@@ -22,6 +22,8 @@ const RUNTIME_DETAILS: Record<string, { description: string, website: string, ic
   lisp: { description: 'Common Lisp environment (SBCL) for symbolic programming and advanced macro systems.', website: 'https://www.sbcl.org', icon: 'symbol-class' },
 }
 
+const UPDATE_OUTCOME_STORAGE_KEY = 'dh:runtimes:update-outcomes:v1'
+
 export function RuntimesPage(): ReactElement {
   const [runtimes, setRuntimes] = useState<RuntimeStatus[]>([])
   const [activeJobs, setActiveJobs] = useState<JobSummary[]>([])
@@ -35,6 +37,7 @@ export function RuntimesPage(): ReactElement {
   const [removeMode, setRemoveMode] = useState<'runtime_only' | 'runtime_and_deps'>('runtime_only')
   const [uninstallPreview, setUninstallPreview] = useState<{ distro: string; runtimePackages: string[]; removableDeps: string[]; blockedSharedDeps: string[]; finalPackages: string[]; note?: string } | null>(null)
   const [loadingUninstallPreview, setLoadingUninstallPreview] = useState(false)
+  const [persistedUpdateOutcomes, setPersistedUpdateOutcomes] = useState<Record<string, 'already_latest' | 'updated'>>({})
 
   const refreshDeps = useCallback(async () => {
     const res = await window.dh.checkDependencies(selectedId)
@@ -47,7 +50,7 @@ export function RuntimesPage(): ReactElement {
       const res = await window.dh.runtimeStatus() as RuntimeStatusResponse
       setRuntimes(res.runtimes)
       const jobs = await window.dh.jobsList() as JobSummary[]
-      setActiveJobs(jobs.filter(j => j.kind.startsWith('install_') || j.kind.startsWith('uninstall_')))
+      setActiveJobs(jobs.filter(j => j.kind.startsWith('install_') || j.kind.startsWith('update_') || j.kind.startsWith('uninstall_')))
     } finally {
       setIsRefreshing(false)
     }
@@ -67,11 +70,52 @@ export function RuntimesPage(): ReactElement {
   const selectedRuntime = useMemo(() => runtimes.find(r => r.id === selectedId), [runtimes, selectedId])
   const activeJob = useMemo(() => {
     const jobsForRuntime = activeJobs.filter(j => j.kind === `install_${selectedId}`)
+      .concat(activeJobs.filter(j => j.kind === `update_${selectedId}`))
       .concat(activeJobs.filter(j => j.kind === `uninstall_${selectedId}`))
     return jobsForRuntime[jobsForRuntime.length - 1]
   }, [activeJobs, selectedId])
   const installInProgress = activeJob?.state === 'running'
   const isUninstallJob = activeJob?.kind === `uninstall_${selectedId}`
+  const isUpdateJob = activeJob?.kind === `update_${selectedId}`
+  const latestUpdateJob = useMemo(() => {
+    const updates = activeJobs.filter(j => j.kind === `update_${selectedId}`)
+    return updates[updates.length - 1]
+  }, [activeJobs, selectedId])
+  const updateOutcome = useMemo<'already_latest' | 'updated' | undefined>(() => {
+    if (!latestUpdateJob || latestUpdateJob.state !== 'completed') return undefined
+    const tail = latestUpdateJob.logTail.join('\n').toLowerCase()
+    if (tail.includes('already latest')) return 'already_latest'
+    if (tail.includes('update finished successfully')) return 'updated'
+    return undefined
+  }, [latestUpdateJob])
+  const effectiveUpdateOutcome = updateOutcome ?? persistedUpdateOutcomes[selectedId]
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(UPDATE_OUTCOME_STORAGE_KEY)
+      if (raw) {
+        const parsed = JSON.parse(raw) as unknown
+        if (parsed && typeof parsed === 'object') {
+          setPersistedUpdateOutcomes(parsed as Record<string, 'already_latest' | 'updated'>)
+        }
+      }
+    } catch {
+      /* ignore malformed local storage */
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!updateOutcome) return
+    setPersistedUpdateOutcomes((prev) => {
+      const next = { ...prev, [selectedId]: updateOutcome }
+      try {
+        localStorage.setItem(UPDATE_OUTCOME_STORAGE_KEY, JSON.stringify(next))
+      } catch {
+        /* ignore storage write errors */
+      }
+      return next
+    })
+  }, [updateOutcome, selectedId])
 
   const startInstall = async (id: string) => {
     setSelectedId(id)
@@ -85,6 +129,16 @@ export function RuntimesPage(): ReactElement {
       kind: 'runtime_install', 
       runtimeId: selectedId,
       method: installMethod 
+    })
+  }
+
+  const runUpdate = async () => {
+    setShowWizard(true)
+    setWizardStep(3)
+    await window.dh.jobStart({
+      kind: 'runtime_update',
+      runtimeId: selectedId,
+      method: installMethod
     })
   }
 
@@ -206,22 +260,32 @@ export function RuntimesPage(): ReactElement {
               </div>
 
               <div style={{ display: 'flex', gap: 12 }}>
-                  <button 
-                   onClick={() => startInstall(selectedId)}
-                   disabled={selectedRuntime.installed || installInProgress}
+                 <button 
+                   onClick={() => { if (selectedRuntime.installed) void runUpdate(); else startInstall(selectedId) }}
+                   disabled={installInProgress}
                    style={{ 
                      padding: '12px 24px', 
                      borderRadius: 12, 
                      border: 'none', 
-                     background: selectedRuntime.installed ? 'rgba(255,255,255,0.05)' : 'var(--accent)',
+                     background: selectedRuntime.installed
+                       ? (effectiveUpdateOutcome === 'already_latest'
+                         ? 'rgba(255, 193, 7, 0.2)'
+                         : effectiveUpdateOutcome === 'updated'
+                           ? 'rgba(0, 230, 118, 0.2)'
+                           : 'rgba(255,255,255,0.08)')
+                       : 'var(--accent)',
                      color: 'white',
                      fontWeight: 700,
-                     cursor: (selectedRuntime.installed || installInProgress) ? 'default' : 'pointer',
-                     opacity: (selectedRuntime.installed || installInProgress) ? 0.6 : 1,
+                     cursor: installInProgress ? 'default' : 'pointer',
+                     opacity: installInProgress ? 0.6 : 1,
                      boxShadow: selectedRuntime.installed ? 'none' : '0 4px 15px rgba(124, 77, 255, 0.3)'
                    }}
                  >
-                   {selectedRuntime.installed ? 'Up to date' : installInProgress ? 'Installing...' : 'Get / Install'}
+                   {installInProgress
+                     ? (isUpdateJob ? 'Updating...' : 'Installing...')
+                     : (selectedRuntime.installed
+                       ? (effectiveUpdateOutcome === 'already_latest' ? 'Already Latest' : effectiveUpdateOutcome === 'updated' ? 'Updated' : 'Update')
+                       : 'Get / Install')}
                  </button>
                  <button
                    onClick={() => void openUninstallModal()}
@@ -256,7 +320,7 @@ export function RuntimesPage(): ReactElement {
               </a>
             </div>
 
-            {!activeJob && selectedRuntime.installed && (
+            {!installInProgress && selectedRuntime.installed && (
               <div style={{ marginTop: 40, padding: 24, background: 'rgba(0,230,118,0.05)', borderRadius: 16, border: '1px solid rgba(0,230,118,0.1)' }}>
                 <h4 style={{ margin: 0, color: 'var(--green)', fontSize: 16, fontWeight: 700 }}>Runtime Active</h4>
                 <p style={{ margin: '8px 0 0 0', fontSize: 14, color: 'var(--text-muted)' }}>
@@ -388,7 +452,7 @@ export function RuntimesPage(): ReactElement {
                    {wizardStep === 3 && (
                      <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                           <h3 style={{ marginTop: 0 }}>{isUninstallJob ? 'Removing' : 'Installing'} {selectedRuntime?.name}</h3>
+                           <h3 style={{ marginTop: 0 }}>{isUninstallJob ? 'Removing' : isUpdateJob ? 'Updating' : 'Installing'} {selectedRuntime?.name}</h3>
                            {activeJob?.state === 'running' && (
                              <button 
                                onClick={cancelInstall}
@@ -399,13 +463,13 @@ export function RuntimesPage(): ReactElement {
                            )}
                         </div>
                         <p style={{ color: 'var(--text-muted)' }}>
-                          {isUninstallJob ? 'Please wait while we remove runtime files and clean shared dependencies safely...' : 'Please wait while we set up your environment...'}
+                          {isUninstallJob ? 'Please wait while we remove runtime files and clean shared dependencies safely...' : isUpdateJob ? 'Please wait while we update runtime packages and verify the version...' : 'Please wait while we set up your environment...'}
                         </p>
 
                         <div style={{ marginTop: 24 }}>
                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
                               <span style={{ fontWeight: 700, fontSize: 14 }}>
-                                {activeJob?.progress === 100 ? 'Verification...' : (isUninstallJob ? 'Removing packages...' : 'Downloading & Extracting...')}
+                                {activeJob?.progress === 100 ? 'Verification...' : (isUninstallJob ? 'Removing packages...' : isUpdateJob ? 'Updating packages...' : 'Downloading & Extracting...')}
                               </span>
                               <span className="mono">{activeJob?.progress || 0}%</span>
                            </div>

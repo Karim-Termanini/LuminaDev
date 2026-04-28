@@ -1843,6 +1843,89 @@ function registerIpc(): void {
       return { id }
     }
 
+    if (req.kind === 'runtime_update') {
+      const runtimeId = req.runtimeId ?? 'unknown'
+      const distro = detectHostDistroSync()
+      const updateProbe = RUNTIME_DETECT_COMMANDS[runtimeId]
+      let previousVersion: string | undefined
+      if (updateProbe) {
+        const before = await detectRuntimeInstallation(runtimeId, updateProbe.cmd, updateProbe.args)
+        previousVersion = before.version
+      }
+      const job: JobRecord = {
+        id,
+        kind: `update_${runtimeId}`,
+        state: 'running',
+        progress: 0,
+        log: [`Starting update of ${runtimeId}...`],
+        cancelRequested: false,
+      }
+      jobs.set(id, job)
+
+      let command = 'pkexec'
+      let args: string[] = []
+      if (runtimeId === 'bun') {
+        command = 'bash'
+        args = ['-lc', 'command -v bun >/dev/null 2>&1 && bun upgrade || (curl -fsSL https://bun.sh/install | bash)']
+      } else if (runtimeId === 'rust') {
+        command = 'bash'
+        args = ['-lc', 'command -v rustup >/dev/null 2>&1 && rustup update || true']
+      } else {
+        const runtimePackages = (RUNTIME_INSTALL_PACKAGES[runtimeId] ?? RUNTIME_INSTALL_PACKAGES.node)[distro]
+        const updateCmdByDistro: Record<Distro, string> = {
+          // Use install-style update so it works even when package alias differs
+          // or when runtime exists but package name is not currently installed.
+          fedora: `dnf install -y ${runtimePackages.join(' ')}`,
+          ubuntu: `apt-get update && apt-get install -y ${runtimePackages.join(' ')}`,
+          arch: `pacman -S --needed --noconfirm ${runtimePackages.join(' ')}`,
+        }
+        args = ['bash', '-lc', updateCmdByDistro[distro]]
+      }
+
+      const proc = spawn(command, args, { shell: false })
+      job.proc = proc
+      proc.stdout.on('data', (d) => { const s = d.toString().trim(); if (s) { job.log.push(s); job.progress = Math.min(95, job.progress + 2) } })
+      proc.stderr.on('data', (d) => { const s = d.toString().trim(); if (s) { job.log.push(s); job.progress = Math.min(95, job.progress + 1) } })
+      proc.on('close', async (code) => {
+        delete job.proc
+        if (job.cancelRequested) {
+          job.state = 'cancelled'
+          job.progress = 100
+          job.log.push('Update cancelled by user.')
+          return
+        }
+        if (code === 0) {
+          const probe = updateProbe
+          if (probe) {
+            const verified = await detectRuntimeInstallation(runtimeId, probe.cmd, probe.args)
+            if (!verified.installed) {
+              job.state = 'failed'
+              job.progress = 100
+              job.log.push('Update finished, but runtime is no longer detected.')
+              return
+            }
+            if (verified.version) {
+              job.log.push(`Detected version after update: ${verified.version}`)
+              if (previousVersion && verified.version === previousVersion) {
+                job.state = 'completed'
+                job.progress = 100
+                job.log.push('Already latest: runtime version did not change.')
+                return
+              }
+            }
+          }
+          job.state = 'completed'
+          job.progress = 100
+          job.log.push('Update finished successfully.')
+        } else {
+          job.state = 'failed'
+          job.progress = 100
+          job.log.push(`Update failed with exit code ${code}`)
+        }
+      })
+      return { id }
+    }
+
     if (req.kind === 'runtime_uninstall') {
       const runtimeId = req.runtimeId ?? 'unknown'
       const distro = detectHostDistroSync()
