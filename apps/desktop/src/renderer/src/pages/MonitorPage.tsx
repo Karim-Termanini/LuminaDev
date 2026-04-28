@@ -670,11 +670,3 @@ function MiniStatus({ label, value, ok }: { label: string; value: string; ok: bo
   )
 }
 
-function InfoRow({ label, value }: { label: string, value?: string }): ReactElement {
-  return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: 6 }}>
-      <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{label}</span>
-      <span style={{ fontSize: 12, fontWeight: 600 }}>{value ?? '—'}</span>
-    </div>
-  )
-}
