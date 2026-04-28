@@ -73,6 +73,9 @@ declare global {
       dockerTerminal: (payload: { containerId: string; cols: number; rows: number }) => Promise<{ ok: boolean; id?: string; error?: string }>
       getHostPorts: () => Promise<HostPortRow[]>
       getHostSysInfo: () => Promise<HostSysInfo>
+      monitorTopProcesses: () => Promise<import('@linux-dev-home/shared').TopProcessRow[]>
+      monitorSecurity: () => Promise<import('@linux-dev-home/shared').HostSecuritySnapshot>
+      monitorSecurityDrilldown: () => Promise<import('@linux-dev-home/shared').HostSecurityDrilldown>
       runtimeStatus: () => Promise<import('@linux-dev-home/shared').RuntimeStatusResponse>
       checkDependencies: (runtimeId: string) => Promise<Array<{ name: string; status: string; ok: boolean }>>
       runtimeUninstallPreview: (payload: { runtimeId: string; removeMode: 'runtime_only' | 'runtime_and_deps' }) => Promise<{ distro: string; runtimePackages: string[]; removableDeps: string[]; blockedSharedDeps: string[]; finalPackages: string[]; note?: string }>

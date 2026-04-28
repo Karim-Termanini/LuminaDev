@@ -43,6 +43,8 @@ import {
   type GitRepoEntry,
   type HostMetrics,
   type HostMetricsResponse,
+  type HostSecurityDrilldown,
+  type HostSecuritySnapshot,
   type ImageRow,
   type JobSummary,
   type NetworkRow,
@@ -51,6 +53,7 @@ import {
   type VolumeRow,
   type HostPortRow,
   type HostSysInfo,
+  type TopProcessRow,
   CustomProfilesStoreSchema,
   StoreGetRequestSchema,
   StoreSetRequestSchema,
@@ -394,6 +397,7 @@ function sampleCpuUsage(): number {
 }
 
 let netPrev: { t: number; rx: number; tx: number } | null = null
+let diskPrev: { t: number; readBytes: number; writeBytes: number } | null = null
 
 function readNetAgg(): { rx: number; tx: number } {
   try {
@@ -430,6 +434,41 @@ function netMbps(): { rx: number; tx: number } {
   netPrev = { t, ...cur }
   const toMbps = (b: number) => Math.max(0, (b * 8) / (dt * 1_000_000))
   return { rx: toMbps(rxBytes), tx: toMbps(txBytes) }
+}
+
+function readDiskIoAgg(): { readBytes: number; writeBytes: number } {
+  try {
+    const lines = readFileSync('/proc/diskstats', 'utf8').split('\n').filter(Boolean)
+    let readSectors = 0
+    let writeSectors = 0
+    for (const line of lines) {
+      const parts = line.trim().split(/\s+/)
+      if (parts.length < 14) continue
+      const name = parts[2] ?? ''
+      if (/^(loop|ram|zram|dm-)/.test(name)) continue
+      readSectors += Number(parts[5] ?? 0)
+      writeSectors += Number(parts[9] ?? 0)
+    }
+    return { readBytes: readSectors * 512, writeBytes: writeSectors * 512 }
+  } catch {
+    return { readBytes: 0, writeBytes: 0 }
+  }
+}
+
+function diskIoMbps(): { readMbps: number; writeMbps: number } {
+  const cur = readDiskIoAgg()
+  const t = Date.now()
+  if (!diskPrev) {
+    diskPrev = { t, ...cur }
+    return { readMbps: 0, writeMbps: 0 }
+  }
+  const dt = (t - diskPrev.t) / 1000
+  if (dt <= 0.2) return { readMbps: 0, writeMbps: 0 }
+  const readDelta = Math.max(0, cur.readBytes - diskPrev.readBytes)
+  const writeDelta = Math.max(0, cur.writeBytes - diskPrev.writeBytes)
+  diskPrev = { t, ...cur }
+  const toMbps = (b: number) => (b * 8) / (dt * 1_000_000)
+  return { readMbps: toMbps(readDelta), writeMbps: toMbps(writeDelta) }
 }
 
 async function systemdRow(unitBase: string): Promise<SystemdRow> {
@@ -479,6 +518,7 @@ async function collectMetrics(): Promise<HostMetricsResponse> {
     /* sandbox */
   }
   const { rx, tx } = netMbps()
+  const { readMbps, writeMbps } = diskIoMbps()
   const model = cpus()[0]?.model ?? 'CPU'
   const metrics: HostMetrics = {
     cpuUsagePercent: sampleCpuUsage(),
@@ -493,6 +533,8 @@ async function collectMetrics(): Promise<HostMetricsResponse> {
     diskFreeGb,
     netRxMbps: rx,
     netTxMbps: tx,
+    diskReadMbps: readMbps,
+    diskWriteMbps: writeMbps,
   }
   const systemd = await Promise.all(SYSTEMD_UNITS.map((u) => systemdRow(u)))
   return { metrics, systemd }
@@ -1074,6 +1116,121 @@ function registerIpc(): void {
         resolve(parseSs(stdout))
       })
     })
+  })
+
+  ipcMain.handle(IPC.monitorTopProcesses, async () => {
+    return await new Promise<TopProcessRow[]>((resolve) => {
+      execFile('ps', ['-eo', 'pid,comm,%cpu,%mem', '--sort=-%cpu'], (err, stdout) => {
+        if (err) {
+          resolve([])
+          return
+        }
+        const rows = stdout
+          .split('\n')
+          .slice(1)
+          .map((line) => line.trim())
+          .filter(Boolean)
+          .slice(0, 8)
+          .map((line) => {
+            const parts = line.split(/\s+/)
+            const pid = Number(parts[0] ?? 0)
+            const cpu = Number(parts[2] ?? 0)
+            const mem = Number(parts[3] ?? 0)
+            return {
+              pid,
+              command: parts[1] ?? 'unknown',
+              cpuPercent: Number.isFinite(cpu) ? cpu : 0,
+              memPercent: Number.isFinite(mem) ? mem : 0,
+            }
+          })
+          .filter((p) => p.pid > 0)
+        resolve(rows)
+      })
+    })
+  })
+
+  ipcMain.handle(IPC.monitorSecurity, async () => {
+    const execText = async (cmd: string): Promise<string> =>
+      await new Promise((resolve) => {
+        execFile('bash', ['-lc', cmd], (err, stdout) => {
+          if (err) resolve('')
+          else resolve((stdout ?? '').trim())
+        })
+      })
+
+    const firewallRaw = await execText('command -v ufw >/dev/null 2>&1 && ufw status | head -n 1 || echo unknown')
+    const firewall: HostSecuritySnapshot['firewall'] =
+      /active/i.test(firewallRaw) ? 'active' : /inactive/i.test(firewallRaw) ? 'inactive' : 'unknown'
+
+    const selinux = (await execText('command -v getenforce >/dev/null 2>&1 && getenforce || echo unavailable')) || 'unavailable'
+    const sshPermitRootLogin = (await execText("sshd -T 2>/dev/null | awk '/permitrootlogin/{print $2; exit}'")) || 'unknown'
+    const sshPasswordAuth = (await execText("sshd -T 2>/dev/null | awk '/passwordauthentication/{print $2; exit}'")) || 'unknown'
+    const failedAuthRaw = await execText("journalctl --since '24 hours ago' -u sshd --no-pager 2>/dev/null | rg -i 'failed password|invalid user|authentication failure' | wc -l")
+    const failedAuth24h = Number.parseInt(failedAuthRaw || '0', 10) || 0
+
+    const hostPorts = await new Promise<HostPortRow[]>((resolve) => {
+      execFile('ss', ['-tunl', '-H'], (err, stdout) => {
+        if (err) resolve([])
+        else resolve(parseSs(stdout))
+      })
+    })
+    const riskySet = new Set([21, 23, 2375, 3389, 5900])
+    const riskyOpenPorts = hostPorts.map((p) => p.port).filter((p) => riskySet.has(p))
+
+    const out: HostSecuritySnapshot = {
+      firewall,
+      selinux,
+      sshPermitRootLogin,
+      sshPasswordAuth,
+      failedAuth24h,
+      riskyOpenPorts: [...new Set(riskyOpenPorts)],
+    }
+    return out
+  })
+
+  ipcMain.handle(IPC.monitorSecurityDrilldown, async () => {
+    const failedAuthRaw = await new Promise<string>((resolve) => {
+      execFile(
+        'bash',
+        ['-lc', "journalctl --since '24 hours ago' -u sshd --no-pager 2>/dev/null | rg -i 'failed password|invalid user|authentication failure' | tail -n 8"],
+        (err, stdout) => {
+          if (err) resolve('')
+          else resolve((stdout ?? '').trim())
+        }
+      )
+    })
+    const failedAuthSamples = failedAuthRaw ? failedAuthRaw.split('\n').map((l) => l.trim()).filter(Boolean) : []
+
+    const riskySet = new Set([21, 23, 2375, 3389, 5900])
+    const riskyPortOwners = await new Promise<Array<{ port: number; process: string; pid?: number }>>((resolve) => {
+      execFile('ss', ['-tulpn', '-H'], (err, stdout) => {
+        if (err) {
+          resolve([])
+          return
+        }
+        const out: Array<{ port: number; process: string; pid?: number }> = []
+        for (const line of stdout.split('\n').map((l) => l.trim()).filter(Boolean)) {
+          const parts = line.split(/\s+/)
+          const local = parts[4] ?? ''
+          const idx = local.lastIndexOf(':')
+          const port = Number.parseInt(idx >= 0 ? local.slice(idx + 1) : '', 10)
+          if (!Number.isFinite(port) || !riskySet.has(port)) continue
+          const m = line.match(/users:\(\("([^"]+)",pid=(\d+)/)
+          out.push({
+            port,
+            process: m?.[1] ?? 'unknown',
+            pid: m?.[2] ? Number.parseInt(m[2], 10) : undefined,
+          })
+        }
+        resolve(out)
+      })
+    })
+
+    const response: HostSecurityDrilldown = {
+      failedAuthSamples,
+      riskyPortOwners,
+    }
+    return response
   })
 
   ipcMain.handle(IPC.getHostSysInfo, async (): Promise<HostSysInfo> => {

@@ -1,6 +1,6 @@
 import type { ReactElement, ReactNode } from 'react'
 import { useCallback, useEffect, useState } from 'react'
-import type { ContainerRow, HostMetricsResponse, HostPortRow, HostSysInfo } from '@linux-dev-home/shared'
+import type { ContainerRow, HostMetricsResponse, HostPortRow, HostSecurityDrilldown, HostSecuritySnapshot, HostSysInfo, TopProcessRow } from '@linux-dev-home/shared'
 
 type GithubEvent = {
   type: string
@@ -25,6 +25,9 @@ export function MonitorPage(): ReactElement {
   const [netHistory, setNetHistory] = useState<{ rx: number, tx: number }[]>(new Array(30).fill({ rx: 0, tx: 0 }))
   const [githubCommits, setGithubCommits] = useState<GithubEvent[]>([])
   const [containers, setContainers] = useState<ContainerRow[]>([])
+  const [topProcesses, setTopProcesses] = useState<TopProcessRow[]>([])
+  const [security, setSecurity] = useState<HostSecuritySnapshot | null>(null)
+  const [securityDrilldown, setSecurityDrilldown] = useState<HostSecurityDrilldown | null>(null)
   const [copiedReport, setCopiedReport] = useState(false)
 
   const refreshLive = useCallback(async () => {
@@ -43,6 +46,9 @@ export function MonitorPage(): ReactElement {
     try {
       setSysInfo(await window.dh.getHostSysInfo())
       setPorts(await window.dh.getHostPorts())
+      setTopProcesses(await window.dh.monitorTopProcesses())
+      setSecurity(await window.dh.monitorSecurity())
+      setSecurityDrilldown(await window.dh.monitorSecurityDrilldown())
     } catch (e) {
       console.error(e)
     }
@@ -103,6 +109,18 @@ export function MonitorPage(): ReactElement {
   const listeningPorts = ports.filter((p) => p.state.toLowerCase() === 'listening').length
   const runningContainers = containers.filter((c) => c.state === 'running').length
   const dockerNetworks = new Set(containers.flatMap((c) => c.networks ?? [])).size
+  const alerts: string[] = []
+  if (m && m.cpuUsagePercent >= 85) alerts.push(`High CPU usage: ${m.cpuUsagePercent.toFixed(1)}%`)
+  if (memPct >= 90) alerts.push(`High RAM usage: ${memPct}%`)
+  if (swapPct >= 80 && (m?.swapTotalMb ?? 0) > 0) alerts.push(`High swap usage: ${swapPct}%`)
+  if ((security?.riskyOpenPorts.length ?? 0) > 0) alerts.push(`Risky open ports: ${security?.riskyOpenPorts.join(', ')}`)
+  if ((security?.failedAuth24h ?? 0) > 20) alerts.push(`Elevated failed SSH auth attempts (24h): ${security?.failedAuth24h}`)
+  const securityRiskCount =
+    (security?.firewall === 'inactive' ? 1 : 0) +
+    (security?.sshPermitRootLogin === 'yes' ? 1 : 0) +
+    (security?.sshPasswordAuth === 'yes' ? 1 : 0) +
+    ((security?.riskyOpenPorts.length ?? 0) > 0 ? 1 : 0) +
+    ((security?.failedAuth24h ?? 0) > 20 ? 1 : 0)
   const copySystemReport = async () => {
     const report = [
       `Distro: ${sysInfo?.distro ?? '—'}`,
@@ -308,9 +326,69 @@ export function MonitorPage(): ReactElement {
         </MetricCard>
       </div>
 
+      <MetricCard title="SECURITY OVERVIEW" subValue="Host hardening and exposure">
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 8 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px', background: 'rgba(255,255,255,0.03)' }}>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Current security posture</div>
+            <div style={{
+              fontSize: 12,
+              fontWeight: 800,
+              color: securityRiskCount === 0 ? 'var(--green)' : '#ffb74d',
+              background: securityRiskCount === 0 ? 'rgba(0,230,118,0.12)' : 'rgba(255,183,77,0.14)',
+              border: `1px solid ${securityRiskCount === 0 ? 'rgba(0,230,118,0.3)' : 'rgba(255,183,77,0.35)'}`,
+              borderRadius: 999,
+              padding: '4px 10px'
+            }}>
+              {securityRiskCount === 0 ? 'Secure baseline' : `${securityRiskCount} risk${securityRiskCount > 1 ? 's' : ''}`}
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 8 }}>
+            <MiniStatus label="Firewall" value={security?.firewall ?? 'unknown'} ok={security?.firewall === 'active'} />
+            <MiniStatus label="SELinux" value={security?.selinux ?? 'unknown'} ok={(security?.selinux ?? '').toLowerCase() === 'enforcing'} />
+            <MiniStatus label="Failed auth (24h)" value={String(security?.failedAuth24h ?? 0)} ok={(security?.failedAuth24h ?? 0) < 20} />
+          </div>
+
+          <div style={{ marginTop: 8, display: 'grid', gap: 8 }}>
+            <SettingsRow label="Firewall (ufw)" value={security?.firewall ?? 'unknown'} />
+            <SettingsRow label="SELinux" value={security?.selinux ?? 'unknown'} />
+            <SettingsRow label="SSH root login" value={security?.sshPermitRootLogin ?? 'unknown'} />
+            <SettingsRow label="SSH password auth" value={security?.sshPasswordAuth ?? 'unknown'} />
+            <SettingsRow label="Failed auth (24h)" value={String(security?.failedAuth24h ?? 0)} />
+            <SettingsRow label="Risky open ports" value={(security?.riskyOpenPorts.length ?? 0) > 0 ? security!.riskyOpenPorts.join(', ') : 'none'} />
+            <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10, background: 'rgba(255,255,255,0.02)', maxHeight: 180, overflow: 'auto' }}>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>FAILED AUTH SAMPLES (24H)</div>
+              {(securityDrilldown?.failedAuthSamples.length ?? 0) === 0 ? (
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>No failed auth lines found.</div>
+              ) : (
+                <div style={{ display: 'grid', gap: 4 }}>
+                  {securityDrilldown?.failedAuthSamples.map((line, i) => (
+                    <div key={i} style={{ fontSize: 11, color: '#ffb3b3', fontFamily: 'monospace', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{line}</div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10, background: 'rgba(255,255,255,0.02)', maxHeight: 160, overflow: 'auto' }}>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>RISKY PORT OWNERS</div>
+              {(securityDrilldown?.riskyPortOwners.length ?? 0) === 0 ? (
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>No risky port ownership detected.</div>
+              ) : (
+                <div style={{ display: 'grid', gap: 4 }}>
+                  {securityDrilldown?.riskyPortOwners.map((p, i) => (
+                    <div key={i} style={{ fontSize: 12 }}>
+                      Port <strong>{p.port}</strong> {'->'} {p.process}{p.pid ? ` (pid ${p.pid})` : ''}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </MetricCard>
+
       {/* System + Activity */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: 20, alignItems: 'start' }}>
-        <MetricCard title="SYSTEM INFORMATION">
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: 20, alignItems: 'stretch' }}>
+        <MetricCard title="SYSTEM INFORMATION" minHeight={560}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 10 }}>
             <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 12, background: 'rgba(255,255,255,0.02)' }}>
               <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700, letterSpacing: '0.06em' }}>ABOUT THIS PC</div>
@@ -360,8 +438,8 @@ export function MonitorPage(): ReactElement {
           </div>
         </MetricCard>
 
-        <MetricCard title="GITHUB RECENT ACTIVITY" subValue="Live feed with periodic refresh">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 10 }}>
+        <MetricCard title="GITHUB RECENT ACTIVITY" subValue="Live feed with periodic refresh" minHeight={560}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 10, maxHeight: 500, overflow: 'auto' }}>
             <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
               Auto-refresh every 30 seconds.
             </div>
@@ -391,11 +469,66 @@ export function MonitorPage(): ReactElement {
           </div>
         </MetricCard>
       </div>
+
+      {/* Disk / Processes with Alerts under Disk */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: 20, alignItems: 'start' }}>
+        <div style={{ display: 'grid', gap: 20 }}>
+          <MetricCard title="DISK I/O LIVE" value={`${m?.diskReadMbps.toFixed(2) ?? '0.00'} Mbps`} subValue="Read / Write throughput">
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10 }}>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>READ</div>
+                <div style={{ fontSize: 16, fontWeight: 700 }}>{m?.diskReadMbps.toFixed(2) ?? '0.00'} Mbps</div>
+              </div>
+              <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10 }}>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>WRITE</div>
+                <div style={{ fontSize: 16, fontWeight: 700 }}>{m?.diskWriteMbps.toFixed(2) ?? '0.00'} Mbps</div>
+              </div>
+            </div>
+          </MetricCard>
+
+          <MetricCard title="ALERTS THRESHOLDS" value={`${alerts.length}`} subValue="Triggered now" contentMarginTop={22}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {alerts.length === 0 ? (
+                <div style={{ color: 'var(--green)', fontWeight: 700 }}>No active alerts.</div>
+              ) : alerts.map((a, i) => (
+                <div key={i} style={{ border: '1px solid rgba(255,82,82,0.25)', background: 'rgba(255,82,82,0.08)', borderRadius: 8, padding: '8px 10px', color: '#ffb3b3' }}>
+                  {a}
+                </div>
+              ))}
+            </div>
+          </MetricCard>
+        </div>
+
+        <MetricCard title="TOP PROCESSES" subValue="Highest CPU consumers" minHeight={378}>
+          <div style={{ maxHeight: 322, overflow: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+              <thead>
+                <tr style={{ textAlign: 'left', color: 'var(--text-muted)' }}>
+                  <th style={{ padding: '8px 4px' }}>PID</th>
+                  <th style={{ padding: '8px 4px' }}>COMMAND</th>
+                  <th style={{ padding: '8px 4px' }}>CPU%</th>
+                  <th style={{ padding: '8px 4px' }}>MEM%</th>
+                </tr>
+              </thead>
+              <tbody>
+                {topProcesses.map((p) => (
+                  <tr key={p.pid} style={{ borderTop: '1px solid var(--border)' }}>
+                    <td style={{ padding: '8px 4px' }} className="mono">{p.pid}</td>
+                    <td style={{ padding: '8px 4px', fontWeight: 600 }}>{p.command}</td>
+                    <td style={{ padding: '8px 4px' }}>{p.cpuPercent.toFixed(1)}</td>
+                    <td style={{ padding: '8px 4px' }}>{p.memPercent.toFixed(1)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </MetricCard>
+      </div>
     </div>
   )
 }
 
-function MetricCard({ title, value, subValue, children }: { title: string, value?: string, subValue?: string, children?: ReactNode }): ReactElement {
+function MetricCard({ title, value, subValue, children, minHeight, contentMarginTop = 16 }: { title: string, value?: string, subValue?: string, children?: ReactNode, minHeight?: number, contentMarginTop?: number }): ReactElement {
   return (
     <section style={{
       background: 'var(--bg-widget)',
@@ -403,13 +536,14 @@ function MetricCard({ title, value, subValue, children }: { title: string, value
       borderRadius: 'var(--radius)',
       padding: 20,
       position: 'relative',
-      overflow: 'hidden'
+      overflow: 'hidden',
+      minHeight,
     }}>
       <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: 4, background: 'linear-gradient(90deg, var(--accent), transparent)' }} />
       <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.05em', marginBottom: 12 }}>{title}</div>
       {value && <div style={{ fontSize: 32, fontWeight: 800, letterSpacing: '-0.02em', textShadow: '0 0 18px rgba(124,77,255,0.25)' }}>{value}</div>}
       {subValue && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>{subValue}</div>}
-      <div style={{ marginTop: 16 }}>{children}</div>
+      <div style={{ marginTop: contentMarginTop }}>{children}</div>
     </section>
   )
 }
@@ -514,6 +648,15 @@ function SettingsRow({ label, value }: { label: string, value?: string }): React
     >
       <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>{label}</div>
       <div style={{ fontSize: 13, fontWeight: 650, color: 'var(--text-main)', wordBreak: 'break-word' }}>{value ?? '—'}</div>
+    </div>
+  )
+}
+
+function MiniStatus({ label, value, ok }: { label: string; value: string; ok: boolean }): ReactElement {
+  return (
+    <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px', background: 'rgba(255,255,255,0.02)' }}>
+      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{label}</div>
+      <div style={{ marginTop: 4, fontSize: 13, fontWeight: 700, color: ok ? 'var(--green)' : '#ffb74d' }}>{value}</div>
     </div>
   )
 }

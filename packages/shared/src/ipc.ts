@@ -52,6 +52,8 @@ export type HostMetrics = {
   uptimeSec: number
   diskTotalGb: number
   diskFreeGb: number
+  diskReadMbps: number
+  diskWriteMbps: number
   netRxMbps: number
   netTxMbps: number
 }
@@ -71,6 +73,27 @@ export type HostPortRow = {
   port: number
   state: string
   service: string
+}
+
+export type TopProcessRow = {
+  pid: number
+  command: string
+  cpuPercent: number
+  memPercent: number
+}
+
+export type HostSecuritySnapshot = {
+  firewall: 'active' | 'inactive' | 'unknown'
+  selinux: string
+  sshPermitRootLogin: string
+  sshPasswordAuth: string
+  failedAuth24h: number
+  riskyOpenPorts: number[]
+}
+
+export type HostSecurityDrilldown = {
+  failedAuthSamples: string[]
+  riskyPortOwners: Array<{ port: number; process: string; pid?: number }>
 }
 
 export type HostSysInfo = {
@@ -167,6 +190,9 @@ export const IPC = {
   dockerTerminal: 'dh:docker:terminal',
   getHostPorts: 'dh:host:ports',
   getHostSysInfo: 'dh:host:sysinfo',
+  monitorTopProcesses: 'dh:monitor:top-processes',
+  monitorSecurity: 'dh:monitor:security',
+  monitorSecurityDrilldown: 'dh:monitor:security-drilldown',
   runtimeStatus: 'dh:runtime:status',
 } as const
 
