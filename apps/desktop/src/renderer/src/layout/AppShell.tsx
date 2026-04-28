@@ -8,7 +8,7 @@ import { WidgetLayoutProvider } from './WidgetLayoutContext'
 
 const nav = [
   { to: '/dashboard', label: 'Dashboard', icon: 'dashboard' },
-  { to: '/system', label: 'System', icon: 'server' },
+  { to: '/system', label: 'Monitor', icon: 'pulse' },
   { to: '/workstation', label: 'Workstation', icon: 'device-desktop' },
   { to: '/docker', label: 'Docker', icon: 'package' },
   { to: '/ssh', label: 'SSH', icon: 'key' },
@@ -32,7 +32,7 @@ export function AppShell({ children }: { children: ReactNode }): ReactElement {
         }}
       >
         <div style={{ padding: '18px 16px 12px' }}>
-          <div style={{ fontWeight: 700, letterSpacing: '0.02em' }}>HypeDev</div>
+          <div style={{ fontWeight: 700, letterSpacing: '0.02em' }}>LuminaDev</div>
           <div
             className="mono"
             style={{

@@ -64,6 +64,30 @@ export type GitRepoEntry = {
   lastOpened: number
 }
 
+export type HostPortRow = {
+  protocol: 'tcp' | 'udp'
+  port: number
+  state: string
+  service: string
+}
+
+export type HostSysInfo = {
+  hostname: string
+  os: string
+  kernel: string
+  arch: string
+  uptime: number
+  ip?: string
+  distro?: string
+  shell?: string
+  de?: string
+  wm?: string
+  gpu?: string
+  memoryUsage?: string
+  packages?: string
+  resolution?: string
+}
+
 /** Renderer ↔ main IPC channel names */
 export type HostMetricsResponse = {
   metrics: HostMetrics
@@ -127,6 +151,8 @@ export const IPC = {
   dockerSearch: 'dh:docker:search',
   dockerGetTags: 'dh:docker:tags',
   dockerTerminal: 'dh:docker:terminal',
+  getHostPorts: 'dh:host:ports',
+  getHostSysInfo: 'dh:host:sysinfo',
 } as const
 
 export type DockerActionPayload = { id: string; action: DockerContainerAction }

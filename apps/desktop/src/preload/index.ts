@@ -67,6 +67,8 @@ export type DhApi = {
   dockerSearch: (term: string) => Promise<Array<{ name: string; description: string; star_count: number; is_official: boolean }>>
   dockerGetTags: (image: string) => Promise<string[]>
   dockerTerminal: (payload: { containerId: string; cols: number; rows: number }) => Promise<{ ok: boolean; id?: string; error?: string }>
+  getHostPorts: () => Promise<import('@linux-dev-home/shared').HostPortRow[]>
+  getHostSysInfo: () => Promise<import('@linux-dev-home/shared').HostSysInfo>
 }
 
 const api: DhApi = {
@@ -141,6 +143,8 @@ const api: DhApi = {
   dockerSearch: (term) => ipcRenderer.invoke(IPC.dockerSearch, term),
   dockerGetTags: (image) => ipcRenderer.invoke(IPC.dockerGetTags, image),
   dockerTerminal: (payload) => ipcRenderer.invoke(IPC.dockerTerminal, payload),
+  getHostPorts: () => ipcRenderer.invoke(IPC.getHostPorts),
+  getHostSysInfo: () => ipcRenderer.invoke(IPC.getHostSysInfo),
 }
 
 contextBridge.exposeInMainWorld('dh', api)

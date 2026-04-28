@@ -12,7 +12,7 @@ import { DockerPage } from './pages/DockerPage'
 import { GitConfigPage } from './pages/GitConfigPage'
 import { ProfilesPage } from './pages/ProfilesPage'
 import { RegistryPage } from './pages/RegistryPage'
-import { SystemPage } from './pages/SystemPage'
+import { MonitorPage } from './pages/MonitorPage'
 import { SshPage } from './pages/SshPage'
 import { TerminalPage } from './pages/TerminalPage'
 import { WorkstationPage } from './pages/WorkstationPage'
@@ -46,7 +46,7 @@ export default function App(): ReactElement | null {
           <Route path="kernels" element={<DashboardKernelsPage />} />
           <Route path="logs" element={<DashboardLogsPage />} />
         </Route>
-        <Route path="/system" element={<SystemPage />} />
+        <Route path="/system" element={<MonitorPage />} />
         <Route path="/workstation" element={<WorkstationPage />} />
         <Route path="/docker" element={<DockerPage />} />
         <Route path="/ssh" element={<SshPage />} />

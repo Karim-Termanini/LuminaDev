@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
 
-import type { ComposeProfile } from '@linux-dev-home/shared'
+import type { ComposeProfile, HostPortRow, HostSysInfo } from '@linux-dev-home/shared'
 
 export {}
 
@@ -71,6 +71,8 @@ declare global {
       dockerSearch: (term: string) => Promise<Array<{ name: string; description: string; star_count: number; is_official: boolean }>>
       dockerGetTags: (image: string) => Promise<string[]>
       dockerTerminal: (payload: { containerId: string; cols: number; rows: number }) => Promise<{ ok: boolean; id?: string; error?: string }>
+      getHostPorts: () => Promise<HostPortRow[]>
+      getHostSysInfo: () => Promise<HostSysInfo>
     }
   }
 }

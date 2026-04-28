@@ -2,7 +2,7 @@ import { readFileSync, statfsSync } from 'node:fs'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { execFile, spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
-import { cpus, freemem, homedir, loadavg, tmpdir, totalmem, uptime } from 'node:os'
+import os, { cpus, freemem, homedir, loadavg, tmpdir, totalmem, uptime } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell } from 'electron'
@@ -49,6 +49,8 @@ import {
   type SessionInfo,
   type SystemdRow,
   type VolumeRow,
+  type HostPortRow,
+  type HostSysInfo,
   CustomProfilesStoreSchema,
   StoreGetRequestSchema,
   StoreSetRequestSchema,
@@ -924,6 +926,67 @@ function registerIpc(): void {
 
   ipcMain.handle(IPC.metrics, async () => await collectMetrics())
 
+  ipcMain.handle(IPC.getHostPorts, async () => {
+    return new Promise<HostPortRow[]>((resolve) => {
+      // Use 'ss -tunl' to get listening TCP/UDP ports
+      execFile('ss', ['-tunl', '-H'], (err, stdout) => {
+        if (err) {
+           // Fallback to netstat if ss fails
+           execFile('netstat', ['-tunl', '-W'], (err2, stdout2) => {
+             if (err2) return resolve([])
+             resolve(parseNetstat(stdout2))
+           })
+           return
+        }
+        resolve(parseSs(stdout))
+      })
+    })
+  })
+
+  ipcMain.handle(IPC.getHostSysInfo, async (): Promise<HostSysInfo> => {
+    const nets = os.networkInterfaces()
+    let ip = ''
+    for (const name of Object.keys(nets)) {
+      for (const net of nets[name] ?? []) {
+        if (net.family === 'IPv4' && !net.internal) {
+          ip = net.address
+          break
+        }
+      }
+      if (ip) break
+    }
+
+    // Attempt to gather more detailed info
+    let distro = ''
+    try {
+      const osRel = await readFile('/etc/os-release', 'utf8')
+      const match = osRel.match(/^PRETTY_NAME="?([^"\n]+)"?/m)
+      if (match) distro = match[1]
+    } catch { distro = `${os.type()} ${os.release()}` }
+
+    let gpu = ''
+    try {
+      const { stdout } = await new Promise<{stdout: string}>(res => execFile('lspci', ['-v'], (err, stdout) => res({stdout})))
+      const match = stdout.match(/VGA compatible controller: (.+)/)
+      if (match) gpu = match[1].split(' (rev')[0]
+    } catch { gpu = 'Unknown' }
+
+    return {
+      hostname: os.hostname(),
+      os: distro,
+      kernel: os.release(),
+      arch: os.arch(),
+      uptime: Math.round(os.uptime()),
+      ip,
+      distro,
+      shell: process.env.SHELL?.split('/').pop() || 'bash',
+      de: process.env.XDG_CURRENT_DESKTOP || 'Unknown',
+      wm: process.env.XDG_SESSION_DESKTOP || 'Unknown',
+      gpu,
+      memoryUsage: `${((os.totalmem() - os.freemem()) / (1024 ** 3)).toFixed(1)} GiB / ${(os.totalmem() / (1024 ** 3)).toFixed(1)} GiB`,
+    }
+  })
+
   ipcMain.handle(IPC.hostExec, async (_e, raw: unknown) => {
     const req = HostExecRequestSchema.parse(raw)
     if (req.command === 'nvidia_smi_short') {
@@ -1493,6 +1556,39 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
 })
 
+
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow()
 })
+
+function parseSs(stdout: string): HostPortRow[] {
+  const lines = stdout.split('\n').filter(Boolean).slice(1) // Skip header
+  return lines.map(line => {
+    const parts = line.split(/\s+/).filter(Boolean)
+    // ss format: Netid State Recv-Q Send-Q Local Address:Port Peer Address:Port
+    const protocol = parts[0]?.toLowerCase().includes('tcp') ? 'tcp' : 'udp'
+    const state = parts[1] || 'LISTEN'
+    const local = parts[4] || ''
+    
+    // Handle both IPv4 (0.0.0.0:80) and IPv6 ([::]:80)
+    const lastColonIndex = local.lastIndexOf(':')
+    const portStr = local.substring(lastColonIndex + 1)
+    const port = parseInt(portStr, 10)
+
+    return { protocol: protocol as 'tcp' | 'udp', port, state, service: '' }
+  }).filter(p => p.port > 0)
+}
+
+function parseNetstat(stdout: string): HostPortRow[] {
+  const lines = stdout.split('\n').filter(l => l.includes('LISTEN'))
+  return lines.map(line => {
+    const parts = line.split(/\s+/).filter(Boolean)
+    // netstat format: Proto Recv-Q Send-Q Local Address Foreign Address State
+    const protocol = parts[0]?.toLowerCase().includes('tcp') ? 'tcp' : 'udp'
+    const local = parts[3] || ''
+    const portMatch = local.match(/:(\d+)$/) || local.match(/\.(\d+)$/)
+    const port = portMatch ? parseInt(portMatch[1]) : 0
+    return { protocol: protocol as 'tcp' | 'udp', port, state: 'LISTEN', service: '' }
+  }).filter(p => p.port > 0)
+}
+
