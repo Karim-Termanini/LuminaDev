@@ -971,6 +971,20 @@ function registerIpc(): void {
       if (match) gpu = match[1].split(' (rev')[0]
     } catch { gpu = 'Unknown' }
 
+    let packages = ''
+    try {
+      const { stdout: rpmCount } = await new Promise<{stdout: string}>(res => execFile('rpm', ['-qa'], (err, stdout) => res({stdout})))
+      const { stdout: flatpakCount } = await new Promise<{stdout: string}>(res => execFile('flatpak', ['list'], (err, stdout) => res({stdout})))
+      packages = `${rpmCount.split('\n').filter(Boolean).length} (rpm), ${flatpakCount.split('\n').filter(Boolean).length} (flatpak)`
+    } catch { packages = 'Unknown' }
+
+    let resolution = ''
+    try {
+      const { stdout } = await new Promise<{stdout: string}>(res => execFile('xdpyinfo', [], (err, stdout) => res({stdout})))
+      const match = stdout.match(/dimensions:\s+(\d+x\d+)/)
+      if (match) resolution = match[1]
+    } catch { resolution = 'Unknown' }
+
     return {
       hostname: os.hostname(),
       os: distro,
@@ -984,6 +998,8 @@ function registerIpc(): void {
       wm: process.env.XDG_SESSION_DESKTOP || 'Unknown',
       gpu,
       memoryUsage: `${((os.totalmem() - os.freemem()) / (1024 ** 3)).toFixed(1)} GiB / ${(os.totalmem() / (1024 ** 3)).toFixed(1)} GiB`,
+      packages,
+      resolution
     }
   })
 

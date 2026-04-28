@@ -11,6 +11,12 @@ type GithubEvent = {
   }
 }
 
+type GithubCommitResponse = {
+  commit: {
+    message: string
+  }
+}
+
 export function MonitorPage(): ReactElement {
   const [metrics, setMetrics] = useState<HostMetricsResponse | null>(null)
   const [ports, setPorts] = useState<HostPortRow[]>([])
@@ -51,8 +57,8 @@ export function MonitorPage(): ReactElement {
               try {
                 const cResp = await fetch(`https://api.github.com/repos/${e.repo.name}/commits?per_page=5`)
                 if (cResp.ok) {
-                  const cData = await cResp.json()
-                  return { ...e, payload: { ...e.payload, commits: cData.map((c: any) => ({ message: c.commit.message })) } }
+                  const cData = await cResp.json() as GithubCommitResponse[]
+                  return { ...e, payload: { ...e.payload, commits: cData.map((c) => ({ message: c.commit.message })) } }
                 }
               } catch { /* ignore */ }
             }
@@ -130,8 +136,9 @@ export function MonitorPage(): ReactElement {
             </div>
             <div style={{ paddingLeft: 112, display: 'flex', flexDirection: 'column', gap: 4, opacity: 0.8 }}>
                <InfoLine label="Kernel" value={sysInfo?.kernel} />
+               <InfoLine label="Packages" value={sysInfo?.packages} />
                <InfoLine label="Shell" value={sysInfo?.shell} />
-               <InfoLine label="DE" value={sysInfo?.de} />
+               <InfoLine label="DE/WM" value={`${sysInfo?.de} / ${sysInfo?.wm}`} />
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '100px 1fr', gap: 12, alignItems: 'center', marginTop: 8 }}>
@@ -139,7 +146,7 @@ export function MonitorPage(): ReactElement {
               <span style={{ fontSize: 13, fontWeight: 600 }}>{sysInfo?.gpu || 'Intel UHD Graphics'}</span>
             </div>
             <div style={{ paddingLeft: 112, display: 'flex', flexDirection: 'column', gap: 4, opacity: 0.8 }}>
-               <InfoLine label="Arch" value={sysInfo?.arch} />
+               <InfoLine label="Res" value={sysInfo?.resolution} />
                <InfoLine label="Memory" value={sysInfo?.memoryUsage} />
                <InfoLine label="Uptime" value={m ? `${Math.floor(m.uptimeSec / 3600)}h ${Math.floor((m.uptimeSec % 3600) / 60)}m` : '—'} />
             </div>
@@ -160,11 +167,17 @@ export function MonitorPage(): ReactElement {
                 </tr>
               </thead>
               <tbody>
-                {ports.slice(0, 15).map((p, i) => (
+                {ports
+                  .sort((a, b) => {
+                    if (a.protocol === b.protocol) return a.port - b.port
+                    return a.protocol === 'tcp' ? -1 : 1
+                  })
+                  .slice(0, 15)
+                  .map((p, i) => (
                   <tr key={i} style={{ borderTop: '1px solid var(--border)' }}>
                     <td style={{ padding: '8px 4px' }} className="mono">{p.protocol.toUpperCase()}</td>
                     <td style={{ padding: '8px 4px', fontWeight: 600 }}>{p.port}</td>
-                    <td style={{ padding: '8px 4px', color: 'var(--green)' }}>{p.state}</td>
+                    <td style={{ padding: '8px 4px', color: p.protocol === 'tcp' ? 'var(--green)' : 'var(--orange)' }}>{p.state}</td>
                   </tr>
                 ))}
               </tbody>
@@ -181,6 +194,7 @@ export function MonitorPage(): ReactElement {
                     <th style={{ padding: '8px 4px' }}>NAME</th>
                     <th style={{ padding: '8px 4px' }}>IMAGE</th>
                     <th style={{ padding: '8px 4px' }}>STATUS</th>
+                    <th style={{ padding: '8px 4px' }}>PORTS</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -198,6 +212,7 @@ export function MonitorPage(): ReactElement {
                           {c.state}
                         </span>
                       </td>
+                      <td style={{ padding: '8px 4px', fontSize: 11, color: 'var(--accent)', fontWeight: 600 }}>{c.ports}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -395,7 +410,7 @@ function NetworkChart({ data, height }: { data: {rx: number, tx: number}[], heig
 function InfoLine({ label, value }: { label: string, value?: string }): ReactElement {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
-      <span style={{ color: 'var(--text-muted)', width: 60 }}>│ ├</span>
+      <span style={{ color: 'var(--text-muted)', width: 70 }}>│ ├ {label}</span>
       <span style={{ fontWeight: 500 }}>{value ?? '—'}</span>
     </div>
   )
