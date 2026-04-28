@@ -866,8 +866,13 @@ function registerIpc(): void {
   ipcMain.handle(IPC.dockerSearch, async (_e, term: string) => {
     if (!docker || !term) return []
     try {
-      const results = await docker.searchImages({ term })
-      return results.map((r: any) => ({
+      const results = (await docker.searchImages({ term })) as Array<{
+        name: string
+        description: string
+        star_count: number
+        is_official: boolean
+      }>
+      return results.map((r) => ({
         name: r.name,
         description: r.description,
         star_count: r.star_count,
