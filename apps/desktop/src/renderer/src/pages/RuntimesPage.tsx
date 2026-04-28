@@ -13,6 +13,13 @@ const RUNTIME_DETAILS: Record<string, { description: string, website: string, ic
   dotnet: { description: '.NET is a free, cross-platform, open source developer platform for building many different types of applications.', website: 'https://dotnet.microsoft.com', icon: 'library' },
   bun: { description: 'Bun is a fast all-in-one JavaScript runtime. Bundle, transpile, install and run JavaScript & TypeScript projects.', website: 'https://bun.sh', icon: 'flame' },
   zig: { description: 'Zig is a general-purpose programming language and toolchain for maintaining robust, optimal, and reusable software.', website: 'https://ziglang.org', icon: 'circuit-board' },
+  c_cpp: { description: 'C/C++ toolchain with compilers and debugger for systems programming, high-performance apps, and native libraries.', website: 'https://gcc.gnu.org', icon: 'terminal-bash' },
+  matlab: { description: 'MATLAB-compatible environment powered by GNU Octave for numerical computing and matrix-heavy workflows.', website: 'https://octave.org', icon: 'graph-line' },
+  dart: { description: 'Dart is a client-optimized language for building fast apps on any platform.', website: 'https://dart.dev', icon: 'symbol-namespace' },
+  flutter: { description: 'Flutter is a UI toolkit for building natively compiled applications from a single codebase.', website: 'https://flutter.dev', icon: 'device-mobile' },
+  julia: { description: 'Julia is a high-performance dynamic language for technical and scientific computing.', website: 'https://julialang.org', icon: 'symbol-color' },
+  lua: { description: 'Lua is a lightweight embeddable scripting language used in game engines and automation.', website: 'https://www.lua.org', icon: 'symbol-variable' },
+  lisp: { description: 'Common Lisp environment (SBCL) for symbolic programming and advanced macro systems.', website: 'https://www.sbcl.org', icon: 'symbol-class' },
 }
 
 export function RuntimesPage(): ReactElement {
@@ -24,6 +31,10 @@ export function RuntimesPage(): ReactElement {
   const [wizardStep, setWizardStep] = useState(1)
   const [installMethod, setInstallMethod] = useState<'system' | 'local'>('system')
   const [dependencies, setDependencies] = useState<Array<{ name: string; status: string; ok: boolean }>>([])
+  const [showUninstallModal, setShowUninstallModal] = useState(false)
+  const [removeMode, setRemoveMode] = useState<'runtime_only' | 'runtime_and_deps'>('runtime_only')
+  const [uninstallPreview, setUninstallPreview] = useState<{ distro: string; runtimePackages: string[]; removableDeps: string[]; blockedSharedDeps: string[]; finalPackages: string[]; note?: string } | null>(null)
+  const [loadingUninstallPreview, setLoadingUninstallPreview] = useState(false)
 
   const refreshDeps = useCallback(async () => {
     const res = await window.dh.checkDependencies(selectedId)
@@ -36,7 +47,7 @@ export function RuntimesPage(): ReactElement {
       const res = await window.dh.runtimeStatus() as RuntimeStatusResponse
       setRuntimes(res.runtimes)
       const jobs = await window.dh.jobsList() as JobSummary[]
-      setActiveJobs(jobs.filter(j => j.kind.startsWith('install_')))
+      setActiveJobs(jobs.filter(j => j.kind.startsWith('install_') || j.kind.startsWith('uninstall_')))
     } finally {
       setIsRefreshing(false)
     }
@@ -56,9 +67,11 @@ export function RuntimesPage(): ReactElement {
   const selectedRuntime = useMemo(() => runtimes.find(r => r.id === selectedId), [runtimes, selectedId])
   const activeJob = useMemo(() => {
     const jobsForRuntime = activeJobs.filter(j => j.kind === `install_${selectedId}`)
+      .concat(activeJobs.filter(j => j.kind === `uninstall_${selectedId}`))
     return jobsForRuntime[jobsForRuntime.length - 1]
   }, [activeJobs, selectedId])
   const installInProgress = activeJob?.state === 'running'
+  const isUninstallJob = activeJob?.kind === `uninstall_${selectedId}`
 
   const startInstall = async (id: string) => {
     setSelectedId(id)
@@ -74,6 +87,29 @@ export function RuntimesPage(): ReactElement {
       method: installMethod 
     })
   }
+
+  const runUninstall = async () => {
+    setWizardStep(3)
+    await window.dh.jobStart({
+      kind: 'runtime_uninstall',
+      runtimeId: selectedId,
+      method: installMethod,
+      removeMode,
+    })
+  }
+
+  const openUninstallModal = async () => {
+    setRemoveMode('runtime_only')
+    setShowUninstallModal(true)
+  }
+
+  useEffect(() => {
+    if (!showUninstallModal || !selectedRuntime?.installed) return
+    setLoadingUninstallPreview(true)
+    void window.dh.runtimeUninstallPreview({ runtimeId: selectedId, removeMode })
+      .then((res) => setUninstallPreview(res))
+      .finally(() => setLoadingUninstallPreview(false))
+  }, [showUninstallModal, selectedId, removeMode, selectedRuntime?.installed])
 
   const cancelInstall = async () => {
     if (activeJob) {
@@ -186,6 +222,22 @@ export function RuntimesPage(): ReactElement {
                    }}
                  >
                    {selectedRuntime.installed ? 'Up to date' : installInProgress ? 'Installing...' : 'Get / Install'}
+                 </button>
+                 <button
+                   onClick={() => void openUninstallModal()}
+                   disabled={!selectedRuntime.installed || installInProgress}
+                   style={{
+                     padding: '12px 20px',
+                     borderRadius: 12,
+                     border: '1px solid rgba(255,82,82,0.35)',
+                     background: 'rgba(255,82,82,0.1)',
+                     color: '#ff8a80',
+                     fontWeight: 700,
+                     cursor: (!selectedRuntime.installed || installInProgress) ? 'default' : 'pointer',
+                     opacity: (!selectedRuntime.installed || installInProgress) ? 0.5 : 1,
+                   }}
+                 >
+                   Remove
                  </button>
               </div>
             </div>
@@ -322,7 +374,7 @@ export function RuntimesPage(): ReactElement {
                                 💡 <strong>Note:</strong> Some missing headers might be required for building.
                              </div>
                              <button 
-                               onClick={() => window.dh.jobStart({ kind: 'install_deps' })}
+                              onClick={() => window.dh.jobStart({ kind: 'install_deps', runtimeId: selectedId })}
                                className="hp-btn" 
                                style={{ background: 'var(--accent)', color: 'white', border: 'none', padding: '6px 12px', fontSize: 11, fontWeight: 700 }}
                              >
@@ -336,7 +388,7 @@ export function RuntimesPage(): ReactElement {
                    {wizardStep === 3 && (
                      <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                           <h3 style={{ marginTop: 0 }}>Installing {selectedRuntime?.name}</h3>
+                           <h3 style={{ marginTop: 0 }}>{isUninstallJob ? 'Removing' : 'Installing'} {selectedRuntime?.name}</h3>
                            {activeJob?.state === 'running' && (
                              <button 
                                onClick={cancelInstall}
@@ -346,11 +398,15 @@ export function RuntimesPage(): ReactElement {
                              </button>
                            )}
                         </div>
-                        <p style={{ color: 'var(--text-muted)' }}>Please wait while we set up your environment...</p>
+                        <p style={{ color: 'var(--text-muted)' }}>
+                          {isUninstallJob ? 'Please wait while we remove runtime files and clean shared dependencies safely...' : 'Please wait while we set up your environment...'}
+                        </p>
 
                         <div style={{ marginTop: 24 }}>
                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
-                              <span style={{ fontWeight: 700, fontSize: 14 }}>{activeJob?.progress === 100 ? 'Verification...' : 'Downloading & Extracting...'}</span>
+                              <span style={{ fontWeight: 700, fontSize: 14 }}>
+                                {activeJob?.progress === 100 ? 'Verification...' : (isUninstallJob ? 'Removing packages...' : 'Downloading & Extracting...')}
+                              </span>
                               <span className="mono">{activeJob?.progress || 0}%</span>
                            </div>
                            <div style={{ height: 10, background: 'rgba(255,255,255,0.05)', borderRadius: 5, overflow: 'hidden' }}>
@@ -421,6 +477,116 @@ export function RuntimesPage(): ReactElement {
           </div>
         )}
       </main>
+      {showUninstallModal && selectedRuntime && (
+        <div style={{
+          position: 'absolute',
+          inset: 0,
+          background: 'rgba(0,0,0,0.6)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 20,
+        }}>
+          <div style={{
+            width: 'min(760px, 92%)',
+            maxHeight: '85vh',
+            overflowY: 'auto',
+            background: 'var(--bg-panel)',
+            border: '1px solid var(--border)',
+            borderRadius: 16,
+            padding: 24,
+          }}>
+            <h3 style={{ marginTop: 0, marginBottom: 8 }}>Confirm Remove {selectedRuntime.name}</h3>
+            <p style={{ marginTop: 0, color: 'var(--text-muted)', fontSize: 13 }}>
+              Choose how much cleanup to apply. Preview reflects detected distro and package mapping.
+            </p>
+
+            <div style={{ display: 'flex', gap: 12, marginTop: 16 }}>
+              <button
+                onClick={() => setRemoveMode('runtime_only')}
+                style={{
+                  flex: 1,
+                  padding: 14,
+                  borderRadius: 10,
+                  border: `1px solid ${removeMode === 'runtime_only' ? 'var(--accent)' : 'var(--border)'}`,
+                  background: removeMode === 'runtime_only' ? 'rgba(124,77,255,0.12)' : 'transparent',
+                  color: 'var(--text-main)',
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                }}
+              >
+                <div style={{ fontWeight: 700 }}>Remove runtime only</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>Removes language package only.</div>
+              </button>
+              <button
+                onClick={() => setRemoveMode('runtime_and_deps')}
+                style={{
+                  flex: 1,
+                  padding: 14,
+                  borderRadius: 10,
+                  border: `1px solid ${removeMode === 'runtime_and_deps' ? 'var(--accent)' : 'var(--border)'}`,
+                  background: removeMode === 'runtime_and_deps' ? 'rgba(124,77,255,0.12)' : 'transparent',
+                  color: 'var(--text-main)',
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                }}
+              >
+                <div style={{ fontWeight: 700 }}>Remove + autoremove deps</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>Also removes safe non-shared dependencies.</div>
+              </button>
+            </div>
+
+            <div style={{ marginTop: 18, padding: 14, borderRadius: 10, border: '1px solid var(--border)', background: 'rgba(255,255,255,0.02)' }}>
+              {loadingUninstallPreview ? (
+                <div style={{ color: 'var(--text-muted)' }}>Preparing removal preview...</div>
+              ) : (
+                <>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>
+                    Distro: <strong>{uninstallPreview?.distro ?? 'unknown'}</strong>
+                  </div>
+                  <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6 }}>Packages to remove now:</div>
+                  {uninstallPreview?.finalPackages.length ? (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                      {uninstallPreview.finalPackages.map((pkg) => (
+                        <span key={pkg} style={{ padding: '4px 8px', borderRadius: 999, border: '1px solid rgba(255,82,82,0.35)', background: 'rgba(255,82,82,0.12)', fontSize: 12 }}>
+                          {pkg}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>No package-managed items detected for this runtime.</div>
+                  )}
+                  {removeMode === 'runtime_and_deps' && uninstallPreview && uninstallPreview.removableDeps.length > 0 && (
+                    <div style={{ marginTop: 10, fontSize: 12, color: 'var(--text-muted)' }}>
+                      Extra safe deps included: {uninstallPreview.removableDeps.join(', ')}
+                    </div>
+                  )}
+                  {removeMode === 'runtime_and_deps' && uninstallPreview && uninstallPreview.blockedSharedDeps.length > 0 && (
+                    <div style={{ marginTop: 10, fontSize: 12, color: '#ffb74d' }}>
+                      Shared dependencies will NOT be removed (used by other runtimes): {uninstallPreview.blockedSharedDeps.join(', ')}.
+                      Runtime removal will continue safely without deleting them.
+                    </div>
+                  )}
+                  {uninstallPreview?.note && (
+                    <div style={{ marginTop: 10, fontSize: 12, color: 'var(--text-muted)' }}>{uninstallPreview.note}</div>
+                  )}
+                </>
+              )}
+            </div>
+
+            <div style={{ marginTop: 20, display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button className="hp-btn" onClick={() => setShowUninstallModal(false)}>Cancel</button>
+              <button
+                className="hp-btn"
+                onClick={() => { setShowUninstallModal(false); void runUninstall() }}
+                style={{ background: 'rgba(255,82,82,0.18)', border: '1px solid rgba(255,82,82,0.4)', color: '#ff8a80', fontWeight: 700 }}
+              >
+                Confirm Remove
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

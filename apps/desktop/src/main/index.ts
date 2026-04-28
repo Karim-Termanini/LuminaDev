@@ -83,6 +83,7 @@ type JobRecord = {
   log: string[]
   cancelRequested: boolean
   timer?: ReturnType<typeof setInterval>
+  proc?: ReturnType<typeof spawn>
 }
 
 const jobs = new Map<string, JobRecord>()
@@ -126,7 +127,87 @@ function getDocker(): Docker | null {
   return null
 }
 
+function detectHostDistroSync(): 'fedora' | 'ubuntu' | 'arch' {
+  if (fs.existsSync('/etc/fedora-release')) return 'fedora'
+  if (fs.existsSync('/etc/arch-release')) return 'arch'
+  return 'ubuntu'
+}
+
 type RuntimeDetectResult = { installed: boolean; version?: string; path?: string }
+type Distro = 'fedora' | 'ubuntu' | 'arch'
+
+const RUNTIME_INSTALL_PACKAGES: Record<string, Record<Distro, string[]>> = {
+  node: { fedora: ['nodejs'], ubuntu: ['nodejs'], arch: ['nodejs'] },
+  rust: { fedora: ['rust'], ubuntu: ['rustc'], arch: ['rust'] },
+  python: { fedora: ['python3'], ubuntu: ['python3'], arch: ['python'] },
+  go: { fedora: ['golang'], ubuntu: ['golang'], arch: ['go'] },
+  java: { fedora: ['java-latest-openjdk'], ubuntu: ['default-jdk'], arch: ['jdk-openjdk'] },
+  php: { fedora: ['php'], ubuntu: ['php'], arch: ['php'] },
+  ruby: { fedora: ['ruby'], ubuntu: ['ruby'], arch: ['ruby'] },
+  dotnet: { fedora: ['dotnet-sdk-8.0'], ubuntu: ['dotnet-sdk-8.0'], arch: ['dotnet-sdk'] },
+  zig: { fedora: ['zig'], ubuntu: ['zig'], arch: ['zig'] },
+  c_cpp: { fedora: ['gcc', 'gcc-c++', 'gdb', 'make'], ubuntu: ['build-essential', 'gdb'], arch: ['base-devel', 'gdb'] },
+  matlab: { fedora: ['octave'], ubuntu: ['octave'], arch: ['octave'] },
+  dart: { fedora: ['dart'], ubuntu: ['dart'], arch: ['dart'] },
+  flutter: { fedora: ['flutter'], ubuntu: ['flutter'], arch: ['flutter'] },
+  julia: { fedora: ['julia'], ubuntu: ['julia'], arch: ['julia'] },
+  lua: { fedora: ['lua'], ubuntu: ['lua5.4'], arch: ['lua'] },
+  lisp: { fedora: ['sbcl'], ubuntu: ['sbcl'], arch: ['sbcl'] },
+}
+
+const RUNTIME_DEP_PACKAGES: Record<string, Record<Distro, string[]>> = {
+  bun: { fedora: ['curl', 'unzip', 'bash'], ubuntu: ['curl', 'unzip', 'bash'], arch: ['curl', 'unzip', 'bash'] },
+  java: { fedora: ['java-latest-openjdk', 'java-latest-openjdk-devel'], ubuntu: ['default-jdk'], arch: ['jdk-openjdk'] },
+  rust: {
+    fedora: ['curl', 'gcc-c++', 'make', 'pkgconf-pkg-config', 'openssl-devel'],
+    ubuntu: ['curl', 'build-essential', 'pkg-config', 'libssl-dev'],
+    arch: ['curl', 'base-devel', 'pkgconf', 'openssl'],
+  },
+  node: { fedora: ['nodejs', 'npm', 'gcc-c++', 'make'], ubuntu: ['nodejs', 'npm', 'build-essential'], arch: ['nodejs', 'npm', 'base-devel'] },
+  c_cpp: { fedora: ['gcc', 'gcc-c++', 'gdb', 'make', 'cmake'], ubuntu: ['build-essential', 'gdb', 'cmake'], arch: ['base-devel', 'gdb', 'cmake'] },
+  go: { fedora: ['golang'], ubuntu: ['golang'], arch: ['go'] },
+  matlab: { fedora: ['octave'], ubuntu: ['octave'], arch: ['octave'] },
+  dart: { fedora: ['dart'], ubuntu: ['dart'], arch: ['dart'] },
+  flutter: { fedora: ['flutter'], ubuntu: ['flutter'], arch: ['flutter'] },
+  julia: { fedora: ['julia'], ubuntu: ['julia'], arch: ['julia'] },
+  lua: { fedora: ['lua', 'luarocks'], ubuntu: ['lua5.4', 'luarocks'], arch: ['lua', 'luarocks'] },
+  lisp: { fedora: ['sbcl'], ubuntu: ['sbcl'], arch: ['sbcl'] },
+  ruby: { fedora: ['ruby'], ubuntu: ['ruby'], arch: ['ruby'] },
+}
+
+const RUNTIME_DETECT_COMMANDS: Record<string, { cmd: string; args: string[]; name: string }> = {
+  node: { cmd: 'node', args: ['--version'], name: 'Node.js' },
+  rust: { cmd: 'rustc', args: ['--version'], name: 'Rust' },
+  python: { cmd: 'python3', args: ['--version'], name: 'Python 3' },
+  go: { cmd: 'go', args: ['version'], name: 'Go' },
+  java: { cmd: 'java', args: ['-version'], name: 'Java' },
+  php: { cmd: 'php', args: ['--version'], name: 'PHP' },
+  ruby: { cmd: 'ruby', args: ['--version'], name: 'Ruby' },
+  dotnet: { cmd: 'dotnet', args: ['--version'], name: '.NET SDK' },
+  bun: { cmd: 'bun', args: ['--version'], name: 'Bun' },
+  zig: { cmd: 'zig', args: ['version'], name: 'Zig' },
+  c_cpp: { cmd: 'g++', args: ['--version'], name: 'C/C++ Toolchain' },
+  matlab: { cmd: 'octave', args: ['--version'], name: 'MATLAB (Octave)' },
+  dart: { cmd: 'dart', args: ['--version'], name: 'Dart' },
+  flutter: { cmd: 'flutter', args: ['--version'], name: 'Flutter' },
+  julia: { cmd: 'julia', args: ['--version'], name: 'Julia' },
+  lua: { cmd: 'lua', args: ['-v'], name: 'Lua' },
+  lisp: { cmd: 'sbcl', args: ['--version'], name: 'Lisp (SBCL)' },
+}
+
+function dependencyRemovalPlan(runtimeId: string, distro: Distro): { removable: string[]; blockedShared: string[] } {
+  const runtimePackages = new Set((RUNTIME_INSTALL_PACKAGES[runtimeId]?.[distro] ?? []))
+  const depCandidates = new Set((RUNTIME_DEP_PACKAGES[runtimeId]?.[distro] ?? []).filter((d) => !runtimePackages.has(d)))
+  if (!depCandidates.size) return { removable: [], blockedShared: [] }
+  const sharedByOthers = new Set<string>()
+  for (const [rid, depByDistro] of Object.entries(RUNTIME_DEP_PACKAGES)) {
+    if (rid === runtimeId) continue
+    for (const dep of (depByDistro[distro] ?? [])) sharedByOthers.add(dep)
+  }
+  const removable = [...depCandidates].filter((dep) => !sharedByOthers.has(dep))
+  const blockedShared = [...depCandidates].filter((dep) => sharedByOthers.has(dep))
+  return { removable, blockedShared }
+}
 
 async function detectRuntimeInstallation(id: string, cmd: string, args: string[]): Promise<RuntimeDetectResult> {
   const home = homedir()
@@ -1043,32 +1124,17 @@ function registerIpc(): void {
   })
 
   ipcMain.handle(IPC.runtimeStatus, async (): Promise<RuntimeStatusResponse> => {
-    const [node, rust, python, go, java, php, ruby, dotnet, bun, zig] = await Promise.all([
-      detectRuntimeInstallation('node', 'node', ['--version']),
-      detectRuntimeInstallation('rust', 'rustc', ['--version']),
-      detectRuntimeInstallation('python', 'python3', ['--version']),
-      detectRuntimeInstallation('go', 'go', ['version']),
-      detectRuntimeInstallation('java', 'java', ['-version']),
-      detectRuntimeInstallation('php', 'php', ['--version']),
-      detectRuntimeInstallation('ruby', 'ruby', ['--version']),
-      detectRuntimeInstallation('dotnet', 'dotnet', ['--version']),
-      detectRuntimeInstallation('bun', 'bun', ['--version']),
-      detectRuntimeInstallation('zig', 'zig', ['version']),
-    ])
+    const runtimeIds = Object.keys(RUNTIME_DETECT_COMMANDS)
+    const results = await Promise.all(
+      runtimeIds.map(async (id) => {
+        const probe = RUNTIME_DETECT_COMMANDS[id]
+        const status = await detectRuntimeInstallation(id, probe.cmd, probe.args)
+        return { id, name: probe.name, ...status }
+      })
+    )
 
     return {
-      runtimes: [
-        { id: 'node', name: 'Node.js', ...node },
-        { id: 'rust', name: 'Rust', ...rust },
-        { id: 'python', name: 'Python 3', ...python },
-        { id: 'go', name: 'Go', ...go },
-        { id: 'java', name: 'Java', ...java },
-        { id: 'php', name: 'PHP', ...php },
-        { id: 'ruby', name: 'Ruby', ...ruby },
-        { id: 'dotnet', name: '.NET SDK', ...dotnet },
-        { id: 'bun', name: 'Bun', ...bun },
-        { id: 'zig', name: 'Zig', ...zig },
-      ]
+      runtimes: results
     }
   })
 
@@ -1076,7 +1142,7 @@ function registerIpc(): void {
     const { execSync } = await import('node:child_process')
     const payload = z.object({ runtimeId: z.string().optional() }).optional().parse(raw)
     const runtimeId = payload?.runtimeId ?? 'node'
-    const isFedora = fs.existsSync('/etc/fedora-release')
+    const distro = detectHostDistroSync()
 
     const check = (cmd: string) => {
       try {
@@ -1084,71 +1150,55 @@ function registerIpc(): void {
         return !!out
       } catch { return false }
     }
-    const checkFile = (p: string) => fs.existsSync(p)
     const isPkgInstalled = (name: string) => {
       try {
-        if (isFedora) {
-          execSync(`rpm -q ${name}`, { stdio: 'ignore' })
-        } else {
-          execSync(`dpkg -s ${name}`, { stdio: 'ignore' })
-        }
+        if (distro === 'fedora') execSync(`rpm -q ${name}`, { stdio: 'ignore' })
+        else if (distro === 'arch') execSync(`pacman -Q ${name}`, { stdio: 'ignore' })
+        else execSync(`dpkg -s ${name}`, { stdio: 'ignore' })
         return true
       } catch {
         return false
       }
     }
-
-    const dep = (name: string, ok: boolean, missingHint?: string) => ({
-      name,
-      status: ok ? 'Detected' : (missingHint ?? 'Missing'),
-      ok,
-    })
-
-    const runtimeDeps: Record<string, Array<{ name: string; ok: boolean; missingHint?: string }>> = {
-      bun: [
-        { name: 'curl', ok: check('curl'), missingHint: isFedora ? 'Missing (dnf install curl)' : 'Missing (apt-get install curl)' },
-        { name: 'unzip', ok: check('unzip'), missingHint: isFedora ? 'Missing (dnf install unzip)' : 'Missing (apt-get install unzip)' },
-        { name: 'bash', ok: check('bash') },
-      ],
-      java: [
-        { name: isFedora ? 'java-latest-openjdk package' : 'default-jdk package', ok: isPkgInstalled(isFedora ? 'java-latest-openjdk' : 'default-jdk') },
-        { name: 'java command', ok: check('java') },
-        { name: 'javac command', ok: check('javac') },
-      ],
-      node: [
-        { name: 'node command', ok: check('node') },
-        { name: 'npm command', ok: check('npm') },
-      ],
-      rust: [
-        { name: 'curl', ok: check('curl') },
-        { name: 'gcc', ok: check('gcc') },
-        { name: 'make', ok: check('make') },
-        { name: 'OpenSSL headers', ok: checkFile('/usr/include/openssl/ssl.h') || checkFile('/usr/include/openssl/opensslv.h') },
-      ],
-      go: [
-        { name: 'go command', ok: check('go') },
-      ],
-      python: [
-        { name: 'python3 command', ok: check('python3') },
-        { name: 'pip3 command', ok: check('pip3') },
-      ],
-      php: [
-        { name: 'php command', ok: check('php') },
-      ],
-      ruby: [
-        { name: 'ruby command', ok: check('ruby') },
-        { name: 'gem command', ok: check('gem') },
-      ],
-      dotnet: [
-        { name: 'dotnet command', ok: check('dotnet') },
-      ],
-      zig: [
-        { name: 'zig command', ok: check('zig') },
-      ],
+    const packages = (RUNTIME_DEP_PACKAGES[runtimeId] ?? RUNTIME_DEP_PACKAGES.node)[distro] ?? []
+    const installHint = distro === 'fedora'
+      ? `dnf install ${packages.join(' ')}`
+      : distro === 'arch'
+        ? `pacman -S --needed ${packages.join(' ')}`
+        : `apt-get install ${packages.join(' ')}`
+    const commandCheck = RUNTIME_DETECT_COMMANDS[runtimeId]?.cmd
+    const rows = packages.map((p) => ({
+      name: p,
+      ok: isPkgInstalled(p),
+      status: isPkgInstalled(p) ? 'Detected' : `Missing (${installHint})`,
+    }))
+    if (commandCheck) {
+      rows.push({
+        name: `${commandCheck} command`,
+        ok: check(commandCheck),
+        status: check(commandCheck) ? 'Detected' : 'Missing',
+      })
     }
+    return rows
+  })
 
-    const deps = runtimeDeps[runtimeId] ?? runtimeDeps.node
-    return deps.map((d) => dep(d.name, d.ok, d.missingHint))
+  ipcMain.handle('dh:runtime:uninstall:preview', async (_e, raw: unknown) => {
+    const payload = z.object({
+      runtimeId: z.string().min(1),
+      removeMode: z.enum(['runtime_only', 'runtime_and_deps']).default('runtime_only'),
+    }).parse(raw)
+    const distro = detectHostDistroSync()
+    const runtimePackages = (RUNTIME_INSTALL_PACKAGES[payload.runtimeId]?.[distro] ?? []).filter(Boolean)
+    const plan = dependencyRemovalPlan(payload.runtimeId, distro)
+    const removableDeps = plan.removable
+    const finalPackages = payload.removeMode === 'runtime_and_deps'
+      ? [...new Set([...runtimePackages, ...removableDeps])]
+      : [...new Set(runtimePackages)]
+    let note: string | undefined
+    if (payload.runtimeId === 'bun' || payload.runtimeId === 'rust') {
+      note = 'This runtime may be installed via local script, so package list can be empty and local files are removed instead.'
+    }
+    return { distro, runtimePackages, removableDeps, blockedSharedDeps: plan.blockedShared, finalPackages, note }
   })
 
   ipcMain.handle(IPC.hostExec, async (_e, raw: unknown) => {
@@ -1659,24 +1709,43 @@ function registerIpc(): void {
     }
 
     if (req.kind === 'install_deps') {
-      const isFedora = fs.existsSync('/etc/fedora-release')
-      const pkg = isFedora ? 'openssl-devel gcc-c++ make pkg-config' : 'libssl-dev build-essential'
+      const distro = detectHostDistroSync()
+      const runtimeId = req.runtimeId ?? 'node'
+      const selected = RUNTIME_DEP_PACKAGES[runtimeId] ?? RUNTIME_DEP_PACKAGES.node
+      const packages = selected[distro]
+      const installCommands: Record<'fedora' | 'ubuntu' | 'arch', string> = {
+        fedora: 'dnf install -y',
+        ubuntu: 'apt-get install -y',
+        arch: 'pacman -S --needed --noconfirm',
+      }
       const job: JobRecord = {
         id, kind: 'install_deps', state: 'running', progress: 0,
-        log: [`Starting dependency installation (${isFedora ? 'DNF' : 'APT'})...`],
+        log: [`Starting dependency installation for ${runtimeId} (${distro.toUpperCase()})...`],
         cancelRequested: false,
       }
       jobs.set(id, job)
-      const proc = spawn('pkexec', [isFedora ? 'dnf' : 'apt-get', 'install', '-y', ...pkg.split(' ')], { shell: true })
+      const proc = spawn('pkexec', ['bash', '-lc', `${installCommands[distro]} ${packages.join(' ')}`], { shell: false })
+      job.proc = proc
       proc.stdout.on('data', (d) => { job.log.push(d.toString().trim()); job.progress = Math.min(95, job.progress + 2) })
       proc.stderr.on('data', (d) => { job.log.push(d.toString().trim()) })
-      proc.on('close', (c) => { job.state = c === 0 ? 'completed' : 'failed'; job.progress = 100 })
+      proc.on('close', (c) => {
+        delete job.proc
+        if (job.cancelRequested) {
+          job.state = 'cancelled'
+          job.log.push('Dependency installation cancelled by user.')
+        } else {
+          job.state = c === 0 ? 'completed' : 'failed'
+          if (c !== 0) job.log.push(`Dependency installation failed with exit code ${c}`)
+        }
+        job.progress = 100
+      })
       return { id }
     }
 
     if (req.kind === 'runtime_install') {
       const runtimeId = req.runtimeId ?? 'unknown'
       const method = req.method ?? 'system'
+      const distro = detectHostDistroSync()
       const job: JobRecord = {
         id,
         kind: `install_${runtimeId}`,
@@ -1690,38 +1759,15 @@ function registerIpc(): void {
       let command = ''
       let args: string[] = []
 
-      // Detection for Fedora/DNF vs Debian/APT
-      const isFedora = fs.existsSync('/etc/fedora-release')
-      const pkgManager = isFedora ? 'dnf' : 'apt-get'
-      const installCmd = isFedora ? 'install -y' : 'install -y'
-      const sudoPrefix = 'pkexec' // Use pkexec for GUI sudo prompts
-
       if (method === 'system' && runtimeId !== 'bun') {
-        const pkgMapFedora: Record<string, string> = {
-          node: 'nodejs',
-          rust: 'rust',
-          python: 'python3',
-          go: 'golang',
-          java: 'java-latest-openjdk',
-          php: 'php',
-          ruby: 'ruby',
-          dotnet: 'dotnet-sdk-8.0',
-          zig: 'zig'
+        const installPackages = (RUNTIME_INSTALL_PACKAGES[runtimeId] ?? RUNTIME_INSTALL_PACKAGES.node)[distro]
+        const cmdByDistro: Record<Distro, string> = {
+          fedora: `dnf install -y ${installPackages.join(' ')}`,
+          ubuntu: `apt-get install -y ${installPackages.join(' ')}`,
+          arch: `pacman -S --needed --noconfirm ${installPackages.join(' ')}`,
         }
-        const pkgMapDebian: Record<string, string> = {
-          node: 'nodejs',
-          rust: 'rustc',
-          python: 'python3',
-          go: 'golang',
-          java: 'default-jdk',
-          php: 'php',
-          ruby: 'ruby',
-          dotnet: 'dotnet-sdk-8.0',
-          zig: 'zig'
-        }
-        const pkgMap = isFedora ? pkgMapFedora : pkgMapDebian
-        command = sudoPrefix
-        args = [pkgManager, ...installCmd.split(' '), pkgMap[runtimeId] || runtimeId]
+        command = 'pkexec'
+        args = ['bash', '-lc', cmdByDistro[distro]]
       } else {
         // Local/Script Method (or Bun which has no standard package)
         if (runtimeId === 'rust') {
@@ -1741,6 +1787,7 @@ function registerIpc(): void {
 
       if (command) {
         const proc = spawn(command, args, { shell: false })
+        job.proc = proc
         proc.stdout.on('data', (data) => {
           const s = data.toString().trim()
           if (s) {
@@ -1758,20 +1805,15 @@ function registerIpc(): void {
           }
         })
         proc.on('close', async (code) => {
+          delete job.proc
+          if (job.cancelRequested) {
+            job.state = 'cancelled'
+            job.progress = 100
+            job.log.push('Installation cancelled by user.')
+            return
+          }
           if (code === 0) {
-            const cmdMap: Record<string, { cmd: string; args: string[] }> = {
-              node: { cmd: 'node', args: ['--version'] },
-              rust: { cmd: 'rustc', args: ['--version'] },
-              python: { cmd: 'python3', args: ['--version'] },
-              go: { cmd: 'go', args: ['version'] },
-              java: { cmd: 'java', args: ['-version'] },
-              php: { cmd: 'php', args: ['--version'] },
-              ruby: { cmd: 'ruby', args: ['--version'] },
-              dotnet: { cmd: 'dotnet', args: ['--version'] },
-              bun: { cmd: 'bun', args: ['--version'] },
-              zig: { cmd: 'zig', args: ['version'] },
-            }
-            const probe = cmdMap[runtimeId]
+            const probe = RUNTIME_DETECT_COMMANDS[runtimeId]
             if (probe) {
               const verified = await detectRuntimeInstallation(runtimeId, probe.cmd, probe.args)
               if (!verified.installed) {
@@ -1801,6 +1843,82 @@ function registerIpc(): void {
       return { id }
     }
 
+    if (req.kind === 'runtime_uninstall') {
+      const runtimeId = req.runtimeId ?? 'unknown'
+      const distro = detectHostDistroSync()
+      const removeMode = req.removeMode ?? 'runtime_only'
+      const job: JobRecord = {
+        id,
+        kind: `uninstall_${runtimeId}`,
+        state: 'running',
+        progress: 0,
+        log: [`Starting uninstall of ${runtimeId}...`],
+        cancelRequested: false,
+      }
+      jobs.set(id, job)
+
+      let command = 'pkexec'
+      let args: string[] = []
+      if (runtimeId === 'bun') {
+        command = 'bash'
+        args = ['-lc', 'rm -rf "$HOME/.bun" "$HOME/.local/bin/bun"']
+      } else if (runtimeId === 'rust') {
+        command = 'bash'
+        args = ['-lc', 'command -v rustup >/dev/null 2>&1 && rustup self uninstall -y || true']
+      } else {
+        const installPackages = (RUNTIME_INSTALL_PACKAGES[runtimeId] ?? RUNTIME_INSTALL_PACKAGES.node)[distro]
+        const depPlan = dependencyRemovalPlan(runtimeId, distro)
+        const depsToRemove = removeMode === 'runtime_and_deps' ? depPlan.removable : []
+        const packagesToRemove = [...new Set([...installPackages, ...depsToRemove])]
+        const removeCmdByDistro: Record<Distro, string> = {
+          fedora: packagesToRemove.length ? `dnf remove -y ${packagesToRemove.join(' ')}${removeMode === 'runtime_and_deps' ? ' && dnf autoremove -y' : ''}` : 'true',
+          ubuntu: packagesToRemove.length ? `apt-get remove -y ${packagesToRemove.join(' ')}${removeMode === 'runtime_and_deps' ? ' && apt-get autoremove -y' : ''}` : 'true',
+          arch: packagesToRemove.length ? `pacman -Rns --noconfirm ${packagesToRemove.join(' ')}` : 'true',
+        }
+        if (!packagesToRemove.length) {
+          job.log.push('No package-managed runtime artifacts detected. Nothing to remove from system packages.')
+        }
+        if (removeMode === 'runtime_and_deps' && depPlan.blockedShared.length) {
+          job.log.push(`Skipped shared dependencies (still used by other runtimes): ${depPlan.blockedShared.join(', ')}`)
+        }
+        args = ['bash', '-lc', removeCmdByDistro[distro]]
+      }
+
+      const proc = spawn(command, args, { shell: false })
+      job.proc = proc
+      proc.stdout.on('data', (d) => { const s = d.toString().trim(); if (s) { job.log.push(s); job.progress = Math.min(95, job.progress + 2) } })
+      proc.stderr.on('data', (d) => { const s = d.toString().trim(); if (s) { job.log.push(s); job.progress = Math.min(95, job.progress + 1) } })
+      proc.on('close', async (code) => {
+        delete job.proc
+        if (job.cancelRequested) {
+          job.state = 'cancelled'
+          job.progress = 100
+          job.log.push('Uninstall cancelled by user.')
+          return
+        }
+        if (code === 0) {
+          const probe = RUNTIME_DETECT_COMMANDS[runtimeId]
+          if (probe) {
+            const stillInstalled = await detectRuntimeInstallation(runtimeId, probe.cmd, probe.args)
+            if (stillInstalled.installed) {
+              job.state = 'failed'
+              job.progress = 100
+              job.log.push('Uninstall command finished, but runtime is still detected.')
+              return
+            }
+          }
+          job.state = 'completed'
+          job.progress = 100
+          job.log.push('Uninstall finished successfully.')
+        } else {
+          job.state = 'failed'
+          job.progress = 100
+          job.log.push(`Uninstall failed with exit code ${code}`)
+        }
+      })
+      return { id }
+    }
+
     throw new Error('Unsupported job kind')
   })
 
@@ -1814,6 +1932,23 @@ function registerIpc(): void {
     if (!j) return { ok: false as const, reason: 'not_found' as const }
     if (j.state !== 'running') return { ok: false as const, reason: 'not_running' as const }
     j.cancelRequested = true
+    if (j.proc && !j.proc.killed) {
+      j.log.push('Cancellation requested. Stopping active process...')
+      try {
+        j.proc.kill('SIGTERM')
+      } catch {
+        /* ignore */
+      }
+      setTimeout(() => {
+        if (j.proc && !j.proc.killed) {
+          try {
+            j.proc.kill('SIGKILL')
+          } catch {
+            /* ignore */
+          }
+        }
+      }, 1500)
+    }
     return { ok: true as const }
   })
 

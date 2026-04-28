@@ -62,7 +62,7 @@ declare global {
       layoutSet: (layout: unknown) => Promise<unknown>
       storeGet: (payload: import('@linux-dev-home/shared').StoreGetRequest) => Promise<unknown>
       storeSet: (payload: import('@linux-dev-home/shared').StoreSetRequest) => Promise<unknown>
-      jobStart: (payload: { kind: string; durationMs?: number; runtimeId?: string; version?: string; method?: 'system' | 'local' }) => Promise<{ id: string }>
+      jobStart: (payload: { kind: string; durationMs?: number; runtimeId?: string; version?: string; method?: 'system' | 'local'; removeMode?: 'runtime_only' | 'runtime_and_deps' }) => Promise<{ id: string }>
       jobsList: () => Promise<unknown>
       jobCancel: (payload: { id: string }) => Promise<unknown>
       dockerInstall: (payload: { distro: 'ubuntu'|'fedora'|'arch'; password?: string; components?: string[] }) => Promise<{ ok: boolean; log: string[]; error?: string }>
@@ -75,6 +75,7 @@ declare global {
       getHostSysInfo: () => Promise<HostSysInfo>
       runtimeStatus: () => Promise<import('@linux-dev-home/shared').RuntimeStatusResponse>
       checkDependencies: (runtimeId: string) => Promise<Array<{ name: string; status: string; ok: boolean }>>
+      runtimeUninstallPreview: (payload: { runtimeId: string; removeMode: 'runtime_only' | 'runtime_and_deps' }) => Promise<{ distro: string; runtimePackages: string[]; removableDeps: string[]; blockedSharedDeps: string[]; finalPackages: string[]; note?: string }>
     }
   }
 }
