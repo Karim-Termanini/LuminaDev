@@ -20,7 +20,7 @@
     "typescript": "^5.6.3",
     "typescript-eslint": "^8.15.0"
   },
-  "packageManager": "pnpm@9.14.2+sha512.0e6f1a944b8b842790d4d51b29a4ba004ba2f4fe45ea96dff61e15ddf99cc715814e815cfdddfabe93abdbc3c30eb982538a690a66d41853499b2d8332870b",
+  "packageManager": "pnpm@9.14.2",
   "engines": {
     "node": ">=20"
   }
