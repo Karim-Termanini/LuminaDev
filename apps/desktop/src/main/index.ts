@@ -593,6 +593,31 @@ async function listContainers(): Promise<
   }
 }
 
+async function dockerPublishedHostPorts(): Promise<HostPortRow[]> {
+  const d = getDocker()
+  if (!d) return []
+  try {
+    const containers = await d.listContainers({ all: false })
+    const rows: HostPortRow[] = []
+    for (const c of containers) {
+      const containerName = (c.Names?.[0] ?? c.Image ?? 'container').replace(/^\//, '')
+      for (const p of (c.Ports ?? [])) {
+        const publicPort = p.PublicPort
+        if (!Number.isFinite(publicPort) || !publicPort || publicPort <= 0) continue
+        rows.push({
+          protocol: p.Type === 'udp' ? 'udp' : 'tcp',
+          port: publicPort,
+          state: 'LISTEN',
+          service: `docker:${containerName}`,
+        })
+      }
+    }
+    return rows
+  } catch {
+    return []
+  }
+}
+
 function broadcast(channel: string, payload: unknown): void {
   mainWindow?.webContents.send(channel, payload)
 }
@@ -1102,20 +1127,28 @@ function registerIpc(): void {
   ipcMain.handle(IPC.metrics, async () => await collectMetrics())
 
   ipcMain.handle(IPC.getHostPorts, async () => {
-    return new Promise<HostPortRow[]>((resolve) => {
+    const hostPorts = await new Promise<HostPortRow[]>((resolve) => {
       // Use 'ss -tunl' to get listening TCP/UDP ports
       execFile('ss', ['-tunl', '-H'], (err, stdout) => {
         if (err) {
-           // Fallback to netstat if ss fails
-           execFile('netstat', ['-tunl', '-W'], (err2, stdout2) => {
-             if (err2) return resolve([])
-             resolve(parseNetstat(stdout2))
-           })
-           return
+          // Fallback to netstat if ss fails
+          execFile('netstat', ['-tunl', '-W'], (err2, stdout2) => {
+            if (err2) return resolve([])
+            resolve(parseNetstat(stdout2))
+          })
+          return
         }
         resolve(parseSs(stdout))
       })
     })
+    const dockerPorts = await dockerPublishedHostPorts()
+    const merged = new Map<string, HostPortRow>()
+    for (const row of [...hostPorts, ...dockerPorts]) {
+      if (!Number.isFinite(row.port) || row.port <= 0) continue
+      const key = `${row.protocol}:${row.port}`
+      if (!merged.has(key)) merged.set(key, row)
+    }
+    return [...merged.values()].sort((a, b) => a.port - b.port)
   })
 
   ipcMain.handle(IPC.monitorTopProcesses, async () => {

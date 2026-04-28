@@ -204,7 +204,7 @@ export function MonitorPage(): ReactElement {
 
       {/* Engineering Hub Row - 2 Columns */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: 20 }}>
-        <MetricCard title="ACTIVE PORTS (LISTEN)" value={`${listeningPorts}`} subValue="Open listening sockets">
+        <MetricCard title="ACTIVE PORTS (LISTEN)" value={`${listeningPorts}`} subValue="Open listening sockets" titleColor="#66bb6a" valueColor="#81c784">
           <div style={{ maxHeight: 300, overflow: 'auto', marginTop: 10 }}>
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 10 }}>
               Listening sockets refresh automatically (about every 10 seconds).
@@ -225,13 +225,22 @@ export function MonitorPage(): ReactElement {
                     </td>
                   </tr>
                 ) : (
-                  ports.slice(0, 25).map((p, i) => (
+                  ports.slice(0, 25).map((p, i) => {
+                  const isListening = p.state.toLowerCase().includes('listen')
+                  const stateColor = isListening ? 'var(--green)' : '#ffb74d'
+                  const stateBg = isListening ? 'rgba(0,230,118,0.12)' : 'rgba(255,183,77,0.14)'
+                  return (
                   <tr key={i} style={{ borderTop: '1px solid var(--border)' }}>
-                    <td style={{ padding: '8px 4px' }} className="mono">{p.protocol.toUpperCase()}</td>
+                    <td style={{ padding: '8px 4px', color: p.protocol === 'tcp' ? '#4fc3f7' : '#ba68c8' }} className="mono">{p.protocol.toUpperCase()}</td>
                     <td style={{ padding: '8px 4px', fontWeight: 600 }}>{p.port}</td>
-                    <td style={{ padding: '8px 4px', color: 'var(--green)' }}>{p.state}</td>
+                    <td style={{ padding: '8px 4px' }}>
+                      <span style={{ color: stateColor, background: stateBg, border: `1px solid ${stateColor}55`, borderRadius: 999, padding: '2px 8px', fontWeight: 700, fontSize: 11 }}>
+                        {p.state}
+                      </span>
+                    </td>
                   </tr>
-                  ))
+                  )
+                  })
                 )}
               </tbody>
             </table>
@@ -276,7 +285,7 @@ export function MonitorPage(): ReactElement {
           </div>
         </MetricCard>
 
-        <MetricCard title="NETWORK HOSTS / INTERFACES">
+        <MetricCard title="NETWORK HOSTS / INTERFACES" titleColor="#64b5f6">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 10 }}>
             {sysInfo && (
               <>
@@ -289,31 +298,31 @@ export function MonitorPage(): ReactElement {
                   }}
                 >
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>PRIMARY ADAPTER</div>
-                  <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--text-main)' }}>{sysInfo.ip ?? '—'}</div>
+                  <div style={{ fontSize: 20, fontWeight: 800, color: '#81d4fa' }}>{sysInfo.ip ?? '—'}</div>
                   <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
                     Host: <span className="mono">{sysInfo.hostname}</span>
                   </div>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                  <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10 }}>
+                  <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10, background: 'rgba(79,195,247,0.08)' }}>
                     <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>RECEIVE</div>
-                    <div style={{ fontSize: 16, fontWeight: 700 }}>{m?.netRxMbps.toFixed(2) ?? '0.00'} Mbps</div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: '#4fc3f7' }}>{m?.netRxMbps.toFixed(2) ?? '0.00'} Mbps</div>
                   </div>
-                  <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10 }}>
+                  <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10, background: 'rgba(255,82,82,0.08)' }}>
                     <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>SEND</div>
-                    <div style={{ fontSize: 16, fontWeight: 700 }}>{m?.netTxMbps.toFixed(2) ?? '0.00'} Mbps</div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: '#ff8a80' }}>{m?.netTxMbps.toFixed(2) ?? '0.00'} Mbps</div>
                   </div>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                  <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10 }}>
+                  <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10, background: 'rgba(0,230,118,0.08)' }}>
                     <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>LISTENING PORTS</div>
-                    <div style={{ fontSize: 16, fontWeight: 700 }}>{listeningPorts}</div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--green)' }}>{listeningPorts}</div>
                   </div>
-                  <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10 }}>
+                  <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10, background: 'rgba(124,77,255,0.1)' }}>
                     <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>DOCKER NETWORKS</div>
-                    <div style={{ fontSize: 16, fontWeight: 700 }}>{dockerNetworks}</div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--accent)' }}>{dockerNetworks}</div>
                   </div>
                 </div>
 
@@ -326,7 +335,7 @@ export function MonitorPage(): ReactElement {
         </MetricCard>
       </div>
 
-      <MetricCard title="SECURITY OVERVIEW" subValue="Host hardening and exposure">
+      <MetricCard title="SECURITY OVERVIEW" subValue="Host hardening and exposure" titleColor="#ffb74d">
         <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 8 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px', background: 'rgba(255,255,255,0.03)' }}>
             <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Current security posture</div>
@@ -388,7 +397,7 @@ export function MonitorPage(): ReactElement {
 
       {/* System + Activity */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: 20, alignItems: 'stretch' }}>
-        <MetricCard title="SYSTEM INFORMATION" minHeight={560}>
+        <MetricCard title="SYSTEM INFORMATION" minHeight={560} titleColor="#80deea">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 10 }}>
             <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 12, background: 'rgba(255,255,255,0.02)' }}>
               <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700, letterSpacing: '0.06em' }}>ABOUT THIS PC</div>
@@ -473,15 +482,15 @@ export function MonitorPage(): ReactElement {
       {/* Disk / Processes with Alerts under Disk */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: 20, alignItems: 'start' }}>
         <div style={{ display: 'grid', gap: 20 }}>
-          <MetricCard title="DISK I/O LIVE" value={`${m?.diskReadMbps.toFixed(2) ?? '0.00'} Mbps`} subValue="Read / Write throughput">
+          <MetricCard title="DISK I/O LIVE" value={`${m?.diskReadMbps.toFixed(2) ?? '0.00'} Mbps`} subValue="Read / Write throughput" titleColor="#80cbc4" valueColor="#80cbc4">
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-              <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10 }}>
+              <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10, background: 'rgba(129,199,132,0.08)' }}>
                 <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>READ</div>
-                <div style={{ fontSize: 16, fontWeight: 700 }}>{m?.diskReadMbps.toFixed(2) ?? '0.00'} Mbps</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: '#81c784' }}>{m?.diskReadMbps.toFixed(2) ?? '0.00'} Mbps</div>
               </div>
-              <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10 }}>
+              <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10, background: 'rgba(255,167,38,0.1)' }}>
                 <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>WRITE</div>
-                <div style={{ fontSize: 16, fontWeight: 700 }}>{m?.diskWriteMbps.toFixed(2) ?? '0.00'} Mbps</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: '#ffb74d' }}>{m?.diskWriteMbps.toFixed(2) ?? '0.00'} Mbps</div>
               </div>
             </div>
           </MetricCard>
@@ -499,7 +508,7 @@ export function MonitorPage(): ReactElement {
           </MetricCard>
         </div>
 
-        <MetricCard title="TOP PROCESSES" subValue="Highest CPU consumers" minHeight={378}>
+        <MetricCard title="TOP PROCESSES" subValue="Highest CPU consumers" minHeight={378} titleColor="#ffd54f">
           <div style={{ maxHeight: 322, overflow: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
               <thead>
@@ -514,9 +523,9 @@ export function MonitorPage(): ReactElement {
                 {topProcesses.map((p) => (
                   <tr key={p.pid} style={{ borderTop: '1px solid var(--border)' }}>
                     <td style={{ padding: '8px 4px' }} className="mono">{p.pid}</td>
-                    <td style={{ padding: '8px 4px', fontWeight: 600 }}>{p.command}</td>
-                    <td style={{ padding: '8px 4px' }}>{p.cpuPercent.toFixed(1)}</td>
-                    <td style={{ padding: '8px 4px' }}>{p.memPercent.toFixed(1)}</td>
+                    <td style={{ padding: '8px 4px', fontWeight: 600, color: '#ffe082' }}>{p.command}</td>
+                    <td style={{ padding: '8px 4px', color: p.cpuPercent >= 60 ? '#ff8a80' : p.cpuPercent >= 30 ? '#ffcc80' : '#a5d6a7', fontWeight: 700 }}>{p.cpuPercent.toFixed(1)}</td>
+                    <td style={{ padding: '8px 4px', color: p.memPercent >= 40 ? '#ce93d8' : '#90caf9', fontWeight: 700 }}>{p.memPercent.toFixed(1)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -528,7 +537,7 @@ export function MonitorPage(): ReactElement {
   )
 }
 
-function MetricCard({ title, value, subValue, children, minHeight, contentMarginTop = 16 }: { title: string, value?: string, subValue?: string, children?: ReactNode, minHeight?: number, contentMarginTop?: number }): ReactElement {
+function MetricCard({ title, value, subValue, children, minHeight, contentMarginTop = 16, titleColor, valueColor }: { title: string, value?: string, subValue?: string, children?: ReactNode, minHeight?: number, contentMarginTop?: number, titleColor?: string, valueColor?: string }): ReactElement {
   return (
     <section style={{
       background: 'var(--bg-widget)',
@@ -540,8 +549,8 @@ function MetricCard({ title, value, subValue, children, minHeight, contentMargin
       minHeight,
     }}>
       <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: 4, background: 'linear-gradient(90deg, var(--accent), transparent)' }} />
-      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.05em', marginBottom: 12 }}>{title}</div>
-      {value && <div style={{ fontSize: 32, fontWeight: 800, letterSpacing: '-0.02em', textShadow: '0 0 18px rgba(124,77,255,0.25)' }}>{value}</div>}
+      <div style={{ fontSize: 11, fontWeight: 700, color: titleColor ?? 'var(--text-muted)', letterSpacing: '0.05em', marginBottom: 12 }}>{title}</div>
+      {value && <div style={{ fontSize: 32, fontWeight: 800, letterSpacing: '-0.02em', color: valueColor ?? 'var(--text-main)' }}>{value}</div>}
       {subValue && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>{subValue}</div>}
       <div style={{ marginTop: contentMarginTop }}>{children}</div>
     </section>
