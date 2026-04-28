@@ -1,4 +1,4 @@
-import { readFileSync, statfsSync } from 'node:fs'
+import fs, { readFileSync, statfsSync } from 'node:fs'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { execFile, spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
@@ -59,6 +59,7 @@ import {
   SshGenerateSchema,
   SshGetPubSchema,
   SshTestGithubSchema,
+  type RuntimeStatusResponse,
 } from '@linux-dev-home/shared'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -123,6 +124,44 @@ function getDocker(): Docker | null {
     }
   }
   return null
+}
+
+type RuntimeDetectResult = { installed: boolean; version?: string; path?: string }
+
+async function detectRuntimeInstallation(id: string, cmd: string, args: string[]): Promise<RuntimeDetectResult> {
+  const home = homedir()
+  const localPaths: Record<string, string[]> = {
+    rust: [`${home}/.cargo/bin/rustc`, '/usr/bin/rustc'],
+    bun: [`${home}/.bun/bin/bun`, `${home}/.local/bin/bun`, '/usr/local/bin/bun'],
+    node: [`${home}/.nvm/versions/node/v*/bin/node`, `${home}/.local/bin/node`, '/usr/bin/node'],
+    go: [`${home}/go/bin/go`, '/usr/bin/go'],
+  }
+
+  const globalRes = await new Promise<RuntimeDetectResult>((resolve) => {
+    execFile(cmd, args, (err, stdout) => {
+      if (!err) {
+        const version = stdout.trim().split('\n')[0].replace(/^v/, '')
+        execFile('which', [cmd], (_errW, outW) => resolve({ installed: true, version, path: outW.trim() || undefined }))
+      } else {
+        resolve({ installed: false })
+      }
+    })
+  })
+  if (globalRes.installed) return globalRes
+
+  const paths = localPaths[id] || []
+  for (const p of paths) {
+    if (!fs.existsSync(p)) continue
+    const res = await new Promise<RuntimeDetectResult>((resolve) => {
+      execFile(p, args, (err, stdout) => {
+        if (!err) resolve({ installed: true, version: stdout.trim().split('\n')[0].replace(/^v/, ''), path: p })
+        else resolve({ installed: false })
+      })
+    })
+    if (res.installed) return res
+  }
+
+  return { installed: false }
 }
 
 function profileComposeDir(profile: string): string {
@@ -1003,6 +1042,115 @@ function registerIpc(): void {
     }
   })
 
+  ipcMain.handle(IPC.runtimeStatus, async (): Promise<RuntimeStatusResponse> => {
+    const [node, rust, python, go, java, php, ruby, dotnet, bun, zig] = await Promise.all([
+      detectRuntimeInstallation('node', 'node', ['--version']),
+      detectRuntimeInstallation('rust', 'rustc', ['--version']),
+      detectRuntimeInstallation('python', 'python3', ['--version']),
+      detectRuntimeInstallation('go', 'go', ['version']),
+      detectRuntimeInstallation('java', 'java', ['-version']),
+      detectRuntimeInstallation('php', 'php', ['--version']),
+      detectRuntimeInstallation('ruby', 'ruby', ['--version']),
+      detectRuntimeInstallation('dotnet', 'dotnet', ['--version']),
+      detectRuntimeInstallation('bun', 'bun', ['--version']),
+      detectRuntimeInstallation('zig', 'zig', ['version']),
+    ])
+
+    return {
+      runtimes: [
+        { id: 'node', name: 'Node.js', ...node },
+        { id: 'rust', name: 'Rust', ...rust },
+        { id: 'python', name: 'Python 3', ...python },
+        { id: 'go', name: 'Go', ...go },
+        { id: 'java', name: 'Java', ...java },
+        { id: 'php', name: 'PHP', ...php },
+        { id: 'ruby', name: 'Ruby', ...ruby },
+        { id: 'dotnet', name: '.NET SDK', ...dotnet },
+        { id: 'bun', name: 'Bun', ...bun },
+        { id: 'zig', name: 'Zig', ...zig },
+      ]
+    }
+  })
+
+  ipcMain.handle('dh:runtime:check-deps', async (_e, raw: unknown) => {
+    const { execSync } = await import('node:child_process')
+    const payload = z.object({ runtimeId: z.string().optional() }).optional().parse(raw)
+    const runtimeId = payload?.runtimeId ?? 'node'
+    const isFedora = fs.existsSync('/etc/fedora-release')
+
+    const check = (cmd: string) => {
+      try {
+        const out = execSync(`which ${cmd} 2>/dev/null`).toString().trim()
+        return !!out
+      } catch { return false }
+    }
+    const checkFile = (p: string) => fs.existsSync(p)
+    const isPkgInstalled = (name: string) => {
+      try {
+        if (isFedora) {
+          execSync(`rpm -q ${name}`, { stdio: 'ignore' })
+        } else {
+          execSync(`dpkg -s ${name}`, { stdio: 'ignore' })
+        }
+        return true
+      } catch {
+        return false
+      }
+    }
+
+    const dep = (name: string, ok: boolean, missingHint?: string) => ({
+      name,
+      status: ok ? 'Detected' : (missingHint ?? 'Missing'),
+      ok,
+    })
+
+    const runtimeDeps: Record<string, Array<{ name: string; ok: boolean; missingHint?: string }>> = {
+      bun: [
+        { name: 'curl', ok: check('curl'), missingHint: isFedora ? 'Missing (dnf install curl)' : 'Missing (apt-get install curl)' },
+        { name: 'unzip', ok: check('unzip'), missingHint: isFedora ? 'Missing (dnf install unzip)' : 'Missing (apt-get install unzip)' },
+        { name: 'bash', ok: check('bash') },
+      ],
+      java: [
+        { name: isFedora ? 'java-latest-openjdk package' : 'default-jdk package', ok: isPkgInstalled(isFedora ? 'java-latest-openjdk' : 'default-jdk') },
+        { name: 'java command', ok: check('java') },
+        { name: 'javac command', ok: check('javac') },
+      ],
+      node: [
+        { name: 'node command', ok: check('node') },
+        { name: 'npm command', ok: check('npm') },
+      ],
+      rust: [
+        { name: 'curl', ok: check('curl') },
+        { name: 'gcc', ok: check('gcc') },
+        { name: 'make', ok: check('make') },
+        { name: 'OpenSSL headers', ok: checkFile('/usr/include/openssl/ssl.h') || checkFile('/usr/include/openssl/opensslv.h') },
+      ],
+      go: [
+        { name: 'go command', ok: check('go') },
+      ],
+      python: [
+        { name: 'python3 command', ok: check('python3') },
+        { name: 'pip3 command', ok: check('pip3') },
+      ],
+      php: [
+        { name: 'php command', ok: check('php') },
+      ],
+      ruby: [
+        { name: 'ruby command', ok: check('ruby') },
+        { name: 'gem command', ok: check('gem') },
+      ],
+      dotnet: [
+        { name: 'dotnet command', ok: check('dotnet') },
+      ],
+      zig: [
+        { name: 'zig command', ok: check('zig') },
+      ],
+    }
+
+    const deps = runtimeDeps[runtimeId] ?? runtimeDeps.node
+    return deps.map((d) => dep(d.name, d.ok, d.missingHint))
+  })
+
   ipcMain.handle(IPC.hostExec, async (_e, raw: unknown) => {
     const req = HostExecRequestSchema.parse(raw)
     if (req.command === 'nvidia_smi_short') {
@@ -1469,46 +1617,191 @@ function registerIpc(): void {
 
   ipcMain.handle(IPC.jobStart, async (_e, raw: unknown) => {
     const req = JobStartRequestSchema.parse(raw)
-    if (req.kind !== 'demo_countdown') throw new Error('Unsupported job kind')
     pruneFinishedJobs()
     const id = randomUUID()
-    const durationMs = req.durationMs ?? 4000
-    const steps = 8
-    const tick = Math.max(120, Math.floor(durationMs / steps))
-    const job: JobRecord = {
-      id,
-      kind: req.kind,
-      state: 'running',
-      progress: 0,
-      log: ['Demo job started (Phase 0 task runner smoke test).'],
-      cancelRequested: false,
+
+    if (req.kind === 'demo_countdown') {
+      const durationMs = req.durationMs ?? 4000
+      const steps = 8
+      const tick = Math.max(120, Math.floor(durationMs / steps))
+      const job: JobRecord = {
+        id,
+        kind: req.kind,
+        state: 'running',
+        progress: 0,
+        log: ['Demo job started (Phase 0 task runner smoke test).'],
+        cancelRequested: false,
+      }
+      jobs.set(id, job)
+      let step = 0
+      job.timer = setInterval(() => {
+        const j = jobs.get(id)
+        if (!j) return
+        if (j.cancelRequested) {
+          j.state = 'cancelled'
+          j.log.push('Cancelled by user.')
+          if (j.timer) clearInterval(j.timer)
+          delete j.timer
+          return
+        }
+        step += 1
+        j.progress = Math.min(100, Math.round((step / steps) * 100))
+        j.log.push(`Step ${step}/${steps} — ${j.progress}%`)
+        if (step >= steps) {
+          j.state = 'completed'
+          j.progress = 100
+          j.log.push('Done.')
+          if (j.timer) clearInterval(j.timer)
+          delete j.timer
+        }
+      }, tick)
+      return { id }
     }
-    jobs.set(id, job)
-    let step = 0
-    job.timer = setInterval(() => {
-      const j = jobs.get(id)
-      if (!j) {
-        return
+
+    if (req.kind === 'install_deps') {
+      const isFedora = fs.existsSync('/etc/fedora-release')
+      const pkg = isFedora ? 'openssl-devel gcc-c++ make pkg-config' : 'libssl-dev build-essential'
+      const job: JobRecord = {
+        id, kind: 'install_deps', state: 'running', progress: 0,
+        log: [`Starting dependency installation (${isFedora ? 'DNF' : 'APT'})...`],
+        cancelRequested: false,
       }
-      if (j.cancelRequested) {
-        j.state = 'cancelled'
-        j.log.push('Cancelled by user.')
-        if (j.timer) clearInterval(j.timer)
-        delete j.timer
-        return
+      jobs.set(id, job)
+      const proc = spawn('pkexec', [isFedora ? 'dnf' : 'apt-get', 'install', '-y', ...pkg.split(' ')], { shell: true })
+      proc.stdout.on('data', (d) => { job.log.push(d.toString().trim()); job.progress = Math.min(95, job.progress + 2) })
+      proc.stderr.on('data', (d) => { job.log.push(d.toString().trim()) })
+      proc.on('close', (c) => { job.state = c === 0 ? 'completed' : 'failed'; job.progress = 100 })
+      return { id }
+    }
+
+    if (req.kind === 'runtime_install') {
+      const runtimeId = req.runtimeId ?? 'unknown'
+      const method = req.method ?? 'system'
+      const job: JobRecord = {
+        id,
+        kind: `install_${runtimeId}`,
+        state: 'running',
+        progress: 0,
+        log: [`Starting installation of ${runtimeId}...`],
+        cancelRequested: false,
       }
-      step += 1
-      j.progress = Math.min(100, Math.round((step / steps) * 100))
-      j.log.push(`Step ${step}/${steps} — ${j.progress}%`)
-      if (step >= steps) {
-        j.state = 'completed'
-        j.progress = 100
-        j.log.push('Done.')
-        if (j.timer) clearInterval(j.timer)
-        delete j.timer
+      jobs.set(id, job)
+
+      let command = ''
+      let args: string[] = []
+
+      // Detection for Fedora/DNF vs Debian/APT
+      const isFedora = fs.existsSync('/etc/fedora-release')
+      const pkgManager = isFedora ? 'dnf' : 'apt-get'
+      const installCmd = isFedora ? 'install -y' : 'install -y'
+      const sudoPrefix = 'pkexec' // Use pkexec for GUI sudo prompts
+
+      if (method === 'system' && runtimeId !== 'bun') {
+        const pkgMapFedora: Record<string, string> = {
+          node: 'nodejs',
+          rust: 'rust',
+          python: 'python3',
+          go: 'golang',
+          java: 'java-latest-openjdk',
+          php: 'php',
+          ruby: 'ruby',
+          dotnet: 'dotnet-sdk-8.0',
+          zig: 'zig'
+        }
+        const pkgMapDebian: Record<string, string> = {
+          node: 'nodejs',
+          rust: 'rustc',
+          python: 'python3',
+          go: 'golang',
+          java: 'default-jdk',
+          php: 'php',
+          ruby: 'ruby',
+          dotnet: 'dotnet-sdk-8.0',
+          zig: 'zig'
+        }
+        const pkgMap = isFedora ? pkgMapFedora : pkgMapDebian
+        command = sudoPrefix
+        args = [pkgManager, ...installCmd.split(' '), pkgMap[runtimeId] || runtimeId]
+      } else {
+        // Local/Script Method (or Bun which has no standard package)
+        if (runtimeId === 'rust') {
+          command = 'bash'
+          args = ['-c', "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y"]
+        } else if (runtimeId === 'bun') {
+          command = 'bash'
+          args = ['-c', "curl -fsSL https://bun.sh/install | bash"]
+        } else {
+          job.state = 'failed'
+          job.progress = 100
+          job.log.push(`Local installer is not implemented for "${runtimeId}".`)
+          job.log.push('Try "System Package Manager" method for this runtime.')
+          return { id }
+        }
       }
-    }, tick)
-    return { id }
+
+      if (command) {
+        const proc = spawn(command, args, { shell: false })
+        proc.stdout.on('data', (data) => {
+          const s = data.toString().trim()
+          if (s) {
+            job.log.push(s)
+            job.progress = Math.min(95, job.progress + 2)
+          }
+        })
+        proc.stderr.on('data', (data) => {
+          const s = data.toString().trim()
+          if (s) {
+            // DNF/CURL use stderr for progress bars. Only prefix if it's an actual error.
+            const isError = /error|failed|denied|not found/i.test(s)
+            job.log.push(isError ? `[ERR] ${s}` : s)
+            job.progress = Math.min(95, job.progress + 1)
+          }
+        })
+        proc.on('close', async (code) => {
+          if (code === 0) {
+            const cmdMap: Record<string, { cmd: string; args: string[] }> = {
+              node: { cmd: 'node', args: ['--version'] },
+              rust: { cmd: 'rustc', args: ['--version'] },
+              python: { cmd: 'python3', args: ['--version'] },
+              go: { cmd: 'go', args: ['version'] },
+              java: { cmd: 'java', args: ['-version'] },
+              php: { cmd: 'php', args: ['--version'] },
+              ruby: { cmd: 'ruby', args: ['--version'] },
+              dotnet: { cmd: 'dotnet', args: ['--version'] },
+              bun: { cmd: 'bun', args: ['--version'] },
+              zig: { cmd: 'zig', args: ['version'] },
+            }
+            const probe = cmdMap[runtimeId]
+            if (probe) {
+              const verified = await detectRuntimeInstallation(runtimeId, probe.cmd, probe.args)
+              if (!verified.installed) {
+                job.state = 'failed'
+                job.progress = 100
+                job.log.push('Install command ended successfully, but runtime is not detected on this system.')
+                if (runtimeId === 'bun') {
+                  job.log.push('Bun often installs to ~/.bun/bin. Open a new terminal or add it to PATH, then retry.')
+                }
+                return
+              }
+            }
+
+            job.state = 'completed'
+            job.progress = 100
+            job.log.push('Installation finished successfully.')
+          } else {
+            job.state = 'failed'
+            job.log.push(`Installation failed with exit code ${code}`)
+          }
+        })
+      } else {
+        job.state = 'failed'
+        job.log.push(`Unsupported runtime: ${runtimeId}`)
+      }
+
+      return { id }
+    }
+
+    throw new Error('Unsupported job kind')
   })
 
   ipcMain.handle(IPC.jobsList, async () => {

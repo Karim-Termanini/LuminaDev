@@ -58,7 +58,7 @@ export type DhApi = {
   layoutSet: (layout: unknown) => Promise<unknown>
   storeGet: (payload: import('@linux-dev-home/shared').StoreGetRequest) => Promise<unknown>
   storeSet: (payload: import('@linux-dev-home/shared').StoreSetRequest) => Promise<unknown>
-  jobStart: (payload: { kind: string; durationMs?: number }) => Promise<unknown>
+  jobStart: (payload: { kind: string; durationMs?: number; runtimeId?: string; version?: string }) => Promise<unknown>
   jobsList: () => Promise<unknown>
   jobCancel: (payload: { id: string }) => Promise<unknown>
   dockerInstall: (payload: { distro: 'ubuntu'|'fedora'|'arch'; password?: string; components?: string[] }) => Promise<{ ok: boolean; log: string[]; error?: string }>
@@ -69,6 +69,8 @@ export type DhApi = {
   dockerTerminal: (payload: { containerId: string; cols: number; rows: number }) => Promise<{ ok: boolean; id?: string; error?: string }>
   getHostPorts: () => Promise<import('@linux-dev-home/shared').HostPortRow[]>
   getHostSysInfo: () => Promise<import('@linux-dev-home/shared').HostSysInfo>
+  runtimeStatus: () => Promise<import('@linux-dev-home/shared').RuntimeStatusResponse>
+  checkDependencies: (runtimeId: string) => Promise<Array<{ name: string; status: string; ok: boolean }>>
 }
 
 const api: DhApi = {
@@ -145,6 +147,8 @@ const api: DhApi = {
   dockerTerminal: (payload) => ipcRenderer.invoke(IPC.dockerTerminal, payload),
   getHostPorts: () => ipcRenderer.invoke(IPC.getHostPorts),
   getHostSysInfo: () => ipcRenderer.invoke(IPC.getHostSysInfo),
+  runtimeStatus: () => ipcRenderer.invoke(IPC.runtimeStatus),
+  checkDependencies: (runtimeId) => ipcRenderer.invoke('dh:runtime:check-deps', { runtimeId }),
 }
 
 contextBridge.exposeInMainWorld('dh', api)

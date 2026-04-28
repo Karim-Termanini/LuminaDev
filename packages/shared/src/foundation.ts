@@ -27,9 +27,15 @@ export type DashboardLayoutFile = z.infer<typeof DashboardLayoutFileSchema>
 export type DashboardPlacement = z.infer<typeof DashboardPlacementSchema>
 
 export const JobStartRequestSchema = z.object({
-  kind: z.enum(['demo_countdown']),
+  kind: z.enum(['demo_countdown', 'runtime_install', 'install_deps']),
   /** Total duration for the demo job (default 4s). */
   durationMs: z.number().int().min(400).max(120_000).optional(),
+  /** For runtime_install: e.g. 'node', 'rust', 'python' */
+  runtimeId: z.string().max(32).optional(),
+  /** Optional version to install */
+  version: z.string().max(64).optional(),
+  /** Installation method: system package manager or local script */
+  method: z.enum(['system', 'local']).optional(),
 })
 export type JobStartRequest = z.infer<typeof JobStartRequestSchema>
 

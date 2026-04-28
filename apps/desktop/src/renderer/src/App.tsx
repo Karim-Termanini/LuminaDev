@@ -16,6 +16,7 @@ import { MonitorPage } from './pages/MonitorPage'
 import { SshPage } from './pages/SshPage'
 import { TerminalPage } from './pages/TerminalPage'
 import { WorkstationPage } from './pages/WorkstationPage'
+import { RuntimesPage } from './pages/RuntimesPage'
 import { WizardFlow } from './wizard/WizardFlow'
 import type { WizardStateStore } from '@linux-dev-home/shared'
 
@@ -54,6 +55,7 @@ export default function App(): ReactElement | null {
         <Route path="/registry" element={<RegistryPage />} />
         <Route path="/profiles" element={<ProfilesPage />} />
         <Route path="/terminal" element={<TerminalPage />} />
+        <Route path="/runtimes" element={<RuntimesPage />} />
       </Routes>
     </AppShell>
   )

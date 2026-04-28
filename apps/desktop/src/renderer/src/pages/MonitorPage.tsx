@@ -22,7 +22,7 @@ export function MonitorPage(): ReactElement {
   const [ports, setPorts] = useState<HostPortRow[]>([])
   const [sysInfo, setSysInfo] = useState<HostSysInfo | null>(null)
   const [cpuHistory, setCpuHistory] = useState<number[]>(new Array(30).fill(0))
-  const [netHistory, setNetHistory] = useState<{rx: number, tx: number}[]>(new Array(30).fill({rx: 0, tx: 0}))
+  const [netHistory, setNetHistory] = useState<{ rx: number, tx: number }[]>(new Array(30).fill({ rx: 0, tx: 0 }))
   const [githubCommits, setGithubCommits] = useState<GithubEvent[]>([])
   const [sshServers, setSshServers] = useState<SshBookmark[]>([])
   const [containers, setContainers] = useState<ContainerRow[]>([])
@@ -33,7 +33,7 @@ export function MonitorPage(): ReactElement {
       setMetrics(m)
       setCpuHistory(prev => [...prev.slice(1), m.metrics.cpuUsagePercent])
       setNetHistory(prev => [...prev.slice(1), { rx: m.metrics.netRxMbps, tx: m.metrics.netTxMbps }])
-      
+
       const c = await window.dh.dockerList() as { ok: boolean, rows: ContainerRow[] }
       if (c.ok) setContainers(c.rows)
     } catch (e) { console.error(e) }
@@ -44,13 +44,13 @@ export function MonitorPage(): ReactElement {
       try {
         setSysInfo(await window.dh.getHostSysInfo())
         setPorts(await window.dh.getHostPorts())
-        
+
         // Fetch GitHub events (mocking or using public API if possible)
         const resp = await fetch('https://api.github.com/users/Karim-Termanini/events/public')
         if (resp.ok) {
           const data = await resp.json() as GithubEvent[]
           const pushEvents = data.filter((e) => e.type === 'PushEvent').slice(0, 10)
-          
+
           // Try to enrich events that have no commit messages
           const enriched = await Promise.all(pushEvents.map(async (e) => {
             if (!e.payload.commits || e.payload.commits.length === 0) {
@@ -100,8 +100,8 @@ export function MonitorPage(): ReactElement {
         <MetricCard title="MEMORY USAGE" value={m ? `${(memUsed / 1024).toFixed(1)} GB` : '—'} subValue={`Total ${((m?.totalMemMb ?? 0) / 1024).toFixed(1)} GB`}>
           <ProgressBar pct={memPct} color="#00e676" />
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontSize: 11, opacity: 0.6 }} className="mono">
-             <span>Used: {memUsed}MB</span>
-             <span>Free: {m?.freeMemMb}MB</span>
+            <span>Used: {memUsed}MB</span>
+            <span>Free: {m?.freeMemMb}MB</span>
           </div>
         </MetricCard>
 
@@ -115,17 +115,17 @@ export function MonitorPage(): ReactElement {
       {/* Network & System Info */}
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 20 }}>
         <MetricCard title="NETWORK ACTIVITY" value={`${m?.netRxMbps.toFixed(2) ?? 0} Mbps`} subValue="Downlink / Uplink Traffic">
-           <NetworkChart data={netHistory} height={120} />
-           <div style={{ display: 'flex', gap: 24, marginTop: 12 }}>
-             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-               <div style={{ width: 12, height: 12, borderRadius: 2, background: 'var(--accent)' }} />
-               <span style={{ fontSize: 12 }}>RX: {m?.netRxMbps.toFixed(2)} Mbps</span>
-             </div>
-             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-               <div style={{ width: 12, height: 12, borderRadius: 2, background: '#ff1744' }} />
-               <span style={{ fontSize: 12 }}>TX: {m?.netTxMbps.toFixed(2)} Mbps</span>
-             </div>
-           </div>
+          <NetworkChart data={netHistory} height={120} />
+          <div style={{ display: 'flex', gap: 24, marginTop: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ width: 12, height: 12, borderRadius: 2, background: 'var(--accent)' }} />
+              <span style={{ fontSize: 12 }}>RX: {m?.netRxMbps.toFixed(2)} Mbps</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ width: 12, height: 12, borderRadius: 2, background: '#ff1744' }} />
+              <span style={{ fontSize: 12 }}>TX: {m?.netTxMbps.toFixed(2)} Mbps</span>
+            </div>
+          </div>
         </MetricCard>
 
         <MetricCard title="SYSTEM INFORMATION">
@@ -135,10 +135,10 @@ export function MonitorPage(): ReactElement {
               <span style={{ fontSize: 13, fontWeight: 600 }}>{sysInfo?.distro || 'Fedora Linux'}</span>
             </div>
             <div style={{ paddingLeft: 112, display: 'flex', flexDirection: 'column', gap: 4, opacity: 0.8 }}>
-               <InfoLine label="Kernel" value={sysInfo?.kernel} />
-               <InfoLine label="Packages" value={sysInfo?.packages} />
-               <InfoLine label="Shell" value={sysInfo?.shell} />
-               <InfoLine label="DE/WM" value={`${sysInfo?.de} / ${sysInfo?.wm}`} />
+              <InfoLine label="Kernel" value={sysInfo?.kernel} />
+              <InfoLine label="Packages" value={sysInfo?.packages} />
+              <InfoLine label="Shell" value={sysInfo?.shell} />
+              <InfoLine label="DE/WM" value={`${sysInfo?.de} / ${sysInfo?.wm}`} />
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '100px 1fr', gap: 12, alignItems: 'center', marginTop: 8 }}>
@@ -146,9 +146,9 @@ export function MonitorPage(): ReactElement {
               <span style={{ fontSize: 13, fontWeight: 600 }}>{sysInfo?.gpu || 'Intel UHD Graphics'}</span>
             </div>
             <div style={{ paddingLeft: 112, display: 'flex', flexDirection: 'column', gap: 4, opacity: 0.8 }}>
-               <InfoLine label="Res" value={sysInfo?.resolution} />
-               <InfoLine label="Memory" value={sysInfo?.memoryUsage} />
-               <InfoLine label="Uptime" value={m ? `${Math.floor(m.uptimeSec / 3600)}h ${Math.floor((m.uptimeSec % 3600) / 60)}m` : '—'} />
+              <InfoLine label="Res" value={sysInfo?.resolution} />
+              <InfoLine label="Memory" value={sysInfo?.memoryUsage} />
+              <InfoLine label="Uptime" value={m ? `${Math.floor(m.uptimeSec / 3600)}h ${Math.floor((m.uptimeSec % 3600) / 60)}m` : '—'} />
             </div>
           </div>
         </MetricCard>
@@ -167,17 +167,11 @@ export function MonitorPage(): ReactElement {
                 </tr>
               </thead>
               <tbody>
-                {ports
-                  .sort((a, b) => {
-                    if (a.protocol === b.protocol) return a.port - b.port
-                    return a.protocol === 'tcp' ? -1 : 1
-                  })
-                  .slice(0, 15)
-                  .map((p, i) => (
+                {ports.slice(0, 15).map((p, i) => (
                   <tr key={i} style={{ borderTop: '1px solid var(--border)' }}>
                     <td style={{ padding: '8px 4px' }} className="mono">{p.protocol.toUpperCase()}</td>
                     <td style={{ padding: '8px 4px', fontWeight: 600 }}>{p.port}</td>
-                    <td style={{ padding: '8px 4px', color: p.protocol === 'tcp' ? 'var(--green)' : 'var(--orange)' }}>{p.state}</td>
+                    <td style={{ padding: '8px 4px', color: 'var(--green)' }}>{p.state}</td>
                   </tr>
                 ))}
               </tbody>
@@ -203,7 +197,7 @@ export function MonitorPage(): ReactElement {
                       <td style={{ padding: '8px 4px', fontWeight: 600 }}>{c.name}</td>
                       <td style={{ padding: '8px 4px', color: 'var(--text-muted)' }}>{c.image.split('@')[0]}</td>
                       <td style={{ padding: '8px 4px' }}>
-                        <span style={{ 
+                        <span style={{
                           color: c.state === 'running' ? 'var(--green)' : 'var(--text-muted)',
                           fontSize: 10,
                           textTransform: 'uppercase',
@@ -286,15 +280,15 @@ export function MonitorPage(): ReactElement {
             )) : (
               <div style={{ textAlign: 'center', padding: '20px 0' }}>
                 <div style={{ color: 'var(--text-muted)', fontSize: 12, marginBottom: 12 }}>No remote servers saved yet.</div>
-                <button 
+                <button
                   onClick={() => window.location.hash = '#/ssh'}
-                  style={{ 
-                    background: 'var(--accent)', 
-                    color: 'white', 
-                    border: 'none', 
-                    padding: '6px 12px', 
-                    borderRadius: 4, 
-                    fontSize: 11, 
+                  style={{
+                    background: 'var(--accent)',
+                    color: 'white',
+                    border: 'none',
+                    padding: '6px 12px',
+                    borderRadius: 4,
+                    fontSize: 11,
                     fontWeight: 600,
                     cursor: 'pointer'
                   }}
@@ -312,10 +306,10 @@ export function MonitorPage(): ReactElement {
 
 function MetricCard({ title, value, subValue, children }: { title: string, value?: string, subValue?: string, children?: ReactNode }): ReactElement {
   return (
-    <section style={{ 
-      background: 'var(--bg-widget)', 
-      border: '1px solid var(--border)', 
-      borderRadius: 'var(--radius)', 
+    <section style={{
+      background: 'var(--bg-widget)',
+      border: '1px solid var(--border)',
+      borderRadius: 'var(--radius)',
       padding: 20,
       position: 'relative',
       overflow: 'hidden'
@@ -345,16 +339,16 @@ function UsageRing({ pct, size, color }: { pct: number, size: number, color: str
   return (
     <div style={{ position: 'relative', width: size, height: size }}>
       <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
-        <circle cx={size/2} cy={size/2} r={radius} fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="6" />
-        <circle 
-          cx={size/2} 
-          cy={size/2} 
-          r={radius} 
-          fill="none" 
-          stroke={color} 
-          strokeWidth="6" 
-          strokeDasharray={circumference} 
-          strokeDashoffset={offset} 
+        <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="6" />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          fill="none"
+          stroke={color}
+          strokeWidth="6"
+          strokeDasharray={circumference}
+          strokeDashoffset={offset}
           strokeLinecap="round"
           style={{ transition: 'stroke-dashoffset 0.5s ease' }}
         />
@@ -369,7 +363,7 @@ function UsageRing({ pct, size, color }: { pct: number, size: number, color: str
 function LiveLineChart({ data, color, height }: { data: number[], color: string, height: number }): ReactElement {
   const max = 100
   const points = data.map((val, i) => `${(i / (data.length - 1)) * 100},${height - (val / max) * height}`).join(' ')
-  
+
   return (
     <svg width="100%" height={height} viewBox={`0 0 100 ${height}`} preserveAspectRatio="none" style={{ overflow: 'visible' }}>
       <polyline
@@ -394,7 +388,7 @@ function LiveLineChart({ data, color, height }: { data: number[], color: string,
   )
 }
 
-function NetworkChart({ data, height }: { data: {rx: number, tx: number}[], height: number }): ReactElement {
+function NetworkChart({ data, height }: { data: { rx: number, tx: number }[], height: number }): ReactElement {
   const max = Math.max(...data.map(d => Math.max(d.rx, d.tx, 1)), 1)
   const rxPoints = data.map((val, i) => `${(i / (data.length - 1)) * 100},${height - (val.rx / max) * height}`).join(' ')
   const txPoints = data.map((val, i) => `${(i / (data.length - 1)) * 100},${height - (val.tx / max) * height}`).join(' ')
@@ -422,5 +416,5 @@ function InfoRow({ label, value }: { label: string, value?: string }): ReactElem
       <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{label}</span>
       <span style={{ fontSize: 12, fontWeight: 600 }}>{value ?? '—'}</span>
     </div>
-)
+  )
 }

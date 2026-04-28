@@ -88,6 +88,18 @@ export type HostSysInfo = {
   resolution?: string
 }
 
+export type RuntimeStatus = {
+  id: string
+  name: string
+  installed: boolean
+  version?: string
+  path?: string
+}
+
+export type RuntimeStatusResponse = {
+  runtimes: RuntimeStatus[]
+}
+
 /** Renderer ↔ main IPC channel names */
 export type HostMetricsResponse = {
   metrics: HostMetrics
@@ -153,6 +165,7 @@ export const IPC = {
   dockerTerminal: 'dh:docker:terminal',
   getHostPorts: 'dh:host:ports',
   getHostSysInfo: 'dh:host:sysinfo',
+  runtimeStatus: 'dh:runtime:status',
 } as const
 
 export type DockerActionPayload = { id: string; action: DockerContainerAction }
