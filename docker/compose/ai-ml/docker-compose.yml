@@ -1,0 +1,5 @@
+services:
+  ml-stub:
+    image: python:3.12-slim
+    command: ["python", "-c", "print('AI/ML profile stub: install GPU drivers on the host for CUDA workloads.')"]
+    restart: "no"

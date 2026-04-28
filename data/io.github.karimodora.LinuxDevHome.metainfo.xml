@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.karimodora.LinuxDevHome</id>
+  <metadata_license>MIT</metadata_license>
+  <project_license>MIT</project_license>
+  <name>Linux Dev Home</name>
+  <summary>Developer dashboard for Linux (Docker, metrics, Git, terminal)</summary>
+  <description>
+    <p>Linux Dev Home is an open-source desktop dashboard inspired by Microsoft Dev Home and VS Code–style visuals. It surfaces Docker containers, host metrics, bundled compose profiles, Git workflows, and an embedded terminal.</p>
+    <p>Distribution is intended to be Flatpak-first for cross-distro compatibility.</p>
+  </description>
+  <url type="homepage">https://github.com/Karim-Termanini/PersonalProjekte</url>
+  <developer id="github.com/Karim-Termanini">
+    <name>Karim Termanini</name>
+  </developer>
+  <content_rating type="oars-1.1"/>
+  <launchable type="desktop-id">io.github.karimodora.LinuxDevHome.desktop</launchable>
+  <releases>
+    <release version="0.1.0" date="2026-04-28">
+      <description><p>Initial public skeleton: Electron UI, Docker integration, metrics, compose profiles, Git, terminal.</p></description>
+    </release>
+  </releases>
+</component>

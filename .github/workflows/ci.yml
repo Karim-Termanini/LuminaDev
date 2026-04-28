@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [main, 'phase-*']
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install system deps (native addons)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential python3 pkg-config libsecret-1-dev
+
+      - run: pnpm install
+
+      - name: Rebuild native modules for Electron
+        run: pnpm --filter desktop rebuild:native
+
+      - run: pnpm test
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm build
+
+  docker-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Docker smoke (lint, test, typecheck, build)
+        run: docker build -f docker/Dockerfile .

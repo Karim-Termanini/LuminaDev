@@ -1,0 +1,4 @@
+services:
+  stub:
+    image: alpine:latest
+    command: ["sleep", "infinity"]

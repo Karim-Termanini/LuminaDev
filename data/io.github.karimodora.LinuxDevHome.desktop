@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Linux Dev Home
+Comment=Developer machine dashboard for Linux
+Exec=linux-dev-home %U
+Icon=io.github.karimodora.LinuxDevHome
+Terminal=false
+Categories=Development;IDE;
+StartupWMClass=linux-dev-home

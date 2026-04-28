@@ -1,0 +1,83 @@
+{
+  "name": "desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./out/main/index.js",
+  "description": "Linux developer home dashboard",
+  "author": "Karim Termanini",
+  "homepage": "https://github.com/Karim-Termanini/PersonalProjekte",
+  "desktopName": "io.github.karimodora.LinuxDevHome.desktop",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build && node scripts/copy-docker-profiles.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.web.json && tsc --noEmit -p tsconfig.node.json",
+    "rebuild:native": "electron-rebuild -f -w node-pty",
+    "pack:linux": "node scripts/pack-linux.mjs"
+  },
+  "dependencies": {
+    "@linux-dev-home/shared": "workspace:*",
+    "@vscode/codicons": "^0.0.36",
+    "@xterm/addon-fit": "^0.10.0",
+    "@xterm/xterm": "^5.5.0",
+    "@xyflow/react": "^12.10.2",
+    "dockerode": "^4.0.2",
+    "node-pty": "^1.0.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.28.0",
+    "simple-git": "^3.27.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^3.7.0",
+    "@types/dockerode": "^3.3.31",
+    "@types/node": "^22.9.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.3",
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8",
+    "electron-vite": "^2.3.0",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11"
+  },
+  "build": {
+    "appId": "io.github.karimodora.LinuxDevHome",
+    "productName": "Linux Dev Home",
+    "executableName": "linux-dev-home",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "out/**/*"
+    ],
+    "asar": true,
+    "asarUnpack": [
+      "**/*.node"
+    ],
+    "extraResources": [
+      {
+        "from": "../../docker/compose",
+        "to": "docker-profiles/compose",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "linux": {
+      "target": [
+        "dir"
+      ],
+      "category": "Development",
+      "icon": "../../data/icons/hicolor/scalable/apps/io.github.karimodora.LinuxDevHome.svg",
+      "desktop": {
+        "Name": "Linux Dev Home",
+        "Comment": "Developer machine dashboard for Linux",
+        "Categories": "Development;IDE;",
+        "StartupWMClass": "linux-dev-home",
+        "Icon": "io.github.karimodora.LinuxDevHome"
+      }
+    }
+  }
+}

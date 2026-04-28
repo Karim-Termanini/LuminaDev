@@ -1,0 +1,47 @@
+app-id: io.github.karimodora.LinuxDevHome
+runtime: org.freedesktop.Platform
+runtime-version: '24.08'
+sdk: org.freedesktop.Sdk
+base: org.electronjs.Electron2.BaseApp
+base-version: '24.08'
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.node20
+
+command: linux-dev-home
+
+finish-args:
+  - --share=ipc
+  - --socket=fallback-x11
+  - --socket=wayland
+  - --device=dri
+  - --share=network
+  - --filesystem=xdg-download
+  - --env=XCURSOR_PATH=/run/host/user-share/icons:/run/host/share/icons
+
+build-options:
+  append-path: /usr/lib/sdk/node20/bin
+
+modules:
+  - name: linux-dev-home
+    buildsystem: simple
+    build-options:
+      append-path: /usr/lib/sdk/node20/bin
+      env:
+        NPM_CONFIG_LOGLEVEL: info
+      build-args:
+        - --share=network
+    sources:
+      - type: dir
+        path: ..
+    build-commands:
+      - corepack enable && corepack prepare pnpm@9.14.2 --activate
+      - rm -rf node_modules apps/desktop/out apps/desktop/release apps/desktop/pack-staging
+      - pnpm install --frozen-lockfile
+      - pnpm --filter desktop rebuild:native
+      - pnpm --filter desktop pack:linux
+      - install -Dm755 packaging/linux-dev-home.sh /app/bin/linux-dev-home
+      - mkdir -p /app/lib/linux-dev-home
+      - cp -a apps/desktop/pack-staging/release/linux*unpacked/. /app/lib/linux-dev-home/
+      - install -Dm644 data/io.github.karimodora.LinuxDevHome.desktop /app/share/applications/io.github.karimodora.LinuxDevHome.desktop
+      - install -Dm644 data/io.github.karimodora.LinuxDevHome.metainfo.xml /app/share/metainfo/io.github.karimodora.LinuxDevHome.metainfo.xml
+      - install -Dm644 data/icons/hicolor/scalable/apps/io.github.karimodora.LinuxDevHome.svg /app/share/icons/hicolor/scalable/apps/io.github.karimodora.LinuxDevHome.svg
