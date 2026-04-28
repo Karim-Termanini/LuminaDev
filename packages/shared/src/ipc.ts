@@ -47,6 +47,8 @@ export type HostMetrics = {
   loadAvg: number[]
   totalMemMb: number
   freeMemMb: number
+  swapTotalMb: number
+  swapFreeMb: number
   uptimeSec: number
   diskTotalGb: number
   diskFreeGb: number

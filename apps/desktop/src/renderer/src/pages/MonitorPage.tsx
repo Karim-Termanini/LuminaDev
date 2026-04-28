@@ -1,6 +1,6 @@
 import type { ReactElement, ReactNode } from 'react'
 import { useCallback, useEffect, useState } from 'react'
-import type { ContainerRow, HostMetricsResponse, HostPortRow, HostSysInfo, SshBookmark } from '@linux-dev-home/shared'
+import type { ContainerRow, HostMetricsResponse, HostPortRow, HostSysInfo } from '@linux-dev-home/shared'
 
 type GithubEvent = {
   type: string
@@ -24,10 +24,10 @@ export function MonitorPage(): ReactElement {
   const [cpuHistory, setCpuHistory] = useState<number[]>(new Array(30).fill(0))
   const [netHistory, setNetHistory] = useState<{ rx: number, tx: number }[]>(new Array(30).fill({ rx: 0, tx: 0 }))
   const [githubCommits, setGithubCommits] = useState<GithubEvent[]>([])
-  const [sshServers, setSshServers] = useState<SshBookmark[]>([])
   const [containers, setContainers] = useState<ContainerRow[]>([])
+  const [copiedReport, setCopiedReport] = useState(false)
 
-  const refresh = useCallback(async () => {
+  const refreshLive = useCallback(async () => {
     try {
       const m = await window.dh.metrics() as HostMetricsResponse
       setMetrics(m)
@@ -39,50 +39,93 @@ export function MonitorPage(): ReactElement {
     } catch (e) { console.error(e) }
   }, [])
 
+  const refreshStatic = useCallback(async () => {
+    try {
+      setSysInfo(await window.dh.getHostSysInfo())
+      setPorts(await window.dh.getHostPorts())
+    } catch (e) {
+      console.error(e)
+    }
+  }, [])
+
+  const refreshGithub = useCallback(async () => {
+    try {
+      const resp = await fetch('https://api.github.com/users/Karim-Termanini/events/public')
+      if (!resp.ok) return
+      const data = await resp.json() as GithubEvent[]
+      const pushEvents = data.filter((e) => e.type === 'PushEvent').slice(0, 10)
+      const enriched = await Promise.all(pushEvents.map(async (e) => {
+        if (!e.payload.commits || e.payload.commits.length === 0) {
+          try {
+            const cResp = await fetch(`https://api.github.com/repos/${e.repo.name}/commits?per_page=5`)
+            if (cResp.ok) {
+              const cData = await cResp.json() as GithubCommitResponse[]
+              return { ...e, payload: { ...e.payload, commits: cData.map((c) => ({ message: c.commit.message })) } }
+            }
+          } catch {
+            /* ignore */
+          }
+        }
+        return e
+      }))
+      setGithubCommits(enriched)
+    } catch {
+      /* ignore transient network errors */
+    }
+  }, [])
+
   useEffect(() => {
     void (async () => {
       try {
-        setSysInfo(await window.dh.getHostSysInfo())
-        setPorts(await window.dh.getHostPorts())
+        await refreshStatic()
+        await refreshLive()
+        await refreshGithub()
 
-        // Fetch GitHub events (mocking or using public API if possible)
-        const resp = await fetch('https://api.github.com/users/Karim-Termanini/events/public')
-        if (resp.ok) {
-          const data = await resp.json() as GithubEvent[]
-          const pushEvents = data.filter((e) => e.type === 'PushEvent').slice(0, 10)
-
-          // Try to enrich events that have no commit messages
-          const enriched = await Promise.all(pushEvents.map(async (e) => {
-            if (!e.payload.commits || e.payload.commits.length === 0) {
-              try {
-                const cResp = await fetch(`https://api.github.com/repos/${e.repo.name}/commits?per_page=5`)
-                if (cResp.ok) {
-                  const cData = await cResp.json() as GithubCommitResponse[]
-                  return { ...e, payload: { ...e.payload, commits: cData.map((c) => ({ message: c.commit.message })) } }
-                }
-              } catch { /* ignore */ }
-            }
-            return e
-          }))
-          setGithubCommits(enriched)
-        }
-
-        // Fetch SSH bookmarks
-        const bookmarks = await window.dh.storeGet({ key: 'ssh_bookmarks' })
-        if (bookmarks && Array.isArray(bookmarks)) {
-          setSshServers(bookmarks)
-        }
       } catch (e) { console.error(e) }
     })()
 
-    const t = setInterval(refresh, 2000)
-    return () => clearInterval(t)
-  }, [refresh])
+    const fast = setInterval(() => { void refreshLive() }, 2000)
+    const slow = setInterval(() => { void refreshStatic() }, 10000)
+    const gh = setInterval(() => { void refreshGithub() }, 30000)
+    return () => {
+      clearInterval(fast)
+      clearInterval(slow)
+      clearInterval(gh)
+    }
+  }, [refreshLive, refreshStatic, refreshGithub])
 
   const m = metrics?.metrics
   const memUsed = m ? m.totalMemMb - m.freeMemMb : 0
   const memPct = m ? Math.round((memUsed / m.totalMemMb) * 100) : 0
+  const swapUsed = m ? Math.max(0, m.swapTotalMb - m.swapFreeMb) : 0
+  const swapPct = m && m.swapTotalMb > 0 ? Math.round((swapUsed / m.swapTotalMb) * 100) : 0
   const diskPct = m ? Math.round(((m.diskTotalGb - m.diskFreeGb) / m.diskTotalGb) * 100) : 0
+  const listeningPorts = ports.filter((p) => p.state.toLowerCase() === 'listening').length
+  const runningContainers = containers.filter((c) => c.state === 'running').length
+  const dockerNetworks = new Set(containers.flatMap((c) => c.networks ?? [])).size
+  const copySystemReport = async () => {
+    const report = [
+      `Distro: ${sysInfo?.distro ?? '—'}`,
+      `Hostname: ${sysInfo?.hostname ?? '—'}`,
+      `Kernel: ${sysInfo?.kernel ?? '—'}`,
+      `Architecture: ${sysInfo?.arch ?? '—'}`,
+      `Packages: ${sysInfo?.packages ?? '—'}`,
+      `Shell: ${sysInfo?.shell ?? '—'}`,
+      `Desktop: ${sysInfo?.de ?? '—'} / ${sysInfo?.wm ?? '—'}`,
+      `Graphics: ${sysInfo?.gpu ?? '—'}`,
+      `Display: ${sysInfo?.resolution ?? '—'}`,
+      `Memory: ${sysInfo?.memoryUsage ?? '—'}`,
+      `Swap: ${m ? `${(swapUsed / 1024).toFixed(1)} / ${(m.swapTotalMb / 1024).toFixed(1)} GB` : '—'}`,
+      `Uptime: ${m ? `${Math.floor(m.uptimeSec / 3600)}h ${Math.floor((m.uptimeSec % 3600) / 60)}m` : '—'}`,
+    ].join('\n')
+    try {
+      await navigator.clipboard.writeText(report)
+      setCopiedReport(true)
+      setTimeout(() => setCopiedReport(false), 1500)
+    } catch {
+      setCopiedReport(false)
+    }
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24, paddingBottom: 40 }}>
@@ -97,67 +140,57 @@ export function MonitorPage(): ReactElement {
           <LiveLineChart data={cpuHistory} color="var(--accent)" height={60} />
         </MetricCard>
 
-        <MetricCard title="MEMORY USAGE" value={m ? `${(memUsed / 1024).toFixed(1)} GB` : '—'} subValue={`Total ${((m?.totalMemMb ?? 0) / 1024).toFixed(1)} GB`}>
+        <MetricCard title="MEMORY USAGE" value={m ? `${(memUsed / 1024).toFixed(1)} GB` : '—'} subValue={`RAM total ${((m?.totalMemMb ?? 0) / 1024).toFixed(1)} GB`}>
           <ProgressBar pct={memPct} color="#00e676" />
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontSize: 11, opacity: 0.6 }} className="mono">
             <span>Used: {memUsed}MB</span>
             <span>Free: {m?.freeMemMb}MB</span>
           </div>
+          <div style={{ marginTop: 12, fontSize: 11, color: 'var(--text-muted)', fontWeight: 700 }}>SWAP</div>
+          <ProgressBar pct={swapPct} color="#42a5f5" />
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontSize: 11, opacity: 0.6 }} className="mono">
+            <span>Used: {swapUsed}MB</span>
+            <span>Total: {m?.swapTotalMb ?? 0}MB</span>
+          </div>
         </MetricCard>
 
-        <MetricCard title="STORAGE" value={m ? `${(m.diskTotalGb - m.diskFreeGb).toFixed(1)} GB` : '—'} subValue={`Root Partition: ${m?.diskTotalGb} GB`}>
+        <MetricCard title="STORAGE" value={m ? `${(m.diskTotalGb - m.diskFreeGb).toFixed(1)} GB` : '—'} subValue={`Root partition: ${m?.diskTotalGb} GB`}>
           <div style={{ display: 'flex', justifyContent: 'center', padding: '10px 0' }}>
             <UsageRing pct={diskPct} size={80} color="var(--orange)" />
           </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontSize: 11, color: 'var(--text-muted)' }}>
+            <span>Used {(m ? (m.diskTotalGb - m.diskFreeGb).toFixed(1) : '0')} GB</span>
+            <span>Free {m?.diskFreeGb ?? 0} GB</span>
+          </div>
         </MetricCard>
       </div>
 
-      {/* Network & System Info */}
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 20 }}>
-        <MetricCard title="NETWORK ACTIVITY" value={`${m?.netRxMbps.toFixed(2) ?? 0} Mbps`} subValue="Downlink / Uplink Traffic">
-          <NetworkChart data={netHistory} height={120} />
-          <div style={{ display: 'flex', gap: 24, marginTop: 12 }}>
+      {/* Network Activity */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 20 }}>
+        <MetricCard title="NETWORK ACTIVITY" value={`${m?.netRxMbps.toFixed(2) ?? '0.00'} Mbps`} subValue="Downlink / Uplink traffic">
+          <div style={{ border: '1px solid var(--border)', borderRadius: 10, background: 'rgba(255,255,255,0.02)', padding: 10 }}>
+            <NetworkChart data={netHistory} height={120} />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 12 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <div style={{ width: 12, height: 12, borderRadius: 2, background: 'var(--accent)' }} />
-              <span style={{ fontSize: 12 }}>RX: {m?.netRxMbps.toFixed(2)} Mbps</span>
+              <span style={{ fontSize: 12 }}>RX: {m?.netRxMbps.toFixed(2) ?? '0.00'} Mbps</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <div style={{ width: 12, height: 12, borderRadius: 2, background: '#ff1744' }} />
-              <span style={{ fontSize: 12 }}>TX: {m?.netTxMbps.toFixed(2)} Mbps</span>
-            </div>
-          </div>
-        </MetricCard>
-
-        <MetricCard title="SYSTEM INFORMATION">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '100px 1fr', gap: 12, alignItems: 'center' }}>
-              <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700 }}>DISTRO</span>
-              <span style={{ fontSize: 13, fontWeight: 600 }}>{sysInfo?.distro || 'Fedora Linux'}</span>
-            </div>
-            <div style={{ paddingLeft: 112, display: 'flex', flexDirection: 'column', gap: 4, opacity: 0.8 }}>
-              <InfoLine label="Kernel" value={sysInfo?.kernel} />
-              <InfoLine label="Packages" value={sysInfo?.packages} />
-              <InfoLine label="Shell" value={sysInfo?.shell} />
-              <InfoLine label="DE/WM" value={`${sysInfo?.de} / ${sysInfo?.wm}`} />
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '100px 1fr', gap: 12, alignItems: 'center', marginTop: 8 }}>
-              <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700 }}>HARDWARE</span>
-              <span style={{ fontSize: 13, fontWeight: 600 }}>{sysInfo?.gpu || 'Intel UHD Graphics'}</span>
-            </div>
-            <div style={{ paddingLeft: 112, display: 'flex', flexDirection: 'column', gap: 4, opacity: 0.8 }}>
-              <InfoLine label="Res" value={sysInfo?.resolution} />
-              <InfoLine label="Memory" value={sysInfo?.memoryUsage} />
-              <InfoLine label="Uptime" value={m ? `${Math.floor(m.uptimeSec / 3600)}h ${Math.floor((m.uptimeSec % 3600) / 60)}m` : '—'} />
+              <span style={{ fontSize: 12 }}>TX: {m?.netTxMbps.toFixed(2) ?? '0.00'} Mbps</span>
             </div>
           </div>
         </MetricCard>
       </div>
 
-      {/* Engineering Hub Row - 3 Columns */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: 20 }}>
-        <MetricCard title="ACTIVE PORTS (LISTEN)">
+      {/* Engineering Hub Row - 2 Columns */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: 20 }}>
+        <MetricCard title="ACTIVE PORTS (LISTEN)" value={`${listeningPorts}`} subValue="Open listening sockets">
           <div style={{ maxHeight: 300, overflow: 'auto', marginTop: 10 }}>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 10 }}>
+              Listening sockets refresh automatically (about every 10 seconds).
+            </div>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
               <thead>
                 <tr style={{ textAlign: 'left', color: 'var(--text-muted)' }}>
@@ -167,19 +200,27 @@ export function MonitorPage(): ReactElement {
                 </tr>
               </thead>
               <tbody>
-                {ports.slice(0, 15).map((p, i) => (
+                {ports.length === 0 ? (
+                  <tr>
+                    <td colSpan={3} style={{ padding: '12px 4px', color: 'var(--text-muted)' }}>
+                      No listening ports detected (or `ss`/`netstat` is unavailable in this environment).
+                    </td>
+                  </tr>
+                ) : (
+                  ports.slice(0, 25).map((p, i) => (
                   <tr key={i} style={{ borderTop: '1px solid var(--border)' }}>
                     <td style={{ padding: '8px 4px' }} className="mono">{p.protocol.toUpperCase()}</td>
                     <td style={{ padding: '8px 4px', fontWeight: 600 }}>{p.port}</td>
                     <td style={{ padding: '8px 4px', color: 'var(--green)' }}>{p.state}</td>
                   </tr>
-                ))}
+                  ))
+                )}
               </tbody>
             </table>
           </div>
         </MetricCard>
 
-        <MetricCard title="DOCKER CONTAINERS">
+        <MetricCard title="DOCKER CONTAINERS" value={`${runningContainers}`} subValue={`Running / Total ${containers.length}`}>
           <div style={{ maxHeight: 300, overflow: 'auto', marginTop: 10 }}>
             {containers.length > 0 ? (
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
@@ -221,12 +262,45 @@ export function MonitorPage(): ReactElement {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 10 }}>
             {sysInfo && (
               <>
-                <InfoRow label="LAN IP" value={sysInfo.ip ?? '—'} />
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', background: 'rgba(0,0,0,0.2)', padding: 12, borderRadius: 4, lineHeight: 1.5 }}>
-                  <code style={{ color: 'var(--accent)' }}>$ ip addr show | grep inet</code>
-                  <div style={{ marginTop: 8 }}>
-                    Monitoring active network interfaces and bridge status for containers.
+                <div
+                  style={{
+                    border: '1px solid var(--border)',
+                    borderRadius: 8,
+                    padding: 12,
+                    background: 'rgba(255,255,255,0.02)',
+                  }}
+                >
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>PRIMARY ADAPTER</div>
+                  <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--text-main)' }}>{sysInfo.ip ?? '—'}</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+                    Host: <span className="mono">{sysInfo.hostname}</span>
                   </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10 }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>RECEIVE</div>
+                    <div style={{ fontSize: 16, fontWeight: 700 }}>{m?.netRxMbps.toFixed(2) ?? '0.00'} Mbps</div>
+                  </div>
+                  <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10 }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>SEND</div>
+                    <div style={{ fontSize: 16, fontWeight: 700 }}>{m?.netTxMbps.toFixed(2) ?? '0.00'} Mbps</div>
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10 }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>LISTENING PORTS</div>
+                    <div style={{ fontSize: 16, fontWeight: 700 }}>{listeningPorts}</div>
+                  </div>
+                  <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10 }}>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>DOCKER NETWORKS</div>
+                    <div style={{ fontSize: 16, fontWeight: 700 }}>{dockerNetworks}</div>
+                  </div>
+                </div>
+
+                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                  Active containers: <strong style={{ color: 'var(--text-main)' }}>{runningContainers}</strong>
                 </div>
               </>
             )}
@@ -234,10 +308,63 @@ export function MonitorPage(): ReactElement {
         </MetricCard>
       </div>
 
-      {/* Activity & Servers Row */}
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 20 }}>
-        <MetricCard title="GITHUB RECENT ACTIVITY">
+      {/* System + Activity */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: 20, alignItems: 'start' }}>
+        <MetricCard title="SYSTEM INFORMATION">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 10 }}>
+            <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 12, background: 'rgba(255,255,255,0.02)' }}>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700, letterSpacing: '0.06em' }}>ABOUT THIS PC</div>
+              <div style={{ marginTop: 8, fontSize: 16, fontWeight: 800, lineHeight: 1.25 }}>
+                {sysInfo?.distro ?? '—'}
+              </div>
+              <div style={{ marginTop: 6, fontSize: 12, color: 'var(--text-muted)' }}>
+                Hostname: <span className="mono" style={{ color: 'var(--text-main)' }}>{sysInfo?.hostname ?? '—'}</span>
+              </div>
+              <div style={{ marginTop: 10 }}>
+                <button
+                  onClick={() => void copySystemReport()}
+                  style={{
+                    border: '1px solid var(--border)',
+                    background: copiedReport ? 'rgba(0,230,118,0.15)' : 'rgba(255,255,255,0.04)',
+                    color: copiedReport ? 'var(--green)' : 'var(--text-main)',
+                    borderRadius: 6,
+                    padding: '6px 10px',
+                    fontSize: 11,
+                    fontWeight: 700,
+                    cursor: 'pointer'
+                  }}
+                >
+                  {copiedReport ? 'Copied' : 'Copy system report'}
+                </button>
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 8 }}>
+              <SettingsRow label="Kernel" value={sysInfo?.kernel} />
+              <SettingsRow label="Architecture" value={sysInfo?.arch} />
+              <SettingsRow label="Packages" value={sysInfo?.packages} />
+              <SettingsRow label="Default shell" value={sysInfo?.shell} />
+              <SettingsRow label="Desktop environment" value={sysInfo?.de} />
+              <SettingsRow label="Session" value={sysInfo?.wm} />
+            </div>
+
+            <div style={{ borderTop: '1px solid var(--border)', paddingTop: 10, marginTop: 2 }}>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700, letterSpacing: '0.06em' }}>DEVICE SPECIFICATIONS</div>
+              <div style={{ marginTop: 8, display: 'grid', gridTemplateColumns: '1fr', gap: 8 }}>
+                <SettingsRow label="Graphics" value={sysInfo?.gpu} />
+                <SettingsRow label="Display resolution" value={sysInfo?.resolution} />
+                <SettingsRow label="Installed RAM" value={sysInfo?.memoryUsage} />
+                <SettingsRow label="Uptime" value={m ? `${Math.floor(m.uptimeSec / 3600)}h ${Math.floor((m.uptimeSec % 3600) / 60)}m` : '—'} />
+              </div>
+            </div>
+          </div>
+        </MetricCard>
+
+        <MetricCard title="GITHUB RECENT ACTIVITY" subValue="Live feed with periodic refresh">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 10 }}>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+              Auto-refresh every 30 seconds.
+            </div>
             {githubCommits.length > 0 ? githubCommits.map((e, i) => (
               <div key={i} style={{ padding: '12px', background: 'rgba(255,255,255,0.02)', borderRadius: 8, border: '1px solid var(--border)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
@@ -263,42 +390,6 @@ export function MonitorPage(): ReactElement {
             )) : <div style={{ color: 'var(--text-muted)' }}>No recent activity found.</div>}
           </div>
         </MetricCard>
-
-        <MetricCard title="REMOTE SERVERS">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 10 }}>
-            {sshServers.length > 0 ? sshServers.map((s, i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0' }}>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>{s.name}</div>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{s.user}@{s.host}</div>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--green)' }} />
-                  <span style={{ fontSize: 11, color: 'var(--green)' }}>Online</span>
-                </div>
-              </div>
-            )) : (
-              <div style={{ textAlign: 'center', padding: '20px 0' }}>
-                <div style={{ color: 'var(--text-muted)', fontSize: 12, marginBottom: 12 }}>No remote servers saved yet.</div>
-                <button
-                  onClick={() => window.location.hash = '#/ssh'}
-                  style={{
-                    background: 'var(--accent)',
-                    color: 'white',
-                    border: 'none',
-                    padding: '6px 12px',
-                    borderRadius: 4,
-                    fontSize: 11,
-                    fontWeight: 600,
-                    cursor: 'pointer'
-                  }}
-                >
-                  Add SSH Server
-                </button>
-              </div>
-            )}
-          </div>
-        </MetricCard>
       </div>
     </div>
   )
@@ -316,7 +407,7 @@ function MetricCard({ title, value, subValue, children }: { title: string, value
     }}>
       <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: 4, background: 'linear-gradient(90deg, var(--accent), transparent)' }} />
       <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.05em', marginBottom: 12 }}>{title}</div>
-      {value && <div style={{ fontSize: 32, fontWeight: 800, letterSpacing: '-0.02em' }}>{value}</div>}
+      {value && <div style={{ fontSize: 32, fontWeight: 800, letterSpacing: '-0.02em', textShadow: '0 0 18px rgba(124,77,255,0.25)' }}>{value}</div>}
       {subValue && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>{subValue}</div>}
       <div style={{ marginTop: 16 }}>{children}</div>
     </section>
@@ -392,20 +483,37 @@ function NetworkChart({ data, height }: { data: { rx: number, tx: number }[], he
   const max = Math.max(...data.map(d => Math.max(d.rx, d.tx, 1)), 1)
   const rxPoints = data.map((val, i) => `${(i / (data.length - 1)) * 100},${height - (val.rx / max) * height}`).join(' ')
   const txPoints = data.map((val, i) => `${(i / (data.length - 1)) * 100},${height - (val.tx / max) * height}`).join(' ')
+  const lastRx = data[data.length - 1]
+  const lastX = 100
+  const lastRxY = height - ((lastRx?.rx ?? 0) / max) * height
+  const lastTxY = height - ((lastRx?.tx ?? 0) / max) * height
 
   return (
     <svg width="100%" height={height} viewBox={`0 0 100 ${height}`} preserveAspectRatio="none" style={{ overflow: 'visible' }}>
-      <polyline fill="none" stroke="var(--accent)" strokeWidth="2" points={rxPoints} />
-      <polyline fill="none" stroke="#ff1744" strokeWidth="2" points={txPoints} strokeDasharray="4 2" />
+      <polyline fill="none" stroke="var(--accent)" strokeWidth="2.5" points={rxPoints} />
+      <polyline fill="none" stroke="#ff1744" strokeWidth="2.5" points={txPoints} strokeDasharray="4 2" />
+      <circle cx={lastX} cy={lastRxY} r="1.6" fill="var(--accent)" />
+      <circle cx={lastX} cy={lastTxY} r="1.6" fill="#ff1744" />
     </svg>
   )
 }
 
-function InfoLine({ label, value }: { label: string, value?: string }): ReactElement {
+function SettingsRow({ label, value }: { label: string, value?: string }): ReactElement {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
-      <span style={{ color: 'var(--text-muted)', width: 70 }}>│ ├ {label}</span>
-      <span style={{ fontWeight: 500 }}>{value ?? '—'}</span>
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: 'minmax(140px, 42%) 1fr',
+        gap: 12,
+        alignItems: 'baseline',
+        padding: '10px 10px',
+        borderRadius: 8,
+        border: '1px solid rgba(255,255,255,0.06)',
+        background: 'rgba(0,0,0,0.12)',
+      }}
+    >
+      <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>{label}</div>
+      <div style={{ fontSize: 13, fontWeight: 650, color: 'var(--text-main)', wordBreak: 'break-word' }}>{value ?? '—'}</div>
     </div>
   )
 }

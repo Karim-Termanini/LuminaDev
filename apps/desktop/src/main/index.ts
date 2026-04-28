@@ -457,6 +457,17 @@ async function systemdRow(unitBase: string): Promise<SystemdRow> {
 async function collectMetrics(): Promise<HostMetricsResponse> {
   const freeMb = Math.round(freemem() / (1024 * 1024))
   const totalMb = Math.round(totalmem() / (1024 * 1024))
+  let swapTotalMb = 0
+  let swapFreeMb = 0
+  try {
+    const meminfo = readFileSync('/proc/meminfo', 'utf8')
+    const swapTotal = meminfo.match(/^SwapTotal:\s+(\d+)\s+kB$/m)
+    const swapFree = meminfo.match(/^SwapFree:\s+(\d+)\s+kB$/m)
+    swapTotalMb = swapTotal ? Math.round(Number(swapTotal[1]) / 1024) : 0
+    swapFreeMb = swapFree ? Math.round(Number(swapFree[1]) / 1024) : 0
+  } catch {
+    /* non-linux or restricted */
+  }
   let diskTotalGb = 0
   let diskFreeGb = 0
   try {
@@ -475,6 +486,8 @@ async function collectMetrics(): Promise<HostMetricsResponse> {
     loadAvg: loadavg(),
     totalMemMb: totalMb,
     freeMemMb: freeMb,
+    swapTotalMb,
+    swapFreeMb,
     uptimeSec: Math.round(uptime()),
     diskTotalGb,
     diskFreeGb,
@@ -2089,21 +2102,24 @@ app.on('activate', () => {
 })
 
 function parseSs(stdout: string): HostPortRow[] {
-  const lines = stdout.split('\n').filter(Boolean).slice(1) // Skip header
-  return lines.map(line => {
+  const lines = stdout.split('\n').map((l) => l.trim()).filter(Boolean)
+  return lines.map((line) => {
     const parts = line.split(/\s+/).filter(Boolean)
-    // ss format: Netid State Recv-Q Send-Q Local Address:Port Peer Address:Port
-    const protocol = parts[0]?.toLowerCase().includes('tcp') ? 'tcp' : 'udp'
-    const state = parts[1] || 'LISTEN'
-    const local = parts[4] || ''
-    
+    // Typical ss -tunl -H line:
+    // tcp LISTEN 0 128 0.0.0.0:22 0.0.0.0:*
+    // udp UNCONN 0 0 0.0.0.0:68 0.0.0.0:*
+    const netid = (parts[0] ?? '').toLowerCase()
+    const protocol: 'tcp' | 'udp' = netid.includes('udp') ? 'udp' : 'tcp'
+    const state = (parts[1] ?? 'LISTEN').toUpperCase()
+    const local = parts[4] ?? ''
+
     // Handle both IPv4 (0.0.0.0:80) and IPv6 ([::]:80)
     const lastColonIndex = local.lastIndexOf(':')
-    const portStr = local.substring(lastColonIndex + 1)
+    const portStr = lastColonIndex >= 0 ? local.slice(lastColonIndex + 1) : ''
     const port = parseInt(portStr, 10)
 
-    return { protocol: protocol as 'tcp' | 'udp', port, state, service: '' }
-  }).filter(p => p.port > 0)
+    return { protocol, port, state, service: '' }
+  }).filter((p) => p.port > 0)
 }
 
 function parseNetstat(stdout: string): HostPortRow[] {
