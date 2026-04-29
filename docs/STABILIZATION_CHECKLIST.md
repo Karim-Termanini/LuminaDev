@@ -163,7 +163,7 @@ Stabilization is considered complete only when:
 
 ## Manual Test Checklist (B5)
 
-Minimal flows to verify before declaring a build stable. Run on real Tauri build.
+Minimal flows to verify before declaring a build stable. Run on a **release-style Tauri** build (e.g. `pnpm --filter desktop tauri build` or your distro package). Check boxes when verified; if skipped, add a one-line reason in a PR or issue.
 
 ### App startup
 - [ ] App launches without crash
@@ -178,8 +178,8 @@ Minimal flows to verify before declaring a build stable. Run on real Tauri build
 - [ ] Volumes tab: list loads, create/remove volume works
 - [ ] Networks tab: list loads, create/remove network works
 - [ ] Cleanup tab: prune preview shows counts; "Run Cleanup" executes
-- [ ] Ports tab: shows current published ports; remap card shows "not available" notice
-- [ ] Install / Setup button: opens modal, shows "not available" notice + docs link
+- [ ] Ports tab: published ports table loads; **native session**: remap form (container + old/new host port) runs or shows a clear `[DOCKER_*]` error; **Flatpak**: remap shows sandbox notice + docs link
+- [ ] Install / Setup: **Flatpak** — step 0 explains host-only install + doc links, no “Continue” into sudo wizard; **native** — “Continue to wizard”, distro + components + sudo, install produces logs or a clear error
 
 ### Terminal
 - [ ] Terminal tab opens, shell prompt appears

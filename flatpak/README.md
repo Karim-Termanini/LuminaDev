@@ -59,6 +59,13 @@ rm -rf flatpak-build-tauri .flatpak-builder
 
 Then rebuild. If `FLATPAK_USER_DIR` is set to a custom path, ensure that directory exists and is writable, or unset it for the build.
 
+### `The state dir … is not on the same filesystem as the target dir`
+
+`flatpak-builder` wants its **cache/state** (default: `.flatpak-builder` under the directory you run from) on the **same filesystem** as the **build directory** (e.g. `flatpak-build-tauri`). Fix by:
+
+- building from the repo with **both** dirs on the same disk, or  
+- passing `--state-dir` on the same filesystem as your `--repo` / build dir (see `flatpak-builder --help`).
+
 ### `Unknown extension 'org.freedesktop.Sdk.Extension.rust-stable//…' in runtime`
 
 The **`//branch` on `sdk-extensions` must match extensions your `org.gnome.Sdk` actually exposes**. Wrong pins produce this error. The Tauri manifest uses **GNOME Platform 49** and **unpinned** `rust-stable` / `node20` so Flatpak resolves the correct pair.

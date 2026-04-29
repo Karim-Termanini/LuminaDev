@@ -1,4 +1,4 @@
-import type { ContainerRow, ImageRow, NetworkRow, VolumeRow } from '@linux-dev-home/shared'
+import type { ContainerRow, ImageRow, NetworkRow, SessionInfo, VolumeRow } from '@linux-dev-home/shared'
 import type { ReactElement } from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Terminal } from '@xterm/xterm'
@@ -21,6 +21,10 @@ type CreateExample = {
 }
 
 type InstallDistroId = 'ubuntu' | 'fedora' | 'arch'
+
+const DOCKER_ENGINE_INSTALL_DOCS = 'https://docs.docker.com/engine/install/'
+const DOCKER_FLATPAK_REPO_DOCS =
+  'https://github.com/Karim-Termanini/LuminaDev/blob/main/docs/DOCKER_FLATPAK.md'
 
 const CREATE_EXAMPLES: CreateExample[] = [
   { title: 'Nginx web server', image: 'nginx:latest', ports: '8080:80', volumes: './:/usr/share/nginx/html' },
@@ -80,7 +84,7 @@ export function DockerPage(): ReactElement {
   const [createVolumeName, setCreateVolumeName] = useState('')
   const [createNetworkName, setCreateNetworkName] = useState('')
   const [showInstallModal, setShowInstallModal] = useState(false)
-  const [selectedDistro] = useState<InstallDistroId | null>(null)
+  const [installDistro, setInstallDistro] = useState<InstallDistroId>('ubuntu')
   const [installStep, setInstallStep] = useState<number>(0)
   const [sudoPassword, setSudoPassword] = useState('')
   const [installLogs, setInstallLogs] = useState<string[]>([])
@@ -96,6 +100,12 @@ export function DockerPage(): ReactElement {
   const [selectedTag, setSelectedTag] = useState('latest')
   const [isLoadingTags, setIsLoadingTags] = useState(false)
   const [activeTermContainer, setActiveTermContainer] = useState<ContainerRow | null>(null)
+  const [sessionKind, setSessionKind] = useState<'flatpak' | 'native' | 'unknown'>('unknown')
+  const [remapContainerId, setRemapContainerId] = useState('')
+  const [remapOldPort, setRemapOldPort] = useState('')
+  const [remapNewPort, setRemapNewPort] = useState('')
+  const [remapBusy, setRemapBusy] = useState(false)
+  const [remapFeedback, setRemapFeedback] = useState<string | null>(null)
 
   const closeTerminal = useCallback(() => setActiveTermContainer(null), [])
 
@@ -135,10 +145,32 @@ export function DockerPage(): ReactElement {
   }, [refreshAll])
 
   useEffect(() => {
+    void window.dh
+      .sessionInfo()
+      .then((s) => {
+        const info = s as SessionInfo
+        setSessionKind(info.kind === 'flatpak' ? 'flatpak' : 'native')
+      })
+      .catch(() => setSessionKind('unknown'))
+  }, [])
+
+  useEffect(() => {
     if (tab === 'cleanup') {
       void previewCleanup()
     }
   }, [tab])
+
+  useEffect(() => {
+    if (tab !== 'ports' || !docker?.ok) return
+    const withP = docker.rows.filter((r) => r.ports !== '—')
+    if (withP.length === 0) {
+      setRemapContainerId('')
+      return
+    }
+    setRemapContainerId((current) =>
+      current && withP.some((r) => r.id === current) ? current : withP[0].id,
+    )
+  }, [tab, docker])
 
 
   useEffect(() => {
@@ -164,7 +196,6 @@ export function DockerPage(): ReactElement {
 
 
   async function runInstallation(): Promise<void> {
-    if (!selectedDistro) return
     setInstallBusy(true)
     setInstallError(null)
     setInstallLogs(['Starting installation...'])
@@ -172,9 +203,9 @@ export function DockerPage(): ReactElement {
 
     try {
       const res = await window.dh.dockerInstall({
-        distro: selectedDistro as 'ubuntu' | 'fedora' | 'arch',
+        distro: installDistro,
         password: sudoPassword,
-        components: selectedFeatures
+        components: selectedFeatures,
       })
       const logs = Array.isArray(res.log) ? res.log : []
       setInstallLogs(
@@ -190,6 +221,37 @@ export function DockerPage(): ReactElement {
       setInstallError(e instanceof Error ? e.message : String(e))
     } finally {
       setInstallBusy(false)
+    }
+  }
+
+  async function runRemapPort(): Promise<void> {
+    const oldHost = Number.parseInt(remapOldPort, 10)
+    const newHost = Number.parseInt(remapNewPort, 10)
+    const id = remapContainerId.trim()
+    if (!id || !Number.isFinite(oldHost) || !Number.isFinite(newHost)) {
+      setRemapFeedback('Choose a container and enter numeric host ports.')
+      return
+    }
+    setRemapBusy(true)
+    setRemapFeedback(null)
+    try {
+      const res = (await window.dh.dockerRemapPort({
+        id,
+        oldHostPort: oldHost,
+        newHostPort: newHost,
+      })) as { ok: boolean; error?: string }
+      if (res.ok) {
+        setRemapFeedback('Remap finished. Container list refreshed.')
+        setRemapOldPort('')
+        setRemapNewPort('')
+        await refreshAll()
+      } else {
+        setRemapFeedback(humanizeDockerError(res.error || '[DOCKER_REMAP_FAILED] Unknown error'))
+      }
+    } catch (e) {
+      setRemapFeedback(humanizeDockerError(e))
+    } finally {
+      setRemapBusy(false)
     }
   }
 
@@ -474,7 +536,13 @@ export function DockerPage(): ReactElement {
         <button
           type="button"
           className="hp-btn"
-          onClick={() => setShowInstallModal(true)}
+          onClick={() => {
+            setInstallStep(0)
+            setInstallError(null)
+            setSudoPassword('')
+            setInstallLogs([])
+            setShowInstallModal(true)
+          }}
         >
           Install / Setup
         </button>
@@ -1017,16 +1085,96 @@ export function DockerPage(): ReactElement {
             </div>
             <div className="hp-card">
               <div style={{ fontWeight: 600, marginBottom: 8 }}>Remap host port</div>
-              <div className="hp-status-alert warning" style={{ marginBottom: 0 }}>
-                <span className="codicon codicon-tools" aria-hidden />
-                <div>
-                  <div style={{ fontWeight: 600, marginBottom: 2 }}>Not yet available in-app</div>
-                  <div style={{ fontSize: 12 }}>
-                    To remap a port: stop the container, remove it, then recreate with the new port flag.
-                    Example: <span className="mono">docker run -p 8081:80 ...</span>
+              {sessionKind === 'flatpak' ? (
+                <div className="hp-status-alert warning" style={{ marginBottom: 0 }}>
+                  <span className="codicon codicon-tools" aria-hidden />
+                  <div>
+                    <div style={{ fontWeight: 600, marginBottom: 2 }}>Not available in Flatpak</div>
+                    <div style={{ fontSize: 12 }}>
+                      Remap uses host Docker CLI. Use a native install session, or recreate the container manually with a new{' '}
+                      <span className="mono">-p</span> mapping.
+                    </div>
+                    <button
+                      type="button"
+                      className="hp-btn"
+                      style={{ marginTop: 10 }}
+                      onClick={() => void window.dh.openExternal(DOCKER_FLATPAK_REPO_DOCS)}
+                    >
+                      <span className="codicon codicon-link-external" aria-hidden /> Flatpak + Docker notes
+                    </button>
                   </div>
                 </div>
-              </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)' }}>
+                    Clones the container with a new host port binding, then stops/removes the original when possible. Container must be running or stoppable as Docker allows.
+                  </p>
+                  {rowsWithPorts.length === 0 ? (
+                    <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>No published ports to pick from — start a container with port mappings first.</div>
+                  ) : (
+                    <>
+                      <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13 }}>
+                        <span style={{ fontWeight: 600 }}>Container</span>
+                        <select
+                          className="hp-input"
+                          value={remapContainerId}
+                          onChange={(e) => setRemapContainerId(e.target.value)}
+                        >
+                          {rowsWithPorts.map((r) => (
+                            <option key={r.id} value={r.id}>
+                              {r.name} ({r.id.slice(0, 12)}) — {r.ports}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end' }}>
+                        <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13 }}>
+                          <span style={{ fontWeight: 600 }}>Current host port</span>
+                          <input
+                            className="hp-input"
+                            type="number"
+                            min={1}
+                            max={65535}
+                            placeholder="8080"
+                            value={remapOldPort}
+                            onChange={(e) => setRemapOldPort(e.target.value)}
+                            style={{ width: 120 }}
+                          />
+                        </label>
+                        <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13 }}>
+                          <span style={{ fontWeight: 600 }}>New host port</span>
+                          <input
+                            className="hp-input"
+                            type="number"
+                            min={1}
+                            max={65535}
+                            placeholder="8081"
+                            value={remapNewPort}
+                            onChange={(e) => setRemapNewPort(e.target.value)}
+                            style={{ width: 120 }}
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          className="hp-btn hp-btn-primary"
+                          disabled={remapBusy}
+                          onClick={() => void runRemapPort()}
+                        >
+                          {remapBusy ? 'Working…' : 'Remap port'}
+                        </button>
+                      </div>
+                      {remapFeedback ? (
+                        <div
+                          className={remapFeedback.startsWith('Remap finished') ? 'hp-status-alert success' : 'hp-status-alert warning'}
+                          style={{ fontSize: 13 }}
+                        >
+                          {remapFeedback}
+                        </div>
+                      ) : null}
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         ) : null}
@@ -1131,30 +1279,98 @@ export function DockerPage(): ReactElement {
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
               {installStep === 0 && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  <div className="hp-status-alert warning">
-                    <span className="codicon codicon-info" aria-hidden />
-                    <div>
-                      <div style={{ fontWeight: 600, marginBottom: 4 }}>Automated installation not yet available</div>
-                      <div style={{ fontSize: 13 }}>
-                        Install Docker manually using the official guide for your distribution.
+                  {sessionKind === 'flatpak' ? (
+                    <>
+                      <div className="hp-status-alert warning">
+                        <span className="codicon codicon-info" aria-hidden />
+                        <div>
+                          <div style={{ fontWeight: 600, marginBottom: 4 }}>Automated install is not available in Flatpak</div>
+                          <div style={{ fontSize: 13 }}>
+                            Package-manager install needs a native host session. Install Docker on the host, then reopen the app outside Flatpak or use documented socket overrides.
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                  <div style={{ fontSize: 14, color: 'var(--text-muted)', lineHeight: 1.6 }}>
-                    Once Docker is installed and running, return here — the Docker panel will detect it automatically.
-                  </div>
-                  <button
-                    type="button"
-                    className="hp-btn hp-btn-primary"
-                    onClick={() => void window.dh.openExternal('https://docs.docker.com/engine/install/')}
-                  >
-                    <span className="codicon codicon-link-external" aria-hidden /> Open docs.docker.com/engine/install
-                  </button>
+                      <div style={{ fontSize: 14, color: 'var(--text-muted)', lineHeight: 1.6 }}>
+                        Once Docker is installed and reachable from this sandbox, refresh — the panel will pick it up if the socket is exposed.
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                        <button
+                          type="button"
+                          className="hp-btn hp-btn-primary"
+                          onClick={() => void window.dh.openExternal(DOCKER_ENGINE_INSTALL_DOCS)}
+                        >
+                          <span className="codicon codicon-link-external" aria-hidden /> Official Docker install guide
+                        </button>
+                        <button type="button" className="hp-btn" onClick={() => void window.dh.openExternal(DOCKER_FLATPAK_REPO_DOCS)}>
+                          <span className="codicon codicon-link-external" aria-hidden /> This repo: Flatpak + Docker
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="hp-status-alert success">
+                        <span className="codicon codicon-pass" aria-hidden />
+                        <div>
+                          <div style={{ fontWeight: 600, marginBottom: 4 }}>Automated install available on this session</div>
+                          <div style={{ fontSize: 13 }}>
+                            This build can run your distro&apos;s package steps (with <span className="mono">sudo</span>) for Docker Engine and selected components. You can still follow the official guide instead if you prefer.
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{ fontSize: 14, color: 'var(--text-muted)', lineHeight: 1.6 }}>
+                        {sessionKind === 'unknown'
+                          ? 'Session type could not be detected; if automated install fails, use the manual guide below.'
+                          : 'Continue to choose components and enter your sudo password on the next steps.'}
+                      </div>
+                      <button
+                        type="button"
+                        className="hp-btn"
+                        onClick={() => void window.dh.openExternal(DOCKER_ENGINE_INSTALL_DOCS)}
+                      >
+                        <span className="codicon codicon-link-external" aria-hidden /> Official Docker install guide (manual path)
+                      </button>
+                    </>
+                  )}
                 </div>
               )}
 
               {installStep === 1 && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  <h3 style={{ margin: 0, fontSize: 16 }}>Distribution</h3>
+                  <p style={{ margin: 0, fontSize: 14, color: 'var(--text-muted)' }}>
+                    Pick the package family for install commands (<span className="mono">apt</span>, <span className="mono">dnf</span>, or <span className="mono">pacman</span>).
+                  </p>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+                    {(
+                      [
+                        { id: 'ubuntu' as const, label: 'Debian / Ubuntu (apt)' },
+                        { id: 'fedora' as const, label: 'Fedora / RHEL family (dnf)' },
+                        { id: 'arch' as const, label: 'Arch / Endeavour (pacman)' },
+                      ] as const
+                    ).map((d) => (
+                      <label
+                        key={d.id}
+                        className="hp-card"
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 10,
+                          padding: '10px 14px',
+                          cursor: 'pointer',
+                          border: installDistro === d.id ? '2px solid var(--accent)' : '1px solid var(--border)',
+                          background: installDistro === d.id ? 'rgba(124, 77, 255, 0.08)' : 'var(--bg-input)',
+                        }}
+                      >
+                        <input
+                          type="radio"
+                          name="install-distro"
+                          checked={installDistro === d.id}
+                          onChange={() => setInstallDistro(d.id)}
+                        />
+                        <span style={{ fontWeight: 600, fontSize: 13 }}>{d.label}</span>
+                      </label>
+                    ))}
+                  </div>
                   <h3 style={{ margin: 0, fontSize: 16 }}>Select Components</h3>
                   <p style={{ margin: 0, fontSize: 14, color: 'var(--text-muted)' }}>
                     We scanned your system and found some components are already installed.
@@ -1269,9 +1485,16 @@ export function DockerPage(): ReactElement {
 
             <div style={{ marginTop: 32, display: 'flex', justifyContent: 'flex-end', gap: 12, borderTop: '1px solid var(--border)', paddingTop: 20 }}>
               {installStep === 0 && (
-                <button className="hp-btn" onClick={() => setShowInstallModal(false)}>
-                  Close
-                </button>
+                <>
+                  <button className="hp-btn" onClick={() => setShowInstallModal(false)}>
+                    Close
+                  </button>
+                  {sessionKind !== 'flatpak' ? (
+                    <button type="button" className="hp-btn hp-btn-primary" onClick={() => setInstallStep(1)}>
+                      Continue to wizard
+                    </button>
+                  ) : null}
+                </>
               )}
               {installStep === 1 && (
                 <>
