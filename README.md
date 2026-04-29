@@ -15,7 +15,7 @@ This project is in active development. Features below are split by maturity:
   - Typed IPC boundaries via `@linux-dev-home/shared` schemas.
 - **Partial / evolving**:
   - Tauri migration: core port done; packaging (Flatpak) intentionally last — heavy CI.
-  - `dh:docker:install` / `dh:docker:remap-port`: explicit not-supported responses until implemented (see work plan).
+  - `dh:docker:install` / `dh:docker:remap-port`: implemented in Tauri (host `sudo` + distro packages; clone + new host ports) — privileged and environment-specific; may still fail on constrained systems.
   - Flatpak packaging and cross-distro consistency.
   - Runtime install/update matrix hardening.
   - Diagnostics and support bundle depth.

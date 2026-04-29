@@ -2,6 +2,7 @@ use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::path::Path;
 use std::path::PathBuf;
+use std::process::Stdio;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
@@ -100,6 +101,361 @@ fn find_repo_root(start: &Path) -> PathBuf {
     }
   }
   start.to_path_buf()
+}
+
+fn sanitize_docker_name(s: &str) -> String {
+  let mut out: String = s
+    .chars()
+    .map(|c| {
+      if c.is_ascii_alphanumeric() || c == '_' || c == '.' || c == '-' {
+        c
+      } else {
+        '-'
+      }
+    })
+    .collect();
+  while out.starts_with('-') {
+    out.remove(0);
+  }
+  if out.is_empty() {
+    out = "remap".into();
+  }
+  if out.len() > 220 {
+    out.truncate(220);
+  }
+  out
+}
+
+fn docker_install_build_steps(distro: &str, components: Option<&Vec<Value>>) -> Option<Vec<String>> {
+  let comp: Vec<String> = components
+    .map(|v| {
+      v.iter()
+        .filter_map(|x| x.as_str().map(std::string::ToString::to_string))
+        .collect()
+    })
+    .unwrap_or_default();
+
+  let mut steps: Vec<String> = match distro {
+    "ubuntu" => vec![
+      "apt-get update && apt-get install -y ca-certificates curl && install -m 0755 -d /etc/apt/keyrings && curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc && chmod a+r /etc/apt/keyrings/docker.asc".into(),
+      "echo \"deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable\" | tee /etc/apt/sources.list.d/docker.list > /dev/null && apt-get update".into(),
+      "apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin".into(),
+      "systemctl enable --now docker && docker --version".into(),
+    ],
+    "fedora" => vec![
+      "dnf -y install dnf-plugins-core && dnf config-manager --add-repo https://download.docker.com/linux/fedora/docker-ce.repo".into(),
+      "dnf install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin".into(),
+      "systemctl enable --now docker && docker --version".into(),
+    ],
+    "arch" => vec![
+      "pacman -S --needed --noconfirm docker docker-compose".into(),
+      "systemctl enable --now docker && docker --version".into(),
+    ],
+    _ => return None,
+  };
+
+  if !comp.is_empty() {
+    if distro == "ubuntu" || distro == "fedora" {
+      let pkg_cmd = if distro == "ubuntu" {
+        "apt-get install -y"
+      } else {
+        "dnf install -y"
+      };
+      let mut packages: Vec<&'static str> = vec![];
+      if comp.iter().any(|c| c == "docker") {
+        packages.extend(["docker-ce", "docker-ce-cli", "containerd.io"]);
+      }
+      if comp.iter().any(|c| c == "compose") {
+        packages.push("docker-compose-plugin");
+      }
+      if comp.iter().any(|c| c == "buildx") {
+        packages.push("docker-buildx-plugin");
+      }
+      if !packages.is_empty() {
+        let joined = packages.join(" ");
+        steps = steps
+          .into_iter()
+          .map(|s| {
+            if s.contains("apt-get install -y docker-ce") || s.contains("dnf install -y docker-ce") {
+              format!("{pkg_cmd} {joined}")
+            } else {
+              s
+            }
+          })
+          .collect();
+      }
+    } else if distro == "arch" {
+      let mut packages: Vec<&'static str> = vec![];
+      if comp.iter().any(|c| c == "docker") {
+        packages.push("docker");
+      }
+      if comp.iter().any(|c| c == "compose") {
+        packages.push("docker-compose");
+      }
+      if !packages.is_empty() {
+        let joined = packages.join(" ");
+        steps = steps
+          .into_iter()
+          .map(|s| {
+            if s.contains("pacman -S") {
+              format!("pacman -S --needed --noconfirm {joined}")
+            } else {
+              s
+            }
+          })
+          .collect();
+      }
+    }
+  }
+
+  Some(steps)
+}
+
+async fn sudo_bash_install_step(cmd: &str, password: Option<&str>, logs: &mut Vec<String>) -> Result<(), String> {
+  logs.push(format!("RUNNING: {}", cmd));
+  let mut child = Command::new("sudo")
+    .arg("-S")
+    .arg("-p")
+    .arg("")
+    .arg("bash")
+    .arg("-c")
+    .arg(cmd)
+    .stdin(Stdio::piped())
+    .stdout(Stdio::piped())
+    .stderr(Stdio::piped())
+    .spawn()
+    .map_err(|e| format!("[DOCKER_INSTALL_FAILED] {}", e))?;
+
+  if let Some(pw) = password {
+    if !pw.is_empty() {
+      use tokio::io::AsyncWriteExt;
+      if let Some(mut stdin) = child.stdin.take() {
+        stdin
+          .write_all(format!("{pw}\n").as_bytes())
+          .await
+          .map_err(|e| format!("[DOCKER_INSTALL_FAILED] {}", e))?;
+        let _ = stdin.shutdown().await;
+      }
+    }
+  } else {
+    drop(child.stdin.take());
+  }
+
+  let out = child
+    .wait_with_output()
+    .await
+    .map_err(|e| format!("[DOCKER_INSTALL_FAILED] {}", e))?;
+  let stdout = String::from_utf8_lossy(&out.stdout);
+  let stderr = String::from_utf8_lossy(&out.stderr);
+  for line in stdout.lines() {
+    if !line.is_empty() {
+      logs.push(format!("OUT: {line}"));
+    }
+  }
+  for line in stderr.lines() {
+    if line.contains("[sudo] password") {
+      continue;
+    }
+    if !line.trim().is_empty() {
+      logs.push(format!("ERR: {line}"));
+    }
+  }
+  if out.status.success() {
+    Ok(())
+  } else {
+    Err(format!(
+      "[DOCKER_INSTALL_FAILED] command exited with status {}",
+      out.status
+    ))
+  }
+}
+
+async fn docker_install_invoke(body: &Value) -> Value {
+  let distro = body.get("distro").and_then(|v| v.as_str()).unwrap_or_default();
+  if !matches!(distro, "ubuntu" | "fedora" | "arch") {
+    return json!({ "ok": false, "log": Vec::<String>::new(), "error": "[DOCKER_INVALID_REQUEST] Unsupported distro." });
+  }
+  let password = body.get("password").and_then(|v| v.as_str());
+  let components = body.get("components").and_then(|v| v.as_array());
+  let Some(steps) = docker_install_build_steps(distro, components) else {
+    return json!({ "ok": false, "log": Vec::<String>::new(), "error": "[DOCKER_INVALID_REQUEST] Unsupported distro." });
+  };
+
+  let mut logs: Vec<String> = Vec::new();
+  for cmd in steps {
+    match sudo_bash_install_step(&cmd, password, &mut logs).await {
+      Ok(()) => {}
+      Err(e) => return json!({ "ok": false, "log": logs, "error": e }),
+    }
+  }
+  json!({ "ok": true, "log": logs })
+}
+
+async fn docker_remap_port_invoke(body: &Value) -> Value {
+  let id = body.get("id").and_then(|v| v.as_str()).unwrap_or_default();
+  let old_hp = body.get("oldHostPort").and_then(|v| v.as_u64()).unwrap_or(0);
+  let new_hp = body.get("newHostPort").and_then(|v| v.as_u64()).unwrap_or(0);
+  if id.is_empty() || old_hp == 0 || new_hp == 0 || old_hp == new_hp {
+    return json!({ "ok": false, "error": "[DOCKER_INVALID_REQUEST] id and two distinct host ports (1-65535) are required." });
+  }
+
+  let inspect_raw = match exec_output("docker", &["inspect", id]).await {
+    Ok(s) => s,
+    Err(e) => return json!({ "ok": false, "error": format!("[DOCKER_NOT_FOUND] {}", e.trim()) }),
+  };
+  let arr: Vec<Value> = match serde_json::from_str(&inspect_raw) {
+    Ok(a) => a,
+    Err(e) => return json!({ "ok": false, "error": format!("[DOCKER_INVALID_REQUEST] inspect parse: {}", e) }),
+  };
+  let Some(info) = arr.first() else {
+    return json!({ "ok": false, "error": "[DOCKER_NOT_FOUND] empty inspect result." });
+  };
+
+  let image = info
+    .pointer("/Config/Image")
+    .and_then(|v| v.as_str())
+    .unwrap_or_default();
+  if image.is_empty() {
+    return json!({ "ok": false, "error": "[DOCKER_INVALID_REQUEST] container image missing from inspect." });
+  }
+
+  let name_raw = info.pointer("/Name").and_then(|v| v.as_str()).unwrap_or("");
+  let old_name = name_raw.trim_start_matches('/');
+  let base = if old_name.is_empty() {
+    format!("ctr-{}", &id[..id.len().min(12)])
+  } else {
+    old_name.to_string()
+  };
+  let mut new_name = sanitize_docker_name(&format!("{base}-p{new_hp}"));
+
+  let mut bindings = info
+    .pointer("/HostConfig/PortBindings")
+    .cloned()
+    .unwrap_or(json!({}));
+  let Some(bind_obj) = bindings.as_object() else {
+    return json!({ "ok": false, "error": "[DOCKER_INVALID_REQUEST] PortBindings missing or invalid." });
+  };
+  if bind_obj.is_empty() {
+    return json!({ "ok": false, "error": "[DOCKER_INVALID_REQUEST] no published host ports to remap." });
+  }
+
+  let mut matched = false;
+  if let Some(obj) = bindings.as_object_mut() {
+    for arr_val in obj.values_mut() {
+      let Some(arr) = arr_val.as_array_mut() else {
+        continue;
+      };
+      for b in arr.iter_mut() {
+        let Some(o) = b.as_object_mut() else {
+          continue;
+        };
+        if let Some(hp) = o.get("HostPort").and_then(|v| v.as_str()) {
+          if hp.parse::<u64>().ok() == Some(old_hp) {
+            o.insert("HostPort".to_string(), json!(new_hp.to_string()));
+            matched = true;
+          }
+        }
+      }
+    }
+  }
+  if !matched {
+    return json!({
+      "ok": false,
+      "error": format!("[DOCKER_INVALID_REQUEST] host port {old_hp} not found in container port bindings.")
+    });
+  }
+
+  let build_create_args = |name_try: &str| -> Vec<String> {
+    let mut args: Vec<String> = vec!["create".into(), "--name".into(), name_try.to_string()];
+    if let Some(true) = info.pointer("/Config/Tty").and_then(|v| v.as_bool()) {
+      args.push("-t".into());
+    }
+    if let Some(true) = info.pointer("/Config/OpenStdin").and_then(|v| v.as_bool()) {
+      args.push("-i".into());
+    }
+    if let Some(rp) = info.pointer("/HostConfig/RestartPolicy/Name").and_then(|v| v.as_str()) {
+      if !rp.is_empty() && rp != "no" {
+        args.push("--restart".into());
+        args.push(rp.to_string());
+      }
+    }
+    if let Some(binds) = info.pointer("/HostConfig/Binds").and_then(|v| v.as_array()) {
+      for b in binds {
+        if let Some(s) = b.as_str() {
+          args.push("-v".into());
+          args.push(s.to_string());
+        }
+      }
+    }
+    if let Some(envs) = info.pointer("/Config/Env").and_then(|v| v.as_array()) {
+      for e in envs {
+        if let Some(s) = e.as_str() {
+          args.push("-e".into());
+          args.push(s.to_string());
+        }
+      }
+    }
+    if let Some(obj) = bindings.as_object() {
+      for (ctr_key, arr_val) in obj.iter() {
+        let parts: Vec<&str> = ctr_key.split('/').collect();
+        if parts.len() != 2 {
+          continue;
+        }
+        let ctr_port = parts[0];
+        let proto = parts[1];
+        if let Some(arr) = arr_val.as_array() {
+          for b in arr {
+            let hp = b.get("HostPort").and_then(|v| v.as_str()).unwrap_or("");
+            if hp.is_empty() {
+              continue;
+            }
+            args.push("-p".into());
+            args.push(format!("{hp}:{ctr_port}/{proto}"));
+          }
+        }
+      }
+    }
+    args.push(image.to_string());
+    if let Some(cmd_arr) = info.pointer("/Config/Cmd").and_then(|v| v.as_array()) {
+      for c in cmd_arr {
+        if let Some(s) = c.as_str() {
+          args.push(s.to_string());
+        }
+      }
+    }
+    args
+  };
+
+  for attempt in 0u32..4u32 {
+    if attempt > 0 {
+      let suf = Uuid::new_v4().to_string();
+      let short = suf.split('-').next().unwrap_or("x");
+      new_name = sanitize_docker_name(&format!("{base}-p{new_hp}-{short}"));
+    }
+    let args = build_create_args(&new_name);
+    let refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+    match exec_output("docker", &refs).await {
+      Ok(out) => {
+        let cid = out.trim().to_string();
+        if cid.is_empty() {
+          return json!({ "ok": false, "error": "[DOCKER_REMAP_FAILED] docker create returned empty id." });
+        }
+        if let Err(e) = exec_output("docker", &["start", &cid]).await {
+          let _ = exec_output("docker", &["rm", "-f", &cid]).await;
+          return json!({ "ok": false, "error": format!("[DOCKER_REMAP_FAILED] start: {}", e.trim()) });
+        }
+        return json!({ "ok": true, "id": cid, "name": new_name });
+      }
+      Err(e) => {
+        let msg = e.to_lowercase();
+        if msg.contains("already in use") || msg.contains("conflict") || msg.contains("already exists") {
+          continue;
+        }
+        return json!({ "ok": false, "error": format!("[DOCKER_REMAP_FAILED] {}", e.trim()) });
+      }
+    }
+  }
+  json!({ "ok": false, "error": "[DOCKER_REMAP_FAILED] could not allocate a unique container name." })
 }
 
 
@@ -1003,9 +1359,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
         }
       }
     },
-    "dh:docker:remap-port" => {
-      json!({ "ok": false, "error": "[DOCKER_REMAP_NOT_SUPPORTED] Port remapping requires stop + remove + recreate. Use the Docker CLI directly." })
-    },
+    "dh:docker:remap-port" => docker_remap_port_invoke(&body).await,
     "dh:ssh:list:dir" => {
       let user = body.get("user").and_then(|v| v.as_str()).unwrap_or_default();
       let host_str = body.get("host").and_then(|v| v.as_str()).unwrap_or_default();
@@ -1053,9 +1407,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
         }
       }
     },
-    "dh:docker:install" => {
-      json!({ "ok": false, "error": "[DOCKER_INSTALL_NOT_SUPPORTED] Automated Docker installation is not yet available. Please install Docker manually from https://docs.docker.com/engine/install/" })
-    },
+    "dh:docker:install" => docker_install_invoke(&body).await,
     _ => json!({ "ok": false, "error": format!("[UNKNOWN_CHANNEL] {}", channel) }),
   };
   Ok(res)

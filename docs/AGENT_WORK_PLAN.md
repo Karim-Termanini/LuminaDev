@@ -26,8 +26,8 @@
 | ID | المهمة | المخرجات / المعيار |
 |----|--------|---------------------|
 | A1 | تدقيق القنوات | مطابقة `packages/shared/src/ipc.ts` مع `ipc_invoke` / مسار Tauri. **`done` (تدقيق أولي 2026-04-30)** — انظر قسم «لقطة A1» أدناه؛ إصلاح `dh:docker:create` لإرجاع `id`. |
-| A2 | `dh:docker:install` | **`open`** — حاليًا خطأ صريح `[DOCKER_INSTALL_NOT_SUPPORTED]` في Rust؛ تنفيذ لاحقًا عند الطلب. |
-| A3 | `dh:docker:remap-port` | **`open` (backend)** — Rust ما زال `[DOCKER_REMAP_NOT_SUPPORTED]`؛ **الواجهة:** بطاقة remap أصبحت إشعارًا فقط (`9c0a4f8`) بدل نموذج يوحي بالدعم. |
+| A2 | `dh:docker:install` | **`done`** — نفس منطق Electron: خطوات `apt`/`dnf`/`pacman` عبر `sudo -S` + سجل `log` في الرد. |
+| A3 | `dh:docker:remap-port` | **`done`** — `docker inspect` + تعديل `PortBindings` + `docker create`/`start` (نسخة بحاوية جديدة)، مع إعادة محاولة عند تعارض الاسم. |
 | A4 | حدود الصلاحيات | مراجعة سريعة لمسارات Docker socket وSSH وأوامر shell: timeouts، allowlists، رسائل خطأ حتمية. |
 | A5 | Flatpak (لاحقًا) | عند التفعيل: manifest، صلاحيات، job في Actions — **بعد** B4/A1 مستقرين. |
 
@@ -37,7 +37,7 @@
 
 1. ~~**B1** + **A1**~~ — منجز.
 2. ~~**B2**–**B5** (واجهة + docs + CI تحقق + checklist يدوي)~~ — منجز على `feat/agent-b-plan` (`9c0a4f8`).
-3. **A2** / **A3** — تنفيذ حقيقي في Rust عند الطلب، أو الإبقاء unsupported مع واجهة صادقة (حاليًا).
+3. ~~**A2** / **A3**~~ — منجز في Rust (تثبيت Docker + remap منفذ).
 4. **A4** — مراجعة صلاحيات/Timeouts.
 5. **A5** — Flatpak + Actions **آخرًا**.
 

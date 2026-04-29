@@ -137,7 +137,7 @@ Stabilization is considered complete only when:
     - `dh:docker:create` — docker CLI with ports/env/volumes/autoStart; returns `id` on success
     - `dh:ssh:list:dir` — native `ssh ls`
     - `dh:ssh:setup:remote:key` — native `ssh` + `sshpass`
-    - `dh:docker:remap-port`, `dh:docker:install` — explicit not-supported errors
+    - `dh:docker:remap-port`, `dh:docker:install` — implemented in Rust (clone + remap host ports; `sudo` distro install steps — host-only, may fail under Flatpak / no root)
   - `invoke_node_bridge()` removed from `lib.rs`
   - `apps/desktop/scripts/tauri-ipc-bridge.mjs` deleted
   - Node.js no longer required at app runtime
@@ -207,6 +207,5 @@ Minimal flows to verify before declaring a build stable. Run on real Tauri build
 - [ ] Runtime status list loads (node, python, go, rust, java)
 
 ### Known limits (not test failures)
-- `dh:docker:install` → "not available" notice with docs link ✓
-- `dh:docker:remap-port` → "not available" notice ✓
+- `dh:docker:install` / `dh:docker:remap-port`: IPC supported in Tauri; UI may still show docs-first notices — real install needs `sudo` on host; remap clones a new container (old one unchanged).
 - Flatpak-specific paths may differ from native install ✓
