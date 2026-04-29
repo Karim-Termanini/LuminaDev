@@ -190,10 +190,10 @@ export function GitConfigPage(): ReactElement {
         : 'idle'
 
   return (
-    <div className="hp-page-stack">
+    <div className="hp-page-stack" style={{ maxWidth: 1120, margin: '0 auto', paddingInline: 8 }}>
       <header>
         <h1 className="hp-title">Git Configuration</h1>
-        <p className="hp-muted">
+        <p className="hp-muted" style={{ lineHeight: 1.5 }}>
           Set user identity and default settings, then review all global config entries.
         </p>
       </header>
@@ -295,6 +295,12 @@ export function GitConfigPage(): ReactElement {
           Apply Configuration
         </button>
       </section>
+      {status ? (
+        <div className={`hp-status-alert ${statusTone === 'success' ? 'success' : 'warning'}`}>
+          <span style={{ fontSize: 16 }}>{statusTone === 'success' ? '✔' : '⚠'}</span>
+          <span>{status}</span>
+        </div>
+      ) : null}
 
       {validation.length > 0 ? (
         <div className="hp-status-alert warning" role="alert">
@@ -409,13 +415,6 @@ export function GitConfigPage(): ReactElement {
           </div>
         )}
       </section>
-
-      {status ? (
-        <div className={`hp-status-alert ${statusTone === 'success' ? 'success' : 'warning'}`}>
-          <span style={{ fontSize: 18 }}>{statusTone === 'success' ? '✔' : '⚠'}</span>
-          <span>{status}</span>
-        </div>
-      ) : null}
     </div>
   )
 }

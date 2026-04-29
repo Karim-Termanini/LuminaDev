@@ -577,7 +577,7 @@ export function DockerPage(): ReactElement {
   const rowsWithPorts = rows.filter((r) => r.ports !== '—')
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 1200 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 1240, margin: '0 auto', paddingInline: 12 }}>
       <header>
         <div className="mono" style={{ color: 'var(--accent)', fontSize: 12, marginBottom: 8 }}>
           DOCKER.SURFACE
@@ -588,7 +588,7 @@ export function DockerPage(): ReactElement {
         </p>
       </header>
 
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', rowGap: 8 }}>
         <button type="button" className="hp-btn" onClick={() => void refreshAll()} disabled={busy}>
           Refresh
         </button>
@@ -625,23 +625,25 @@ export function DockerPage(): ReactElement {
         <div className="hp-status-alert warning">
           <span style={{ fontSize: 18 }}>⚠</span>
           <span>{err}</span>
-          <button type="button" className="hp-btn" onClick={() => void refreshAll()} style={{ marginLeft: 10 }}>
+          <button type="button" className="hp-btn" onClick={() => void refreshAll()} style={{ marginLeft: 10, marginInlineStart: 'auto' }}>
             Retry
           </button>
         </div>
       ) : null}
 
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        {(['scheme', 'create', 'containers', 'images', 'volumes', 'networks', 'ports', 'cleanup'] as const).map((t) => (
-          <button
-            key={t}
-            type="button"
-            style={tab === t ? tabBtnActive : tabBtn}
-            onClick={() => setTab(t)}
-          >
-            {t}
-          </button>
-        ))}
+      <div style={{ overflowX: 'auto', paddingBottom: 2 }}>
+        <div style={{ display: 'flex', gap: 8, minWidth: 'max-content' }}>
+          {(['scheme', 'create', 'containers', 'images', 'volumes', 'networks', 'ports', 'cleanup'] as const).map((t) => (
+            <button
+              key={t}
+              type="button"
+              style={tab === t ? tabBtnActive : tabBtn}
+              onClick={() => setTab(t)}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
       </div>
 
       <section className="hp-card">
@@ -653,7 +655,10 @@ export function DockerPage(): ReactElement {
               Create from examples. Click <span className="mono">Use</span> to create a new container template.
             </div>
             <div className="hp-card">
-              <div style={{ fontWeight: 600, marginBottom: 8 }}>Pull from Docker Hub Explorer</div>
+              <div className="hp-card-header">
+                <div className="hp-card-title">Pull from Docker Hub Explorer</div>
+                <div className="hp-card-subtitle">Search image names and pick a tag before pulling.</div>
+              </div>
               <div style={{ position: 'relative' }}>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   <div style={{ flex: 1, position: 'relative' }}>
@@ -741,7 +746,10 @@ export function DockerPage(): ReactElement {
               </div>
             </div>
             <div className="hp-card">
-              <div style={{ fontWeight: 600, marginBottom: 8 }}>Custom create (ports/env/volumes)</div>
+              <div className="hp-card-header">
+                <div className="hp-card-title">Custom create (ports/env/volumes)</div>
+                <div className="hp-card-subtitle">Define runtime options line-by-line, then create once.</div>
+              </div>
               <div style={formGrid}>
                 <input value={customImage} onChange={(e) => setCustomImage(e.target.value)} placeholder="Image" className="hp-input" disabled={busy} />
                 <input value={customName} onChange={(e) => setCustomName(e.target.value)} placeholder="Container name (optional)" className="hp-input" disabled={busy} />
@@ -834,7 +842,7 @@ export function DockerPage(): ReactElement {
         {docker?.ok && tab === 'images' ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
             <div>
-              <div style={{ fontWeight: 600, marginBottom: 12 }}>Recommended Images</div>
+              <div className="hp-section-title">Recommended images</div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: 12 }}>
                 {RECOMMENDED_IMAGES.map((rec) => (
                   <div key={rec.name} style={{
@@ -874,7 +882,7 @@ export function DockerPage(): ReactElement {
             </div>
 
             <div>
-              <div style={{ fontWeight: 600, marginBottom: 12 }}>Downloaded Images</div>
+              <div className="hp-section-title">Downloaded images</div>
               {images.length === 0 ? (
                 <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>No images found.</div>
               ) : (
@@ -1719,7 +1727,7 @@ function ContainerTable(props: ContainerTableProps & { onConsole: (row: Containe
   const { title, rows, busy, onAction, onLogs, onConsole } = props
   return (
     <div>
-      <div style={{ fontWeight: 600, marginBottom: 12 }}>{title}</div>
+      <div className="hp-section-title">{title}</div>
       {rows.length === 0 ? (
         <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>No containers in this group.</div>
       ) : (

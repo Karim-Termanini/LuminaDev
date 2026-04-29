@@ -29,6 +29,7 @@ type CleanupPreview = { containers: number; images: number; volumes: number; net
 type TabId = (typeof TABS)[number]
 type DiagnosticCheck = { id: string; label: string; ok: boolean; details: string }
 type PerfSnapshot = { startupMs: number; rssMb: number; heapUsedMb: number; heapTotalMb: number; uptimeSec: number }
+const PAGE_MAX_WIDTH = 1320
 
 export function MaintenancePage(): ReactElement {
   const [activeTab, setActiveTab] = useState<TabId>('Overview / Health Dashboard')
@@ -430,17 +431,34 @@ export function MaintenancePage(): ReactElement {
   }
 
   return (
-    <div className="hp-page-stack" style={{ gap: 20, paddingBottom: 36 }}>
+    <div
+      className="hp-page-stack"
+      style={{
+        gap: 24,
+        paddingBottom: 36,
+        maxWidth: PAGE_MAX_WIDTH,
+        margin: '0 auto',
+        paddingInline: 16,
+      }}
+    >
       <header>
         <h1 className="hp-title">Maintenance</h1>
-        <p className="hp-muted">
+        <p className="hp-muted" style={{ marginTop: 6, lineHeight: 1.5 }}>
           {degradedProfiles > 0 ? `${degradedProfiles} profile issues detected.` : 'Your workstation is healthy.'}
           {' '}Last maintenance: {lastMaintenanceDaysAgo === null ? 'never' : `${lastMaintenanceDaysAgo} day(s) ago`}.
         </p>
       </header>
 
       <section className="hp-card">
-        <div className="hp-row-wrap">
+        <div
+          className="hp-row-wrap"
+          style={{
+            rowGap: 10,
+            overflowX: 'auto',
+            paddingBottom: 2,
+            scrollbarWidth: 'thin',
+          }}
+        >
           {TABS.map((tab) => (
             <button key={tab} className={`hp-btn ${activeTab === tab ? 'hp-btn-primary' : ''}`} onClick={() => setActiveTab(tab)}>
               {tab}
@@ -451,20 +469,22 @@ export function MaintenancePage(): ReactElement {
 
       {(activeTab === 'Overview / Health Dashboard' || activeTab === 'System Cleanup') ? (
       <section className="hp-card">
-        <div className="hp-grid-2">
-          <div>
+        <div className="hp-grid-2" style={{ gap: 18, alignItems: 'stretch' }}>
+          <div style={{ minHeight: 130, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
             <div className="hp-section-title">System Overview</div>
-            <div style={{ fontSize: 28, fontWeight: 800 }}>{guardianScore}% <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>health</span></div>
-            <div className="hp-row-wrap" style={{ marginTop: 8, fontSize: 12, color: 'var(--text-muted)' }}>
+            <div style={{ fontSize: 32, fontWeight: 800, lineHeight: 1.2 }}>
+              {guardianScore}% <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>health</span>
+            </div>
+            <div className="hp-row-wrap" style={{ marginTop: 10, fontSize: 12, color: 'var(--text-muted)', rowGap: 6 }}>
               <span>CPU {m?.cpuUsagePercent.toFixed(1) ?? '0.0'}%</span>
               <span>Mem {m ? Math.round(((m.totalMemMb - m.freeMemMb) / m.totalMemMb) * 100) : 0}%</span>
               <span>Disk {m ? Math.round(((m.diskTotalGb - m.diskFreeGb) / m.diskTotalGb) * 100) : 0}%</span>
               <span>Docker {runningContainers}/{containers.length}</span>
             </div>
           </div>
-          <div>
+          <div style={{ minHeight: 130 }}>
             <div className="hp-section-title">Run Recommended Maintenance</div>
-            <div className="hp-grid-gap-8" style={{ fontSize: 13 }}>
+            <div className="hp-grid-gap-8" style={{ fontSize: 13, marginTop: 4 }}>
               <label><input type="checkbox" checked={recommendedSelection.clearCache} onChange={(e) => setRecommendedSelection((p) => ({ ...p, clearCache: e.target.checked }))} /> Clear app cache/temp (manual-assisted)</label>
               <label><input type="checkbox" checked={recommendedSelection.pruneDocker} onChange={(e) => setRecommendedSelection((p) => ({ ...p, pruneDocker: e.target.checked }))} /> Prune Docker resources</label>
               <label><input type="checkbox" checked={recommendedSelection.cleanLogs} onChange={(e) => setRecommendedSelection((p) => ({ ...p, cleanLogs: e.target.checked }))} /> Clean old logs (manual-assisted)</label>
@@ -481,11 +501,11 @@ export function MaintenancePage(): ReactElement {
       {(activeTab === 'Overview / Health Dashboard' || activeTab === 'Data & Profiles') ? (
       <section className="hp-card">
         <div className="hp-section-title">Infrastructure Status</div>
-        <div className="hp-row-wrap" style={{ marginBottom: 10 }}>
+        <div className="hp-row-wrap" style={{ marginBottom: 12, rowGap: 8 }}>
           <button className="hp-btn" onClick={() => void checkAllProfiles()} disabled={savingState}>Check all profiles</button>
           <button className="hp-btn" onClick={() => void refreshSystemdSnapshot()} disabled={savingState}>Refresh systemd snapshot</button>
         </div>
-        <div className="hp-table-wrap">
+        <div className="hp-table-wrap" style={{ borderRadius: 10, border: '1px solid var(--border)' }}>
           <table className="hp-table">
             <thead>
               <tr className="hp-table-head">
@@ -531,7 +551,7 @@ export function MaintenancePage(): ReactElement {
       {(activeTab === 'Docker Maintenance' || activeTab === 'System Cleanup') ? (
       <section className="hp-card">
         <div className="hp-section-title">Docker Cleanup Planner</div>
-        <div className="hp-row-wrap">
+        <div className="hp-row-wrap" style={{ rowGap: 8 }}>
           <label><input type="checkbox" checked={cleanupSelection.containers} onChange={(e) => setCleanupSelection((p) => ({ ...p, containers: e.target.checked }))} /> Containers</label>
           <label><input type="checkbox" checked={cleanupSelection.images} onChange={(e) => setCleanupSelection((p) => ({ ...p, images: e.target.checked }))} /> Images</label>
           <label><input type="checkbox" checked={cleanupSelection.volumes} onChange={(e) => setCleanupSelection((p) => ({ ...p, volumes: e.target.checked }))} /> Volumes</label>
@@ -552,7 +572,7 @@ export function MaintenancePage(): ReactElement {
       {(activeTab === 'Data & Profiles' || activeTab === 'Scheduled / Automation') ? (
       <section className="hp-card">
         <div className="hp-section-title">Maintenance Tasks & Runbook</div>
-        <div className="hp-grid-gap-8">
+        <div className="hp-grid-gap-8" style={{ marginTop: 6 }}>
           <input value={newTaskTitle} onChange={(e) => setNewTaskTitle(e.target.value)} className="hp-input" placeholder="Task title (e.g. rotate local logs)" />
           <div className="hp-grid-2">
             <input value={newCron} onChange={(e) => setNewCron(e.target.value)} className="hp-input" placeholder="Cron hint (optional)" />
@@ -600,7 +620,7 @@ export function MaintenancePage(): ReactElement {
       {(activeTab === 'Logs & History' || activeTab === 'Overview / Health Dashboard') ? (
       <section className="hp-card">
         <div className="hp-section-title">Job Runner</div>
-        <div className="hp-table-wrap">
+        <div className="hp-table-wrap" style={{ borderRadius: 10, border: '1px solid var(--border)' }}>
           <table className="hp-table">
             <thead>
               <tr className="hp-table-head">
@@ -686,7 +706,7 @@ export function MaintenancePage(): ReactElement {
       {(activeTab === 'Logs & History' || activeTab === 'Overview / Health Dashboard') ? (
         <section className="hp-card">
           <div className="hp-section-title">Integrity & Diagnostics</div>
-          <div className="hp-row-wrap" style={{ marginBottom: 10 }}>
+          <div className="hp-row-wrap" style={{ marginBottom: 12, rowGap: 8 }}>
             <button className="hp-btn hp-btn-primary" onClick={() => void runDiagnosticsWizard()} disabled={runningDiagnostics}>
               {runningDiagnostics ? 'Running diagnostics...' : 'Run diagnostics wizard'}
             </button>

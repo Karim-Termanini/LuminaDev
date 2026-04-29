@@ -35,7 +35,7 @@ export function DashboardKernelsPage(): ReactElement {
   }, [])
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 980 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 980, margin: '0 auto', paddingInline: 12 }}>
       <header>
         <div className="mono" style={{ color: 'var(--accent)', fontSize: 12, marginBottom: 8 }}>
           DASHBOARD.KERNELS
@@ -47,22 +47,28 @@ export function DashboardKernelsPage(): ReactElement {
         </p>
       </header>
 
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-        <button type="button" onClick={() => void refresh()} style={btn} disabled={busy}>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', rowGap: 8 }}>
+        <button type="button" onClick={() => void refresh()} className="hp-btn" disabled={busy}>
           {busy ? 'Refreshing…' : 'Refresh checks'}
         </button>
-        <button type="button" style={btn} onClick={() => void window.dh.openExternal('https://kernel.org/')}>
+        <button type="button" className="hp-btn" onClick={() => void window.dh.openExternal('https://kernel.org/')}>
           Kernel docs
         </button>
       </div>
 
       <section style={card}>
-        <div className="mono" style={{ color: 'var(--text-muted)', fontSize: 12 }}>GPU</div>
-        <pre className="mono" style={pre}>{gpu}</pre>
+        <div className="hp-card-header">
+          <div className="hp-card-title">GPU snapshot</div>
+          <div className="hp-card-subtitle">Runtime detection from host tooling.</div>
+        </div>
+        <pre className="mono" style={{ ...pre, overflowX: 'auto' }}>{gpu}</pre>
       </section>
 
       <section style={card}>
-        <div className="mono" style={{ color: 'var(--text-muted)', fontSize: 12, marginBottom: 8 }}>Service states</div>
+        <div className="hp-card-header">
+          <div className="hp-card-title">Service states</div>
+          <div className="hp-card-subtitle">Quick status for critical local services.</div>
+        </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 10 }}>
           {UNITS.map((u) => (
             <div key={u} style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10, background: '#141414' }}>
@@ -87,16 +93,7 @@ const card = {
   background: 'var(--bg-widget)',
   border: '1px solid var(--border)',
   borderRadius: 'var(--radius)',
-  padding: 14,
-}
-
-const btn = {
-  border: '1px solid var(--border)',
-  background: 'var(--bg-input)',
-  color: 'var(--text)',
-  borderRadius: 8,
-  padding: '9px 14px',
-  cursor: 'pointer',
+  padding: 16,
 }
 
 const pre = {
