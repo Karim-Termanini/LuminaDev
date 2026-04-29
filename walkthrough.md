@@ -70,3 +70,21 @@ Here, **Done** = matched the implementation intent at audit time; **Partial** = 
 | Phase 6 — Recommended path + deps checklist + job + logs | Done (`RuntimesPage` + main jobs) |
 | Phase 6 — Job progress reflects long installs | Done — **throttled stream + time spine** in main process |
 | Phase 6 — Ship 2–3 languages first then template | Done in practice (many runtimes shipped) |
+
+---
+
+## Agent B documentation & verification (maintenance track)
+
+This section records the **docs + checklist + smoke** closure for Agent B (not a second visual pass).
+
+| Area | Where |
+|------|--------|
+| Flatpak / install / remap UX copy | `apps/desktop/src/renderer/src/pages/dockerError.ts` — `*_NOT_SUPPORTED` messages note **likely Flatpak** where applicable |
+| Sandboxing rationale | `docs/DOCKER_FLATPAK.md` — **Limitations in Flatpak** |
+| Manual checklist + expected UI | `docs/STABILIZATION_CHECKLIST.md` — B5 + **Known limits** table (**Expected UI Response**) |
+| Local Flatpak build issues | `flatpak/README.md` — Troubleshooting (cache, extensions, state vs target filesystem) |
+| Role boundaries | `docs/AGENT_B_HANDOFF.md` |
+
+**Verification command:** `bash scripts/smoke-ci.sh` (workspace typecheck, `vitest` shared + desktop, ESLint). Latest gate should stay green on `main` before release tagging.
+
+**Handoff:** New UI-only work stays in **Agent B** scope; Rust IPC and heavy CI remain **Agent A** per `docs/AGENT_WORK_PLAN.md`.
