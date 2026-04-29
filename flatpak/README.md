@@ -42,3 +42,23 @@ flatpak-builder --user --install --force-clean flatpak-build-dir-offline \
 Run: `flatpak run io.github.karimodora.LinuxDevHome`
 
 See [../docs/DOCKER_FLATPAK.md](../docs/DOCKER_FLATPAK.md), [../docs/INSTALL_TEST.md](../docs/INSTALL_TEST.md), [../docs/FLATHUB_CHECKLIST.md](../docs/FLATHUB_CHECKLIST.md).
+
+## Troubleshooting
+
+### `Error opening cache: opening repo: opendir(objects): No such file or directory`
+
+Usually a **broken Flatpak user repo or builder cache**, or a **runtime/extension branch mismatch** (fixed in the Tauri manifest by pinning `//24.08` on Rust and Node SDK extensions).
+
+Try in order:
+
+```bash
+flatpak repair --user
+rm -rf ~/.cache/flatpak-builder
+rm -rf flatpak-build-tauri .flatpak-builder
+```
+
+Then rebuild. If `FLATPAK_USER_DIR` is set to a custom path, ensure that directory exists and is writable, or unset it for the build.
+
+### Wrong SDK extension branch (e.g. 23.08 vs GNOME 46)
+
+`flatpak-builder` must install extensions on the **same branch** as the app’s `org.gnome.Sdk` (for Platform 46 that is **24.08**). The Tauri manifest lists `//24.08` explicitly on both extensions.
