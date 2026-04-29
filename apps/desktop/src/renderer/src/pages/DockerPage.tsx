@@ -22,18 +22,6 @@ type CreateExample = {
 
 type InstallDistroId = 'ubuntu' | 'fedora' | 'arch'
 
-type InstallStep = {
-  label: string
-  command: string
-}
-
-type InstallDistro = {
-  id: InstallDistroId
-  title: string
-  subtitle: string
-  steps: InstallStep[]
-}
-
 const CREATE_EXAMPLES: CreateExample[] = [
   { title: 'Nginx web server', image: 'nginx:latest', ports: '8080:80', volumes: './:/usr/share/nginx/html' },
   { title: 'PostgreSQL database', image: 'postgres:16', ports: '5432:5432', env: 'POSTGRES_PASSWORD=postgres\nPOSTGRES_DB=app' },
@@ -66,67 +54,6 @@ const RECOMMENDED_IMAGES = [
   { name: 'mongo', tag: '7', description: 'MongoDB document databases provide high availability and easy scalability.', color: '#47A248' },
 ]
 
-const INSTALL_DISTROS: InstallDistro[] = [
-  {
-    id: 'ubuntu',
-    title: 'Ubuntu / Debian / Linux Mint',
-    subtitle: 'APT-based setup with official Docker repository.',
-    steps: [
-      {
-        label: 'Prepare repository keys',
-        command: `apt-get update && apt-get install -y ca-certificates curl && install -m 0755 -d /etc/apt/keyrings && curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc && chmod a+r /etc/apt/keyrings/docker.asc`,
-      },
-      {
-        label: 'Add Docker apt repository',
-        command:
-          `echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null && apt-get update`,
-      },
-      {
-        label: 'Install Docker Engine + Compose',
-        command: `apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin`,
-      },
-      {
-        label: 'Enable service and verify',
-        command: `systemctl enable --now docker && docker --version`,
-      },
-    ],
-  },
-  {
-    id: 'fedora',
-    title: 'Fedora / RedHat / CentOS',
-    subtitle: 'DNF-based setup with official repository.',
-    steps: [
-      {
-        label: 'Add Docker repository',
-        command:
-          `dnf -y install dnf-plugins-core && dnf config-manager --add-repo https://download.docker.com/linux/fedora/docker-ce.repo`,
-      },
-      {
-        label: 'Install Docker Engine + Compose',
-        command: `dnf install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin`,
-      },
-      {
-        label: 'Enable service and verify',
-        command: `systemctl enable --now docker && docker --version`,
-      },
-    ],
-  },
-  {
-    id: 'arch',
-    title: 'Arch Linux',
-    subtitle: 'pacman-based setup from Arch repositories.',
-    steps: [
-      {
-        label: 'Install Docker packages',
-        command: `pacman -S --needed --noconfirm docker docker-compose`,
-      },
-      {
-        label: 'Enable service and verify',
-        command: `systemctl enable --now docker && docker --version`,
-      },
-    ],
-  },
-]
 
 export function DockerPage(): ReactElement {
   const [tab, setTab] = useState<TabId>('scheme')
@@ -150,13 +77,10 @@ export function DockerPage(): ReactElement {
   const [customVolumesText, setCustomVolumesText] = useState('')
   const [customEnvText, setCustomEnvText] = useState('')
   const [autoStart, setAutoStart] = useState(true)
-  const [remapContainerId, setRemapContainerId] = useState('')
-  const [oldHostPort, setOldHostPort] = useState('')
-  const [newHostPort, setNewHostPort] = useState('')
   const [createVolumeName, setCreateVolumeName] = useState('')
   const [createNetworkName, setCreateNetworkName] = useState('')
   const [showInstallModal, setShowInstallModal] = useState(false)
-  const [selectedDistro, setSelectedDistro] = useState<InstallDistroId | null>(null)
+  const [selectedDistro] = useState<InstallDistroId | null>(null)
   const [installStep, setInstallStep] = useState<number>(0)
   const [sudoPassword, setSudoPassword] = useState('')
   const [installLogs, setInstallLogs] = useState<string[]>([])
@@ -164,10 +88,8 @@ export function DockerPage(): ReactElement {
   const [installBusy, setInstallBusy] = useState(false)
   const [pruneSelection, setPruneSelection] = useState({ containers: true, images: true, volumes: false, networks: false })
   const [prunePreview, setPrunePreview] = useState<{ containers: number; images: number; volumes: number; networks: number } | null>(null)
-  const [installedFeatures, setInstalledFeatures] = useState<{ docker: boolean; compose: boolean; buildx: boolean }>({ docker: false, compose: false, buildx: false })
+  const [installedFeatures] = useState<{ docker: boolean; compose: boolean; buildx: boolean }>({ docker: false, compose: false, buildx: false })
   const [selectedFeatures, setSelectedFeatures] = useState<string[]>(['docker', 'compose', 'buildx'])
-  const [isScanning, setIsScanning] = useState(false)
-  const [hostDistro, setHostDistro] = useState<string>('unknown')
   const [hubResults, setHubResults] = useState<Array<{ name: string; description: string; star_count: number; is_official: boolean }>>([])
   const [isSearchingHub, setIsSearchingHub] = useState(false)
   const [availableTags, setAvailableTags] = useState<string[]>([])
@@ -218,11 +140,6 @@ export function DockerPage(): ReactElement {
     }
   }, [tab])
 
-  useEffect(() => {
-    if (showInstallModal) {
-      void window.dh.getHostDistro().then(setHostDistro)
-    }
-  }, [showInstallModal])
 
   useEffect(() => {
     const term = pullImage.trim()
@@ -245,25 +162,6 @@ export function DockerPage(): ReactElement {
     return () => clearTimeout(id)
   }, [pullImage])
 
-  async function runScan(): Promise<void> {
-    setIsScanning(true)
-    try {
-      const res = await window.dh.dockerCheckInstalled()
-      setInstalledFeatures(res)
-      // Auto-select features that are NOT installed
-      const toSelect: string[] = []
-      if (!res.docker) toSelect.push('docker')
-      if (!res.compose) toSelect.push('compose')
-      if (!res.buildx) toSelect.push('buildx')
-      setSelectedFeatures(toSelect)
-      setInstallStep(1)
-    } catch (e) {
-      console.error('Scan failed', e)
-      setInstallStep(1) // Continue anyway
-    } finally {
-      setIsScanning(false)
-    }
-  }
 
   async function runInstallation(): Promise<void> {
     if (!selectedDistro) return
@@ -278,12 +176,15 @@ export function DockerPage(): ReactElement {
         password: sudoPassword,
         components: selectedFeatures
       })
-      setInstallLogs(res.log)
+      const logs = Array.isArray(res.log) ? res.log : []
+      setInstallLogs(
+        logs.length > 0 ? logs : res.ok ? ['Installation completed.'] : ['(no log output)']
+      )
       if (res.ok) {
         setInstallStep(4) // Success (mapped to step 4 now)
         void refreshAll()
       } else {
-        setInstallError(res.error || 'Unknown error during installation')
+        setInstallError(humanizeDockerError(res.error || 'Unknown error during installation'))
       }
     } catch (e) {
       setInstallError(e instanceof Error ? e.message : String(e))
@@ -538,31 +439,6 @@ export function DockerPage(): ReactElement {
     }
   }
 
-  async function remapPort(): Promise<void> {
-    setBusy(true)
-    setErr('')
-    setCreatedInfo('')
-    try {
-      if (!remapContainerId) throw new Error('Select container first')
-      const oldP = Number(oldHostPort)
-      const newP = Number(newHostPort)
-      if (!Number.isInteger(oldP) || !Number.isInteger(newP)) {
-        throw new Error('Old/New host port must be valid numbers')
-      }
-      const res = (await window.dh.dockerRemapPort({
-        id: remapContainerId,
-        oldHostPort: oldP,
-        newHostPort: newP,
-      })) as { ok: true; name: string }
-      setCreatedInfo(`Port remap done. New cloned container: ${res.name}`)
-      await refreshAll()
-      setTab('containers')
-    } catch (e) {
-      setErr(humanizeDockerError(e))
-    } finally {
-      setBusy(false)
-    }
-  }
 
 
 
@@ -1141,24 +1017,15 @@ export function DockerPage(): ReactElement {
             </div>
             <div className="hp-card">
               <div style={{ fontWeight: 600, marginBottom: 8 }}>Remap host port</div>
-              <div style={formGrid}>
-                <select
-                  value={remapContainerId}
-                  onChange={(e) => setRemapContainerId(e.target.value)}
-                  className="hp-input"
-                >
-                  <option value="">Select container</option>
-                  {rowsWithPorts.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.name} ({r.ports})
-                    </option>
-                  ))}
-                </select>
-                <input value={oldHostPort} onChange={(e) => setOldHostPort(e.target.value)} placeholder="Old host port (e.g. 8080)" className="hp-input" />
-                <input value={newHostPort} onChange={(e) => setNewHostPort(e.target.value)} placeholder="New host port (e.g. 8081)" className="hp-input" />
-                <button type="button" className="hp-btn hp-btn-primary" onClick={() => void remapPort()} disabled={busy}>
-                  Remap (clone + start)
-                </button>
+              <div className="hp-status-alert warning" style={{ marginBottom: 0 }}>
+                <span className="codicon codicon-tools" aria-hidden />
+                <div>
+                  <div style={{ fontWeight: 600, marginBottom: 2 }}>Not yet available in-app</div>
+                  <div style={{ fontSize: 12 }}>
+                    To remap a port: stop the container, remove it, then recreate with the new port flag.
+                    Example: <span className="mono">docker run -p 8081:80 ...</span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -1264,30 +1131,25 @@ export function DockerPage(): ReactElement {
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
               {installStep === 0 && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  <p style={{ margin: 0, fontSize: 14 }}>Welcome to the Docker Engine Installation Wizard. This tool will automate the setup on your host machine.</p>
-                  <div style={{ fontWeight: 600, fontSize: 13 }}>Select your Linux distribution:</div>
-                  <div style={{ display: 'grid', gap: 8 }}>
-                    {INSTALL_DISTROS.map((d) => (
-                      <label key={d.id} className="hp-card" style={{ 
-                        display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', cursor: 'pointer', 
-                        borderColor: selectedDistro === d.id ? 'var(--accent)' : 'var(--border)',
-                        background: selectedDistro === d.id ? 'rgba(124, 77, 255, 0.05)' : 'var(--bg-input)'
-                      }}>
-                        <input type="radio" name="distro" checked={selectedDistro === d.id} onChange={() => setSelectedDistro(d.id)} />
-                        <div>
-                          <div style={{ fontWeight: 600, fontSize: 14 }}>{d.title}</div>
-                          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{d.subtitle}</div>
-                        </div>
-                      </label>
-                    ))}
-                  </div>
-
-                  {selectedDistro && hostDistro !== 'unknown' && selectedDistro !== hostDistro && (
-                    <div style={{ ...sectionBox, background: 'rgba(244, 67, 54, 0.1)', borderColor: 'var(--red)', color: 'var(--red)', fontSize: 13, padding: '12px' }}>
-                      <div style={{ fontWeight: 700, marginBottom: 4 }}>⚠️ OS Mismatch Detected</div>
-                      You selected <strong>{INSTALL_DISTROS.find(d => d.id === selectedDistro)?.title}</strong>, but we detected you are running <strong>{hostDistro.charAt(0).toUpperCase() + hostDistro.slice(1)}</strong>. Installing for the wrong distribution may break your system!
+                  <div className="hp-status-alert warning">
+                    <span className="codicon codicon-info" aria-hidden />
+                    <div>
+                      <div style={{ fontWeight: 600, marginBottom: 4 }}>Automated installation not yet available</div>
+                      <div style={{ fontSize: 13 }}>
+                        Install Docker manually using the official guide for your distribution.
+                      </div>
                     </div>
-                  )}
+                  </div>
+                  <div style={{ fontSize: 14, color: 'var(--text-muted)', lineHeight: 1.6 }}>
+                    Once Docker is installed and running, return here — the Docker panel will detect it automatically.
+                  </div>
+                  <button
+                    type="button"
+                    className="hp-btn hp-btn-primary"
+                    onClick={() => void window.dh.openExternal('https://docs.docker.com/engine/install/')}
+                  >
+                    <span className="codicon codicon-link-external" aria-hidden /> Open docs.docker.com/engine/install
+                  </button>
                 </div>
               )}
 
@@ -1407,8 +1269,8 @@ export function DockerPage(): ReactElement {
 
             <div style={{ marginTop: 32, display: 'flex', justifyContent: 'flex-end', gap: 12, borderTop: '1px solid var(--border)', paddingTop: 20 }}>
               {installStep === 0 && (
-                <button className="hp-btn hp-btn-primary" disabled={!selectedDistro || isScanning} onClick={() => void runScan()}>
-                  {isScanning ? 'Scanning...' : 'Next >'}
+                <button className="hp-btn" onClick={() => setShowInstallModal(false)}>
+                  Close
                 </button>
               )}
               {installStep === 1 && (
