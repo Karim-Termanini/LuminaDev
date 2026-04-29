@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { humanizeDashboardError } from './dashboardError'
 import { humanizeDockerError } from './dockerError'
 import { humanizeRuntimeError } from './runtimeError'
+import { collectAccessibilitySnapshot, evaluateAccessibilitySnapshot } from './accessibilityAudit'
 
 const CRON_HINTS = ['0 */6 * * *', '0 3 * * *', '30 2 * * 0']
 const OPS_COMMAND_TEMPLATES = [
@@ -27,6 +28,7 @@ type ServiceState = Record<string, 'active' | 'inactive' | 'unknown'>
 type CleanupPreview = { containers: number; images: number; volumes: number; networks: number } | null
 type TabId = (typeof TABS)[number]
 type DiagnosticCheck = { id: string; label: string; ok: boolean; details: string }
+type PerfSnapshot = { startupMs: number; rssMb: number; heapUsedMb: number; heapTotalMb: number; uptimeSec: number }
 
 export function MaintenancePage(): ReactElement {
   const [activeTab, setActiveTab] = useState<TabId>('Overview / Health Dashboard')
@@ -368,6 +370,26 @@ export function MaintenancePage(): ReactElement {
         label: 'Core runtimes',
         ok: installedCount >= 2,
         details: rt.ok ? `${installedCount}/3 core runtimes installed` : humanizeRuntimeError(rt.error),
+      })
+
+      const perf = await window.dh.perfSnapshot()
+      const snap = perf.ok ? (perf.snapshot as PerfSnapshot | undefined) : undefined
+      checks.push({
+        id: 'perf',
+        label: 'Performance baseline',
+        ok: Boolean(snap && snap.rssMb < 900 && snap.startupMs < 120000),
+        details: snap
+          ? `startup=${snap.startupMs}ms rss=${snap.rssMb}MB heap=${snap.heapUsedMb}/${snap.heapTotalMb}MB uptime=${snap.uptimeSec}s`
+          : perf.error || 'Perf snapshot unavailable',
+      })
+
+      const a11ySnapshot = collectAccessibilitySnapshot(document)
+      const a11y = evaluateAccessibilitySnapshot(a11ySnapshot)
+      checks.push({
+        id: 'a11y',
+        label: 'Accessibility baseline',
+        ok: a11y.ok,
+        details: a11y.details,
       })
 
       setDiagnostics(checks)
