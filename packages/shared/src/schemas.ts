@@ -4,6 +4,15 @@ export const DockerContainerActionSchema = z.enum(['start', 'stop', 'restart', '
 export const DockerImageActionSchema = z.enum(['remove'])
 export const DockerVolumeActionSchema = z.enum(['remove'])
 export const DockerNetworkActionSchema = z.enum(['remove'])
+export const DockerErrorCodeSchema = z.enum([
+  'DOCKER_PERMISSION_DENIED',
+  'DOCKER_UNAVAILABLE',
+  'DOCKER_NOT_FOUND',
+  'DOCKER_CONFLICT',
+  'DOCKER_TIMEOUT',
+  'DOCKER_INVALID_REQUEST',
+  'DOCKER_UNKNOWN',
+])
 
 export const DockerLogsRequestSchema = z.object({
   id: z.string().min(1).max(256),
@@ -206,6 +215,7 @@ export type DockerContainerAction = z.infer<typeof DockerContainerActionSchema>
 export type DockerImageAction = z.infer<typeof DockerImageActionSchema>
 export type DockerVolumeAction = z.infer<typeof DockerVolumeActionSchema>
 export type DockerNetworkAction = z.infer<typeof DockerNetworkActionSchema>
+export type DockerErrorCode = z.infer<typeof DockerErrorCodeSchema>
 export type ComposeProfile = z.infer<typeof ComposeProfileSchema>
 export type CustomProfileEntry = z.infer<typeof CustomProfileEntrySchema>
 export type MaintenanceTask = z.infer<typeof MaintenanceTaskSchema>

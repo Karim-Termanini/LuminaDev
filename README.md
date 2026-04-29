@@ -1,20 +1,37 @@
-# LuminaDev (HypeDevHome) 🚀
+# LuminaDev
 
-**A premium, Nordic-inspired developer workstation dashboard for Linux. Manage Docker containers, remote servers, and system resources through a stunning, unified interface.**
+Linux developer workstation dashboard (Electron + React), focused on safe click-first flows for Docker, system visibility, and local machine setup.
 
-100% open-source developer dashboard for Linux, inspired by Microsoft Dev Home and the VS Code visual language. **Install target: Flatpak.** **Dev/CI: Docker-friendly.**
+## Project Status (truthful snapshot)
 
-HypeDevHome is an advanced, all-in-one developer workspace designed to streamline Linux environment management. Built with a focus on performance and aesthetics, it bridges the gap between complex terminal operations and intuitive GUI control.
+This project is in active development. Features below are split by maturity:
 
-## ✨ Features
+- **Implemented (verified)**:
+  - Docker surface: container list/actions/logs plus image/volume/network cleanup flows.
+  - Maintenance and Monitor pages with metrics + job runner integration.
+  - SSH and Git configuration UI flows.
+  - Typed IPC boundaries via `@linux-dev-home/shared` schemas.
+- **Partial / evolving**:
+  - Flatpak-host privilege parity and cross-distro consistency.
+  - Runtime install/update matrix hardening.
+  - Diagnostics and support bundle depth.
+- **Planned**:
+  - Advanced source-control cloud integrations, extensions, and broader automation.
 
-- **VS Code–style dark UI:** Codicons, Inter + JetBrains Mono fonts for a premium feel.
-- **Docker Hub Explorer:** Integrated search and deployment directly from Docker Hub with smart tag selection.
-- **Interactive Terminal:** Embedded terminal via `xterm.js` + `node-pty` with external-terminal fallback.
-- **Container Management:** Dashboard with Docker container overview, compose “profile” cards, and logs.
-- **System Metrics:** Real-time tracking of CPU, memory, disk, and network resources.
-- **Git Integration:** Git clone / recent repos with path validation in the main process.
-- **Type-Safe IPC:** Surface guarded with Zod schemas in `@linux-dev-home/shared`.
+## Quality Gate Policy
+
+Until Docker vertical slice hardening is complete:
+
+1. No new feature expansion outside Docker vertical slice fixes.
+2. All Docker destructive actions must keep confirmation + tested error handling.
+3. `smoke` and Docker-related tests must pass before phase expansion.
+4. Documentation must use `Implemented / Partial / Planned` wording only.
+
+## Known Limits
+
+- Flatpak sessions require explicit host overrides for some operations (Docker socket, SSH paths).
+- Some cleanup operations are manual-assisted due to host privilege boundaries.
+- Electron + Flatpak + native modules (`node-pty`) can require per-system rebuild/runtime tuning.
 
 ## 🛠️ Prerequisites
 

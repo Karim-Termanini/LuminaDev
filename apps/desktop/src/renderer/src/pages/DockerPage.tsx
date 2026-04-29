@@ -6,6 +6,7 @@ import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 
 import { DockerSchemeView } from '../components/DockerSchemeView'
+import { humanizeDockerError } from './dockerError'
 
 type TabId = 'scheme' | 'create' | 'containers' | 'images' | 'volumes' | 'networks' | 'ports' | 'cleanup'
 
@@ -356,7 +357,7 @@ export function DockerPage(): ReactElement {
       await window.dh.dockerVolumeAction({ name, action: 'remove' })
       await refreshAll()
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e))
+      setErr(humanizeDockerError(e))
     } finally {
       setBusy(false)
     }
@@ -375,13 +376,15 @@ export function DockerPage(): ReactElement {
       await window.dh.dockerNetworkAction({ id, action: 'remove' })
       await refreshAll()
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e))
+      setErr(humanizeDockerError(e))
     } finally {
       setBusy(false)
     }
   }
 
   async function runPrune(): Promise<void> {
+    const yes = window.confirm('Run Docker cleanup with the selected options? This may remove stopped resources.')
+    if (!yes) return
     setBusy(true)
     try {
       const res = (await window.dh.dockerCleanupRun(pruneSelection)) as { ok: true; reclaimedBytes: number }
@@ -390,7 +393,7 @@ export function DockerPage(): ReactElement {
       await refreshAll()
       await previewCleanup()
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e))
+      setErr(humanizeDockerError(e))
     } finally {
       setBusy(false)
     }
@@ -404,7 +407,7 @@ export function DockerPage(): ReactElement {
       }
       setPrunePreview(res.preview)
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e))
+      setErr(humanizeDockerError(e))
     }
   }
 
@@ -419,7 +422,7 @@ export function DockerPage(): ReactElement {
       setCreateVolumeName('')
       await refreshAll()
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e))
+      setErr(humanizeDockerError(e))
     } finally {
       setBusy(false)
     }
@@ -436,7 +439,7 @@ export function DockerPage(): ReactElement {
       setCreateNetworkName('')
       await refreshAll()
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e))
+      setErr(humanizeDockerError(e))
     } finally {
       setBusy(false)
     }
@@ -464,7 +467,7 @@ export function DockerPage(): ReactElement {
       setCreatedInfo(`Pulled image: ${img}`)
       await refreshAll()
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e))
+      setErr(humanizeDockerError(e))
     } finally {
       setBusy(false)
     }
@@ -493,7 +496,7 @@ export function DockerPage(): ReactElement {
       await refreshAll()
       setTab('containers')
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e))
+      setErr(humanizeDockerError(e))
     } finally {
       setBusy(false)
     }
@@ -519,7 +522,7 @@ export function DockerPage(): ReactElement {
       await refreshAll()
       setTab('containers')
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e))
+      setErr(humanizeDockerError(e))
     } finally {
       setBusy(false)
     }
@@ -586,6 +589,9 @@ export function DockerPage(): ReactElement {
         <div className="hp-status-alert warning">
           <span style={{ fontSize: 18 }}>⚠</span>
           <span>{err}</span>
+          <button type="button" className="hp-btn" onClick={() => void refreshAll()} style={{ marginLeft: 10 }}>
+            Retry
+          </button>
         </div>
       ) : null}
 
@@ -604,7 +610,7 @@ export function DockerPage(): ReactElement {
 
       <section className="hp-card">
         {!docker ? <div style={{ color: 'var(--text-muted)' }}>Checking Docker daemon…</div> : null}
-        {docker && !docker.ok ? <div style={{ color: 'var(--orange)' }}>{docker.error}</div> : null}
+        {docker && !docker.ok ? <div style={{ color: 'var(--orange)' }}>{humanizeDockerError(docker.error)}</div> : null}
         {docker?.ok && tab === 'create' ? (
           <div style={{ display: 'grid', gap: 8 }}>
             <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>

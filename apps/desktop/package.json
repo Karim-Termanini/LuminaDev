@@ -12,6 +12,7 @@
     "dev": "electron-vite dev",
     "build": "electron-vite build && node scripts/copy-docker-profiles.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.web.json && tsc --noEmit -p tsconfig.node.json",
+    "test": "vitest run",
     "rebuild:native": "electron-rebuild -f -w node-pty",
     "pack:linux": "node scripts/pack-linux.mjs"
   },
@@ -42,7 +43,8 @@
     "electron-builder": "^25.1.8",
     "electron-vite": "^2.3.0",
     "typescript": "^5.6.3",
-    "vite": "^5.4.11"
+    "vite": "^5.4.11",
+    "vitest": "^2.1.9"
   },
   "build": {
     "appId": "io.github.karimodora.LinuxDevHome",

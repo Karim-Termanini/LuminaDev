@@ -164,6 +164,19 @@ function getDocker(): Docker | null {
   return null
 }
 
+function dockerErrorString(err: unknown, fallback: string): string {
+  const raw = err instanceof Error ? err.message : String(err)
+  const m = raw.toLowerCase()
+  if (/permission denied|eacces|operation not permitted/.test(m)) return `[DOCKER_PERMISSION_DENIED] ${raw}`
+  if (/no such container|not found|no such image|no such volume|no such network/.test(m)) return `[DOCKER_NOT_FOUND] ${raw}`
+  if (/conflict|already in use|already exists|is in use/.test(m)) return `[DOCKER_CONFLICT] ${raw}`
+  if (/timeout|timed out|etimedout/.test(m)) return `[DOCKER_TIMEOUT] ${raw}`
+  if (/socket|cannot connect|docker unavailable|is the docker daemon running/.test(m)) {
+    return `[DOCKER_UNAVAILABLE] ${raw || fallback}`
+  }
+  return `[DOCKER_UNKNOWN] ${raw || fallback}`
+}
+
 function detectHostDistroSync(): 'fedora' | 'ubuntu' | 'arch' {
   if (fs.existsSync('/etc/fedora-release')) return 'fedora'
   if (fs.existsSync('/etc/arch-release')) return 'arch'
@@ -1120,7 +1133,7 @@ async function listContainers(): Promise<
     })
     return { ok: true, rows }
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e)
+    const msg = dockerErrorString(e, 'Failed to list Docker containers.')
     return { ok: false, error: msg }
   }
 }
@@ -1158,39 +1171,47 @@ function registerIpc(): void {
   ipcMain.handle(IPC.dockerList, async () => await listContainers())
 
   ipcMain.handle(IPC.dockerAction, async (_e, raw: unknown) => {
-    const body = raw as DockerActionPayload
-    const act = DockerContainerActionSchema.safeParse(body?.action)
-    const id = typeof body?.id === 'string' ? body.id : ''
-    if (!id || !act.success) throw new Error('Invalid docker action')
-    const d = getDocker()
-    if (!d) throw new Error('Docker unavailable')
-    const container = d.getContainer(id)
-    if (act.data === 'start') await container.start()
-    else if (act.data === 'stop') await container.stop({ t: 2 })
-    else if (act.data === 'restart') await container.restart()
-    else await container.remove({ force: true })
-    return { ok: true }
+    try {
+      const body = raw as DockerActionPayload
+      const act = DockerContainerActionSchema.safeParse(body?.action)
+      const id = typeof body?.id === 'string' ? body.id : ''
+      if (!id || !act.success) throw new Error('[DOCKER_INVALID_REQUEST] Invalid docker action')
+      const d = getDocker()
+      if (!d) throw new Error('[DOCKER_UNAVAILABLE] Docker unavailable')
+      const container = d.getContainer(id)
+      if (act.data === 'start') await container.start()
+      else if (act.data === 'stop') await container.stop({ t: 2 })
+      else if (act.data === 'restart') await container.restart()
+      else await container.remove({ force: true })
+      return { ok: true }
+    } catch (e) {
+      throw new Error(dockerErrorString(e, 'Container action failed.'))
+    }
   })
 
   ipcMain.handle(IPC.dockerLogs, async (_e, raw: unknown) => {
-    const req = DockerLogsRequestSchema.parse(raw)
-    const d = getDocker()
-    if (!d) throw new Error('Docker unavailable')
-    const container = d.getContainer(req.id)
-    const stream = await container.logs({
-      stdout: true,
-      stderr: true,
-      tail: req.tail ?? 200,
-      timestamps: false,
-    })
-    const buf = Buffer.isBuffer(stream) ? stream : Buffer.from(stream as ArrayBuffer)
-    return buf.toString('utf8')
+    try {
+      const req = DockerLogsRequestSchema.parse(raw)
+      const d = getDocker()
+      if (!d) throw new Error('[DOCKER_UNAVAILABLE] Docker unavailable')
+      const container = d.getContainer(req.id)
+      const stream = await container.logs({
+        stdout: true,
+        stderr: true,
+        tail: req.tail ?? 200,
+        timestamps: false,
+      })
+      const buf = Buffer.isBuffer(stream) ? stream : Buffer.from(stream as ArrayBuffer)
+      return buf.toString('utf8')
+    } catch (e) {
+      throw new Error(dockerErrorString(e, 'Failed to read Docker logs.'))
+    }
   })
 
   ipcMain.handle(IPC.dockerCreate, async (_e, raw: unknown) => {
     const req = DockerCreateRequestSchema.parse(raw)
     const d = getDocker()
-    if (!d) throw new Error('Docker unavailable')
+    if (!d) throw new Error('[DOCKER_UNAVAILABLE] Docker unavailable')
     const cmd = req.command?.trim() ? req.command.trim().split(/\s+/) : undefined
     const exposedPorts =
       req.ports && req.ports.length > 0
@@ -1233,7 +1254,7 @@ function registerIpc(): void {
       container = await d.createContainer(createPayload)
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
-      if (!/No such image/i.test(msg)) throw e
+      if (!/No such image/i.test(msg)) throw new Error(dockerErrorString(e, 'Container creation failed.'))
       // If image is missing locally, pull it once and retry create.
       const stream = await d.pull(req.image)
       await new Promise<void>((resolvePull, rejectPull) => {
@@ -1251,17 +1272,21 @@ function registerIpc(): void {
   })
 
   ipcMain.handle(IPC.dockerPull, async (_e, raw: unknown) => {
-    const req = DockerPullRequestSchema.parse(raw)
-    const d = getDocker()
-    if (!d) throw new Error('Docker unavailable')
-    const stream = await d.pull(req.image)
-    await new Promise<void>((resolvePull, rejectPull) => {
-      d.modem.followProgress(stream, (err) => {
-        if (err) rejectPull(err)
-        else resolvePull()
+    try {
+      const req = DockerPullRequestSchema.parse(raw)
+      const d = getDocker()
+      if (!d) throw new Error('[DOCKER_UNAVAILABLE] Docker unavailable')
+      const stream = await d.pull(req.image)
+      await new Promise<void>((resolvePull, rejectPull) => {
+        d.modem.followProgress(stream, (err) => {
+          if (err) rejectPull(err)
+          else resolvePull()
+        })
       })
-    })
-    return { ok: true }
+      return { ok: true }
+    } catch (e) {
+      throw new Error(dockerErrorString(e, 'Image pull failed.'))
+    }
   })
 
   ipcMain.handle(IPC.dockerRemapPort, async (_e, raw: unknown) => {
@@ -1475,7 +1500,7 @@ function registerIpc(): void {
       })
       .parse(raw)
     const d = getDocker()
-    if (!d) throw new Error('Docker unavailable')
+    if (!d) throw new Error('[DOCKER_UNAVAILABLE] Docker unavailable')
     let reclaimedBytes = 0
     if (req.containers) {
       const res = await d.pruneContainers()

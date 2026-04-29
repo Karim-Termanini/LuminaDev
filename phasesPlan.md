@@ -8,6 +8,18 @@
 
 ---
 
+## Quality Gate Policy (active)
+
+Before any new phase expansion, the following gate must pass:
+
+1. **Docker vertical slice only**: focus scope on Docker list/start/stop/logs + cleanup reliability.
+2. **Safety**: destructive flows require explicit confirmation and deterministic error messaging.
+3. **Tests**: `smoke` plus Docker-related schema/UI tests must be green.
+4. **Docs truthfulness**: user-facing docs must label items as **Implemented / Partial / Planned** only.
+5. **Scope freeze**: no net-new features outside bug fixes for existing phases until gate passes.
+
+---
+
 ## Phase 0 — Foundations (do this before big features)
 
 **Status (implemented):** widget registry + `dashboard-layout.json` in Electron `userData`; responsive profile grid + Add widget / Custom profile entry points; demo job runner (`jobStart` / `jobsList` / `jobCancel`) with footer strip; session banner (`FLATPAK_ID` vs native) + link to `docs/DOCKER_FLATPAK.md` on GitHub.

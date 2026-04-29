@@ -8,7 +8,7 @@
     "pack:linux": "pnpm --filter desktop pack:linux",
     "lint": "eslint .",
     "typecheck": "pnpm -r typecheck",
-    "test": "pnpm --filter shared test",
+    "test": "pnpm --filter shared test && pnpm --filter desktop test",
     "smoke": "bash scripts/smoke-ci.sh"
   },
   "devDependencies": {

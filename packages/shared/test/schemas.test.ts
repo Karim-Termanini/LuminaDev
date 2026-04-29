@@ -3,6 +3,7 @@ import { DashboardLayoutFileSchema } from '../src/foundation'
 import {
   ComposeUpRequestSchema,
   CustomProfilesStoreSchema,
+  DockerErrorCodeSchema,
   DockerLogsRequestSchema,
   GitCloneRequestSchema,
   HostExecRequestSchema,
@@ -22,6 +23,11 @@ describe('schemas', () => {
       id: 'abc',
       tail: 100,
     })
+  })
+
+  it('accepts known docker error codes', () => {
+    expect(DockerErrorCodeSchema.parse('DOCKER_UNAVAILABLE')).toBe('DOCKER_UNAVAILABLE')
+    expect(() => DockerErrorCodeSchema.parse('RANDOM_ERROR')).toThrow()
   })
 
   it('accepts compose profiles only', () => {
