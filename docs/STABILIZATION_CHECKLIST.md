@@ -3,6 +3,8 @@
 This checklist is the closure track for the "hype vs substance" concerns.
 It is intentionally limited to reliability, safety, process discipline, and truthful documentation.
 
+Execution split (Agent B vs Rust/IPC): [AGENT_WORK_PLAN.md](./AGENT_WORK_PLAN.md).
+
 Status legend:
 - `open` = not started
 - `in_progress` = actively being implemented
@@ -114,14 +116,14 @@ Stabilization is considered complete only when:
 
 ## Tauri Pre-Release Migration Track
 
-- **Status:** `in_progress` — Stage 2 done; Stage 4/5 pending merge + release gate verification
+- **Status:** `in_progress` — Rust IPC done; packaging/Flatpak deferred; no semver/release pressure until product-complete (see [AGENT_WORK_PLAN.md](./AGENT_WORK_PLAN.md))
 - **Scope:** Replace Electron runtime shell with Tauri before first public release while preserving existing behavior.
 - **Stage 0 (baseline + freeze):** `done`
 - **Stage 1 (Tauri skeleton + API bridge):** `done`
 - **Stage 2 (Rust-native backend port):** `done` — all IPC channels native; Node bridge removed
 - **Stage 3 (renderer parity + UX preservation):** `done`
 - **Stage 4 (packaging + CI + Flatpak):** `in_progress` — native-linux-build green; flatpak deferred to release
-- **Stage 5 (release gate):** `open` — pending final merge + sanity
+- **Stage 5 (release gate):** `open` — product-complete criteria + final `pnpm smoke` when you choose to cut a release (not on a fixed calendar)
 
 - **Stage 1 evidence:**
   - Tauri app scaffold: `apps/desktop/src-tauri/*`
@@ -132,7 +134,7 @@ Stabilization is considered complete only when:
   - All remaining channels ported to Rust native:
     - `dh:metrics` — `/proc/meminfo`, `/proc/loadavg`, `/proc/cpuinfo`, `df`
     - `dh:host:exec` — `systemctl is-active`, `nvidia-smi`
-    - `dh:docker:create` — docker CLI with ports/env/volumes/autoStart
+    - `dh:docker:create` — docker CLI with ports/env/volumes/autoStart; returns `id` on success
     - `dh:ssh:list:dir` — native `ssh ls`
     - `dh:ssh:setup:remote:key` — native `ssh` + `sshpass`
     - `dh:docker:remap-port`, `dh:docker:install` — explicit not-supported errors
@@ -152,8 +154,6 @@ Stabilization is considered complete only when:
   - `quality-gate` job: trimmed to only `build-essential python3` (WebKit deps were unnecessary)
   - `native-linux-build`: Rust toolchain + cache present, Tauri build green in CI
 
-- **Remaining before Stage 5 release gate:**
-  - Merge `feat/tauri-stage2-port` (Rust port) to main
-  - Merge `feat/release-gate-docs-ci` (this branch) to main
-  - Run `pnpm smoke` on final main
-  - Flatpak offline build (deferred — added back before Flathub submission)
+- **Remaining before Stage 5 (when you declare product-ready):**
+  - Run `pnpm smoke` on `main` before any tagged release
+  - Flatpak offline build / Flathub — **last** (long CI); enable when ready

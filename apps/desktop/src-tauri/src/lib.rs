@@ -989,14 +989,17 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
         let refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
         match exec_output("docker", &refs).await {
           Ok(out) => {
-            let auto_start = body.get("autoStart").and_then(|v| v.as_bool()).unwrap_or(false);
-            if auto_start {
-              let id = out.trim();
-              let _ = exec_output("docker", &["start", id]).await;
+            let id = out.trim().to_string();
+            if id.is_empty() {
+              return json!({ "ok": false, "error": "[DOCKER_CREATE_FAILED] docker create returned empty id.", "id": "" });
             }
-            json!({ "ok": true })
+            let auto_start = body.get("autoStart").and_then(|v| v.as_bool()).unwrap_or(true);
+            if auto_start {
+              let _ = exec_output("docker", &["start", &id]).await;
+            }
+            json!({ "ok": true, "id": id })
           }
-          Err(e) => json!({ "ok": false, "error": format!("[DOCKER_CREATE_FAILED] {}", e.trim()) }),
+          Err(e) => json!({ "ok": false, "error": format!("[DOCKER_CREATE_FAILED] {}", e.trim()), "id": "" }),
         }
       }
     },

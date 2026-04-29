@@ -278,12 +278,15 @@ export function DockerPage(): ReactElement {
         password: sudoPassword,
         components: selectedFeatures
       })
-      setInstallLogs(res.log)
+      const logs = Array.isArray(res.log) ? res.log : []
+      setInstallLogs(
+        logs.length > 0 ? logs : res.ok ? ['Installation completed.'] : ['(no log output)']
+      )
       if (res.ok) {
         setInstallStep(4) // Success (mapped to step 4 now)
         void refreshAll()
       } else {
-        setInstallError(res.error || 'Unknown error during installation')
+        setInstallError(humanizeDockerError(res.error || 'Unknown error during installation'))
       }
     } catch (e) {
       setInstallError(e instanceof Error ? e.message : String(e))
@@ -553,7 +556,13 @@ export function DockerPage(): ReactElement {
         id: remapContainerId,
         oldHostPort: oldP,
         newHostPort: newP,
-      })) as { ok: true; name: string }
+      })) as { ok: boolean; name?: string; error?: string }
+      if (!res.ok) {
+        throw new Error(res.error || 'Port remap failed.')
+      }
+      if (!res.name) {
+        throw new Error('Port remap succeeded but container name was not returned.')
+      }
       setCreatedInfo(`Port remap done. New cloned container: ${res.name}`)
       await refreshAll()
       setTab('containers')

@@ -2,7 +2,7 @@
 
 Linux developer workstation dashboard, focused on safe click-first flows for Docker, system visibility, and local machine setup.
 
-> **Runtime migration:** Tauri backend port complete. All IPC channels run Rust-native; Node.js bridge removed. Pending final merge + release gate. See [Stabilization Checklist](docs/STABILIZATION_CHECKLIST.md).
+> **Runtime migration:** Tauri backend port complete. All `ipc_invoke` channels run Rust-native; Node.js bridge removed. File/folder pickers on Tauri use `@tauri-apps/plugin-dialog` from the renderer (not `dh:dialog:*` over invoke). Ongoing work is tracked in [Agent work plan](docs/AGENT_WORK_PLAN.md) and [Stabilization Checklist](docs/STABILIZATION_CHECKLIST.md).
 
 ## Project Status (truthful snapshot)
 
@@ -14,7 +14,8 @@ This project is in active development. Features below are split by maturity:
   - SSH and Git configuration UI flows.
   - Typed IPC boundaries via `@linux-dev-home/shared` schemas.
 - **Partial / evolving**:
-  - Tauri migration: Stages 0–4 done; release gate (Stage 5) pending.
+  - Tauri migration: core port done; packaging (Flatpak) intentionally last — heavy CI.
+  - `dh:docker:install` / `dh:docker:remap-port`: explicit not-supported responses until implemented (see work plan).
   - Flatpak packaging and cross-distro consistency.
   - Runtime install/update matrix hardening.
   - Diagnostics and support bundle depth.
