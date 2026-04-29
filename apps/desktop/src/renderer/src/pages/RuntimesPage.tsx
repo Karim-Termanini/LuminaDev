@@ -65,7 +65,30 @@ export function RuntimesPage(): ReactElement {
   const [persistedUpdateOutcomes, setPersistedUpdateOutcomes] = useState<Record<string, 'already_latest' | 'updated'>>({})
   const [availableVersions, setAvailableVersions] = useState<string[]>([])
   const [selectedVersion, setSelectedVersion] = useState<string>('latest')
+  const [versionsLoading, setVersionsLoading] = useState(false)
   const [addToPath, setAddToPath] = useState(true)
+
+  const loadVersionsForRuntime = useCallback(async (runtimeId: string, resetDefault: boolean) => {
+    setVersionsLoading(true)
+    try {
+      const vs = (await window.dh.getAvailableVersions(runtimeId)) as string[]
+      setAvailableVersions(vs)
+      if (vs.length === 0) return
+      if (resetDefault) {
+        setSelectedVersion(pickDefaultRuntimeVersion(runtimeId, vs))
+      } else {
+        setSelectedVersion((prev) => (vs.includes(prev) ? prev : pickDefaultRuntimeVersion(runtimeId, vs)))
+      }
+    } finally {
+      setVersionsLoading(false)
+    }
+  }, [])
+
+  /** Same as load but for the currently selected runtime (wizard Refresh button). */
+  const refreshVersionsList = useCallback(
+    (resetDefault: boolean) => loadVersionsForRuntime(selectedId, resetDefault),
+    [selectedId, loadVersionsForRuntime],
+  )
 
   const refreshDeps = useCallback(async () => {
     const res = await window.dh.checkDependencies(selectedId)
@@ -148,21 +171,14 @@ export function RuntimesPage(): ReactElement {
   useEffect(() => {
     setAvailableVersions([])
     setSelectedVersion('latest')
-    void window.dh.getAvailableVersions(selectedId).then((vs: string[]) => {
-      setAvailableVersions(vs)
-      if (vs.length > 0) setSelectedVersion(pickDefaultRuntimeVersion(selectedId, vs))
-    })
-  }, [selectedId])
+    void loadVersionsForRuntime(selectedId, true)
+  }, [selectedId, loadVersionsForRuntime])
 
   const startInstall = async (id: string) => {
     setSelectedId(id)
     setShowWizard(true)
     setWizardStep(1)
-    // Force refresh versions when wizard opens to avoid stale "latest"
-    void window.dh.getAvailableVersions(id).then((vs: string[]) => {
-      setAvailableVersions(vs)
-      if (vs.length > 0) setSelectedVersion(pickDefaultRuntimeVersion(id, vs))
-    })
+    void loadVersionsForRuntime(id, true)
   }
 
   const runInstall = async () => {
@@ -468,15 +484,45 @@ export function RuntimesPage(): ReactElement {
                         </div>
 
                         <div className="hp-card" style={{ marginBottom: 20 }}>
-                           <div style={{ fontWeight: 600, marginBottom: 8 }}>Target Version</div>
+                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, gap: 12 }}>
+                             <div style={{ fontWeight: 600 }}>Target Version</div>
+                             <button
+                               type="button"
+                               className="hp-btn-icon"
+                               title="Refresh version list from the network (new releases appear here without an app update)"
+                               disabled={versionsLoading}
+                               onClick={() => void refreshVersionsList(false)}
+                               style={{
+                                 padding: '6px 10px',
+                                 border: '1px solid var(--border)',
+                                 borderRadius: 8,
+                                 background: 'rgba(255,255,255,0.04)',
+                                 color: 'var(--text-muted)',
+                                 cursor: versionsLoading ? 'default' : 'pointer',
+                                 opacity: versionsLoading ? 0.65 : 1,
+                                 display: 'flex',
+                                 alignItems: 'center',
+                                 gap: 6,
+                                 fontSize: 12,
+                                 fontWeight: 600,
+                               }}
+                             >
+                               <span className={`codicon ${versionsLoading ? 'codicon-loading codicon-modifier-spin' : 'codicon-refresh'}`} />
+                               Refresh
+                             </button>
+                           </div>
                            <select 
                              className="hp-input" 
-                             style={{ width: '100%' }} 
+                             style={{ width: '100%', opacity: versionsLoading && availableVersions.length === 0 ? 0.6 : 1 }} 
                              value={selectedVersion} 
+                             disabled={versionsLoading && availableVersions.length === 0}
                              onChange={(e) => setSelectedVersion(e.target.value)}
                            >
                              {availableVersions.map(v => <option key={v} value={v}>{v}</option>)}
                            </select>
+                           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
+                             Lists are loaded from upstream APIs where possible; use Refresh after a new release if you do not change language.
+                           </div>
                         </div>
 
                         <div className="hp-card">
