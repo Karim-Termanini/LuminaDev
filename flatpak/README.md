@@ -1,6 +1,6 @@
 # Flatpak
 
-**Tauri (current app):** [`io.github.karimodora.LinuxDevHome.tauri.yml`](io.github.karimodora.LinuxDevHome.tauri.yml) — `org.gnome.Platform` + `cargo build --release` for `lumina-dev`, installs as `linux-dev-home`. Build locally with `flatpak-builder` (not in GitHub Actions yet; add a workflow job later for CI smoke only).
+**Tauri (current app):** [`io.github.karimodora.LinuxDevHome.tauri.yml`](io.github.karimodora.LinuxDevHome.tauri.yml) — `org.gnome.Platform` **49** + `cargo build --release` for `lumina-dev`, installs as `linux-dev-home`. Build locally with `flatpak-builder` (not in GitHub Actions yet; add a workflow job later for CI smoke only).
 
 **Legacy Electron manifests** (historical; still usable if you maintain an Electron pack path):
 
@@ -47,7 +47,7 @@ See [../docs/DOCKER_FLATPAK.md](../docs/DOCKER_FLATPAK.md), [../docs/INSTALL_TES
 
 ### `Error opening cache: opening repo: opendir(objects): No such file or directory`
 
-Usually a **broken Flatpak user repo or builder cache**, or a **runtime/extension branch mismatch** (fixed in the Tauri manifest by pinning `//24.08` on Rust and Node SDK extensions).
+Usually a **broken Flatpak user repo or builder cache**, or a **manifest/runtime mismatch** (e.g. EOL GNOME 46, or an SDK extension branch the runtime does not declare — do **not** add `//24.08` on extensions unless that branch is listed for your chosen `org.gnome.Sdk`).
 
 Try in order:
 
@@ -59,6 +59,10 @@ rm -rf flatpak-build-tauri .flatpak-builder
 
 Then rebuild. If `FLATPAK_USER_DIR` is set to a custom path, ensure that directory exists and is writable, or unset it for the build.
 
-### Wrong SDK extension branch (e.g. 23.08 vs GNOME 46)
+### `Unknown extension 'org.freedesktop.Sdk.Extension.rust-stable//…' in runtime`
 
-`flatpak-builder` must install extensions on the **same branch** as the app’s `org.gnome.Sdk` (for Platform 46 that is **24.08**). The Tauri manifest lists `//24.08` explicitly on both extensions.
+The **`//branch` on `sdk-extensions` must match extensions your `org.gnome.Sdk` actually exposes**. Wrong pins produce this error. The Tauri manifest uses **GNOME Platform 49** and **unpinned** `rust-stable` / `node20` so Flatpak resolves the correct pair.
+
+### Old GNOME runtimes (46–48) end-of-life
+
+Use a **currently supported** `org.gnome.Platform` branch (see Flathub / `flatpak remote-info`). This repo tracks that in [`io.github.karimodora.LinuxDevHome.tauri.yml`](io.github.karimodora.LinuxDevHome.tauri.yml).

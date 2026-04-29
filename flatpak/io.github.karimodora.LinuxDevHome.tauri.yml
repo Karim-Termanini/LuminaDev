@@ -2,14 +2,14 @@
 # Tauri (GTK/WebKit) Flatpak — local / Flathub prep. Not wired into GitHub Actions yet (see flatpak/README.md).
 app-id: io.github.karimodora.LinuxDevHome
 runtime: org.gnome.Platform
-runtime-version: '46'
+runtime-version: '49'
 sdk: org.gnome.Sdk
 command: linux-dev-home
 
-# Pin branches to match org.gnome.Sdk//46 (freedesktop 24.08). Unpinned refs often resolve to 23.08 and break the build SDK mix.
+# Extension branches must match what org.gnome.Sdk declares (do not add //24.08 etc. — that causes "Unknown extension in runtime").
 sdk-extensions:
-  - org.freedesktop.Sdk.Extension.rust-stable//24.08
-  - org.freedesktop.Sdk.Extension.node20//24.08
+  - org.freedesktop.Sdk.Extension.rust-stable
+  - org.freedesktop.Sdk.Extension.node20
 
 finish-args:
   - --share=ipc
