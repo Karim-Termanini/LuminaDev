@@ -991,7 +991,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
           Ok(out) => {
             let id = out.trim().to_string();
             if id.is_empty() {
-              return json!({ "ok": false, "error": "[DOCKER_CREATE_FAILED] docker create returned empty id.", "id": "" });
+              return Ok(json!({ "ok": false, "error": "[DOCKER_CREATE_FAILED] docker create returned empty id.", "id": "" }));
             }
             let auto_start = body.get("autoStart").and_then(|v| v.as_bool()).unwrap_or(true);
             if auto_start {
