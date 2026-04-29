@@ -1,6 +1,8 @@
 import type { ReactElement } from 'react'
 import { useEffect, useState, useCallback, useMemo } from 'react'
-import type { RuntimeStatus, RuntimeStatusResponse, JobSummary } from '@linux-dev-home/shared'
+import type { RuntimeStatus, JobSummary } from '@linux-dev-home/shared'
+import { assertRuntimeOk } from './runtimeContract'
+import { humanizeRuntimeError } from './runtimeError'
 
 const RUNTIME_DETAILS: Record<string, { description: string, website: string, icon: string }> = {
   node: { description: 'Node.js is a JavaScript runtime built on Chrome\'s V8 JavaScript engine. Ideal for scalable network applications.', website: 'https://nodejs.org', icon: 'symbol-method' },
@@ -67,11 +69,14 @@ export function RuntimesPage(): ReactElement {
   const [selectedVersion, setSelectedVersion] = useState<string>('latest')
   const [versionsLoading, setVersionsLoading] = useState(false)
   const [addToPath, setAddToPath] = useState(true)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   const loadVersionsForRuntime = useCallback(async (runtimeId: string, resetDefault: boolean) => {
     setVersionsLoading(true)
     try {
-      const vs = (await window.dh.getAvailableVersions(runtimeId)) as string[]
+      const res = await window.dh.getAvailableVersions(runtimeId)
+      assertRuntimeOk(res, 'Failed to fetch runtime versions.')
+      const vs = res.versions
       setAvailableVersions(vs)
       if (vs.length === 0) return
       if (resetDefault) {
@@ -79,6 +84,9 @@ export function RuntimesPage(): ReactElement {
       } else {
         setSelectedVersion((prev) => (vs.includes(prev) ? prev : pickDefaultRuntimeVersion(runtimeId, vs)))
       }
+    } catch (e) {
+      setAvailableVersions(['latest'])
+      setErrorMessage(humanizeRuntimeError(e))
     } finally {
       setVersionsLoading(false)
     }
@@ -91,17 +99,30 @@ export function RuntimesPage(): ReactElement {
   )
 
   const refreshDeps = useCallback(async () => {
-    const res = await window.dh.checkDependencies(selectedId)
-    setDependencies(res)
+    try {
+      const res = await window.dh.checkDependencies(selectedId)
+      assertRuntimeOk(res, 'Failed to check runtime dependencies.')
+      setDependencies(res.dependencies)
+    } catch (e) {
+      setDependencies([])
+      setErrorMessage(humanizeRuntimeError(e))
+    }
   }, [selectedId])
 
   const refreshStatus = useCallback(async () => {
     setIsRefreshing(true)
+    setErrorMessage(null)
     try {
-      const res = await window.dh.runtimeStatus() as RuntimeStatusResponse
-      setRuntimes(res.runtimes)
+      const res = await window.dh.runtimeStatus() as { ok: boolean; runtimes: RuntimeStatus[]; error?: string }
+      if (res.ok) {
+        setRuntimes(res.runtimes)
+      } else {
+        setErrorMessage(humanizeRuntimeError(res.error))
+      }
       const jobs = await window.dh.jobsList() as JobSummary[]
       setActiveJobs(jobs.filter(j => j.kind.startsWith('install_') || j.kind.startsWith('update_') || j.kind.startsWith('uninstall_')))
+    } catch (e) {
+      setErrorMessage(e instanceof Error ? e.message : String(e))
     } finally {
       setIsRefreshing(false)
     }
@@ -221,7 +242,21 @@ export function RuntimesPage(): ReactElement {
     if (!showUninstallModal || !selectedRuntime?.installed) return
     setLoadingUninstallPreview(true)
     void window.dh.runtimeUninstallPreview({ runtimeId: selectedId, removeMode })
-      .then((res) => setUninstallPreview(res))
+      .then((res) => {
+        if (res.ok) {
+          setUninstallPreview({
+            distro: res.distro || 'unknown',
+            runtimePackages: res.runtimePackages || [],
+            removableDeps: res.removableDeps || [],
+            blockedSharedDeps: res.blockedSharedDeps || [],
+            finalPackages: res.finalPackages || [],
+            note: res.note,
+          })
+        } else {
+          setUninstallPreview(null)
+          setErrorMessage(humanizeRuntimeError(res.error))
+        }
+      })
       .finally(() => setLoadingUninstallPreview(false))
   }, [showUninstallModal, selectedId, removeMode, selectedRuntime?.installed])
 
@@ -282,6 +317,15 @@ export function RuntimesPage(): ReactElement {
 
       {/* Main Content Area */}
       <main style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'var(--bg-main)', overflowY: 'auto' }}>
+        {errorMessage && (
+          <div style={{ padding: '12px 20px', background: 'rgba(255, 82, 82, 0.1)', borderBottom: '1px solid rgba(255, 82, 82, 0.2)', color: '#ff8a80', fontSize: 13, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span className="codicon codicon-error" />
+              {errorMessage}
+            </div>
+            <button onClick={() => setErrorMessage(null)} style={{ background: 'transparent', border: 'none', color: '#ff8a80', cursor: 'pointer', fontSize: 16 }}>×</button>
+          </div>
+        )}
         {selectedRuntime && !showWizard ? (
           <div style={{ padding: 40, maxWidth: 800 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>

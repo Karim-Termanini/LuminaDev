@@ -9,12 +9,16 @@ export function ProfilesPage(): ReactElement {
 
   async function load(): Promise<void> {
     try {
-      const stored = await window.dh.storeGet({ key: 'custom_profiles' })
-      if (!stored) {
+      const res = (await window.dh.storeGet({ key: 'custom_profiles' })) as { ok: boolean; data: unknown; error?: string }
+      if (!res.ok) {
+        setStatus(res.error || 'Failed to load profiles.')
+        return
+      }
+      if (!res.data) {
         setProfiles([])
         return
       }
-      const parsed = CustomProfilesStoreSchema.parse(stored)
+      const parsed = CustomProfilesStoreSchema.parse(res.data)
       setProfiles(parsed)
     } catch (e) {
       setStatus(e instanceof Error ? e.message : String(e))
@@ -26,10 +30,18 @@ export function ProfilesPage(): ReactElement {
   }, [])
 
   async function save(next: CustomProfileEntry[], msg: string): Promise<void> {
-    const parsed = CustomProfilesStoreSchema.parse(next)
-    await window.dh.storeSet({ key: 'custom_profiles', data: parsed })
-    setProfiles(parsed)
-    setStatus(msg)
+    try {
+      const parsed = CustomProfilesStoreSchema.parse(next)
+      const res = (await window.dh.storeSet({ key: 'custom_profiles', data: parsed })) as { ok: boolean; error?: string }
+      if (res.ok) {
+        setProfiles(parsed)
+        setStatus(msg)
+      } else {
+        setStatus(res.error || 'Failed to save profiles.')
+      }
+    } catch (e) {
+      setStatus(e instanceof Error ? e.message : String(e))
+    }
   }
 
   async function removeAt(idx: number): Promise<void> {

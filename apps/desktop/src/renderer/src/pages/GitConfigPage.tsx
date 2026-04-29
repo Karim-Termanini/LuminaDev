@@ -1,5 +1,7 @@
 import type { ReactElement } from 'react'
 import { useCallback, useEffect, useState } from 'react'
+import { assertGitOk } from './gitContract'
+import { humanizeGitError } from './gitError'
 
 type Target = 'sandbox' | 'host'
 
@@ -69,7 +71,9 @@ export function GitConfigPage(): ReactElement {
       const res = (await window.dh.gitConfigList({ target })) as {
         ok: boolean
         rows: GitConfigRow[]
+        error?: string
       }
+      assertGitOk(res, 'Failed to load git config.')
       const nextRows = res.rows ?? []
       setRows(nextRows)
       const byKey = new Map(nextRows.map((r) => [r.key.toLowerCase(), r.value]))
@@ -78,7 +82,7 @@ export function GitConfigPage(): ReactElement {
       setDefaultBranch(byKey.get('init.defaultbranch') ?? '')
       setDefaultEditor(byKey.get('core.editor') ?? '')
     } catch (e) {
-      setStatus(e instanceof Error ? e.message : String(e))
+      setStatus(humanizeGitError(e))
       setRows([])
     } finally {
       setBusy(false)
@@ -112,17 +116,18 @@ export function GitConfigPage(): ReactElement {
     setBusy(true)
     setStatus('')
     try {
-      await window.dh.gitConfigSet({
+      const res = await window.dh.gitConfigSet({
         name: name.trim(),
         email: email.trim(),
         defaultBranch: defaultBranch.trim() || undefined,
         defaultEditor: defaultEditor.trim() || undefined,
         target,
       })
+      assertGitOk(res, 'Failed to save git config.')
       setStatus('Git config saved.')
       await loadConfig()
     } catch (e) {
-      setStatus(e instanceof Error ? e.message : String(e))
+      setStatus(humanizeGitError(e))
     } finally {
       setBusy(false)
     }

@@ -1,6 +1,8 @@
 import type { ReactElement, ReactNode } from 'react'
 import { useCallback, useEffect, useState } from 'react'
 import type { ContainerRow, HostMetricsResponse, HostPortRow, HostSecurityDrilldown, HostSecuritySnapshot, HostSysInfo, TopProcessRow } from '@linux-dev-home/shared'
+import { humanizeDashboardError } from './dashboardError'
+import { assertMonitorOk } from './monitorContract'
 
 type GithubEvent = {
   type: string
@@ -40,28 +42,53 @@ export function MonitorPage(): ReactElement {
   const [securityDrilldown, setSecurityDrilldown] = useState<HostSecurityDrilldown | null>(null)
   const [copiedReport, setCopiedReport] = useState(false)
   const [activeTab, setActiveTab] = useState<MonitorTabId>('overview')
+  const [monitorError, setMonitorError] = useState<string | null>(null)
 
   const refreshLive = useCallback(async () => {
     try {
-      const m = await window.dh.metrics() as HostMetricsResponse
-      setMetrics(m)
-      setCpuHistory(prev => [...prev.slice(1), m.metrics.cpuUsagePercent])
-      setNetHistory(prev => [...prev.slice(1), { rx: m.metrics.netRxMbps, tx: m.metrics.netTxMbps }])
+      const res = await window.dh.metrics()
+      assertMonitorOk<HostMetricsResponse, 'metrics'>(res, 'metrics', 'Failed to collect live metrics.')
+      setMetrics(res)
+      setCpuHistory((prev) => [...prev.slice(1), res.metrics.cpuUsagePercent])
+      setNetHistory((prev) => [...prev.slice(1), { rx: res.metrics.netRxMbps, tx: res.metrics.netTxMbps }])
 
-      const c = await window.dh.dockerList() as { ok: boolean, rows: ContainerRow[] }
+      const c = (await window.dh.dockerList()) as { ok: boolean; rows: ContainerRow[] }
       if (c.ok) setContainers(c.rows)
-    } catch (e) { console.error(e) }
+      setMonitorError(null)
+    } catch (e) {
+      setMonitorError(humanizeDashboardError(e))
+    }
   }, [])
 
   const refreshStatic = useCallback(async () => {
     try {
-      setSysInfo(await window.dh.getHostSysInfo())
-      setPorts(await window.dh.getHostPorts())
-      setTopProcesses(await window.dh.monitorTopProcesses())
-      setSecurity(await window.dh.monitorSecurity())
-      setSecurityDrilldown(await window.dh.monitorSecurityDrilldown())
+      const s = await window.dh.getHostSysInfo()
+      setSysInfo(assertMonitorOk<HostSysInfo, 'info'>(s, 'info', 'Failed to collect host system info.'))
+
+      const p = await window.dh.getHostPorts()
+      setPorts(assertMonitorOk<HostPortRow[], 'ports'>(p, 'ports', 'Failed to collect host ports.'))
+
+      const proc = await window.dh.monitorTopProcesses()
+      setTopProcesses(
+        assertMonitorOk<TopProcessRow[], 'processes'>(proc, 'processes', 'Failed to collect top processes.')
+      )
+
+      const sec = await window.dh.monitorSecurity()
+      setSecurity(
+        assertMonitorOk<HostSecuritySnapshot, 'snapshot'>(sec, 'snapshot', 'Failed to collect security snapshot.')
+      )
+
+      const drill = await window.dh.monitorSecurityDrilldown()
+      setSecurityDrilldown(
+        assertMonitorOk<HostSecurityDrilldown, 'drilldown'>(
+          drill,
+          'drilldown',
+          'Failed to collect security drilldown.'
+        )
+      )
+      setMonitorError(null)
     } catch (e) {
-      console.error(e)
+      setMonitorError(humanizeDashboardError(e))
     }
   }, [])
 
@@ -170,6 +197,20 @@ export function MonitorPage(): ReactElement {
         <h1 style={{ margin: 0, fontSize: 28, fontWeight: 700 }}>Engineering Dashboard</h1>
         <p style={{ color: 'var(--text-muted)', marginTop: 8 }}>Real-time system health and development activity.</p>
       </header>
+      {monitorError ? (
+        <div
+          style={{
+            padding: '10px 12px',
+            border: '1px solid rgba(255, 183, 77, 0.35)',
+            background: 'rgba(255, 183, 77, 0.14)',
+            color: '#ffcc80',
+            borderRadius: 8,
+            fontSize: 13,
+          }}
+        >
+          {monitorError}
+        </div>
+      ) : null}
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
         {MONITOR_TABS.map((tab) => (

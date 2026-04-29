@@ -5,6 +5,8 @@ import { FitAddon } from '@xterm/addon-fit'
 import { Terminal } from '@xterm/xterm'
 import '@xterm/xterm/css/xterm.css'
 import { SSH_FLATPAK_HINT } from './environmentHints'
+import { assertSshOk } from './sshContract'
+import { humanizeSshError } from './sshError'
 
 type Target = 'sandbox' | 'host'
 
@@ -69,8 +71,8 @@ export function SshPage(): ReactElement {
 
   async function loadBookmarks(): Promise<void> {
     try {
-      const res = (await window.dh.storeGet({ key: 'ssh_bookmarks' })) as SshBookmark[] | null
-      if (res) setBookmarks(res)
+      const res = await window.dh.storeGet({ key: 'ssh_bookmarks' })
+      if (res.ok && Array.isArray(res.data)) setBookmarks(res.data as SshBookmark[])
     } catch (e) {
       console.error('Failed to load ssh bookmarks', e)
     }
@@ -89,11 +91,12 @@ export function SshPage(): ReactElement {
     setBusy(true)
     setStatus('Generating key...')
     try {
-      await window.dh.sshGenerate({ target, email })
-      setStatus('SSH key generated successfully!')
+      const res = await window.dh.sshGenerate({ target, email })
+      assertSshOk(res, 'Failed to generate SSH key.')
+      setStatus('✅ SSH key generated successfully!')
       await loadPub()
     } catch (e) {
-      setStatus(e instanceof Error ? e.message : String(e))
+      setStatus(`❌ ${humanizeSshError(e)}`)
     } finally {
       setBusy(false)
     }
@@ -102,13 +105,16 @@ export function SshPage(): ReactElement {
   async function loadPub(): Promise<void> {
     setBusy(true)
     try {
-      const res = (await window.dh.sshGetPub({ target })) as { pub: string; fingerprint: string } | null
-      if (res) {
+      const res = await window.dh.sshGetPub({ target })
+      if (res.ok && res.pub) {
         setPubKey(res.pub)
         setFingerprint(res.fingerprint)
       } else {
         setPubKey('')
         setFingerprint('')
+        if (res.error && !res.error.includes('SSH_NO_KEY')) {
+           setStatus(`❌ ${humanizeSshError(res.error)}`)
+        }
       }
     } catch (e) {
       console.error(e)
@@ -147,8 +153,8 @@ export function SshPage(): ReactElement {
 
     try {
       const pubRes = await window.dh.sshGetPub({ target: 'host' })
-      if (!pubRes || !pubRes.pub) {
-        setStatus('⚠ Error: No SSH key found. Generate one in the Wizard first.')
+      if (!pubRes.ok || !pubRes.pub) {
+        setStatus(`⚠ Error: ${humanizeSshError(pubRes.error || 'No SSH key found. Generate one in the Wizard first.')}`)
         return
       }
 
@@ -163,7 +169,7 @@ export function SshPage(): ReactElement {
       if (setupRes.ok) {
         setStatus(`Remote browser activated for ${sess.host}! ✅`)
       } else {
-        setStatus(`Failed to activate: ${setupRes.error}`)
+        setStatus(`Failed to activate: ${humanizeSshError(setupRes.error)}`)
       }
     } catch (err) {
       setStatus(`Error: ${err instanceof Error ? err.message : String(err)}`)
@@ -178,16 +184,16 @@ export function SshPage(): ReactElement {
     setTestOk(null)
     setTestResult('')
     try {
-      const res = (await window.dh.sshTestGithub({ target })) as {
-        ok: boolean
-        output: string
-        code: number | null
-      }
+      const res = await window.dh.sshTestGithub({ target })
       setTestResult(res.output)
       setTestOk(res.ok)
-      setStatus(res.ok ? '✅ Connected to GitHub successfully!' : `❌ Test failed (code ${res.code ?? 'n/a'}).`)
+      setStatus(
+        res.ok
+          ? '✅ Connected to GitHub successfully!'
+          : `❌ ${humanizeSshError(res.error || `Test failed (code ${res.code ?? 'n/a'}).`)}`
+      )
     } catch (e) {
-      setStatus(e instanceof Error ? e.message : String(e))
+      setStatus(humanizeSshError(e))
       setTestOk(false)
     } finally {
       setBusy(false)
@@ -301,7 +307,7 @@ export function SshPage(): ReactElement {
   async function handleConnect(bm: SshBookmark): Promise<void> {
     // Check if local identity exists, if not, generate one silently
     const pubRes = await window.dh.sshGetPub({ target: 'host' })
-    if (!pubRes?.pub) {
+    if (!pubRes.ok || !pubRes.pub) {
       await generate()
     }
 
@@ -348,7 +354,7 @@ export function SshPage(): ReactElement {
         setFtRemotePath(path)
         setFtStatus('')
       } else {
-        setFtStatus(`⚠ Cannot browse: ${res.error ?? 'Unknown error'}. Enter path manually.`)
+        setFtStatus(`❌ ${humanizeSshError(res.error)}`)
       }
     } finally {
       setRemoteBrowsing(false)

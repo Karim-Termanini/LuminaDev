@@ -12,6 +12,10 @@ import simpleGit from 'simple-git'
 import yazl from 'yazl'
 import { z } from 'zod'
 import { dockerErrorString } from './dockerError'
+import { sshErrorString } from './sshError'
+import { runtimeErrorString } from './runtimeError'
+import { gitErrorString } from './gitError'
+import { terminalErrorString } from './terminalError'
 
 import {
   ComposeUpRequestSchema,
@@ -46,7 +50,6 @@ import {
   type GitRepoEntry,
   type HostMetrics,
   type HostMetricsResponse,
-  type HostSecurityDrilldown,
   type HostSecuritySnapshot,
   type ImageRow,
   type JobSummary,
@@ -68,7 +71,6 @@ import {
   RuntimeCheckDepsRequestSchema,
   RuntimeGetVersionsRequestSchema,
   RuntimeUninstallPreviewRequestSchema,
-  type RuntimeStatusResponse,
 } from '@linux-dev-home/shared'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -643,7 +645,8 @@ async function detectRuntimeInstallation(id: string, cmd: string, args: string[]
          try {
            const dirs = fs.readdirSync(base)
            for (const d of dirs) {
-              const full = p.replace('*', d)
+              // Expand every wildcard occurrence to avoid partial replacement patterns.
+              const full = p.replaceAll('*', d)
               if (fs.existsSync(full)) {
                  await new Promise<void>(res => {
                    execFile(full, args, (err, stdout) => {
@@ -1029,51 +1032,75 @@ async function systemdRow(unitBase: string): Promise<SystemdRow> {
   })
 }
 
-async function collectMetrics(): Promise<HostMetricsResponse> {
-  const freeMb = Math.round(freemem() / (1024 * 1024))
-  const totalMb = Math.round(totalmem() / (1024 * 1024))
-  let swapTotalMb = 0
-  let swapFreeMb = 0
+async function collectMetrics(): Promise<HostMetricsResponse & { ok: boolean; error?: string }> {
   try {
-    const meminfo = readFileSync('/proc/meminfo', 'utf8')
-    const swapTotal = meminfo.match(/^SwapTotal:\s+(\d+)\s+kB$/m)
-    const swapFree = meminfo.match(/^SwapFree:\s+(\d+)\s+kB$/m)
-    swapTotalMb = swapTotal ? Math.round(Number(swapTotal[1]) / 1024) : 0
-    swapFreeMb = swapFree ? Math.round(Number(swapFree[1]) / 1024) : 0
-  } catch {
-    /* non-linux or restricted */
+    const freeMb = Math.round(freemem() / (1024 * 1024))
+    const totalMb = Math.round(totalmem() / (1024 * 1024))
+    let swapTotalMb = 0
+    let swapFreeMb = 0
+    try {
+      const meminfo = readFileSync('/proc/meminfo', 'utf8')
+      const swapTotal = meminfo.match(/^SwapTotal:\s+(\d+)\s+kB$/m)
+      const swapFree = meminfo.match(/^SwapFree:\s+(\d+)\s+kB$/m)
+      swapTotalMb = swapTotal ? Math.round(Number(swapTotal[1]) / 1024) : 0
+      swapFreeMb = swapFree ? Math.round(Number(swapFree[1]) / 1024) : 0
+    } catch {
+      /* non-linux or restricted */
+    }
+    let diskTotalGb = 0
+    let diskFreeGb = 0
+    try {
+      const s = statfsSync('/')
+      const bs = Number(s.bsize)
+      diskTotalGb = Math.round(((s.blocks * bs) / 1024 ** 3) * 10) / 10
+      diskFreeGb = Math.round(((s.bfree * bs) / 1024 ** 3) * 10) / 10
+    } catch {
+      /* sandbox */
+    }
+    const { rx, tx } = netMbps()
+    const { readMbps, writeMbps } = diskIoMbps()
+    const model = cpus()[0]?.model ?? 'CPU'
+    const metrics: HostMetrics = {
+      cpuUsagePercent: sampleCpuUsage(),
+      cpuModel: model,
+      loadAvg: loadavg(),
+      totalMemMb: totalMb,
+      freeMemMb: freeMb,
+      swapTotalMb,
+      swapFreeMb,
+      uptimeSec: Math.round(uptime()),
+      diskTotalGb,
+      diskFreeGb,
+      netRxMbps: rx,
+      netTxMbps: tx,
+      diskReadMbps: readMbps,
+      diskWriteMbps: writeMbps,
+    }
+    const systemd = await Promise.all(SYSTEMD_UNITS.map((u) => systemdRow(u)))
+    return { ok: true, metrics, systemd }
+  } catch (e) {
+    return { 
+      ok: false, 
+      error: e instanceof Error ? e.message : String(e),
+      metrics: {
+        cpuUsagePercent: 0,
+        cpuModel: 'Unknown',
+        loadAvg: [0, 0, 0],
+        totalMemMb: 0,
+        freeMemMb: 0,
+        swapTotalMb: 0,
+        swapFreeMb: 0,
+        uptimeSec: 0,
+        diskTotalGb: 0,
+        diskFreeGb: 0,
+        netRxMbps: 0,
+        netTxMbps: 0,
+        diskReadMbps: 0,
+        diskWriteMbps: 0,
+      } as HostMetrics,
+      systemd: []
+    }
   }
-  let diskTotalGb = 0
-  let diskFreeGb = 0
-  try {
-    const s = statfsSync('/')
-    const bs = Number(s.bsize)
-    diskTotalGb = Math.round(((s.blocks * bs) / 1024 ** 3) * 10) / 10
-    diskFreeGb = Math.round(((s.bfree * bs) / 1024 ** 3) * 10) / 10
-  } catch {
-    /* sandbox */
-  }
-  const { rx, tx } = netMbps()
-  const { readMbps, writeMbps } = diskIoMbps()
-  const model = cpus()[0]?.model ?? 'CPU'
-  const metrics: HostMetrics = {
-    cpuUsagePercent: sampleCpuUsage(),
-    cpuModel: model,
-    loadAvg: loadavg(),
-    totalMemMb: totalMb,
-    freeMemMb: freeMb,
-    swapTotalMb,
-    swapFreeMb,
-    uptimeSec: Math.round(uptime()),
-    diskTotalGb,
-    diskFreeGb,
-    netRxMbps: rx,
-    netTxMbps: tx,
-    diskReadMbps: readMbps,
-    diskWriteMbps: writeMbps,
-  }
-  const systemd = await Promise.all(SYSTEMD_UNITS.map((u) => systemdRow(u)))
-  return { metrics, systemd }
 }
 
 function formatPorts(ports: Docker.Port[]): string {
@@ -1671,39 +1698,40 @@ function registerIpc(): void {
   })
 
   ipcMain.handle(IPC.dockerSearch, async (_e, term: string) => {
-    if (!docker || !term) return []
     try {
+      if (!docker || !term) return { ok: true as const, results: [] }
       const results = (await docker.searchImages({ term })) as Array<{
         name: string
         description: string
         star_count: number
         is_official: boolean
       }>
-      return results.map((r) => ({
-        name: r.name,
-        description: r.description,
-        star_count: r.star_count,
-        is_official: r.is_official
-      }))
-    } catch (err) {
-      console.error('Docker search error:', err)
-      return []
+      return {
+        ok: true as const,
+        results: results.map((r) => ({
+          name: r.name,
+          description: r.description,
+          star_count: r.star_count,
+          is_official: r.is_official
+        }))
+      }
+    } catch (e) {
+      return { ok: false as const, error: String(e), results: [] }
     }
   })
 
   ipcMain.handle(IPC.dockerGetTags, async (_e, image: string) => {
-    if (!image) return []
-    const parts = image.split('/')
-    const fullImage = parts.length === 1 ? `library/${image}` : image
     try {
+      if (!image) return { ok: true as const, tags: [] }
+      const parts = image.split('/')
+      const fullImage = parts.length === 1 ? `library/${image}` : image
       const url = `https://hub.docker.com/v2/repositories/${fullImage}/tags?page_size=100`
       const resp = await fetch(url)
-      if (!resp.ok) return []
+      if (!resp.ok) return { ok: false as const, error: `Registry returned ${resp.status}`, tags: [] }
       const data = (await resp.json()) as { results: Array<{ name: string }> }
-      return data.results.map(r => r.name)
-    } catch (err) {
-      console.error('Docker tags error:', err)
-      return []
+      return { ok: true as const, tags: data.results.map(r => r.name) }
+    } catch (e) {
+      return { ok: false as const, error: String(e), tags: [] }
     }
   })
 
@@ -1732,452 +1760,417 @@ function registerIpc(): void {
   ipcMain.handle(IPC.metrics, async () => await collectMetrics())
 
   ipcMain.handle(IPC.getHostPorts, async () => {
-    const hostPorts = await new Promise<HostPortRow[]>((resolve) => {
-      // Use 'ss -tunl' to get listening TCP/UDP ports
-      execFile('ss', ['-tunl', '-H'], (err, stdout) => {
-        if (err) {
-          // Fallback to netstat if ss fails
-          execFile('netstat', ['-tunl', '-W'], (err2, stdout2) => {
-            if (err2) return resolve([])
-            resolve(parseNetstat(stdout2))
-          })
-          return
-        }
-        resolve(parseSs(stdout))
+    try {
+      const hostPorts = await new Promise<HostPortRow[]>((resolve) => {
+        execFile('ss', ['-tunl', '-H'], (err, stdout) => {
+          if (err) {
+            execFile('netstat', ['-tunl', '-W'], (err2, stdout2) => {
+              if (err2) return resolve([])
+              resolve(parseNetstat(stdout2))
+            })
+            return
+          }
+          resolve(parseSs(stdout))
+        })
       })
-    })
-    const dockerPorts = await dockerPublishedHostPorts()
-    const merged = new Map<string, HostPortRow>()
-    for (const row of [...hostPorts, ...dockerPorts]) {
-      if (!Number.isFinite(row.port) || row.port <= 0) continue
-      const key = `${row.protocol}:${row.port}`
-      if (!merged.has(key)) merged.set(key, row)
+      const dockerPorts = await dockerPublishedHostPorts()
+      const merged = new Map<string, HostPortRow>()
+      for (const row of [...hostPorts, ...dockerPorts]) {
+        if (!Number.isFinite(row.port) || row.port <= 0) continue
+        const key = `${row.protocol}:${row.port}`
+        if (!merged.has(key)) merged.set(key, row)
+      }
+      return { ok: true as const, ports: [...merged.values()].sort((a, b) => a.port - b.port) }
+    } catch (e) {
+      return { ok: false as const, error: String(e), ports: [] }
     }
-    return [...merged.values()].sort((a, b) => a.port - b.port)
   })
 
   ipcMain.handle(IPC.monitorTopProcesses, async () => {
-    return await new Promise<TopProcessRow[]>((resolve) => {
-      execFile('ps', ['-eo', 'pid,comm,%cpu,%mem', '--sort=-%cpu'], (err, stdout) => {
-        if (err) {
-          resolve([])
-          return
-        }
-        const rows = stdout
-          .split('\n')
-          .slice(1)
-          .map((line) => line.trim())
-          .filter(Boolean)
-          .slice(0, 8)
-          .map((line) => {
-            const parts = line.split(/\s+/)
-            const pid = Number(parts[0] ?? 0)
-            const cpu = Number(parts[2] ?? 0)
-            const mem = Number(parts[3] ?? 0)
-            return {
-              pid,
-              command: parts[1] ?? 'unknown',
-              cpuPercent: Number.isFinite(cpu) ? cpu : 0,
-              memPercent: Number.isFinite(mem) ? mem : 0,
-            }
-          })
-          .filter((p) => p.pid > 0)
-        resolve(rows)
+    try {
+      const processes = await new Promise<TopProcessRow[]>((resolve) => {
+        execFile('ps', ['-eo', 'pid,comm,%cpu,%mem', '--sort=-%cpu'], (err, stdout) => {
+          if (err) return resolve([])
+          const rows = (stdout ?? '')
+            .split('\n')
+            .slice(1)
+            .map((l) => l.trim())
+            .filter(Boolean)
+            .slice(0, 8)
+            .map((line) => {
+              const parts = line.split(/\s+/)
+              const pid = Number(parts[0] ?? 0)
+              const cpu = Number(parts[2] ?? 0)
+              const mem = Number(parts[3] ?? 0)
+              return { pid, command: parts[1] ?? 'unknown', cpuPercent: isFinite(cpu) ? cpu : 0, memPercent: isFinite(mem) ? mem : 0 }
+            })
+            .filter((p) => p.pid > 0)
+          resolve(rows)
+        })
       })
-    })
+      return { ok: true as const, processes }
+    } catch (e) {
+      return { ok: false as const, error: String(e), processes: [] }
+    }
   })
 
   ipcMain.handle(IPC.monitorSecurity, async () => {
-    const execText = async (cmd: string): Promise<string> =>
-      await new Promise((resolve) => {
-        execFile('bash', ['-lc', cmd], (err, stdout) => {
-          if (err) resolve('')
-          else resolve((stdout ?? '').trim())
+    try {
+      const execText = async (cmd: string): Promise<string> =>
+        await new Promise((resolve) => {
+          execFile('bash', ['-lc', cmd], (err, stdout) => {
+            if (err) resolve('')
+            else resolve((stdout ?? '').trim())
+          })
+        })
+
+      const firewallRaw = await execText('command -v ufw >/dev/null 2>&1 && ufw status | head -n 1 || echo unknown')
+      const firewall: HostSecuritySnapshot['firewall'] = /active/i.test(firewallRaw) ? 'active' : /inactive/i.test(firewallRaw) ? 'inactive' : 'unknown'
+      const selinux = (await execText('command -v getenforce >/dev/null 2>&1 && getenforce || echo unavailable')) || 'unavailable'
+      const sshPermitRootLogin = (await execText("sshd -T 2>/dev/null | awk '/permitrootlogin/{print $2; exit}'")) || 'unknown'
+      const sshPasswordAuth = (await execText("sshd -T 2>/dev/null | awk '/passwordauthentication/{print $2; exit}'")) || 'unknown'
+      const failedAuthRaw = await execText("journalctl --since '24 hours ago' -u sshd --no-pager 2>/dev/null | rg -i 'failed password|invalid user|authentication failure' | wc -l")
+      const failedAuth24h = parseInt(failedAuthRaw || '0', 10) || 0
+
+      const hostPorts = await new Promise<HostPortRow[]>((resolve) => {
+        execFile('ss', ['-tunl', '-H'], (err, stdout) => {
+          if (err) resolve([])
+          else resolve(parseSs(stdout))
         })
       })
-
-    const firewallRaw = await execText('command -v ufw >/dev/null 2>&1 && ufw status | head -n 1 || echo unknown')
-    const firewall: HostSecuritySnapshot['firewall'] =
-      /active/i.test(firewallRaw) ? 'active' : /inactive/i.test(firewallRaw) ? 'inactive' : 'unknown'
-
-    const selinux = (await execText('command -v getenforce >/dev/null 2>&1 && getenforce || echo unavailable')) || 'unavailable'
-    const sshPermitRootLogin = (await execText("sshd -T 2>/dev/null | awk '/permitrootlogin/{print $2; exit}'")) || 'unknown'
-    const sshPasswordAuth = (await execText("sshd -T 2>/dev/null | awk '/passwordauthentication/{print $2; exit}'")) || 'unknown'
-    const failedAuthRaw = await execText("journalctl --since '24 hours ago' -u sshd --no-pager 2>/dev/null | rg -i 'failed password|invalid user|authentication failure' | wc -l")
-    const failedAuth24h = Number.parseInt(failedAuthRaw || '0', 10) || 0
-
-    const hostPorts = await new Promise<HostPortRow[]>((resolve) => {
-      execFile('ss', ['-tunl', '-H'], (err, stdout) => {
-        if (err) resolve([])
-        else resolve(parseSs(stdout))
-      })
-    })
-    const riskySet = new Set([21, 23, 2375, 3389, 5900])
-    const riskyOpenPorts = hostPorts.map((p) => p.port).filter((p) => riskySet.has(p))
-
-    const out: HostSecuritySnapshot = {
-      firewall,
-      selinux,
-      sshPermitRootLogin,
-      sshPasswordAuth,
-      failedAuth24h,
-      riskyOpenPorts: [...new Set(riskyOpenPorts)],
+      const riskySet = new Set([21, 23, 2375, 3389, 5900])
+      const riskyOpenPorts = hostPorts.map((p) => p.port).filter((p) => riskySet.has(p))
+        const snapshot: HostSecuritySnapshot = { firewall, selinux, sshPermitRootLogin, sshPasswordAuth, failedAuth24h, riskyOpenPorts }
+      return { ok: true as const, snapshot }
+    } catch (e) {
+      return { ok: false as const, error: String(e) }
     }
-    return out
   })
 
   ipcMain.handle(IPC.monitorSecurityDrilldown, async () => {
-    const failedAuthRaw = await new Promise<string>((resolve) => {
-      execFile(
-        'bash',
-        ['-lc', "journalctl --since '24 hours ago' -u sshd --no-pager 2>/dev/null | rg -i 'failed password|invalid user|authentication failure' | tail -n 8"],
-        (err, stdout) => {
+    try {
+      const failedAuthRaw = await new Promise<string>((resolve) => {
+        execFile('bash', ['-lc', "journalctl --since '48 hours ago' -u sshd --no-pager 2>/dev/null | rg -i 'failed password|invalid user|authentication failure' | tail -n 20"], (err, stdout) => {
           if (err) resolve('')
-          else resolve((stdout ?? '').trim())
-        }
-      )
-    })
-    const failedAuthSamples = failedAuthRaw ? failedAuthRaw.split('\n').map((l) => l.trim()).filter(Boolean) : []
-
-    const riskySet = new Set([21, 23, 2375, 3389, 5900])
-    const riskyPortOwners = await new Promise<Array<{ port: number; process: string; pid?: number }>>((resolve) => {
-      execFile('ss', ['-tulpn', '-H'], (err, stdout) => {
-        if (err) {
-          resolve([])
-          return
-        }
-        const out: Array<{ port: number; process: string; pid?: number }> = []
-        for (const line of stdout.split('\n').map((l) => l.trim()).filter(Boolean)) {
-          const parts = line.split(/\s+/)
-          const local = parts[4] ?? ''
-          const idx = local.lastIndexOf(':')
-          const port = Number.parseInt(idx >= 0 ? local.slice(idx + 1) : '', 10)
-          if (!Number.isFinite(port) || !riskySet.has(port)) continue
-          const m = line.match(/users:\(\("([^"]+)",pid=(\d+)/)
-          out.push({
-            port,
-            process: m?.[1] ?? 'unknown',
-            pid: m?.[2] ? Number.parseInt(m[2], 10) : undefined,
-          })
-        }
-        resolve(out)
+          else resolve(stdout ?? '')
+        })
       })
-    })
+      const failedAuthSamples = failedAuthRaw ? failedAuthRaw.split('\n').map((l) => l.trim()).filter(Boolean) : []
 
-    const response: HostSecurityDrilldown = {
-      failedAuthSamples,
-      riskyPortOwners,
+      const riskySet = new Set([21, 23, 2375, 3389, 5900])
+      const riskyPortOwners = await new Promise<Array<{ port: number; process: string; pid?: number }>>((resolve) => {
+        execFile('ss', ['-tulpn', '-H'], (err, stdout) => {
+          if (err) return resolve([])
+          const out: Array<{ port: number; process: string; pid?: number }> = []
+          for (const line of (stdout || '').split('\n').map((l) => l.trim()).filter(Boolean)) {
+            const parts = line.split(/\s+/)
+            const local = parts[4] ?? ''
+            const idx = local.lastIndexOf(':')
+            const port = parseInt(idx >= 0 ? local.slice(idx + 1) : '', 10)
+            if (!isFinite(port) || !riskySet.has(port)) continue
+            const m = line.match(/users:\(\("([^"]+)",pid=(\d+)/)
+            out.push({ port, process: m?.[1] ?? 'unknown', pid: m?.[2] ? parseInt(m[2], 10) : undefined })
+          }
+          resolve(out)
+        })
+      })
+      return { ok: true as const, drilldown: { failedAuthSamples, riskyPortOwners } }
+    } catch (e) {
+      return { ok: false as const, error: String(e) }
     }
-    return response
   })
 
-  ipcMain.handle(IPC.getHostSysInfo, async (): Promise<HostSysInfo> => {
-    const nets = os.networkInterfaces()
-    let ip = ''
-    for (const name of Object.keys(nets)) {
-      for (const net of nets[name] ?? []) {
-        if (net.family === 'IPv4' && !net.internal) {
-          ip = net.address
-          break
+  ipcMain.handle(IPC.getHostSysInfo, async () => {
+    try {
+      const nets = os.networkInterfaces()
+      let ip = ''
+      for (const name of Object.keys(nets)) {
+        for (const net of nets[name] ?? []) {
+          if (net.family === 'IPv4' && !net.internal) {
+            ip = net.address
+            break
+          }
         }
+        if (ip) break
       }
-      if (ip) break
-    }
 
-    // Attempt to gather more detailed info
-    let distro = ''
-    try {
-      const osRel = await readFile('/etc/os-release', 'utf8')
-      const match = osRel.match(/^PRETTY_NAME="?([^"\n]+)"?/m)
-      if (match) distro = match[1]
-    } catch { distro = `${os.type()} ${os.release()}` }
+      let distro = ''
+      try {
+        const osRel = await readFile('/etc/os-release', 'utf8')
+        const match = osRel.match(/^PRETTY_NAME="?([^"\n]+)"?/m)
+        if (match) distro = match[1]
+      } catch { distro = `${os.type()} ${os.release()}` }
 
-    let gpu = ''
-    try {
-      const { stdout } = await new Promise<{stdout: string}>(res => execFile('lspci', ['-v'], (err, stdout) => res({stdout})))
-      const match = stdout.match(/VGA compatible controller: (.+)/)
-      if (match) gpu = match[1].split(' (rev')[0]
-    } catch { gpu = 'Unknown' }
+      let gpu = ''
+      try {
+        const { stdout } = await new Promise<{stdout: string}>(res => execFile('lspci', ['-v'], (err, stdout) => res({stdout})))
+        const match = stdout.match(/VGA compatible controller: (.+)/)
+        if (match) gpu = match[1].split(' (rev')[0]
+      } catch { gpu = 'Unknown' }
 
-    let packages = ''
-    try {
-      const { stdout: rpmCount } = await new Promise<{stdout: string}>(res => execFile('rpm', ['-qa'], (err, stdout) => res({stdout})))
-      const { stdout: flatpakCount } = await new Promise<{stdout: string}>(res => execFile('flatpak', ['list'], (err, stdout) => res({stdout})))
-      packages = `${rpmCount.split('\n').filter(Boolean).length} (rpm), ${flatpakCount.split('\n').filter(Boolean).length} (flatpak)`
-    } catch { packages = 'Unknown' }
+      let packages = ''
+      try {
+        const { stdout: rpmCount } = await new Promise<{stdout: string}>(res => execFile('rpm', ['-qa'], (err, stdout) => res({stdout})))
+        const { stdout: flatpakCount } = await new Promise<{stdout: string}>(res => execFile('flatpak', ['list'], (err, stdout) => res({stdout})))
+        packages = `${(rpmCount || '').split('\n').filter(Boolean).length} (rpm), ${(flatpakCount || '').split('\n').filter(Boolean).length} (flatpak)`
+      } catch { packages = 'Unknown' }
 
-    let resolution = ''
-    try {
-      const { stdout } = await new Promise<{stdout: string}>(res => execFile('xdpyinfo', [], (err, stdout) => res({stdout})))
-      const match = stdout.match(/dimensions:\s+(\d+x\d+)/)
-      if (match) resolution = match[1]
-    } catch { resolution = 'Unknown' }
+      let resolution = ''
+      try {
+        const { stdout } = await new Promise<{stdout: string}>(res => execFile('xdpyinfo', [], (err, stdout) => res({stdout})))
+        const match = stdout.match(/dimensions:\s+(\d+x\d+)/)
+        if (match) resolution = match[1]
+      } catch { resolution = 'Unknown' }
 
-    return {
-      hostname: os.hostname(),
-      os: distro,
-      kernel: os.release(),
-      arch: os.arch(),
-      uptime: Math.round(os.uptime()),
-      ip,
-      distro,
-      shell: process.env.SHELL?.split('/').pop() || 'bash',
-      de: process.env.XDG_CURRENT_DESKTOP || 'Unknown',
-      wm: process.env.XDG_SESSION_DESKTOP || 'Unknown',
-      gpu,
-      memoryUsage: `${((os.totalmem() - os.freemem()) / (1024 ** 3)).toFixed(1)} GiB / ${(os.totalmem() / (1024 ** 3)).toFixed(1)} GiB`,
-      packages,
-      resolution
+      const info: HostSysInfo = { 
+        os: distro,
+        kernel: os.release(),
+        ip,
+        gpu,
+        packages,
+        hostname: os.hostname(),
+        resolution,
+        arch: os.arch(),
+        uptime: Math.round(os.uptime()),
+        shell: process.env.SHELL?.split('/').pop() || 'bash',
+        de: process.env.XDG_CURRENT_DESKTOP || 'Unknown',
+        wm: process.env.XDG_SESSION_DESKTOP || 'Unknown',
+        memoryUsage: `${((os.totalmem() - os.freemem()) / (1024 ** 3)).toFixed(1)} GiB / ${(os.totalmem() / (1024 ** 3)).toFixed(1)} GiB`,
+      }
+      return { ok: true as const, info }
+    } catch (e) {
+      return { ok: false as const, error: String(e) }
     }
   })
 
-  ipcMain.handle(IPC.runtimeStatus, async (): Promise<RuntimeStatusResponse> => {
-    const runtimeIds = Object.keys(RUNTIME_DETECT_COMMANDS)
-    const results = await Promise.all(
-      runtimeIds.map(async (id) => {
-        const probe = RUNTIME_DETECT_COMMANDS[id]
-        const status = await detectRuntimeInstallation(id, probe.cmd, probe.args)
-        return { id, name: probe.name, ...status }
-      })
-    )
-
-    return {
-      runtimes: results
+  ipcMain.handle(IPC.runtimeStatus, async () => {
+    try {
+      const runtimeIds = Object.keys(RUNTIME_DETECT_COMMANDS)
+      const results = await Promise.all(
+        runtimeIds.map(async (id) => {
+          const probe = RUNTIME_DETECT_COMMANDS[id]
+          const status = await detectRuntimeInstallation(id, probe.cmd, probe.args)
+          return { id, name: probe.name, ...status }
+        })
+      )
+      return { ok: true as const, runtimes: results }
+    } catch (e) {
+      return { ok: false as const, error: runtimeErrorString(e, 'Failed to detect runtimes.'), runtimes: [] }
     }
   })
 
   ipcMain.handle(IPC.runtimeGetVersions, async (_e, raw: unknown) => {
-    const payload = RuntimeGetVersionsRequestSchema.parse(raw ?? {})
-    const runtimeId = (payload?.runtimeId || 'unknown').toLowerCase()
-
     try {
-      if (runtimeId === 'node') return await fetchNodeVersionsForPicker()
-      if (runtimeId === 'go') return await fetchGoVersionsForPicker()
-      if (runtimeId === 'python') return await fetchPythonVersionsForPicker()
-      if (runtimeId === 'bun') return await fetchBunVersionsForPicker()
-      if (runtimeId === 'zig') {
-        const res = await fetch('https://ziglang.org/download/index.json').then((r) => r.json()) as Record<string, unknown>
-        const keys = Object.keys(res)
+      const payload = RuntimeGetVersionsRequestSchema.parse(raw ?? {})
+      const runtimeId = (payload?.runtimeId || 'unknown').toLowerCase()
+
+      let list: string[] = []
+      if (runtimeId === 'node') list = await fetchNodeVersionsForPicker()
+      else if (runtimeId === 'go') list = await fetchGoVersionsForPicker()
+      else if (runtimeId === 'python') list = await fetchPythonVersionsForPicker()
+      else if (runtimeId === 'bun') list = await fetchBunVersionsForPicker()
+      else if (runtimeId === 'zig') {
+        const res = (await fetch('https://ziglang.org/download/index.json').then((r) => r.json())) as Record<string, unknown>
+        list = Object.keys(res)
           .filter((k) => k !== 'master')
           .sort(compareSemverDesc)
-        return keys.slice(0, 60)
-      }
-      if (runtimeId === 'php') return await fetchEolLatestVersions('php', 55)
-      if (runtimeId === 'ruby') return await fetchEolLatestVersions('ruby', 45)
-      if (runtimeId === 'lua') return await fetchEolLatestVersions('lua', 35)
-      if (runtimeId === 'rust') {
+          .slice(0, 60)
+      } else if (runtimeId === 'php') list = await fetchEolLatestVersions('php', 55)
+      else if (runtimeId === 'ruby') list = await fetchEolLatestVersions('ruby', 45)
+      else if (runtimeId === 'lua') list = await fetchEolLatestVersions('lua', 35)
+      else if (runtimeId === 'rust') {
         const patch = await fetchEolLatestVersions('rust', 85)
-        return ['stable', 'beta', 'nightly', ...patch]
-      }
-      if (runtimeId === 'julia') return await fetchJuliaVersionsForPicker()
-      if (runtimeId === 'java') return await fetchJavaVersionsForPicker()
-      if (runtimeId === 'dotnet') return await fetchDotnetSdkVersionsForPicker()
-      if (runtimeId === 'dart') return await fetchDartSdkVersionsForPicker()
-      if (runtimeId === 'flutter') return await fetchFlutterLinuxVersionsForPicker()
-    } catch (e) {
-      console.warn(`Dynamic version list failed for ${runtimeId}, using static fallback.`, e)
-    }
+        list = ['stable', 'beta', 'nightly', ...patch]
+      } else if (runtimeId === 'julia') list = await fetchJuliaVersionsForPicker()
+      else if (runtimeId === 'java') list = await fetchJavaVersionsForPicker()
+      else if (runtimeId === 'dotnet') list = await fetchDotnetSdkVersionsForPicker()
+      else if (runtimeId === 'dart') list = await fetchDartSdkVersionsForPicker()
+      else if (runtimeId === 'flutter') list = await fetchFlutterLinuxVersionsForPicker()
 
-    const versions: Record<string, string[]> = {
-      node: ['22.12.0', '22.11.0', '20.18.0', '20.17.0', '18.20.4', '18.19.0', '16.20.2', '14.21.3', '12.22.12'],
-      python: ['3.14.0', '3.13.2', '3.12.8', '3.11.9', '3.10.14', '3.9.19', '3.8.18'],
-      go: ['1.24.0', '1.23.4', '1.22.6', '1.21.8', '1.20.14', '1.19.13', '1.18.10', '1.17.13'],
-      rust: [
-        'stable', 'beta', 'nightly',
-        '1.85.0', '1.84.0', '1.83.0', '1.82.0', '1.80.0', '1.75.0', '1.70.0', '1.65.0',
-      ],
-      bun: ['canary', '1.2.2', '1.1.42', '1.0.36', '1.0.30', '1.0.0'],
-      java: [
-        '25.0.1+8-LTS (LTS)', '24.0.2+12', '23.0.2+7', '22.0.2+9',
-        '21.0.11+10-LTS (LTS)', '17.0.13+11-LTS (LTS)', '11.0.25+9-LTS (LTS)', '8.0.432+6-LTS (LTS)',
-      ],
-      php: ['8.5.0', '8.4.5', '8.3.15', '8.2.27', '8.1.31', '8.0.30', '7.4.33'],
-      ruby: ['4.0.0', '3.4.2', '3.3.7', '3.2.6', '3.1.6', '3.0.7', '2.7.8'],
-      zig: ['0.14.0', '0.13.0', '0.12.1', '0.11.0', '0.10.1', '0.9.1'],
-      dotnet: [
-        '11.0 · SDK 11.0.100-preview · STS',
-        '10.0 · SDK 10.0.203 · LTS',
-        '9.0 · SDK 9.0.313 · STS',
-        '8.0 · SDK 8.0.420 · LTS',
-        '7.0 · SDK 7.0.410 · STS',
-        '6.0 · SDK 6.0.428 · LTS',
-        '3.1 · SDK 3.1.426 · LTS',
-      ],
-      c_cpp: [
-        '15.1', '15.0', '14.2', '14.1', '13.3', '13.2', '12.4', '12.3', '11.4', '10.5',
-      ],
-      matlab: ['9.4.0', '9.3.0', '9.2.0', '9.1.0', '8.4.0', '8.3.0', '8.2.0', '8.1.0', '7.4.0'],
-      dart: [
-        '3.8.1', '3.8.0', '3.7.2', '3.7.1', '3.7.0', '3.6.2', '3.6.1', '3.6.0', '3.5.4', '3.5.3', '3.5.2', '3.5.1', '3.5.0',
-        '3.4.4', '3.4.3', '3.4.2', '3.4.1', '3.4.0', '3.3.4', '3.3.3', '3.3.2', '3.3.1', '3.3.0', '3.2.6', '3.2.5', '3.2.4',
-        '3.1.5', '3.1.4', '3.1.3', '3.0.7', '3.0.6', '3.0.5',
-      ],
-      flutter: ['3.29.0', '3.27.0', '3.24.0', '3.22.0', '3.19.0', '3.16.0', '3.13.0', '3.10.0'],
-      julia: [
-        '1.12.0', '1.11.4', '1.11.3', '1.11.2', '1.11.1', '1.11.0', '1.10.5', '1.10.4', '1.10.3', '1.10.2', '1.10.1', '1.10.0',
-        '1.9.4', '1.9.3', '1.9.2', '1.9.1', '1.9.0', '1.8.5', '1.8.4', '1.8.3', '1.8.2', '1.8.1', '1.8.0', '1.7.3', '1.7.2', '1.7.1',
-        '1.6.7', '1.6.6', '1.6.5', '1.6.4', '1.6.3',
-      ],
-      lua: ['5.5.0', '5.4.8', '5.4.7', '5.3.6', '5.2.4', '5.1.5', '5.0.3'],
-      lisp: [
-        '2.5.5', '2.5.4', '2.5.3', '2.5.2', '2.5.1', '2.5.0',
-        '2.4.10', '2.4.9', '2.4.8', '2.4.7', '2.4.6', '2.4.5', '2.4.4', '2.4.3', '2.4.2', '2.4.1', '2.4.0',
-        '2.3.11', '2.3.10', '2.3.9', '2.3.8',
-      ],
+      if (list.length === 0) {
+        const fallbacks: Record<string, string[]> = {
+          node: ['22.12.0', '20.18.0', '18.20.4'],
+          python: ['3.13.2', '3.12.8', '3.11.9'],
+          go: ['1.24.0', '1.23.4'],
+          rust: ['stable', 'beta', 'nightly'],
+          bun: ['canary', '1.2.2'],
+        }
+        list = fallbacks[runtimeId] || ['latest']
+      }
+      return { ok: true as const, versions: list }
+    } catch (e) {
+      return { ok: false as const, error: runtimeErrorString(e, 'Failed to fetch versions.'), versions: ['latest'] }
     }
-    return versions[runtimeId] || ['latest']
   })
 
   ipcMain.handle('dh:runtime:check-deps', async (_e, raw: unknown) => {
-    const { execSync } = await import('node:child_process')
-    const payload = RuntimeCheckDepsRequestSchema.parse(raw ?? {})
-    const runtimeId = payload?.runtimeId ?? 'node'
-    const distro = detectHostDistroSync()
+    try {
+      const { execSync } = await import('node:child_process')
+      const payload = RuntimeCheckDepsRequestSchema.parse(raw ?? {})
+      const runtimeId = payload?.runtimeId ?? 'node'
+      const distro = detectHostDistroSync()
 
-    const check = (cmd: string) => {
-      try {
-        const out = execSync(`which ${cmd} 2>/dev/null`).toString().trim()
-        return !!out
-      } catch { return false }
-    }
-    const isPkgInstalled = (name: string) => {
-      try {
-        if (distro === 'fedora') execSync(`rpm -q ${name}`, { stdio: 'ignore' })
-        else if (distro === 'arch') execSync(`pacman -Q ${name}`, { stdio: 'ignore' })
-        else execSync(`dpkg -s ${name}`, { stdio: 'ignore' })
-        return true
-      } catch {
-        return false
+      const check = (cmd: string) => {
+        try {
+          const out = execSync(`which ${cmd} 2>/dev/null`).toString().trim()
+          return !!out
+        } catch { return false }
       }
+      const isPkgInstalled = (name: string) => {
+        try {
+          if (distro === 'fedora') execSync(`rpm -q ${name}`, { stdio: 'ignore' })
+          else if (distro === 'arch') execSync(`pacman -Q ${name}`, { stdio: 'ignore' })
+          else execSync(`dpkg -s ${name}`, { stdio: 'ignore' })
+          return true
+        } catch {
+          return false
+        }
+      }
+      const packages = (RUNTIME_DEP_PACKAGES[runtimeId] ?? RUNTIME_DEP_PACKAGES.node)[distro] ?? []
+      const installHint = distro === 'fedora'
+        ? `dnf install ${packages.join(' ')}`
+        : distro === 'arch'
+          ? `pacman -S --needed ${packages.join(' ')}`
+          : `apt-get install ${packages.join(' ')}`
+      const commandCheck = RUNTIME_DETECT_COMMANDS[runtimeId]?.cmd
+      const rows = packages.map((p) => ({
+        name: p,
+        ok: isPkgInstalled(p),
+        status: isPkgInstalled(p) ? 'Detected' : `Missing (${installHint})`,
+      }))
+      if (commandCheck) {
+        rows.push({
+          name: `${commandCheck} command`,
+          ok: check(commandCheck),
+          status: check(commandCheck) ? 'Detected' : 'Missing',
+        })
+      }
+      return { ok: true as const, dependencies: rows }
+    } catch (e) {
+      return { ok: false as const, error: runtimeErrorString(e, 'Failed to check dependencies.'), dependencies: [] }
     }
-    const packages = (RUNTIME_DEP_PACKAGES[runtimeId] ?? RUNTIME_DEP_PACKAGES.node)[distro] ?? []
-    const installHint = distro === 'fedora'
-      ? `dnf install ${packages.join(' ')}`
-      : distro === 'arch'
-        ? `pacman -S --needed ${packages.join(' ')}`
-        : `apt-get install ${packages.join(' ')}`
-    const commandCheck = RUNTIME_DETECT_COMMANDS[runtimeId]?.cmd
-    const rows = packages.map((p) => ({
-      name: p,
-      ok: isPkgInstalled(p),
-      status: isPkgInstalled(p) ? 'Detected' : `Missing (${installHint})`,
-    }))
-    if (commandCheck) {
-      rows.push({
-        name: `${commandCheck} command`,
-        ok: check(commandCheck),
-        status: check(commandCheck) ? 'Detected' : 'Missing',
-      })
-    }
-    return rows
   })
 
   ipcMain.handle('dh:runtime:uninstall:preview', async (_e, raw: unknown) => {
-    const payload = RuntimeUninstallPreviewRequestSchema.parse(raw)
-    const distro = detectHostDistroSync()
-    const runtimePackages = (RUNTIME_INSTALL_PACKAGES[payload.runtimeId]?.[distro] ?? []).filter(Boolean)
-    const plan = dependencyRemovalPlan(payload.runtimeId, distro)
-    const removableDeps = plan.removable
-    const finalPackages = payload.removeMode === 'runtime_and_deps'
-      ? [...new Set([...runtimePackages, ...removableDeps])]
-      : [...new Set(runtimePackages)]
-    let note: string | undefined
-    if (payload.runtimeId === 'bun' || payload.runtimeId === 'rust') {
-      note = 'This runtime may be installed via local script, so package list can be empty and local files are removed instead.'
+    try {
+      const payload = RuntimeUninstallPreviewRequestSchema.parse(raw)
+      const distro = detectHostDistroSync()
+      const runtimePackages = (RUNTIME_INSTALL_PACKAGES[payload.runtimeId]?.[distro] ?? []).filter(Boolean)
+      const plan = dependencyRemovalPlan(payload.runtimeId, distro)
+      const removableDeps = plan.removable
+      const finalPackages = payload.removeMode === 'runtime_and_deps'
+        ? [...new Set([...runtimePackages, ...removableDeps])]
+        : [...new Set(runtimePackages)]
+      let note: string | undefined
+      if (payload.runtimeId === 'bun' || payload.runtimeId === 'rust') {
+        note = 'This runtime may be installed via local script, so package list can be empty and local files are removed instead.'
+      }
+      return { ok: true as const, distro, runtimePackages, removableDeps, blockedSharedDeps: plan.blockedShared, finalPackages, note }
+    } catch (e) {
+      return { ok: false as const, error: runtimeErrorString(e, 'Failed to prepare uninstall preview.') }
     }
-    return { distro, runtimePackages, removableDeps, blockedSharedDeps: plan.blockedShared, finalPackages, note }
   })
 
   ipcMain.handle(IPC.hostExec, async (_e, raw: unknown) => {
-    const req = HostExecRequestSchema.parse(raw)
-    if (req.command === 'nvidia_smi_short') {
-      return await new Promise<string>((res) => {
-        execFile(
-          'nvidia-smi',
-          ['--query-gpu=name', '--format=csv,noheader'],
-          { timeout: 5000 },
-          (err, stdout) => {
+    try {
+      const req = HostExecRequestSchema.parse(raw)
+      if (req.command === 'nvidia_smi_short') {
+        const result = await new Promise<string>((res) => {
+          execFile('nvidia-smi', ['--query-gpu=name', '--format=csv,noheader'], { timeout: 5000 }, (err, stdout) => {
             if (err) res('GPU: unavailable')
             else res(stdout.trim() || 'GPU')
-          }
-        )
-      })
-    }
-    if (req.command === 'flatpak_spawn_echo') {
-      return 'flatpak-spawn: configure host helper for sandboxed metrics'
-    }
-    if (req.command === 'systemctl_is_active' && req.unit) {
-      const row = await systemdRow(req.unit.replace(/\.service$/, ''))
-      return row.state
-    }
-    if (req.command === 'docker_install_step') {
-      if (!req.distro && req.stepIndex !== undefined) throw new Error('Missing install distro')
-      if (req.distro === undefined || req.stepIndex === undefined) throw new Error('Missing install step payload')
-      const steps = DOCKER_INSTALL_STEPS[req.distro]
-      const command = steps[req.stepIndex]
-      if (!command) throw new Error('Invalid install step')
-      return await new Promise<{ ok: boolean; code: number | null; output: string }>((resolveExec) => {
-        execFile(
-          'pkexec',
-          ['bash', '-lc', command],
-          { maxBuffer: 1024 * 1024 * 8, timeout: 1000 * 60 * 20 },
-          (err, stdout, stderr) => {
+          })
+        })
+        return { ok: true as const, result }
+      }
+      if (req.command === 'flatpak_spawn_echo') {
+        return { ok: true as const, result: 'flatpak-spawn: configure host helper for sandboxed metrics' }
+      }
+      if (req.command === 'systemctl_is_active' && req.unit) {
+        const row = await systemdRow(req.unit.replace(/\.service$/, ''))
+        return { ok: true as const, result: row.state }
+      }
+      if (req.command === 'docker_install_step') {
+        if (!req.distro && req.stepIndex !== undefined) throw new Error('Missing install distro')
+        if (req.distro === undefined || req.stepIndex === undefined) throw new Error('Missing install step payload')
+        const steps = DOCKER_INSTALL_STEPS[req.distro]
+        const command = steps[req.stepIndex]
+        if (!command) throw new Error('Invalid install step')
+        const result = await new Promise<{ ok: boolean; code: number | null; output: string }>((resolveExec) => {
+          execFile('pkexec', ['bash', '-lc', command], { maxBuffer: 1024 * 1024 * 8, timeout: 1000 * 60 * 20 }, (err, stdout, stderr) => {
             const output = `${stdout ?? ''}${stderr ?? ''}`.trim()
-            if (err) {
-              const code = typeof (err as { code?: unknown }).code === 'number' ? ((err as { code: number }).code) : null
-              resolveExec({
-                ok: false,
-                code,
-                output: output || (err instanceof Error ? err.message : String(err)),
-              })
-              return
-            }
-            resolveExec({ ok: true, code: 0, output: output || 'Step completed successfully.' })
-          }
-        )
-      })
+            if (err) resolveExec({ ok: false, code: (err as { code?: number }).code ?? 1, output })
+            else resolveExec({ ok: true, code: 0, output: output || 'Step completed successfully.' })
+          })
+        })
+        return { ok: true as const, result }
+      }
+      return { ok: false as const, error: 'Unknown host command' }
+    } catch (e) {
+      return { ok: false as const, error: String(e) }
     }
-    throw new Error('Unsupported host command')
   })
 
   ipcMain.handle(IPC.composeUp, async (_e, raw: unknown) => {
-    const { profile } = ComposeUpRequestSchema.parse(raw)
-    const dir = profileComposeDir(profile)
-    return await new Promise<{ ok: boolean; log: string }>((resolveCompose) => {
-      const child = spawn('docker', ['compose', 'up', '-d'], {
-        cwd: dir,
-        env: { ...process.env },
+    try {
+      const { profile } = ComposeUpRequestSchema.parse(raw)
+      const dir = profileComposeDir(profile)
+      return await new Promise<{ ok: boolean; log: string; error?: string }>((resolveCompose) => {
+        const child = spawn('docker', ['compose', 'up', '-d'], {
+          cwd: dir,
+          env: { ...process.env },
+        })
+        let log = ''
+        child.stdout?.on('data', (d) => {
+          log += d.toString()
+        })
+        child.stderr?.on('data', (d) => {
+          log += d.toString()
+        })
+        child.on('error', (err) => {
+          resolveCompose({
+            ok: false,
+            log: log || String(err),
+            error: dockerErrorString(err, 'Compose up failed.'),
+          })
+        })
+        child.on('close', (code) => {
+          if (code === 0) {
+            resolveCompose({ ok: true, log: log || 'compose up completed' })
+            return
+          }
+          const detail = log || `exit ${code}`
+          resolveCompose({
+            ok: false,
+            log: detail,
+            error: dockerErrorString(new Error(detail), 'Compose up failed.'),
+          })
+        })
       })
-      let log = ''
-      child.stdout?.on('data', (d) => {
-        log += d.toString()
-      })
-      child.stderr?.on('data', (d) => {
-        log += d.toString()
-      })
-      child.on('error', (err) => {
-        resolveCompose({ ok: false, log: String(err) })
-      })
-      child.on('close', (code) => {
-        resolveCompose({ ok: code === 0, log: log || `exit ${code}` })
-      })
-    })
+    } catch (e) {
+      return { ok: false as const, log: '', error: dockerErrorString(e, 'Compose up failed.') }
+    }
   })
 
   ipcMain.handle(IPC.composeLogs, async (_e, raw: unknown) => {
-    const { profile } = ComposeUpRequestSchema.parse(raw)
-    const dir = profileComposeDir(profile)
-    return await new Promise<string>((res) => {
-      execFile(
-        'docker',
-        ['compose', 'logs', '--no-color', '--tail', '80'],
-        { cwd: dir, maxBuffer: 1024 * 1024 },
-        (err, stdout) => {
-          if (err) res(String(err))
-          else res(stdout ?? '')
-        }
-      )
-    })
+    try {
+      const { profile } = ComposeUpRequestSchema.parse(raw)
+      const dir = profileComposeDir(profile)
+      const log = await new Promise<string>((res, rej) => {
+        execFile(
+          'docker',
+          ['compose', 'logs', '--no-color', '--tail', '80'],
+          { cwd: dir, maxBuffer: 1024 * 1024 },
+          (err, stdout) => {
+            if (err) rej(err)
+            else res(stdout ?? '')
+          }
+        )
+      })
+      return { ok: true as const, log }
+    } catch (e) {
+      return { ok: false as const, error: String(e), log: '' }
+    }
   })
 
   ipcMain.handle(IPC.terminalCreate, (_e, payload: { cols: number; rows: number; cmd?: string; args?: string[] }) => {
@@ -2203,7 +2196,7 @@ function registerIpc(): void {
       })
       return { ok: true as const, id }
     } catch (e) {
-      return { ok: false as const, error: e instanceof Error ? e.message : String(e) }
+      return { ok: false as const, error: terminalErrorString(e, 'Failed to start terminal session.') }
     }
   })
 
@@ -2233,105 +2226,160 @@ function registerIpc(): void {
     for (const [cmd, ...rest] of order) {
       if (await trySpawn(cmd, [...rest])) return { ok: true }
     }
-    return { ok: false }
+    return {
+      ok: false as const,
+      error:
+        '[TERMINAL_NOT_FOUND] Could not spawn a host terminal. Install xdg-terminal-emulator, kitty, alacritty, gnome-terminal, or konsole.',
+    }
   })
 
   ipcMain.handle(IPC.gitClone, async (_e, raw: unknown) => {
-    const req = GitCloneRequestSchema.parse(raw)
-    const dir = assertAllowedWritePath(req.targetDir)
-    await simpleGit().clone(req.url, dir)
-    const recent = await loadRecentRepos()
-    const next: GitRepoEntry[] = [
-      { path: dir, lastOpened: Date.now() },
-      ...recent.filter((r) => r.path !== dir),
-    ]
-    await saveRecentRepos(next)
-    return { ok: true }
+    try {
+      const req = GitCloneRequestSchema.parse(raw)
+      const dir = assertAllowedWritePath(req.targetDir)
+      await simpleGit().clone(req.url, dir)
+      const recent = await loadRecentRepos()
+      const next: GitRepoEntry[] = [
+        { path: dir, lastOpened: Date.now() },
+        ...recent.filter((r) => r.path !== dir),
+      ]
+      await saveRecentRepos(next)
+      return { ok: true as const }
+    } catch (e) {
+      return { ok: false as const, error: gitErrorString(e, 'Git clone failed.') }
+    }
   })
 
   ipcMain.handle(IPC.gitStatus, async (_e, raw: unknown) => {
-    const req = GitStatusRequestSchema.parse(raw)
-    const repoPath = assertAllowedWritePath(req.repoPath)
-    const st = await simpleGit(repoPath).status()
-    return {
-      branch: st.current ?? 'unknown',
-      tracking: st.tracking,
-      ahead: st.ahead,
-      behind: st.behind,
-      modified: st.modified.length,
-      created: st.created.length,
-      deleted: st.deleted.length,
+    try {
+      const req = GitStatusRequestSchema.parse(raw)
+      const repoPath = assertAllowedWritePath(req.repoPath)
+      const st = await simpleGit(repoPath).status()
+      return {
+        ok: true as const,
+        info: {
+          branch: st.current ?? 'unknown',
+          tracking: st.tracking,
+          ahead: st.ahead,
+          behind: st.behind,
+          modified: st.modified.length,
+          created: st.created.length,
+          deleted: st.deleted.length,
+        },
+      }
+    } catch (e) {
+      return {
+        ok: false as const,
+        error: gitErrorString(e, 'Git status failed.'),
+        info: {
+          branch: 'unknown',
+          tracking: null,
+          ahead: 0,
+          behind: 0,
+          modified: 0,
+          created: 0,
+          deleted: 0,
+        },
+      }
     }
   })
 
-  ipcMain.handle(IPC.gitRecentList, async () => await loadRecentRepos())
+  ipcMain.handle(IPC.gitRecentList, async () => {
+    try {
+      const repos = await loadRecentRepos()
+      return { ok: true as const, repos }
+    } catch (e) {
+      return { ok: false as const, error: String(e), repos: [] }
+    }
+  })
 
   ipcMain.handle(IPC.gitRecentAdd, async (_e, raw: unknown) => {
-    const req = GitRecentAddSchema.parse(raw)
-    const repoPath = assertAllowedWritePath(req.path)
-    const recent = await loadRecentRepos()
-    const next = [{ path: repoPath, lastOpened: Date.now() }, ...recent.filter((r) => r.path !== repoPath)]
-    await saveRecentRepos(next)
-    return { ok: true }
+    try {
+      const req = GitRecentAddSchema.parse(raw)
+      const repoPath = assertAllowedWritePath(req.path)
+      const recent = await loadRecentRepos()
+      const next = [{ path: repoPath, lastOpened: Date.now() }, ...recent.filter((r) => r.path !== repoPath)]
+      await saveRecentRepos(next)
+      return { ok: true as const }
+    } catch (e) {
+      return { ok: false as const, error: gitErrorString(e, 'Failed to add recent repo.') }
+    }
   })
 
   ipcMain.handle(IPC.gitConfigSet, async (_e, raw: unknown) => {
-    const { name, email, defaultBranch, defaultEditor, target } = GitConfigSetSchema.parse(raw)
-    await execTarget(target, 'git', ['config', '--global', 'user.name', name])
-    await execTarget(target, 'git', ['config', '--global', 'user.email', email])
-    if (defaultBranch?.trim()) {
-      await execTarget(target, 'git', ['config', '--global', 'init.defaultBranch', defaultBranch.trim()])
+    try {
+      const { name, email, defaultBranch, defaultEditor, target } = GitConfigSetSchema.parse(raw)
+      await execTarget(target, 'git', ['config', '--global', 'user.name', name])
+      await execTarget(target, 'git', ['config', '--global', 'user.email', email])
+      if (defaultBranch?.trim()) {
+        await execTarget(target, 'git', ['config', '--global', 'init.defaultBranch', defaultBranch.trim()])
+      }
+      if (defaultEditor?.trim()) {
+        await execTarget(target, 'git', ['config', '--global', 'core.editor', defaultEditor.trim()])
+      }
+      return { ok: true as const }
+    } catch (e) {
+      return { ok: false as const, error: gitErrorString(e, 'Failed to set git config.') }
     }
-    if (defaultEditor?.trim()) {
-      await execTarget(target, 'git', ['config', '--global', 'core.editor', defaultEditor.trim()])
-    }
-    return { ok: true }
   })
 
   ipcMain.handle(IPC.gitConfigList, async (_e, raw: unknown) => {
-    const { target } = GitConfigListSchema.parse(raw)
-    const out = await execTarget(target, 'git', ['config', '--global', '--list'])
-    const rows = out
-      .split('\n')
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .map((line) => {
-        const i = line.indexOf('=')
-        if (i < 0) return { key: line, value: '' }
-        return { key: line.slice(0, i), value: line.slice(i + 1) }
-      })
-      .sort((a, b) => a.key.localeCompare(b.key))
-    return { ok: true, rows }
+    try {
+      const { target } = GitConfigListSchema.parse(raw)
+      const out = await execTarget(target, 'git', ['config', '--global', '--list'])
+      const rows = out
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .map((line) => {
+          const i = line.indexOf('=')
+          if (i < 0) return { key: line, value: '' }
+          return { key: line.slice(0, i), value: line.slice(i + 1) }
+        })
+        .sort((a, b) => a.key.localeCompare(b.key))
+      return { ok: true as const, rows }
+    } catch (e) {
+      return { ok: false as const, error: gitErrorString(e, 'Failed to list git config.'), rows: [] as Array<{ key: string; value: string }> }
+    }
   })
 
   ipcMain.handle(IPC.sshGenerate, async (_e, raw: unknown) => {
-    const { target, email } = SshGenerateSchema.parse(raw)
-    const sshDir = path.join(homedir(), '.ssh')
-    const keyPath = path.join(sshDir, 'id_ed25519')
-    const comment = email && email.trim() !== '' ? email.trim() : 'linux-dev-home'
-    
-    if (target === 'host') {
-      await execTarget('host', 'mkdir', ['-p', sshDir])
-      await execTarget('host', 'ssh-keygen', ['-t', 'ed25519', '-C', comment, '-N', '', '-f', keyPath])
-    } else {
-      await mkdir(sshDir, { recursive: true })
-      await execTarget('sandbox', 'ssh-keygen', ['-t', 'ed25519', '-C', comment, '-N', '', '-f', keyPath])
+    try {
+      const { target, email } = SshGenerateSchema.parse(raw)
+      const sshDir = path.join(homedir(), '.ssh')
+      const keyPath = path.join(sshDir, 'id_ed25519')
+      const comment = email && email.trim() !== '' ? email.trim() : 'linux-dev-home'
+      
+      if (target === 'host') {
+        await execTarget('host', 'mkdir', ['-p', sshDir])
+        await execTarget('host', 'ssh-keygen', ['-t', 'ed25519', '-C', comment, '-N', '', '-f', keyPath])
+      } else {
+        await mkdir(sshDir, { recursive: true })
+        await execTarget('sandbox', 'ssh-keygen', ['-t', 'ed25519', '-C', comment, '-N', '', '-f', keyPath])
+      }
+      return { ok: true as const }
+    } catch (e) {
+      return { ok: false as const, error: sshErrorString(e, 'Failed to generate SSH key.') }
     }
-    return { ok: true }
   })
 
   ipcMain.handle(IPC.sshGetPub, async (_e, raw: unknown) => {
-    const { target } = SshGetPubSchema.parse(raw)
-    const pubPath = path.join(homedir(), '.ssh', 'id_ed25519.pub')
     try {
+      const { target } = SshGetPubSchema.parse(raw)
+      const pubPath = path.join(homedir(), '.ssh', 'id_ed25519.pub')
+      
       let pub = ''
-      if (target === 'host') {
-        pub = (await execTarget('host', 'cat', [pubPath])).trim()
-      } else {
-        pub = (await readFile(pubPath, 'utf8')).trim()
+      try {
+        if (target === 'host') {
+          pub = (await execTarget('host', 'cat', [pubPath])).trim()
+        } else {
+          pub = (await readFile(pubPath, 'utf8')).trim()
+        }
+      } catch {
+        return { ok: false as const, error: '[SSH_NO_KEY] No public key found at standard location.', pub: '', fingerprint: '' }
       }
 
-      if (!pub) return null
+      if (!pub) return { ok: false as const, error: '[SSH_NO_KEY] Public key is empty.', pub: '', fingerprint: '' }
 
       // Get fingerprint: ssh-keygen -lf /path/to/key.pub
       let fingerprint = ''
@@ -2349,39 +2397,34 @@ function registerIpc(): void {
         fingerprint = 'Unknown fingerprint'
       }
 
-      return { pub, fingerprint }
-    } catch {
-      return null
+      return { ok: true as const, pub, fingerprint }
+    } catch (e) {
+      return { ok: false as const, error: sshErrorString(e, 'Failed to read SSH public key.'), pub: '', fingerprint: '' }
     }
   })
 
   ipcMain.handle(IPC.sshTestGithub, async (_e, raw: unknown) => {
-    const { target } = SshTestGithubSchema.parse(raw)
-    const isFlatpak = !!process.env.FLATPAK_ID
-    let cmd = 'ssh'
-    let args = ['-T', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10', 'git@github.com']
-    if (target === 'host' && isFlatpak) {
-      cmd = 'flatpak-spawn'
-      args = ['--host', 'ssh', ...args]
+    try {
+      const { target } = SshTestGithubSchema.parse(raw)
+      const isFlatpak = !!process.env.FLATPAK_ID
+      let cmd = 'ssh'
+      let args = ['-T', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10', 'git@github.com']
+      if (target === 'host' && isFlatpak) {
+        cmd = 'flatpak-spawn'
+        args = ['--host', 'ssh', ...args]
+      }
+
+      return await new Promise((resolve) => {
+        execFile(cmd, args, (err, stdout, stderr) => {
+          const out = (stdout + stderr).trim()
+          // GitHub returns code 1 on success for -T
+          const ok = out.includes('Hi') || out.includes('successfully authenticated')
+          resolve({ ok, output: out, code: err?.code ?? 0 })
+        })
+      })
+    } catch (e) {
+      return { ok: false as const, error: sshErrorString(e, 'GitHub test failed.'), output: '', code: -1 }
     }
-    return await new Promise<{ ok: boolean; output: string; code: number | null }>((resolveTest) => {
-      const child = spawn(cmd, args)
-      let out = ''
-      child.stdout.on('data', (d) => {
-        out += d.toString()
-      })
-      child.stderr.on('data', (d) => {
-        out += d.toString()
-      })
-      child.on('error', (err) => {
-        resolveTest({ ok: false, output: String(err), code: null })
-      })
-      child.on('close', (code) => {
-        const text = out.trim() || `exit ${code ?? 'unknown'}`
-        const ok = /successfully authenticated/i.test(text) || /hi .*github/i.test(text)
-        resolveTest({ ok, output: text, code: code ?? null })
-      })
-    })
   })
 
   ipcMain.handle(IPC.selectFolder, async () => {
@@ -2411,148 +2454,174 @@ function registerIpc(): void {
 
   // List files in a remote directory via SSH
   ipcMain.handle(IPC.sshListDir, async (_e, raw: unknown) => {
-    const { user, host, port, remotePath } = raw as { user: string; host: string; port: number; remotePath: string }
-    
-    // Expand ~/ to $HOME or relative . to avoid issues with quoted ~ in ls
-    let finalPath = remotePath
-    if (finalPath === '~' || finalPath === '~/') {
-      finalPath = '.'
-    } else if (finalPath.startsWith('~/')) {
-      finalPath = finalPath.replace(/^~\//, '')
-    }
-
-    return new Promise<{ ok: boolean; entries: string[]; error?: string }>((resolve) => {
-      execFile('ssh', [
-        '-p', String(port),
-        '-o', 'StrictHostKeyChecking=no',
-        '-o', 'BatchMode=yes',
-        '-o', 'ConnectTimeout=5',
-        `${user}@${host}`,
-        `ls -1a "${finalPath}"`,
-      ], { timeout: 8000 }, (err, stdout) => {
-        if (err) {
-          let msg = err.message
-          if (msg.includes('Permission denied')) {
-            msg += '\n\n💡 Tip: To use the File Browser, your SSH public key must be added to the server (authorized_keys). The browser does not support password auth yet.'
-          } else if (msg.includes('Connection timed out') || msg.includes('Connection refused')) {
-             msg += '\n\n💡 Tip: Make sure the server is running and the Port is correct.'
+    try {
+      const { user, host, port, path: finalPath } = z.object({
+        user: z.string().min(1).max(128),
+        host: z.string().min(1).max(256),
+        port: z.number().int().min(1).max(65535),
+        path: z.string().min(1).max(4096),
+      }).parse(raw)
+      return new Promise<{ ok: boolean; entries: string[]; error?: string }>((resolve) => {
+        execFile('ssh', [
+          '-p', String(port),
+          '-o', 'StrictHostKeyChecking=no',
+          '-o', 'BatchMode=yes',
+          '-o', 'ConnectTimeout=5',
+          `${user}@${host}`,
+          `ls -1a "${finalPath}"`,
+        ], { timeout: 8000 }, (err, stdout) => {
+          if (err) {
+            let msg = err.message
+            if (msg.includes('Permission denied')) {
+              msg += '\n\n💡 Tip: To use the File Browser, your SSH public key must be added to the server (authorized_keys). The browser does not support password auth yet.'
+            } else if (msg.includes('Connection timed out') || msg.includes('Connection refused')) {
+               msg += '\n\n💡 Tip: Make sure the server is running and the Port is correct.'
+            }
+            resolve({ ok: false, entries: [], error: msg })
+          } else {
+            const entries = stdout.split('\n').map(l => l.trim()).filter(Boolean)
+            resolve({ ok: true, entries })
           }
-          resolve({ ok: false, entries: [], error: msg })
-        } else {
-          const entries = stdout.split('\n').map(l => l.trim()).filter(Boolean)
-          resolve({ ok: true, entries })
-        }
+        })
       })
-    })
+    } catch (e) {
+      return { ok: false, entries: [], error: sshErrorString(e, 'Failed to list remote directory.') }
+    }
   })
 
   // Setup SSH key on a remote server with a password (GUI flow)
   ipcMain.handle(IPC.sshSetupRemoteKey, async (_e, raw: unknown) => {
-    const { user, host, port, password, publicKey } = z
-      .object({
-        user: z.string().min(1),
-        host: z.string().min(1),
-        port: z.number().int().min(1).max(65535),
-        password: z.string(),
-        publicKey: z.string().min(1),
-      })
-      .parse(raw)
-    const envVars: Record<string, string> = Object.fromEntries(
-      Object.entries(process.env).filter((entry): entry is [string, string] => typeof entry[1] === 'string')
-    )
-    return new Promise((resolve) => {
-      const ptyProcess = pty.spawn('ssh', [
-        '-p', String(port),
-        '-o', 'StrictHostKeyChecking=no',
-        '-o', 'PreferredAuthentications=password',
-        `${user}@${host}`,
-        `mkdir -p ~/.ssh && chmod 700 ~/.ssh && echo '${publicKey}' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys`
-      ], {
-        name: 'xterm-color',
-        cols: 80,
-        rows: 24,
-        cwd: homedir(),
-        env: envVars,
-      })
+    try {
+      const { user, host, port, password, publicKey } = z
+        .object({
+          user: z.string().min(1),
+          host: z.string().min(1),
+          port: z.number().int().min(1).max(65535),
+          password: z.string(),
+          publicKey: z.string().min(1),
+        })
+        .parse(raw)
+      const envVars: Record<string, string> = Object.fromEntries(
+        Object.entries(process.env).filter((entry): entry is [string, string] => typeof entry[1] === 'string')
+      )
+      return await new Promise((resolve) => {
+        const ptyProcess = pty.spawn('ssh', [
+          '-p', String(port),
+          '-o', 'StrictHostKeyChecking=no',
+          '-o', 'PreferredAuthentications=password',
+          `${user}@${host}`,
+          `mkdir -p ~/.ssh && chmod 700 ~/.ssh && echo '${publicKey.trim()}' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys`
+        ], {
+          name: 'xterm-color',
+          cols: 80,
+          rows: 24,
+          cwd: homedir(),
+          env: envVars,
+        })
 
-      let output = ''
-      let resolved = false
+        let output = ''
+        let resolved = false
 
-      ptyProcess.onData((data) => {
-        output += data
-        // Watch for password prompt
-        if (data.toLowerCase().includes('password:')) {
-          ptyProcess.write(password + '\n')
-        }
-      })
+        ptyProcess.onData((data) => {
+          output += data
+          // Watch for password prompt
+          if (data.toLowerCase().includes('password:')) {
+            ptyProcess.write(password + '\n')
+          }
+        })
 
-      ptyProcess.onExit(({ exitCode }) => {
-        if (resolved) return
-        resolved = true
-        if (exitCode === 0) {
-          resolve({ ok: true })
-        } else {
-          resolve({ ok: false, error: output || 'SSH command failed' })
-        }
-      })
-
-      // Safety timeout
-      setTimeout(() => {
-        if (!resolved) {
+        ptyProcess.onExit(({ exitCode }) => {
+          if (resolved) return
           resolved = true
-          ptyProcess.kill()
-          resolve({ ok: false, error: 'Connection timed out. Please check your host and password.' })
-        }
-      }, 20000)
-    })
+          if (exitCode === 0) {
+            resolve({ ok: true })
+          } else {
+            resolve({ ok: false, error: sshErrorString(new Error(output), 'Remote key setup failed.') })
+          }
+        })
+
+        // Safety timeout
+        setTimeout(() => {
+          if (!resolved) {
+            resolved = true
+            ptyProcess.kill()
+            resolve({ ok: false, error: '[SSH_TIMEOUT] Remote setup timed out after 30s.' })
+          }
+        }, 30000)
+      })
+    } catch (e) {
+      return { ok: false, error: sshErrorString(e, 'Failed to setup remote SSH key.') }
+    }
   })
 
   ipcMain.handle(IPC.sessionInfo, async () => getSessionInfo())
 
-  ipcMain.handle(IPC.layoutGet, async () => await readDashboardLayout())
+  ipcMain.handle(IPC.layoutGet, async () => {
+    try {
+      const layout = await readDashboardLayout()
+      return { ok: true as const, layout }
+    } catch (e) {
+      return { ok: false as const, layout: defaultDashboardLayout(), error: e instanceof Error ? e.message : String(e) }
+    }
+  })
 
   ipcMain.handle(IPC.layoutSet, async (_e, raw: unknown) => {
-    const layout = DashboardLayoutFileSchema.parse(raw)
-    await writeDashboardLayout(layout)
-    return { ok: true as const }
+    try {
+      const layout = DashboardLayoutFileSchema.parse(raw)
+      await writeDashboardLayout(layout)
+      return { ok: true as const }
+    } catch (e) {
+      return { ok: false as const, error: e instanceof Error ? e.message : String(e) }
+    }
   })
 
   ipcMain.handle(IPC.storeGet, async (_e, raw: unknown) => {
-    const { key } = StoreGetRequestSchema.parse(raw)
-    const storePath = path.join(app.getPath('userData'), `store_${key}.json`)
     try {
-      const content = await readFile(storePath, 'utf8')
-      const parsed = JSON.parse(content) as unknown
+      const { key } = StoreGetRequestSchema.parse(raw)
+      const storePath = path.join(app.getPath('userData'), `store_${key}.json`)
+      let data: unknown = null
+      try {
+        const content = await readFile(storePath, 'utf8')
+        data = JSON.parse(content)
+      } catch {
+        return { ok: true as const, data: null }
+      }
+
       if (key === 'custom_profiles') {
-        return CustomProfilesStoreSchema.parse(parsed)
+        return { ok: true as const, data: CustomProfilesStoreSchema.parse(data) }
       }
       if (key === 'wizard_state') {
-        return WizardStateStoreSchema.parse(parsed)
+        return { ok: true as const, data: WizardStateStoreSchema.parse(data) }
       }
       if (key === 'ssh_bookmarks') {
-        return z.array(z.object({
+        const schema = z.array(z.object({
           id: z.string(),
           name: z.string(),
           user: z.string(),
           host: z.string(),
           port: z.number().default(22),
-        })).parse(parsed)
+        }))
+        return { ok: true as const, data: schema.parse(data) }
       }
       if (key === 'maintenance_state') {
-        return MaintenanceStateStoreSchema.parse(parsed)
+        return { ok: true as const, data: MaintenanceStateStoreSchema.parse(data) }
       }
-      return null
-    } catch {
-      return null
+      return { ok: true as const, data: null }
+    } catch (e) {
+      return { ok: false as const, error: String(e), data: null }
     }
   })
 
   ipcMain.handle(IPC.storeSet, async (_e, raw: unknown) => {
-    const body = StoreSetRequestSchema.parse(raw)
-    const storePath = path.join(app.getPath('userData'), `store_${body.key}.json`)
-    await mkdir(app.getPath('userData'), { recursive: true })
-    await writeFile(storePath, JSON.stringify(body.data, null, 2))
-    return { ok: true }
+    try {
+      const body = StoreSetRequestSchema.parse(raw)
+      const storePath = path.join(app.getPath('userData'), `store_${body.key}.json`)
+      await mkdir(app.getPath('userData'), { recursive: true })
+      await writeFile(storePath, JSON.stringify(body.data, null, 2))
+      return { ok: true as const }
+    } catch (e) {
+      return { ok: false as const, error: String(e) }
+    }
   })
 
   ipcMain.handle(IPC.jobStart, async (_e, raw: unknown) => {

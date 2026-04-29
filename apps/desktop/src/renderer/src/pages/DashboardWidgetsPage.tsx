@@ -8,6 +8,7 @@ import { useWidgetLayout } from '../layout/WidgetLayoutContext'
 export function DashboardWidgetsPage(): ReactElement {
   const { layout, setLayout, removePlacement } = useWidgetLayout()
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   async function reorderWidgets(fromInstanceId: string, toInstanceId: string): Promise<void> {
     if (!layout) return
@@ -19,9 +20,15 @@ export function DashboardWidgetsPage(): ReactElement {
     placements.splice(toIndex, 0, moved)
     const next = { ...layout, placements }
     try {
-      await window.dh.layoutSet(next)
+      const res = await window.dh.layoutSet(next)
+      if (!res.ok) {
+        setSaveError(res.error || 'Failed to save dashboard layout.')
+        return
+      }
       setLayout(next)
+      setSaveError(null)
     } catch {
+      setSaveError('Failed to save dashboard layout.')
       // Keep UX resilient; user can still refresh the page to recover.
     }
   }
@@ -63,6 +70,7 @@ export function DashboardWidgetsPage(): ReactElement {
           Add widget
         </button>
       </div>
+      {saveError ? <div style={{ color: 'var(--orange)', fontSize: 13 }}>{saveError}</div> : null}
 
       {layout ? (
         <AddWidgetModal

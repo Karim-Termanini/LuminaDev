@@ -357,6 +357,16 @@ Use this template for every new issue discovered during development:
 - **Verification evidence:** desktop tests + smoke gate passing.
 - **Status:** resolved
 
+#### 2026-04 — Contract drift after IPC typing hardening
+- **Area:** UI contracts / Maintenance / Dashboard slices
+- **Symptom:** Multiple pages assumed legacy payload shapes after IPC return types were tightened.
+- **Root cause:** UI casts were not upgraded in the same pass as preload/renderer type definitions.
+- **Impact:** Typecheck failures and potential silent UX regressions when operations failed.
+- **Fix implemented:** Added slice-specific contract helpers (`dashboard/monitor/registry/runtime/terminal`) and replaced loose casts with explicit `ok/error` handling.
+- **Preventive action:** Any IPC signature change must include same-PR updates for main + preload + renderer + page-level contract test.
+- **Verification evidence:** desktop typecheck green and dedicated contract tests passing for each hardened slice.
+- **Status:** resolved
+
 ---
 
 ## 10) Maintenance rule for this file

@@ -1,6 +1,9 @@
 import { ComposeProfileSchema, type ComposeProfile, type ContainerRow, type HostMetricsResponse, type HostSecuritySnapshot, type JobSummary, type MaintenanceProfileHealth, type MaintenanceStateStore, type MaintenanceTask } from '@linux-dev-home/shared'
 import type { ReactElement } from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { humanizeDashboardError } from './dashboardError'
+import { humanizeDockerError } from './dockerError'
+import { humanizeRuntimeError } from './runtimeError'
 
 const CRON_HINTS = ['0 */6 * * *', '0 3 * * *', '30 2 * * 0']
 const OPS_COMMAND_TEMPLATES = [
@@ -67,26 +70,38 @@ export function MaintenancePage(): ReactElement {
   const refreshCleanupPreview = useCallback(async () => {
     try {
       const res = (await window.dh.dockerPrunePreview()) as {
-        ok: true
-        preview: { containers: number; images: number; volumes: number; networks: number }
+        ok: boolean
+        preview?: { containers: number; images: number; volumes: number; networks: number }
+        error?: string
       }
-      setCleanupPreview(res.preview)
-    } catch {
+      if (res.ok) {
+        setCleanupPreview(res.preview ?? null)
+      } else {
+        setCleanupPreview(null)
+        setStatus(humanizeDockerError(res.error))
+      }
+    } catch (e) {
+      setStatus(humanizeDockerError(e))
       setCleanupPreview(null)
     }
   }, [])
 
   const refreshLive = useCallback(async () => {
     try {
-      const m = (await window.dh.metrics()) as HostMetricsResponse
-      setMetrics(m)
-      const c = (await window.dh.dockerList()) as { ok: boolean; rows: ContainerRow[] }
+      const m = await window.dh.metrics()
+      if (m.ok) {
+        setMetrics(m)
+      } else {
+        setStatus(humanizeDashboardError(m.error))
+      }
+      const c = (await window.dh.dockerList()) as { ok: boolean; rows: ContainerRow[]; error?: string }
       if (c.ok) setContainers(c.rows)
+      else setStatus(humanizeDockerError(c.error))
       const j = (await window.dh.jobsList()) as JobSummary[]
-      setJobs(j)
+      setJobs(Array.isArray(j) ? j : [])
       await refreshCleanupPreview()
     } catch (e) {
-      setStatus(e instanceof Error ? e.message : String(e))
+      setStatus(humanizeDashboardError(e))
     }
   }, [refreshCleanupPreview])
 
@@ -95,8 +110,8 @@ export function MaintenancePage(): ReactElement {
     await Promise.all(
       SYSTEMD_UNITS.map(async (unit) => {
         try {
-          const res = (await window.dh.hostExec({ command: 'systemctl_is_active', unit })) as { ok: boolean; output?: string }
-          const out = (res.output ?? '').trim().toLowerCase()
+          const res = await window.dh.hostExec({ command: 'systemctl_is_active', unit })
+          const out = (res.ok ? String(res.result ?? '') : '').trim().toLowerCase()
           next[unit] = out.includes('active') ? 'active' : out ? 'inactive' : 'unknown'
         } catch {
           next[unit] = 'unknown'
@@ -108,12 +123,21 @@ export function MaintenancePage(): ReactElement {
 
   const refreshStatic = useCallback(async () => {
     try {
-      setSecurity(await window.dh.monitorSecurity())
-      const stored = (await window.dh.storeGet({ key: 'maintenance_state' })) as MaintenanceStateStore | null
-      setState(stored ?? { tasks: [], profileHealth: [], history: [] })
+      const sec = await window.dh.monitorSecurity()
+      setSecurity(sec.ok ? sec.snapshot : null)
+      if (!sec.ok && sec.error) {
+        setStatus(humanizeDashboardError(sec.error))
+      }
+      const stored = await window.dh.storeGet({ key: 'maintenance_state' })
+      if (stored.ok) {
+        setState((stored.data as MaintenanceStateStore | null) ?? { tasks: [], profileHealth: [], history: [] })
+      } else {
+        setState({ tasks: [], profileHealth: [], history: [] })
+        setStatus(stored.error || 'Failed to load maintenance state.')
+      }
       await refreshSystemdSnapshot()
     } catch (e) {
-      setStatus(e instanceof Error ? e.message : String(e))
+      setStatus(humanizeDashboardError(e))
     }
   }, [refreshSystemdSnapshot])
 
@@ -150,7 +174,8 @@ export function MaintenancePage(): ReactElement {
 
   async function checkProfileHealth(profile: ComposeProfile): Promise<void> {
     try {
-      const logs = ((await window.dh.composeLogs({ profile })) as string).toLowerCase()
+      const logsRes = await window.dh.composeLogs({ profile })
+      const logs = (logsRes.ok ? logsRes.log : logsRes.error || '').toLowerCase()
       const hasErrors = /error|failed|fatal/.test(logs)
       const health: MaintenanceProfileHealth['health'] = hasErrors ? 'degraded' : logs.trim().length === 0 ? 'unknown' : 'healthy'
       const nextEntry: MaintenanceProfileHealth = {
@@ -176,13 +201,15 @@ export function MaintenancePage(): ReactElement {
 
   async function runProfile(profile: ComposeProfile): Promise<void> {
     try {
-      const res = (await window.dh.composeUp({ profile })) as { ok: boolean; log: string }
+      const res = await window.dh.composeUp({ profile })
       const nextEntry: MaintenanceProfileHealth = {
         profile,
         health: res.ok ? 'healthy' : 'degraded',
         lastCheckedAtIso: new Date().toISOString(),
         lastRunAtIso: new Date().toISOString(),
-        note: res.ok ? 'Compose up succeeded.' : (res.log || 'Compose up returned non-zero.').slice(0, 280),
+        note: res.ok
+          ? 'Compose up succeeded.'
+          : (humanizeDockerError(res.error || res.log || 'Compose up returned non-zero.')).slice(0, 280),
       }
       const next = { ...state, profileHealth: [nextEntry, ...state.profileHealth.filter((x) => x.profile !== profile)].slice(0, 40) }
       await saveState(next)
@@ -195,8 +222,15 @@ export function MaintenancePage(): ReactElement {
   async function runCleanup(): Promise<void> {
     setBusyCleanup(true)
     try {
-      const res = (await window.dh.dockerCleanupRun(cleanupSelection)) as { ok: true; reclaimedBytes: number }
-      const mb = Math.round((res.reclaimedBytes / (1024 * 1024)) * 10) / 10
+      const res = (await window.dh.dockerCleanupRun(cleanupSelection)) as {
+        ok: boolean
+        reclaimedBytes?: number
+        error?: string
+      }
+      if (!res.ok) {
+        throw new Error(humanizeDockerError(res.error))
+      }
+      const mb = Math.round((((res.reclaimedBytes ?? 0) / (1024 * 1024)) * 10)) / 10
       setStatus(`Cleanup finished. Reclaimed ~${mb} MB.`)
       await appendHistory('docker.cleanup', 'success', 'Selected Docker cleanup executed.', mb)
       await refreshLive()
@@ -213,9 +247,16 @@ export function MaintenancePage(): ReactElement {
       await runCleanup()
     }
     if (recommendedSelection.refreshWidgets) {
-      const layout = await window.dh.layoutGet()
-      await window.dh.layoutSet(layout)
-      await appendHistory('widgets.refresh', 'success', 'Widget layout cache refreshed.')
+      const layoutRes = await window.dh.layoutGet()
+      if (layoutRes.ok) {
+        const saveRes = await window.dh.layoutSet(layoutRes.layout)
+        if (!saveRes.ok) {
+          throw new Error(saveRes.error || 'Failed to refresh widget layout cache.')
+        }
+        await appendHistory('widgets.refresh', 'success', 'Widget layout cache refreshed.')
+      } else {
+        throw new Error(layoutRes.error || 'Failed to load widget layout cache.')
+      }
     }
     if (recommendedSelection.clearCache) {
       await appendHistory('cache.cleanup.manual', 'warning', 'Use runbook command templates for host cache cleanup.')
@@ -283,40 +324,50 @@ export function MaintenancePage(): ReactElement {
         details: `docker=${docker.docker} compose=${docker.compose} buildx=${docker.buildx}`,
       })
 
-      const hostSec = (await window.dh.monitorSecurity()) as HostSecuritySnapshot
+      const hostSecRes = await window.dh.monitorSecurity()
+      const hostSec = hostSecRes.ok ? hostSecRes.snapshot : null
       checks.push({
         id: 'security',
         label: 'Security baseline',
-        ok: hostSec.firewall === 'active' && hostSec.sshPasswordAuth !== 'yes',
-        details: `firewall=${hostSec.firewall}, sshPasswordAuth=${hostSec.sshPasswordAuth}`,
+        ok: Boolean(hostSec && hostSec.firewall === 'active' && hostSec.sshPasswordAuth !== 'yes'),
+        details: hostSec
+          ? `firewall=${hostSec.firewall}, sshPasswordAuth=${hostSec.sshPasswordAuth}`
+          : hostSecRes.error || 'Security snapshot unavailable',
       })
 
-      const gitHost = (await window.dh.gitConfigList({ target: 'host' })) as { ok: boolean; rows: Array<{ key: string; value: string }> }
-      const hasName = (gitHost.rows ?? []).some((r) => r.key.toLowerCase() === 'user.name')
-      const hasEmail = (gitHost.rows ?? []).some((r) => r.key.toLowerCase() === 'user.email')
+      const gitHost = (await window.dh.gitConfigList({ target: 'host' })) as {
+        ok: boolean
+        rows: Array<{ key: string; value: string }>
+        error?: string
+      }
+      const rows = gitHost.ok ? (gitHost.rows ?? []) : []
+      const hasName = rows.some((r) => r.key.toLowerCase() === 'user.name')
+      const hasEmail = rows.some((r) => r.key.toLowerCase() === 'user.email')
       checks.push({
         id: 'git',
         label: 'Git identity',
         ok: hasName && hasEmail,
-        details: `user.name=${hasName} user.email=${hasEmail}`,
+        details: gitHost.ok ? `user.name=${hasName} user.email=${hasEmail}` : gitHost.error || 'Git config unavailable',
       })
 
       const sshHost = await window.dh.sshGetPub({ target: 'host' })
       checks.push({
         id: 'ssh',
         label: 'SSH key',
-        ok: Boolean(sshHost?.pub),
-        details: sshHost?.fingerprint ? `fingerprint=${sshHost.fingerprint}` : 'No host SSH key detected',
+        ok: Boolean(sshHost.ok && sshHost.pub),
+        details: sshHost.ok && sshHost.fingerprint ? `fingerprint=${sshHost.fingerprint}` : 'No host SSH key detected',
       })
 
-      const rt = (await window.dh.runtimeStatus()) as { runtimes: Array<{ id: string; installed: boolean }> }
+      const rt = await window.dh.runtimeStatus()
       const critical = ['node', 'python', 'rust']
-      const installedCount = critical.filter((id) => rt.runtimes.some((r) => r.id === id && r.installed)).length
+      const installedCount = rt.ok
+        ? critical.filter((id) => rt.runtimes.some((r) => r.id === id && r.installed)).length
+        : 0
       checks.push({
         id: 'runtimes',
         label: 'Core runtimes',
         ok: installedCount >= 2,
-        details: `${installedCount}/3 core runtimes installed`,
+        details: rt.ok ? `${installedCount}/3 core runtimes installed` : humanizeRuntimeError(rt.error),
       })
 
       setDiagnostics(checks)

@@ -10,9 +10,11 @@ export function GuardianSummaryWidget(): ReactElement {
   useEffect(() => {
     async function fetchData() {
       try {
-        const m = await window.dh.metrics() as HostMetricsResponse
-        const s = await window.dh.monitorSecurity() as HostSecuritySnapshot
+        const m = await window.dh.metrics() as HostMetricsResponse & { ok: boolean; error?: string }
+        const sRes = await window.dh.monitorSecurity() as { ok: boolean; snapshot: HostSecuritySnapshot; error?: string }
         await window.dh.dockerList() as { ok: boolean, rows: ContainerRow[] }
+        if (!m.ok || !sRes.ok) return
+        const s = sRes.snapshot
         
         // Simple score calculation logic (mirroring MaintenancePage)
         let sCore = 100
