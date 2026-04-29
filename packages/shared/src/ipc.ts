@@ -198,6 +198,7 @@ export const IPC = {
   runtimeGetVersions: 'dh:runtime:get-versions',
   runtimeCheckDeps: 'dh:runtime:check-deps',
   runtimeUninstallPreview: 'dh:runtime:uninstall:preview',
+  diagnosticsBundleCreate: 'dh:diagnostics:bundle:create',
 } as const
 
 export type DockerActionPayload = { id: string; action: DockerContainerAction }

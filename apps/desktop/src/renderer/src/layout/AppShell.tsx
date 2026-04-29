@@ -17,6 +17,7 @@ const nav = [
   { to: '/profiles', label: 'Profiles', icon: 'account' },
   { to: '/terminal', label: 'Terminal', icon: 'terminal' },
   { to: '/runtimes', label: 'Runtimes', icon: 'zap' },
+  { to: '/maintenance', label: 'Maintenance', icon: 'shield' },
 ] as const
 
 export function AppShell({ children }: { children: ReactNode }): ReactElement {

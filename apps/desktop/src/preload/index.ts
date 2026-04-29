@@ -76,6 +76,7 @@ export type DhApi = {
   getAvailableVersions: (runtimeId: string) => Promise<string[]>
   checkDependencies: (runtimeId: string) => Promise<Array<{ name: string; status: string; ok: boolean }>>
   runtimeUninstallPreview: (payload: { runtimeId: string; removeMode: 'runtime_only' | 'runtime_and_deps' }) => Promise<{ distro: string; runtimePackages: string[]; removableDeps: string[]; blockedSharedDeps: string[]; finalPackages: string[]; note?: string }>
+  diagnosticsBundleCreate: (payload: { report: unknown; includeSensitive?: boolean }) => Promise<{ ok: boolean; path?: string; error?: string }>
 }
 
 const api: DhApi = {
@@ -159,6 +160,7 @@ const api: DhApi = {
   getAvailableVersions: (runtimeId) => ipcRenderer.invoke(IPC.runtimeGetVersions, { runtimeId }),
   checkDependencies: (runtimeId) => ipcRenderer.invoke(IPC.runtimeCheckDeps, { runtimeId }),
   runtimeUninstallPreview: (payload) => ipcRenderer.invoke(IPC.runtimeUninstallPreview, payload),
+  diagnosticsBundleCreate: (payload) => ipcRenderer.invoke(IPC.diagnosticsBundleCreate, payload),
 }
 
 contextBridge.exposeInMainWorld('dh', api)

@@ -11,6 +11,8 @@ const titles: Record<string, string> = {
   '/registry': 'Registry',
   '/profiles': 'Profiles',
   '/terminal': 'Terminal',
+  '/runtimes': 'Runtimes',
+  '/maintenance': 'Maintenance',
 }
 
 function screenTitle(pathname: string): string {

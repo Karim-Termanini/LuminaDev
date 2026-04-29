@@ -92,8 +92,45 @@ export const WizardStateStoreSchema = z.object({
   showOnStartup: z.boolean().optional().default(false),
 })
 
+export const MaintenanceTaskSchema = z.object({
+  id: z.string().uuid(),
+  title: z.string().trim().min(1).max(160),
+  done: z.boolean(),
+  cronHint: z.string().trim().max(200).optional(),
+  commandHint: z.string().trim().max(400).optional(),
+  updatedAtIso: z.string().datetime(),
+})
+
+export const MaintenanceProfileHealthSchema = z.object({
+  profile: ComposeProfileSchema,
+  health: z.enum(['healthy', 'degraded', 'offline', 'unknown']),
+  lastCheckedAtIso: z.string().datetime().optional(),
+  lastRunAtIso: z.string().datetime().optional(),
+  note: z.string().max(300).optional(),
+})
+
+export const MaintenanceStateStoreSchema = z.object({
+  tasks: z.array(MaintenanceTaskSchema).max(100).default([]),
+  profileHealth: z.array(MaintenanceProfileHealthSchema).max(40).default([]),
+  history: z
+    .array(
+      z.object({
+        id: z.string().uuid(),
+        atIso: z.string().datetime(),
+        action: z.string().min(1).max(120),
+        result: z.enum(['success', 'warning', 'failed']),
+        note: z.string().max(400).optional(),
+        reclaimedMb: z.number().min(0).max(1_000_000).optional(),
+      })
+    )
+    .max(200)
+    .default([]),
+  lastMaintenanceAtIso: z.string().datetime().optional(),
+  reminderDays: z.number().int().min(1).max(60).optional(),
+})
+
 /** Keys with typed payloads persisted under userData (`store_<key>.json`). */
-export const StoreKeySchema = z.enum(['custom_profiles', 'wizard_state', 'ssh_bookmarks'])
+export const StoreKeySchema = z.enum(['custom_profiles', 'wizard_state', 'ssh_bookmarks', 'maintenance_state'])
 
 export const StoreGetRequestSchema = z.object({
   key: StoreKeySchema,
@@ -117,6 +154,10 @@ export const StoreSetRequestSchema = z.discriminatedUnion('key', [
       host: z.string(),
       port: z.number().default(22),
     })),
+  }),
+  z.object({
+    key: z.literal('maintenance_state'),
+    data: MaintenanceStateStoreSchema,
   }),
 ])
 export const ComposeUpRequestSchema = z.object({
@@ -167,6 +208,9 @@ export type DockerVolumeAction = z.infer<typeof DockerVolumeActionSchema>
 export type DockerNetworkAction = z.infer<typeof DockerNetworkActionSchema>
 export type ComposeProfile = z.infer<typeof ComposeProfileSchema>
 export type CustomProfileEntry = z.infer<typeof CustomProfileEntrySchema>
+export type MaintenanceTask = z.infer<typeof MaintenanceTaskSchema>
+export type MaintenanceProfileHealth = z.infer<typeof MaintenanceProfileHealthSchema>
+export type MaintenanceStateStore = z.infer<typeof MaintenanceStateStoreSchema>
 export type StoreKey = z.infer<typeof StoreKeySchema>
 export type StoreGetRequest = z.infer<typeof StoreGetRequestSchema>
 export type StoreSetRequest = z.infer<typeof StoreSetRequestSchema>

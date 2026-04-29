@@ -45,6 +45,13 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
     minCols: 2,
     ipcHints: [],
   },
+  {
+    typeId: 'guardian.summary',
+    title: 'Guardian Status',
+    description: 'High-level system health and maintenance summary.',
+    minCols: 1,
+    ipcHints: ['dh:metrics', 'dh:monitor:security', 'dh:job:list'],
+  },
 ] as const
 
 const allowed = new Set(WIDGET_DEFINITIONS.map((w) => w.typeId))

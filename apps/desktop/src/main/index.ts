@@ -9,6 +9,7 @@ import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell } from 'electro
 import Docker from 'dockerode'
 import pty from 'node-pty'
 import simpleGit from 'simple-git'
+import yazl from 'yazl'
 import { z } from 'zod'
 
 import {
@@ -31,6 +32,7 @@ import {
   IPC,
   JobCancelRequestSchema,
   JobStartRequestSchema,
+  MaintenanceStateStoreSchema,
   WizardStateStoreSchema,
   defaultDashboardLayout,
   isRegisteredWidgetType,
@@ -697,6 +699,30 @@ function getSessionInfo(): SessionInfo {
     kind: 'native',
     summary: 'Native session: the app runs with your user permissions; system-wide changes may still need sudo or PolicyKit.',
   }
+}
+
+function redactSensitive(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map((v) => redactSensitive(v))
+  if (value && typeof value === 'object') {
+    const out: Record<string, unknown> = {}
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      const lower = k.toLowerCase()
+      if (
+        lower.includes('password') ||
+        lower.includes('token') ||
+        lower.includes('secret') ||
+        lower.includes('fingerprint') ||
+        lower.includes('privatekey') ||
+        lower.includes('publickey')
+      ) {
+        out[k] = '[REDACTED]'
+      } else {
+        out[k] = redactSensitive(v)
+      }
+    }
+    return out
+  }
+  return value
 }
 
 async function readDashboardLayout(): Promise<DashboardLayoutFile> {
@@ -2441,6 +2467,9 @@ function registerIpc(): void {
           port: z.number().default(22),
         })).parse(parsed)
       }
+      if (key === 'maintenance_state') {
+        return MaintenanceStateStoreSchema.parse(parsed)
+      }
       return null
     } catch {
       return null
@@ -2892,6 +2921,68 @@ function registerIpc(): void {
       }, 1500)
     }
     return { ok: true as const }
+  })
+
+  ipcMain.handle(IPC.diagnosticsBundleCreate, async (_e, raw: unknown) => {
+    const body = z.object({ report: z.unknown(), includeSensitive: z.boolean().optional().default(false) }).parse(raw)
+    const now = new Date().toISOString().replace(/[:.]/g, '-')
+    const outDir = path.join(app.getPath('downloads'), 'LuminaDev')
+    await mkdir(outDir, { recursive: true })
+    const outPath = path.join(outDir, `lumina-support-bundle-${now}.zip`)
+
+    const zip = new yazl.ZipFile()
+    const addJson = (name: string, value: unknown): void => {
+      zip.addBuffer(Buffer.from(JSON.stringify(value, null, 2), 'utf8'), name)
+    }
+
+    const includeSensitive = body.includeSensitive === true
+    const maybeRedact = (value: unknown): unknown => (includeSensitive ? value : redactSensitive(value))
+
+    addJson('report.json', maybeRedact(body.report))
+    addJson('jobs.json', maybeRedact([...jobs.values()].map((j) => jobToSummary(j))))
+    addJson('session.json', maybeRedact(getSessionInfo()))
+    try {
+      addJson('metrics.json', maybeRedact(await collectMetrics()))
+    } catch {
+      addJson('metrics.json', { error: 'metrics unavailable' })
+    }
+
+    const userData = app.getPath('userData')
+    const knownStoreFiles = [
+      'dashboard-layout.json',
+      'store_custom_profiles.json',
+      'store_wizard_state.json',
+      'store_maintenance_state.json',
+    ]
+    for (const filename of knownStoreFiles) {
+      const absolute = path.join(userData, filename)
+      if (!fs.existsSync(absolute)) continue
+      try {
+        const rawFile = await readFile(absolute, 'utf8')
+        if (includeSensitive) {
+          zip.addBuffer(Buffer.from(rawFile, 'utf8'), `userData/${filename}`)
+        } else {
+          try {
+            const parsed = JSON.parse(rawFile) as unknown
+            zip.addBuffer(Buffer.from(JSON.stringify(redactSensitive(parsed), null, 2), 'utf8'), `userData/${filename}`)
+          } catch {
+            zip.addBuffer(Buffer.from('[REDACTED_NON_JSON_CONTENT]', 'utf8'), `userData/${filename}`)
+          }
+        }
+      } catch {
+        /* skip unreadable bundle file */
+      }
+    }
+
+    await new Promise<void>((resolve, reject) => {
+      const out = fs.createWriteStream(outPath)
+      out.on('close', () => resolve())
+      out.on('error', reject)
+      zip.outputStream.pipe(out)
+      zip.end()
+    })
+
+    return { ok: true as const, path: outPath }
   })
 
   ipcMain.handle('dh:openExternal', async (_e, url: string) => {
