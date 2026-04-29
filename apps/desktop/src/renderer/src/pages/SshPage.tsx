@@ -414,6 +414,10 @@ export function SshPage(): ReactElement {
           <p style={{ color: 'var(--text-muted)', marginTop: 10 }}>
             Configure your local identity and manage your remote connections securely.
           </p>
+          <p style={{ color: 'var(--text-muted)', marginTop: 8, fontSize: 13 }}>
+            Flatpak note: if SSH key/files are inaccessible, grant access to `~/.ssh` for the app (for example with
+            `flatpak override --user --filesystem=~/.ssh io.github.karimodora.LinuxDevHome`).
+          </p>
         </header>
 
         {/* SSH Identity Wizard Section */}

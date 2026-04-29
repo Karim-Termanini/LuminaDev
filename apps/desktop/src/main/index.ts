@@ -87,9 +87,41 @@ type JobRecord = {
   cancelRequested: boolean
   timer?: ReturnType<typeof setInterval>
   proc?: ReturnType<typeof spawn>
+  /** Wall-clock start for time-based progress floor (long host installs). */
+  progressStartedAtMs?: number
+  lastStreamProgressAtMs?: number
 }
 
 const jobs = new Map<string, JobRecord>()
+
+/**
+ * Stream-based progress bumps are throttled and mixed with a slow time spine so
+ * noisy stdout cannot jump to 95% in the first seconds of a multi-minute install.
+ */
+function createJobStreamProgress(job: JobRecord, opts?: { spineMs?: number; minGapMs?: number; cap?: number }): {
+  bump: (delta: number) => void
+} {
+  const t0 = Date.now()
+  job.progressStartedAtMs = t0
+  const spineMs = opts?.spineMs ?? 120_000
+  const minGapMs = opts?.minGapMs ?? 420
+  const cap = opts?.cap ?? 94
+  return {
+    bump(delta: number) {
+      const now = Date.now()
+      const spine = Math.min(87, Math.floor(((now - t0) / spineMs) * 87))
+      const last = job.lastStreamProgressAtMs ?? 0
+      const aheadOfSpine = job.progress > spine + 4
+      if (aheadOfSpine && now - last < minGapMs) {
+        job.progress = Math.min(cap, Math.max(job.progress, spine))
+        return
+      }
+      job.lastStreamProgressAtMs = now
+      const d = Math.max(0, Math.round(delta))
+      job.progress = Math.min(cap, Math.max(job.progress + d, spine))
+    },
+  }
+}
 
 const DOCKER_INSTALL_STEPS: Record<'ubuntu' | 'fedora' | 'arch', string[]> = {
   ubuntu: [
@@ -801,7 +833,7 @@ async function runSmokeTest(runtimeId: string, cmd: string): Promise<{ ok: boole
   }
 
   const code = testCodes[runtimeId]
-  if (!code) return { ok: true, output: 'No smoke test defined for this runtime.' }
+  if (!code) return { ok: true, output: `[smoke:${runtimeId}] skipped (no harness)` }
 
   return new Promise((resolve) => {
     let process: ReturnType<typeof spawn>
@@ -814,9 +846,13 @@ async function runSmokeTest(runtimeId: string, cmd: string): Promise<{ ok: boole
        const binFile = path.join(tmpdir(), `test_${randomUUID()}`)
        fs.writeFileSync(tmpFile, code)
        execFile('rustc', [tmpFile, '-o', binFile], (err) => {
-         if (err) return resolve({ ok: false, output: `Build failed: ${err.message}` })
+         if (err) return resolve({ ok: false, output: `[smoke:rust] build failed: ${err.message}` })
          execFile(binFile, (err2, stdout) => {
-            resolve({ ok: !err2 && stdout.trim() === 'ok', output: stdout.trim() })
+            const out = stdout.trim()
+            resolve({
+              ok: !err2 && out === 'ok',
+              output: err2 ? `[smoke:rust] run failed: ${err2.message}` : `[smoke:rust] ${out}`,
+            })
          })
        })
        return
@@ -835,9 +871,13 @@ async function runSmokeTest(runtimeId: string, cmd: string): Promise<{ ok: boole
     let out = ''
     process.stdout?.on('data', (d) => (out += d.toString()))
     process.on('close', (code) => {
-      resolve({ ok: code === 0 && out.trim().includes('ok'), output: out.trim() })
+      const tail = out.trim()
+      resolve({
+        ok: code === 0 && tail.includes('ok'),
+        output: `[smoke:${runtimeId}] exit=${code ?? 'n/a'} out=${tail.slice(0, 120)}`,
+      })
     })
-    process.on('error', (err) => resolve({ ok: false, output: err.message }))
+    process.on('error', (err) => resolve({ ok: false, output: `[smoke:${runtimeId}] ${err.message}` }))
   })
 }
 
@@ -2476,8 +2516,15 @@ function registerIpc(): void {
       jobs.set(id, job)
       const proc = spawn('pkexec', ['bash', '-lc', `${installCommands[distro]} ${packages.join(' ')}`], { shell: false })
       job.proc = proc
-      proc.stdout.on('data', (d) => { job.log.push(d.toString().trim()); job.progress = Math.min(95, job.progress + 2) })
-      proc.stderr.on('data', (d) => { job.log.push(d.toString().trim()) })
+      const pt = createJobStreamProgress(job)
+      proc.stdout.on('data', (d) => {
+        job.log.push(d.toString().trim())
+        pt.bump(1)
+      })
+      proc.stderr.on('data', (d) => {
+        job.log.push(d.toString().trim())
+        pt.bump(1)
+      })
       proc.on('close', (c) => {
         delete job.proc
         if (job.cancelRequested) {
@@ -2557,11 +2604,12 @@ function registerIpc(): void {
       if (command) {
         const proc = spawn(command, args, { shell: false })
         job.proc = proc
+        const pt = createJobStreamProgress(job)
         proc.stdout.on('data', (data) => {
           const s = data.toString().trim()
           if (s) {
             job.log.push(s)
-            job.progress = Math.min(95, job.progress + 2)
+            pt.bump(1)
           }
         })
         proc.stderr.on('data', (data) => {
@@ -2569,7 +2617,7 @@ function registerIpc(): void {
           if (s) {
             const isError = /error|failed|denied|not found/i.test(s)
             job.log.push(isError ? `[ERR] ${s}` : s)
-            job.progress = Math.min(95, job.progress + 1)
+            pt.bump(1)
           }
         })
         proc.on('close', async (code) => {
@@ -2669,8 +2717,21 @@ function registerIpc(): void {
 
       const proc = spawn(command, args, { shell: false })
       job.proc = proc
-      proc.stdout.on('data', (d) => { const s = d.toString().trim(); if (s) { job.log.push(s); job.progress = Math.min(95, job.progress + 2) } })
-      proc.stderr.on('data', (d) => { const s = d.toString().trim(); if (s) { job.log.push(s); job.progress = Math.min(95, job.progress + 1) } })
+      const ptUpdate = createJobStreamProgress(job)
+      proc.stdout.on('data', (d) => {
+        const s = d.toString().trim()
+        if (s) {
+          job.log.push(s)
+          ptUpdate.bump(1)
+        }
+      })
+      proc.stderr.on('data', (d) => {
+        const s = d.toString().trim()
+        if (s) {
+          job.log.push(s)
+          ptUpdate.bump(1)
+        }
+      })
       proc.on('close', async (code) => {
         delete job.proc
         if (job.cancelRequested) {
@@ -2754,8 +2815,21 @@ function registerIpc(): void {
 
       const proc = spawn(command, args, { shell: false })
       job.proc = proc
-      proc.stdout.on('data', (d) => { const s = d.toString().trim(); if (s) { job.log.push(s); job.progress = Math.min(95, job.progress + 2) } })
-      proc.stderr.on('data', (d) => { const s = d.toString().trim(); if (s) { job.log.push(s); job.progress = Math.min(95, job.progress + 1) } })
+      const ptUn = createJobStreamProgress(job)
+      proc.stdout.on('data', (d) => {
+        const s = d.toString().trim()
+        if (s) {
+          job.log.push(s)
+          ptUn.bump(1)
+        }
+      })
+      proc.stderr.on('data', (d) => {
+        const s = d.toString().trim()
+        if (s) {
+          job.log.push(s)
+          ptUn.bump(1)
+        }
+      })
       proc.on('close', async (code) => {
         delete job.proc
         if (job.cancelRequested) {

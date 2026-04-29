@@ -17,6 +17,16 @@ type GithubCommitResponse = {
   }
 }
 
+type MonitorTabId = 'overview' | 'processes' | 'docker' | 'disk' | 'network'
+
+const MONITOR_TABS: Array<{ id: MonitorTabId; label: string; anchorId: string }> = [
+  { id: 'overview', label: 'Overview', anchorId: 'monitor-overview' },
+  { id: 'processes', label: 'Processes', anchorId: 'monitor-processes' },
+  { id: 'docker', label: 'Docker', anchorId: 'monitor-docker' },
+  { id: 'disk', label: 'Disk', anchorId: 'monitor-disk' },
+  { id: 'network', label: 'Network', anchorId: 'monitor-network' },
+]
+
 export function MonitorPage(): ReactElement {
   const [metrics, setMetrics] = useState<HostMetricsResponse | null>(null)
   const [ports, setPorts] = useState<HostPortRow[]>([])
@@ -29,6 +39,7 @@ export function MonitorPage(): ReactElement {
   const [security, setSecurity] = useState<HostSecuritySnapshot | null>(null)
   const [securityDrilldown, setSecurityDrilldown] = useState<HostSecurityDrilldown | null>(null)
   const [copiedReport, setCopiedReport] = useState(false)
+  const [activeTab, setActiveTab] = useState<MonitorTabId>('overview')
 
   const refreshLive = useCallback(async () => {
     try {
@@ -145,6 +156,14 @@ export function MonitorPage(): ReactElement {
     }
   }
 
+  function jumpToTab(tab: MonitorTabId): void {
+    setActiveTab(tab)
+    const entry = MONITOR_TABS.find((t) => t.id === tab)
+    if (!entry) return
+    const node = document.getElementById(entry.anchorId)
+    node?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24, paddingBottom: 40 }}>
       <header>
@@ -152,8 +171,29 @@ export function MonitorPage(): ReactElement {
         <p style={{ color: 'var(--text-muted)', marginTop: 8 }}>Real-time system health and development activity.</p>
       </header>
 
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+        {MONITOR_TABS.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => jumpToTab(tab.id)}
+            style={{
+              border: '1px solid var(--border)',
+              background: activeTab === tab.id ? 'rgba(124,77,255,0.2)' : 'var(--bg-input)',
+              color: activeTab === tab.id ? 'var(--accent)' : 'var(--text)',
+              borderRadius: 8,
+              padding: '8px 12px',
+              fontWeight: 700,
+              cursor: 'pointer',
+            }}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
       {/* Primary Metrics Row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 20 }}>
+      <div id="monitor-overview" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 20 }}>
         <MetricCard title="CPU LOAD" value={m ? `${m.cpuUsagePercent.toFixed(1)}%` : '—'} subValue={m?.cpuModel}>
           <LiveLineChart data={cpuHistory} color="var(--accent)" height={60} />
         </MetricCard>
@@ -184,7 +224,7 @@ export function MonitorPage(): ReactElement {
       </div>
 
       {/* Network Activity */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 20 }}>
+      <div id="monitor-network" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 20 }}>
         <MetricCard title="NETWORK ACTIVITY" value={`${m?.netRxMbps.toFixed(2) ?? '0.00'} Mbps`} subValue="Downlink / Uplink traffic">
           <div style={{ border: '1px solid var(--border)', borderRadius: 10, background: 'rgba(255,255,255,0.02)', padding: 10 }}>
             <NetworkChart data={netHistory} height={120} />
@@ -203,7 +243,7 @@ export function MonitorPage(): ReactElement {
       </div>
 
       {/* Engineering Hub Row - 2 Columns */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: 20 }}>
+      <div id="monitor-docker" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: 20 }}>
         <MetricCard title="ACTIVE PORTS (LISTEN)" value={`${listeningPorts}`} subValue="Open listening sockets" titleColor="#66bb6a" valueColor="#81c784">
           <div style={{ maxHeight: 300, overflow: 'auto', marginTop: 10 }}>
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 10 }}>
@@ -480,7 +520,7 @@ export function MonitorPage(): ReactElement {
       </div>
 
       {/* Disk / Processes with Alerts under Disk */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: 20, alignItems: 'start' }}>
+      <div id="monitor-disk" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: 20, alignItems: 'start' }}>
         <div style={{ display: 'grid', gap: 20 }}>
           <MetricCard title="DISK I/O LIVE" value={`${m?.diskReadMbps.toFixed(2) ?? '0.00'} Mbps`} subValue="Read / Write throughput" titleColor="#80cbc4" valueColor="#80cbc4">
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
@@ -508,7 +548,8 @@ export function MonitorPage(): ReactElement {
           </MetricCard>
         </div>
 
-        <MetricCard title="TOP PROCESSES" subValue="Highest CPU consumers" minHeight={378} titleColor="#ffd54f">
+        <div id="monitor-processes">
+          <MetricCard title="TOP PROCESSES" subValue="Highest CPU consumers" minHeight={378} titleColor="#ffd54f">
           <div style={{ maxHeight: 322, overflow: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
               <thead>
@@ -531,7 +572,8 @@ export function MonitorPage(): ReactElement {
               </tbody>
             </table>
           </div>
-        </MetricCard>
+          </MetricCard>
+        </div>
       </div>
     </div>
   )

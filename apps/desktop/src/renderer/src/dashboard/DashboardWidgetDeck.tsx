@@ -6,6 +6,7 @@ import { Link } from 'react-router-dom'
 export function DashboardWidgetDeck(props: {
   layout: DashboardLayoutFile
   onRemove: (instanceId: string) => void
+  onReorder?: (fromInstanceId: string, toInstanceId: string) => void
   /** `comfortable` = shell rail under top bar (larger type + min card width). */
   density?: 'compact' | 'comfortable'
   heading?: string
@@ -44,6 +45,7 @@ export function DashboardWidgetDeck(props: {
             placement={p}
             comfortable={comfortable}
             onRemove={() => props.onRemove(p.instanceId)}
+            onReorder={props.onReorder}
           />
         ))}
       </div>
@@ -55,6 +57,7 @@ function WidgetTile(props: {
   placement: DashboardPlacement
   comfortable: boolean
   onRemove: () => void
+  onReorder?: (fromInstanceId: string, toInstanceId: string) => void
 }): ReactElement {
   const c = props.comfortable
   const fs = (t: number) => (c ? t + 2 : t)
@@ -112,6 +115,24 @@ function WidgetTile(props: {
 
   return (
     <article
+      draggable={Boolean(props.onReorder)}
+      onDragStart={(e) => {
+        if (!props.onReorder) return
+        e.dataTransfer.setData('text/widget-instance-id', props.placement.instanceId)
+        e.dataTransfer.effectAllowed = 'move'
+      }}
+      onDragOver={(e) => {
+        if (!props.onReorder) return
+        e.preventDefault()
+        e.dataTransfer.dropEffect = 'move'
+      }}
+      onDrop={(e) => {
+        if (!props.onReorder) return
+        e.preventDefault()
+        const from = e.dataTransfer.getData('text/widget-instance-id')
+        if (!from || from === props.placement.instanceId) return
+        props.onReorder(from, props.placement.instanceId)
+      }}
       style={{
         background: 'var(--bg-widget)',
         border: '1px solid var(--border)',

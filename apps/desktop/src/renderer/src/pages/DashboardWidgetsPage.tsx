@@ -9,6 +9,23 @@ export function DashboardWidgetsPage(): ReactElement {
   const { layout, setLayout, removePlacement } = useWidgetLayout()
   const [pickerOpen, setPickerOpen] = useState(false)
 
+  async function reorderWidgets(fromInstanceId: string, toInstanceId: string): Promise<void> {
+    if (!layout) return
+    const fromIndex = layout.placements.findIndex((p) => p.instanceId === fromInstanceId)
+    const toIndex = layout.placements.findIndex((p) => p.instanceId === toInstanceId)
+    if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return
+    const placements = [...layout.placements]
+    const [moved] = placements.splice(fromIndex, 1)
+    placements.splice(toIndex, 0, moved)
+    const next = { ...layout, placements }
+    try {
+      await window.dh.layoutSet(next)
+      setLayout(next)
+    } catch {
+      // Keep UX resilient; user can still refresh the page to recover.
+    }
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24, maxWidth: 1200 }}>
       <header>
@@ -19,7 +36,9 @@ export function DashboardWidgetsPage(): ReactElement {
         <p style={{ color: 'var(--text-muted)', marginTop: 8, maxWidth: 720, fontSize: 15, lineHeight: 1.55 }}>
           This page is only for pinned dashboard widgets (tips, quick links, placeholders). Use{' '}
           <span style={{ fontWeight: 600, color: 'var(--text)' }}>Main</span> in the top bar for compose profiles and
-          host overview.
+          host overview.{' '}
+          <strong style={{ color: 'var(--text)' }}>Layout:</strong> drag a widget card and drop it on another card to
+          reorder. Add and remove widgets from the grid below.
         </p>
       </header>
 
@@ -58,6 +77,7 @@ export function DashboardWidgetsPage(): ReactElement {
         <DashboardWidgetDeck
           layout={layout}
           onRemove={(id) => void removePlacement(id)}
+          onReorder={(fromId, toId) => void reorderWidgets(fromId, toId)}
           density="comfortable"
           heading="Pinned widgets"
         />

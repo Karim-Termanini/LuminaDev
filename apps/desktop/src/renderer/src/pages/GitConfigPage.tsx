@@ -8,6 +8,31 @@ type GitConfigRow = {
   value: string
 }
 
+function validateGitForm(input: {
+  name: string
+  email: string
+  defaultBranch: string
+  defaultEditor: string
+}): { ok: true } | { ok: false; messages: string[] } {
+  const messages: string[] = []
+  const name = input.name.trim()
+  const email = input.email.trim()
+  const branch = input.defaultBranch.trim()
+  const editor = input.defaultEditor.trim()
+  if (!name) messages.push('Name is required.')
+  if (!email) messages.push('Email is required.')
+  else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) messages.push('Email looks invalid (expect user@domain.tld).')
+  if (branch) {
+    if (branch.length > 200) messages.push('Default branch name is too long.')
+    if (/\s/.test(branch)) messages.push('Default branch should not contain whitespace.')
+    if (branch.includes('..') || /[~^:?*[\]\\]/.test(branch)) {
+      messages.push('Default branch contains characters Git discourages in ref names (~ ^ : ? * [ ] \\ or ..).')
+    }
+  }
+  if (editor && editor.length > 500) messages.push('Editor command is unusually long; double-check before applying.')
+  return messages.length ? { ok: false, messages } : { ok: true }
+}
+
 const SENSITIVE_KEYS = new Set([
   'user.password',
   'user.signingkey',
@@ -28,6 +53,7 @@ export function GitConfigPage(): ReactElement {
   const [defaultEditor, setDefaultEditor] = useState('')
   const [rows, setRows] = useState<GitConfigRow[]>([])
   const [status, setStatus] = useState('')
+  const [validation, setValidation] = useState<string[]>([])
   const [search, setSearch] = useState('')
   const [sortKey, setSortKey] = useState<'key' | 'value'>('key')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
@@ -63,11 +89,26 @@ export function GitConfigPage(): ReactElement {
     void loadConfig()
   }, [loadConfig])
 
+  function runValidate(): boolean {
+    const res = validateGitForm({ name, email, defaultBranch, defaultEditor })
+    if (res.ok) {
+      setValidation([])
+      setStatus('Validation passed. You can apply or adjust further.')
+      return true
+    }
+    setValidation(res.messages)
+    setStatus('')
+    return false
+  }
+
   async function applyConfig(): Promise<void> {
-    if (!name.trim() || !email.trim()) {
-      setStatus('Name and email are required.')
+    const res = validateGitForm({ name, email, defaultBranch, defaultEditor })
+    if (!res.ok) {
+      setValidation(res.messages)
+      setStatus('Fix validation errors or run Validate to see details.')
       return
     }
+    setValidation([])
     setBusy(true)
     setStatus('')
     try {
@@ -137,7 +178,7 @@ export function GitConfigPage(): ReactElement {
   }
 
   const statusTone =
-    status.toLowerCase().includes('saved')
+    status.toLowerCase().includes('saved') || status.toLowerCase().includes('validation passed')
       ? 'success'
       : status
         ? 'warning'
@@ -236,7 +277,10 @@ export function GitConfigPage(): ReactElement {
         </div>
       </section>
 
-      <section className="hp-card">
+      <section className="hp-card hp-row-wrap" style={{ gap: 10 }}>
+        <button type="button" className="hp-btn" onClick={() => runValidate()} disabled={busy}>
+          Validate
+        </button>
         <button
           type="button"
           className="hp-btn hp-btn-primary"
@@ -246,6 +290,17 @@ export function GitConfigPage(): ReactElement {
           Apply Configuration
         </button>
       </section>
+
+      {validation.length > 0 ? (
+        <div className="hp-status-alert warning" role="alert">
+          <span style={{ fontSize: 18 }}>⚠</span>
+          <ul style={{ margin: 0, paddingLeft: 18 }}>
+            {validation.map((m) => (
+              <li key={m}>{m}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
 
       <section className="hp-card">
         <div className="hp-row-wrap" style={{ justifyContent: 'space-between', marginBottom: 12 }}>
