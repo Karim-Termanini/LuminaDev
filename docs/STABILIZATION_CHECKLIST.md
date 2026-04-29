@@ -109,3 +109,36 @@ Stabilization is considered complete only when:
 1. Items **1, 2, 3, 5** are marked `done` with evidence.
 2. Item **4** remains enforced throughout and does not regress.
 3. `pnpm smoke` is green at the final checkpoint.
+
+---
+
+## Tauri Pre-Release Migration Track (active)
+
+- **Status:** `in_progress`
+- **Scope:** Replace Electron runtime shell with Tauri before first public release while preserving existing behavior.
+- **Stage 0 (baseline + freeze):** `done`
+- **Stage 1 (Tauri skeleton + API bridge):** `done`
+- **Stage 2 (Rust-native backend port):** `in_progress` — Docker/Git/SSH/Monitor/Runtimes still routed through Node bridge (Agent A)
+- **Stage 3 (renderer parity + UX preservation):** `done`
+- **Stage 4 (packaging + CI + Flatpak):** `in_progress`
+- **Stage 5 (release gate):** `open`
+
+- **Stage 1 evidence:**
+  - Tauri app scaffold: `apps/desktop/src-tauri/*`
+  - Renderer transport bridge: `apps/desktop/src/renderer/src/api/desktopApiBridge.ts`
+  - Node-backed parity bridge: `apps/desktop/scripts/tauri-ipc-bridge.mjs`
+  - `pnpm smoke` passed on 2026-04-29
+
+- **Stage 3 evidence (Agent B, 2026-04-29):**
+  - Renderer parity: all 63 `window.dh.*` call sites across 8 pages verified against bridge — no missing methods
+  - Two bugs fixed in bridge init path:
+    - `isTauriRuntime` guard was missing `()` — fixed
+    - `DashboardLayoutFile` missing import in `vite-env.d.ts` — fixed
+  - UX regression audit: all polish batches (1–5) confirmed intact
+  - CI hardened: Rust toolchain + cache added to `native-linux-build` job; `stabilization/*` + `agent-*` branches added to CI triggers
+  - `pnpm typecheck` passed; `pnpm smoke` passed
+
+- **Open release gate blocker:**
+  - Stage 2 (Rust-native port) not complete — all Docker/Git/SSH/Monitor channels still via `invoke_node_bridge()` (Node spawn per call)
+  - local `cargo check` still needs Linux WebKitGTK/Soup/JSC packages; mitigated in CI
+  - blocker fully tracked in `docs/APP_CREATION_PLAYBOOK.md`

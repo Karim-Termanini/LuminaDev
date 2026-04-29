@@ -367,6 +367,36 @@ Use this template for every new issue discovered during development:
 - **Verification evidence:** desktop typecheck green and dedicated contract tests passing for each hardened slice.
 - **Status:** resolved
 
+#### 2026-04-29 — isTauriRuntime guard not called (desktopApiBridge)
+- **Area:** Renderer / IPC bridge / Tauri migration
+- **Symptom:** `ensureDesktopApi()` skipped its "are we in Tauri?" check, causing Tauri IPC to be injected in non-Tauri contexts (web-only dev build).
+- **Root cause:** Guard was `if (!isTauriRuntime)` (function ref check) instead of `if (!isTauriRuntime())` (call).
+- **Impact:** In pure web build context (`dev:web`), all `window.dh.*` calls would throw Tauri invoke errors instead of failing gracefully. No impact in Electron (preload sets `window.dh` before renderer runs) or production Tauri build.
+- **Fix implemented:** Changed to `isTauriRuntime()` in `apps/desktop/src/renderer/src/api/desktopApiBridge.ts`.
+- **Preventive action:** Guard functions in bridge init paths must always be called with `()`.
+- **Verification evidence:** typecheck and smoke gate green.
+- **Status:** resolved
+
+#### 2026-04-29 — Missing DashboardLayoutFile import in vite-env.d.ts
+- **Area:** TypeScript types / renderer declarations
+- **Symptom:** `DashboardLayoutFile` used in `Window.dh` interface definition without import.
+- **Root cause:** Type added to `layoutGet` signature without adding the corresponding import from `@linux-dev-home/shared`.
+- **Impact:** Ambient type resolution masked the missing import; TypeScript accepted it but the pattern is fragile and breaks explicitly typed builds.
+- **Fix implemented:** Added `DashboardLayoutFile` to the import in `apps/desktop/src/renderer/src/vite-env.d.ts`.
+- **Preventive action:** Any type used in `vite-env.d.ts` declarations must be explicitly imported.
+- **Verification evidence:** typecheck green after fix.
+- **Status:** resolved
+
+#### 2026-04-29 — CI native-linux-build missing Rust toolchain
+- **Area:** CI / Tauri build
+- **Symptom:** `native-linux-build` job ran `pnpm --filter desktop build:tauri` without installing Rust, causing `cargo` not found error.
+- **Root cause:** Rust toolchain setup was not added when the Tauri build job was created.
+- **Impact:** `native-linux-build` CI job would fail on every run.
+- **Fix implemented:** Added `dtolnay/rust-toolchain@stable` and `Swatinem/rust-cache@v2` steps to `native-linux-build` in `.github/workflows/ci.yml`.
+- **Preventive action:** Any CI job that invokes `cargo` must include a Rust toolchain setup step.
+- **Verification evidence:** CI workflow updated; Rust step confirmed present.
+- **Status:** resolved
+
 ---
 
 ## 10) Maintenance rule for this file
@@ -490,3 +520,52 @@ This file is a living engineering memory, not static documentation.
 - Evidence:
   - no behavioral logic changed; UI-only refinements on existing flows
   - typography and contrast updates localized to renderer theme/page components
+
+### Tauri migration kickoff (pre-release freeze)
+
+- Decision:
+  - before first public release, migrate runtime shell from Electron to Tauri
+  - prioritize lower RAM footprint and faster startup while preserving all current product surfaces
+- Freeze rule (active):
+  - no new feature expansion during migration
+  - only migration, parity fixes, tests, CI, packaging, and docs evidence updates
+- Baseline reference (source of truth to preserve behavior):
+  - `apps/desktop/src/main/index.ts`
+  - `apps/desktop/src/preload/index.ts`
+  - `packages/shared/src/ipc.ts`
+- Initial implementation completed:
+  - added `src-tauri` shell scaffold (Rust entrypoint + Tauri config + capabilities)
+  - added renderer `desktopApiBridge` to keep `window.dh` API stable under Tauri runtime
+  - added command dispatcher (`ipc_invoke` / `ipc_send`) with deterministic error fallback for not-yet-ported channels
+- Migration evidence rule:
+  - each channel/slice moved from `TAURI_NOT_IMPLEMENTED` to active implementation must include test or smoke evidence and playbook update in the same batch
+- Evidence snapshot (this batch):
+  - `pnpm smoke` passed after adding Tauri bridge + renderer transport wiring
+  - `vite build --config apps/desktop/vite.renderer.config.ts` passed and produced `apps/desktop/out/renderer`
+  - `apps/desktop/scripts/tauri-ipc-bridge.mjs dh:runtime:status` executed successfully and returned structured runtime payload
+- Environment blocker captured:
+  - local `cargo check` for `src-tauri` failed on missing system packages:
+    - `webkit2gtk-4.1`
+    - `javascriptcoregtk-4.1`
+    - `libsoup-3.0`
+  - mitigation applied:
+    - CI workflow updated to install required Tauri Linux dependencies before Tauri build job
+
+### Agent B renderer parity pass (2026-04-29)
+
+- Renderer parity audit completed across all 8 target pages:
+  - `DockerPage`, `TerminalPage`, `MaintenancePage`, `MonitorPage`, `RegistryPage`, `RuntimesPage`, `SshPage`, `GitConfigPage`
+  - all 63 `window.dh.*` call sites verified against bridge coverage — no missing methods
+- Two bugs found and fixed:
+  1. `ensureDesktopApi()` guard used `isTauriRuntime` (function ref, not a call) — guard never fired in non-Tauri context; fixed to `isTauriRuntime()`
+  2. `DashboardLayoutFile` used in `vite-env.d.ts` type declarations without import from `@linux-dev-home/shared` — import added
+- UX regression audit: polish batches 1–5 verified intact
+  - `.hp-btn`, `.hp-btn-primary`, `.hp-btn-danger`, `.hp-input`, `.hp-status-alert`, `.hp-card-header` all present in global.css
+  - focus-visible rings, hover/active transitions, overflow handling confirmed intact
+- CI workflow hardened:
+  - added `dtolnay/rust-toolchain@stable` to `native-linux-build` job (was missing; build would have failed)
+  - added `Swatinem/rust-cache@v2` to avoid redundant Rust recompiles in CI
+  - added `stabilization/*` and `agent-*` branch patterns to CI push trigger
+- Verification evidence:
+  - `pnpm typecheck` passed (workspace-wide)
+  - `pnpm smoke` passed

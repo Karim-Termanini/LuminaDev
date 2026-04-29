@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
 
-import type { ComposeProfile, HostPortRow, HostSysInfo } from '@linux-dev-home/shared'
+import type { ComposeProfile, DashboardLayoutFile, HostPortRow, HostSysInfo } from '@linux-dev-home/shared'
 
 export {}
 

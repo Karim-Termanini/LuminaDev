@@ -2,7 +2,7 @@ name: Quality Gate
 
 on:
   push:
-    branches: [main, 'phase-*']
+    branches: [main, 'phase-*', 'stabilization/*', 'agent-*']
   pull_request:
     branches: [main]
 
@@ -16,17 +16,15 @@ jobs:
         with:
           node-version: '20'
           cache: 'pnpm'
-      - name: Install deps for native addons
+      - name: Install deps for native addons and Tauri
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential python3 pkg-config libsecret-1-dev
+          sudo apt-get install -y build-essential python3 pkg-config libsecret-1-dev libwebkit2gtk-4.1-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf
       - name: Normalize GitHub git protocol to HTTPS
         run: |
           git config --global url."https://github.com/".insteadOf git@github.com:
           git config --global url."https://github.com/".insteadOf ssh://git@github.com/
       - run: pnpm install --frozen-lockfile
-      - name: Rebuild native modules for Electron
-        run: pnpm --filter desktop rebuild:native
       - name: Lint + typecheck + unit tests
         run: bash scripts/smoke-ci.sh
 
@@ -77,19 +75,25 @@ jobs:
         with:
           node-version: '20'
           cache: 'pnpm'
-      - name: Install deps for native addons
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri -> target
+      - name: Install Linux build deps for Tauri
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential python3 pkg-config libsecret-1-dev
+          sudo apt-get install -y build-essential pkg-config libwebkit2gtk-4.1-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf
       - name: Normalize GitHub git protocol to HTTPS
         run: |
           git config --global url."https://github.com/".insteadOf git@github.com:
           git config --global url."https://github.com/".insteadOf ssh://git@github.com/
       - run: pnpm install --frozen-lockfile
-      - name: Rebuild native modules for Electron
-        run: pnpm --filter desktop rebuild:native
-      - name: Build Linux app
-        run: pnpm build
+      - name: Build frontend bundle
+        run: pnpm --filter desktop build:web
+      - name: Build Tauri Linux app
+        run: pnpm --filter desktop build:tauri
 
   flatpak-offline-build:
     runs-on: ubuntu-latest

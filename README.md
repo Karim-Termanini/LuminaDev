@@ -1,6 +1,8 @@
 # LuminaDev
 
-Linux developer workstation dashboard (Electron + React), focused on safe click-first flows for Docker, system visibility, and local machine setup.
+Linux developer workstation dashboard, focused on safe click-first flows for Docker, system visibility, and local machine setup.
+
+> **Runtime migration in progress:** moving from Electron to Tauri before first public release. Current build uses a Node-backed compatibility bridge while the Rust backend port is in progress. See [Stabilization Checklist](docs/STABILIZATION_CHECKLIST.md) for migration stage status.
 
 ## Project Status (truthful snapshot)
 
@@ -12,6 +14,7 @@ This project is in active development. Features below are split by maturity:
   - SSH and Git configuration UI flows.
   - Typed IPC boundaries via `@linux-dev-home/shared` schemas.
 - **Partial / evolving**:
+  - Tauri migration: Stage 1 (bridge skeleton) done; Stage 2 (Rust-native backend port) in progress.
   - Flatpak-host privilege parity and cross-distro consistency.
   - Runtime install/update matrix hardening.
   - Diagnostics and support bundle depth.

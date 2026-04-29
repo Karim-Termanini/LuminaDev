@@ -3,7 +3,10 @@ import ReactDOM from 'react-dom/client'
 import { HashRouter } from 'react-router-dom'
 
 import App from './App'
+import { ensureDesktopApi } from './api/desktopApiBridge'
 import './theme/global.css'
+
+ensureDesktopApi()
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
   <React.StrictMode>
