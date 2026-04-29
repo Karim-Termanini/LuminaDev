@@ -198,15 +198,44 @@ select:focus-visible {
 
 .hp-title {
   margin: 0;
+  font-size: 28px;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
 }
 
 .hp-muted {
   color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.55;
 }
 
 .hp-section-title {
-  font-weight: 600;
+  font-weight: 650;
+  font-size: 14px;
+  letter-spacing: 0.01em;
+  margin-bottom: 10px;
+}
+
+.hp-card-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
   margin-bottom: 12px;
+}
+
+.hp-card-title {
+  margin: 0;
+  font-weight: 650;
+  font-size: 14px;
+  color: #f1f1f1;
+  letter-spacing: 0.01em;
+}
+
+.hp-card-subtitle {
+  margin: 0;
+  color: #b4b4b4;
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .hp-row {

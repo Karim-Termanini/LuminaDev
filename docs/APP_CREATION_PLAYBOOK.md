@@ -474,3 +474,19 @@ This file is a living engineering memory, not static documentation.
   - `DashboardKernelsPage`
   - `DashboardLogsPage`
   - `DockerPage` (alert action alignment + interaction consistency)
+
+### Batch 5 delivered
+
+- Contrast and typography polish:
+  - introduced reusable card heading primitives in `global.css`:
+    - `.hp-card-header`
+    - `.hp-card-title`
+    - `.hp-card-subtitle`
+  - tuned common title/muted/section styles for clearer hierarchy and better readability in dark theme
+- Applied card-header polish to:
+  - `DashboardKernelsPage` (GPU snapshot + Service states cards)
+  - `DashboardLogsPage` (Compose output + Background jobs cards)
+  - `DockerPage` (create-flow cards + section titles + container table headings)
+- Evidence:
+  - no behavioral logic changed; UI-only refinements on existing flows
+  - typography and contrast updates localized to renderer theme/page components
