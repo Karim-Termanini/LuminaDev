@@ -208,5 +208,5 @@ Minimal flows to verify before declaring a build stable. Run on real Tauri build
 - [ ] Runtime status list loads (node, python, go, rust, java)
 
 ### Known limits (not test failures)
-- `dh:docker:install` / `dh:docker:remap-port`: IPC in Tauri — install blocked in Flatpak / without sudo; remap stops then removes old container when possible; UI may still show docs-first notices.
+- `dh:docker:install` / `dh:docker:remap-port`: Tauri IPC — install blocked in Flatpak / without usable sudo; remap clones then stops/removes source when possible. Where the backend returns `*_NOT_SUPPORTED`, the UI shows docs-first notices (see Docker screen audit on `main`).
 - Flatpak-specific paths may differ from native install ✓

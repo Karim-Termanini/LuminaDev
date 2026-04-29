@@ -15,9 +15,9 @@
 |----|--------|---------------------|
 | B1 | توثيق الحالة الحقيقية | تحديث `README.md` و`docs/STABILIZATION_CHECKLIST.md`: Tauri + Rust IPC، ما هو «جاهز / جزئي / مخطط»، Flatpak «لاحقًا» — بدون وعود إصدار. **`done` (2026-04-30)** — ربط بخطة الوكلاء، تخفيف صياغة «release gate». |
 | B2 | واجهة الأخطاء الصريحة | تدفقات تعتمد على `dh:docker:install` و`dh:docker:remap-port`: عرض واضح عند `ok: false` (ومنها `*_NOT_SUPPORTED`) بدون سلوك يشبه النجاح. **`done` (2026-04-30)** — `DockerPage.tsx` + `dockerError.ts` + اختبارات. |
-| B3 | مراجعة شاشات Docker | أزرار وتبويبات متوافقة مع السلوك الفعلي على Tauri؛ تقليل أزرار «مربكة» بدون backend يدعمها. **`done` (`feat/agent-b-plan` @ `9c0a4f8`)** — Install: خطوة 0 إشعار + رابط docs بدل wizard؛ Remap: إشعار بدل form؛ حذف dead code (`INSTALL_DISTROS`, `runScan`, `remapPort`, state/useEffect زائد). |
-| B4 | CI خفيف وموثوق | triggers، cache، deps مناسبة لـ Linux/Tauri؛ **بدون** إطالة المسار بـ Flatpak إلى أن يُقرّ تفعيله. **`done` (`9c0a4f8`)** — تحقق يدوي؛ بدون مسار Flatpak في التركيز. |
-| B5 | اختبار يدوي / سيناريوهات حرجة | قائمة تحقق قصيرة (يمكن إبقاؤها في نفس المستند أو في checklist الرئيسي)؛ Flatpak يُذكر كـ «لاحقًا» فقط. **`done` (`9c0a4f8`)** — checklist كاملة داخل `docs/STABILIZATION_CHECKLIST.md`. |
+| B3 | مراجعة شاشات Docker | أزرار وتبويبات متوافقة مع السلوك الفعلي على Tauri؛ تقليل أزرار «مربكة» بدون backend يدعمها. **`done` (`9c0a4f8` + دمج `#26` على `main`)** — Install: إشعار + رابط docs حيث يلزم؛ Remap: إشعار حيث غير مدعوم؛ إزالة dead code حيث انطبق. |
+| B4 | CI خفيف وموثوق | triggers، cache، deps مناسبة لـ Linux/Tauri؛ **بدون** إطالة المسار بـ Flatpak إلى أن يُقرّ تفعيله. **`done`** — تحقق يدوي؛ بدون مسار Flatpak في التركيز. |
+| B5 | اختبار يدوي / سيناريوهات حرجة | قائمة تحقق قصيرة (يمكن إبقاؤها في نفس المستند أو في checklist الرئيسي)؛ Flatpak يُذكر كـ «لاحقًا» فقط. **`done`** — checklist داخل `docs/STABILIZATION_CHECKLIST.md`. |
 
 ---
 
@@ -26,18 +26,18 @@
 | ID | المهمة | المخرجات / المعيار |
 |----|--------|---------------------|
 | A1 | تدقيق القنوات | مطابقة `packages/shared/src/ipc.ts` مع `ipc_invoke` / مسار Tauri. **`done` (تدقيق أولي 2026-04-30)** — انظر قسم «لقطة A1» أدناه؛ إصلاح `dh:docker:create` لإرجاع `id`. |
-| A2 | `dh:docker:install` | **`done`** — نفس منطق Electron: خطوات `apt`/`dnf`/`pacman` عبر `sudo -S` + سجل `log` في الرد. |
+| A2 | `dh:docker:install` | **`done`** — خطوات `apt`/`dnf`/`pacman` عبر `sudo -S` + سجل `log` في الرد؛ رفض في Flatpak / بدون sudo صالح. |
 | A3 | `dh:docker:remap-port` | **`done`** — inspect + create + start؛ ثم **`docker stop`** + **`docker rm`** للمصدر عند نجاح الإيقاف + حقول `sourceStopped` / `sourceRemoved` / ملاحظات في الرد. |
 | A4 | حدود الصلاحيات | مراجعة سريعة لمسارات Docker socket وSSH وأوامر shell: timeouts، allowlists، رسائل خطأ حتمية. |
-| A5 | Flatpak (لاحقًا) | **جزئي:** `flatpak/io.github.karimodora.LinuxDevHome.tauri.yml` + README؛ **بدون** job في GitHub Actions حتى تضيف اختبارًا بطيئًا لاحقًا؛ Docker عبر `flatpak override` كالوثائق. |
+| A5 | Flatpak (لاحقًا) | **جزئي:** manifest Tauri + README؛ **بدون** job في GitHub Actions حتى يُقرّ اختبار بطيء؛ Docker عبر `flatpak override` كالوثائق. |
 
 ---
 
 ## ترتيب تنفيذ مقترح
 
 1. ~~**B1** + **A1**~~ — منجز.
-2. ~~**B2**–**B5** (واجهة + docs + CI تحقق + checklist يدوي)~~ — منجز على `feat/agent-b-plan` (`9c0a4f8`).
-3. ~~**A2** / **A3**~~ — منجز في Rust (تثبيت Docker + remap منفذ).
+2. ~~**B2**–**B5**~~ — منجز (واجهة + docs + CI تحقق + checklist يدوي؛ دمج مراجعة شاشة Docker من `main` `#26`).
+3. ~~**A2** / **A3**~~ — منجز في Rust.
 4. **A4** — مراجعة صلاحيات/Timeouts.
 5. **A5** — Flatpak + Actions **آخرًا**.
 
@@ -58,4 +58,4 @@
 - واجهة Docker: `apps/desktop/src/renderer/src/pages/DockerPage.tsx`
 - سياسة الجودة العامة: `CLAUDE.md` و`phasesPlan.md`
 
-آخر تحديث: 2026-04-30 — **Agent B B1–B5:** `feat/agent-b-plan` @ `9c0a4f8` (smoke ✅). سابقًا: لقطة A1 + إصلاح `docker:create`.
+آخر تحديث: 2026-04-30 — B1–B5 منجزة؛ A2/A3 في Rust؛ دمج `main` (Docker UI audit #26). لقطة A1 + إصلاح `docker:create` سابقًا.
