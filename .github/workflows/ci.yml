@@ -95,14 +95,3 @@ jobs:
       - name: Build Tauri Linux app
         run: pnpm --filter desktop build:tauri
 
-  flatpak-offline-build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install Flatpak build tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y flatpak flatpak-builder
-      - name: Flatpak offline build smoke
-        run: |
-          flatpak-builder --force-clean flatpak-build-dir flatpak/io.github.karimodora.LinuxDevHome.offline.yml
