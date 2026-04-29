@@ -48,10 +48,10 @@ export function DashboardKernelsPage(): ReactElement {
       </header>
 
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', rowGap: 8 }}>
-        <button type="button" onClick={() => void refresh()} style={btn} disabled={busy}>
+        <button type="button" onClick={() => void refresh()} className="hp-btn" disabled={busy}>
           {busy ? 'Refreshing…' : 'Refresh checks'}
         </button>
-        <button type="button" style={btn} onClick={() => void window.dh.openExternal('https://kernel.org/')}>
+        <button type="button" className="hp-btn" onClick={() => void window.dh.openExternal('https://kernel.org/')}>
           Kernel docs
         </button>
       </div>
@@ -88,16 +88,6 @@ const card = {
   border: '1px solid var(--border)',
   borderRadius: 'var(--radius)',
   padding: 16,
-}
-
-const btn = {
-  border: '1px solid var(--border)',
-  background: 'var(--bg-input)',
-  color: 'var(--text)',
-  borderRadius: 8,
-  padding: '9px 14px',
-  cursor: 'pointer',
-  fontWeight: 600,
 }
 
 const pre = {

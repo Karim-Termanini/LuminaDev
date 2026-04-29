@@ -463,3 +463,14 @@ This file is a living engineering memory, not static documentation.
   - horizontal overflow safety for long logs/terminal-style text blocks
   - tab strip overflow handling for Docker sections on smaller widths
   - denser, more consistent card spacing without changing runtime behavior
+
+### Batch 4 delivered
+
+- Interaction state hardening:
+  - stronger hover/active/disabled states for `.hp-btn`
+  - visible keyboard focus rings for buttons/inputs/selects/textareas
+  - improved focus feedback for `.hp-input`
+- Applied to active dashboard surfaces with no behavior changes:
+  - `DashboardKernelsPage`
+  - `DashboardLogsPage`
+  - `DockerPage` (alert action alignment + interaction consistency)

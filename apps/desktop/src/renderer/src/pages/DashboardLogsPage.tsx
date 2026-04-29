@@ -55,7 +55,7 @@ export function DashboardLogsPage(): ReactElement {
               <option key={p} value={p}>{p}</option>
             ))}
           </select>
-          <button type="button" style={btn} onClick={() => void loadComposeLog()} disabled={busy}>
+          <button type="button" className="hp-btn" onClick={() => void loadComposeLog()} disabled={busy}>
             {busy ? 'Loading…' : 'Fetch compose logs'}
           </button>
         </div>
@@ -67,7 +67,7 @@ export function DashboardLogsPage(): ReactElement {
       <section style={card}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div className="mono" style={{ fontSize: 12, color: 'var(--text-muted)' }}>Background jobs</div>
-          <button type="button" style={btnSmall} onClick={() => void refreshJobs()}>Refresh</button>
+          <button type="button" className="hp-btn" onClick={() => void refreshJobs()}>Refresh</button>
         </div>
         {jobs.length === 0 ? (
           <div style={{ color: 'var(--text-muted)', marginTop: 10 }}>No jobs reported yet.</div>
@@ -101,26 +101,6 @@ const input = {
   color: 'var(--text)',
   borderRadius: 6,
   padding: '7px 10px',
-}
-
-const btn = {
-  border: '1px solid var(--border)',
-  background: 'var(--bg-input)',
-  color: 'var(--text)',
-  borderRadius: 8,
-  padding: '8px 12px',
-  cursor: 'pointer',
-  fontWeight: 600,
-}
-
-const btnSmall = {
-  border: '1px solid var(--border)',
-  background: 'var(--bg-input)',
-  color: 'var(--text)',
-  borderRadius: 6,
-  padding: '4px 10px',
-  cursor: 'pointer',
-  fontSize: 12,
 }
 
 const pre = {

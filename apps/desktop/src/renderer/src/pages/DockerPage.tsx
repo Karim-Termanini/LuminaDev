@@ -625,7 +625,7 @@ export function DockerPage(): ReactElement {
         <div className="hp-status-alert warning">
           <span style={{ fontSize: 18 }}>⚠</span>
           <span>{err}</span>
-          <button type="button" className="hp-btn" onClick={() => void refreshAll()} style={{ marginLeft: 10 }}>
+          <button type="button" className="hp-btn" onClick={() => void refreshAll()} style={{ marginLeft: 10, marginInlineStart: 'auto' }}>
             Retry
           </button>
         </div>
