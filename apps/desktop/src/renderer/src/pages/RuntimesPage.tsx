@@ -24,6 +24,31 @@ const RUNTIME_DETAILS: Record<string, { description: string, website: string, ic
 
 const UPDATE_OUTCOME_STORAGE_KEY = 'dh:runtimes:update-outcomes:v1'
 
+/** Prefer a sensible default when the version API returns many entries (e.g. Node: first LTS row). */
+function pickDefaultRuntimeVersion(runtimeId: string, versions: string[]): string {
+  if (versions.length === 0) return 'latest'
+  if (runtimeId === 'node') {
+    const lts = versions.find((v) => /\bLTS\b/i.test(v))
+    if (lts) return lts
+  }
+  if (runtimeId === 'java') {
+    const lts = versions.find((v) => /\(LTS\)/i.test(v))
+    if (lts) return lts
+  }
+  if (runtimeId === 'dotnet') {
+    const lts = versions.find((v) => /\bLTS\b/i.test(v))
+    if (lts) return lts
+  }
+  if (runtimeId === 'bun') {
+    const stable = versions.find((v) => /^\d+\.\d+\.\d+$/.test(v))
+    if (stable) return stable
+  }
+  if (runtimeId === 'rust') {
+    return versions.includes('stable') ? 'stable' : versions[0]
+  }
+  return versions[0]
+}
+
 export function RuntimesPage(): ReactElement {
   const [runtimes, setRuntimes] = useState<RuntimeStatus[]>([])
   const [activeJobs, setActiveJobs] = useState<JobSummary[]>([])
@@ -38,6 +63,9 @@ export function RuntimesPage(): ReactElement {
   const [uninstallPreview, setUninstallPreview] = useState<{ distro: string; runtimePackages: string[]; removableDeps: string[]; blockedSharedDeps: string[]; finalPackages: string[]; note?: string } | null>(null)
   const [loadingUninstallPreview, setLoadingUninstallPreview] = useState(false)
   const [persistedUpdateOutcomes, setPersistedUpdateOutcomes] = useState<Record<string, 'already_latest' | 'updated'>>({})
+  const [availableVersions, setAvailableVersions] = useState<string[]>([])
+  const [selectedVersion, setSelectedVersion] = useState<string>('latest')
+  const [addToPath, setAddToPath] = useState(true)
 
   const refreshDeps = useCallback(async () => {
     const res = await window.dh.checkDependencies(selectedId)
@@ -117,10 +145,24 @@ export function RuntimesPage(): ReactElement {
     })
   }, [updateOutcome, selectedId])
 
+  useEffect(() => {
+    setAvailableVersions([])
+    setSelectedVersion('latest')
+    void window.dh.getAvailableVersions(selectedId).then((vs: string[]) => {
+      setAvailableVersions(vs)
+      if (vs.length > 0) setSelectedVersion(pickDefaultRuntimeVersion(selectedId, vs))
+    })
+  }, [selectedId])
+
   const startInstall = async (id: string) => {
     setSelectedId(id)
     setShowWizard(true)
     setWizardStep(1)
+    // Force refresh versions when wizard opens to avoid stale "latest"
+    void window.dh.getAvailableVersions(id).then((vs: string[]) => {
+      setAvailableVersions(vs)
+      if (vs.length > 0) setSelectedVersion(pickDefaultRuntimeVersion(id, vs))
+    })
   }
 
   const runInstall = async () => {
@@ -128,7 +170,9 @@ export function RuntimesPage(): ReactElement {
     await window.dh.jobStart({ 
       kind: 'runtime_install', 
       runtimeId: selectedId,
-      method: installMethod 
+      method: installMethod,
+      version: selectedVersion,
+      addToPath,
     })
   }
 
@@ -261,48 +305,63 @@ export function RuntimesPage(): ReactElement {
 
               <div style={{ display: 'flex', gap: 12 }}>
                  <button 
-                   onClick={() => { if (selectedRuntime.installed) void runUpdate(); else startInstall(selectedId) }}
+                   onClick={() => startInstall(selectedId)}
                    disabled={installInProgress}
                    style={{ 
                      padding: '12px 24px', 
                      borderRadius: 12, 
                      border: 'none', 
-                     background: selectedRuntime.installed
-                       ? (effectiveUpdateOutcome === 'already_latest'
-                         ? 'rgba(255, 193, 7, 0.2)'
-                         : effectiveUpdateOutcome === 'updated'
-                           ? 'rgba(0, 230, 118, 0.2)'
-                           : 'rgba(255,255,255,0.08)')
-                       : 'var(--accent)',
+                     background: 'var(--accent)',
                      color: 'white',
                      fontWeight: 700,
                      cursor: installInProgress ? 'default' : 'pointer',
                      opacity: installInProgress ? 0.6 : 1,
-                     boxShadow: selectedRuntime.installed ? 'none' : '0 4px 15px rgba(124, 77, 255, 0.3)'
+                     boxShadow: '0 4px 15px rgba(124, 77, 255, 0.3)'
                    }}
                  >
-                   {installInProgress
-                     ? (isUpdateJob ? 'Updating...' : 'Installing...')
-                     : (selectedRuntime.installed
-                       ? (effectiveUpdateOutcome === 'already_latest' ? 'Already Latest' : effectiveUpdateOutcome === 'updated' ? 'Updated' : 'Update')
-                       : 'Get / Install')}
+                   {installInProgress && !isUninstallJob && !isUpdateJob ? 'Installing...' : 'Install Version'}
                  </button>
-                 <button
-                   onClick={() => void openUninstallModal()}
-                   disabled={!selectedRuntime.installed || installInProgress}
-                   style={{
-                     padding: '12px 20px',
-                     borderRadius: 12,
-                     border: '1px solid rgba(255,82,82,0.35)',
-                     background: 'rgba(255,82,82,0.1)',
-                     color: '#ff8a80',
-                     fontWeight: 700,
-                     cursor: (!selectedRuntime.installed || installInProgress) ? 'default' : 'pointer',
-                     opacity: (!selectedRuntime.installed || installInProgress) ? 0.5 : 1,
-                   }}
-                 >
-                   Remove
-                 </button>
+
+                 {selectedRuntime.installed && (
+                   <>
+                     <button 
+                       onClick={() => void runUpdate()}
+                       disabled={installInProgress}
+                       style={{ 
+                         padding: '12px 20px', 
+                         borderRadius: 12, 
+                         border: '1px solid var(--border)',
+                         background: effectiveUpdateOutcome === 'already_latest'
+                             ? 'rgba(255, 193, 7, 0.1)'
+                             : effectiveUpdateOutcome === 'updated'
+                               ? 'rgba(0, 230, 118, 0.1)'
+                               : 'rgba(255,255,255,0.05)',
+                         color: 'white',
+                         fontWeight: 700,
+                         cursor: installInProgress ? 'default' : 'pointer',
+                         opacity: installInProgress ? 0.6 : 1,
+                       }}
+                     >
+                       {isUpdateJob ? 'Updating...' : (effectiveUpdateOutcome === 'already_latest' ? 'Already Latest' : 'Update Current')}
+                     </button>
+                     <button
+                       onClick={() => void openUninstallModal()}
+                       disabled={installInProgress}
+                       style={{
+                         padding: '12px 20px',
+                         borderRadius: 12,
+                         border: '1px solid rgba(255,82,82,0.35)',
+                         background: 'rgba(255,82,82,0.1)',
+                         color: '#ff8a80',
+                         fontWeight: 700,
+                         cursor: installInProgress ? 'default' : 'pointer',
+                         opacity: installInProgress ? 0.5 : 1,
+                       }}
+                     >
+                       Remove
+                     </button>
+                   </>
+                 )}
               </div>
             </div>
 
@@ -320,14 +379,26 @@ export function RuntimesPage(): ReactElement {
               </a>
             </div>
 
-            {!installInProgress && selectedRuntime.installed && (
-              <div style={{ marginTop: 40, padding: 24, background: 'rgba(0,230,118,0.05)', borderRadius: 16, border: '1px solid rgba(0,230,118,0.1)' }}>
-                <h4 style={{ margin: 0, color: 'var(--green)', fontSize: 16, fontWeight: 700 }}>Runtime Active</h4>
-                <p style={{ margin: '8px 0 0 0', fontSize: 14, color: 'var(--text-muted)' }}>
-                  This environment is correctly configured and accessible at:
-                </p>
-                <div style={{ marginTop: 12, padding: '10px 14px', background: 'rgba(0,0,0,0.2)', borderRadius: 8, fontFamily: 'monospace', fontSize: 12, color: 'var(--accent)' }}>
-                  {selectedRuntime.path}
+            {selectedRuntime.installed && selectedRuntime.allVersions && (
+              <div style={{ marginTop: 40 }}>
+                <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>Detected Installations</h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {selectedRuntime.allVersions.map((v, i) => (
+                    <div key={i} style={{ 
+                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                      padding: '12px 16px', background: 'rgba(255,255,255,0.03)', borderRadius: 12, border: '1px solid var(--border)' 
+                    }}>
+                      <div>
+                        <div style={{ fontSize: 14, fontWeight: 700 }}>Version {v.version}</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, fontFamily: 'monospace' }}>{v.path}</div>
+                      </div>
+                      {v.path === selectedRuntime.path && (
+                        <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--green)', padding: '2px 8px', borderRadius: 10, border: '1px solid rgba(0,230,118,0.3)', background: 'rgba(0,230,118,0.05)' }}>
+                          ACTIVE
+                        </span>
+                      )}
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
@@ -391,22 +462,30 @@ export function RuntimesPage(): ReactElement {
                                 }}
                               >
                                  <div style={{ fontWeight: 700, fontSize: 14 }}>Isolated Script (Local)</div>
-                                 <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Installs to ~/.lumina without sudo. Safer but manual paths.</div>
+                                 <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Installs to user scope without sudo. Safer, and can auto-update PATH.</div>
                               </button>
                            </div>
                         </div>
 
                         <div className="hp-card" style={{ marginBottom: 20 }}>
-                           <div style={{ fontWeight: 600, marginBottom: 8 }}>Target Location</div>
-                           <div style={{ display: 'flex', gap: 8 }}>
-                              <input className="hp-input" style={{ flex: 1 }} value={installMethod === 'system' ? '/usr/bin' : '~/.lumina/runtimes'} readOnly />
-                              <button className="hp-btn" disabled>Browse...</button>
-                           </div>
+                           <div style={{ fontWeight: 600, marginBottom: 8 }}>Target Version</div>
+                           <select 
+                             className="hp-input" 
+                             style={{ width: '100%' }} 
+                             value={selectedVersion} 
+                             onChange={(e) => setSelectedVersion(e.target.value)}
+                           >
+                             {availableVersions.map(v => <option key={v} value={v}>{v}</option>)}
+                           </select>
                         </div>
 
                         <div className="hp-card">
                            <label style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
-                              <input type="checkbox" checked readOnly />
+                              <input 
+                                type="checkbox" 
+                                checked={addToPath} 
+                                onChange={(e) => setAddToPath(e.target.checked)} 
+                              />
                               <div>
                                  <div style={{ fontWeight: 600 }}>Add to system PATH</div>
                                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Automatically configure environment variables for this runtime.</div>
@@ -500,7 +579,18 @@ export function RuntimesPage(): ReactElement {
                         </div>
                         <h2 style={{ fontSize: 28, fontWeight: 800 }}>Successfully Installed!</h2>
                         <p style={{ color: 'var(--text-muted)', fontSize: 16, maxWidth: 400, margin: '16px auto 40px' }}>
-                          {selectedRuntime?.name} version {selectedRuntime?.version} is now ready for use in your development projects.
+                          {selectedRuntime?.name} is now ready for use. 
+                          {activeJob?.logTail.some(l => l.includes('Smoke test passed')) ? (
+                            <span style={{ color: 'var(--green)', display: 'block', marginTop: 8, fontSize: 14 }}>
+                               <span className="codicon codicon-pass" style={{ verticalAlign: 'middle', marginRight: 6 }} />
+                               Post-install verification passed.
+                            </span>
+                          ) : (
+                            <span style={{ color: 'var(--orange)', display: 'block', marginTop: 8, fontSize: 14 }}>
+                               <span className="codicon codicon-warning" style={{ verticalAlign: 'middle', marginRight: 6 }} />
+                               Verification skipped or pending shell restart.
+                            </span>
+                          )}
                         </p>
                         
                         <div style={{ background: 'rgba(0,0,0,0.2)', padding: 20, borderRadius: 12, display: 'inline-block', textAlign: 'left', minWidth: 300 }}>

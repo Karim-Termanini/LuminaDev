@@ -119,6 +119,7 @@ export type RuntimeStatus = {
   installed: boolean
   version?: string
   path?: string
+  allVersions?: Array<{ version: string; path: string }>
 }
 
 export type RuntimeStatusResponse = {
@@ -194,6 +195,9 @@ export const IPC = {
   monitorSecurity: 'dh:monitor:security',
   monitorSecurityDrilldown: 'dh:monitor:security-drilldown',
   runtimeStatus: 'dh:runtime:status',
+  runtimeGetVersions: 'dh:runtime:get-versions',
+  runtimeCheckDeps: 'dh:runtime:check-deps',
+  runtimeUninstallPreview: 'dh:runtime:uninstall:preview',
 } as const
 
 export type DockerActionPayload = { id: string; action: DockerContainerAction }

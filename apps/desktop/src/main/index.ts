@@ -212,39 +212,427 @@ function dependencyRemovalPlan(runtimeId: string, distro: Distro): { removable: 
   return { removable, blockedShared }
 }
 
-async function detectRuntimeInstallation(id: string, cmd: string, args: string[]): Promise<RuntimeDetectResult> {
+function compareSemverAsc(a: string, b: string): number {
+  const pa = a.split('.').map((x) => Number.parseInt(x, 10) || 0)
+  const pb = b.split('.').map((x) => Number.parseInt(x, 10) || 0)
+  const len = Math.max(pa.length, pb.length)
+  for (let i = 0; i < len; i++) {
+    const da = pa[i] ?? 0
+    const db = pb[i] ?? 0
+    if (da !== db) return da - db
+  }
+  return 0
+}
+
+function compareSemverDesc(a: string, b: string): number {
+  return compareSemverAsc(b, a)
+}
+
+/** Strip UI suffixes like " (LTS Iron)" and return a version string nvm/pyenv/go can consume. */
+function normalizeRequestedVersion(runtimeId: string, rawVersion?: string): string {
+  const raw = (rawVersion ?? 'latest').trim()
+  if (!raw || raw.toLowerCase() === 'latest') return 'latest'
+
+  if (runtimeId === 'node') {
+    const base = raw.replace(/\s*\([^)]*\)\s*$/u, '').trim().replace(/^v/i, '')
+    if (base.toLowerCase() === 'lts' || base.toLowerCase() === 'stable') return 'lts'
+    const triple = base.match(/^(\d+)\.(\d+)\.(\d+)/)
+    if (triple) return `${triple[1]}.${triple[2]}.${triple[3]}`
+    const duo = base.match(/^(\d+)\.(\d+)/)
+    if (duo) return `${duo[1]}.${duo[2]}`
+    const major = base.match(/^(\d{1,2})$/)
+    if (major) return major[1]
+    return 'lts'
+  }
+
+  if (runtimeId === 'go') {
+    const base = raw.replace(/^go/i, '').replace(/\s*\([^)]*\)\s*$/u, '').trim()
+    const triple = base.match(/^(\d+\.\d+\.\d+)/)
+    if (triple) return triple[1]
+    const duo = base.match(/^(\d+\.\d+)/)
+    if (duo) return duo[1]
+    return 'latest'
+  }
+
+  if (runtimeId === 'python') {
+    const base = raw.replace(/\s*\([^)]*\)\s*$/u, '').trim()
+    const triple = base.match(/^(\d+\.\d+\.\d+)/)
+    if (triple) return triple[1]
+    const duo = base.match(/^(\d+\.\d+)/)
+    if (duo) return duo[1]
+    return 'latest'
+  }
+
+  return raw
+}
+
+async function fetchNodeVersionsForPicker(): Promise<string[]> {
+  const res = await fetch('https://nodejs.org/dist/index.json').then((r) => r.json()) as Array<{ version: string; lts: string | boolean }>
+  const rows = res
+    .map((row) => {
+      const semver = row.version.replace(/^v/, '')
+      const ltsName = row.lts && typeof row.lts === 'string' ? String(row.lts) : ''
+      const label = ltsName ? `${semver} (LTS ${ltsName})` : semver
+      return { semver, label }
+    })
+    .sort((x, y) => compareSemverDesc(x.semver, y.semver))
+
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const r of rows) {
+    if (seen.has(r.semver)) continue
+    seen.add(r.semver)
+    out.push(r.label)
+    if (out.length >= 120) break
+  }
+  return out
+}
+
+async function fetchGoVersionsForPicker(): Promise<string[]> {
+  const res = await fetch('https://go.dev/dl/?mode=json&include=all').then((r) => r.json()) as Array<{ version: string }>
+  const versions = res
+    .map((x) => x.version.replace(/^go/, ''))
+    .filter((v) => /^\d+\.\d+\.\d+$/.test(v))
+    .sort(compareSemverDesc)
+
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const v of versions) {
+    if (seen.has(v)) continue
+    seen.add(v)
+    out.push(v)
+    if (out.length >= 120) break
+  }
+  return out
+}
+
+async function fetchPythonVersionsForPicker(): Promise<string[]> {
+  const res = await fetch('https://endoflife.date/api/python.json').then((r) => r.json()) as Array<{ latest: string }>
+  const versions = res
+    .map((x) => x.latest)
+    .filter((v) => typeof v === 'string' && /^\d+\.\d+\.\d+$/.test(v))
+    .sort(compareSemverDesc)
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const v of versions) {
+    if (seen.has(v)) continue
+    seen.add(v)
+    out.push(v)
+    if (out.length >= 50) break
+  }
+  return out
+}
+
+/** GitHub REST requires a User-Agent; without it many clients get an HTML error page instead of JSON. */
+const GITHUB_JSON_HEADERS: Record<string, string> = {
+  Accept: 'application/vnd.github+json',
+  'User-Agent': 'LuminaDev/1.0 (Electron; runtime version picker)',
+}
+
+async function fetchGithubJson<T>(url: string): Promise<T> {
+  const r = await fetch(url, { headers: GITHUB_JSON_HEADERS })
+  const ct = (r.headers.get('content-type') ?? '').toLowerCase()
+  if (!r.ok) {
+    const body = await r.text()
+    throw new Error(`GitHub HTTP ${r.status}: ${body.slice(0, 160)}`)
+  }
+  if (!ct.includes('json')) {
+    const body = await r.text()
+    throw new Error(`GitHub non-JSON (${ct}): ${body.slice(0, 160)}`)
+  }
+  return (await r.json()) as T
+}
+
+/** Parse `3.13.0-77.0.dev` → `3.13.0`; ignore analyzer/meta branch tags. */
+function parseDartSdkTripletFromGitTag(name: string): string {
+  const n = name.trim()
+  if (!/^\d/.test(n)) return ''
+  if (/^(analyzer|meta|merge_|depends_on_|interpreter_|language_|pkg_|rollup_|ffi-|characters-|material_)/i.test(n)) {
+    return ''
+  }
+  const m = n.match(/^(\d+\.\d+\.\d+)/)
+  return m ? m[1] : ''
+}
+
+async function fetchDartSdkGitTagsPaged(maxPages = 8): Promise<Array<{ name: string }>> {
+  const all: Array<{ name: string }> = []
+  let nextUrl: string | null = 'https://api.github.com/repos/dart-lang/sdk/tags?per_page=100'
+  for (let page = 0; page < maxPages && nextUrl; page++) {
+    const r = await fetch(nextUrl, { headers: GITHUB_JSON_HEADERS })
+    const ct = (r.headers.get('content-type') ?? '').toLowerCase()
+    if (!r.ok || !ct.includes('json')) {
+      const body = await r.text()
+      throw new Error(`GitHub tags HTTP ${r.status}: ${body.slice(0, 160)}`)
+    }
+    const batch = (await r.json()) as Array<{ name: string }>
+    all.push(...batch)
+    nextUrl = null
+    const link = r.headers.get('link')
+    if (link) {
+      const part = link.split(',').find((s) => /rel="next"/.test(s))
+      const m = part?.match(/<([^>]+)>/)
+      if (m) nextUrl = m[1]
+    }
+    if (batch.length < 100) break
+  }
+  return all
+}
+
+async function fetchBunVersionsForPicker(): Promise<string[]> {
+  let res: Array<{ tag_name?: string }>
+  try {
+    res = await fetchGithubJson<Array<{ tag_name?: string }>>(
+      'https://api.github.com/repos/oven-sh/bun/releases?per_page=100',
+    )
+  } catch {
+    return ['canary', '1.2.2', '1.1.42', '1.0.36', '1.0.30', '1.0.0']
+  }
+  const tags = res
+    .map((x) => {
+      let t = (x.tag_name ?? '').trim()
+      t = t.replace(/^bun-v?/i, '').replace(/^v/i, '')
+      t = t.split('+')[0]
+      const m = t.match(/^(\d+\.\d+\.\d+)/)
+      return m ? m[1] : ''
+    })
+    .filter(Boolean)
+    .sort(compareSemverDesc)
+  const seen = new Set<string>()
+  const numeric: string[] = []
+  for (const t of tags) {
+    if (seen.has(t)) continue
+    seen.add(t)
+    numeric.push(t)
+    if (numeric.length >= 60) break
+  }
+  return numeric.length ? ['canary', ...numeric] : ['canary', '1.2.2', '1.1.42', '1.0.36']
+}
+
+async function resolveGoTarballVersion(requested: string): Promise<string> {
+  const r = requested.trim()
+  if (r === 'latest' || !r) {
+    const text = await fetch('https://go.dev/VERSION?m=text').then((x) => x.text())
+    const m = text.match(/go(\d+\.\d+\.\d+)/)
+    return m ? m[1] : '1.22.2'
+  }
+  if (/^\d+\.\d+\.\d+$/.test(r)) return r
+  if (/^\d+\.\d+$/.test(r)) {
+    const all = await fetch('https://go.dev/dl/?mode=json&include=all').then((x) => x.json()) as Array<{ version: string }>
+    const candidates = all
+      .map((x) => x.version.replace(/^go/, ''))
+      .filter((v) => v.startsWith(`${r}.`) && /^\d+\.\d+\.\d+$/.test(v))
+      .sort(compareSemverDesc)
+    return candidates[0] ?? r
+  }
+  return r
+}
+
+async function resolvePythonInstallVersion(requested: string): Promise<string> {
+  if (requested !== 'latest' && /^\d+\.\d+/.test(requested)) return requested
+  const rows = await fetch('https://endoflife.date/api/python.json').then((r) => r.json()) as Array<{ latest: string }>
+  const sorted = rows
+    .map((x) => x.latest)
+    .filter((v) => typeof v === 'string' && /^\d+\.\d+\.\d+$/.test(v))
+    .sort(compareSemverDesc)
+  return sorted[0] ?? '3.12.0'
+}
+
+/** endoflife.date: use `latest` when it looks like a normal semver (avoids odd legacy tags in the UI). */
+async function fetchEolLatestVersions(product: string, max: number): Promise<string[]> {
+  const res = await fetch(`https://endoflife.date/api/${product}.json`).then((r) => {
+    if (!r.ok) throw new Error(`eol ${product}: ${r.status}`)
+    return r.json()
+  }) as Array<{ latest?: string }>
+  const labels = res
+    .map((x) => (typeof x.latest === 'string' ? x.latest : ''))
+    .filter((v) => /^\d+\.\d+/.test(v))
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const v of labels.sort(compareSemverDesc)) {
+    if (seen.has(v)) continue
+    seen.add(v)
+    out.push(v)
+    if (out.length >= max) break
+  }
+  return out
+}
+
+async function fetchJavaVersionsForPicker(): Promise<string[]> {
+  const j = await fetch(
+    'https://api.adoptium.net/v3/info/release_versions?release_type=ga&page_size=80&sort_order=DESC&vendor=eclipse&image_type=jdk',
+  ).then((r) => r.json()) as { versions?: Array<{ openjdk_version: string; optional?: string }> }
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const v of j.versions ?? []) {
+    const label = `${v.openjdk_version}${v.optional === 'LTS' ? ' (LTS)' : ''}`
+    if (seen.has(label)) continue
+    seen.add(label)
+    out.push(label)
+    if (out.length >= 60) break
+  }
+  return out
+}
+
+async function fetchDotnetSdkVersionsForPicker(): Promise<string[]> {
+  const idx = await fetch('https://dotnetcli.blob.core.windows.net/dotnet/release-metadata/releases-index.json').then((r) =>
+    r.json(),
+  ) as {
+    'releases-index'?: Array<{
+      'channel-version': string
+      'latest-sdk': string
+      'release-type'?: string
+      'support-phase'?: string
+      'latest-release'?: string
+    }>
+  }
+  const rows = idx['releases-index'] ?? []
+  const sorted = [...rows].sort((a, b) => {
+    const na = Number.parseFloat(a['channel-version'] ?? '0')
+    const nb = Number.parseFloat(b['channel-version'] ?? '0')
+    return nb - na
+  })
+
+  const out: string[] = []
+  for (const r of sorted) {
+    const ch = r['channel-version']
+    const sdk = r['latest-sdk']
+    const rel = r['release-type'] ?? ''
+    const phase = r['support-phase'] ?? ''
+    if (!ch || !sdk) continue
+    if (/preview/i.test(sdk) || /preview/i.test(r['latest-release'] ?? '')) continue
+    out.push(`${ch} · SDK ${sdk} · ${rel.toUpperCase()}${phase ? ` · ${phase}` : ''}`)
+    if (out.length >= 45) break
+  }
+  return out
+}
+
+async function fetchJuliaVersionsForPicker(): Promise<string[]> {
+  const releases = await fetchGithubJson<Array<{ tag_name?: string }>>(
+    'https://api.github.com/repos/JuliaLang/julia/releases?per_page=100',
+  )
+  const tags = releases
+    .map((x) => {
+      const raw = (x.tag_name ?? '').replace(/^v/i, '').split('+')[0]
+      const m = raw.match(/^(\d+\.\d+\.\d+)/)
+      return m ? m[1] : ''
+    })
+    .filter(Boolean)
+    .sort(compareSemverDesc)
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const t of tags) {
+    if (seen.has(t)) continue
+    seen.add(t)
+    out.push(t)
+    if (out.length >= 80) break
+  }
+  if (out.length === 0) return await fetchEolLatestVersions('julia', 25)
+  return out
+}
+
+async function fetchFlutterLinuxVersionsForPicker(): Promise<string[]> {
+  const data = await fetch('https://storage.googleapis.com/flutter_infra_release/releases/releases_linux.json').then((r) =>
+    r.json(),
+  ) as { releases?: Array<{ channel?: string; version?: string }> }
+  const stable = (data.releases ?? []).filter((x) => x.channel === 'stable' && x.version && !String(x.version).includes('pre'))
+  const versions = stable
+    .map((x) => String(x.version))
+    .sort(compareSemverDesc)
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const v of versions) {
+    if (seen.has(v)) continue
+    seen.add(v)
+    out.push(v)
+    if (out.length >= 55) break
+  }
+  return out
+}
+
+async function fetchDartSdkVersionsForPicker(): Promise<string[]> {
+  /** dart-lang/sdk does not publish GitHub Releases; SDK versions live as git tags (`3.5.4`, `3.13.0-77.0.dev`, …). */
+  const tagRows = await fetchDartSdkGitTagsPaged(10)
+  const triplets = tagRows
+    .map((row) => parseDartSdkTripletFromGitTag(row.name))
+    .filter(Boolean)
+    .sort(compareSemverDesc)
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const v of triplets) {
+    if (seen.has(v)) continue
+    seen.add(v)
+    out.push(v)
+    if (out.length >= 80) break
+  }
+  if (out.length === 0) throw new Error('No Dart x.y.z tags parsed from dart-lang/sdk git tags')
+  return out
+}
+
+async function detectRuntimeInstallation(id: string, cmd: string, args: string[]): Promise<RuntimeDetectResult & { allVersions?: Array<{ version: string; path: string }> }> {
   const home = homedir()
   const localPaths: Record<string, string[]> = {
     rust: [`${home}/.cargo/bin/rustc`, '/usr/bin/rustc'],
     bun: [`${home}/.bun/bin/bun`, `${home}/.local/bin/bun`, '/usr/local/bin/bun'],
-    node: [`${home}/.nvm/versions/node/v*/bin/node`, `${home}/.local/bin/node`, '/usr/bin/node'],
-    go: [`${home}/go/bin/go`, '/usr/bin/go'],
+    node: [`${home}/.nvm/versions/node/v*/bin/node`, `${home}/.local/bin/node`, `${home}/.lumina/runtimes/node/bin/node`, '/usr/bin/node'],
+    go: [`${home}/go/bin/go`, `${home}/.lumina/runtimes/go/bin/go`, '/usr/bin/go'],
+    python: [`${home}/.pyenv/shims/python3`, `${home}/.pyenv/shims/python`, '/usr/bin/python3'],
   }
 
-  const globalRes = await new Promise<RuntimeDetectResult>((resolve) => {
+  const allVersions: Array<{ version: string; path: string }> = []
+  
+  // 1. Check global
+  await new Promise<void>((resolve) => {
     execFile(cmd, args, (err, stdout) => {
       if (!err) {
         const version = stdout.trim().split('\n')[0].replace(/^v/, '')
-        execFile('which', [cmd], (_errW, outW) => resolve({ installed: true, version, path: outW.trim() || undefined }))
+        execFile('which', [cmd], (_errW, outW) => {
+          const p = outW.trim()
+          if (p) allVersions.push({ version, path: p })
+          resolve()
+        })
       } else {
-        resolve({ installed: false })
+        resolve()
       }
     })
   })
-  if (globalRes.installed) return globalRes
 
+  // 2. Check locals
   const paths = localPaths[id] || []
   for (const p of paths) {
+    if (p.includes('*')) {
+       const base = p.split('*')[0]
+       if (fs.existsSync(base)) {
+         try {
+           const dirs = fs.readdirSync(base)
+           for (const d of dirs) {
+              const full = p.replace('*', d)
+              if (fs.existsSync(full)) {
+                 await new Promise<void>(res => {
+                   execFile(full, args, (err, stdout) => {
+                     if (!err) allVersions.push({ version: stdout.trim().split('\n')[0].replace(/^v/, ''), path: full })
+                     res()
+                   })
+                 })
+              }
+           }
+         } catch { /* ignore dir read errors */ }
+       }
+       continue
+    }
+
     if (!fs.existsSync(p)) continue
-    const res = await new Promise<RuntimeDetectResult>((resolve) => {
+    await new Promise<void>((resolve) => {
       execFile(p, args, (err, stdout) => {
-        if (!err) resolve({ installed: true, version: stdout.trim().split('\n')[0].replace(/^v/, ''), path: p })
-        else resolve({ installed: false })
+        if (!err) allVersions.push({ version: stdout.trim().split('\n')[0].replace(/^v/, ''), path: p })
+        resolve()
       })
     })
-    if (res.installed) return res
   }
 
+  const unique = Array.from(new Map(allVersions.map(v => [v.path, v])).values())
+  if (unique.length > 0) {
+    return { installed: true, version: unique[0].version, path: unique[0].path, allVersions: unique }
+  }
   return { installed: false }
 }
 
@@ -373,6 +761,84 @@ function assertAllowedWritePath(target: string): string {
     throw new Error('Path must resolve under your home directory or temp.')
   }
   return resolved
+}
+
+async function appendToShellProfile(binPath: string): Promise<string[]> {
+  const home = homedir()
+  const profiles = ['.bashrc', '.zshrc', '.profile', '.bash_profile']
+  const logs: string[] = []
+  const exportLine = `\n# LuminaDev: added bin path\nexport PATH="${binPath}:$PATH"\n`
+
+  for (const p of profiles) {
+    const fullPath = path.join(home, p)
+    if (fs.existsSync(fullPath)) {
+      try {
+        const content = await readFile(fullPath, 'utf8')
+        if (!content.includes(binPath)) {
+          await fs.promises.appendFile(fullPath, exportLine)
+          logs.push(`Updated ${p}: added ${binPath} to PATH.`)
+        } else {
+          logs.push(`Skipped ${p}: path already exists.`)
+        }
+      } catch (err) {
+        logs.push(`Error updating ${p}: ${String(err)}`)
+      }
+    }
+  }
+  return logs
+}
+
+async function runSmokeTest(runtimeId: string, cmd: string): Promise<{ ok: boolean; output: string }> {
+  const testCodes: Record<string, string> = {
+    node: `console.log("ok")`,
+    python: `print("ok")`,
+    go: `package main; import "fmt"; func main() { fmt.Println("ok") }`,
+    rust: `fn main() { println!("ok"); }`,
+    bun: `console.log("ok")`,
+    php: `echo "ok";`,
+    ruby: `puts "ok"`,
+    lua: `print("ok")`,
+  }
+
+  const code = testCodes[runtimeId]
+  if (!code) return { ok: true, output: 'No smoke test defined for this runtime.' }
+
+  return new Promise((resolve) => {
+    let process: ReturnType<typeof spawn>
+    if (runtimeId === 'go') {
+       const tmpFile = path.join(tmpdir(), `test_${randomUUID()}.go`)
+       fs.writeFileSync(tmpFile, code)
+       process = spawn(cmd, ['run', tmpFile])
+    } else if (runtimeId === 'rust') {
+       const tmpFile = path.join(tmpdir(), `test_${randomUUID()}.rs`)
+       const binFile = path.join(tmpdir(), `test_${randomUUID()}`)
+       fs.writeFileSync(tmpFile, code)
+       execFile('rustc', [tmpFile, '-o', binFile], (err) => {
+         if (err) return resolve({ ok: false, output: `Build failed: ${err.message}` })
+         execFile(binFile, (err2, stdout) => {
+            resolve({ ok: !err2 && stdout.trim() === 'ok', output: stdout.trim() })
+         })
+       })
+       return
+    } else {
+      let flags = ['-c', code]
+      if (runtimeId === 'node' || runtimeId === 'bun') flags = ['-e', code]
+      if (runtimeId === 'php') flags = ['-r', code]
+      if (runtimeId === 'ruby' || runtimeId === 'lua' || runtimeId === 'python') flags = ['-c', code] 
+      // Actually python -c is correct. Ruby is -e.
+      if (runtimeId === 'ruby') flags = ['-e', code]
+      if (runtimeId === 'lua') flags = ['-e', code]
+      
+      process = spawn(cmd, flags)
+    }
+
+    let out = ''
+    process.stdout?.on('data', (d) => (out += d.toString()))
+    process.on('close', (code) => {
+      resolve({ ok: code === 0 && out.trim().includes('ok'), output: out.trim() })
+    })
+    process.on('error', (err) => resolve({ ok: false, output: err.message }))
+  })
 }
 
 function sampleCpuUsage(): number {
@@ -1341,6 +1807,87 @@ function registerIpc(): void {
     }
   })
 
+  ipcMain.handle(IPC.runtimeGetVersions, async (_e, payload: { runtimeId?: string }) => {
+    const runtimeId = (payload?.runtimeId || 'unknown').toLowerCase()
+
+    try {
+      if (runtimeId === 'node') return await fetchNodeVersionsForPicker()
+      if (runtimeId === 'go') return await fetchGoVersionsForPicker()
+      if (runtimeId === 'python') return await fetchPythonVersionsForPicker()
+      if (runtimeId === 'bun') return await fetchBunVersionsForPicker()
+      if (runtimeId === 'zig') {
+        const res = await fetch('https://ziglang.org/download/index.json').then((r) => r.json()) as Record<string, unknown>
+        const keys = Object.keys(res)
+          .filter((k) => k !== 'master')
+          .sort(compareSemverDesc)
+        return keys.slice(0, 60)
+      }
+      if (runtimeId === 'php') return await fetchEolLatestVersions('php', 55)
+      if (runtimeId === 'ruby') return await fetchEolLatestVersions('ruby', 45)
+      if (runtimeId === 'lua') return await fetchEolLatestVersions('lua', 35)
+      if (runtimeId === 'rust') {
+        const patch = await fetchEolLatestVersions('rust', 85)
+        return ['stable', 'beta', 'nightly', ...patch]
+      }
+      if (runtimeId === 'julia') return await fetchJuliaVersionsForPicker()
+      if (runtimeId === 'java') return await fetchJavaVersionsForPicker()
+      if (runtimeId === 'dotnet') return await fetchDotnetSdkVersionsForPicker()
+      if (runtimeId === 'dart') return await fetchDartSdkVersionsForPicker()
+      if (runtimeId === 'flutter') return await fetchFlutterLinuxVersionsForPicker()
+    } catch (e) {
+      console.warn(`Dynamic version list failed for ${runtimeId}, using static fallback.`, e)
+    }
+
+    const versions: Record<string, string[]> = {
+      node: ['22.12.0', '22.11.0', '20.18.0', '20.17.0', '18.20.4', '18.19.0', '16.20.2', '14.21.3', '12.22.12'],
+      python: ['3.14.0', '3.13.2', '3.12.8', '3.11.9', '3.10.14', '3.9.19', '3.8.18'],
+      go: ['1.24.0', '1.23.4', '1.22.6', '1.21.8', '1.20.14', '1.19.13', '1.18.10', '1.17.13'],
+      rust: [
+        'stable', 'beta', 'nightly',
+        '1.85.0', '1.84.0', '1.83.0', '1.82.0', '1.80.0', '1.75.0', '1.70.0', '1.65.0',
+      ],
+      bun: ['canary', '1.2.2', '1.1.42', '1.0.36', '1.0.30', '1.0.0'],
+      java: [
+        '25.0.1+8-LTS (LTS)', '24.0.2+12', '23.0.2+7', '22.0.2+9',
+        '21.0.11+10-LTS (LTS)', '17.0.13+11-LTS (LTS)', '11.0.25+9-LTS (LTS)', '8.0.432+6-LTS (LTS)',
+      ],
+      php: ['8.5.0', '8.4.5', '8.3.15', '8.2.27', '8.1.31', '8.0.30', '7.4.33'],
+      ruby: ['4.0.0', '3.4.2', '3.3.7', '3.2.6', '3.1.6', '3.0.7', '2.7.8'],
+      zig: ['0.14.0', '0.13.0', '0.12.1', '0.11.0', '0.10.1', '0.9.1'],
+      dotnet: [
+        '11.0 · SDK 11.0.100-preview · STS',
+        '10.0 · SDK 10.0.203 · LTS',
+        '9.0 · SDK 9.0.313 · STS',
+        '8.0 · SDK 8.0.420 · LTS',
+        '7.0 · SDK 7.0.410 · STS',
+        '6.0 · SDK 6.0.428 · LTS',
+        '3.1 · SDK 3.1.426 · LTS',
+      ],
+      c_cpp: [
+        '15.1', '15.0', '14.2', '14.1', '13.3', '13.2', '12.4', '12.3', '11.4', '10.5',
+      ],
+      matlab: ['9.4.0', '9.3.0', '9.2.0', '9.1.0', '8.4.0', '8.3.0', '8.2.0', '8.1.0', '7.4.0'],
+      dart: [
+        '3.8.1', '3.8.0', '3.7.2', '3.7.1', '3.7.0', '3.6.2', '3.6.1', '3.6.0', '3.5.4', '3.5.3', '3.5.2', '3.5.1', '3.5.0',
+        '3.4.4', '3.4.3', '3.4.2', '3.4.1', '3.4.0', '3.3.4', '3.3.3', '3.3.2', '3.3.1', '3.3.0', '3.2.6', '3.2.5', '3.2.4',
+        '3.1.5', '3.1.4', '3.1.3', '3.0.7', '3.0.6', '3.0.5',
+      ],
+      flutter: ['3.29.0', '3.27.0', '3.24.0', '3.22.0', '3.19.0', '3.16.0', '3.13.0', '3.10.0'],
+      julia: [
+        '1.12.0', '1.11.4', '1.11.3', '1.11.2', '1.11.1', '1.11.0', '1.10.5', '1.10.4', '1.10.3', '1.10.2', '1.10.1', '1.10.0',
+        '1.9.4', '1.9.3', '1.9.2', '1.9.1', '1.9.0', '1.8.5', '1.8.4', '1.8.3', '1.8.2', '1.8.1', '1.8.0', '1.7.3', '1.7.2', '1.7.1',
+        '1.6.7', '1.6.6', '1.6.5', '1.6.4', '1.6.3',
+      ],
+      lua: ['5.5.0', '5.4.8', '5.4.7', '5.3.6', '5.2.4', '5.1.5', '5.0.3'],
+      lisp: [
+        '2.5.5', '2.5.4', '2.5.3', '2.5.2', '2.5.1', '2.5.0',
+        '2.4.10', '2.4.9', '2.4.8', '2.4.7', '2.4.6', '2.4.5', '2.4.4', '2.4.3', '2.4.2', '2.4.1', '2.4.0',
+        '2.3.11', '2.3.10', '2.3.9', '2.3.8',
+      ],
+    }
+    return versions[runtimeId] || ['latest']
+  })
+
   ipcMain.handle('dh:runtime:check-deps', async (_e, raw: unknown) => {
     const { execSync } = await import('node:child_process')
     const payload = z.object({ runtimeId: z.string().optional() }).optional().parse(raw)
@@ -1972,13 +2519,32 @@ function registerIpc(): void {
         command = 'pkexec'
         args = ['bash', '-lc', cmdByDistro[distro]]
       } else {
-        // Local/Script Method (or Bun which has no standard package)
+        // Local/Script Method
+        const luminaRuntimes = path.join(homedir(), '.lumina', 'runtimes')
+        const _version = normalizeRequestedVersion(runtimeId, req.version)
+        job.log.push(`Local install method: aiming for ${_version}`)
+        
         if (runtimeId === 'rust') {
           command = 'bash'
           args = ['-c', "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y"]
         } else if (runtimeId === 'bun') {
           command = 'bash'
           args = ['-c', "curl -fsSL https://bun.sh/install | bash"]
+        } else if (runtimeId === 'node') {
+          command = 'bash'
+          const nodeTarget =
+            _version === 'latest' ? 'node' : _version === 'lts' ? '--lts' : _version
+          args = ['-lc', `mkdir -p "${luminaRuntimes}" && export NVM_DIR="$HOME/.nvm" && ([ -s "$NVM_DIR/nvm.sh" ] || curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash) && . "$NVM_DIR/nvm.sh" && nvm install ${nodeTarget} && nvm alias default ${nodeTarget}`]
+        } else if (runtimeId === 'go') {
+          command = 'bash'
+          const goVer = await resolveGoTarballVersion(_version)
+          job.log.push(`Resolved Go install tarball: ${goVer}`)
+          args = ['-lc', `set -e; mkdir -p "${luminaRuntimes}"; VER="${goVer}"; TAR="go$VER.linux-amd64.tar.gz"; rm -rf "${luminaRuntimes}/go" "$HOME/.go-tmp"; mkdir -p "$HOME/.go-tmp"; curl -fsSL "https://go.dev/dl/$TAR" -o "$HOME/.go-tmp/$TAR" && tar -C "${luminaRuntimes}" -xzf "$HOME/.go-tmp/$TAR"`]
+        } else if (runtimeId === 'python') {
+          command = 'bash'
+          const pyTarget = await resolvePythonInstallVersion(_version)
+          job.log.push(`Resolved Python install version: ${pyTarget}`)
+          args = ['-lc', `set -e; export PYENV_ROOT="$HOME/.pyenv"; export PATH="$PYENV_ROOT/bin:$PATH"; if [ ! -d "$PYENV_ROOT" ]; then curl -fsSL https://pyenv.run | bash; fi; eval "$(pyenv init -)"; pyenv install -s ${pyTarget}; pyenv global ${pyTarget}`]
         } else {
           job.state = 'failed'
           job.progress = 100
@@ -2001,7 +2567,6 @@ function registerIpc(): void {
         proc.stderr.on('data', (data) => {
           const s = data.toString().trim()
           if (s) {
-            // DNF/CURL use stderr for progress bars. Only prefix if it's an actual error.
             const isError = /error|failed|denied|not found/i.test(s)
             job.log.push(isError ? `[ERR] ${s}` : s)
             job.progress = Math.min(95, job.progress + 1)
@@ -2018,15 +2583,32 @@ function registerIpc(): void {
           if (code === 0) {
             const probe = RUNTIME_DETECT_COMMANDS[runtimeId]
             if (probe) {
+              // Wait a bit for filesystem sync if local
+              if (method === 'local') await new Promise(r => setTimeout(r, 1000))
+              
               const verified = await detectRuntimeInstallation(runtimeId, probe.cmd, probe.args)
-              if (!verified.installed) {
+              if (!verified.installed && method === 'system') {
                 job.state = 'failed'
                 job.progress = 100
                 job.log.push('Install command ended successfully, but runtime is not detected on this system.')
-                if (runtimeId === 'bun') {
-                  job.log.push('Bun often installs to ~/.bun/bin. Open a new terminal or add it to PATH, then retry.')
-                }
                 return
+              }
+              
+              // Handle PATH update if requested
+              if (req.addToPath && verified.path) {
+                job.log.push(`Updating shell PATH for ${verified.path}...`)
+                const binDir = path.dirname(verified.path)
+                const pathLogs = await appendToShellProfile(binDir)
+                pathLogs.forEach(l => job.log.push(l))
+              }
+
+              // Run Smoke Test
+              job.log.push('Running post-installation smoke test...')
+              const testRes = await runSmokeTest(runtimeId, verified.path || probe.cmd)
+              if (testRes.ok) {
+                job.log.push(`Smoke test passed: ${testRes.output}`)
+              } else {
+                job.log.push(`[WARN] Smoke test failed or skipped: ${testRes.output}`)
               }
             }
 

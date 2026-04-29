@@ -38,6 +38,8 @@ export const JobStartRequestSchema = z.object({
   method: z.enum(['system', 'local']).optional(),
   /** For runtime_uninstall: remove runtime only, or include safe autoremove deps */
   removeMode: z.enum(['runtime_only', 'runtime_and_deps']).optional(),
+  /** Whether to automatically add the bin path to shell profile (~/.bashrc, etc.) */
+  addToPath: z.boolean().optional(),
 })
 export type JobStartRequest = z.infer<typeof JobStartRequestSchema>
 
