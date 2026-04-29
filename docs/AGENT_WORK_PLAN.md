@@ -27,7 +27,7 @@
 |----|--------|---------------------|
 | A1 | تدقيق القنوات | مطابقة `packages/shared/src/ipc.ts` مع `ipc_invoke` / مسار Tauri. **`done` (تدقيق أولي 2026-04-30)** — انظر قسم «لقطة A1» أدناه؛ إصلاح `dh:docker:create` لإرجاع `id`. |
 | A2 | `dh:docker:install` | **`done`** — نفس منطق Electron: خطوات `apt`/`dnf`/`pacman` عبر `sudo -S` + سجل `log` في الرد. |
-| A3 | `dh:docker:remap-port` | **`done`** — `docker inspect` + تعديل `PortBindings` + `docker create`/`start` (نسخة بحاوية جديدة)، مع إعادة محاولة عند تعارض الاسم. |
+| A3 | `dh:docker:remap-port` | **`done`** — inspect + create + start؛ ثم **`docker stop`** للحاوية الأصلية (best-effort) + حقول `sourceStopped` / `sourceStopNote` في الرد. |
 | A4 | حدود الصلاحيات | مراجعة سريعة لمسارات Docker socket وSSH وأوامر shell: timeouts، allowlists، رسائل خطأ حتمية. |
 | A5 | Flatpak (لاحقًا) | عند التفعيل: manifest، صلاحيات، job في Actions — **بعد** B4/A1 مستقرين. |
 

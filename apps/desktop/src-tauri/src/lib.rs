@@ -270,12 +270,35 @@ async fn sudo_bash_install_step(cmd: &str, password: Option<&str>, logs: &mut Ve
   }
 }
 
+async fn sudo_passwordless_ok() -> bool {
+  exec_output("sudo", &["-n", "true"]).await.is_ok()
+}
+
 async fn docker_install_invoke(body: &Value) -> Value {
+  if std::env::var("FLATPAK_ID").is_ok() {
+    return json!({
+      "ok": false,
+      "log": vec![
+        "Blocked: Flatpak sandbox cannot run privileged host package managers (apt/dnf/pacman).".to_string()
+      ],
+      "error": "[DOCKER_INSTALL_FAILED] Install Docker on the host outside Flatpak (see https://docs.docker.com/engine/install/), grant socket access to this app, then retry."
+    });
+  }
+
   let distro = body.get("distro").and_then(|v| v.as_str()).unwrap_or_default();
   if !matches!(distro, "ubuntu" | "fedora" | "arch") {
     return json!({ "ok": false, "log": Vec::<String>::new(), "error": "[DOCKER_INVALID_REQUEST] Unsupported distro." });
   }
   let password = body.get("password").and_then(|v| v.as_str());
+  let pw_nonempty = password.map(|p| !p.is_empty()).unwrap_or(false);
+  if !pw_nonempty && !sudo_passwordless_ok().await {
+    return json!({
+      "ok": false,
+      "log": Vec::<String>::new(),
+      "error": "[DOCKER_INSTALL_FAILED] sudo needs a password or passwordless sudo. Enter the sudo password in the installer UI, or configure NOPASSWD for this user."
+    });
+  }
+
   let components = body.get("components").and_then(|v| v.as_array());
   let Some(steps) = docker_install_build_steps(distro, components) else {
     return json!({ "ok": false, "log": Vec::<String>::new(), "error": "[DOCKER_INVALID_REQUEST] Unsupported distro." });
@@ -444,7 +467,18 @@ async fn docker_remap_port_invoke(body: &Value) -> Value {
           let _ = exec_output("docker", &["rm", "-f", &cid]).await;
           return json!({ "ok": false, "error": format!("[DOCKER_REMAP_FAILED] start: {}", e.trim()) });
         }
-        return json!({ "ok": true, "id": cid, "name": new_name });
+        // Stop source container so two copies are not left running (clone keeps old id bound to old host port).
+        let stop_note = match exec_output("docker", &["stop", id]).await {
+          Ok(_) => json!(null),
+          Err(e) => json!(format!("source still running: {}", e.trim())),
+        };
+        return json!({
+          "ok": true,
+          "id": cid,
+          "name": new_name,
+          "sourceStopped": stop_note.is_null(),
+          "sourceStopNote": stop_note,
+        });
       }
       Err(e) => {
         let msg = e.to_lowercase();
