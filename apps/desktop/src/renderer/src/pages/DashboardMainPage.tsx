@@ -378,7 +378,11 @@ export function DashboardMainPage(): ReactElement {
 
   async function dockerAction(id: string, action: 'start' | 'stop' | 'restart'): Promise<void> {
     if (!window.confirm(`${action} this container?`)) return
-    await window.dh.dockerAction({ id, action })
+    const res = (await window.dh.dockerAction({ id, action })) as { ok?: boolean; error?: string }
+    if (res && typeof res === 'object' && res.ok === false) {
+      setComposeMsg(res.error || 'Container action failed.')
+      return
+    }
     void refresh()
   }
 }

@@ -11,6 +11,7 @@ import pty from 'node-pty'
 import simpleGit from 'simple-git'
 import yazl from 'yazl'
 import { z } from 'zod'
+import { dockerErrorString } from './dockerError'
 
 import {
   ComposeUpRequestSchema,
@@ -64,6 +65,9 @@ import {
   SshGenerateSchema,
   SshGetPubSchema,
   SshTestGithubSchema,
+  RuntimeCheckDepsRequestSchema,
+  RuntimeGetVersionsRequestSchema,
+  RuntimeUninstallPreviewRequestSchema,
   type RuntimeStatusResponse,
 } from '@linux-dev-home/shared'
 
@@ -162,19 +166,6 @@ function getDocker(): Docker | null {
     }
   }
   return null
-}
-
-function dockerErrorString(err: unknown, fallback: string): string {
-  const raw = err instanceof Error ? err.message : String(err)
-  const m = raw.toLowerCase()
-  if (/permission denied|eacces|operation not permitted/.test(m)) return `[DOCKER_PERMISSION_DENIED] ${raw}`
-  if (/no such container|not found|no such image|no such volume|no such network/.test(m)) return `[DOCKER_NOT_FOUND] ${raw}`
-  if (/conflict|already in use|already exists|is in use/.test(m)) return `[DOCKER_CONFLICT] ${raw}`
-  if (/timeout|timed out|etimedout/.test(m)) return `[DOCKER_TIMEOUT] ${raw}`
-  if (/socket|cannot connect|docker unavailable|is the docker daemon running/.test(m)) {
-    return `[DOCKER_UNAVAILABLE] ${raw || fallback}`
-  }
-  return `[DOCKER_UNKNOWN] ${raw || fallback}`
 }
 
 function detectHostDistroSync(): 'fedora' | 'ubuntu' | 'arch' {
@@ -1175,17 +1166,17 @@ function registerIpc(): void {
       const body = raw as DockerActionPayload
       const act = DockerContainerActionSchema.safeParse(body?.action)
       const id = typeof body?.id === 'string' ? body.id : ''
-      if (!id || !act.success) throw new Error('[DOCKER_INVALID_REQUEST] Invalid docker action')
+      if (!id || !act.success) return { ok: false as const, error: '[DOCKER_INVALID_REQUEST] Invalid docker action' }
       const d = getDocker()
-      if (!d) throw new Error('[DOCKER_UNAVAILABLE] Docker unavailable')
+      if (!d) return { ok: false as const, error: '[DOCKER_UNAVAILABLE] Docker unavailable' }
       const container = d.getContainer(id)
       if (act.data === 'start') await container.start()
       else if (act.data === 'stop') await container.stop({ t: 2 })
       else if (act.data === 'restart') await container.restart()
       else await container.remove({ force: true })
-      return { ok: true }
+      return { ok: true as const }
     } catch (e) {
-      throw new Error(dockerErrorString(e, 'Container action failed.'))
+      return { ok: false as const, error: dockerErrorString(e, 'Container action failed.') }
     }
   })
 
@@ -1193,7 +1184,7 @@ function registerIpc(): void {
     try {
       const req = DockerLogsRequestSchema.parse(raw)
       const d = getDocker()
-      if (!d) throw new Error('[DOCKER_UNAVAILABLE] Docker unavailable')
+      if (!d) return { ok: false as const, error: '[DOCKER_UNAVAILABLE] Docker unavailable', text: '' }
       const container = d.getContainer(req.id)
       const stream = await container.logs({
         stdout: true,
@@ -1202,80 +1193,83 @@ function registerIpc(): void {
         timestamps: false,
       })
       const buf = Buffer.isBuffer(stream) ? stream : Buffer.from(stream as ArrayBuffer)
-      return buf.toString('utf8')
+      return { ok: true as const, text: buf.toString('utf8') }
     } catch (e) {
-      throw new Error(dockerErrorString(e, 'Failed to read Docker logs.'))
+      return { ok: false as const, error: dockerErrorString(e, 'Failed to read Docker logs.'), text: '' }
     }
   })
 
   ipcMain.handle(IPC.dockerCreate, async (_e, raw: unknown) => {
-    const req = DockerCreateRequestSchema.parse(raw)
-    const d = getDocker()
-    if (!d) throw new Error('[DOCKER_UNAVAILABLE] Docker unavailable')
-    const cmd = req.command?.trim() ? req.command.trim().split(/\s+/) : undefined
-    const exposedPorts =
-      req.ports && req.ports.length > 0
-        ? Object.fromEntries(req.ports.map((p) => [`${p.containerPort}/${p.protocol ?? 'tcp'}`, {}]))
-        : undefined
-    const portBindings =
-      req.ports && req.ports.length > 0
-        ? Object.fromEntries(
-            req.ports.map((p) => [
-              `${p.containerPort}/${p.protocol ?? 'tcp'}`,
-              [{ HostPort: String(p.hostPort) }],
-            ])
-          )
-        : undefined
-    const binds =
-      req.volumes && req.volumes.length > 0
-        ? req.volumes.map((v) => {
-            const hostPath = path.isAbsolute(v.hostPath)
-              ? v.hostPath
-              : path.resolve(process.cwd(), v.hostPath)
-            return `${hostPath}:${v.containerPath}`
-          })
-        : undefined
-    const createPayload = {
-      Image: req.image,
-      name: req.name,
-      Cmd: cmd,
-      Env: req.env,
-      ExposedPorts: exposedPorts,
-      Tty: true,
-      OpenStdin: false,
-      HostConfig: {
-        PortBindings: portBindings,
-        Binds: binds,
-        RestartPolicy: { Name: 'unless-stopped' as const },
-      },
-    }
-    let container: Docker.Container
     try {
-      container = await d.createContainer(createPayload)
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e)
-      if (!/No such image/i.test(msg)) throw new Error(dockerErrorString(e, 'Container creation failed.'))
-      // If image is missing locally, pull it once and retry create.
-      const stream = await d.pull(req.image)
-      await new Promise<void>((resolvePull, rejectPull) => {
-        d.modem.followProgress(stream, (err) => {
-          if (err) rejectPull(err)
-          else resolvePull()
+      const req = DockerCreateRequestSchema.parse(raw)
+      const d = getDocker()
+      if (!d) return { ok: false as const, error: '[DOCKER_UNAVAILABLE] Docker unavailable', id: '' }
+      const cmd = req.command?.trim() ? req.command.trim().split(/\s+/) : undefined
+      const exposedPorts =
+        req.ports && req.ports.length > 0
+          ? Object.fromEntries(req.ports.map((p) => [`${p.containerPort}/${p.protocol ?? 'tcp'}`, {}]))
+          : undefined
+      const portBindings =
+        req.ports && req.ports.length > 0
+          ? Object.fromEntries(
+              req.ports.map((p) => [
+                `${p.containerPort}/${p.protocol ?? 'tcp'}`,
+                [{ HostPort: String(p.hostPort) }],
+              ])
+            )
+          : undefined
+      const binds =
+        req.volumes && req.volumes.length > 0
+          ? req.volumes.map((v) => {
+              const hostPath = path.isAbsolute(v.hostPath)
+                ? v.hostPath
+                : path.resolve(process.cwd(), v.hostPath)
+              return `${hostPath}:${v.containerPath}`
+            })
+          : undefined
+      const createPayload = {
+        Image: req.image,
+        name: req.name,
+        Cmd: cmd,
+        Env: req.env,
+        ExposedPorts: exposedPorts,
+        Tty: true,
+        OpenStdin: false,
+        HostConfig: {
+          PortBindings: portBindings,
+          Binds: binds,
+          RestartPolicy: { Name: 'unless-stopped' as const },
+        },
+      }
+      let container: Docker.Container
+      try {
+        container = await d.createContainer(createPayload)
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e)
+        if (!/No such image/i.test(msg)) throw e
+        const stream = await d.pull(req.image)
+        await new Promise<void>((resolvePull, rejectPull) => {
+          d.modem.followProgress(stream, (err) => {
+            if (err) rejectPull(err)
+            else resolvePull()
+          })
         })
-      })
-      container = await d.createContainer(createPayload)
+        container = await d.createContainer(createPayload)
+      }
+      if (req.autoStart ?? true) {
+        await container.start()
+      }
+      return { ok: true as const, id: container.id }
+    } catch (e) {
+      return { ok: false as const, error: dockerErrorString(e, 'Container creation failed.'), id: '' }
     }
-    if (req.autoStart ?? true) {
-      await container.start()
-    }
-    return { ok: true, id: container.id }
   })
 
   ipcMain.handle(IPC.dockerPull, async (_e, raw: unknown) => {
     try {
       const req = DockerPullRequestSchema.parse(raw)
       const d = getDocker()
-      if (!d) throw new Error('[DOCKER_UNAVAILABLE] Docker unavailable')
+      if (!d) return { ok: false as const, error: '[DOCKER_UNAVAILABLE] Docker unavailable' }
       const stream = await d.pull(req.image)
       await new Promise<void>((resolvePull, rejectPull) => {
         d.modem.followProgress(stream, (err) => {
@@ -1283,9 +1277,9 @@ function registerIpc(): void {
           else resolvePull()
         })
       })
-      return { ok: true }
+      return { ok: true as const }
     } catch (e) {
-      throw new Error(dockerErrorString(e, 'Image pull failed.'))
+      return { ok: false as const, error: dockerErrorString(e, 'Image pull failed.') }
     }
   })
 
@@ -1327,197 +1321,251 @@ function registerIpc(): void {
   })
 
   ipcMain.handle(IPC.dockerImagesList, async () => {
-    const d = getDocker()
-    if (!d) throw new Error('Docker unavailable')
-    const list = await d.listImages({ all: true })
-    const rows: ImageRow[] = list.map((img) => ({
-      id: img.Id,
-      repoTags: Array.isArray(img.RepoTags) && img.RepoTags.length > 0 ? img.RepoTags : ['<none>:<none>'],
-      sizeMb: Math.round((((img.Size ?? 0) as number) / (1024 * 1024)) * 10) / 10,
-      createdAt: ((img.Created ?? 0) as number) * 1000,
-    }))
-    return { ok: true, rows }
+    try {
+      const d = getDocker()
+      if (!d) return { ok: false as const, error: '[DOCKER_UNAVAILABLE] Docker unavailable', rows: [] as ImageRow[] }
+      const list = await d.listImages({ all: true })
+      const rows: ImageRow[] = list.map((img) => ({
+        id: img.Id,
+        repoTags: Array.isArray(img.RepoTags) && img.RepoTags.length > 0 ? img.RepoTags : ['<none>:<none>'],
+        sizeMb: Math.round((((img.Size ?? 0) as number) / (1024 * 1024)) * 10) / 10,
+        createdAt: ((img.Created ?? 0) as number) * 1000,
+      }))
+      return { ok: true as const, rows }
+    } catch (e) {
+      return { ok: false as const, error: dockerErrorString(e, 'Images listing failed.'), rows: [] as ImageRow[] }
+    }
   })
 
   ipcMain.handle(IPC.dockerImageAction, async (_e, raw: unknown) => {
-    const req = DockerImageActionRequestSchema.parse(raw as DockerImageActionPayload)
-    const d = getDocker()
-    if (!d) throw new Error('Docker unavailable')
-    if (req.action !== 'remove') throw new Error('Unsupported image action')
-    await d.getImage(req.id).remove({ force: req.force ?? false })
-    return { ok: true }
+    try {
+      const req = DockerImageActionRequestSchema.parse(raw as DockerImageActionPayload)
+      const d = getDocker()
+      if (!d) return { ok: false as const, error: '[DOCKER_UNAVAILABLE] Docker unavailable' }
+      if (req.action !== 'remove') return { ok: false as const, error: '[DOCKER_INVALID_REQUEST] Unsupported image action' }
+      await d.getImage(req.id).remove({ force: req.force ?? false })
+      return { ok: true as const }
+    } catch (e) {
+      return { ok: false as const, error: dockerErrorString(e, 'Image action failed.') }
+    }
   })
 
   ipcMain.handle(IPC.dockerVolumesList, async () => {
-    const d = getDocker()
-    if (!d) throw new Error('Docker unavailable')
-    const list = await d.listVolumes()
-    const containers = await d.listContainers({ all: true })
-    const usage = new Map<string, Set<string>>()
-    for (const c of containers) {
-      const cName = (c.Names?.[0] ?? '').replace(/^\//, '') || c.Id.slice(0, 12)
-      for (const m of c.Mounts ?? []) {
-        if (m.Type !== 'volume' || !m.Name) continue
-        if (!usage.has(m.Name)) usage.set(m.Name, new Set<string>())
-        usage.get(m.Name)?.add(cName)
+    try {
+      const d = getDocker()
+      if (!d) return { ok: false as const, error: '[DOCKER_UNAVAILABLE] Docker unavailable', rows: [] as VolumeRow[] }
+      const list = await d.listVolumes()
+      const containers = await d.listContainers({ all: true })
+      const usage = new Map<string, Set<string>>()
+      for (const c of containers) {
+        const cName = (c.Names?.[0] ?? '').replace(/^\//, '') || c.Id.slice(0, 12)
+        for (const m of c.Mounts ?? []) {
+          if (m.Type !== 'volume' || !m.Name) continue
+          if (!usage.has(m.Name)) usage.set(m.Name, new Set<string>())
+          usage.get(m.Name)?.add(cName)
+        }
       }
+      const rows: VolumeRow[] = (list.Volumes ?? []).map((v) => ({
+        name: v.Name,
+        driver: v.Driver,
+        mountpoint: v.Mountpoint,
+        scope: v.Scope,
+        usedBy: Array.from(usage.get(v.Name) ?? []),
+      }))
+      return { ok: true as const, rows }
+    } catch (e) {
+      return { ok: false as const, error: dockerErrorString(e, 'Volumes listing failed.'), rows: [] as VolumeRow[] }
     }
-    const rows: VolumeRow[] = (list.Volumes ?? []).map((v) => ({
-      name: v.Name,
-      driver: v.Driver,
-      mountpoint: v.Mountpoint,
-      scope: v.Scope,
-      usedBy: Array.from(usage.get(v.Name) ?? []),
-    }))
-    return { ok: true, rows }
   })
 
   ipcMain.handle(IPC.dockerVolumeAction, async (_e, raw: unknown) => {
-    const req = DockerVolumeActionRequestSchema.parse(raw as DockerVolumeActionPayload)
-    const d = getDocker()
-    if (!d) throw new Error('Docker unavailable')
-    if (req.action !== 'remove') throw new Error('Unsupported volume action')
-    await d.getVolume(req.name).remove()
-    return { ok: true }
+    try {
+      const req = DockerVolumeActionRequestSchema.parse(raw as DockerVolumeActionPayload)
+      const d = getDocker()
+      if (!d) return { ok: false as const, error: '[DOCKER_UNAVAILABLE] Docker unavailable' }
+      if (req.action !== 'remove') return { ok: false as const, error: '[DOCKER_INVALID_REQUEST] Unsupported volume action' }
+      await d.getVolume(req.name).remove()
+      return { ok: true as const }
+    } catch (e) {
+      return { ok: false as const, error: dockerErrorString(e, 'Volume action failed.') }
+    }
   })
 
   ipcMain.handle(IPC.dockerVolumeCreate, async (_e, raw: unknown) => {
-    const { name } = DockerVolumeCreateRequestSchema.parse(raw)
-    const d = getDocker()
-    if (!d) throw new Error('Docker unavailable')
-    await d.createVolume({ Name: name })
-    return { ok: true }
+    try {
+      const { name } = DockerVolumeCreateRequestSchema.parse(raw)
+      const d = getDocker()
+      if (!d) return { ok: false as const, error: '[DOCKER_UNAVAILABLE] Docker unavailable' }
+      await d.createVolume({ Name: name })
+      return { ok: true as const }
+    } catch (e) {
+      return { ok: false as const, error: dockerErrorString(e, 'Volume creation failed.') }
+    }
   })
 
   ipcMain.handle(IPC.dockerNetworksList, async () => {
-    const d = getDocker()
-    if (!d) throw new Error('Docker unavailable')
-    const list = await d.listNetworks()
-    const containers = await d.listContainers({ all: true })
-    const usage = new Map<string, Set<string>>()
-    for (const c of containers) {
-      const cName = (c.Names?.[0] ?? '').replace(/^\//, '') || c.Id.slice(0, 12)
-      for (const netName of Object.keys(c.NetworkSettings?.Networks ?? {})) {
-        if (!usage.has(netName)) usage.set(netName, new Set<string>())
-        usage.get(netName)?.add(cName)
+    try {
+      const d = getDocker()
+      if (!d) return { ok: false as const, error: '[DOCKER_UNAVAILABLE] Docker unavailable', rows: [] as NetworkRow[] }
+      const list = await d.listNetworks()
+      const containers = await d.listContainers({ all: true })
+      const usage = new Map<string, Set<string>>()
+      for (const c of containers) {
+        const cName = (c.Names?.[0] ?? '').replace(/^\//, '') || c.Id.slice(0, 12)
+        for (const netName of Object.keys(c.NetworkSettings?.Networks ?? {})) {
+          if (!usage.has(netName)) usage.set(netName, new Set<string>())
+          usage.get(netName)?.add(cName)
+        }
       }
+      const rows: NetworkRow[] = list.map((n) => ({
+        id: n.Id,
+        name: n.Name,
+        driver: n.Driver,
+        scope: n.Scope,
+        usedBy: Array.from(usage.get(n.Name) ?? []),
+      }))
+      return { ok: true as const, rows }
+    } catch (e) {
+      return { ok: false as const, error: dockerErrorString(e, 'Networks listing failed.'), rows: [] as NetworkRow[] }
     }
-    const rows: NetworkRow[] = list.map((n) => ({
-      id: n.Id,
-      name: n.Name,
-      driver: n.Driver,
-      scope: n.Scope,
-      usedBy: Array.from(usage.get(n.Name) ?? []),
-    }))
-    return { ok: true, rows }
   })
 
   ipcMain.handle(IPC.dockerNetworkAction, async (_e, raw: unknown) => {
-    const req = DockerNetworkActionRequestSchema.parse(raw as DockerNetworkActionPayload)
-    const d = getDocker()
-    if (!d) throw new Error('Docker unavailable')
-    if (req.action !== 'remove') throw new Error('Unsupported network action')
-    await d.getNetwork(req.id).remove()
-    return { ok: true }
+    try {
+      const req = DockerNetworkActionRequestSchema.parse(raw as DockerNetworkActionPayload)
+      const d = getDocker()
+      if (!d) return { ok: false as const, error: '[DOCKER_UNAVAILABLE] Docker unavailable' }
+      if (req.action !== 'remove') return { ok: false as const, error: '[DOCKER_INVALID_REQUEST] Unsupported network action' }
+      await d.getNetwork(req.id).remove()
+      return { ok: true as const }
+    } catch (e) {
+      return { ok: false as const, error: dockerErrorString(e, 'Network action failed.') }
+    }
   })
 
   ipcMain.handle(IPC.dockerNetworkCreate, async (_e, raw: unknown) => {
-    const { name } = DockerNetworkCreateRequestSchema.parse(raw)
-    const d = getDocker()
-    if (!d) throw new Error('Docker unavailable')
-    await d.createNetwork({ Name: name })
-    return { ok: true }
+    try {
+      const { name } = DockerNetworkCreateRequestSchema.parse(raw)
+      const d = getDocker()
+      if (!d) return { ok: false as const, error: '[DOCKER_UNAVAILABLE] Docker unavailable' }
+      await d.createNetwork({ Name: name })
+      return { ok: true as const }
+    } catch (e) {
+      return { ok: false as const, error: dockerErrorString(e, 'Network creation failed.') }
+    }
   })
 
   ipcMain.handle(IPC.dockerPrune, async (_e, raw: unknown) => {
-    const selection = z
-      .object({
-        containers: z.boolean().optional().default(true),
-        images: z.boolean().optional().default(true),
-        volumes: z.boolean().optional().default(true),
-        networks: z.boolean().optional().default(true),
-      })
-      .parse(raw ?? {})
-    const d = getDocker()
-    if (!d) throw new Error('Docker unavailable')
+    try {
+      const selection = z
+        .object({
+          containers: z.boolean().optional().default(true),
+          images: z.boolean().optional().default(true),
+          volumes: z.boolean().optional().default(true),
+          networks: z.boolean().optional().default(true),
+        })
+        .parse(raw ?? {})
+      const d = getDocker()
+      if (!d) return { ok: false as const, error: '[DOCKER_UNAVAILABLE] Docker unavailable', reclaimedBytes: 0 }
 
-    let reclaimed = 0
-    if (selection.containers) {
-      const res = await d.pruneContainers()
-      reclaimed += Number(res.SpaceReclaimed || 0)
-    }
-    if (selection.images) {
-      const res = await d.pruneImages()
-      reclaimed += Number(res.SpaceReclaimed || 0)
-    }
-    if (selection.volumes) {
-      const res = await d.pruneVolumes()
-      reclaimed += Number(res.SpaceReclaimed || 0)
-    }
-    if (selection.networks) {
-      await d.pruneNetworks()
-    }
+      let reclaimed = 0
+      if (selection.containers) {
+        const res = await d.pruneContainers()
+        reclaimed += Number(res.SpaceReclaimed || 0)
+      }
+      if (selection.images) {
+        const res = await d.pruneImages()
+        reclaimed += Number(res.SpaceReclaimed || 0)
+      }
+      if (selection.volumes) {
+        const res = await d.pruneVolumes()
+        reclaimed += Number(res.SpaceReclaimed || 0)
+      }
+      if (selection.networks) {
+        await d.pruneNetworks()
+      }
 
-    return {
-      ok: true,
-      reclaimedBytes: reclaimed,
+      return {
+        ok: true as const,
+        reclaimedBytes: reclaimed,
+      }
+    } catch (e) {
+      return { ok: false as const, error: dockerErrorString(e, 'Docker prune failed.'), reclaimedBytes: 0 }
     }
   })
 
   ipcMain.handle(IPC.dockerPrunePreview, async () => {
-    const d = getDocker()
-    if (!d) throw new Error('Docker unavailable')
-    const [containers, images, volumes, networks] = await Promise.all([
-      d.listContainers({ all: true }),
-      d.listImages({ all: true, filters: { dangling: ['true'] } }),
-      d.listVolumes(),
-      d.listNetworks(),
-    ])
-    const stoppedCount = containers.filter((c) => c.State !== 'running').length
-    const volumeUnused = (volumes.Volumes ?? []).filter((v) => (v.UsageData?.RefCount ?? 0) === 0).length
-    const networkUnused = networks.filter((n) => {
-      const isSystem = n.Name === 'bridge' || n.Name === 'host' || n.Name === 'none'
-      return !isSystem && (n.Containers ? Object.keys(n.Containers).length === 0 : true)
-    }).length
-    return {
-      ok: true,
-      preview: {
-        containers: stoppedCount,
-        images: images.length,
-        volumes: volumeUnused,
-        networks: networkUnused,
-      },
+    try {
+      const d = getDocker()
+      if (!d) {
+        return {
+          ok: false as const,
+          error: '[DOCKER_UNAVAILABLE] Docker unavailable',
+          preview: { containers: 0, images: 0, volumes: 0, networks: 0 },
+        }
+      }
+      const [containers, images, volumes, networks] = await Promise.all([
+        d.listContainers({ all: true }),
+        d.listImages({ all: true, filters: { dangling: ['true'] } }),
+        d.listVolumes(),
+        d.listNetworks(),
+      ])
+      const stoppedCount = containers.filter((c) => c.State !== 'running').length
+      const volumeUnused = (volumes.Volumes ?? []).filter((v) => (v.UsageData?.RefCount ?? 0) === 0).length
+      const networkUnused = networks.filter((n) => {
+        const isSystem = n.Name === 'bridge' || n.Name === 'host' || n.Name === 'none'
+        return !isSystem && (n.Containers ? Object.keys(n.Containers).length === 0 : true)
+      }).length
+      return {
+        ok: true as const,
+        preview: {
+          containers: stoppedCount,
+          images: images.length,
+          volumes: volumeUnused,
+          networks: networkUnused,
+        },
+      }
+    } catch (e) {
+      return {
+        ok: false as const,
+        error: dockerErrorString(e, 'Cleanup preview failed.'),
+        preview: { containers: 0, images: 0, volumes: 0, networks: 0 },
+      }
     }
   })
 
   ipcMain.handle(IPC.dockerCleanupRun, async (_e, raw: unknown) => {
-    const req = z
-      .object({
-        containers: z.boolean().optional().default(false),
-        images: z.boolean().optional().default(false),
-        volumes: z.boolean().optional().default(false),
-        networks: z.boolean().optional().default(false),
-      })
-      .parse(raw)
-    const d = getDocker()
-    if (!d) throw new Error('[DOCKER_UNAVAILABLE] Docker unavailable')
-    let reclaimedBytes = 0
-    if (req.containers) {
-      const res = await d.pruneContainers()
-      reclaimedBytes += Number(res.SpaceReclaimed ?? 0)
+    try {
+      const req = z
+        .object({
+          containers: z.boolean().optional().default(false),
+          images: z.boolean().optional().default(false),
+          volumes: z.boolean().optional().default(false),
+          networks: z.boolean().optional().default(false),
+        })
+        .parse(raw)
+      const d = getDocker()
+      if (!d) return { ok: false as const, error: '[DOCKER_UNAVAILABLE] Docker unavailable', reclaimedBytes: 0 }
+      let reclaimedBytes = 0
+      if (req.containers) {
+        const res = await d.pruneContainers()
+        reclaimedBytes += Number(res.SpaceReclaimed ?? 0)
+      }
+      if (req.images) {
+        const res = await d.pruneImages()
+        reclaimedBytes += Number(res.SpaceReclaimed ?? 0)
+      }
+      if (req.volumes) {
+        const res = await d.pruneVolumes()
+        reclaimedBytes += Number(res.SpaceReclaimed ?? 0)
+      }
+      if (req.networks) {
+        await d.pruneNetworks()
+      }
+      return { ok: true as const, reclaimedBytes }
+    } catch (e) {
+      return { ok: false as const, error: dockerErrorString(e, 'Docker cleanup failed.'), reclaimedBytes: 0 }
     }
-    if (req.images) {
-      const res = await d.pruneImages()
-      reclaimedBytes += Number(res.SpaceReclaimed ?? 0)
-    }
-    if (req.volumes) {
-      const res = await d.pruneVolumes()
-      reclaimedBytes += Number(res.SpaceReclaimed ?? 0)
-    }
-    if (req.networks) {
-      await d.pruneNetworks()
-    }
-    return { ok: true, reclaimedBytes }
   })
 
   ipcMain.handle(IPC.dockerCheckInstalled, async () => {
@@ -1898,7 +1946,8 @@ function registerIpc(): void {
     }
   })
 
-  ipcMain.handle(IPC.runtimeGetVersions, async (_e, payload: { runtimeId?: string }) => {
+  ipcMain.handle(IPC.runtimeGetVersions, async (_e, raw: unknown) => {
+    const payload = RuntimeGetVersionsRequestSchema.parse(raw ?? {})
     const runtimeId = (payload?.runtimeId || 'unknown').toLowerCase()
 
     try {
@@ -1981,7 +2030,7 @@ function registerIpc(): void {
 
   ipcMain.handle('dh:runtime:check-deps', async (_e, raw: unknown) => {
     const { execSync } = await import('node:child_process')
-    const payload = z.object({ runtimeId: z.string().optional() }).optional().parse(raw)
+    const payload = RuntimeCheckDepsRequestSchema.parse(raw ?? {})
     const runtimeId = payload?.runtimeId ?? 'node'
     const distro = detectHostDistroSync()
 
@@ -2024,10 +2073,7 @@ function registerIpc(): void {
   })
 
   ipcMain.handle('dh:runtime:uninstall:preview', async (_e, raw: unknown) => {
-    const payload = z.object({
-      runtimeId: z.string().min(1),
-      removeMode: z.enum(['runtime_only', 'runtime_and_deps']).default('runtime_only'),
-    }).parse(raw)
+    const payload = RuntimeUninstallPreviewRequestSchema.parse(raw)
     const distro = detectHostDistroSync()
     const runtimePackages = (RUNTIME_INSTALL_PACKAGES[payload.runtimeId]?.[distro] ?? []).filter(Boolean)
     const plan = dependencyRemovalPlan(payload.runtimeId, distro)

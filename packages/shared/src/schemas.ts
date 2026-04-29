@@ -211,6 +211,19 @@ export const SshTestGithubSchema = z.object({
   target: z.enum(['sandbox', 'host']),
 })
 
+export const RuntimeGetVersionsRequestSchema = z.object({
+  runtimeId: z.string().min(1).max(64).optional(),
+})
+
+export const RuntimeCheckDepsRequestSchema = z.object({
+  runtimeId: z.string().min(1).max(64).optional(),
+})
+
+export const RuntimeUninstallPreviewRequestSchema = z.object({
+  runtimeId: z.string().min(1).max(64),
+  removeMode: z.enum(['runtime_only', 'runtime_and_deps']).default('runtime_only'),
+})
+
 export type DockerContainerAction = z.infer<typeof DockerContainerActionSchema>
 export type DockerImageAction = z.infer<typeof DockerImageActionSchema>
 export type DockerVolumeAction = z.infer<typeof DockerVolumeActionSchema>

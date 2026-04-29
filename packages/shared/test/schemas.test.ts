@@ -6,7 +6,12 @@ import {
   DockerErrorCodeSchema,
   DockerLogsRequestSchema,
   GitCloneRequestSchema,
+  GitConfigSetSchema,
   HostExecRequestSchema,
+  RuntimeCheckDepsRequestSchema,
+  RuntimeGetVersionsRequestSchema,
+  RuntimeUninstallPreviewRequestSchema,
+  SshGenerateSchema,
   StoreSetRequestSchema,
 } from '../src/schemas'
 import { isRegisteredWidgetType } from '../src/widgetRegistry'
@@ -42,6 +47,48 @@ describe('schemas', () => {
         url: 'not-a-url',
         targetDir: '/tmp/x',
       })
+    ).toThrow()
+  })
+
+  it('validates git config payload and rejects malformed values', () => {
+    expect(
+      GitConfigSetSchema.parse({
+        name: 'Dev User',
+        email: 'dev@example.com',
+        target: 'host',
+      })
+    ).toMatchObject({ target: 'host' })
+    expect(() =>
+      GitConfigSetSchema.parse({
+        name: 'Dev User',
+        email: 'not-an-email',
+        target: 'host',
+      })
+    ).toThrow()
+  })
+
+  it('validates ssh generate payload and rejects missing target', () => {
+    expect(SshGenerateSchema.parse({ target: 'sandbox', email: 'dev@example.com' })).toMatchObject({
+      target: 'sandbox',
+    })
+    expect(() => SshGenerateSchema.parse({ email: 'dev@example.com' })).toThrow()
+  })
+
+  it('validates runtime version/check-deps request payload bounds', () => {
+    expect(RuntimeGetVersionsRequestSchema.parse({ runtimeId: 'node' })).toEqual({ runtimeId: 'node' })
+    expect(RuntimeCheckDepsRequestSchema.parse({ runtimeId: 'python' })).toEqual({ runtimeId: 'python' })
+    expect(() =>
+      RuntimeGetVersionsRequestSchema.parse({ runtimeId: '' })
+    ).toThrow()
+  })
+
+  it('validates runtime uninstall preview payload and default mode', () => {
+    expect(RuntimeUninstallPreviewRequestSchema.parse({ runtimeId: 'node' })).toEqual({
+      runtimeId: 'node',
+      removeMode: 'runtime_only',
+    })
+    expect(() =>
+      RuntimeUninstallPreviewRequestSchema.parse({ runtimeId: 'node', removeMode: 'remove_all' })
     ).toThrow()
   })
 

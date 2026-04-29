@@ -6,6 +6,7 @@ import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
 
 import { DockerSchemeView } from '../components/DockerSchemeView'
+import { assertDockerOk } from './dockerContract'
 import { humanizeDockerError } from './dockerError'
 
 type TabId = 'scheme' | 'create' | 'containers' | 'images' | 'volumes' | 'networks' | 'ports' | 'cleanup'
@@ -189,9 +190,12 @@ export function DockerPage(): ReactElement {
         setNetworks([])
         return
       }
-      const img = (await window.dh.dockerImagesList()) as { ok: true; rows: ImageRow[] }
-      const vol = (await window.dh.dockerVolumesList()) as { ok: true; rows: VolumeRow[] }
-      const net = (await window.dh.dockerNetworksList()) as { ok: true; rows: NetworkRow[] }
+      const img = (await window.dh.dockerImagesList()) as { ok: boolean; rows: ImageRow[]; error?: string }
+      const vol = (await window.dh.dockerVolumesList()) as { ok: boolean; rows: VolumeRow[]; error?: string }
+      const net = (await window.dh.dockerNetworksList()) as { ok: boolean; rows: NetworkRow[]; error?: string }
+      assertDockerOk(img, 'Failed to list images.')
+      assertDockerOk(vol, 'Failed to list volumes.')
+      assertDockerOk(net, 'Failed to list networks.')
       setImages(img.rows)
       setVolumes(vol.rows)
       setNetworks(net.rows)
@@ -294,8 +298,11 @@ export function DockerPage(): ReactElement {
     }
     setBusy(true)
     try {
-      await window.dh.dockerAction({ id, action })
+      const res = await window.dh.dockerAction({ id, action })
+      assertDockerOk(res, 'Container action failed.')
       await refreshAll()
+    } catch (e) {
+      setErr(humanizeDockerError(e))
     } finally {
       setBusy(false)
     }
@@ -304,14 +311,25 @@ export function DockerPage(): ReactElement {
   async function openLogs(row: ContainerRow): Promise<void> {
     setSelected(row)
     setLogText('Loading logs…')
-    const text = (await window.dh.dockerLogs({ id: row.id, tail: 200 })) as string
-    setLogText(text || 'No logs')
+    const res = (await window.dh.dockerLogs({ id: row.id, tail: 200 })) as
+      | string
+      | { ok: boolean; text?: string; error?: string }
+    if (typeof res === 'string') {
+      setLogText(res || 'No logs')
+      return
+    }
+    if (!res.ok) {
+      setLogText(humanizeDockerError(res.error || 'Failed to read logs.'))
+      return
+    }
+    setLogText(res.text || 'No logs')
   }
 
   async function removeImage(id: string): Promise<void> {
     setBusy(true)
     try {
-      await window.dh.dockerImageAction({ id, action: 'remove' })
+      const removeRes = await window.dh.dockerImageAction({ id, action: 'remove' })
+      assertDockerOk(removeRes, 'Image removal failed.')
       await refreshAll()
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e)
@@ -325,9 +343,11 @@ export function DockerPage(): ReactElement {
         if (yes) {
           try {
             for (const dep of deps) {
-              await window.dh.dockerAction({ id: dep.id, action: 'remove' })
+              const depRes = await window.dh.dockerAction({ id: dep.id, action: 'remove' })
+              assertDockerOk(depRes, 'Failed removing dependent container.')
             }
-            await window.dh.dockerImageAction({ id, action: 'remove', force: true })
+            const forceRes = await window.dh.dockerImageAction({ id, action: 'remove', force: true })
+            assertDockerOk(forceRes, 'Forced image removal failed.')
             await refreshAll()
             setErr('')
           } catch (forceErr) {
@@ -354,7 +374,8 @@ export function DockerPage(): ReactElement {
     }
     setBusy(true)
     try {
-      await window.dh.dockerVolumeAction({ name, action: 'remove' })
+      const res = await window.dh.dockerVolumeAction({ name, action: 'remove' })
+      assertDockerOk(res, 'Volume removal failed.')
       await refreshAll()
     } catch (e) {
       setErr(humanizeDockerError(e))
@@ -373,7 +394,8 @@ export function DockerPage(): ReactElement {
     }
     setBusy(true)
     try {
-      await window.dh.dockerNetworkAction({ id, action: 'remove' })
+      const res = await window.dh.dockerNetworkAction({ id, action: 'remove' })
+      assertDockerOk(res, 'Network removal failed.')
       await refreshAll()
     } catch (e) {
       setErr(humanizeDockerError(e))
@@ -387,7 +409,12 @@ export function DockerPage(): ReactElement {
     if (!yes) return
     setBusy(true)
     try {
-      const res = (await window.dh.dockerCleanupRun(pruneSelection)) as { ok: true; reclaimedBytes: number }
+      const res = (await window.dh.dockerCleanupRun(pruneSelection)) as {
+        ok: boolean
+        reclaimedBytes: number
+        error?: string
+      }
+      assertDockerOk(res, 'Docker cleanup failed.')
       const mb = Math.round((res.reclaimedBytes / (1024 * 1024)) * 10) / 10
       setPruneInfo(`Cleanup finished. Reclaimed ~${mb} MB.`)
       await refreshAll()
@@ -402,9 +429,11 @@ export function DockerPage(): ReactElement {
   async function previewCleanup(): Promise<void> {
     try {
       const res = (await window.dh.dockerPrunePreview()) as {
-        ok: true
+        ok: boolean
         preview: { containers: number; images: number; volumes: number; networks: number }
+        error?: string
       }
+      assertDockerOk(res, 'Failed to preview cleanup.')
       setPrunePreview(res.preview)
     } catch (e) {
       setErr(humanizeDockerError(e))
@@ -417,7 +446,8 @@ export function DockerPage(): ReactElement {
     setErr('')
     setCreatedInfo('')
     try {
-      await window.dh.dockerVolumeCreate({ name: createVolumeName.trim() })
+      const res = await window.dh.dockerVolumeCreate({ name: createVolumeName.trim() })
+      assertDockerOk(res, 'Volume creation failed.')
       setCreatedInfo(`Created volume: ${createVolumeName.trim()}`)
       setCreateVolumeName('')
       await refreshAll()
@@ -434,7 +464,8 @@ export function DockerPage(): ReactElement {
     setErr('')
     setCreatedInfo('')
     try {
-      await window.dh.dockerNetworkCreate({ name: createNetworkName.trim() })
+      const res = await window.dh.dockerNetworkCreate({ name: createNetworkName.trim() })
+      assertDockerOk(res, 'Network creation failed.')
       setCreatedInfo(`Created network: ${createNetworkName.trim()}`)
       setCreateNetworkName('')
       await refreshAll()
@@ -463,7 +494,8 @@ export function DockerPage(): ReactElement {
     setErr('')
     setCreatedInfo(`Pulling image: ${img} (this may take a minute)...`)
     try {
-      await window.dh.dockerPull({ image: img })
+      const res = await window.dh.dockerPull({ image: img })
+      assertDockerOk(res, 'Image pull failed.')
       setCreatedInfo(`Pulled image: ${img}`)
       await refreshAll()
     } catch (e) {
@@ -491,7 +523,10 @@ export function DockerPage(): ReactElement {
         volumes,
         env,
         autoStart,
-      })) as { ok: true; id: string }
+      })) as { ok: boolean; id?: string; error?: string }
+      if (!res.ok || !res.id) {
+        throw new Error(res.error || 'Container creation failed.')
+      }
       setCreatedInfo(`Created container ${res.id.slice(0, 12)} from ${image}`)
       await refreshAll()
       setTab('containers')
