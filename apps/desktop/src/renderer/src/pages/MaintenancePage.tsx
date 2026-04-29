@@ -29,7 +29,6 @@ type CleanupPreview = { containers: number; images: number; volumes: number; net
 type TabId = (typeof TABS)[number]
 type DiagnosticCheck = { id: string; label: string; ok: boolean; details: string }
 type PerfSnapshot = { startupMs: number; rssMb: number; heapUsedMb: number; heapTotalMb: number; uptimeSec: number }
-const PAGE_MAX_WIDTH = 1320
 
 export function MaintenancePage(): ReactElement {
   const [activeTab, setActiveTab] = useState<TabId>('Overview / Health Dashboard')
