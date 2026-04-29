@@ -157,3 +157,56 @@ Stabilization is considered complete only when:
 - **Remaining before Stage 5 (when you declare product-ready):**
   - Run `pnpm smoke` on `main` before any tagged release
   - Flatpak offline build / Flathub — **last** (long CI); enable when ready
+
+---
+
+## Manual Test Checklist (B5)
+
+Minimal flows to verify before declaring a build stable. Run on real Tauri build.
+
+### App startup
+- [ ] App launches without crash
+- [ ] Wizard shows on first run; completes and dismisses on "Finish"
+- [ ] Dashboard loads with correct layout
+
+### Docker panel
+- [ ] Container list loads (or shows "docker unavailable" if no daemon)
+- [ ] Start / Stop / Restart / Remove actions work and refresh list
+- [ ] Container logs load and scroll
+- [ ] Images tab: list loads, remove image works
+- [ ] Volumes tab: list loads, create/remove volume works
+- [ ] Networks tab: list loads, create/remove network works
+- [ ] Cleanup tab: prune preview shows counts; "Run Cleanup" executes
+- [ ] Ports tab: shows current published ports; remap card shows "not available" notice
+- [ ] Install / Setup button: opens modal, shows "not available" notice + docs link
+
+### Terminal
+- [ ] Terminal tab opens, shell prompt appears
+- [ ] Input echoes, commands run
+- [ ] "Open external terminal" button works or shows clear error
+
+### SSH page
+- [ ] Key generation completes
+- [ ] Public key displays and can be copied
+- [ ] GitHub SSH test runs and returns output
+
+### Git Config page
+- [ ] Git config list loads
+- [ ] Set name/email saves without error
+
+### Monitor / System page
+- [ ] Metrics load (CPU, memory, disk, load avg)
+- [ ] Top processes list appears
+- [ ] System info loads
+
+### Maintenance page
+- [ ] Compose profiles list and launch
+- [ ] Diagnostics bundle creates file
+
+### Runtimes page
+- [ ] Runtime status list loads (node, python, go, rust, java)
+
+### Known limits (not test failures)
+- `dh:docker:install` → "not available" notice with docs link ✓
+- `dh:docker:remap-port` → "not available" notice ✓
+- Flatpak-specific paths may differ from native install ✓
