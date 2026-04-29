@@ -4,6 +4,7 @@ import type { SshBookmark } from '@linux-dev-home/shared'
 import { FitAddon } from '@xterm/addon-fit'
 import { Terminal } from '@xterm/xterm'
 import '@xterm/xterm/css/xterm.css'
+import { SSH_FLATPAK_HINT } from './environmentHints'
 
 type Target = 'sandbox' | 'host'
 
@@ -415,8 +416,7 @@ export function SshPage(): ReactElement {
             Configure your local identity and manage your remote connections securely.
           </p>
           <p style={{ color: 'var(--text-muted)', marginTop: 8, fontSize: 13 }}>
-            Flatpak note: if SSH key/files are inaccessible, grant access to `~/.ssh` for the app (for example with
-            `flatpak override --user --filesystem=~/.ssh io.github.karimodora.LinuxDevHome`).
+            {SSH_FLATPAK_HINT}
           </p>
         </header>
 
