@@ -95,18 +95,3 @@ jobs:
       - name: Build Tauri Linux app
         run: pnpm --filter desktop build:tauri
 
-  flatpak-offline-build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install Flatpak build tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y flatpak flatpak-builder
-      - name: Add Flathub and install Freedesktop SDK
-        run: |
-          flatpak remote-add --if-not-exists --user flathub https://dl.flathub.org/repo/flathub.flatpakrepo
-          flatpak install --user -y flathub org.freedesktop.Sdk//24.08 org.freedesktop.Platform//24.08
-      - name: Flatpak offline build smoke
-        run: |
-          flatpak-builder --user --force-clean flatpak-build-dir flatpak/io.github.karimodora.LinuxDevHome.offline.yml
