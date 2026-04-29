@@ -655,7 +655,10 @@ export function DockerPage(): ReactElement {
               Create from examples. Click <span className="mono">Use</span> to create a new container template.
             </div>
             <div className="hp-card">
-              <div style={{ fontWeight: 600, marginBottom: 8 }}>Pull from Docker Hub Explorer</div>
+              <div className="hp-card-header">
+                <div className="hp-card-title">Pull from Docker Hub Explorer</div>
+                <div className="hp-card-subtitle">Search image names and pick a tag before pulling.</div>
+              </div>
               <div style={{ position: 'relative' }}>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   <div style={{ flex: 1, position: 'relative' }}>
@@ -743,7 +746,10 @@ export function DockerPage(): ReactElement {
               </div>
             </div>
             <div className="hp-card">
-              <div style={{ fontWeight: 600, marginBottom: 8 }}>Custom create (ports/env/volumes)</div>
+              <div className="hp-card-header">
+                <div className="hp-card-title">Custom create (ports/env/volumes)</div>
+                <div className="hp-card-subtitle">Define runtime options line-by-line, then create once.</div>
+              </div>
               <div style={formGrid}>
                 <input value={customImage} onChange={(e) => setCustomImage(e.target.value)} placeholder="Image" className="hp-input" disabled={busy} />
                 <input value={customName} onChange={(e) => setCustomName(e.target.value)} placeholder="Container name (optional)" className="hp-input" disabled={busy} />
@@ -836,7 +842,7 @@ export function DockerPage(): ReactElement {
         {docker?.ok && tab === 'images' ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
             <div>
-              <div style={{ fontWeight: 600, marginBottom: 12 }}>Recommended Images</div>
+              <div className="hp-section-title">Recommended images</div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: 12 }}>
                 {RECOMMENDED_IMAGES.map((rec) => (
                   <div key={rec.name} style={{
@@ -876,7 +882,7 @@ export function DockerPage(): ReactElement {
             </div>
 
             <div>
-              <div style={{ fontWeight: 600, marginBottom: 12 }}>Downloaded Images</div>
+              <div className="hp-section-title">Downloaded images</div>
               {images.length === 0 ? (
                 <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>No images found.</div>
               ) : (
@@ -1721,7 +1727,7 @@ function ContainerTable(props: ContainerTableProps & { onConsole: (row: Containe
   const { title, rows, busy, onAction, onLogs, onConsole } = props
   return (
     <div>
-      <div style={{ fontWeight: 600, marginBottom: 12 }}>{title}</div>
+      <div className="hp-section-title">{title}</div>
       {rows.length === 0 ? (
         <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>No containers in this group.</div>
       ) : (

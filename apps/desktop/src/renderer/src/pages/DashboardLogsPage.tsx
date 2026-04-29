@@ -48,6 +48,10 @@ export function DashboardLogsPage(): ReactElement {
       </header>
 
       <section style={card}>
+        <div className="hp-card-header">
+          <div className="hp-card-title">Compose output</div>
+          <div className="hp-card-subtitle">Live logs by profile with explicit fetch control.</div>
+        </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
           <label className="mono" style={{ fontSize: 12 }}>Compose profile</label>
           <select value={profile} onChange={(e) => setProfile(e.target.value as (typeof profiles)[number])} style={input}>
@@ -65,8 +69,11 @@ export function DashboardLogsPage(): ReactElement {
       </section>
 
       <section style={card}>
+        <div className="hp-card-header">
+          <div className="hp-card-title">Background jobs</div>
+          <div className="hp-card-subtitle">Recent task states and latest tail line.</div>
+        </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div className="mono" style={{ fontSize: 12, color: 'var(--text-muted)' }}>Background jobs</div>
           <button type="button" className="hp-btn" onClick={() => void refreshJobs()}>Refresh</button>
         </div>
         {jobs.length === 0 ? (

@@ -57,12 +57,18 @@ export function DashboardKernelsPage(): ReactElement {
       </div>
 
       <section style={card}>
-        <div className="mono" style={{ color: 'var(--text-muted)', fontSize: 12 }}>GPU</div>
+        <div className="hp-card-header">
+          <div className="hp-card-title">GPU snapshot</div>
+          <div className="hp-card-subtitle">Runtime detection from host tooling.</div>
+        </div>
         <pre className="mono" style={{ ...pre, overflowX: 'auto' }}>{gpu}</pre>
       </section>
 
       <section style={card}>
-        <div className="mono" style={{ color: 'var(--text-muted)', fontSize: 12, marginBottom: 8 }}>Service states</div>
+        <div className="hp-card-header">
+          <div className="hp-card-title">Service states</div>
+          <div className="hp-card-subtitle">Quick status for critical local services.</div>
+        </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 10 }}>
           {UNITS.map((u) => (
             <div key={u} style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10, background: '#141414' }}>
