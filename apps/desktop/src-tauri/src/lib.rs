@@ -102,29 +102,6 @@ fn find_repo_root(start: &Path) -> PathBuf {
   start.to_path_buf()
 }
 
-async fn invoke_node_bridge(channel: &str, payload: &Value) -> Value {
-  let payload_raw = payload.to_string();
-  let output = Command::new("node")
-    .arg("../scripts/tauri-ipc-bridge.mjs")
-    .arg(channel)
-    .arg(payload_raw)
-    .output()
-    .await;
-  match output {
-    Ok(out) => {
-      if out.status.success() {
-        let body = String::from_utf8_lossy(&out.stdout).trim().to_string();
-        serde_json::from_str(&body).unwrap_or_else(|_| json!({ "ok": false, "error": "[TAURI_BRIDGE_PARSE_ERROR] Invalid JSON from node bridge." }))
-      } else {
-        json!({
-          "ok": false,
-          "error": format!("[TAURI_BRIDGE_FAILED] {}", String::from_utf8_lossy(&out.stderr).trim())
-        })
-      }
-    },
-    Err(e) => json!({ "ok": false, "error": format!("[TAURI_BRIDGE_SPAWN_FAILED] {}", e) }),
-  }
-}
 
 #[tauri::command]
 async fn ipc_send(channel: String, payload: Value, app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
@@ -883,18 +860,199 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       "ok": true,
       "drilldown": { "failedAuthSamples": [], "riskyPortOwners": [] }
     }),
-    // Stage 2: routed to Node bridge for parity while Rust-native port progresses.
-    "dh:docker:create"
-    | "dh:docker:remap-port"
-    | "dh:metrics"
-    | "dh:host:exec"
-    | "dh:dialog:folder"
-    | "dh:dialog:file:open"
-    | "dh:dialog:file:save"
-    | "dh:ssh:list:dir"
-    | "dh:ssh:setup:remote:key"
-    | "dh:docker:install"
-    => invoke_node_bridge(&channel, &body).await,
+    "dh:metrics" => {
+      let meminfo = std::fs::read_to_string("/proc/meminfo").unwrap_or_default();
+      let parse_kb = |key: &str| -> u64 {
+        meminfo.lines()
+          .find(|l| l.starts_with(key))
+          .and_then(|l| l.split_whitespace().nth(1))
+          .and_then(|v| v.parse::<u64>().ok())
+          .unwrap_or(0)
+      };
+      let total_kb = parse_kb("MemTotal:");
+      let free_kb = parse_kb("MemAvailable:");
+      let swap_total_kb = parse_kb("SwapTotal:");
+      let swap_free_kb = parse_kb("SwapFree:");
+      let uptime_str = std::fs::read_to_string("/proc/uptime").unwrap_or_default();
+      let uptime_sec = uptime_str.split_whitespace().next()
+        .and_then(|v| v.parse::<f64>().ok()).unwrap_or(0.0) as u64;
+      let loadavg_str = std::fs::read_to_string("/proc/loadavg").unwrap_or_default();
+      let load_parts: Vec<f64> = loadavg_str.split_whitespace().take(3)
+        .filter_map(|v| v.parse::<f64>().ok()).collect();
+      let load1 = load_parts.first().copied().unwrap_or(0.0);
+      let cpuinfo = std::fs::read_to_string("/proc/cpuinfo").unwrap_or_default();
+      let cpu_model = cpuinfo.lines()
+        .find(|l| l.starts_with("model name"))
+        .and_then(|l| l.splitn(2, ':').nth(1))
+        .map(|s| s.trim().to_string())
+        .unwrap_or_else(|| "Unknown CPU".to_string());
+      let num_cpus = cpuinfo.lines().filter(|l| l.starts_with("processor")).count().max(1) as f64;
+      let cpu_percent = (load1 / num_cpus * 100.0).min(100.0);
+      let disk_out = exec_output("df", &["-k", "/"]).await.unwrap_or_default();
+      let (disk_total_gb, disk_free_gb) = disk_out.lines().nth(1)
+        .and_then(|l| {
+          let p: Vec<&str> = l.split_whitespace().collect();
+          let total = p.get(1).and_then(|v| v.parse::<u64>().ok())?;
+          let free = p.get(3).and_then(|v| v.parse::<u64>().ok())?;
+          Some((total / 1024 / 1024, free / 1024 / 1024))
+        }).unwrap_or((0, 0));
+      let svc_out = exec_output("bash", &["-lc", "systemctl list-units --type=service --no-pager --plain --no-legend 2>/dev/null | head -30"]).await.unwrap_or_default();
+      let systemd: Vec<Value> = svc_out.lines().filter_map(|l| {
+        let p: Vec<&str> = l.split_whitespace().collect();
+        if p.len() < 4 { return None; }
+        let name = p[0].trim_end_matches(".service");
+        let state = match p[3] { "running" => "active", "failed" => "failed", _ => "inactive" };
+        Some(json!({ "name": name, "state": state }))
+      }).collect();
+      json!({
+        "ok": true,
+        "metrics": {
+          "cpuUsagePercent": cpu_percent,
+          "cpuModel": cpu_model,
+          "loadAvg": load_parts,
+          "totalMemMb": total_kb / 1024,
+          "freeMemMb": free_kb / 1024,
+          "swapTotalMb": swap_total_kb / 1024,
+          "swapFreeMb": swap_free_kb / 1024,
+          "uptimeSec": uptime_sec,
+          "diskTotalGb": disk_total_gb,
+          "diskFreeGb": disk_free_gb,
+          "diskReadMbps": 0.0,
+          "diskWriteMbps": 0.0,
+          "netRxMbps": 0.0,
+          "netTxMbps": 0.0
+        },
+        "systemd": systemd
+      })
+    },
+    "dh:host:exec" => {
+      let cmd = body.get("command").and_then(|v| v.as_str()).unwrap_or_default();
+      match cmd {
+        "nvidia_smi_short" => {
+          match exec_output("bash", &["-lc", "nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -n1"]).await {
+            Ok(out) => json!({ "ok": true, "result": out.trim() }),
+            Err(_) => json!({ "ok": true, "result": "GPU: unavailable" }),
+          }
+        }
+        "systemctl_is_active" => {
+          let unit = body.get("unit").and_then(|v| v.as_str()).unwrap_or_default();
+          if unit.is_empty() {
+            json!({ "ok": false, "result": Value::Null, "error": "[HOST_EXEC_INVALID] Missing unit." })
+          } else {
+            match exec_output("systemctl", &["is-active", unit]).await {
+              Ok(out) => json!({ "ok": true, "result": out.trim() }),
+              Err(_) => json!({ "ok": true, "result": "unknown" }),
+            }
+          }
+        }
+        _ => json!({ "ok": false, "result": Value::Null, "error": "[HOST_EXEC_NOT_ALLOWED] command not allowed" }),
+      }
+    },
+    "dh:docker:create" => {
+      let image = body.get("image").and_then(|v| v.as_str()).unwrap_or_default();
+      let name = body.get("name").and_then(|v| v.as_str()).unwrap_or_default();
+      if image.is_empty() || name.is_empty() {
+        json!({ "ok": false, "error": "[DOCKER_INVALID_REQUEST] Missing image or name." })
+      } else {
+        let mut args = vec!["create".to_string(), "--name".to_string(), name.to_string()];
+        if let Some(ports) = body.get("ports").and_then(|v| v.as_array()) {
+          for p in ports {
+            let host = p.get("hostPort").and_then(|v| v.as_u64()).unwrap_or(0);
+            let ctr = p.get("containerPort").and_then(|v| v.as_u64()).unwrap_or(0);
+            let proto = p.get("protocol").and_then(|v| v.as_str()).unwrap_or("tcp");
+            args.push("-p".to_string());
+            args.push(format!("{}:{}/{}", host, ctr, proto));
+          }
+        }
+        if let Some(envs) = body.get("env").and_then(|v| v.as_array()) {
+          for e in envs {
+            if let Some(s) = e.as_str() {
+              args.push("-e".to_string());
+              args.push(s.to_string());
+            }
+          }
+        }
+        if let Some(vols) = body.get("volumes").and_then(|v| v.as_array()) {
+          for v in vols {
+            let hp = v.get("hostPath").and_then(|v| v.as_str()).unwrap_or_default();
+            let cp = v.get("containerPath").and_then(|v| v.as_str()).unwrap_or_default();
+            if !hp.is_empty() && !cp.is_empty() {
+              args.push("-v".to_string());
+              args.push(format!("{}:{}", hp, cp));
+            }
+          }
+        }
+        args.push(image.to_string());
+        if let Some(cmd_str) = body.get("command").and_then(|v| v.as_str()) {
+          if !cmd_str.is_empty() { args.push(cmd_str.to_string()); }
+        }
+        let refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+        match exec_output("docker", &refs).await {
+          Ok(out) => {
+            let auto_start = body.get("autoStart").and_then(|v| v.as_bool()).unwrap_or(false);
+            if auto_start {
+              let id = out.trim();
+              let _ = exec_output("docker", &["start", id]).await;
+            }
+            json!({ "ok": true })
+          }
+          Err(e) => json!({ "ok": false, "error": format!("[DOCKER_CREATE_FAILED] {}", e.trim()) }),
+        }
+      }
+    },
+    "dh:docker:remap-port" => {
+      json!({ "ok": false, "error": "[DOCKER_REMAP_NOT_SUPPORTED] Port remapping requires stop + remove + recreate. Use the Docker CLI directly." })
+    },
+    "dh:ssh:list:dir" => {
+      let user = body.get("user").and_then(|v| v.as_str()).unwrap_or_default();
+      let host_str = body.get("host").and_then(|v| v.as_str()).unwrap_or_default();
+      let port = body.get("port").and_then(|v| v.as_u64()).unwrap_or(22);
+      let remote_path = body.get("remotePath").and_then(|v| v.as_str()).unwrap_or(".");
+      let remote = format!("{}@{}", user, host_str);
+      let port_str = port.to_string();
+      let ls_cmd = format!("ls -1 '{}'", remote_path.replace('\'', r"'\''"));
+      match exec_result("ssh", &["-o", "StrictHostKeyChecking=no", "-p", &port_str, &remote, &ls_cmd]).await {
+        Ok((stdout, _)) => {
+          let entries: Vec<&str> = stdout.lines().filter(|l| !l.is_empty()).collect();
+          json!({ "ok": true, "entries": entries })
+        }
+        Err(e) => json!({ "ok": false, "entries": [], "error": format!("[SSH_LIST_DIR_FAILED] {}", e.trim()) }),
+      }
+    },
+    "dh:ssh:setup:remote:key" => {
+      let user = body.get("user").and_then(|v| v.as_str()).unwrap_or_default();
+      let host_str = body.get("host").and_then(|v| v.as_str()).unwrap_or_default();
+      let port = body.get("port").and_then(|v| v.as_u64()).unwrap_or(22);
+      let password = body.get("password").and_then(|v| v.as_str()).unwrap_or_default();
+      let public_key = body.get("publicKey").and_then(|v| v.as_str()).unwrap_or_default();
+      if public_key.is_empty() {
+        json!({ "ok": false, "error": "[SSH_SETUP_KEY_FAILED] Missing public key." })
+      } else {
+        let port_str = port.to_string();
+        let remote = format!("{}@{}", user, host_str);
+        let safe_key = public_key.replace('\'', r"'\''");
+        let setup_cmd = format!(
+          "mkdir -p ~/.ssh && chmod 700 ~/.ssh && printf '%s\\n' '{}' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys",
+          safe_key
+        );
+        let result = if !password.is_empty() {
+          let script = format!(
+            "sshpass -p '{}' ssh -o StrictHostKeyChecking=no -p {} {} \"{}\"",
+            password.replace('\'', r"'\''"), port_str, remote, setup_cmd.replace('"', "\\\"")
+          );
+          exec_result("bash", &["-lc", &script]).await
+        } else {
+          exec_result("ssh", &["-o", "StrictHostKeyChecking=no", "-p", &port_str, &remote, &setup_cmd]).await
+        };
+        match result {
+          Ok(_) => json!({ "ok": true }),
+          Err(e) => json!({ "ok": false, "error": format!("[SSH_SETUP_KEY_FAILED] {}", e.trim()) }),
+        }
+      }
+    },
+    "dh:docker:install" => {
+      json!({ "ok": false, "error": "[DOCKER_INSTALL_NOT_SUPPORTED] Automated Docker installation is not yet available. Please install Docker manually from https://docs.docker.com/engine/install/" })
+    },
     _ => json!({ "ok": false, "error": format!("[UNKNOWN_CHANNEL] {}", channel) }),
   };
   Ok(res)
