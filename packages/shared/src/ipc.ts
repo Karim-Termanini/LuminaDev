@@ -126,6 +126,14 @@ export type RuntimeStatusResponse = {
   runtimes: RuntimeStatus[]
 }
 
+export type PerfSnapshot = {
+  startupMs: number
+  rssMb: number
+  heapUsedMb: number
+  heapTotalMb: number
+  uptimeSec: number
+}
+
 /** Renderer ↔ main IPC channel names */
 export type HostMetricsResponse = {
   metrics: HostMetrics
@@ -198,6 +206,7 @@ export const IPC = {
   runtimeGetVersions: 'dh:runtime:get-versions',
   runtimeCheckDeps: 'dh:runtime:check-deps',
   runtimeUninstallPreview: 'dh:runtime:uninstall:preview',
+  perfSnapshot: 'dh:perf:snapshot',
   diagnosticsBundleCreate: 'dh:diagnostics:bundle:create',
 } as const
 

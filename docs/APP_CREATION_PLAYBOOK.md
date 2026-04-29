@@ -410,3 +410,24 @@ This file is a living engineering memory, not static documentation.
   - keyboard navigation, focus order, labels, contrast
 - Mutation testing (optional advanced):
   - apply only to sensitive logic modules (contracts/error mappers)
+
+### Phase C baseline update (implemented)
+
+- Added `perfSnapshot` IPC endpoint for deterministic runtime perf telemetry:
+  - startup time (`startupMs`)
+  - memory footprint (`rssMb`, `heapUsedMb`, `heapTotalMb`)
+  - process uptime (`uptimeSec`)
+- Wired perf baseline into Maintenance diagnostics wizard with explicit pass/fail thresholding.
+- Added accessibility baseline audit in Maintenance diagnostics:
+  - unlabeled inputs/buttons
+  - images missing `alt`
+  - focusable elements count
+  - semantic landmarks presence
+
+### Documentation discipline reinforcement
+
+- Every hardening step must update this file in the same change set:
+  - what changed
+  - why it matters
+  - verification evidence
+- Treat missing playbook updates as a process bug.

@@ -16,6 +16,7 @@ import { sshErrorString } from './sshError'
 import { runtimeErrorString } from './runtimeError'
 import { gitErrorString } from './gitError'
 import { terminalErrorString } from './terminalError'
+import { collectPerfSnapshot } from './perf'
 
 import {
   ComposeUpRequestSchema,
@@ -74,6 +75,7 @@ import {
 } from '@linux-dev-home/shared'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const APP_START_AT_MS = Date.now()
 
 nativeTheme.themeSource = 'dark'
 
@@ -2068,6 +2070,14 @@ function registerIpc(): void {
       return { ok: true as const, distro, runtimePackages, removableDeps, blockedSharedDeps: plan.blockedShared, finalPackages, note }
     } catch (e) {
       return { ok: false as const, error: runtimeErrorString(e, 'Failed to prepare uninstall preview.') }
+    }
+  })
+
+  ipcMain.handle(IPC.perfSnapshot, async () => {
+    try {
+      return { ok: true as const, snapshot: collectPerfSnapshot(APP_START_AT_MS) }
+    } catch (e) {
+      return { ok: false as const, error: String(e) }
     }
   })
 
