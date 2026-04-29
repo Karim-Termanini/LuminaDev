@@ -467,17 +467,29 @@ async fn docker_remap_port_invoke(body: &Value) -> Value {
           let _ = exec_output("docker", &["rm", "-f", &cid]).await;
           return json!({ "ok": false, "error": format!("[DOCKER_REMAP_FAILED] start: {}", e.trim()) });
         }
-        // Stop source container so two copies are not left running (clone keeps old id bound to old host port).
-        let stop_note = match exec_output("docker", &["stop", id]).await {
-          Ok(_) => json!(null),
-          Err(e) => json!(format!("source still running: {}", e.trim())),
-        };
+        // Stop then remove source container (only rm after successful stop; avoids two copies).
+        let mut source_stopped = false;
+        let mut source_stop_note = serde_json::Value::Null;
+        let mut source_removed = false;
+        let mut source_remove_note = serde_json::Value::Null;
+        match exec_output("docker", &["stop", id]).await {
+          Ok(_) => {
+            source_stopped = true;
+            match exec_output("docker", &["rm", id]).await {
+              Ok(_) => source_removed = true,
+              Err(e) => source_remove_note = json!(e.trim()),
+            }
+          }
+          Err(e) => source_stop_note = json!(format!("source still running: {}", e.trim())),
+        }
         return json!({
           "ok": true,
           "id": cid,
           "name": new_name,
-          "sourceStopped": stop_note.is_null(),
-          "sourceStopNote": stop_note,
+          "sourceStopped": source_stopped,
+          "sourceStopNote": source_stop_note,
+          "sourceRemoved": source_removed,
+          "sourceRemoveNote": source_remove_note,
         });
       }
       Err(e) => {

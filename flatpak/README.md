@@ -1,11 +1,13 @@
 # Flatpak
 
-Two manifests (run from **repository root** `startSH/`):
+**Tauri (current app):** [`io.github.karimodora.LinuxDevHome.tauri.yml`](io.github.karimodora.LinuxDevHome.tauri.yml) — `org.gnome.Platform` + `cargo build --release` for `lumina-dev`, installs as `linux-dev-home`. Build locally with `flatpak-builder` (not in GitHub Actions yet; add a workflow job later for CI smoke only).
+
+**Legacy Electron manifests** (historical; still usable if you maintain an Electron pack path):
 
 | Manifest | Use |
 |----------|-----|
-| [`io.github.karimodora.LinuxDevHome.yml`](io.github.karimodora.LinuxDevHome.yml) | **Network build** (CI or quick local); `flatpak-builder` passes `--share=network`. |
-| [`io.github.karimodora.LinuxDevHome.offline.yml`](io.github.karimodora.LinuxDevHome.offline.yml) | **Offline build** for Flathub-style reproducibility; requires [`generated-sources.json`](generated-sources.json). |
+| [`io.github.karimodora.LinuxDevHome.yml`](io.github.karimodora.LinuxDevHome.yml) | **Network build**; `flatpak-builder` passes `--share=network`. |
+| [`io.github.karimodora.LinuxDevHome.offline.yml`](io.github.karimodora.LinuxDevHome.offline.yml) | **Offline build**; requires [`generated-sources.json`](generated-sources.json). |
 
 ## Regenerate Node sources (offline manifest)
 
@@ -21,12 +23,17 @@ Commit the updated `flatpak/generated-sources.json` (or vendor it only in your F
 ## Build and install
 
 ```bash
-# Network (simpler)
+# Tauri (recommended)
+flatpak-builder --user --install --force-clean flatpak-build-tauri \
+  flatpak/io.github.karimodora.LinuxDevHome.tauri.yml \
+  --install-deps-from=flathub
+
+# Electron legacy — network
 flatpak-builder --user --install --force-clean flatpak-build-dir \
   flatpak/io.github.karimodora.LinuxDevHome.yml \
   --install-deps-from=flathub
 
-# Offline (no build network; install Flathub runtimes first)
+# Electron legacy — offline (install Flathub runtimes first)
 flatpak-builder --user --install --force-clean flatpak-build-dir-offline \
   flatpak/io.github.karimodora.LinuxDevHome.offline.yml \
   --install-deps-from=flathub

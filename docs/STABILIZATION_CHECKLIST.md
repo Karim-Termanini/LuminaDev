@@ -137,7 +137,7 @@ Stabilization is considered complete only when:
     - `dh:docker:create` — docker CLI with ports/env/volumes/autoStart; returns `id` on success
     - `dh:ssh:list:dir` — native `ssh ls`
     - `dh:ssh:setup:remote:key` — native `ssh` + `sshpass`
-    - `dh:docker:remap-port`, `dh:docker:install` — Rust: install guards Flatpak + sudo preflight; remap clones then `docker stop` source (best-effort; `sourceStopped` / `sourceStopNote` on success)
+    - `dh:docker:remap-port`, `dh:docker:install` — Rust: install guards Flatpak + sudo preflight; remap clones then `docker stop` + `docker rm` source when stop succeeds (`sourceStopped`, `sourceRemoved`, notes in JSON)
   - `invoke_node_bridge()` removed from `lib.rs`
   - `apps/desktop/scripts/tauri-ipc-bridge.mjs` deleted
   - Node.js no longer required at app runtime
@@ -150,9 +150,10 @@ Stabilization is considered complete only when:
   - `pnpm typecheck` + `pnpm smoke` passed
 
 - **Stage 4 evidence (2026-04-30):**
-  - CI: `agent-*` trigger removed; `feat/*`, `fix/*`, `chore/*` added
+  - CI: broadened push triggers (`feat/*`, `fix/*`, `chore/*`, etc.)
   - `quality-gate` job: trimmed to only `build-essential python3` (WebKit deps were unnecessary)
   - `native-linux-build`: Rust toolchain + cache present, Tauri build green in CI
+  - Flatpak: `flatpak/io.github.karimodora.LinuxDevHome.tauri.yml` added for local/Flathub prep — **not** in GitHub Actions until a dedicated slow job is added
 
 - **Remaining before Stage 5 (when you declare product-ready):**
   - Run `pnpm smoke` on `main` before any tagged release
@@ -207,5 +208,5 @@ Minimal flows to verify before declaring a build stable. Run on real Tauri build
 - [ ] Runtime status list loads (node, python, go, rust, java)
 
 ### Known limits (not test failures)
-- `dh:docker:install` / `dh:docker:remap-port`: IPC in Tauri — install blocked in Flatpak / without sudo; remap stops old container when possible; UI may still show docs-first notices.
+- `dh:docker:install` / `dh:docker:remap-port`: IPC in Tauri — install blocked in Flatpak / without sudo; remap stops then removes old container when possible; UI may still show docs-first notices.
 - Flatpak-specific paths may differ from native install ✓
