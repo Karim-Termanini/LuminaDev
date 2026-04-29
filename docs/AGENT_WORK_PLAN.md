@@ -15,9 +15,9 @@
 |----|--------|---------------------|
 | B1 | توثيق الحالة الحقيقية | تحديث `README.md` و`docs/STABILIZATION_CHECKLIST.md`: Tauri + Rust IPC، ما هو «جاهز / جزئي / مخطط»، Flatpak «لاحقًا» — بدون وعود إصدار. **`done` (2026-04-30)** — ربط بخطة الوكلاء، تخفيف صياغة «release gate». |
 | B2 | واجهة الأخطاء الصريحة | تدفقات تعتمد على `dh:docker:install` و`dh:docker:remap-port`: عرض واضح عند `ok: false` (ومنها `*_NOT_SUPPORTED`) بدون سلوك يشبه النجاح. **`done` (2026-04-30)** — `DockerPage.tsx` + `dockerError.ts` + اختبارات. |
-| B3 | مراجعة شاشات Docker | أزرار وتبويبات متوافقة مع السلوك الفعلي على Tauri؛ تقليل أزرار «مربكة» بدون backend يدعمها. |
-| B4 | CI خفيف وموثوق | triggers، cache، deps مناسبة لـ Linux/Tauri؛ **بدون** إطالة المسار بـ Flatpak إلى أن يُقرّ تفعيله. |
-| B5 | اختبار يدوي / سيناريوهات حرجة | قائمة تحقق قصيرة (يمكن إبقاؤها في نفس المستند أو في checklist الرئيسي)؛ Flatpak يُذكر كـ «لاحقًا» فقط. |
+| B3 | مراجعة شاشات Docker | أزرار وتبويبات متوافقة مع السلوك الفعلي على Tauri؛ تقليل أزرار «مربكة» بدون backend يدعمها. **`done` (`feat/agent-b-plan` @ `9c0a4f8`)** — Install: خطوة 0 إشعار + رابط docs بدل wizard؛ Remap: إشعار بدل form؛ حذف dead code (`INSTALL_DISTROS`, `runScan`, `remapPort`, state/useEffect زائد). |
+| B4 | CI خفيف وموثوق | triggers، cache، deps مناسبة لـ Linux/Tauri؛ **بدون** إطالة المسار بـ Flatpak إلى أن يُقرّ تفعيله. **`done` (`9c0a4f8`)** — تحقق يدوي؛ بدون مسار Flatpak في التركيز. |
+| B5 | اختبار يدوي / سيناريوهات حرجة | قائمة تحقق قصيرة (يمكن إبقاؤها في نفس المستند أو في checklist الرئيسي)؛ Flatpak يُذكر كـ «لاحقًا» فقط. **`done` (`9c0a4f8`)** — checklist كاملة داخل `docs/STABILIZATION_CHECKLIST.md`. |
 
 ---
 
@@ -27,7 +27,7 @@
 |----|--------|---------------------|
 | A1 | تدقيق القنوات | مطابقة `packages/shared/src/ipc.ts` مع `ipc_invoke` / مسار Tauri. **`done` (تدقيق أولي 2026-04-30)** — انظر قسم «لقطة A1» أدناه؛ إصلاح `dh:docker:create` لإرجاع `id`. |
 | A2 | `dh:docker:install` | **`open`** — حاليًا خطأ صريح `[DOCKER_INSTALL_NOT_SUPPORTED]` في Rust؛ تنفيذ لاحقًا عند الطلب. |
-| A3 | `dh:docker:remap-port` | **`open`** — حاليًا `[DOCKER_REMAP_NOT_SUPPORTED]`؛ تنفيذ أو إخفاء الزر في الواجهة لاحقًا. |
+| A3 | `dh:docker:remap-port` | **`open` (backend)** — Rust ما زال `[DOCKER_REMAP_NOT_SUPPORTED]`؛ **الواجهة:** بطاقة remap أصبحت إشعارًا فقط (`9c0a4f8`) بدل نموذج يوحي بالدعم. |
 | A4 | حدود الصلاحيات | مراجعة سريعة لمسارات Docker socket وSSH وأوامر shell: timeouts، allowlists، رسائل خطأ حتمية. |
 | A5 | Flatpak (لاحقًا) | عند التفعيل: manifest، صلاحيات، job في Actions — **بعد** B4/A1 مستقرين. |
 
@@ -35,11 +35,11 @@
 
 ## ترتيب تنفيذ مقترح
 
-1. **B1** + **A1** — يقلل الالتباس بين الوثائق والكود.
-2. **B2** مع قرار واضح على **A2** و**A3** (تنفيذ أو unsupported نهائي مع نص ثابت).
-3. **B3** حسب الحاجة بعد ظهور فجوات من المستخدمين أو من المراجعة.
-4. **B4** بشكل مستمر خفيف.
-5. **A5** (وB المرتبط بـ Flatpak) **آخرًا** عند الجاهزية للـ Actions الطويلة.
+1. ~~**B1** + **A1**~~ — منجز.
+2. ~~**B2**–**B5** (واجهة + docs + CI تحقق + checklist يدوي)~~ — منجز على `feat/agent-b-plan` (`9c0a4f8`).
+3. **A2** / **A3** — تنفيذ حقيقي في Rust عند الطلب، أو الإبقاء unsupported مع واجهة صادقة (حاليًا).
+4. **A4** — مراجعة صلاحيات/Timeouts.
+5. **A5** — Flatpak + Actions **آخرًا**.
 
 ---
 
@@ -58,4 +58,4 @@
 - واجهة Docker: `apps/desktop/src/renderer/src/pages/DockerPage.tsx`
 - سياسة الجودة العامة: `CLAUDE.md` و`phasesPlan.md`
 
-آخر تحديث: 2026-04-30 — B1، B2، لقطة A1 + إصلاح `docker:create`.
+آخر تحديث: 2026-04-30 — **Agent B B1–B5:** `feat/agent-b-plan` @ `9c0a4f8` (smoke ✅). سابقًا: لقطة A1 + إصلاح `docker:create`.
