@@ -15,7 +15,7 @@ fi
 log "root=$ROOT"
 log "typecheck (workspace)"
 "${PNPM[@]}" typecheck
-log "test (shared)"
+log "test (workspace: shared + desktop)"
 "${PNPM[@]}" test
 log "lint"
 "${PNPM[@]}" lint

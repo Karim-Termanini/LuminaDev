@@ -26,6 +26,7 @@ Until Docker vertical slice hardening is complete:
 2. All Docker destructive actions must keep confirmation + tested error handling.
 3. `smoke` and Docker-related tests must pass before phase expansion.
 4. Documentation must use `Implemented / Partial / Planned` wording only.
+5. Commit hygiene: no micro-churn commits; each commit must represent one reviewable change with a descriptive message.
 
 ## Known Limits
 
@@ -72,6 +73,14 @@ The image runs tests, typecheck, lint, and production build inside Node 20.
 ## 📦 Flatpak & Docker socket
 
 See [docs/DOCKER_FLATPAK.md](docs/DOCKER_FLATPAK.md), [docs/INSTALL_TEST.md](docs/INSTALL_TEST.md), and [docs/FLATHUB_CHECKLIST.md](docs/FLATHUB_CHECKLIST.md).
+Privilege behavior matrix and verification steps: [docs/PRIVILEGE_BOUNDARY_MATRIX.md](docs/PRIVILEGE_BOUNDARY_MATRIX.md).
+
+## ✅ Stabilization Tracker
+
+See [docs/STABILIZATION_CHECKLIST.md](docs/STABILIZATION_CHECKLIST.md) for remaining reliability/safety/process closure items and acceptance criteria.
+For reusable engineering lessons and incident-driven build process, see [docs/APP_CREATION_PLAYBOOK.md](docs/APP_CREATION_PLAYBOOK.md).
+Commit and PR quality rules: [docs/COMMIT_QUALITY_RULES.md](docs/COMMIT_QUALITY_RULES.md).
+Documentation audit record: [docs/DOCS_AUDIT_2026-04.md](docs/DOCS_AUDIT_2026-04.md).
 
 ## 🌳 Monorepo Layout
 

@@ -4,6 +4,7 @@ This project is developed in **sequential phases** (0 → 11). Distribution targ
 
 ## Rules
 
+- Follow `docs/COMMIT_QUALITY_RULES.md` for commit hygiene and reviewability.
 - Each **phase branch** is created from an up-to-date `main`, not from another phase branch.
 - **No direct commits to `main`**. All work lands via pull request.
 - Phase branches are **not rebased**. Integrate with `merge` or **squash merge** as your team prefers; history on the phase branch stays linear from `main`.

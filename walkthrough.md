@@ -40,7 +40,9 @@ Both pass after this unification pass.
 
 ## Phase sign-off matrix (Phases 0–6)
 
-Two-column audit against `phasesPlan.md`. **Done** = matches written intent; **Partial** = usable gap vs doc; **Later** = explicitly deferred in doc or roadmap.
+Two-column audit against `phasesPlan.md`. **This section is a historical implementation walkthrough, not a release sign-off or quality-gate approval.**
+Use `README.md` status labels (`Implemented / Partial / Planned`) as the canonical public status.
+Here, **Done** = matched the implementation intent at audit time; **Partial** = usable gap vs doc; **Later** = explicitly deferred in doc or roadmap.
 
 | Deliverable (phase) | Status |
 |---------------------|--------|

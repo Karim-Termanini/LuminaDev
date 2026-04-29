@@ -27,3 +27,7 @@ flatpak override --user --filesystem=xdg-run/docker io.github.karimodora.LinuxDe
 ## Flathub review
 
 If you publish on Flathub, be ready to document why broader filesystem/device permissions are required and offer safe defaults (read-only UI) where possible.
+
+## Boundary verification reference
+
+For cross-surface Flatpak/native expectations (Docker, SSH, PTY fallback) and reproducible verification steps, see `docs/PRIVILEGE_BOUNDARY_MATRIX.md`.

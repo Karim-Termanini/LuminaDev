@@ -3,7 +3,7 @@
 After building the Flatpak locally (network build; see `flatpak/README.md` for the offline manifest):
 
 ```bash
-cd /path/to/startSH
+cd /path/to/LuminaDev
 flatpak-builder --user --install --force-clean flatpak-build-dir flatpak/io.github.karimodora.LinuxDevHome.yml
 ```
 
