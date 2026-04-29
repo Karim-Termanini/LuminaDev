@@ -10,7 +10,11 @@
   "desktopName": "io.github.karimodora.LinuxDevHome.desktop",
   "scripts": {
     "dev": "electron-vite dev",
+    "dev:web": "vite --config vite.renderer.config.ts",
+    "dev:tauri": "tauri dev",
     "build": "electron-vite build && node scripts/copy-docker-profiles.mjs",
+    "build:web": "vite build --config vite.renderer.config.ts",
+    "build:tauri": "tauri build",
     "typecheck": "tsc --noEmit -p tsconfig.web.json && tsc --noEmit -p tsconfig.node.json",
     "test": "vitest run",
     "test:integration": "vitest run src/renderer/src/pages/dockerIpc.integration.test.ts",
@@ -20,6 +24,9 @@
     "pack:linux": "node scripts/pack-linux.mjs"
   },
   "dependencies": {
+    "@tauri-apps/api": "^2.8.0",
+    "@tauri-apps/plugin-dialog": "^2.4.0",
+    "@tauri-apps/plugin-opener": "^2.4.0",
     "@linux-dev-home/shared": "workspace:*",
     "@vscode/codicons": "^0.0.36",
     "@xterm/addon-fit": "^0.10.0",
@@ -35,6 +42,7 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2.8.1",
     "@electron/rebuild": "^3.7.0",
     "@types/dockerode": "^3.3.31",
     "@types/node": "^22.9.0",
