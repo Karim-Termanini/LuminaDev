@@ -93,14 +93,22 @@ export function RegistryPage(): ReactElement {
   }
 
   return (
-    <div style={{ maxWidth: 920 }}>
-      <h1 style={{ marginTop: 0 }}>Registry &amp; Git</h1>
-      <p style={{ color: 'var(--text-muted)' }}>
+    <div style={{ maxWidth: 980, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 18 }}>
+      <header>
+      <h1 style={{ marginTop: 0, marginBottom: 6 }}>Registry &amp; Git</h1>
+      <p style={{ color: 'var(--text-muted)', marginTop: 0, lineHeight: 1.5 }}>
         Manage your source control and container assets. Clone repositories or search for official
         Docker images directly from the Hub.
       </p>
+      </header>
+      {status ? (
+        <div className="hp-status-alert warning" style={{ marginTop: -4 }}>
+          <span style={{ fontSize: 16 }}>⚠</span>
+          <span>{status}</span>
+        </div>
+      ) : null}
 
-      <section style={{ ...section, marginTop: 24 }}>
+      <section style={section}>
         <label style={label}>
           Remote URL
           <input value={url} onChange={(e) => setUrl(e.target.value)} style={input} />
@@ -117,7 +125,6 @@ export function RegistryPage(): ReactElement {
         <button type="button" onClick={() => void clone()} style={btnPrimary}>
           git clone
         </button>
-        {status ? <div className="mono" style={{ fontSize: 13 }}>{status}</div> : null}
       </section>
 
       <section style={{ ...section, marginTop: 20 }}>
@@ -185,7 +192,7 @@ export function RegistryPage(): ReactElement {
                 </div>
                 <div style={{ marginTop: 8, fontSize: 11, color: 'var(--accent)', display: 'flex', justifyContent: 'space-between' }}>
                   <span>★ {r.star_count}</span>
-                  <button type="button" style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', padding: 0 }} onClick={() => {
+                  <button type="button" style={{ ...btnLink }} onClick={() => {
                     void window.dh.openExternal(`https://hub.docker.com/_/${r.name.includes('/') ? 'r/' + r.name : r.name}`)
                   }}>View Hub ↗</button>
                 </div>
@@ -216,7 +223,7 @@ export function RegistryPage(): ReactElement {
         ) : null}
       </section>
 
-      <section style={{ marginTop: 20 }}>
+      <section style={{ ...section, paddingTop: 14 }}>
         <div style={{ fontWeight: 600, marginBottom: 8 }}>Recent repositories</div>
         <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
           {recent.map((r) => (
@@ -274,6 +281,8 @@ const btn: CSSProperties = {
   borderRadius: 6,
   padding: '8px 12px',
   cursor: 'pointer',
+  fontWeight: 600,
+  transition: 'filter 120ms ease, transform 120ms ease',
 }
 
 const btnPrimary: CSSProperties = {
@@ -282,4 +291,14 @@ const btnPrimary: CSSProperties = {
   borderColor: 'var(--accent)',
   color: '#0d0d0d',
   fontWeight: 600,
+}
+
+const btnLink: CSSProperties = {
+  background: 'none',
+  border: 'none',
+  color: 'inherit',
+  cursor: 'pointer',
+  padding: 0,
+  textDecoration: 'underline',
+  textUnderlineOffset: 2,
 }

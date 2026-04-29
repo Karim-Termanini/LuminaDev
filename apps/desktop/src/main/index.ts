@@ -2219,19 +2219,41 @@ function registerIpc(): void {
   })
 
   ipcMain.handle(IPC.openExternalTerminal, async () => {
-    const trySpawn = (cmd: string, args: string[] = []) =>
-      new Promise<boolean>((res) => {
-        const child = spawn(cmd, args, { detached: true, stdio: 'ignore' })
-        child.on('error', () => res(false))
-        child.unref()
-        res(true)
+    const hasCommand = async (cmd: string): Promise<boolean> =>
+      await new Promise((resolve) => {
+        execFile('bash', ['-lc', `command -v ${cmd} >/dev/null 2>&1`], (err) => resolve(!err))
       })
+
+    const trySpawn = async (cmd: string, args: string[] = []): Promise<boolean> => {
+      if (!(await hasCommand(cmd))) return false
+      return await new Promise<boolean>((resolve) => {
+        let settled = false
+        const child = spawn(cmd, args, { detached: true, stdio: 'ignore' })
+        child.on('error', () => {
+          if (!settled) {
+            settled = true
+            resolve(false)
+          }
+        })
+        child.unref()
+        // If no startup error is emitted quickly, treat it as launched.
+        setTimeout(() => {
+          if (!settled) {
+            settled = true
+            resolve(true)
+          }
+        }, 300)
+      })
+    }
     const order: [string, ...string[]][] = [
       ['xdg-terminal-emulator'],
+      ['gnome-console'],
       ['kitty'],
       ['alacritty'],
       ['gnome-terminal'],
       ['konsole'],
+      ['xfce4-terminal'],
+      ['xterm'],
     ]
     for (const [cmd, ...rest] of order) {
       if (await trySpawn(cmd, [...rest])) return { ok: true }
@@ -3074,65 +3096,67 @@ function registerIpc(): void {
   })
 
   ipcMain.handle(IPC.diagnosticsBundleCreate, async (_e, raw: unknown) => {
-    const body = z.object({ report: z.unknown(), includeSensitive: z.boolean().optional().default(false) }).parse(raw)
-    const now = new Date().toISOString().replace(/[:.]/g, '-')
-    const outDir = path.join(app.getPath('downloads'), 'LuminaDev')
-    await mkdir(outDir, { recursive: true })
-    const outPath = path.join(outDir, `lumina-support-bundle-${now}.zip`)
-
-    const zip = new yazl.ZipFile()
-    const addJson = (name: string, value: unknown): void => {
-      zip.addBuffer(Buffer.from(JSON.stringify(value, null, 2), 'utf8'), name)
-    }
-
-    const includeSensitive = body.includeSensitive === true
-    const maybeRedact = (value: unknown): unknown => (includeSensitive ? value : redactSensitive(value))
-
-    addJson('report.json', maybeRedact(body.report))
-    addJson('jobs.json', maybeRedact([...jobs.values()].map((j) => jobToSummary(j))))
-    addJson('session.json', maybeRedact(getSessionInfo()))
     try {
-      addJson('metrics.json', maybeRedact(await collectMetrics()))
-    } catch {
-      addJson('metrics.json', { error: 'metrics unavailable' })
-    }
+      const body = z.object({ report: z.unknown(), includeSensitive: z.boolean().optional().default(false) }).parse(raw)
+      const now = new Date().toISOString().replace(/[:.]/g, '-')
+      const outDir = path.join(app.getPath('downloads'), 'LuminaDev')
+      await mkdir(outDir, { recursive: true })
+      const outPath = path.join(outDir, `lumina-support-bundle-${now}.zip`)
 
-    const userData = app.getPath('userData')
-    const knownStoreFiles = [
-      'dashboard-layout.json',
-      'store_custom_profiles.json',
-      'store_wizard_state.json',
-      'store_maintenance_state.json',
-    ]
-    for (const filename of knownStoreFiles) {
-      const absolute = path.join(userData, filename)
-      if (!fs.existsSync(absolute)) continue
-      try {
-        const rawFile = await readFile(absolute, 'utf8')
-        if (includeSensitive) {
-          zip.addBuffer(Buffer.from(rawFile, 'utf8'), `userData/${filename}`)
-        } else {
-          try {
-            const parsed = JSON.parse(rawFile) as unknown
-            zip.addBuffer(Buffer.from(JSON.stringify(redactSensitive(parsed), null, 2), 'utf8'), `userData/${filename}`)
-          } catch {
-            zip.addBuffer(Buffer.from('[REDACTED_NON_JSON_CONTENT]', 'utf8'), `userData/${filename}`)
-          }
-        }
-      } catch {
-        /* skip unreadable bundle file */
+      const zip = new yazl.ZipFile()
+      const addJson = (name: string, value: unknown): void => {
+        zip.addBuffer(Buffer.from(JSON.stringify(value, null, 2), 'utf8'), name)
       }
+
+      const includeSensitive = body.includeSensitive === true
+      const maybeRedact = (value: unknown): unknown => (includeSensitive ? value : redactSensitive(value))
+
+      addJson('report.json', maybeRedact(body.report))
+      addJson('jobs.json', maybeRedact([...jobs.values()].map((j) => jobToSummary(j))))
+      addJson('session.json', maybeRedact(getSessionInfo()))
+      try {
+        addJson('metrics.json', maybeRedact(await collectMetrics()))
+      } catch {
+        addJson('metrics.json', { error: 'metrics unavailable' })
+      }
+
+      const userData = app.getPath('userData')
+      const knownStoreFiles = [
+        'dashboard-layout.json',
+        'store_custom_profiles.json',
+        'store_wizard_state.json',
+        'store_maintenance_state.json',
+      ]
+      for (const filename of knownStoreFiles) {
+        const absolute = path.join(userData, filename)
+        if (!fs.existsSync(absolute)) continue
+        try {
+          const rawFile = await readFile(absolute, 'utf8')
+          if (includeSensitive) {
+            zip.addBuffer(Buffer.from(rawFile, 'utf8'), `userData/${filename}`)
+          } else {
+            try {
+              const parsed = JSON.parse(rawFile) as unknown
+              zip.addBuffer(Buffer.from(JSON.stringify(redactSensitive(parsed), null, 2), 'utf8'), `userData/${filename}`)
+            } catch {
+              zip.addBuffer(Buffer.from('[REDACTED_NON_JSON_CONTENT]', 'utf8'), `userData/${filename}`)
+            }
+          }
+        } catch {
+          /* skip unreadable bundle file */
+        }
+      }
+
+      return await new Promise<{ ok: boolean; path: string; error?: string }>((resolve) => {
+        const out = fs.createWriteStream(outPath)
+        out.on('close', () => resolve({ ok: true, path: outPath }))
+        out.on('error', (e) => resolve({ ok: false, path: '', error: String(e) }))
+        zip.outputStream.pipe(out)
+        zip.end()
+      })
+    } catch (e) {
+      return { ok: false as const, path: '', error: String(e) }
     }
-
-    await new Promise<void>((resolve, reject) => {
-      const out = fs.createWriteStream(outPath)
-      out.on('close', () => resolve())
-      out.on('error', reject)
-      zip.outputStream.pipe(out)
-      zip.end()
-    })
-
-    return { ok: true as const, path: outPath }
   })
 
   ipcMain.handle('dh:openExternal', async (_e, url: string) => {

@@ -36,7 +36,7 @@ export function DashboardLogsPage(): ReactElement {
   }, [])
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 1100 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 1100, margin: '0 auto', paddingInline: 12 }}>
       <header>
         <div className="mono" style={{ color: 'var(--accent)', fontSize: 12, marginBottom: 8 }}>
           DASHBOARD.LOGS
@@ -59,7 +59,7 @@ export function DashboardLogsPage(): ReactElement {
             {busy ? 'Loading…' : 'Fetch compose logs'}
           </button>
         </div>
-        <pre className="mono" style={pre}>
+        <pre className="mono" style={{ ...pre, overflowX: 'auto' }}>
           {composeLog || 'Press "Fetch compose logs" to load output.'}
         </pre>
       </section>
@@ -92,7 +92,7 @@ const card = {
   background: 'var(--bg-widget)',
   border: '1px solid var(--border)',
   borderRadius: 'var(--radius)',
-  padding: 14,
+  padding: 16,
 }
 
 const input = {
@@ -110,6 +110,7 @@ const btn = {
   borderRadius: 8,
   padding: '8px 12px',
   cursor: 'pointer',
+  fontWeight: 600,
 }
 
 const btnSmall = {
