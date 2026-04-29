@@ -15,6 +15,7 @@ import { dockerErrorString } from './dockerError'
 import { sshErrorString } from './sshError'
 import { runtimeErrorString } from './runtimeError'
 import { gitErrorString } from './gitError'
+import { terminalErrorString } from './terminalError'
 
 import {
   ComposeUpRequestSchema,
@@ -2195,7 +2196,7 @@ function registerIpc(): void {
       })
       return { ok: true as const, id }
     } catch (e) {
-      return { ok: false as const, error: e instanceof Error ? e.message : String(e) }
+      return { ok: false as const, error: terminalErrorString(e, 'Failed to start terminal session.') }
     }
   })
 
@@ -2225,7 +2226,11 @@ function registerIpc(): void {
     for (const [cmd, ...rest] of order) {
       if (await trySpawn(cmd, [...rest])) return { ok: true }
     }
-    return { ok: false }
+    return {
+      ok: false as const,
+      error:
+        '[TERMINAL_NOT_FOUND] Could not spawn a host terminal. Install xdg-terminal-emulator, kitty, alacritty, gnome-terminal, or konsole.',
+    }
   })
 
   ipcMain.handle(IPC.gitClone, async (_e, raw: unknown) => {

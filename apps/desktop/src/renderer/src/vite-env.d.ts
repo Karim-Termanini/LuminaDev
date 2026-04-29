@@ -36,10 +36,10 @@ declare global {
       hostExec: (payload: unknown) => Promise<{ ok: boolean; result: unknown; error?: string }>
       composeUp: (payload: { profile: ComposeProfile }) => Promise<{ ok: boolean; log: string; error?: string }>
       composeLogs: (payload: { profile: ComposeProfile }) => Promise<{ ok: boolean; log: string; error?: string }>
-      terminalCreate: (payload: { cols: number; rows: number; cmd?: string; args?: string[] }) => Promise<unknown>
+      terminalCreate: (payload: { cols: number; rows: number; cmd?: string; args?: string[] }) => Promise<{ ok: boolean; id?: string; error?: string }>
       terminalWrite: (id: string, data: string) => void
       terminalResize: (id: string, cols: number, rows: number) => void
-      openExternalTerminal: () => Promise<unknown>
+      openExternalTerminal: () => Promise<{ ok: boolean; error?: string }>
       gitClone: (payload: { url: string; targetDir: string }) => Promise<{ ok: boolean; error?: string }>
       gitStatus: (payload: { repoPath: string }) => Promise<{ ok: boolean; info: { branch: string; tracking: string | null; ahead: number; behind: number; modified: number; created: number; deleted: number }; error?: string }>
       gitRecentList: () => Promise<{ ok: boolean; repos: import('@linux-dev-home/shared').GitRepoEntry[]; error?: string }>

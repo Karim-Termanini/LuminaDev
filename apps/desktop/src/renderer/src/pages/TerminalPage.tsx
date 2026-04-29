@@ -4,6 +4,8 @@ import { FitAddon } from '@xterm/addon-fit'
 import { Terminal } from '@xterm/xterm'
 import '@xterm/xterm/css/xterm.css'
 import { TERMINAL_OPEN_EXTERNAL_HINT, TERMINAL_PTY_HINT } from './environmentHints'
+import { assertTerminalOk } from './terminalContract'
+import { humanizeTerminalError } from './terminalError'
 
 export function TerminalPage(): ReactElement {
   const wrapRef = useRef<HTMLDivElement | null>(null)
@@ -30,11 +32,14 @@ export function TerminalPage(): ReactElement {
     fit.fit()
 
     void (async () => {
-      const res = (await window.dh.terminalCreate({ cols: term.cols, rows: term.rows })) as
-        | { ok: true; id: string }
-        | { ok: false; error: string }
+      const res = await window.dh.terminalCreate({ cols: term.cols, rows: term.rows })
       if (!res.ok) {
-        setErr(res.error)
+        setErr(humanizeTerminalError(res.error))
+        setFallbackHint(true)
+        return
+      }
+      if (!res.id) {
+        setErr(humanizeTerminalError('[TERMINAL_UNKNOWN] Missing terminal session id.'))
         setFallbackHint(true)
         return
       }
@@ -76,8 +81,12 @@ export function TerminalPage(): ReactElement {
   }, [])
 
   async function openExternal(): Promise<void> {
-    const r = (await window.dh.openExternalTerminal()) as { ok: boolean }
-    if (!r.ok) setErr('Could not spawn a host terminal. Install xdg-terminal-emulator or similar.')
+    try {
+      const r = await window.dh.openExternalTerminal()
+      assertTerminalOk(r, 'Failed to open external terminal.')
+    } catch (e) {
+      setErr(humanizeTerminalError(e))
+    }
   }
 
   return (
