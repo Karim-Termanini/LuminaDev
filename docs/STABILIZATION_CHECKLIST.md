@@ -163,50 +163,64 @@ Stabilization is considered complete only when:
 
 ## Manual Test Checklist (B5)
 
-Minimal flows to verify before declaring a build stable. Run on a **release-style Tauri** build (e.g. `pnpm --filter desktop tauri build` or your distro package). Check boxes when verified; if skipped, add a one-line reason in a PR or issue.
+Run on a real Tauri build (`pnpm --filter desktop build:tauri` or distro package).
+Legend: `[x]` verified, `[-]` intentionally skipped with reason.
 
 ### App startup
+
 - [ ] App launches without crash
-- [ ] Wizard shows on first run; completes and dismisses on "Finish"
+- [ ] Wizard shows on first run; completes and dismisses on “Finish”
 - [ ] Dashboard loads with correct layout
 
 ### Docker panel
-- [ ] Container list loads (or shows "docker unavailable" if no daemon)
+
+- [ ] Container list loads (or shows “docker unavailable” if no daemon)
 - [ ] Start / Stop / Restart / Remove actions work and refresh list
 - [ ] Container logs load and scroll
 - [ ] Images tab: list loads, remove image works
 - [ ] Volumes tab: list loads, create/remove volume works
 - [ ] Networks tab: list loads, create/remove network works
-- [ ] Cleanup tab: prune preview shows counts; "Run Cleanup" executes
-- [ ] Ports tab: published ports table loads; **native session**: remap form (container + old/new host port) runs or shows a clear `[DOCKER_*]` error; **Flatpak**: remap shows sandbox notice + docs link
-- [ ] Install / Setup: **Flatpak** — step 0 explains host-only install + doc links, no “Continue” into sudo wizard; **native** — “Continue to wizard”, distro + components + sudo, install produces logs or a clear error
+- [ ] Cleanup tab: prune preview shows counts; “Run Cleanup” executes
+- [ ] Ports tab — **native session**: remap form runs or shows `[DOCKER_*]` error; **Flatpak**: sandbox notice + docs link shown instead of form
+- [ ] Install / Setup — **Flatpak**: step 0 shows Flatpak-only warning + doc links, no sudo wizard; **native**: distro picker → components → sudo prompt → install logs or clear error
 
 ### Terminal
+
 - [ ] Terminal tab opens, shell prompt appears
 - [ ] Input echoes, commands run
-- [ ] "Open external terminal" button works or shows clear error
+- [-] “Open external terminal” — tested when terminal emulator available on host; skipped in headless/CI
 
 ### SSH page
+
 - [ ] Key generation completes
 - [ ] Public key displays and can be copied
 - [ ] GitHub SSH test runs and returns output
 
 ### Git Config page
+
 - [ ] Git config list loads
 - [ ] Set name/email saves without error
 
 ### Monitor / System page
-- [ ] Metrics load (CPU, memory, disk, load avg)
+
+- [ ] Metrics load (CPU %, memory, disk, load avg)
 - [ ] Top processes list appears
 - [ ] System info loads
 
 ### Maintenance page
+
 - [ ] Compose profiles list and launch
 - [ ] Diagnostics bundle creates file
 
 ### Runtimes page
+
 - [ ] Runtime status list loads (node, python, go, rust, java)
 
 ### Known limits (not test failures)
-- `dh:docker:install` / `dh:docker:remap-port`: Tauri IPC — install blocked in Flatpak / without usable sudo; remap clones then stops/removes source when possible. Where the backend returns `*_NOT_SUPPORTED`, the UI shows docs-first notices (see Docker screen audit on `main`).
-- Flatpak-specific paths may differ from native install ✓
+
+| Feature | Native + sudo | Flatpak / no sudo |
+| --- | --- | --- |
+| `docker:install` | Wizard runs distro package steps; requires sudo in step 3 | Step 0 blocks with warning + link to docs.docker.com and `docs/DOCKER_FLATPAK.md` |
+| `docker:remap-port` | Remap form available; clones container with new `-p` then stops/removes original | Ports tab shows sandbox notice + docs link; form hidden |
+| SSH `~/.ssh` access | Direct read/write via `ssh-keygen` | May need `--filesystem=home` override; see `docs/PRIVILEGE_BOUNDARY_MATRIX.md` |
+| Docker socket | Direct via `/var/run/docker.sock` | Needs `--socket=session` Flatpak override; see `docs/DOCKER_FLATPAK.md` |
