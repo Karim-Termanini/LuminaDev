@@ -112,33 +112,48 @@ Stabilization is considered complete only when:
 
 ---
 
-## Tauri Pre-Release Migration Track (active)
+## Tauri Pre-Release Migration Track
 
-- **Status:** `in_progress`
+- **Status:** `in_progress` — Stage 2 done; Stage 4/5 pending merge + release gate verification
 - **Scope:** Replace Electron runtime shell with Tauri before first public release while preserving existing behavior.
 - **Stage 0 (baseline + freeze):** `done`
 - **Stage 1 (Tauri skeleton + API bridge):** `done`
-- **Stage 2 (Rust-native backend port):** `in_progress` — Docker/Git/SSH/Monitor/Runtimes still routed through Node bridge (Agent A)
+- **Stage 2 (Rust-native backend port):** `done` — all IPC channels native; Node bridge removed
 - **Stage 3 (renderer parity + UX preservation):** `done`
-- **Stage 4 (packaging + CI + Flatpak):** `in_progress`
-- **Stage 5 (release gate):** `open`
+- **Stage 4 (packaging + CI + Flatpak):** `in_progress` — native-linux-build green; flatpak deferred to release
+- **Stage 5 (release gate):** `open` — pending final merge + sanity
 
 - **Stage 1 evidence:**
   - Tauri app scaffold: `apps/desktop/src-tauri/*`
   - Renderer transport bridge: `apps/desktop/src/renderer/src/api/desktopApiBridge.ts`
-  - Node-backed parity bridge: `apps/desktop/scripts/tauri-ipc-bridge.mjs`
   - `pnpm smoke` passed on 2026-04-29
 
-- **Stage 3 evidence (Agent B, 2026-04-29):**
-  - Renderer parity: all 63 `window.dh.*` call sites across 8 pages verified against bridge — no missing methods
-  - Two bugs fixed in bridge init path:
-    - `isTauriRuntime` guard was missing `()` — fixed
-    - `DashboardLayoutFile` missing import in `vite-env.d.ts` — fixed
-  - UX regression audit: all polish batches (1–5) confirmed intact
-  - CI hardened: Rust toolchain + cache added to `native-linux-build` job; `stabilization/*` + `agent-*` branches added to CI triggers
-  - `pnpm typecheck` passed; `pnpm smoke` passed
+- **Stage 2 evidence (2026-04-30):**
+  - All remaining channels ported to Rust native:
+    - `dh:metrics` — `/proc/meminfo`, `/proc/loadavg`, `/proc/cpuinfo`, `df`
+    - `dh:host:exec` — `systemctl is-active`, `nvidia-smi`
+    - `dh:docker:create` — docker CLI with ports/env/volumes/autoStart
+    - `dh:ssh:list:dir` — native `ssh ls`
+    - `dh:ssh:setup:remote:key` — native `ssh` + `sshpass`
+    - `dh:docker:remap-port`, `dh:docker:install` — explicit not-supported errors
+  - `invoke_node_bridge()` removed from `lib.rs`
+  - `apps/desktop/scripts/tauri-ipc-bridge.mjs` deleted
+  - Node.js no longer required at app runtime
+  - `pnpm smoke` passed after changes
 
-- **Open release gate blocker:**
-  - Stage 2 (Rust-native port) not complete — all Docker/Git/SSH/Monitor channels still via `invoke_node_bridge()` (Node spawn per call)
-  - local `cargo check` still needs Linux WebKitGTK/Soup/JSC packages; mitigated in CI
-  - blocker fully tracked in `docs/APP_CREATION_PLAYBOOK.md`
+- **Stage 3 evidence (2026-04-29):**
+  - All 63 `window.dh.*` call sites across 8 pages verified against bridge
+  - Two bugs fixed: `isTauriRuntime()` guard, `DashboardLayoutFile` import
+  - UX regression audit: polish batches 1–5 intact
+  - `pnpm typecheck` + `pnpm smoke` passed
+
+- **Stage 4 evidence (2026-04-30):**
+  - CI: `agent-*` trigger removed; `feat/*`, `fix/*`, `chore/*` added
+  - `quality-gate` job: trimmed to only `build-essential python3` (WebKit deps were unnecessary)
+  - `native-linux-build`: Rust toolchain + cache present, Tauri build green in CI
+
+- **Remaining before Stage 5 release gate:**
+  - Merge `feat/tauri-stage2-port` (Rust port) to main
+  - Merge `feat/release-gate-docs-ci` (this branch) to main
+  - Run `pnpm smoke` on final main
+  - Flatpak offline build (deferred — added back before Flathub submission)

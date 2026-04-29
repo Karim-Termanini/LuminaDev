@@ -2,7 +2,7 @@
 
 Linux developer workstation dashboard, focused on safe click-first flows for Docker, system visibility, and local machine setup.
 
-> **Runtime migration in progress:** moving from Electron to Tauri before first public release. Current build uses a Node-backed compatibility bridge while the Rust backend port is in progress. See [Stabilization Checklist](docs/STABILIZATION_CHECKLIST.md) for migration stage status.
+> **Runtime migration:** Tauri backend port complete. All IPC channels run Rust-native; Node.js bridge removed. Pending final merge + release gate. See [Stabilization Checklist](docs/STABILIZATION_CHECKLIST.md).
 
 ## Project Status (truthful snapshot)
 
@@ -14,8 +14,8 @@ This project is in active development. Features below are split by maturity:
   - SSH and Git configuration UI flows.
   - Typed IPC boundaries via `@linux-dev-home/shared` schemas.
 - **Partial / evolving**:
-  - Tauri migration: Stage 1 (bridge skeleton) done; Stage 2 (Rust-native backend port) in progress.
-  - Flatpak-host privilege parity and cross-distro consistency.
+  - Tauri migration: Stages 0–4 done; release gate (Stage 5) pending.
+  - Flatpak packaging and cross-distro consistency.
   - Runtime install/update matrix hardening.
   - Diagnostics and support bundle depth.
 - **Planned**:
