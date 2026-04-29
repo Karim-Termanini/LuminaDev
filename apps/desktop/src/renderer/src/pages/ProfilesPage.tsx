@@ -84,16 +84,22 @@ export function ProfilesPage(): ReactElement {
   }, [profiles])
 
   return (
-    <div style={{ maxWidth: 980, display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div style={{ maxWidth: 1040, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 20 }}>
       <header>
         <div className="mono" style={{ color: 'var(--accent)', fontSize: 12, marginBottom: 8 }}>
           PROFILES
         </div>
         <h1 style={{ margin: 0, fontSize: 28, fontWeight: 700 }}>Profile Manager</h1>
-        <p style={{ color: 'var(--text-muted)', marginTop: 10, maxWidth: 760 }}>
+        <p style={{ color: 'var(--text-muted)', marginTop: 10, maxWidth: 760, lineHeight: 1.5 }}>
           Manage saved custom profiles used by Dashboard Main cards. Profiles are stored in your local userData JSON.
         </p>
       </header>
+      {status ? (
+        <div className={`hp-status-alert ${/copied|saved|removed|duplicated|imported|cleared/i.test(status) ? 'success' : 'warning'}`}>
+          <span style={{ fontSize: 16 }}>{/copied|saved|removed|duplicated|imported|cleared/i.test(status) ? '✔' : '⚠'}</span>
+          <span>{status}</span>
+        </div>
+      ) : null}
 
       <section style={card}>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -110,7 +116,6 @@ export function ProfilesPage(): ReactElement {
             {profiles.length} profiles
           </span>
         </div>
-        {status ? <div style={{ marginTop: 10, color: 'var(--text-muted)' }}>{status}</div> : null}
       </section>
 
       <section style={card}>
@@ -185,7 +190,7 @@ const card = {
   background: 'var(--bg-widget)',
   border: '1px solid var(--border)',
   borderRadius: 'var(--radius)',
-  padding: 14,
+  padding: 16,
 }
 
 const btn = {
@@ -193,8 +198,9 @@ const btn = {
   background: 'var(--bg-input)',
   color: 'var(--text)',
   borderRadius: 8,
-  padding: '8px 12px',
+  padding: '9px 13px',
   cursor: 'pointer',
+  fontWeight: 600,
 }
 
 const btnDanger = {

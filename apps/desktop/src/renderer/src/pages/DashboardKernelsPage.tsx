@@ -35,7 +35,7 @@ export function DashboardKernelsPage(): ReactElement {
   }, [])
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 980 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 980, margin: '0 auto', paddingInline: 12 }}>
       <header>
         <div className="mono" style={{ color: 'var(--accent)', fontSize: 12, marginBottom: 8 }}>
           DASHBOARD.KERNELS
@@ -47,7 +47,7 @@ export function DashboardKernelsPage(): ReactElement {
         </p>
       </header>
 
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', rowGap: 8 }}>
         <button type="button" onClick={() => void refresh()} style={btn} disabled={busy}>
           {busy ? 'Refreshing…' : 'Refresh checks'}
         </button>
@@ -58,7 +58,7 @@ export function DashboardKernelsPage(): ReactElement {
 
       <section style={card}>
         <div className="mono" style={{ color: 'var(--text-muted)', fontSize: 12 }}>GPU</div>
-        <pre className="mono" style={pre}>{gpu}</pre>
+        <pre className="mono" style={{ ...pre, overflowX: 'auto' }}>{gpu}</pre>
       </section>
 
       <section style={card}>
@@ -87,7 +87,7 @@ const card = {
   background: 'var(--bg-widget)',
   border: '1px solid var(--border)',
   borderRadius: 'var(--radius)',
-  padding: 14,
+  padding: 16,
 }
 
 const btn = {
@@ -97,6 +97,7 @@ const btn = {
   borderRadius: 8,
   padding: '9px 14px',
   cursor: 'pointer',
+  fontWeight: 600,
 }
 
 const pre = {

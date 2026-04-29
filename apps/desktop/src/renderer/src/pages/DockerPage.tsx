@@ -577,7 +577,7 @@ export function DockerPage(): ReactElement {
   const rowsWithPorts = rows.filter((r) => r.ports !== '—')
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 1200 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 1240, margin: '0 auto', paddingInline: 12 }}>
       <header>
         <div className="mono" style={{ color: 'var(--accent)', fontSize: 12, marginBottom: 8 }}>
           DOCKER.SURFACE
@@ -588,7 +588,7 @@ export function DockerPage(): ReactElement {
         </p>
       </header>
 
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', rowGap: 8 }}>
         <button type="button" className="hp-btn" onClick={() => void refreshAll()} disabled={busy}>
           Refresh
         </button>
@@ -631,17 +631,19 @@ export function DockerPage(): ReactElement {
         </div>
       ) : null}
 
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        {(['scheme', 'create', 'containers', 'images', 'volumes', 'networks', 'ports', 'cleanup'] as const).map((t) => (
-          <button
-            key={t}
-            type="button"
-            style={tab === t ? tabBtnActive : tabBtn}
-            onClick={() => setTab(t)}
-          >
-            {t}
-          </button>
-        ))}
+      <div style={{ overflowX: 'auto', paddingBottom: 2 }}>
+        <div style={{ display: 'flex', gap: 8, minWidth: 'max-content' }}>
+          {(['scheme', 'create', 'containers', 'images', 'volumes', 'networks', 'ports', 'cleanup'] as const).map((t) => (
+            <button
+              key={t}
+              type="button"
+              style={tab === t ? tabBtnActive : tabBtn}
+              onClick={() => setTab(t)}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
       </div>
 
       <section className="hp-card">

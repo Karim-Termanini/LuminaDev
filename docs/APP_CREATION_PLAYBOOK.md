@@ -431,3 +431,35 @@ This file is a living engineering memory, not static documentation.
   - why it matters
   - verification evidence
 - Treat missing playbook updates as a process bug.
+
+### Phase 7 UI hardening (batch approach)
+
+- Apply UI polish in controlled batches, not all at once:
+  1. layout and spacing rhythm
+  2. visual hierarchy (titles, accents, emphasis)
+  3. button states and feedback clarity
+  4. responsive behavior and overflow sanity
+- Each batch must preserve existing behavior and pass typecheck/tests before the next batch.
+
+### Batch 2 delivered
+
+- Improved visual hierarchy and feedback clarity in:
+  - `GitConfigPage`
+  - `RegistryPage`
+  - `ProfilesPage`
+- Changes include:
+  - clearer status surfaces (dedicated success/warning alert blocks)
+  - stronger heading/body spacing rhythm
+  - more consistent button emphasis and readability for primary vs secondary actions
+
+### Batch 3 delivered
+
+- Responsive refinement and overflow hardening for:
+  - `DashboardKernelsPage`
+  - `DashboardLogsPage`
+  - `DockerPage`
+- Changes include:
+  - centered content with safe horizontal page padding
+  - horizontal overflow safety for long logs/terminal-style text blocks
+  - tab strip overflow handling for Docker sections on smaller widths
+  - denser, more consistent card spacing without changing runtime behavior
