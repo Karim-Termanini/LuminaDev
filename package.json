@@ -9,6 +9,10 @@
     "lint": "eslint .",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm --filter shared test && pnpm --filter desktop test",
+    "test:integration": "pnpm --filter desktop test:integration",
+    "test:e2e": "pnpm --filter desktop test:e2e",
+    "test:coverage": "pnpm --filter desktop test:coverage",
+    "audit:prod": "pnpm audit --prod --audit-level=high",
     "smoke": "bash scripts/smoke-ci.sh"
   },
   "devDependencies": {

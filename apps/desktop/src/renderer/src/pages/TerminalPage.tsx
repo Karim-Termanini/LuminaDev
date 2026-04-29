@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { FitAddon } from '@xterm/addon-fit'
 import { Terminal } from '@xterm/xterm'
 import '@xterm/xterm/css/xterm.css'
+import { TERMINAL_OPEN_EXTERNAL_HINT, TERMINAL_PTY_HINT } from './environmentHints'
 
 export function TerminalPage(): ReactElement {
   const wrapRef = useRef<HTMLDivElement | null>(null)
@@ -92,13 +93,12 @@ export function TerminalPage(): ReactElement {
         </button>
       </div>
       <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>
-        Uses node-pty in the main process. Sandboxed Flatpak builds may block PTYs—use the external
-        launcher as a fallback.
+        {TERMINAL_PTY_HINT}
       </p>
       {err ? (
         <div style={{ color: 'var(--orange)', marginBottom: 8 }}>
           {err}
-          {fallbackHint ? ' Try “Open external terminal”.' : ''}
+          {fallbackHint ? ` ${TERMINAL_OPEN_EXTERNAL_HINT}` : ''}
         </div>
       ) : null}
       <div

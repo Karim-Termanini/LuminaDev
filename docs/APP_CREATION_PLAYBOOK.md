@@ -261,6 +261,64 @@ For delete/prune/remove operations:
 
 ---
 
+## 8.1) Vertical Slice Definition Template (copy/paste)
+
+Use this template before starting any new slice.
+
+### A) Slice identity
+
+- **Slice name:**
+- **User value (one sentence):**
+- **In-scope capabilities:**
+- **Out-of-scope capabilities (explicitly deferred):**
+
+### B) Boundary and safety map
+
+- **Execution context:** sandbox | host | mixed
+- **Privilege needs:** none | user-level | elevated
+- **Sensitive operations:** (delete/prune/write/system changes)
+- **User confirmations required:** yes/no + where
+- **Failure classes expected:** unavailable | permission | conflict | timeout | invalid | unknown
+
+### C) Contract definition
+
+- **Request schema(s):**
+- **Response schema(s):**
+- **Deterministic result shape:** `{ ok: true, ... }` | `{ ok: false, error, ...safe fallback }`
+- **Invalid payload behavior:** reject at boundary with stable error
+
+### D) UX definition
+
+- **Success state shown to user:**
+- **Failure message strategy:** technical code -> humanized message
+- **Fallback behavior:** (when operation blocked in sandbox, etc.)
+- **Help text/docs link shown in UI:**
+
+### E) Test plan (minimum)
+
+- **Schema validation tests:** valid + invalid payloads
+- **Mapper/normalizer tests:** stable error code mapping
+- **Contract assertion tests:** missing fields / malformed response
+- **Flow test target:** one critical user path
+- **Smoke gate target:** typecheck + tests + lint green
+
+### F) Evidence required to mark slice "done"
+
+- [ ] All tests above added and passing
+- [ ] `bash scripts/smoke-ci.sh` green
+- [ ] Docs updated with truthful status (`Implemented / Partial / Planned`)
+- [ ] Known limits documented
+- [ ] No net-new scope outside this slice in same PR
+
+### G) Post-implementation review
+
+- **What regressed?**
+- **What surprised us technically?**
+- **What should become a permanent rule in this playbook?**
+- **Incident log entry added?** yes/no
+
+---
+
 ## 9) Continuous Incident Log (update every new problem)
 
 Use this template for every new issue discovered during development:
@@ -310,3 +368,35 @@ Whenever a new issue appears:
 4. Keep language factual (no marketing terms).
 
 This file is a living engineering memory, not static documentation.
+
+---
+
+## 11) Quality Pipeline Rollout (A/B/C)
+
+### Phase A — Immediate Gate (implemented)
+
+- Mandatory CI jobs:
+  - Lint + typecheck + unit tests (`bash scripts/smoke-ci.sh`)
+  - Production dependency audit (`pnpm audit --prod --audit-level=high`)
+  - Native Linux build (includes `node-pty` rebuild)
+  - Flatpak offline build smoke (`flatpak-builder ...offline.yml`)
+- SAST enabled through CodeQL workflow.
+- Dependabot configured for npm and GitHub Actions updates.
+
+### Phase B — Behavior Stability (implemented baseline)
+
+- Integration tests added for IPC contract + error mapping path.
+- E2E-lite critical scenarios added for:
+  - Docker failure UX mapping
+  - SSH Flatpak permission guidance
+  - Terminal PTY fallback guidance
+- Coverage baseline enabled for critical files (minimum 60% statements, with thresholds in `vitest.config.ts`).
+
+### Phase C — Product Hardening (next)
+
+- Performance:
+  - measure startup latency, memory footprint, and polling overhead
+- Accessibility:
+  - keyboard navigation, focus order, labels, contrast
+- Mutation testing (optional advanced):
+  - apply only to sensitive logic modules (contracts/error mappers)

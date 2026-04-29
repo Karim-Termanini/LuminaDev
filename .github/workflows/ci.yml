@@ -1,4 +1,4 @@
-name: CI
+name: Quality Gate
 
 on:
   push:
@@ -7,36 +7,82 @@ on:
     branches: [main]
 
 jobs:
-  build:
+  quality-gate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: pnpm/action-setup@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'pnpm'
-
-      - name: Install system deps (native addons)
+      - name: Install deps for native addons
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential python3 pkg-config libsecret-1-dev
-
-      - run: pnpm install
-
+      - run: pnpm install --frozen-lockfile
       - name: Rebuild native modules for Electron
         run: pnpm --filter desktop rebuild:native
+      - name: Lint + typecheck + unit tests
+        run: bash scripts/smoke-ci.sh
 
-      - run: pnpm test
-      - run: pnpm typecheck
-      - run: pnpm lint
-      - run: pnpm build
-
-  docker-smoke:
+  dependency-audit:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Docker smoke (lint, test, typecheck, build)
-        run: docker build -f docker/Dockerfile .
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - name: Production dependency audit
+        run: pnpm audit --prod --audit-level=high
+
+  integration-and-e2e-lite:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - name: Integration tests
+        run: pnpm test:integration
+      - name: E2E-lite critical scenarios
+        run: pnpm test:e2e
+      - name: Coverage baseline (critical files)
+        run: pnpm test:coverage
+
+  native-linux-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+      - name: Install deps for native addons
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential python3 pkg-config libsecret-1-dev
+      - run: pnpm install --frozen-lockfile
+      - name: Rebuild native modules for Electron
+        run: pnpm --filter desktop rebuild:native
+      - name: Build Linux app
+        run: pnpm build
+
+  flatpak-offline-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Flatpak build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak flatpak-builder
+      - name: Flatpak offline build smoke
+        run: |
+          flatpak-builder --force-clean flatpak-build-dir flatpak/io.github.karimodora.LinuxDevHome.offline.yml

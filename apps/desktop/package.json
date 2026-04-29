@@ -13,6 +13,9 @@
     "build": "electron-vite build && node scripts/copy-docker-profiles.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.web.json && tsc --noEmit -p tsconfig.node.json",
     "test": "vitest run",
+    "test:integration": "vitest run src/renderer/src/pages/dockerIpc.integration.test.ts",
+    "test:e2e": "vitest run src/renderer/src/pages/criticalScenarios.e2e.test.ts",
+    "test:coverage": "vitest run --coverage",
     "rebuild:native": "electron-rebuild -f -w node-pty",
     "pack:linux": "node scripts/pack-linux.mjs"
   },
@@ -38,6 +41,7 @@
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@types/yazl": "^3.3.1",
+    "@vitest/coverage-v8": "^2.1.9",
     "@vitejs/plugin-react": "^4.3.3",
     "electron": "^33.2.0",
     "electron-builder": "^25.1.8",
