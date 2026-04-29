@@ -1,6 +1,10 @@
 import type { SessionInfo } from '@linux-dev-home/shared'
 import type { ReactElement } from 'react'
 import { useEffect, useState } from 'react'
+import { assertGitOk } from '../pages/gitContract'
+import { humanizeGitError } from '../pages/gitError'
+import { assertSshOk } from '../pages/sshContract'
+import { humanizeSshError } from '../pages/sshError'
 
 export function WizardFlow({ onComplete }: { onComplete: () => void }): ReactElement {
   const [step, setStep] = useState(0)
@@ -102,10 +106,11 @@ export function WizardFlow({ onComplete }: { onComplete: () => void }): ReactEle
               <button style={btnPrimary} disabled={!gitName || !gitEmail || busy} onClick={async () => {
                 setBusy(true)
                 try {
-                  await window.dh.gitConfigSet({ name: gitName, email: gitEmail, target })
+                  const res = await window.dh.gitConfigSet({ name: gitName, email: gitEmail, target })
+                  assertGitOk(res, 'Failed to apply git identity.')
                   setStep(4)
                 } catch (e) {
-                  alert(e)
+                  alert(humanizeGitError(e))
                 }
                 setBusy(false)
               }}>Apply &amp; Next</button>
@@ -132,11 +137,12 @@ export function WizardFlow({ onComplete }: { onComplete: () => void }): ReactEle
                 <button style={btnPrimary} disabled={busy} onClick={async () => {
                   setBusy(true)
                   try {
-                    await window.dh.sshGenerate({ target })
+                    const genRes = await window.dh.sshGenerate({ target })
+                    assertSshOk(genRes, 'Failed to generate SSH key.')
                     const pub = await window.dh.sshGetPub({ target })
-                    setPubKey(pub?.pub ?? '')
+                    setPubKey(pub.ok ? pub.pub : '')
                   } catch (e) {
-                    alert(e)
+                    alert(humanizeSshError(e))
                   }
                   setBusy(false)
                 }}>Generate Key</button>

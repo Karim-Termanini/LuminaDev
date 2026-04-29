@@ -4,29 +4,26 @@ import { useCallback, useEffect, useState } from 'react'
 
 export function SystemPage(): ReactElement {
   const [snap, setSnap] = useState<HostMetricsResponse | null>(null)
-  const [docker, setDocker] = useState<
-    { ok: true; rows: ContainerRow[] } | { ok: false; error: string } | null
-  >(null)
+  const [docker, setDocker] = useState<{ ok: boolean; rows: ContainerRow[]; error?: string } | null>(null)
   const [gpu, setGpu] = useState<string>('…')
 
   const refresh = useCallback(async () => {
     try {
-      setSnap((await window.dh.metrics()) as HostMetricsResponse)
+      const m = (await window.dh.metrics()) as HostMetricsResponse & { ok: boolean; error?: string }
+      if (m.ok) setSnap(m)
     } catch {
       /* ignore */
     }
     try {
-      setDocker(
-        (await window.dh.dockerList()) as
-          | { ok: true; rows: ContainerRow[] }
-          | { ok: false; error: string }
-      )
+      const d = (await window.dh.dockerList()) as { ok: boolean; rows: ContainerRow[]; error?: string }
+      setDocker(d)
     } catch {
       /* ignore */
     }
     try {
-      const g = (await window.dh.hostExec({ command: 'nvidia_smi_short' })) as string
-      setGpu(g)
+      const g = (await window.dh.hostExec({ command: 'nvidia_smi_short' })) as { ok: boolean; result: string; error?: string }
+      if (g.ok) setGpu(g.result)
+      else setGpu('GPU: unavailable')
     } catch {
       setGpu('GPU: unavailable')
     }

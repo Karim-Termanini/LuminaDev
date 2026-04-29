@@ -11,8 +11,8 @@ export function DashboardKernelsPage(): ReactElement {
   async function refresh(): Promise<void> {
     setBusy(true)
     try {
-      const g = (await window.dh.hostExec({ command: 'nvidia_smi_short' })) as string
-      setGpu(g || 'GPU: unavailable')
+      const g = await window.dh.hostExec({ command: 'nvidia_smi_short' })
+      setGpu(g.ok && typeof g.result === 'string' ? g.result : 'GPU: unavailable')
     } catch {
       setGpu('GPU: unavailable')
     }
@@ -20,8 +20,8 @@ export function DashboardKernelsPage(): ReactElement {
     const nextUnits: Record<string, string> = {}
     for (const unit of UNITS) {
       try {
-        const s = (await window.dh.hostExec({ command: 'systemctl_is_active', unit })) as string
-        nextUnits[unit] = String(s)
+        const s = await window.dh.hostExec({ command: 'systemctl_is_active', unit })
+        nextUnits[unit] = s.ok ? String(s.result ?? 'unknown') : 'unknown'
       } catch {
         nextUnits[unit] = 'unknown'
       }

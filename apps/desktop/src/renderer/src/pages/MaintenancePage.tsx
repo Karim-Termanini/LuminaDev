@@ -108,9 +108,10 @@ export function MaintenancePage(): ReactElement {
 
   const refreshStatic = useCallback(async () => {
     try {
-      setSecurity(await window.dh.monitorSecurity())
-      const stored = (await window.dh.storeGet({ key: 'maintenance_state' })) as MaintenanceStateStore | null
-      setState(stored ?? { tasks: [], profileHealth: [], history: [] })
+      const sec = await window.dh.monitorSecurity()
+      setSecurity(sec.ok ? sec.snapshot : null)
+      const stored = await window.dh.storeGet({ key: 'maintenance_state' })
+      setState((stored.ok ? (stored.data as MaintenanceStateStore | null) : null) ?? { tasks: [], profileHealth: [], history: [] })
       await refreshSystemdSnapshot()
     } catch (e) {
       setStatus(e instanceof Error ? e.message : String(e))
@@ -150,7 +151,8 @@ export function MaintenancePage(): ReactElement {
 
   async function checkProfileHealth(profile: ComposeProfile): Promise<void> {
     try {
-      const logs = ((await window.dh.composeLogs({ profile })) as string).toLowerCase()
+      const logsRes = await window.dh.composeLogs({ profile })
+      const logs = (logsRes.ok ? logsRes.log : logsRes.error || '').toLowerCase()
       const hasErrors = /error|failed|fatal/.test(logs)
       const health: MaintenanceProfileHealth['health'] = hasErrors ? 'degraded' : logs.trim().length === 0 ? 'unknown' : 'healthy'
       const nextEntry: MaintenanceProfileHealth = {
@@ -283,12 +285,15 @@ export function MaintenancePage(): ReactElement {
         details: `docker=${docker.docker} compose=${docker.compose} buildx=${docker.buildx}`,
       })
 
-      const hostSec = (await window.dh.monitorSecurity()) as HostSecuritySnapshot
+      const hostSecRes = await window.dh.monitorSecurity()
+      const hostSec = hostSecRes.ok ? hostSecRes.snapshot : null
       checks.push({
         id: 'security',
         label: 'Security baseline',
-        ok: hostSec.firewall === 'active' && hostSec.sshPasswordAuth !== 'yes',
-        details: `firewall=${hostSec.firewall}, sshPasswordAuth=${hostSec.sshPasswordAuth}`,
+        ok: Boolean(hostSec && hostSec.firewall === 'active' && hostSec.sshPasswordAuth !== 'yes'),
+        details: hostSec
+          ? `firewall=${hostSec.firewall}, sshPasswordAuth=${hostSec.sshPasswordAuth}`
+          : hostSecRes.error || 'Security snapshot unavailable',
       })
 
       const gitHost = (await window.dh.gitConfigList({ target: 'host' })) as { ok: boolean; rows: Array<{ key: string; value: string }> }
@@ -305,8 +310,8 @@ export function MaintenancePage(): ReactElement {
       checks.push({
         id: 'ssh',
         label: 'SSH key',
-        ok: Boolean(sshHost?.pub),
-        details: sshHost?.fingerprint ? `fingerprint=${sshHost.fingerprint}` : 'No host SSH key detected',
+        ok: Boolean(sshHost.ok && sshHost.pub),
+        details: sshHost.ok && sshHost.fingerprint ? `fingerprint=${sshHost.fingerprint}` : 'No host SSH key detected',
       })
 
       const rt = (await window.dh.runtimeStatus()) as { runtimes: Array<{ id: string; installed: boolean }> }

@@ -1,6 +1,10 @@
 import type { GitRepoEntry } from '@linux-dev-home/shared'
 import type { CSSProperties, ReactElement } from 'react'
 import { useCallback, useEffect, useState } from 'react'
+import { assertGitOk } from './gitContract'
+import { humanizeGitError } from './gitError'
+import { humanizeDockerError } from './dockerError'
+import { assertGitRecentList } from './registryContract'
 
 export function RegistryPage(): ReactElement {
   const [url, setUrl] = useState('https://github.com/octocat/Hello-World.git')
@@ -10,9 +14,20 @@ export function RegistryPage(): ReactElement {
   const [repoPath, setRepoPath] = useState('')
   const [gitInfo, setGitInfo] = useState<Record<string, unknown> | null>(null)
 
+  // Docker Search State
+  const [dockerTerm, setDockerTerm] = useState('')
+  const [dockerResults, setDockerResults] = useState<Array<{ name: string; description: string; star_count: number; is_official: boolean }>>([])
+  const [dockerLoading, setDockerLoading] = useState(false)
+
   const loadRecent = useCallback(async () => {
-    const r = (await window.dh.gitRecentList()) as GitRepoEntry[]
-    setRecent(r)
+    try {
+      const res = await window.dh.gitRecentList()
+      setRecent(assertGitRecentList(res))
+      setStatus(null)
+    } catch (e) {
+      setStatus(humanizeGitError(e))
+      setRecent([])
+    }
   }, [])
 
   useEffect(() => {
@@ -36,23 +51,44 @@ export function RegistryPage(): ReactElement {
     }
     setStatus('Cloning…')
     try {
-      await window.dh.gitClone({ url, targetDir: target.trim() })
+      const res = await window.dh.gitClone({ url, targetDir: target.trim() })
+      assertGitOk(res, 'Git clone failed.')
       setStatus('Clone complete')
       await loadRecent()
     } catch (e) {
-      setStatus(e instanceof Error ? e.message : String(e))
+      setStatus(humanizeGitError(e))
     }
   }
 
   async function inspect(): Promise<void> {
     if (!repoPath) return
     try {
-      const s = (await window.dh.gitStatus({ repoPath })) as Record<string, unknown>
-      setGitInfo(s)
-      await window.dh.gitRecentAdd({ path: repoPath })
+      const s = (await window.dh.gitStatus({ repoPath })) as { ok: boolean; info: Record<string, unknown>; error?: string }
+      assertGitOk(s, 'Git status failed.')
+      setGitInfo(s.info)
+      const addRes = (await window.dh.gitRecentAdd({ path: repoPath })) as { ok: boolean; error?: string }
+      assertGitOk(addRes, 'Failed to save recent repo.')
       await loadRecent()
     } catch (e) {
-      setGitInfo({ error: e instanceof Error ? e.message : String(e) })
+      setGitInfo({ error: humanizeGitError(e) })
+    }
+  }
+
+  async function searchDocker(): Promise<void> {
+    if (!dockerTerm.trim()) return
+    setDockerLoading(true)
+    setStatus(null)
+    try {
+      const res = await window.dh.dockerSearch(dockerTerm.trim())
+      if (res.ok) {
+        setDockerResults(res.results)
+      } else {
+        setStatus(humanizeDockerError(res.error))
+      }
+    } catch (e) {
+      setStatus(humanizeDockerError(e))
+    } finally {
+      setDockerLoading(false)
     }
   }
 
@@ -60,8 +96,8 @@ export function RegistryPage(): ReactElement {
     <div style={{ maxWidth: 920 }}>
       <h1 style={{ marginTop: 0 }}>Registry &amp; Git</h1>
       <p style={{ color: 'var(--text-muted)' }}>
-        Clone repositories into your home directory and track recently opened folders. Paths are
-        validated in the main process.
+        Manage your source control and container assets. Clone repositories or search for official
+        Docker images directly from the Hub.
       </p>
 
       <section style={{ ...section, marginTop: 24 }}>
@@ -82,6 +118,81 @@ export function RegistryPage(): ReactElement {
           git clone
         </button>
         {status ? <div className="mono" style={{ fontSize: 13 }}>{status}</div> : null}
+      </section>
+
+      <section style={{ ...section, marginTop: 20 }}>
+        <div style={{ fontWeight: 600, marginBottom: 12 }}>Docker Hub Search</div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input
+            value={dockerTerm}
+            onChange={(e) => setDockerTerm(e.target.value)}
+            placeholder="Search images (e.g. redis, postgres)…"
+            style={{ ...input, flex: 1 }}
+            onKeyDown={(e) => e.key === 'Enter' && void searchDocker()}
+          />
+          <button type="button" onClick={() => void searchDocker()} style={btnPrimary} disabled={dockerLoading}>
+            {dockerLoading ? 'Searching…' : 'Search'}
+          </button>
+        </div>
+        {dockerResults.length > 0 && (
+          <div
+            style={{
+              marginTop: 16,
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
+              gap: 12,
+            }}
+          >
+            {dockerResults.slice(0, 6).map((r) => (
+              <div
+                key={r.name}
+                style={{
+                  padding: 12,
+                  background: 'rgba(255,255,255,0.03)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 8,
+                }}
+              >
+                <div style={{ fontWeight: 600, fontSize: 14 }}>
+                  {r.name}
+                  {r.is_official && (
+                    <span
+                      style={{
+                        marginLeft: 6,
+                        fontSize: 10,
+                        background: 'var(--accent)',
+                        color: '#000',
+                        padding: '1px 4px',
+                        borderRadius: 4,
+                        verticalAlign: 'middle',
+                      }}
+                    >
+                      OFFICIAL
+                    </span>
+                  )}
+                </div>
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: 'var(--text-muted)',
+                    marginTop: 4,
+                    height: 32,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                  }}
+                >
+                  {r.description}
+                </div>
+                <div style={{ marginTop: 8, fontSize: 11, color: 'var(--accent)', display: 'flex', justifyContent: 'space-between' }}>
+                  <span>★ {r.star_count}</span>
+                  <button type="button" style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', padding: 0 }} onClick={() => {
+                    void window.dh.openExternal(`https://hub.docker.com/_/${r.name.includes('/') ? 'r/' + r.name : r.name}`)
+                  }}>View Hub ↗</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
 
       <section style={{ ...section, marginTop: 20 }}>

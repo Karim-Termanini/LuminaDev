@@ -8,8 +8,12 @@ export function WorkstationPage(): ReactElement {
   const [log, setLog] = useState<string>('')
 
   async function showLogs(profile: ComposeProfile): Promise<void> {
-    const text = (await window.dh.composeLogs({ profile })) as string
-    setLog(text)
+    const res = (await window.dh.composeLogs({ profile })) as { ok: boolean; log: string; error?: string }
+    if (res.ok) {
+      setLog(res.log)
+    } else {
+      setLog(`Error fetching logs: ${res.error || 'Unknown error'}`)
+    }
   }
 
   return (

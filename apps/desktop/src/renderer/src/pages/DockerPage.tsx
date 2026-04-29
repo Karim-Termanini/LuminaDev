@@ -234,7 +234,8 @@ export function DockerPage(): ReactElement {
       setIsSearchingHub(true)
       try {
         const res = await window.dh.dockerSearch(term)
-        setHubResults(res)
+        if (res.ok) setHubResults(res.results)
+        else setHubResults([])
       } catch (e) {
         console.error('Search failed', e)
       } finally {
@@ -713,7 +714,8 @@ export function DockerPage(): ReactElement {
                           setHubResults([])
                           setIsLoadingTags(true)
                           try {
-                            const tags = await window.dh.dockerGetTags(r.name)
+                            const res = await window.dh.dockerGetTags(r.name)
+                            const tags = res.ok ? res.tags : []
                             setAvailableTags(tags)
                             if (tags.includes('latest')) setSelectedTag('latest')
                             else if (tags.length > 0) setSelectedTag(tags[0])

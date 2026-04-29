@@ -9,6 +9,9 @@ import {
 import type { CSSProperties, ReactElement } from 'react'
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { assertDockerOk } from './dockerContract'
+import { humanizeDockerError } from './dockerError'
+import { humanizeDashboardError } from './dashboardError'
 
 import { CustomProfileWizardModal } from '../dashboard/CustomProfileWizardModal'
 
@@ -17,6 +20,7 @@ export function DashboardMainPage(): ReactElement {
     { ok: true; rows: ContainerRow[] } | { ok: false; error: string } | null
   >(null)
   const [snap, setSnap] = useState<HostMetricsResponse | null>(null)
+  const [metricsError, setMetricsError] = useState<string | null>(null)
   const [composeMsg, setComposeMsg] = useState<string | null>(null)
   const [wizardOpen, setWizardOpen] = useState(false)
   const [customProfiles, setCustomProfiles] = useState<CustomProfileEntry[]>([])
@@ -31,10 +35,15 @@ export function DashboardMainPage(): ReactElement {
       setDocker({ ok: false, error: e instanceof Error ? e.message : String(e) })
     }
     try {
-      const m = (await window.dh.metrics()) as HostMetricsResponse
-      setSnap(m)
-    } catch {
-      /* ignore */
+      const m = (await window.dh.metrics()) as HostMetricsResponse & { ok: boolean; error?: string }
+      if (m.ok) {
+        setSnap(m)
+        setMetricsError(null)
+      } else {
+        setMetricsError(humanizeDashboardError(m.error))
+      }
+    } catch (e) {
+      setMetricsError(e instanceof Error ? e.message : String(e))
     }
   }, [])
 
@@ -60,8 +69,12 @@ export function DashboardMainPage(): ReactElement {
 
   async function initProfile(profile: ComposeProfile): Promise<void> {
     setComposeMsg(`Starting ${profile}…`)
-    const r = (await window.dh.composeUp({ profile })) as { ok: boolean; log: string }
-    setComposeMsg(r.ok ? `Compose up: OK\n${r.log}` : `Compose error\n${r.log}`)
+    const r = await window.dh.composeUp({ profile })
+    if (r.ok) {
+      setComposeMsg(`Compose up: OK\n${r.log}`)
+    } else {
+      setComposeMsg(`Compose error\n${humanizeDockerError(r.error || r.log)}`)
+    }
     void refresh()
   }
 
@@ -327,13 +340,14 @@ export function DashboardMainPage(): ReactElement {
               padding: 16,
             }}
           >
-            <div style={{ fontWeight: 600, marginBottom: 12 }}>Resource allocation</div>
-            {m ? (
+            {metricsError ? (
+              <div style={{ color: 'var(--orange)', fontSize: 12 }}>{metricsError}</div>
+            ) : m ? (
               <>
                 <MetricBar label="CPU" value={`${m.cpuUsagePercent}%`} pct={m.cpuUsagePercent} tone="purple" />
                 <MetricBar
                   label="RAM"
-                  value={`${(m.totalMemMb - m.freeMemMb).toFixed(1)} / ${m.totalMemMb} MB`}
+                  value={`${((m.totalMemMb - m.freeMemMb)/1024).toFixed(1)} / ${(m.totalMemMb/1024).toFixed(1)} GB`}
                   pct={Math.min(100, Math.round(((m.totalMemMb - m.freeMemMb) / m.totalMemMb) * 100))}
                   tone="orange"
                 />
@@ -342,7 +356,7 @@ export function DashboardMainPage(): ReactElement {
                   value={`${m.diskFreeGb} GB free`}
                   pct={
                     m.diskTotalGb > 0
-                      ? Math.min(100, Math.round((m.diskFreeGb / m.diskTotalGb) * 100))
+                      ? Math.min(100, Math.round(((m.diskTotalGb - m.diskFreeGb) / m.diskTotalGb) * 100))
                       : 0
                   }
                   tone="blue"
@@ -378,12 +392,13 @@ export function DashboardMainPage(): ReactElement {
 
   async function dockerAction(id: string, action: 'start' | 'stop' | 'restart'): Promise<void> {
     if (!window.confirm(`${action} this container?`)) return
-    const res = (await window.dh.dockerAction({ id, action })) as { ok?: boolean; error?: string }
-    if (res && typeof res === 'object' && res.ok === false) {
-      setComposeMsg(res.error || 'Container action failed.')
-      return
+    try {
+      const res = await window.dh.dockerAction({ id, action })
+      assertDockerOk(res, 'Container action failed.')
+      void refresh()
+    } catch (e) {
+      setComposeMsg(humanizeDockerError(e))
     }
-    void refresh()
   }
 }
 

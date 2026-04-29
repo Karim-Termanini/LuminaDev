@@ -22,8 +22,8 @@ export function DashboardLogsPage(): ReactElement {
   async function loadComposeLog(): Promise<void> {
     setBusy(true)
     try {
-      const text = (await window.dh.composeLogs({ profile })) as string
-      setComposeLog(text || 'No output yet.')
+      const res = await window.dh.composeLogs({ profile })
+      setComposeLog(res.ok ? res.log || 'No output yet.' : res.error || 'No output yet.')
     } finally {
       setBusy(false)
     }

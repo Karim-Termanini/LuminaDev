@@ -1,6 +1,7 @@
 import type { DashboardLayoutFile } from '@linux-dev-home/shared'
 import type { ReactElement, ReactNode } from 'react'
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { assertDashboardLayoutGet } from '../pages/dashboardContract'
 
 export type WidgetLayoutContextValue = {
   layout: DashboardLayoutFile | null
@@ -26,8 +27,8 @@ export function WidgetLayoutProvider({ children }: { children: ReactNode }): Rea
 
   const reloadLayout = useCallback(async () => {
     try {
-      const raw = (await window.dh.layoutGet()) as DashboardLayoutFile
-      setLayout(raw)
+      const raw = await window.dh.layoutGet()
+      setLayout(assertDashboardLayoutGet(raw))
     } catch {
       setLayout(null)
     }
