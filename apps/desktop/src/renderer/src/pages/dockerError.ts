@@ -15,5 +15,11 @@ export function humanizeDockerError(err: unknown): string {
   if (code === 'DOCKER_REMAP_NOT_SUPPORTED') {
     return `Port remapping from the UI is not supported. ${detail}`.trim()
   }
+  if (code === 'DOCKER_INSTALL_FAILED') {
+    return `Docker install step failed. ${detail}`.trim()
+  }
+  if (code === 'DOCKER_REMAP_FAILED') {
+    return `Port remap (clone) failed. ${detail}`.trim()
+  }
   return detail || 'Docker operation failed.'
 }

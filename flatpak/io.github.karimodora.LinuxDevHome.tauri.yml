@@ -1,0 +1,45 @@
+# SPDX-License-Identifier: MIT
+# Tauri (GTK/WebKit) Flatpak — local / Flathub prep. Not wired into GitHub Actions yet (see flatpak/README.md).
+app-id: io.github.karimodora.LinuxDevHome
+runtime: org.gnome.Platform
+runtime-version: '49'
+sdk: org.gnome.Sdk
+command: linux-dev-home
+
+# Extension branches must match what org.gnome.Sdk declares (do not add //24.08 etc. — that causes "Unknown extension in runtime").
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
+  - org.freedesktop.Sdk.Extension.node20
+
+finish-args:
+  - --share=ipc
+  - --socket=fallback-x11
+  - --socket=wayland
+  - --device=dri
+  - --share=network
+  - --filesystem=home
+  # Docker socket: not granted by default — use `flatpak override` (docs/DOCKER_FLATPAK.md).
+
+build-options:
+  append-path: /usr/lib/sdk/rust-stable/bin:/usr/lib/sdk/node20/bin
+
+modules:
+  - name: luminadev-tauri
+    buildsystem: simple
+    build-options:
+      append-path: /usr/lib/sdk/rust-stable/bin:/usr/lib/sdk/node20/bin
+      env:
+        NPM_CONFIG_LOGLEVEL: info
+    sources:
+      - type: dir
+        path: ..
+    build-commands:
+      - corepack enable && corepack prepare pnpm@9.14.2 --activate
+      - pnpm install --frozen-lockfile
+      - pnpm --filter @linux-dev-home/shared build
+      - pnpm --filter desktop build:web
+      - (cd apps/desktop/src-tauri && cargo build --release)
+      - install -Dm755 apps/desktop/src-tauri/target/release/lumina-dev /app/bin/linux-dev-home
+      - install -Dm644 data/io.github.karimodora.LinuxDevHome.desktop /app/share/applications/io.github.karimodora.LinuxDevHome.desktop
+      - install -Dm644 data/io.github.karimodora.LinuxDevHome.metainfo.xml /app/share/metainfo/io.github.karimodora.LinuxDevHome.metainfo.xml
+      - install -Dm644 data/icons/hicolor/scalable/apps/io.github.karimodora.LinuxDevHome.svg /app/share/icons/hicolor/scalable/apps/io.github.karimodora.LinuxDevHome.svg

@@ -137,7 +137,7 @@ Stabilization is considered complete only when:
     - `dh:docker:create` — docker CLI with ports/env/volumes/autoStart; returns `id` on success
     - `dh:ssh:list:dir` — native `ssh ls`
     - `dh:ssh:setup:remote:key` — native `ssh` + `sshpass`
-    - `dh:docker:remap-port`, `dh:docker:install` — explicit not-supported errors
+    - `dh:docker:remap-port`, `dh:docker:install` — Rust: install guards Flatpak + sudo preflight; remap clones then `docker stop` + `docker rm` source when stop succeeds (`sourceStopped`, `sourceRemoved`, notes in JSON)
   - `invoke_node_bridge()` removed from `lib.rs`
   - `apps/desktop/scripts/tauri-ipc-bridge.mjs` deleted
   - Node.js no longer required at app runtime
@@ -150,9 +150,10 @@ Stabilization is considered complete only when:
   - `pnpm typecheck` + `pnpm smoke` passed
 
 - **Stage 4 evidence (2026-04-30):**
-  - CI: `agent-*` trigger removed; `feat/*`, `fix/*`, `chore/*` added
+  - CI: broadened push triggers (`feat/*`, `fix/*`, `chore/*`, etc.)
   - `quality-gate` job: trimmed to only `build-essential python3` (WebKit deps were unnecessary)
   - `native-linux-build`: Rust toolchain + cache present, Tauri build green in CI
+  - Flatpak: `flatpak/io.github.karimodora.LinuxDevHome.tauri.yml` added for local/Flathub prep — **not** in GitHub Actions until a dedicated slow job is added
 
 - **Remaining before Stage 5 (when you declare product-ready):**
   - Run `pnpm smoke` on `main` before any tagged release
@@ -207,6 +208,5 @@ Minimal flows to verify before declaring a build stable. Run on real Tauri build
 - [ ] Runtime status list loads (node, python, go, rust, java)
 
 ### Known limits (not test failures)
-- `dh:docker:install` → "not available" notice with docs link ✓
-- `dh:docker:remap-port` → "not available" notice ✓
+- `dh:docker:install` / `dh:docker:remap-port`: Tauri IPC — install blocked in Flatpak / without usable sudo; remap clones then stops/removes source when possible. Where the backend returns `*_NOT_SUPPORTED`, the UI shows docs-first notices (see Docker screen audit on `main`).
 - Flatpak-specific paths may differ from native install ✓
