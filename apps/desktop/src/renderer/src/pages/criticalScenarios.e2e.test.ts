@@ -18,7 +18,7 @@ describe('critical user-facing scenarios (e2e-lite)', () => {
   })
 
   it('terminal fallback guidance is explicit', () => {
-    expect(TERMINAL_PTY_HINT).toContain('node-pty')
+    expect(TERMINAL_PTY_HINT).toContain('Flatpak')
     expect(TERMINAL_OPEN_EXTERNAL_HINT).toContain('Open external terminal')
   })
 })
