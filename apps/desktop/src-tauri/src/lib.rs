@@ -3331,10 +3331,14 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
         let home = std::env::var("HOME").unwrap_or_default();
         let lumina_base = format!("{}/.local/share/lumina/{}", home, runtime_id);
         let mise_base   = format!("{}/.local/share/mise/installs/{}", home, runtime_id);
-        let path = std::path::Path::new(path_str);
-        if path_str.starts_with(&lumina_base) {
-          // Walk up from the binary path until we are a direct child of lumina_base
-          let base = std::path::Path::new(&lumina_base);
+        let nvm_base    = format!("{}/.nvm/versions/node", home);
+        let pyenv_base  = format!("{}/.pyenv/versions", home);
+        let rustup_base = format!("{}/.rustup/toolchains", home);
+
+        // Helper: walk up from binary path to direct child of a base dir, then rm -rf it
+        let rmrf_version_under = |base_s: &str| -> Value {
+          let base = std::path::Path::new(base_s);
+          let path = std::path::Path::new(path_str);
           let mut cursor = path;
           let mut version_dir: Option<std::path::PathBuf> = None;
           loop {
@@ -3345,7 +3349,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
             }
           }
           match version_dir {
-            Some(dir) if dir.is_dir() && dir != base => {
+            Some(dir) if dir.is_dir() => {
               match std::fs::remove_dir_all(&dir) {
                 Ok(_) => json!({ "ok": true }),
                 Err(e) => json!({ "ok": false, "error": format!("[REMOVE_VERSION_FAILED] rm -rf: {}", e) }),
@@ -3353,13 +3357,81 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
             }
             _ => json!({ "ok": false, "error": "[REMOVE_VERSION_FAILED] could not resolve version directory." }),
           }
+        };
+
+        if path_str.starts_with(&lumina_base) {
+          // Go / Zig / Java / Dart / Flutter — lumina-managed dirs, safe rm -rf
+          rmrf_version_under(&lumina_base)
+        } else if path_str.starts_with(&nvm_base) {
+          // Node via nvm: nvm uninstall <version-tag>
+          // version tag is the directory name under ~/.nvm/versions/node/
+          let tag = std::path::Path::new(path_str)
+            .ancestors()
+            .find(|p| p.parent().map(|pp| pp == std::path::Path::new(&nvm_base)).unwrap_or(false))
+            .and_then(|p| p.file_name())
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_else(|| version.clone());
+          if tag.is_empty() {
+            json!({ "ok": false, "error": "[REMOVE_VERSION_FAILED] could not determine nvm version tag." })
+          } else {
+            let cmd = format!(
+              r#"export NVM_DIR="$HOME/.nvm"; [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"; nvm uninstall '{}' 2>&1"#,
+              tag.replace('\'', "'\\''")
+            );
+            match exec_output_limit("bash", &["-c", &cmd], CMD_TIMEOUT_SHORT).await {
+              Ok(_) => json!({ "ok": true }),
+              Err(e) => json!({ "ok": false, "error": format!("[REMOVE_VERSION_FAILED] nvm uninstall: {}", e.trim()) }),
+            }
+          }
+        } else if path_str.starts_with(&pyenv_base) {
+          // Python via pyenv: pyenv uninstall -f <version>
+          let pyenv_version = std::path::Path::new(path_str)
+            .ancestors()
+            .find(|p| p.parent().map(|pp| pp == std::path::Path::new(&pyenv_base)).unwrap_or(false))
+            .and_then(|p| p.file_name())
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_else(|| version.clone());
+          if pyenv_version.is_empty() {
+            json!({ "ok": false, "error": "[REMOVE_VERSION_FAILED] could not determine pyenv version." })
+          } else {
+            let cmd = format!(
+              r#"export PYENV_ROOT="$HOME/.pyenv"; export PATH="$PYENV_ROOT/bin:$PATH"; eval "$(pyenv init -)" 2>/dev/null; pyenv uninstall -f '{}' 2>&1"#,
+              pyenv_version.replace('\'', "'\\''")
+            );
+            match exec_output_limit("bash", &["-c", &cmd], CMD_TIMEOUT_SHORT).await {
+              Ok(_) => json!({ "ok": true }),
+              Err(e) => json!({ "ok": false, "error": format!("[REMOVE_VERSION_FAILED] pyenv uninstall: {}", e.trim()) }),
+            }
+          }
+        } else if path_str.starts_with(&rustup_base) {
+          // Rust via rustup: rustup toolchain remove <toolchain-name>
+          // toolchain name is the dir directly under ~/.rustup/toolchains/
+          let toolchain = std::path::Path::new(path_str)
+            .ancestors()
+            .find(|p| p.parent().map(|pp| pp == std::path::Path::new(&rustup_base)).unwrap_or(false))
+            .and_then(|p| p.file_name())
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_else(|| version.clone());
+          if toolchain.is_empty() {
+            json!({ "ok": false, "error": "[REMOVE_VERSION_FAILED] could not determine rustup toolchain name." })
+          } else {
+            let cmd = format!(
+              "export PATH=\"$HOME/.cargo/bin:$PATH\"; rustup toolchain remove '{}' 2>&1",
+              toolchain.replace('\'', "'\\''")
+            );
+            match exec_output_limit("bash", &["-c", &cmd], CMD_TIMEOUT_SHORT).await {
+              Ok(_) => json!({ "ok": true }),
+              Err(e) => json!({ "ok": false, "error": format!("[REMOVE_VERSION_FAILED] rustup toolchain remove: {}", e.trim()) }),
+            }
+          }
         } else if path_str.starts_with(&mise_base) || matches!(runtime_id, "php" | "ruby" | "lua") {
+          // PHP / Ruby / Lua via mise — find mise binary dynamically
           if version.is_empty() {
             json!({ "ok": false, "error": "[REMOVE_VERSION_FAILED] version required for mise-managed runtime." })
           } else {
             let cmd = format!(
-              "export PATH=\"$HOME/.local/bin:$PATH\"; \"$HOME/.local/bin/mise\" uninstall {}@{} 2>&1",
-              runtime_id, version
+              r#"MISE=$(command -v mise 2>/dev/null || echo "$HOME/.local/bin/mise"); export PATH="$HOME/.local/bin:$PATH"; "$MISE" uninstall {}@'{}' 2>&1"#,
+              runtime_id, version.replace('\'', "'\\''")
             );
             match exec_output_limit("bash", &["-lc", &cmd], CMD_TIMEOUT_SHORT).await {
               Ok(_) => json!({ "ok": true }),
@@ -3367,7 +3439,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
             }
           }
         } else {
-          json!({ "ok": false, "error": "[REMOVE_VERSION_FAILED] path is not in a lumina-managed directory." })
+          json!({ "ok": false, "error": "[REMOVE_VERSION_FAILED] path is not in a recognised version manager directory (lumina / nvm / pyenv / rustup / mise)." })
         }
       }
     },
