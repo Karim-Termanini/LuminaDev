@@ -65,41 +65,109 @@ const CMD_TIMEOUT_LONG: Duration = Duration::from_secs(900);
 const CMD_TIMEOUT_INSTALL_STEP: Duration = Duration::from_secs(900);
 
 /// Run a bootstrap script without elevation (writes under $HOME only).
-async fn runtime_bash_user_step(cmd: &str, logs: &mut Vec<String>) -> Result<(), String> {
+// Streaming user-shell install step — identical progress logic to sudo_bash_install_step
+// but runs as the user (no sudo/pkexec). Streams stdout+stderr live so the UI
+// shows real output while the installer is running.
+async fn runtime_bash_user_step(
+  cmd: &str,
+  logs: &mut Vec<String>,
+  app: Option<tauri::AppHandle>,
+  job_id: Option<String>,
+  base_progress: u32,
+  step_weight: u32,
+) -> Result<(), String> {
   logs.push(format!("RUNNING (user shell, no sudo): {}", cmd));
-  let fut = async {
-    // Use non-login shell here to avoid user rc/profile parse failures from
-    // blocking local installers (nvm/pyenv/etc). Commands explicitly source
-    // their own bootstrap scripts where needed.
-    let output = Command::new("bash")
-      .arg("-c")
-      .arg(cmd)
-      // nvm aborts when npm prefix is preconfigured globally.
-      .env_remove("npm_config_prefix")
-      .env_remove("NPM_CONFIG_PREFIX")
-      .output()
-      .await
-      .map_err(|e| format!("[EXEC_ERROR] {}", e))?;
-    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-    if output.status.success() {
-      Ok((stdout, stderr))
-    } else {
-      Err(if stderr.trim().is_empty() { stdout } else { stderr })
-    }
-  };
 
-  match tokio::time::timeout(CMD_TIMEOUT_INSTALL_STEP, fut).await {
-    Ok(Ok((stdout, stderr))) => {
-      for line in stdout.lines().chain(stderr.lines()) {
-        if !line.trim().is_empty() {
-          logs.push(format!("OUT: {}", line));
+  let mut child = Command::new("bash")
+    .arg("-c")
+    .arg(cmd)
+    .env_remove("npm_config_prefix")
+    .env_remove("NPM_CONFIG_PREFIX")
+    .stdin(Stdio::null())
+    .stdout(Stdio::piped())
+    .stderr(Stdio::piped())
+    .spawn()
+    .map_err(|e| format!("[RUNTIME_INSTALL_FAILED] spawn: {}", e))?;
+
+  let stdout = child.stdout.take().unwrap();
+  let stderr = child.stderr.take().unwrap();
+  let mut out_reader = tokio::io::BufReader::new(stdout).lines();
+  let mut err_reader = tokio::io::BufReader::new(stderr).lines();
+
+  let mut line_count: u32 = 0;
+  let mut last_explicit_bonus: u32 = 0;
+  let deadline = tokio::time::Instant::now() + CMD_TIMEOUT_INSTALL_STEP;
+
+  loop {
+    tokio::select! {
+      res = out_reader.next_line() => {
+        match res {
+          Ok(Some(line)) => {
+            if !line.trim().is_empty() {
+              logs.push(format!("OUT: {}", line));
+              line_count += 1;
+            }
+            if let (Some(ref app_h), Some(ref jid)) = (&app, &job_id) {
+              let mut bonus = last_explicit_bonus;
+              if line.contains('%') {
+                if let Some(p_str) = line.split('%').next().and_then(|s| s.split_whitespace().last()) {
+                  if let Ok(p) = p_str.parse::<u32>() {
+                    let explicit = (p * step_weight) / 100;
+                    if explicit > bonus { bonus = explicit; last_explicit_bonus = explicit; }
+                  }
+                }
+              } else if line.contains('/') && (line.contains('(') || line.contains('[')) {
+                if let Some(idx) = line.find('/') {
+                  let before = &line[..idx];
+                  let after  = &line[idx+1..];
+                  let start = before.rfind(|c: char| !c.is_ascii_digit()).map(|i| i+1).unwrap_or(0);
+                  let end   = after.find(|c: char| !c.is_ascii_digit()).unwrap_or(after.len());
+                  let cur   = line[start..idx].trim().parse::<u32>().unwrap_or(0);
+                  let total = line[idx+1..idx+1+end].trim().parse::<u32>().unwrap_or(1);
+                  if total > 0 {
+                    let explicit = (cur * step_weight) / total;
+                    if explicit > bonus { bonus = explicit; last_explicit_bonus = explicit; }
+                  }
+                }
+              } else {
+                let heuristic = ((line_count * step_weight) / 60).min(step_weight.saturating_sub(2));
+                if heuristic > bonus { bonus = heuristic; }
+              }
+              let prog = (base_progress + bonus).min(base_progress + step_weight.saturating_sub(1));
+              let st = app_h.state::<AppState>();
+              let mut jobs = st.jobs.lock().await;
+              if let Some(j) = jobs.iter_mut().find(|j| j.get("id").and_then(|v| v.as_str()) == Some(jid.as_str())) {
+                let cur_prog = j["progress"].as_u64().unwrap_or(0) as u32;
+                if prog > cur_prog { j["progress"] = json!(prog); }
+              }
+            }
+          }
+          _ => break,
         }
       }
-      Ok(())
+      res = err_reader.next_line() => {
+        match res {
+          Ok(Some(line)) => {
+            if !line.trim().is_empty() { logs.push(format!("ERR: {}", line)); }
+          }
+          _ => {}
+        }
+      }
+      _ = tokio::time::sleep_until(deadline) => {
+        let _ = child.kill().await;
+        return Err("[RUNTIME_INSTALL_FAILED] [HOST_COMMAND_TIMEOUT] bash -c <runtime-user-step>".to_string());
+      }
     }
-    Ok(Err(e)) => Err(format!("[RUNTIME_INSTALL_FAILED] {}", e.trim())),
-    Err(_) => Err("[RUNTIME_INSTALL_FAILED] [HOST_COMMAND_TIMEOUT] bash -c <runtime-user-step>".to_string()),
+  }
+
+  match child.wait().await {
+    Ok(s) if s.success() => Ok(()),
+    Ok(_) => {
+      let tail = logs.iter().rev().find(|l| l.starts_with("ERR:") || l.starts_with("OUT:"))
+        .map(|l| l.as_str()).unwrap_or("non-zero exit").to_string();
+      Err(format!("[RUNTIME_INSTALL_FAILED] {}", tail.trim()))
+    }
+    Err(e) => Err(format!("[RUNTIME_INSTALL_FAILED] wait: {}", e)),
   }
 }
 
@@ -897,7 +965,7 @@ async fn runtime_append_verify(runtime_id: &str, method: &str, requested_version
     "node" => "([ -s \"$NVM_DIR/nvm.sh\" ] && . \"$NVM_DIR/nvm.sh\" && node --version 2>&1) || (command -v node >/dev/null 2>&1 && node --version 2>&1) || echo MISSING",
     "python" => "([ -d \"$HOME/.pyenv\" ] && export PYENV_ROOT=\"$HOME/.pyenv\" && export PATH=\"$PYENV_ROOT/bin:$PATH\" && eval \"$(pyenv init -)\" && python3 --version 2>&1) || (command -v python3 >/dev/null 2>&1 && python3 --version 2>&1) || echo MISSING",
     "go" => "([ -x \"$HOME/.local/share/lumina/go/current/bin/go\" ] && \"$HOME/.local/share/lumina/go/current/bin/go\" version 2>&1) || ([ -x \"$HOME/.local/share/lumina/go/bin/go\" ] && \"$HOME/.local/share/lumina/go/bin/go\" version 2>&1) || (command -v go >/dev/null 2>&1 && go version 2>&1) || echo MISSING",
-    "rust" => "([ -x \"$HOME/.cargo/bin/rustup\" ] && \"$HOME/.cargo/bin/rustup\" show active-toolchain 2>&1 | head -1) || ([ -x \"$HOME/.cargo/bin/rustc\" ] && \"$HOME/.cargo/bin/rustc\" --version 2>&1) || (command -v rustc >/dev/null 2>&1 && rustc --version 2>&1) || echo MISSING",
+    "rust" => "unset RUSTUP_TOOLCHAIN; ([ -x \"$HOME/.cargo/bin/rustup\" ] && \"$HOME/.cargo/bin/rustup\" show active-toolchain 2>&1 | head -1) || ([ -x \"$HOME/.cargo/bin/rustc\" ] && \"$HOME/.cargo/bin/rustc\" --version 2>&1) || (command -v rustc >/dev/null 2>&1 && rustc --version 2>&1) || echo MISSING",
     "java" if method == "local" => "([ -x \"$HOME/.local/share/lumina/java/current/bin/java\" ] && \"$HOME/.local/share/lumina/java/current/bin/java\" -version 2>&1 | head -1) || echo MISSING",
     "java" => "command -v java >/dev/null 2>&1 && java -version 2>&1 | head -1 || echo MISSING",
     "php" if method == "local" => "export PATH=\"$HOME/.local/bin:$PATH\"; ([ -x \"$HOME/.local/bin/mise\" ] && eval \"$($HOME/.local/bin/mise activate bash)\" >/dev/null 2>&1 || true); (command -v php >/dev/null 2>&1 && php --version 2>&1 | head -1) || echo MISSING",
@@ -912,7 +980,7 @@ async fn runtime_append_verify(runtime_id: &str, method: &str, requested_version
     "matlab" => "command -v octave >/dev/null 2>&1 && octave --version 2>&1 | head -1 || echo MISSING",
     "dart" => "([ -x \"$HOME/.dart/dart-sdk/bin/dart\" ] && \"$HOME/.dart/dart-sdk/bin/dart\" --version 2>&1 | head -1) || (command -v dart >/dev/null 2>&1 && dart --version 2>&1 | head -1) || echo MISSING",
     "flutter" => "([ -x \"$HOME/.flutter-sdk/bin/flutter\" ] && \"$HOME/.flutter-sdk/bin/flutter\" --version 2>&1 | head -1) || (command -v flutter >/dev/null 2>&1 && flutter --version 2>&1 | head -1) || echo MISSING",
-    "julia" => "export PATH=\"$HOME/.juliaup/bin:$PATH\"; ([ -x \"$HOME/.juliaup/bin/julia\" ] && \"$HOME/.juliaup/bin/julia\" --version 2>&1) || (command -v julia >/dev/null 2>&1 && julia --version 2>&1) || echo MISSING",
+    "julia" => "export PATH=\"$HOME/.juliaup/bin:$PATH\"; ([ -x \"$HOME/.juliaup/bin/julia\" ] && \"$HOME/.juliaup/bin/julia\" --startup-file=no --version 2>&1) || (command -v julia >/dev/null 2>&1 && julia --startup-file=no --version 2>&1) || echo MISSING",
     "lua" if method == "local" => "export PATH=\"$HOME/.local/bin:$PATH\"; ([ -x \"$HOME/.local/bin/mise\" ] && eval \"$($HOME/.local/bin/mise activate bash)\" >/dev/null 2>&1 || true); ((command -v lua5.4 >/dev/null 2>&1 && lua5.4 -v 2>&1) || (command -v lua >/dev/null 2>&1 && lua -v 2>&1)) || echo MISSING",
     "lua" => "(command -v lua5.4 >/dev/null 2>&1 && lua5.4 -v 2>&1) || (command -v lua >/dev/null 2>&1 && lua -v 2>&1) || echo MISSING",
     "lisp" => "command -v sbcl >/dev/null 2>&1 && sbcl --version 2>&1 || echo MISSING",
@@ -1031,7 +1099,7 @@ async fn runtime_job_execute(
                fi"#,
             safe_tc = safe_tc
           );
-          runtime_bash_user_step(&cmd, &mut logs).await.map_err(|e| format!("{}", e))
+          runtime_bash_user_step(&cmd, &mut logs, Some(app.clone()), Some(job_id.clone()), 30, 65).await.map_err(|e| format!("{}", e))
         } else if runtime_id == "node" && method == "local" {
           let v = lumina_first_version_token(&version).unwrap_or_else(|| "lts/*".into());
           // nvm refuses to operate when ~/.npmrc pins npm prefix/globalconfig; strip those keys (with backup).
@@ -1053,7 +1121,7 @@ async fn runtime_job_execute(
                nvm use --delete-prefix {v}"#,
             v = v
           );
-          runtime_bash_user_step(&cmd, &mut logs).await.map_err(|e| format!("{}", e))
+          runtime_bash_user_step(&cmd, &mut logs, Some(app.clone()), Some(job_id.clone()), 30, 65).await.map_err(|e| format!("{}", e))
         } else if runtime_id == "go" && method == "local" {
           let v = lumina_first_version_token(&version).unwrap_or_else(|| "1.22.2".into());
           let cmd = format!(
@@ -1073,7 +1141,7 @@ async fn runtime_job_execute(
              || echo 'export PATH=\"$HOME/.local/share/lumina/go/current/bin:$PATH\"  # lumina-go' >> \"$HOME/.bashrc\"",
             v = v
           );
-          runtime_bash_user_step(&cmd, &mut logs).await.map_err(|e| format!("{}", e))
+          runtime_bash_user_step(&cmd, &mut logs, Some(app.clone()), Some(job_id.clone()), 30, 65).await.map_err(|e| format!("{}", e))
         } else if runtime_id == "zig" && method == "local" {
           let mut v = lumina_first_version_token(&version).unwrap_or_else(|| "0.13.0".into());
           v = v.trim().trim_start_matches('v').trim().to_string();
@@ -1100,7 +1168,7 @@ async fn runtime_job_execute(
              || echo 'export PATH=\"$HOME/.local/share/lumina/zig/current:$PATH\"  # lumina-zig' >> \"$HOME/.bashrc\"",
             v = v
           );
-          runtime_bash_user_step(&cmd, &mut logs).await.map_err(|e| format!("{}", e))
+          runtime_bash_user_step(&cmd, &mut logs, Some(app.clone()), Some(job_id.clone()), 30, 65).await.map_err(|e| format!("{}", e))
         } else if runtime_id == "python" && method == "local" {
           if pkg_mgr == "dnf" {
             if let Some(pw) = password_opt.filter(|p| !p.is_empty()) {
@@ -1125,7 +1193,7 @@ async fn runtime_job_execute(
              && pyenv global {v}",
             v = v
           );
-          runtime_bash_user_step(&cmd, &mut logs).await.map_err(|e| format!("{}", e))
+          runtime_bash_user_step(&cmd, &mut logs, Some(app.clone()), Some(job_id.clone()), 30, 65).await.map_err(|e| format!("{}", e))
         } else if runtime_id == "java" {
           if method.trim() == "local" {
             let major = runtime_java_major(&version).unwrap_or(21);
@@ -1156,7 +1224,7 @@ async fn runtime_job_execute(
                  "$LUMINA_JAVA_DIR/current/bin/java" -version 2>&1 | head -1"#,
               major = major
             );
-            runtime_bash_user_step(&cmd, &mut logs).await.map_err(|e| format!("{}", e))
+            runtime_bash_user_step(&cmd, &mut logs, Some(app.clone()), Some(job_id.clone()), 30, 65).await.map_err(|e| format!("{}", e))
           } else {
             if pkg_mgr == "dnf" && runtime_java_major(&version) == Some(8) {
               Err("[RUNTIME_INSTALL_FAILED] Fedora repositories on this host do not provide java-1.8.0-openjdk-devel. Use Isolated Script (Local) for Java 8.".to_string())
@@ -1219,13 +1287,13 @@ async fn runtime_job_execute(
              || echo 'export PATH=\"$HOME/.dotnet:$HOME/.dotnet/tools:$PATH\"  # Microsoft .NET (lumina)' >> \"$HOME/.bashrc\"",
             ch = ch
           );
-          runtime_bash_user_step(&cmd, &mut logs).await.map_err(|e| format!("{}", e))
+          runtime_bash_user_step(&cmd, &mut logs, Some(app.clone()), Some(job_id.clone()), 30, 65).await.map_err(|e| format!("{}", e))
         } else if runtime_id == "bun" {
           let ver = lumina_first_version_token(&version).unwrap_or_default();
           let ver = ver.trim().trim_start_matches('v').to_string();
           if ver.is_empty() {
             logs.push("Installing Bun via official installer (latest)…".into());
-            runtime_bash_user_step("curl -fsSL https://bun.sh/install | bash", &mut logs)
+            runtime_bash_user_step("curl -fsSL https://bun.sh/install | bash", &mut logs, Some(app.clone()), Some(job_id.clone()), 30, 65)
               .await
               .map_err(|e| format!("{}", e))
           } else {
@@ -1234,7 +1302,7 @@ async fn runtime_job_execute(
               "curl -fsSL https://bun.sh/install | bash -s \"bun-v{}\"",
               ver.replace('"', "").replace('\'', "")
             );
-            runtime_bash_user_step(&cmd, &mut logs).await.map_err(|e| format!("{}", e))
+            runtime_bash_user_step(&cmd, &mut logs, Some(app.clone()), Some(job_id.clone()), 30, 65).await.map_err(|e| format!("{}", e))
           }
         } else if runtime_id == "dart" {
           let (channel, release) = lumina_dart_channel_release(&version);
@@ -1268,7 +1336,7 @@ async fn runtime_job_execute(
               channel = channel,
               rel = rel_safe
             );
-            runtime_bash_user_step(&cmd, &mut logs).await.map_err(|e| format!("{}", e))
+            runtime_bash_user_step(&cmd, &mut logs, Some(app.clone()), Some(job_id.clone()), 30, 65).await.map_err(|e| format!("{}", e))
           }
         } else if runtime_id == "flutter" {
           let has_snap = exec_output_limit("which", &["snap"], CMD_TIMEOUT_SHORT).await.is_ok();
@@ -1301,7 +1369,7 @@ async fn runtime_job_execute(
             "#,
               ch = flutter_ch
             );
-            runtime_bash_user_step(&cmd, &mut logs).await.map_err(|e| format!("{}", e))
+            runtime_bash_user_step(&cmd, &mut logs, Some(app.clone()), Some(job_id.clone()), 30, 65).await.map_err(|e| format!("{}", e))
           }
         } else if (runtime_id == "php" || runtime_id == "ruby" || runtime_id == "lua") && method == "local" {
           let ver_guess = lumina_first_version_token(&version)
@@ -1339,7 +1407,7 @@ async fn runtime_job_execute(
                  fi"#,
               spec = safe_spec
             );
-            runtime_bash_user_step(&cmd, &mut logs).await.map_err(|e| format!("{}", e))
+            runtime_bash_user_step(&cmd, &mut logs, Some(app.clone()), Some(job_id.clone()), 30, 65).await.map_err(|e| format!("{}", e))
           }
         } else if runtime_id == "julia" {
           let want = lumina_first_version_token(&version).unwrap_or_default();
@@ -1347,15 +1415,20 @@ async fn runtime_job_execute(
           logs.push("Installing Julia via juliaup…".into());
           let cmd = if want.is_empty() {
             r#"set -e
-               rm -f "$HOME/.julia/juliaup/juliaup.json" 2>/dev/null || true
-               curl -fsSL https://install.julialang.org | sh -s -- -y"#
+               export PATH="$HOME/.juliaup/bin:$PATH"
+               if ! command -v juliaup >/dev/null 2>&1 && [ ! -x "$HOME/.juliaup/bin/juliaup" ]; then
+                 curl -fsSL https://install.julialang.org | sh -s -- -y
+               fi"#
               .to_string()
           } else {
             let safe = want.replace('\'', "'\\''").replace('"', "");
             format!(
               r#"set -e
-                 rm -f "$HOME/.julia/juliaup/juliaup.json" 2>/dev/null || true
-                 curl -fsSL https://install.julialang.org | sh -s -- -y
+                 export PATH="$HOME/.juliaup/bin:$PATH"
+                 if ! command -v juliaup >/dev/null 2>&1 && [ ! -x "$HOME/.juliaup/bin/juliaup" ]; then
+                   curl -fsSL https://install.julialang.org | sh -s -- -y
+                   export PATH="$HOME/.juliaup/bin:$PATH"
+                 fi
                  export PATH="$HOME/.juliaup/bin:$PATH"
                  JUP="$HOME/.juliaup/bin/juliaup"
                  if [ ! -x "$JUP" ]; then
@@ -1381,7 +1454,7 @@ async fn runtime_job_execute(
               want = safe
             )
           };
-          runtime_bash_user_step(&cmd, &mut logs).await.map_err(|e| format!("{}", e))
+          runtime_bash_user_step(&cmd, &mut logs, Some(app.clone()), Some(job_id.clone()), 30, 65).await.map_err(|e| format!("{}", e))
         } else {
           let pkgs = runtime_system_packages(&runtime_id, pkg_mgr);
           if method.trim() == "local"
@@ -2962,9 +3035,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
                     CMD_TIMEOUT_SHORT,
                   ).await {
                     let p = p.trim();
-                    if !p.is_empty() {
-                      detected_path = Some(p.to_string());
-                    }
+                    if !p.is_empty() { detected_path = Some(p.to_string()); }
                   }
                   if let Ok(raw) = exec_output_limit(
                     "bash",
@@ -2978,6 +3049,68 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
                       if !v.is_empty() && !p.is_empty() {
                         all_versions.push(json!({ "version": v, "path": p }));
                       }
+                    }
+                  }
+                }
+                "bun" => {
+                  // Bun installs a single binary to ~/.bun/bin/bun
+                  let bun_bin = format!("{}/.bun/bin/bun", std::env::var("HOME").unwrap_or_default());
+                  if std::path::Path::new(&bun_bin).exists() {
+                    if let Ok(v) = exec_output_limit("bash", &["-c", &format!("\"{}\" --version 2>/dev/null", bun_bin)], CMD_TIMEOUT_SHORT).await {
+                      let v = v.trim().to_string();
+                      if !v.is_empty() {
+                        all_versions.push(json!({ "version": v, "path": bun_bin }));
+                      }
+                    }
+                  }
+                }
+                "dart" => {
+                  // Lumina installs Dart under ~/.local/share/lumina/dart/<channel-or-version>/bin/dart
+                  if let Ok(raw) = exec_output_limit(
+                    "bash",
+                    &["-lc", "LDIR=\"$HOME/.local/share/lumina/dart\"; if [ -d \"$LDIR\" ]; then for d in \"$LDIR\"/*; do [ -d \"$d\" ] || continue; b=$(basename \"$d\"); [ \"$b\" = \"current\" ] && continue; [ -x \"$d/bin/dart\" ] || continue; ver=$(\"$d/bin/dart\" --version 2>&1 | awk '{print $4}'); printf '%s\\t%s\\n' \"${ver:-$b}\" \"$d/bin/dart\"; done; fi"],
+                    CMD_TIMEOUT_SHORT,
+                  ).await {
+                    for line in raw.lines() {
+                      let mut parts = line.splitn(2, '\t');
+                      let v = parts.next().unwrap_or("").trim();
+                      let p = parts.next().unwrap_or("").trim();
+                      if !v.is_empty() && !p.is_empty() {
+                        all_versions.push(json!({ "version": v, "path": p }));
+                      }
+                    }
+                  }
+                }
+                "flutter" => {
+                  // Lumina installs Flutter under ~/.local/share/lumina/flutter/<channel>/bin/flutter
+                  if let Ok(raw) = exec_output_limit(
+                    "bash",
+                    &["-lc", "LDIR=\"$HOME/.local/share/lumina/flutter\"; if [ -d \"$LDIR\" ]; then for d in \"$LDIR\"/*; do [ -d \"$d\" ] || continue; b=$(basename \"$d\"); [ \"$b\" = \"current\" ] && continue; [ -x \"$d/bin/flutter\" ] || continue; ver=$(\"$d/bin/flutter\" --version 2>/dev/null | awk '/^Flutter/{print $2}'); printf '%s\\t%s\\n' \"${ver:-$b}\" \"$d/bin/flutter\"; done; fi"],
+                    CMD_TIMEOUT_SHORT,
+                  ).await {
+                    for line in raw.lines() {
+                      let mut parts = line.splitn(2, '\t');
+                      let v = parts.next().unwrap_or("").trim();
+                      let p = parts.next().unwrap_or("").trim();
+                      if !v.is_empty() && !p.is_empty() {
+                        all_versions.push(json!({ "version": v, "path": p }));
+                      }
+                    }
+                  }
+                }
+                "julia" => {
+                  // List juliaup toolchains
+                  if let Ok(raw) = exec_output_limit(
+                    "bash",
+                    &["-lc", "export PATH=\"$HOME/.juliaup/bin:$PATH\"; juliaup list 2>/dev/null | tail -n +2 || true"],
+                    CMD_TIMEOUT_SHORT,
+                  ).await {
+                    for line in raw.lines().filter(|l| !l.trim().is_empty()) {
+                      let parts: Vec<&str> = line.split_whitespace().collect();
+                      let tag = parts.first().copied().unwrap_or("").trim_start_matches('*').trim();
+                      if tag.is_empty() { continue; }
+                      let julia_bin = format!("{}/.juliaup/bin/julia", std::env::var("HOME").unwrap_or_default());
+                      all_versions.push(json!({ "version": tag, "path": julia_bin }));
                     }
                   }
                 }
@@ -3252,7 +3385,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
         "dart"    => vec![("dart", "dart --version 2>&1 || $HOME/.dart/dart-sdk/bin/dart --version 2>&1"), ("curl", "curl --version")],
         "flutter" => vec![("flutter", "flutter --version 2>&1 | head -1 || $HOME/.flutter-sdk/bin/flutter --version 2>&1 | head -1"), ("dart", "dart --version 2>&1 || $HOME/.dart/dart-sdk/bin/dart --version 2>&1"), ("git", "git --version")],
         "julia"   => vec![("julia", "export PATH=\"$HOME/.juliaup/bin:$PATH\"; julia --version 2>/dev/null || ~/.juliaup/bin/julia --version 2>/dev/null"), ("curl", "curl --version")],
-        "lua"     => vec![("lua", "export PATH=\"$HOME/.local/bin:$PATH\"; ([ -x \"$HOME/.local/bin/mise\" ] && eval \"$($HOME/.local/bin/mise activate bash)\" >/dev/null 2>&1 || true); lua -v 2>&1 || lua5.4 -v 2>&1")],
+        "lua"     => vec![("lua", "export PATH=\"$HOME/.local/bin:$PATH\"; ([ -x \"$HOME/.local/bin/mise\" ] && eval \"$($HOME/.local/bin/mise activate bash)\" >/dev/null 2>&1 || true); lua -v 2>&1 || lua5.4 -v 2>&1"), ("readline-devel (build dep)", "rpm -q readline-devel 2>/dev/null || dpkg -l libreadline-dev 2>/dev/null | grep -q '^ii' && echo ok || echo missing")],
         "lisp"    => vec![("sbcl", "sbcl --version")],
         _         => vec![],
       };

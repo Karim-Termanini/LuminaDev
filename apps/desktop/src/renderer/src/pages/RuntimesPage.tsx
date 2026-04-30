@@ -216,13 +216,16 @@ export function RuntimesPage(): ReactElement {
   useEffect(() => {
     void refreshStatus()
     if (showWizard && wizardStep === 2) void refreshDeps()
-    
+
+    // Fast poll (800ms) only while a job is running; 3s idle to avoid CPU spike
+    const hasRunningJob = activeJobs.some((j) => j.state === 'running')
+    const interval = hasRunningJob ? 800 : 3000
     const t = setInterval(() => {
       void refreshStatus()
       if (showWizard && wizardStep === 2) void refreshDeps()
-    }, 500)
+    }, interval)
     return () => clearInterval(t)
-  }, [refreshStatus, refreshDeps, showWizard, wizardStep])
+  }, [refreshStatus, refreshDeps, showWizard, wizardStep, activeJobs])
 
   const selectedRuntime = useMemo(() => runtimes.find(r => r.id === selectedId), [runtimes, selectedId])
   const activeJob = useMemo(() => {
