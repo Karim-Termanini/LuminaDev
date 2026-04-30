@@ -21,6 +21,10 @@ struct TerminalSession {
 struct AppState {
   terminals: Mutex<HashMap<String, TerminalSession>>,
   jobs: Mutex<Vec<Value>>,
+  // (rx_bytes, tx_bytes, instant) for net delta
+  net_prev: Mutex<Option<(u64, u64, std::time::Instant)>>,
+  // (read_kb, write_kb, instant) for disk I/O delta
+  disk_prev: Mutex<Option<(u64, u64, std::time::Instant)>>,
 }
 
 #[cfg(unix)]
@@ -930,7 +934,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
     "dh:layout:get" => match app_file(&app, "layout.json") {
       Ok(path) => {
         let layout = read_json(&path);
-        json!({ "ok": true, "layout": if layout == json!({}) { json!({ "widgets": [] }) } else { layout } })
+        json!({ "ok": true, "layout": if layout == json!({}) { json!({ "version": 1, "placements": [] }) } else { layout } })
       }
       Err(e) => json!({ "ok": false, "error": e }),
     },
@@ -1290,7 +1294,10 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
           "if command -v script >/dev/null 2>&1; then exec script -qfec \"${SHELL:-bash} -i\" /dev/null; else exec ${SHELL:-bash} -i; fi".to_string(),
         ]);
       let _ = (cols, rows);
-      match Command::new(cmd).args(args).stdin(std::process::Stdio::piped()).stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped()).spawn() {
+      match Command::new(cmd).args(args)
+        .env("TERM", "xterm-256color")
+        .env("COLORTERM", "truecolor")
+        .stdin(std::process::Stdio::piped()).stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped()).spawn() {
         Ok(mut child) => {
           let id = Uuid::new_v4().to_string();
           let pid = child.id();
@@ -1723,6 +1730,47 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
         .and_then(|v| v.split('.').next())
         .and_then(|v| v.parse::<u64>().ok())
         .unwrap_or(0);
+      // Distro from /etc/os-release PRETTY_NAME
+      let os_release = std::fs::read_to_string("/etc/os-release").unwrap_or_default();
+      let distro = os_release.lines()
+        .find(|l| l.starts_with("PRETTY_NAME="))
+        .and_then(|l| l.splitn(2, '=').nth(1))
+        .map(|v| v.trim_matches('"').to_string())
+        .unwrap_or_else(|| os_name.trim().to_string());
+      // IP address (first non-loopback)
+      let ip = exec_output_limit("sh", &["-c", "hostname -I 2>/dev/null | awk '{print $1}'"], CMD_TIMEOUT_SHORT)
+        .await.unwrap_or_default();
+      // Shell from $SHELL env, fallback to /proc/1/cmdline
+      let shell = std::env::var("SHELL").unwrap_or_else(|_| "unknown".to_string());
+      let shell_name = Path::new(shell.trim()).file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_else(|| shell.trim().to_string());
+      // Desktop environment
+      let de = std::env::var("XDG_CURRENT_DESKTOP")
+        .or_else(|_| std::env::var("DESKTOP_SESSION"))
+        .unwrap_or_else(|_| "unknown".to_string());
+      // WM / session type
+      let wm = std::env::var("XDG_SESSION_TYPE").unwrap_or_else(|_| "unknown".to_string());
+      // GPU
+      let gpu = exec_output_limit("sh", &["-c",
+        "nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1 || lspci 2>/dev/null | grep -i 'vga\\|3d\\|display' | head -1 | sed 's/.*: //' || echo 'unknown'"
+      ], CMD_TIMEOUT_SHORT).await.unwrap_or_else(|_| "unknown".to_string());
+      // Memory total
+      let meminfo = std::fs::read_to_string("/proc/meminfo").unwrap_or_default();
+      let mem_total_kb: u64 = meminfo.lines()
+        .find(|l| l.starts_with("MemTotal:"))
+        .and_then(|l| l.split_whitespace().nth(1))
+        .and_then(|v| v.parse().ok()).unwrap_or(0);
+      let mem_total_gb = mem_total_kb / 1024 / 1024;
+      let memory_usage = format!("{} GB", mem_total_gb);
+      // Package count
+      let packages = exec_output_limit("sh", &["-c",
+        "pacman -Q 2>/dev/null | wc -l || dpkg -l 2>/dev/null | grep -c '^ii' || rpm -qa 2>/dev/null | wc -l || echo 0"
+      ], CMD_TIMEOUT_SHORT).await.unwrap_or_else(|_| "0".to_string());
+      // Resolution via xrandr or wlr-randr
+      let resolution = exec_output_limit("sh", &["-c",
+        "xrandr --current 2>/dev/null | grep ' connected' | grep -oE '[0-9]+x[0-9]+' | head -1 || wlr-randr 2>/dev/null | grep -oE '[0-9]+x[0-9]+' | head -1 || echo unknown"
+      ], CMD_TIMEOUT_SHORT).await.unwrap_or_else(|_| "unknown".to_string());
       json!({
         "ok": true,
         "info": {
@@ -1730,7 +1778,16 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
           "os": os_name.trim(),
           "kernel": kernel.trim(),
           "arch": arch.trim(),
-          "uptime": uptime
+          "uptime": uptime,
+          "distro": distro,
+          "ip": ip.trim(),
+          "shell": shell_name,
+          "de": de.trim(),
+          "wm": wm.trim(),
+          "gpu": gpu.trim(),
+          "memoryUsage": memory_usage,
+          "packages": packages.trim(),
+          "resolution": resolution.trim()
         }
       })
     },
@@ -1863,6 +1920,51 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
           let free = p.get(3).and_then(|v| v.parse::<u64>().ok())?;
           Some((total / 1024 / 1024, free / 1024 / 1024))
         }).unwrap_or((0, 0));
+      // Net I/O delta from /proc/net/dev
+      let net_raw = std::fs::read_to_string("/proc/net/dev").unwrap_or_default();
+      let (net_rx_now, net_tx_now) = net_raw.lines().skip(2).fold((0u64, 0u64), |acc, l| {
+        let parts: Vec<&str> = l.split_whitespace().collect();
+        if parts.len() < 10 || parts[0].starts_with("lo:") { return acc; }
+        let rx = parts[1].parse::<u64>().unwrap_or(0);
+        let tx = parts[9].parse::<u64>().unwrap_or(0);
+        (acc.0 + rx, acc.1 + tx)
+      });
+      let now_inst = std::time::Instant::now();
+      let (net_rx_mbps, net_tx_mbps) = {
+        let mut prev = state.net_prev.lock().await;
+        let mbps = prev.as_ref().map(|(prx, ptx, pt)| {
+          let secs = now_inst.duration_since(*pt).as_secs_f64().max(0.1);
+          let rx = (net_rx_now.saturating_sub(*prx) as f64 / secs / 1_000_000.0 * 8.0).max(0.0);
+          let tx = (net_tx_now.saturating_sub(*ptx) as f64 / secs / 1_000_000.0 * 8.0).max(0.0);
+          (rx, tx)
+        }).unwrap_or((0.0, 0.0));
+        *prev = Some((net_rx_now, net_tx_now, now_inst));
+        mbps
+      };
+      // Disk I/O delta from /proc/diskstats (sectors = 512 bytes)
+      let disk_raw = std::fs::read_to_string("/proc/diskstats").unwrap_or_default();
+      let (disk_read_now, disk_write_now) = disk_raw.lines().fold((0u64, 0u64), |acc, l| {
+        let p: Vec<&str> = l.split_whitespace().collect();
+        // only physical disks (sda, nvme0n1, vda, etc.) — skip partitions (>= 3 chars name and ends in digit)
+        let name = p.get(2).copied().unwrap_or("");
+        let is_part = name.chars().last().map(|c| c.is_ascii_digit()).unwrap_or(false) && name.len() > 3;
+        if is_part { return acc; }
+        let r = p.get(5).and_then(|v| v.parse::<u64>().ok()).unwrap_or(0);
+        let w = p.get(9).and_then(|v| v.parse::<u64>().ok()).unwrap_or(0);
+        (acc.0 + r, acc.1 + w)
+      });
+      let disk_now_inst = std::time::Instant::now();
+      let (disk_read_mbps, disk_write_mbps) = {
+        let mut prev = state.disk_prev.lock().await;
+        let mbps = prev.as_ref().map(|(pr, pw, pt)| {
+          let secs = disk_now_inst.duration_since(*pt).as_secs_f64().max(0.1);
+          let rd = (disk_read_now.saturating_sub(*pr) as f64 * 512.0 / secs / 1_000_000.0).max(0.0);
+          let wr = (disk_write_now.saturating_sub(*pw) as f64 * 512.0 / secs / 1_000_000.0).max(0.0);
+          (rd, wr)
+        }).unwrap_or((0.0, 0.0));
+        *prev = Some((disk_read_now, disk_write_now, disk_now_inst));
+        mbps
+      };
       let svc_out = exec_output_limit("systemctl", &["list-units", "--type=service", "--no-pager", "--plain", "--no-legend"], CMD_TIMEOUT_SHORT).await.unwrap_or_default();
       let systemd: Vec<Value> = svc_out.lines().take(30).filter_map(|l| {
         let p: Vec<&str> = l.split_whitespace().collect();
@@ -1884,10 +1986,10 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
           "uptimeSec": uptime_sec,
           "diskTotalGb": disk_total_gb,
           "diskFreeGb": disk_free_gb,
-          "diskReadMbps": 0.0,
-          "diskWriteMbps": 0.0,
-          "netRxMbps": 0.0,
-          "netTxMbps": 0.0
+          "diskReadMbps": disk_read_mbps,
+          "diskWriteMbps": disk_write_mbps,
+          "netRxMbps": net_rx_mbps,
+          "netTxMbps": net_tx_mbps
         },
         "systemd": systemd
       })

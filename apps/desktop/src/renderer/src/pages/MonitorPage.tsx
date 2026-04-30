@@ -144,7 +144,7 @@ export function MonitorPage(): ReactElement {
   const swapUsed = m ? Math.max(0, m.swapTotalMb - m.swapFreeMb) : 0
   const swapPct = m && m.swapTotalMb > 0 ? Math.round((swapUsed / m.swapTotalMb) * 100) : 0
   const diskPct = m ? Math.round(((m.diskTotalGb - m.diskFreeGb) / m.diskTotalGb) * 100) : 0
-  const listeningPorts = ports.filter((p) => p.state.toLowerCase() === 'listening').length
+  const listeningPorts = ports.filter((p) => p.state.toLowerCase().includes('listen')).length
   const runningContainers = containers.filter((c) => c.state === 'running').length
   const dockerNetworks = new Set(containers.flatMap((c) => c.networks ?? [])).size
   const alerts: string[] = []

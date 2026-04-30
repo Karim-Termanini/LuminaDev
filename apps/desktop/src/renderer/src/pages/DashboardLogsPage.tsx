@@ -108,6 +108,8 @@ const input = {
   color: 'var(--text)',
   borderRadius: 6,
   padding: '7px 10px',
+  appearance: 'none' as const,
+  WebkitAppearance: 'none' as const,
 }
 
 const pre = {
