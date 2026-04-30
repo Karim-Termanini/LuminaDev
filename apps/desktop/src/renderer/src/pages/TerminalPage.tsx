@@ -33,20 +33,26 @@ export function TerminalPage(): ReactElement {
     term.focus()
 
     void (async () => {
-      const res = await window.dh.terminalCreate({ cols: term.cols, rows: term.rows })
-      if (!res.ok) {
-        setErr(humanizeTerminalError(res.error))
+      try {
+        const res = await window.dh.terminalCreate({ cols: term.cols, rows: term.rows })
+        if (!res.ok) {
+          setErr(humanizeTerminalError(res.error))
+          setFallbackHint(true)
+          return
+        }
+        if (!res.id) {
+          setErr(humanizeTerminalError('[TERMINAL_UNKNOWN] Missing terminal session id.'))
+          setFallbackHint(true)
+          return
+        }
+        sessionRef.current = res.id
+        setErr(null)
+        setFallbackHint(false)
+      } catch (e) {
+        setErr(humanizeTerminalError(e))
         setFallbackHint(true)
         return
       }
-      if (!res.id) {
-        setErr(humanizeTerminalError('[TERMINAL_UNKNOWN] Missing terminal session id.'))
-        setFallbackHint(true)
-        return
-      }
-      sessionRef.current = res.id
-      setErr(null)
-      setFallbackHint(false)
     })()
 
     const onData = (d: string): void => {

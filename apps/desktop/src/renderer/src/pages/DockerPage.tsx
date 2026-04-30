@@ -1993,11 +1993,17 @@ function DockerTerminalModal({ container, onClose }: { container: ContainerRow; 
     xtermRef.current = term
 
     void (async () => {
-      const res = await window.dh.dockerTerminal({
-        containerId: container.id,
-        cols: term.cols,
-        rows: term.rows
-      })
+      let res: { ok: boolean; id?: string; error?: string }
+      try {
+        res = await window.dh.dockerTerminal({
+          containerId: container.id,
+          cols: term.cols,
+          rows: term.rows
+        })
+      } catch (e) {
+        term.writeln(`\r\nError creating terminal: ${e instanceof Error ? e.message : String(e)}`)
+        return
+      }
       if (!res.ok || !res.id) {
         term.writeln(`\r\nError creating terminal: ${res.ok ? 'missing id' : res.error}`)
         return
