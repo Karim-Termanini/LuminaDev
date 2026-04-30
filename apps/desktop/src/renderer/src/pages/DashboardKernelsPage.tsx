@@ -140,9 +140,9 @@ function SecurityItem({ label, value, ok }: { label: string; value: string; ok: 
 }
 
 function colorFor(s?: string): string {
-  if (s == 'active') return 'var(--green)'
-  if (s == 'failed') return 'var(--red)'
-  if (s == 'inactive') return 'var(--yellow)'
+  if (s === 'active') return 'var(--green)'
+  if (s === 'failed') return 'var(--red)'
+  if (s === 'inactive') return 'var(--yellow)'
   return 'var(--text-muted)'
 }
 
