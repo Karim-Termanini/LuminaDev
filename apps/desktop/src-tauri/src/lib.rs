@@ -414,6 +414,181 @@ async fn sudo_passwordless_ok() -> bool {
     .is_ok()
 }
 
+fn runtime_pkg_mgr(distro: &str) -> &'static str {
+  match distro {
+    "ubuntu" | "debian" | "linuxmint" | "pop" | "elementary" | "raspbian" => "apt",
+    "fedora" | "rhel" | "centos" | "rocky" | "alma" | "amzn" => "dnf",
+    "arch" | "manjaro" | "endeavouros" | "garuda" => "pacman",
+    "opensuse" | "opensuse-leap" | "opensuse-tumbleweed" | "sles" => "zypper",
+    _ => "apt",
+  }
+}
+
+fn runtime_system_packages(runtime_id: &str, pkg_mgr: &str) -> Vec<&'static str> {
+  match (runtime_id, pkg_mgr) {
+    ("node", "apt") => vec!["nodejs", "npm"],
+    ("node", "dnf") => vec!["nodejs", "npm"],
+    ("node", "pacman") => vec!["nodejs", "npm"],
+    ("node", "zypper") => vec!["nodejs", "npm"],
+    ("python", "apt") => vec!["python3", "python3-pip"],
+    ("python", "dnf") => vec!["python3", "python3-pip"],
+    ("python", "pacman") => vec!["python", "python-pip"],
+    ("python", "zypper") => vec!["python3", "python3-pip"],
+    ("go", "apt") => vec!["golang"],
+    ("go", "dnf") => vec!["golang"],
+    ("go", "pacman") => vec!["go"],
+    ("go", "zypper") => vec!["go"],
+    ("java", "apt") => vec!["default-jdk"],
+    ("java", "dnf") => vec!["java-latest-openjdk-devel"],
+    ("java", "pacman") => vec!["jdk-openjdk"],
+    ("java", "zypper") => vec!["java-21-openjdk-devel"],
+    _ => vec![],  // rust: always via rustup; unknown: empty
+  }
+}
+
+fn pkg_upgrade_cmd(pkg_mgr: &str, packages: &[&str]) -> String {
+  let pkgs = packages.join(" ");
+  match pkg_mgr {
+    "apt" => format!("DEBIAN_FRONTEND=noninteractive apt-get install --only-upgrade -y {}", pkgs),
+    "dnf" => format!("dnf upgrade -y {}", pkgs),
+    "pacman" => format!("pacman -Syu --noconfirm {}", pkgs),
+    "zypper" => format!("zypper update -y {}", pkgs),
+    _ => format!("apt-get install --only-upgrade -y {}", pkgs),
+  }
+}
+
+fn pkg_remove_cmd(pkg_mgr: &str, packages: &[&str]) -> String {
+  let pkgs = packages.join(" ");
+  match pkg_mgr {
+    "apt" => format!("apt-get remove -y {}", pkgs),
+    "dnf" => format!("dnf remove -y {}", pkgs),
+    "pacman" => format!("pacman -R --noconfirm {}", pkgs),
+    "zypper" => format!("zypper remove -y {}", pkgs),
+    _ => format!("apt-get remove -y {}", pkgs),
+  }
+}
+
+async fn runtime_job_execute(
+  app: AppHandle,
+  job_id: String,
+  kind: String,
+  runtime_id: String,
+  method: String,
+  version: String,
+  _remove_mode: String,
+) {
+  let mut logs: Vec<String> = vec![format!("job={} runtime={} method={}", kind, runtime_id, method)];
+  let mut final_state = "done";
+
+  let distro = exec_output("bash", &["-lc", "source /etc/os-release 2>/dev/null && printf '%s' \"${ID:-unknown}\""])
+    .await
+    .unwrap_or_else(|_| "unknown".to_string());
+  let distro = distro.trim().to_string();
+  let pkg_mgr = runtime_pkg_mgr(&distro);
+  logs.push(format!("distro={} pkg_mgr={}", distro, pkg_mgr));
+
+  // Flatpak guard for privileged operations
+  let in_flatpak = std::env::var("FLATPAK_ID").is_ok();
+  if in_flatpak && kind != "runtime_uninstall" && runtime_id != "rust" {
+    logs.push("[RUNTIME_INSTALL_FAILED] Flatpak sandbox: cannot run host package managers. Install the runtime on the host and expose it via Flatpak overrides.".to_string());
+    final_state = "failed";
+  } else {
+    let result: Result<(), String> = match kind.as_str() {
+      "runtime_install" | "install_deps" => {
+        if runtime_id == "rust" {
+          let tc = if version.is_empty() { "stable" } else { version.trim() };
+          let cmd = format!("curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain {}", tc);
+          logs.push(format!("Running: {}", cmd));
+          exec_output_limit("bash", &["-lc", &cmd], CMD_TIMEOUT_INSTALL_STEP).await
+            .map(|out| { if !out.is_empty() { logs.push(out); } })
+            .map_err(|e| format!("[RUNTIME_INSTALL_FAILED] {}", e.trim()))
+        } else if runtime_id == "node" && method == "local" {
+          let v = if version.is_empty() { "lts/*" } else { version.trim() };
+          let cmd = format!(
+            "curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.0/install.sh | bash \
+             && export NVM_DIR=\"$HOME/.nvm\" \
+             && [ -s \"$NVM_DIR/nvm.sh\" ] && . \"$NVM_DIR/nvm.sh\" \
+             && nvm install {}", v
+          );
+          logs.push(format!("Running nvm install {}", v));
+          exec_output_limit("bash", &["-lc", &cmd], CMD_TIMEOUT_INSTALL_STEP).await
+            .map(|out| { if !out.is_empty() { logs.push(out); } })
+            .map_err(|e| format!("[RUNTIME_INSTALL_FAILED] {}", e.trim()))
+        } else {
+          let pkgs = runtime_system_packages(&runtime_id, pkg_mgr);
+          if pkgs.is_empty() {
+            logs.push(format!("No system packages known for '{}' on {}. Try local/rustup method.", runtime_id, distro));
+            Ok(())
+          } else {
+            let cmd = {
+              let p: Vec<&str> = pkgs.clone();
+              match pkg_mgr {
+                "apt" => format!("DEBIAN_FRONTEND=noninteractive apt-get install -y {}", p.join(" ")),
+                "dnf" => format!("dnf install -y {}", p.join(" ")),
+                "pacman" => format!("pacman -S --needed --noconfirm {}", p.join(" ")),
+                "zypper" => format!("zypper install -y {}", p.join(" ")),
+                _ => format!("apt-get install -y {}", p.join(" ")),
+              }
+            };
+            sudo_bash_install_step(&cmd, None, &mut logs).await
+              .map_err(|e| format!("[RUNTIME_INSTALL_FAILED] {}", e))
+          }
+        }
+      }
+      "runtime_update" => {
+        if runtime_id == "rust" {
+          exec_output_limit("bash", &["-lc", "rustup update"], CMD_TIMEOUT_INSTALL_STEP).await
+            .map(|out| { if !out.is_empty() { logs.push(out); } })
+            .map_err(|e| format!("[RUNTIME_UPDATE_FAILED] {}", e.trim()))
+        } else {
+          let pkgs = runtime_system_packages(&runtime_id, pkg_mgr);
+          if pkgs.is_empty() {
+            logs.push(format!("No system packages to update for '{}' on {}.", runtime_id, distro));
+            Ok(())
+          } else {
+            let cmd = pkg_upgrade_cmd(pkg_mgr, &pkgs);
+            sudo_bash_install_step(&cmd, None, &mut logs).await
+              .map_err(|e| format!("[RUNTIME_UPDATE_FAILED] {}", e))
+          }
+        }
+      }
+      "runtime_uninstall" => {
+        if runtime_id == "rust" {
+          exec_output_limit("bash", &["-lc", "rustup self uninstall -y 2>/dev/null || true"], CMD_TIMEOUT_INSTALL_STEP).await
+            .map(|out| { if !out.is_empty() { logs.push(out); } })
+            .map_err(|e| format!("[RUNTIME_UNINSTALL_FAILED] {}", e.trim()))
+        } else {
+          let pkgs = runtime_system_packages(&runtime_id, pkg_mgr);
+          if pkgs.is_empty() {
+            logs.push(format!("No system packages to remove for '{}' on {}.", runtime_id, distro));
+            Ok(())
+          } else {
+            let cmd = pkg_remove_cmd(pkg_mgr, &pkgs);
+            sudo_bash_install_step(&cmd, None, &mut logs).await
+              .map_err(|e| format!("[RUNTIME_UNINSTALL_FAILED] {}", e))
+          }
+        }
+      }
+      _ => {
+        logs.push(format!("Unknown job kind: {}.", kind));
+        Ok(())
+      }
+    };
+    if let Err(e) = result {
+      logs.push(format!("ERROR: {}", e));
+      final_state = "failed";
+    }
+  }
+
+  let st = app.state::<AppState>();
+  let mut jobs = st.jobs.lock().await;
+  if let Some(j) = jobs.iter_mut().find(|j| j.get("id").and_then(|v| v.as_str()) == Some(job_id.as_str())) {
+    j["state"] = json!(final_state);
+    j["progress"] = json!(if final_state == "done" { 100 } else { 0 });
+    j["logTail"] = json!(logs);
+  }
+}
+
 async fn docker_install_invoke(body: &Value) -> Value {
   if std::env::var("FLATPAK_ID").is_ok() {
     return json!({
@@ -1145,11 +1320,39 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
     "dh:job:list" => json!(state.jobs.lock().await.clone()),
     "dh:job:start" => {
       let id = Uuid::new_v4().to_string();
-      let mut jobs = state.jobs.lock().await;
-      jobs.push(json!({"id": id, "kind": body.get("kind").cloned().unwrap_or(json!("job")), "state": "done", "progress": 100, "logTail": ["No-op job under Tauri bridge."]}));
+      let kind = body.get("kind").and_then(|v| v.as_str()).unwrap_or("unknown").to_string();
+      let runtime_id = body.get("runtimeId").and_then(|v| v.as_str()).unwrap_or("").to_string();
+      let method = body.get("method").and_then(|v| v.as_str()).unwrap_or("system").to_string();
+      let version = body.get("version").and_then(|v| v.as_str()).unwrap_or("").to_string();
+      let remove_mode = body.get("removeMode").and_then(|v| v.as_str()).unwrap_or("runtime_only").to_string();
+      {
+        let mut jobs = state.jobs.lock().await;
+        jobs.push(json!({
+          "id": id,
+          "kind": kind,
+          "state": "running",
+          "progress": 5,
+          "logTail": [format!("Starting {} for {}…", kind, runtime_id)]
+        }));
+      }
+      let jid = id.clone();
+      let app2 = app.clone();
+      tauri::async_runtime::spawn(async move {
+        runtime_job_execute(app2, jid, kind, runtime_id, method, version, remove_mode).await;
+      });
       json!({ "id": id })
     }
-    "dh:job:cancel" => json!({ "ok": true }),
+    "dh:job:cancel" => {
+      let id = body.get("id").and_then(|v| v.as_str()).unwrap_or_default().to_string();
+      let mut jobs = state.jobs.lock().await;
+      if let Some(j) = jobs.iter_mut().find(|j| j.get("id").and_then(|v| v.as_str()) == Some(id.as_str())) {
+        if j.get("state").and_then(|v| v.as_str()) == Some("running") {
+          j["state"] = json!("cancelled");
+          j["logTail"] = json!(["Cancelled by user."]);
+        }
+      }
+      json!({ "ok": true })
+    }
     "dh:git:recent:list" => match app_file(&app, "git_recent.json") {
       Ok(path) => {
         let value = read_json(&path);
@@ -1329,15 +1532,51 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       json!({ "ok": true, "runtimes": runtimes })
     },
     "dh:runtime:get-versions" => json!({ "ok": true, "versions": [] }),
-    "dh:runtime:check-deps" => json!({ "ok": true, "dependencies": [] }),
-    "dh:runtime:uninstall:preview" => json!({
-      "ok": true,
-      "runtimePackages": [],
-      "removableDeps": [],
-      "blockedSharedDeps": [],
-      "finalPackages": [],
-      "note": "Preview unavailable in Rust-native baseline implementation."
-    }),
+    "dh:runtime:check-deps" => {
+      let runtime_id = body.get("runtimeId").and_then(|v| v.as_str()).unwrap_or("node");
+      let tools: &[(&str, &str)] = match runtime_id {
+        "node"   => &[("node", "node --version"), ("npm", "npm --version"), ("curl", "curl --version")],
+        "python" => &[("python3", "python3 --version"), ("pip3", "pip3 --version")],
+        "go"     => &[("go", "go version")],
+        "rust"   => &[("cargo", "cargo --version"), ("rustup", "rustup --version")],
+        "java"   => &[("java", "java -version"), ("javac", "javac -version")],
+        _        => &[],
+      };
+      let mut deps: Vec<Value> = Vec::new();
+      for (name, check_cmd) in tools {
+        let parts: Vec<&str> = check_cmd.split_whitespace().collect();
+        let ok = exec_result_limit(parts[0], &parts[1..], CMD_TIMEOUT_SHORT).await.is_ok();
+        deps.push(json!({ "name": name, "status": if ok { "installed" } else { "missing" }, "ok": ok }));
+      }
+      json!({ "ok": true, "dependencies": deps })
+    },
+    "dh:runtime:uninstall:preview" => {
+      let runtime_id = body.get("runtimeId").and_then(|v| v.as_str()).unwrap_or("node");
+      let remove_mode = body.get("removeMode").and_then(|v| v.as_str()).unwrap_or("runtime_only");
+      let distro = exec_output("bash", &["-lc", "source /etc/os-release 2>/dev/null && printf '%s' \"${ID:-unknown}\""])
+        .await.unwrap_or_else(|_| "unknown".to_string());
+      let distro = distro.trim().to_string();
+      let pkg_mgr = runtime_pkg_mgr(&distro);
+      let pkgs = runtime_system_packages(runtime_id, pkg_mgr);
+      let pkg_vals: Vec<Value> = pkgs.iter().map(|p| json!(p)).collect();
+      let note: Option<&str> = if pkgs.is_empty() {
+        Some("No system packages found. If installed via version manager (nvm/rustup/pyenv), remove manually.")
+      } else if runtime_id == "rust" {
+        Some("Rust is managed by rustup; uninstall via 'rustup self uninstall'.")
+      } else {
+        None
+      };
+      let removable = if remove_mode == "runtime_and_deps" { pkg_vals.clone() } else { vec![] };
+      json!({
+        "ok": true,
+        "distro": distro,
+        "runtimePackages": pkg_vals,
+        "removableDeps": removable,
+        "blockedSharedDeps": [],
+        "finalPackages": pkg_vals,
+        "note": note
+      })
+    },
     "dh:diagnostics:bundle:create" => {
       let include_sensitive = body.get("includeSensitive").and_then(|v| v.as_bool()).unwrap_or(false);
       let report = body.get("report").cloned().unwrap_or_else(|| json!({}));
