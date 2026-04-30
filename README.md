@@ -36,14 +36,15 @@ Until Docker vertical slice hardening is complete:
 
 - Flatpak sessions require explicit host overrides for some operations (Docker socket, SSH paths).
 - Some cleanup operations are manual-assisted due to host privilege boundaries.
-- Electron + Flatpak + native modules (`node-pty`) can require per-system rebuild/runtime tuning.
+- Legacy Electron shell + Flatpak + `node-pty` can require per-system rebuild if you still use `pnpm dev:electron` / `pnpm build:electron`.
 
 ## 🛠️ Prerequisites
 
 - **Node.js 20+**
 - **pnpm** 9 (`corepack enable` recommended)
 - **Docker** (optional, for compose stacks and the Docker panel)
-- **Build toolchain:** `build-essential`, `python3` (required for native `node-pty` module)
+- **Tauri (default dev):** Rust stable, and on Linux the WebKit/GTK dev packages your distro documents for Tauri v2 (see [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/)).
+- **Optional — Electron only:** `build-essential`, `python3` for `node-pty` when using `pnpm dev:electron` or `pnpm build:electron`.
 
 ## 🚀 Getting Started
 
@@ -52,19 +53,19 @@ Until Docker vertical slice hardening is complete:
    pnpm install
    ```
 
-2. **Rebuild native modules:**
-   After install, rebuild native modules for your Electron version:
+2. **Development scripts:**
    ```bash
-   cd apps/desktop && pnpm exec electron-rebuild -f -w node-pty
+   pnpm dev          # Tauri dev (Rust + Vite renderer)
+   pnpm test         # Unit tests (shared + desktop)
+   pnpm typecheck    # TypeScript validation
+   pnpm lint         # ESLint
+   pnpm build        # Renderer bundle + copy compose profiles (CI / Docker friendly)
+   pnpm --filter desktop build:tauri   # Full desktop app bundle (Rust + frontend)
    ```
 
-3. **Development scripts:**
+3. **Legacy Electron shell (optional):** after install, if you use `pnpm dev:electron` or `pnpm build:electron`, rebuild `node-pty` for your Electron version:
    ```bash
-   pnpm dev          # Run electron-vite dev server
-   pnpm test         # Run shared package unit tests (Zod)
-   pnpm typecheck    # Run TypeScript validation
-   pnpm lint         # Run ESLint
-   pnpm build        # Build production bundle + copy compose profiles
+   cd apps/desktop && pnpm exec electron-rebuild -f -w node-pty
    ```
 
 ## 🐳 Docker CI Image
@@ -88,7 +89,7 @@ Documentation audit record: [docs/DOCS_AUDIT_2026-04.md](docs/DOCS_AUDIT_2026-04
 
 ## 🌳 Monorepo Layout
 
-- `apps/desktop` — Electron + React UI
+- `apps/desktop` — Tauri + React UI (Electron stack kept under `dev:electron` / `build:electron` until removed)
 - `packages/shared` — Shared types, IPC channel names, Zod schemas
 - `docker/compose/*` — Bundled `docker compose` profiles
 - `flatpak/` — Flatpak manifest template + notes

@@ -29,7 +29,7 @@
 | A1 | تدقيق القنوات | مطابقة `packages/shared/src/ipc.ts` مع `ipc_invoke` / مسار Tauri. **`done` (تدقيق أولي 2026-04-30)** — انظر قسم «لقطة A1» أدناه؛ إصلاح `dh:docker:create` لإرجاع `id`. |
 | A2 | `dh:docker:install` | **`done`** — خطوات `apt`/`dnf`/`pacman` عبر `sudo -S` + سجل `log` في الرد؛ رفض في Flatpak / بدون sudo صالح. |
 | A3 | `dh:docker:remap-port` | **`done`** — inspect + create + start؛ ثم **`docker stop`** + **`docker rm`** للمصدر عند نجاح الإيقاف + حقول `sourceStopped` / `sourceRemoved` / ملاحظات في الرد. |
-| A4 | حدود الصلاحيات | مراجعة سريعة لمسارات Docker socket وSSH وأوامر shell: timeouts، allowlists، رسائل خطأ حتمية. **`جزئي` (2026-04-30):** `exec_*_limit` + `tokio::time::timeout`؛ `/etc/os-release` و`/proc/uptime`؛ `curl`/طرفية خارجية 30s؛ **`docker pull` / `compose up`** 900s؛ **`git clone` / `sshpass` setup** 900s؛ **`ssh` list-dir / setup بدون كلمة** 120s؛ **`ssh -T github`** 180s؛ `[HOST_COMMAND_TIMEOUT]` + humanize؛ **`dh:terminal:close`** مربوط؛ باقي تضييق `bash -lc` لاحقًا. |
+| A4 | حدود الصلاحيات | مراجعة سريعة لمسارات Docker socket وSSH وأوامر shell: timeouts، allowlists، رسائل خطأ حتمية. **`done` (2026-04-30):** `exec_*_limit` + `tokio::time::timeout`؛ **`docker compose`** عبر `current_dir` بدل `bash -lc`؛ **معاينة prune** بعدّ أسطر `docker` مباشرة؛ **`ps`** للـ top بدون shell؛ **`sshpass`** argv بدل سكربت bash؛ **`sh -c`** لـ `ss|awk` فقط؛ **`git:status`** ما زال `bash -c` (تجميع JSON يعتمد bashisms)؛ تثبيت Docker ما زال `sudo bash -c`؛ طرفية خارجية `bash -lc` (سلوك المحطات). |
 | A5 | Flatpak (لاحقًا) | **جزئي:** manifest Tauri + README؛ **بدون** job في GitHub Actions حتى يُقرّ اختبار بطيء؛ Docker عبر `flatpak override` كالوثائق. |
 
 ---
@@ -39,7 +39,7 @@
 1. ~~**B1** + **A1**~~ — منجز.
 2. ~~**B2**–**B5**~~ — منجز (واجهة + docs + CI تحقق + checklist يدوي؛ دمج مراجعة شاشة Docker من `main` `#26`).
 3. ~~**A2** / **A3**~~ — منجز في Rust.
-4. **A4** — مراجعة صلاحيات/Timeouts.
+4. ~~**A4**~~ — منجز (2026-04-30).
 5. **A5** — Flatpak + Actions **آخرًا**.
 
 ---
@@ -59,4 +59,4 @@
 - واجهة Docker: `apps/desktop/src/renderer/src/pages/DockerPage.tsx`
 - سياسة الجودة العامة: `CLAUDE.md` و`phasesPlan.md`
 
-آخر تحديث: 2026-04-30 — B1–B5 منجزة؛ A2/A3 في Rust؛ دمج `main` (Docker UI audit #26). لقطة A1 + إصلاح `docker:create` سابقًا.
+آخر تحديث: 2026-04-30 — B1–B5 منجزة؛ A1–A4 منجزة؛ A5 لاحقًا؛ دمج `main` (Docker UI audit #26).

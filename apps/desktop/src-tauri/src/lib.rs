@@ -11,11 +11,30 @@ use tokio::process::{ChildStdin, Command};
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
+struct TerminalSession {
+  stdin: ChildStdin,
+  /// Best-effort host PID for `terminal:close` (Unix: `libc::kill`).
+  pid: Option<u32>,
+}
+
 #[derive(Default)]
 struct AppState {
-  terminals: Mutex<HashMap<String, ChildStdin>>,
+  terminals: Mutex<HashMap<String, TerminalSession>>,
   jobs: Mutex<Vec<Value>>,
 }
+
+#[cfg(unix)]
+fn kill_pid_best_effort(pid: u32) {
+  if pid == 0 {
+    return;
+  }
+  unsafe {
+    libc::kill(pid as libc::pid_t, libc::SIGTERM);
+  }
+}
+
+#[cfg(not(unix))]
+fn kill_pid_best_effort(_pid: u32) {}
 
 fn app_file(app: &AppHandle, name: &str) -> Result<PathBuf, String> {
   let dir = app
@@ -45,7 +64,7 @@ const CMD_TIMEOUT_DEFAULT: Duration = Duration::from_secs(180);
 const CMD_TIMEOUT_SHORT: Duration = Duration::from_secs(30);
 /// Remote SSH ops (list dir, key install) — network-bound.
 const CMD_TIMEOUT_SSH: Duration = Duration::from_secs(120);
-/// `git clone`, `docker pull`, `docker compose up -d`, and similar long host work.
+/// `git clone`, `docker pull`, `docker compose` (in-profile dir), and similar long host work.
 const CMD_TIMEOUT_LONG: Duration = Duration::from_secs(900);
 /// Single `sudo bash -c` step during Docker engine install.
 const CMD_TIMEOUT_INSTALL_STEP: Duration = Duration::from_secs(900);
@@ -104,6 +123,79 @@ async fn exec_result_limit(cmd: &str, args: &[&str], limit: Duration) -> Result<
 
 async fn exec_result(cmd: &str, args: &[&str]) -> Result<(String, String), String> {
   exec_result_limit(cmd, args, CMD_TIMEOUT_DEFAULT).await
+}
+
+/// `docker compose` in a fixed directory (avoids `bash -lc "cd … && …"`).
+async fn exec_docker_compose_in_dir(
+  compose_dir: &Path,
+  compose_subargs: &[&str],
+  limit: Duration,
+) -> Result<(String, String), String> {
+  let fut = async {
+    let output = Command::new("docker")
+      .current_dir(compose_dir)
+      .arg("compose")
+      .args(compose_subargs)
+      .output()
+      .await
+      .map_err(|e| format!("[EXEC_ERROR] {}", e))?;
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    if output.status.success() {
+      Ok((stdout, stderr))
+    } else {
+      Err(if stderr.trim().is_empty() { stdout } else { stderr })
+    }
+  };
+  match tokio::time::timeout(limit, fut).await {
+    Ok(inner) => inner,
+    Err(_) => Err(format!(
+      "[HOST_COMMAND_TIMEOUT] docker compose {}",
+      compose_subargs.join(" ")
+    )),
+  }
+}
+
+async fn docker_nonempty_line_count(args: &[&str]) -> u64 {
+  match exec_output_limit("docker", args, CMD_TIMEOUT_SHORT).await {
+    Ok(out) => out.lines().filter(|l| !l.trim().is_empty()).count() as u64,
+    Err(_) => 0,
+  }
+}
+
+async fn exec_sshpass_ssh(
+  password: &str,
+  port: &str,
+  remote: &str,
+  remote_cmd: &str,
+  limit: Duration,
+) -> Result<(String, String), String> {
+  let fut = async {
+    let output = Command::new("sshpass")
+      .arg("-p")
+      .arg(password)
+      .arg("ssh")
+      .arg("-o")
+      .arg("StrictHostKeyChecking=no")
+      .arg("-p")
+      .arg(port)
+      .arg(remote)
+      .arg(remote_cmd)
+      .output()
+      .await
+      .map_err(|e| format!("[EXEC_ERROR] {}", e))?;
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    if output.status.success() {
+      Ok((stdout, stderr))
+    } else {
+      Err(if stderr.trim().is_empty() { stdout } else { stderr })
+    }
+  };
+  match tokio::time::timeout(limit, fut).await {
+    Ok(inner) => inner,
+    Err(_) => Err("[HOST_COMMAND_TIMEOUT] sshpass ssh".to_string()),
+  }
 }
 
 fn now_ms() -> u64 {
@@ -560,15 +652,20 @@ async fn ipc_send(channel: String, payload: Value, app: AppHandle, state: State<
       let id = payload.get("id").and_then(|v| v.as_str()).unwrap_or_default().to_string();
       let data = payload.get("data").and_then(|v| v.as_str()).unwrap_or_default().to_string();
       let mut map = state.terminals.lock().await;
-      if let Some(stdin) = map.get_mut(&id) {
-        stdin.write_all(data.as_bytes()).await.map_err(|e| format!("[TERMINAL_WRITE_FAILED] {}", e))?;
+      if let Some(session) = map.get_mut(&id) {
+        session.stdin.write_all(data.as_bytes()).await.map_err(|e| format!("[TERMINAL_WRITE_FAILED] {}", e))?;
       }
       Ok(())
     },
     "dh:terminal:close" => {
       let id = payload.get("id").and_then(|v| v.as_str()).unwrap_or_default().to_string();
       let mut map = state.terminals.lock().await;
-      map.remove(&id);
+      if let Some(session) = map.remove(&id) {
+        if let Some(pid) = session.pid {
+          kill_pid_best_effort(pid);
+        }
+        drop(session.stdin);
+      }
       Ok(())
     },
     "dh:terminal:resize" => Ok(()),
@@ -825,17 +922,17 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       Err(e) => json!({ "ok": false, "error": format!("[DOCKER_PRUNE_FAILED] {}", e.trim()) }),
     },
     "dh:docker:prune:preview" => {
-      let containers = exec_output_limit("bash", &["-c", "docker ps -a -q --filter status=exited | wc -l"], CMD_TIMEOUT_SHORT).await.unwrap_or_else(|_| "0".to_string());
-      let images = exec_output_limit("bash", &["-c", "docker images -f dangling=true -q | wc -l"], CMD_TIMEOUT_SHORT).await.unwrap_or_else(|_| "0".to_string());
-      let volumes = exec_output_limit("bash", &["-c", "docker volume ls -qf dangling=true | wc -l"], CMD_TIMEOUT_SHORT).await.unwrap_or_else(|_| "0".to_string());
-      let networks = exec_output_limit("bash", &["-c", "docker network ls -qf dangling=true | wc -l"], CMD_TIMEOUT_SHORT).await.unwrap_or_else(|_| "0".to_string());
+      let containers = docker_nonempty_line_count(&["ps", "-a", "-q", "--filter", "status=exited"]).await;
+      let images = docker_nonempty_line_count(&["images", "-f", "dangling=true", "-q"]).await;
+      let volumes = docker_nonempty_line_count(&["volume", "ls", "-qf", "dangling=true"]).await;
+      let networks = docker_nonempty_line_count(&["network", "ls", "-qf", "dangling=true"]).await;
       json!({
         "ok": true,
         "preview": {
-          "containers": containers.trim().parse::<u64>().unwrap_or(0),
-          "images": images.trim().parse::<u64>().unwrap_or(0),
-          "volumes": volumes.trim().parse::<u64>().unwrap_or(0),
-          "networks": networks.trim().parse::<u64>().unwrap_or(0)
+          "containers": containers,
+          "images": images,
+          "volumes": volumes,
+          "networks": networks
         }
       })
     },
@@ -925,13 +1022,14 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       let dir = find_repo_root(&std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")))
         .join("docker")
         .join("compose")
-        .join(profile)
-        .to_string_lossy()
-        .to_string();
-      let cmd = format!("cd '{}' && docker compose up -d", dir.replace('\'', "'\\''"));
-      match exec_result_limit("bash", &["-lc", &cmd], CMD_TIMEOUT_LONG).await {
-        Ok((stdout, stderr)) => json!({ "ok": true, "log": format!("{}{}", stdout, stderr) }),
-        Err(e) => json!({ "ok": false, "log": "", "error": format!("[DOCKER_COMPOSE_FAILED] {}", e.trim()) }),
+        .join(profile);
+      if !dir.is_dir() {
+        json!({ "ok": false, "log": "", "error": format!("[DOCKER_COMPOSE_FAILED] missing compose directory: {}", dir.display()) })
+      } else {
+        match exec_docker_compose_in_dir(&dir, &["up", "-d"], CMD_TIMEOUT_LONG).await {
+          Ok((stdout, stderr)) => json!({ "ok": true, "log": format!("{}{}", stdout, stderr) }),
+          Err(e) => json!({ "ok": false, "log": "", "error": format!("[DOCKER_COMPOSE_FAILED] {}", e.trim()) }),
+        }
       }
     },
     "dh:compose:logs" => {
@@ -939,13 +1037,14 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       let dir = find_repo_root(&std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")))
         .join("docker")
         .join("compose")
-        .join(profile)
-        .to_string_lossy()
-        .to_string();
-      let cmd = format!("cd '{}' && docker compose logs --tail 200", dir.replace('\'', "'\\''"));
-      match exec_result_limit("bash", &["-lc", &cmd], CMD_TIMEOUT_DEFAULT).await {
-        Ok((stdout, stderr)) => json!({ "ok": true, "log": format!("{}{}", stdout, stderr) }),
-        Err(e) => json!({ "ok": false, "log": "", "error": format!("[DOCKER_COMPOSE_FAILED] {}", e.trim()) }),
+        .join(profile);
+      if !dir.is_dir() {
+        json!({ "ok": false, "log": "", "error": format!("[DOCKER_COMPOSE_FAILED] missing compose directory: {}", dir.display()) })
+      } else {
+        match exec_docker_compose_in_dir(&dir, &["logs", "--tail", "200"], CMD_TIMEOUT_DEFAULT).await {
+          Ok((stdout, stderr)) => json!({ "ok": true, "log": format!("{}{}", stdout, stderr) }),
+          Err(e) => json!({ "ok": false, "log": "", "error": format!("[DOCKER_COMPOSE_FAILED] {}", e.trim()) }),
+        }
       }
     },
     "dh:terminal:openExternal" => {
@@ -961,7 +1060,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       } else {
         json!({ "ok": false, "error": "[TERMINAL_NOT_FOUND] Could not spawn host terminal." })
       }
-    }
+    },
     "dh:terminal:create" => {
       let cols = body.get("cols").and_then(|v| v.as_u64()).unwrap_or(120) as u16;
       let rows = body.get("rows").and_then(|v| v.as_u64()).unwrap_or(34) as u16;
@@ -975,8 +1074,9 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       match Command::new(cmd).args(args).stdin(std::process::Stdio::piped()).stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped()).spawn() {
         Ok(mut child) => {
           let id = Uuid::new_v4().to_string();
+          let pid = child.id();
           if let Some(stdin) = child.stdin.take() {
-            state.terminals.lock().await.insert(id.clone(), stdin);
+            state.terminals.lock().await.insert(id.clone(), TerminalSession { stdin, pid });
           }
           if let Some(stdout) = child.stdout.take() {
             let app_out = app.clone();
@@ -1015,8 +1115,9 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
         {
           Ok(mut child) => {
             let id = Uuid::new_v4().to_string();
+            let pid = child.id();
             if let Some(stdin) = child.stdin.take() {
-              state.terminals.lock().await.insert(id.clone(), stdin);
+              state.terminals.lock().await.insert(id.clone(), TerminalSession { stdin, pid });
             }
             if let Some(stdout) = child.stdout.take() {
               let app_out = app.clone();
@@ -1278,7 +1379,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
     },
     "dh:host:ports" => {
       let script = "ss -tulpnH 2>/dev/null | awk '{print $1\" \"$5\" \"$NF}'";
-      match exec_output_limit("bash", &["-c", script], CMD_TIMEOUT_SHORT).await {
+      match exec_output_limit("sh", &["-c", script], CMD_TIMEOUT_SHORT).await {
         Ok(out) => {
           let ports: Vec<Value> = out
             .lines()
@@ -1307,12 +1408,13 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       }
     },
     "dh:monitor:top-processes" => {
-      let script = "ps -eo pid,comm,%cpu,%mem --sort=-%cpu | head -n 16";
-      match exec_output_limit("bash", &["-c", script], CMD_TIMEOUT_SHORT).await {
+      match exec_output_limit("ps", &["-eo", "pid,comm,%cpu,%mem", "--sort=-%cpu"], CMD_TIMEOUT_SHORT).await {
         Ok(out) => {
           let processes: Vec<Value> = out
             .lines()
             .skip(1)
+            .filter(|l| !l.trim().is_empty())
+            .take(15)
             .filter_map(|line| {
               let parts: Vec<&str> = line.split_whitespace().collect();
               if parts.len() < 4 {
@@ -1529,11 +1631,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
           safe_key
         );
         let result = if !password.is_empty() {
-          let script = format!(
-            "sshpass -p '{}' ssh -o StrictHostKeyChecking=no -p {} {} \"{}\"",
-            password.replace('\'', r"'\''"), port_str, remote, setup_cmd.replace('"', "\\\"")
-          );
-          exec_result_limit("bash", &["-lc", &script], CMD_TIMEOUT_LONG).await
+          exec_sshpass_ssh(password, &port_str, &remote, &setup_cmd, CMD_TIMEOUT_LONG).await
         } else {
           exec_result_limit(
             "ssh",
