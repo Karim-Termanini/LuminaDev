@@ -11,11 +11,30 @@ use tokio::process::{ChildStdin, Command};
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
+struct TerminalSession {
+  stdin: ChildStdin,
+  /// Best-effort host PID for `terminal:close` (Unix: `libc::kill`).
+  pid: Option<u32>,
+}
+
 #[derive(Default)]
 struct AppState {
-  terminals: Mutex<HashMap<String, ChildStdin>>,
+  terminals: Mutex<HashMap<String, TerminalSession>>,
   jobs: Mutex<Vec<Value>>,
 }
+
+#[cfg(unix)]
+fn kill_pid_best_effort(pid: u32) {
+  if pid == 0 {
+    return;
+  }
+  unsafe {
+    libc::kill(pid as libc::pid_t, libc::SIGTERM);
+  }
+}
+
+#[cfg(not(unix))]
+fn kill_pid_best_effort(_pid: u32) {}
 
 fn app_file(app: &AppHandle, name: &str) -> Result<PathBuf, String> {
   let dir = app
@@ -560,15 +579,20 @@ async fn ipc_send(channel: String, payload: Value, app: AppHandle, state: State<
       let id = payload.get("id").and_then(|v| v.as_str()).unwrap_or_default().to_string();
       let data = payload.get("data").and_then(|v| v.as_str()).unwrap_or_default().to_string();
       let mut map = state.terminals.lock().await;
-      if let Some(stdin) = map.get_mut(&id) {
-        stdin.write_all(data.as_bytes()).await.map_err(|e| format!("[TERMINAL_WRITE_FAILED] {}", e))?;
+      if let Some(session) = map.get_mut(&id) {
+        session.stdin.write_all(data.as_bytes()).await.map_err(|e| format!("[TERMINAL_WRITE_FAILED] {}", e))?;
       }
       Ok(())
     },
     "dh:terminal:close" => {
       let id = payload.get("id").and_then(|v| v.as_str()).unwrap_or_default().to_string();
       let mut map = state.terminals.lock().await;
-      map.remove(&id);
+      if let Some(session) = map.remove(&id) {
+        if let Some(pid) = session.pid {
+          kill_pid_best_effort(pid);
+        }
+        drop(session.stdin);
+      }
       Ok(())
     },
     "dh:terminal:resize" => Ok(()),
@@ -975,8 +999,9 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       match Command::new(cmd).args(args).stdin(std::process::Stdio::piped()).stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped()).spawn() {
         Ok(mut child) => {
           let id = Uuid::new_v4().to_string();
+          let pid = child.id();
           if let Some(stdin) = child.stdin.take() {
-            state.terminals.lock().await.insert(id.clone(), stdin);
+            state.terminals.lock().await.insert(id.clone(), TerminalSession { stdin, pid });
           }
           if let Some(stdout) = child.stdout.take() {
             let app_out = app.clone();
@@ -1015,8 +1040,9 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
         {
           Ok(mut child) => {
             let id = Uuid::new_v4().to_string();
+            let pid = child.id();
             if let Some(stdin) = child.stdin.take() {
-              state.terminals.lock().await.insert(id.clone(), stdin);
+              state.terminals.lock().await.insert(id.clone(), TerminalSession { stdin, pid });
             }
             if let Some(stdout) = child.stdout.take() {
               let app_out = app.clone();
