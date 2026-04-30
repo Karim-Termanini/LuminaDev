@@ -116,6 +116,7 @@ Stabilization is considered complete only when:
 
 ## Tauri Pre-Release Migration Track
 
+- **Living snapshot:** [STATUS.md](./STATUS.md) (stages table, PR roll-up, remaining work).
 - **Status:** `in_progress` — Rust IPC done; packaging/Flatpak deferred; no semver/release pressure until product-complete (see [AGENT_WORK_PLAN.md](./AGENT_WORK_PLAN.md))
 - **Scope:** Replace Electron runtime shell with Tauri before first public release while preserving existing behavior.
 - **Stage 0 (baseline + freeze):** `done`
@@ -162,10 +163,18 @@ Stabilization is considered complete only when:
   - Flatpak: `flatpak/io.github.karimodora.LinuxDevHome.tauri.yml` added for local/Flathub prep — **not** in GitHub Actions until a dedicated slow job is added
   - Default dev entry: `apps/desktop` `pnpm dev` → `tauri dev`; Electron preserved as `pnpm dev:electron` / `pnpm build:electron` (e.g. `pack:linux`); root `pnpm build` runs renderer bundle + compose copy (no Electron emit)
 
-- **Remaining before Stage 5 (when you declare product-ready):**
-  - Run `pnpm smoke` on `main` before any tagged release
-  - Flatpak offline build / Flathub — **last** (long CI); enable when ready
-  - **No `git tag` / GitHub Release** until the maintainer explicitly declares the product complete (no routine pre-release tags from automation).
+- **Post-parity hardening (before product-complete declaration, not part of Stage 5 definition):**
+  - `runtime_install` job: replace sleep simulation with real distro package execution
+  - `runtime:check-deps` + `runtime:uninstall:preview`: replace stubs with working implementations
+  - Electron removal from repo (`main/`, `preload/`, `dev:electron`, `build:electron`) — after Tauri-only confirmed stable (see `AGENT_WORK_PLAN.md`)
+
+- **Stage 4 remaining:**
+  - Flatpak CI job (heavy; add before Flathub submission only)
+
+- **Stage 5 (release gate — when you declare product-ready):**
+  - `pnpm smoke` green on final `main`
+  - Manual test checklist (B5 below) completed
+  - **No `git tag` / GitHub Release** until maintainer explicitly declares product-complete.
 
 ---
 
