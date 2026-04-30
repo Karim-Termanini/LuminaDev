@@ -140,8 +140,14 @@ Stabilization is considered complete only when:
     - `dh:docker:remap-port`, `dh:docker:install` — Rust: install guards Flatpak + sudo preflight; remap clones then `docker stop` + `docker rm` source when stop succeeds (`sourceStopped`, `sourceRemoved`, notes in JSON)
   - `invoke_node_bridge()` removed from `lib.rs`
   - `apps/desktop/scripts/tauri-ipc-bridge.mjs` deleted
-  - Node.js no longer required at app runtime
-  - `pnpm smoke` passed after changes
+  - Node.js not required at runtime
+  - `pnpm smoke` passed
+
+  **Known accuracy notes (not blockers):**
+  - Job runner (`job:start`, `job:list`): UI pipeline ready; `runtime_install` uses sleep-based simulation. `job:start` returns `{ id }` (no `ok`); `job:list` returns bare array — matches renderer typings, intentional.
+  - Security probes (`dh:monitor:security`, `security-drilldown`): logic in Rust, commands via `bash -c` (`ufw`, `getenforce`, `sshd -T`, `journalctl`, `ss`). Not pure Rust, not a bug.
+  - Runtime versions (`dh:runtime:get-versions`): Node/Go/Python fetch from public APIs; all others return `["latest"]`. `check-deps` and `uninstall:preview` return empty stubs.
+  - Electron stack still in repo (`dev:electron`, `build:electron`, `main/`, `preload/`). Default path is Tauri. Removal is a separate step after product-complete.
 
 - **Stage 3 evidence (2026-04-29):**
   - All 63 `window.dh.*` call sites across 8 pages verified against bridge
