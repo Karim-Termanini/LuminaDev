@@ -25,7 +25,6 @@ const RUNTIME_DETAILS: Record<string, { description: string, website: string, ic
 }
 
 const UPDATE_OUTCOME_STORAGE_KEY = 'dh:runtimes:update-outcomes:v1'
-const LOCAL_JAVA_VERSIONS = ['21 (LTS)', '17 (LTS)', '11 (LTS)', '8 (LTS)']
 
 /** Prefer a sensible default when the version API returns many entries (e.g. Node: first LTS row). */
 function pickDefaultRuntimeVersion(runtimeId: string, versions: string[]): string {
@@ -97,13 +96,14 @@ export function RuntimesPage(): ReactElement {
   const VERSIONS_CACHE_KEY = 'dh:runtimes:versions-cache:v1'
   const VERSIONS_CACHE_TTL = 5 * 60 * 1000 // 5 minutes
 
-  const loadVersionsForRuntime = useCallback(async (runtimeId: string, resetDefault: boolean) => {
+  const loadVersionsForRuntime = useCallback(async (runtimeId: string, method: 'system' | 'local', resetDefault: boolean) => {
+    const cacheKey = `${runtimeId}:${method}`
     // Check localStorage cache first
     try {
       const raw = localStorage.getItem(VERSIONS_CACHE_KEY)
       if (raw) {
         const cache = JSON.parse(raw) as Record<string, { ts: number; versions: string[] }>
-        const entry = cache[runtimeId]
+        const entry = cache[cacheKey]
         if (entry && Date.now() - entry.ts < VERSIONS_CACHE_TTL && entry.versions.length > 0) {
           setAvailableVersions(entry.versions)
           if (resetDefault) setSelectedVersion(pickDefaultRuntimeVersion(runtimeId, entry.versions))
@@ -115,7 +115,7 @@ export function RuntimesPage(): ReactElement {
 
     setVersionsLoading(true)
     try {
-      const res = await window.dh.getAvailableVersions(runtimeId)
+      const res = await window.dh.getAvailableVersions(runtimeId, method)
       assertRuntimeOk(res, 'Failed to fetch runtime versions.')
       const vs = res.versions
       setAvailableVersions(vs)
@@ -129,7 +129,7 @@ export function RuntimesPage(): ReactElement {
       try {
         const raw = localStorage.getItem(VERSIONS_CACHE_KEY)
         const cache: Record<string, { ts: number; versions: string[] }> = raw ? JSON.parse(raw) : {}
-        cache[runtimeId] = { ts: Date.now(), versions: vs }
+        cache[cacheKey] = { ts: Date.now(), versions: vs }
         localStorage.setItem(VERSIONS_CACHE_KEY, JSON.stringify(cache))
       } catch { /* ignore cache write errors */ }
     } catch (e) {
@@ -142,8 +142,8 @@ export function RuntimesPage(): ReactElement {
 
   /** Same as load but for the currently selected runtime (wizard Refresh button). */
   const refreshVersionsList = useCallback(
-    (resetDefault: boolean) => loadVersionsForRuntime(selectedId, resetDefault),
-    [selectedId, loadVersionsForRuntime],
+    (resetDefault: boolean) => loadVersionsForRuntime(selectedId, installMethod, resetDefault),
+    [selectedId, installMethod, loadVersionsForRuntime],
   )
 
   const refreshDeps = useCallback(async () => {
@@ -230,10 +230,7 @@ export function RuntimesPage(): ReactElement {
     return undefined
   }, [latestUpdateJob])
   const effectiveUpdateOutcome = updateOutcome ?? persistedUpdateOutcomes[selectedId]
-  const displayedVersions = useMemo(
-    () => (selectedId === 'java' && installMethod === 'local' ? LOCAL_JAVA_VERSIONS : availableVersions),
-    [selectedId, installMethod, availableVersions],
-  )
+  const displayedVersions = availableVersions
 
   const suggestVerifyCmd = RUNTIME_VERIFY_CMD[selectedId] ?? `${selectedId} --version`
   const lastJobTail = activeJob?.logTail ?? []
@@ -270,8 +267,8 @@ export function RuntimesPage(): ReactElement {
   useEffect(() => {
     setAvailableVersions([])
     setSelectedVersion('latest')
-    void loadVersionsForRuntime(selectedId, true)
-  }, [selectedId, loadVersionsForRuntime])
+    void loadVersionsForRuntime(selectedId, installMethod, true)
+  }, [selectedId, installMethod, loadVersionsForRuntime])
 
   useEffect(() => {
     if (displayedVersions.length === 0) return
@@ -284,7 +281,7 @@ export function RuntimesPage(): ReactElement {
     setSelectedId(id)
     setShowWizard(true)
     setWizardStep(1)
-    void loadVersionsForRuntime(id, true)
+    void loadVersionsForRuntime(id, installMethod, true)
   }
 
   const runInstall = async () => {
@@ -658,6 +655,11 @@ export function RuntimesPage(): ReactElement {
                            {selectedId === 'java' && installMethod === 'system' && (
                              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
                                System list shows only Java versions currently available from your distro repositories.
+                             </div>
+                           )}
+                           {installMethod === 'system' && selectedId !== 'java' && (
+                             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
+                               System mode now shows only repository-backed choices for this runtime on your distro.
                              </div>
                            )}
                            {installMethod === 'system' && (

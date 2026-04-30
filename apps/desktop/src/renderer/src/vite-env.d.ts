@@ -95,7 +95,7 @@ declare global {
       monitorSecurity: () => Promise<{ ok: boolean; snapshot: import('@linux-dev-home/shared').HostSecuritySnapshot; error?: string }>
       monitorSecurityDrilldown: () => Promise<{ ok: boolean; drilldown: import('@linux-dev-home/shared').HostSecurityDrilldown; error?: string }>
       runtimeStatus: () => Promise<import('@linux-dev-home/shared').RuntimeStatusResponse & { ok: boolean; error?: string }>
-      getAvailableVersions: (runtimeId: string) => Promise<{ ok: boolean; versions: string[]; error?: string }>
+      getAvailableVersions: (runtimeId: string, method?: 'system' | 'local') => Promise<{ ok: boolean; versions: string[]; error?: string }>
       checkDependencies: (runtimeId: string) => Promise<{ ok: boolean; dependencies: Array<{ name: string; status: string; ok: boolean }>; error?: string }>
       runtimeUninstallPreview: (payload: { runtimeId: string; removeMode: 'runtime_only' | 'runtime_and_deps' }) => Promise<{ ok: boolean; distro?: string; runtimePackages?: string[]; removableDeps?: string[]; blockedSharedDeps?: string[]; finalPackages?: string[]; note?: string; error?: string }>
       perfSnapshot: () => Promise<{ ok: boolean; snapshot?: import('@linux-dev-home/shared').PerfSnapshot; error?: string }>

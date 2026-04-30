@@ -682,6 +682,17 @@ async fn runtime_dnf_package_available(pkg: &str) -> bool {
   exec_result_limit("bash", &["-lc", &cmd], CMD_TIMEOUT_SHORT).await.is_ok()
 }
 
+async fn runtime_system_package_available(pkg_mgr: &str, pkg: &str) -> bool {
+  let cmd = match pkg_mgr {
+    "dnf" => format!("dnf -q list --available '{}' >/dev/null 2>&1", pkg),
+    "apt" => format!("apt-cache show '{}' >/dev/null 2>&1", pkg),
+    "pacman" => format!("pacman -Si '{}' >/dev/null 2>&1", pkg),
+    "zypper" => format!("zypper -n info '{}' >/dev/null 2>&1", pkg),
+    _ => return false,
+  };
+  exec_result_limit("bash", &["-lc", &cmd], CMD_TIMEOUT_SHORT).await.is_ok()
+}
+
 async fn runtime_system_package_installed(pkg_mgr: &str, pkg: &str) -> bool {
   let cmd = match pkg_mgr {
     "dnf" | "zypper" => format!("rpm -q '{}' >/dev/null 2>&1", pkg),
@@ -2464,7 +2475,47 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
     },
     "dh:runtime:get-versions" => {
       let runtime_id = body.get("runtimeId").and_then(|v| v.as_str()).unwrap_or("node");
+      let method = body.get("method").and_then(|v| v.as_str()).unwrap_or("local");
       let mut versions: Vec<String> = Vec::new();
+      if method == "system" {
+        let distro = exec_output("bash", &["-lc", "source /etc/os-release 2>/dev/null && printf '%s' \"${ID:-unknown}\""])
+          .await
+          .unwrap_or_else(|_| "unknown".to_string());
+        let pkg_mgr = runtime_pkg_mgr(distro.trim());
+        match runtime_id {
+          // System package managers do not pin versions for these runtimes.
+          "node" | "python" | "go" | "php" | "ruby" | "zig" | "c_cpp" | "matlab" | "lua" | "lisp" => {
+            versions.push("system (repo default)".into());
+          }
+          // Local/script-driven runtimes (no stable system package management path).
+          "bun" | "dart" | "flutter" | "julia" | "rust" => {
+            versions.push("local installer (recommended)".into());
+          }
+          "java" => {
+            for label in ["21 (LTS)", "17 (LTS)", "11 (LTS)", "8 (LTS)"] {
+              if let Some(pkg) = runtime_java_system_packages_for_version(pkg_mgr, label).into_iter().next() {
+                if runtime_system_package_available(pkg_mgr, &pkg).await {
+                  versions.push(label.to_string());
+                }
+              }
+            }
+            let latest_pkg = if pkg_mgr == "dnf" {
+              "java-latest-openjdk-devel"
+            } else {
+              ""
+            };
+            if !latest_pkg.is_empty() && runtime_system_package_available(pkg_mgr, latest_pkg).await {
+              versions.push("latest (repo)".into());
+            }
+            if versions.is_empty() {
+              versions.push("system (repo default)".into());
+            }
+          }
+          "dotnet" => versions.push("8.0 (LTS)".into()),
+          _ => versions.push("system (repo default)".into()),
+        }
+        return Ok(json!({ "ok": true, "versions": versions }));
+      }
       match runtime_id {
         "node" => {
           if let Ok(raw) = exec_output_limit("curl", &["-fsSL", "https://nodejs.org/dist/index.json"], CMD_TIMEOUT_SHORT).await {
