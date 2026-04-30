@@ -96,6 +96,6 @@ This section records the **docs + checklist + smoke** closure for Agent B (not a
 | Item | Detail |
 |------|--------|
 | Fewer `bash -lc` probes | Prefer direct reads (`/etc/os-release`, `/proc/uptime`) and direct CLI (`docker --version`, `systemctl`, `nvidia-smi`) where safe in `apps/desktop/src-tauri/src/lib.rs`. |
-| Timeouts | `exec_output_limit` / `exec_result_limit` with `CMD_TIMEOUT_DEFAULT` (180s), `CMD_TIMEOUT_SHORT` (30s) for probes and `curl`, `CMD_TIMEOUT_LONG` (900s) for `git clone`, install steps under `sudo`. |
+| Timeouts | `exec_output_limit` / `exec_result_limit` with `CMD_TIMEOUT_DEFAULT` (180s), `CMD_TIMEOUT_SHORT` (30s) for probes / `curl` / external-terminal discovery, `CMD_TIMEOUT_LONG` (900s) for `git clone`, `docker pull`, `docker compose up`, and install steps under `sudo`. |
 | `HOST_COMMAND_TIMEOUT` | Returned on wall-clock exceed; humanized in `dockerError`, `gitError`, `sshError`, `dashboardError`, `runtimeError`. |
 | **`dh:terminal:close`** | Declared in `packages/shared/src/ipc.ts`; Tauri `ipc_send` removes `ChildStdin` from map; Electron **kills** the PTY via `ipcMain.on(IPC.terminalClose, …)`. Renderer calls `window.dh.terminalClose(id)` on unmount for **TerminalPage**, **DockerTerminalModal**, **SshPage** embed; **SshPage** disconnect uses `terminalClose`. |

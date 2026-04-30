@@ -29,7 +29,7 @@
 | A1 | تدقيق القنوات | مطابقة `packages/shared/src/ipc.ts` مع `ipc_invoke` / مسار Tauri. **`done` (تدقيق أولي 2026-04-30)** — انظر قسم «لقطة A1» أدناه؛ إصلاح `dh:docker:create` لإرجاع `id`. |
 | A2 | `dh:docker:install` | **`done`** — خطوات `apt`/`dnf`/`pacman` عبر `sudo -S` + سجل `log` في الرد؛ رفض في Flatpak / بدون sudo صالح. |
 | A3 | `dh:docker:remap-port` | **`done`** — inspect + create + start؛ ثم **`docker stop`** + **`docker rm`** للمصدر عند نجاح الإيقاف + حقول `sourceStopped` / `sourceRemoved` / ملاحظات في الرد. |
-| A4 | حدود الصلاحيات | مراجعة سريعة لمسارات Docker socket وSSH وأوامر shell: timeouts، allowlists، رسائل خطأ حتمية. **`جزئي` (2026-04-30):** `exec_output` / `exec_result` مع `tokio::time::timeout`؛ قراءة مباشرة لـ `/etc/os-release` و`/proc/uptime` حيث ينطبق؛ `curl`/تحقق سريع بـ 30s؛ `git clone` 900s؛ بادئة `[HOST_COMMAND_TIMEOUT]` + humanize في الواجهة؛ قناة **`dh:terminal:close`** في `IPC` + preload + Tauri `ipc_send` + Electron `kill` للـ PTY واستدعاؤها من Terminal/Docker/SSH عند الإغلاق؛ باقي allowlist لـ `bash -lc` لاحقًا. |
+| A4 | حدود الصلاحيات | مراجعة سريعة لمسارات Docker socket وSSH وأوامر shell: timeouts، allowlists، رسائل خطأ حتمية. **`جزئي` (2026-04-30):** `exec_output` / `exec_result` مع `tokio::time::timeout`؛ قراءة مباشرة لـ `/etc/os-release` و`/proc/uptime` حيث ينطبق؛ `curl`/تحقق سريع/فتح طرفية خارجية بـ 30s؛ **`docker pull`** و**`docker compose up`** بحد أقصى 900s؛ `compose logs` بـ 180s؛ `git clone` 900s؛ بادئة `[HOST_COMMAND_TIMEOUT]` + humanize؛ **`dh:terminal:close`** في `IPC` + preload + Tauri + Electron؛ باقي allowlist لـ `bash -lc` لاحقًا. |
 | A5 | Flatpak (لاحقًا) | **جزئي:** manifest Tauri + README؛ **بدون** job في GitHub Actions حتى يُقرّ اختبار بطيء؛ Docker عبر `flatpak override` كالوثائق. |
 
 ---

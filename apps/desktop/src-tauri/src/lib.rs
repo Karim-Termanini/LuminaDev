@@ -43,7 +43,7 @@ fn write_json(path: &PathBuf, value: &Value) -> Result<(), String> {
 const CMD_TIMEOUT_DEFAULT: Duration = Duration::from_secs(180);
 /// Short probe (sudo -n, quick shell checks).
 const CMD_TIMEOUT_SHORT: Duration = Duration::from_secs(30);
-/// `git clone` and similar large transfers.
+/// `git clone`, `docker pull`, `docker compose up -d`, and similar long host work.
 const CMD_TIMEOUT_LONG: Duration = Duration::from_secs(900);
 /// Single `sudo bash -c` step during Docker engine install.
 const CMD_TIMEOUT_INSTALL_STEP: Duration = Duration::from_secs(900);
@@ -858,7 +858,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       if image.is_empty() {
         json!({ "ok": false, "error": "[DOCKER_PULL_FAILED] Missing image name." })
       } else {
-        match exec_result("docker", &["pull", image]).await {
+        match exec_result_limit("docker", &["pull", image], CMD_TIMEOUT_LONG).await {
           Ok((stdout, stderr)) => json!({ "ok": true, "log": format!("{}{}", stdout, stderr) }),
           Err(e) => json!({ "ok": false, "error": format!("[DOCKER_PULL_FAILED] {}", e.trim()) }),
         }
@@ -918,7 +918,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
         Err(e) => json!({ "ok": false, "error": format!("[DOCKER_TAGS_FAILED] {}", e.trim()) }),
       }
     },
-    "dh:compose:up" | "dh:compose:logs" => {
+    "dh:compose:up" => {
       let profile = body.get("profile").and_then(|v| v.as_str()).unwrap_or("web-dev");
       let dir = find_repo_root(&std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")))
         .join("docker")
@@ -926,18 +926,34 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
         .join(profile)
         .to_string_lossy()
         .to_string();
-      let cmd = if channel == "dh:compose:up" {
-        format!("cd '{}' && docker compose up -d", dir.replace('\'', "'\\''"))
-      } else {
-        format!("cd '{}' && docker compose logs --tail 200", dir.replace('\'', "'\\''"))
-      };
-      match exec_result("bash", &["-lc", &cmd]).await {
+      let cmd = format!("cd '{}' && docker compose up -d", dir.replace('\'', "'\\''"));
+      match exec_result_limit("bash", &["-lc", &cmd], CMD_TIMEOUT_LONG).await {
+        Ok((stdout, stderr)) => json!({ "ok": true, "log": format!("{}{}", stdout, stderr) }),
+        Err(e) => json!({ "ok": false, "log": "", "error": format!("[DOCKER_COMPOSE_FAILED] {}", e.trim()) }),
+      }
+    },
+    "dh:compose:logs" => {
+      let profile = body.get("profile").and_then(|v| v.as_str()).unwrap_or("web-dev");
+      let dir = find_repo_root(&std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")))
+        .join("docker")
+        .join("compose")
+        .join(profile)
+        .to_string_lossy()
+        .to_string();
+      let cmd = format!("cd '{}' && docker compose logs --tail 200", dir.replace('\'', "'\\''"));
+      match exec_result_limit("bash", &["-lc", &cmd], CMD_TIMEOUT_DEFAULT).await {
         Ok((stdout, stderr)) => json!({ "ok": true, "log": format!("{}{}", stdout, stderr) }),
         Err(e) => json!({ "ok": false, "log": "", "error": format!("[DOCKER_COMPOSE_FAILED] {}", e.trim()) }),
       }
     },
     "dh:terminal:openExternal" => {
-      let launched = exec_output("bash", &["-lc", "for t in xdg-terminal-emulator gnome-console kitty alacritty gnome-terminal konsole xfce4-terminal xterm; do command -v $t >/dev/null 2>&1 && ($t >/dev/null 2>&1 &); if [ $? -eq 0 ]; then echo ok; exit 0; fi; done; exit 1"]).await.is_ok();
+      let launched = exec_output_limit(
+        "bash",
+        &["-lc", "for t in xdg-terminal-emulator gnome-console kitty alacritty gnome-terminal konsole xfce4-terminal xterm; do command -v $t >/dev/null 2>&1 && ($t >/dev/null 2>&1 &); if [ $? -eq 0 ]; then echo ok; exit 0; fi; done; exit 1"],
+        CMD_TIMEOUT_SHORT,
+      )
+      .await
+      .is_ok();
       if launched {
         json!({ "ok": true })
       } else {
@@ -972,10 +988,9 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
           }
           let app_exit = app.clone();
           let id_exit = id.clone();
-          let state_exit = state.clone();
           tauri::async_runtime::spawn(async move {
             let _ = child.wait().await;
-            state_exit.terminals.lock().await.remove(&id_exit);
+            app_exit.state::<AppState>().terminals.lock().await.remove(&id_exit);
             let _ = app_exit.emit("dh:terminal:exit", json!({ "id": id_exit }));
           });
           json!({ "ok": true, "id": id })
@@ -1013,10 +1028,9 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
             }
             let app_exit = app.clone();
             let id_exit = id.clone();
-            let state_exit = state.clone();
             tauri::async_runtime::spawn(async move {
               let _ = child.wait().await;
-              state_exit.terminals.lock().await.remove(&id_exit);
+              app_exit.state::<AppState>().terminals.lock().await.remove(&id_exit);
               let _ = app_exit.emit("dh:terminal:exit", json!({ "id": id_exit }));
             });
             json!({ "ok": true, "id": id })
