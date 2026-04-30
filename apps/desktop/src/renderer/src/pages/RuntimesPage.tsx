@@ -25,6 +25,7 @@ const RUNTIME_DETAILS: Record<string, { description: string, website: string, ic
 }
 
 const UPDATE_OUTCOME_STORAGE_KEY = 'dh:runtimes:update-outcomes:v1'
+const LOCAL_JAVA_VERSIONS = ['21 (LTS)', '17 (LTS)', '11 (LTS)', '8 (LTS)']
 
 /** Prefer a sensible default when the version API returns many entries (e.g. Node: first LTS row). */
 function pickDefaultRuntimeVersion(runtimeId: string, versions: string[]): string {
@@ -229,6 +230,10 @@ export function RuntimesPage(): ReactElement {
     return undefined
   }, [latestUpdateJob])
   const effectiveUpdateOutcome = updateOutcome ?? persistedUpdateOutcomes[selectedId]
+  const displayedVersions = useMemo(
+    () => (selectedId === 'java' && installMethod === 'local' ? LOCAL_JAVA_VERSIONS : availableVersions),
+    [selectedId, installMethod, availableVersions],
+  )
 
   const suggestVerifyCmd = RUNTIME_VERIFY_CMD[selectedId] ?? `${selectedId} --version`
   const lastJobTail = activeJob?.logTail ?? []
@@ -267,6 +272,13 @@ export function RuntimesPage(): ReactElement {
     setSelectedVersion('latest')
     void loadVersionsForRuntime(selectedId, true)
   }, [selectedId, loadVersionsForRuntime])
+
+  useEffect(() => {
+    if (displayedVersions.length === 0) return
+    setSelectedVersion((prev) => (
+      displayedVersions.includes(prev) ? prev : pickDefaultRuntimeVersion(selectedId, displayedVersions)
+    ))
+  }, [displayedVersions, selectedId])
 
   const startInstall = async (id: string) => {
     setSelectedId(id)
@@ -633,16 +645,21 @@ export function RuntimesPage(): ReactElement {
                            </div>
                            <select 
                              className="hp-input" 
-                             style={{ width: '100%', opacity: versionsLoading && availableVersions.length === 0 ? 0.6 : 1 }} 
+                             style={{ width: '100%', opacity: versionsLoading && displayedVersions.length === 0 ? 0.6 : 1 }} 
                              value={selectedVersion} 
-                             disabled={versionsLoading && availableVersions.length === 0}
+                             disabled={versionsLoading && displayedVersions.length === 0}
                              onChange={(e) => setSelectedVersion(e.target.value)}
                            >
-                             {availableVersions.map(v => <option key={v} value={v}>{v}</option>)}
+                             {displayedVersions.map(v => <option key={v} value={v}>{v}</option>)}
                            </select>
                            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
                              Lists are loaded from upstream APIs where possible; use Refresh after a new release if you do not change language.
                            </div>
+                           {selectedId === 'java' && installMethod === 'system' && (
+                             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
+                               System list shows only Java versions currently available from your distro repositories.
+                             </div>
+                           )}
                            {installMethod === 'system' && (
                              <div
                                role="note"

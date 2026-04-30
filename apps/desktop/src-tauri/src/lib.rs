@@ -2513,7 +2513,32 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
             }
           }
         },
-        "java" => versions.extend(["21 (LTS)".into(), "17 (LTS)".into(), "11 (LTS)".into(), "8 (LTS)".into()]),
+        "java" => {
+          let distro = exec_output("bash", &["-lc", "source /etc/os-release 2>/dev/null && printf '%s' \"${ID:-unknown}\""])
+            .await
+            .unwrap_or_else(|_| "unknown".to_string());
+          let pkg_mgr = runtime_pkg_mgr(distro.trim());
+          match pkg_mgr {
+            "dnf" => {
+              let candidates = [
+                ("25", "java-25-openjdk-devel"),
+                ("21 (LTS)", "java-21-openjdk-devel"),
+                ("17 (LTS)", "java-17-openjdk-devel"),
+                ("11 (LTS)", "java-11-openjdk-devel"),
+                ("8 (LTS)", "java-1.8.0-openjdk-devel"),
+              ];
+              for (label, pkg) in candidates {
+                if runtime_dnf_package_available(pkg).await {
+                  versions.push(label.to_string());
+                }
+              }
+              if versions.is_empty() {
+                versions.push("latest (repo)".into());
+              }
+            }
+            _ => versions.extend(["21 (LTS)".into(), "17 (LTS)".into(), "11 (LTS)".into(), "8 (LTS)".into()]),
+          }
+        },
         "php" => {
           if let Ok(raw) = exec_output_limit("curl", &["-fsSL", "https://endoflife.date/api/php.json"], CMD_TIMEOUT_SHORT).await {
             if let Ok(arr) = serde_json::from_str::<Value>(&raw) {
