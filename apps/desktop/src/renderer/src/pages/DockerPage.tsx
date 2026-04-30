@@ -2280,7 +2280,7 @@ function DockerTerminalModal({ container, onClose }: { container: ContainerRow; 
             const ta = termWrapRef.current?.querySelector('.xterm-helper-textarea') as HTMLTextAreaElement | null
             ta?.focus()
           }}
-          style={{ flex: 1, background: '#0a0a0a', borderRadius: 8, padding: 8, overflow: 'hidden' }}
+          style={{ flex: 1, background: '#0a0a0a', borderRadius: 8, padding: '16px', overflow: 'hidden' }}
         />
       </div>
     </div>
