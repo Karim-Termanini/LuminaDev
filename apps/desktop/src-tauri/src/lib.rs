@@ -710,21 +710,20 @@ async fn runtime_job_execute(
           sudo_bash_install_step("snap remove flutter", password_opt, &mut logs).await
             .map_err(|e| format!("[RUNTIME_UNINSTALL_FAILED] {}", e))
         } else if runtime_id == "julia" {
-          // Try juliaup first, fall back to system package
-          let juliaup_ok = exec_output_limit("bash", &["-lc", "juliaup self uninstall -y 2>/dev/null"], CMD_TIMEOUT_INSTALL_STEP).await.is_ok();
-          if juliaup_ok {
-            logs.push("Julia removed via juliaup.".into());
-            Ok(())
-          } else {
-            let pkgs = runtime_system_packages(&runtime_id, pkg_mgr);
-            if pkgs.is_empty() {
-              logs.push("No system packages to remove for Julia.".into());
-              Ok(())
-            } else {
-              sudo_bash_install_step(&pkg_remove_cmd(pkg_mgr, &pkgs), password_opt, &mut logs).await
-                .map_err(|e| format!("[RUNTIME_UNINSTALL_FAILED] {}", e))
-            }
-          }
+          // juliaup self uninstall doesn't accept -y; pipe stdin to confirm,
+          // then fall back to manual directory removal if juliaup isn't found.
+          let cmd = r#"
+            if command -v juliaup > /dev/null 2>&1 || [ -x "$HOME/.juliaup/bin/juliaup" ]; then
+              JULIAUP="$( command -v juliaup 2>/dev/null || echo "$HOME/.juliaup/bin/juliaup" )"
+              echo y | "$JULIAUP" self uninstall 2>/dev/null || true
+            fi
+            rm -rf "$HOME/.juliaup" "$HOME/.julia" 2>/dev/null || true
+            sed -i '/juliaup/d;/\.julia/d' "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.profile" "$HOME/.bash_profile" 2>/dev/null || true
+          "#;
+          logs.push("Removing Julia via juliaup and cleaning home directories…".into());
+          exec_output_limit("bash", &["-lc", cmd], CMD_TIMEOUT_INSTALL_STEP).await
+            .map(|out| { if !out.is_empty() { logs.push(out); } })
+            .map_err(|e| format!("[RUNTIME_UNINSTALL_FAILED] {}", e.trim()))
         } else {
           let pkgs = runtime_system_packages(&runtime_id, pkg_mgr);
           if pkgs.is_empty() {
@@ -2159,12 +2158,8 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
           pkg_vals = vec![json!("flutter (snap)")];
         },
         "julia" => {
-          if pkgs.is_empty() {
-            note = "Julia may have been installed via juliaup. This will run 'juliaup self uninstall' if available, otherwise removes the system package.".to_string();
-            pkg_vals = vec![json!("juliaup / julia")];
-          } else {
-            note = format!("Julia system packages detected. Removal will use {}.", pkg_mgr);
-          }
+          note = "Removes juliaup + cleans ~/.juliaup and ~/.julia. No sudo needed.".to_string();
+          pkg_vals = vec![json!("~/.juliaup"), json!("~/.julia")];
         },
         "dotnet" if pkg_mgr == "pacman" => {
           note = "On Arch, .NET was installed via Microsoft's install script to ~/.dotnet. Remove that directory manually or run: rm -rf ~/.dotnet".to_string();
