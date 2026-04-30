@@ -36,7 +36,7 @@ Until Docker vertical slice hardening is complete:
 
 - Flatpak sessions require explicit host overrides for some operations (Docker socket, SSH paths).
 - Some cleanup operations are manual-assisted due to host privilege boundaries.
-- Legacy Electron shell + Flatpak + `node-pty` can require per-system rebuild if you still use `pnpm dev:electron` / `pnpm build:electron`.
+- Flatpak builds may need host overrides for Docker socket, SSH, and terminal PTY access.
 
 ## 🛠️ Prerequisites
 
@@ -44,7 +44,7 @@ Until Docker vertical slice hardening is complete:
 - **pnpm** 9 (`corepack enable` recommended)
 - **Docker** (optional, for compose stacks and the Docker panel)
 - **Tauri (default dev):** Rust stable, and on Linux the WebKit/GTK dev packages your distro documents for Tauri v2 (see [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/)).
-- **Optional — Electron only:** `build-essential`, `python3` for `node-pty` when using `pnpm dev:electron` or `pnpm build:electron`.
+- **Tauri:** Rust stable + WebKit/GTK dev packages (see [Tauri v2 prerequisites](https://v2.tauri.app/start/prerequisites/)).
 
 ## 🚀 Getting Started
 
@@ -61,11 +61,6 @@ Until Docker vertical slice hardening is complete:
    pnpm lint         # ESLint
    pnpm build        # Renderer bundle + copy compose profiles (CI / Docker friendly)
    pnpm --filter desktop build:tauri   # Full desktop app bundle (Rust + frontend)
-   ```
-
-3. **Legacy Electron shell (optional):** after install, if you use `pnpm dev:electron` or `pnpm build:electron`, rebuild `node-pty` for your Electron version:
-   ```bash
-   cd apps/desktop && pnpm exec electron-rebuild -f -w node-pty
    ```
 
 ## 🐳 Docker CI Image

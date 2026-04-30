@@ -148,7 +148,7 @@ Stabilization is considered complete only when:
   - Job runner (`job:start`, `job:list`): UI pipeline ready; `runtime_install` uses sleep-based simulation. `job:start` returns `{ id }` (no `ok`); `job:list` returns bare array — matches renderer typings, intentional.
   - Security probes (`dh:monitor:security`, `security-drilldown`): logic in Rust, commands via `bash -c` (`ufw`, `getenforce`, `sshd -T`, `journalctl`, `ss`). Not pure Rust, not a bug.
   - Runtime versions (`dh:runtime:get-versions`): Node/Go/Python fetch from public APIs; all others return `["latest"]`. `check-deps` and `uninstall:preview` return empty stubs.
-  - Electron stack still in repo (`dev:electron`, `build:electron`, `main/`, `preload/`). Default path is Tauri. Removal is a separate step after product-complete.
+  - Electron stack removed from repo (2026-04-30): `main/`, `preload/`, `electron.vite.config.ts`, `node-pty`, `dockerode`, `simple-git`, Electron scripts. Repo is now Tauri-only.
 
 - **Stage 3 evidence (2026-04-29):**
   - All 63 `window.dh.*` call sites across 8 pages verified against bridge
@@ -158,15 +158,16 @@ Stabilization is considered complete only when:
 
 - **Stage 4 evidence (2026-04-30):**
   - CI: broadened push triggers (`feat/*`, `fix/*`, `chore/*`, etc.)
-  - `quality-gate` job: trimmed to only `build-essential python3` (WebKit deps were unnecessary)
-  - `native-linux-build`: Rust toolchain + cache present, Tauri build green in CI
-  - Flatpak: `flatpak/io.github.karimodora.LinuxDevHome.tauri.yml` added for local/Flathub prep — **not** in GitHub Actions until a dedicated slow job is added
-  - Default dev entry: `apps/desktop` `pnpm dev` → `tauri dev`; Electron preserved as `pnpm dev:electron` / `pnpm build:electron` (e.g. `pack:linux`); root `pnpm build` runs renderer bundle + compose copy (no Electron emit)
+  - `quality-gate` job: no native addon build tools needed (node-pty removed)
+  - `native-linux-build`: Rust toolchain + cache, Tauri build green in CI
+  - Flatpak: `flatpak/io.github.karimodora.LinuxDevHome.tauri.yml` added for local/Flathub prep — not in CI until Flathub submission
+  - Electron removed from repo (2026-04-30) — repo is now Tauri-only; `pnpm dev` → `tauri dev`
 
 - **Post-parity hardening (before product-complete declaration, not part of Stage 5 definition):**
-  - `runtime_install` job: replace sleep simulation with real distro package execution
-  - `runtime:check-deps` + `runtime:uninstall:preview`: replace stubs with working implementations
-  - Electron removal from repo (`main/`, `preload/`, `dev:electron`, `build:electron`) — after Tauri-only confirmed stable (see `AGENT_WORK_PLAN.md`)
+  - ✅ `runtime_install` job: real distro package execution (apt/dnf/pacman + nvm/rustup)
+  - ✅ `runtime:check-deps`: real tool checks on PATH
+  - ✅ `runtime:uninstall:preview`: distro-aware package list
+  - ✅ Electron removed from repo (2026-04-30)
 
 - **Stage 4 remaining:**
   - Flatpak CI job (heavy; add before Flathub submission only)
@@ -177,6 +178,34 @@ Stabilization is considered complete only when:
   - **No `git tag` / GitHub Release** until maintainer explicitly declares product-complete.
 
 ---
+
+## Parity Check Plan — real vs static data
+
+Use this to audit which pages show live data and which show stubs/static content.
+
+| Page / feature | Expected live data | Known stub / static |
+| --- | --- | --- |
+| **Monitor → Metrics** | CPU%, memory, disk, load avg from `/proc` | `diskReadMbps`, `diskWriteMbps`, `netRxMbps`, `netTxMbps` always 0 |
+| **Monitor → Top processes** | `ps` output, refreshed | — |
+| **Monitor → Security** | `ufw`, `getenforce`, `sshd -T`, `journalctl` via bash | — |
+| **Monitor → System info** | `hostname`, `uname`, uptime | `ip`, `distro`, `shell`, `de`, `wm`, `gpu`, `packages`, `resolution` all optional / may be empty |
+| **Docker → Containers** | Live via `docker` CLI | — |
+| **Docker → Images / Volumes / Networks** | Live via `docker` CLI | — |
+| **Docker → Ports** | Live from container list | `[DOCKER_REMAP_NOT_SUPPORTED]` in Flatpak |
+| **Docker → Install/Setup** | Real sudo steps on native; blocked on Flatpak | — |
+| **Runtimes → Status** | `node --version`, `python3 --version`, etc. | — |
+| **Runtimes → get-versions** | Node/Go/Python via public API | All others return `["latest"]` |
+| **Runtimes → check-deps** | `which` on each tool | — |
+| **Runtimes → uninstall-preview** | Distro package list | No real dep graph; `removableDeps` always empty |
+| **Runtimes → install job** | Real apt/dnf/pacman or nvm/rustup | Requires passwordless sudo for system method |
+| **Job runner progress** | Starts `running`, ends `done`/`failed` | No streaming progress (final state only) |
+| **SSH → generate / getPub / testGithub** | Real `ssh-keygen`, `ssh -T` | — |
+| **Git → config list / set** | Real `git config --global` | — |
+| **Git → clone / status** | Real git operations | — |
+| **Terminal** | Real shell via tokio spawn | No PTY (line-buffered only; no interactive apps like vim) |
+| **Compose** | Real `docker compose up/logs` | Needs compose files in `docker/compose/` |
+| **Diagnostics bundle** | Saves JSON to app data dir | `perf.snapshot` returns zeros |
+| **Dashboard widgets** | Layout persistence (store.json) | Widget data depends on Monitor IPC |
 
 ## Manual Test Checklist (B5)
 
