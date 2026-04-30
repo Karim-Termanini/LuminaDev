@@ -442,23 +442,73 @@ fn runtime_pkg_mgr(distro: &str) -> &'static str {
 
 fn runtime_system_packages(runtime_id: &str, pkg_mgr: &str) -> Vec<&'static str> {
   match (runtime_id, pkg_mgr) {
-    ("node", "apt") => vec!["nodejs", "npm"],
-    ("node", "dnf") => vec!["nodejs", "npm"],
+    // Node
+    ("node", "apt")    => vec!["nodejs", "npm"],
+    ("node", "dnf")    => vec!["nodejs", "npm"],
     ("node", "pacman") => vec!["nodejs", "npm"],
     ("node", "zypper") => vec!["nodejs", "npm"],
-    ("python", "apt") => vec!["python3", "python3-pip"],
-    ("python", "dnf") => vec!["python3", "python3-pip"],
+    // Python
+    ("python", "apt")    => vec!["python3", "python3-pip"],
+    ("python", "dnf")    => vec!["python3", "python3-pip"],
     ("python", "pacman") => vec!["python", "python-pip"],
     ("python", "zypper") => vec!["python3", "python3-pip"],
-    ("go", "apt") => vec!["golang"],
-    ("go", "dnf") => vec!["golang"],
+    // Go
+    ("go", "apt")    => vec!["golang"],
+    ("go", "dnf")    => vec!["golang"],
     ("go", "pacman") => vec!["go"],
     ("go", "zypper") => vec!["go"],
-    ("java", "apt") => vec!["default-jdk"],
-    ("java", "dnf") => vec!["java-latest-openjdk-devel"],
+    // Java
+    ("java", "apt")    => vec!["default-jdk"],
+    ("java", "dnf")    => vec!["java-latest-openjdk-devel"],
     ("java", "pacman") => vec!["jdk-openjdk"],
     ("java", "zypper") => vec!["java-21-openjdk-devel"],
-    _ => vec![],  // rust: always via rustup; unknown: empty
+    // PHP
+    ("php", "apt")    => vec!["php", "php-cli", "php-common"],
+    ("php", "dnf")    => vec!["php", "php-cli"],
+    ("php", "pacman") => vec!["php"],
+    ("php", "zypper") => vec!["php8", "php8-cli"],
+    // Ruby
+    ("ruby", "apt")    => vec!["ruby", "ruby-dev"],
+    ("ruby", "dnf")    => vec!["ruby", "ruby-devel"],
+    ("ruby", "pacman") => vec!["ruby"],
+    ("ruby", "zypper") => vec!["ruby"],
+    // .NET
+    ("dotnet", "apt")    => vec!["dotnet-sdk-8.0"],
+    ("dotnet", "dnf")    => vec!["dotnet-sdk-8.0"],
+    ("dotnet", "pacman") => vec!["dotnet-sdk-8.0"],
+    ("dotnet", "zypper") => vec!["dotnet-sdk-8.0"],
+    // Zig
+    ("zig", "apt")    => vec!["zig"],
+    ("zig", "dnf")    => vec!["zig"],
+    ("zig", "pacman") => vec!["zig"],
+    ("zig", "zypper") => vec!["zig"],
+    // C/C++ toolchain
+    ("c_cpp", "apt")    => vec!["gcc", "g++", "make", "cmake", "gdb"],
+    ("c_cpp", "dnf")    => vec!["gcc", "gcc-c++", "make", "cmake", "gdb"],
+    ("c_cpp", "pacman") => vec!["gcc", "make", "cmake", "gdb"],
+    ("c_cpp", "zypper") => vec!["gcc", "gcc-c++", "make", "cmake", "gdb"],
+    // MATLAB-compatible (Octave)
+    ("matlab", "apt")    => vec!["octave"],
+    ("matlab", "dnf")    => vec!["octave"],
+    ("matlab", "pacman") => vec!["octave"],
+    ("matlab", "zypper") => vec!["octave"],
+    // Julia
+    ("julia", "apt")    => vec!["julia"],
+    ("julia", "dnf")    => vec!["julia"],
+    ("julia", "pacman") => vec!["julia"],
+    ("julia", "zypper") => vec!["julia"],
+    // Lua
+    ("lua", "apt")    => vec!["lua5.4"],
+    ("lua", "dnf")    => vec!["lua"],
+    ("lua", "pacman") => vec!["lua"],
+    ("lua", "zypper") => vec!["lua54"],
+    // Lisp (SBCL)
+    ("lisp", "apt")    => vec!["sbcl"],
+    ("lisp", "dnf")    => vec!["sbcl"],
+    ("lisp", "pacman") => vec!["sbcl"],
+    ("lisp", "zypper") => vec!["sbcl"],
+    // bun & dart & flutter: always via local installer — no reliable system package
+    _ => vec![],
   }
 }
 
@@ -565,6 +615,35 @@ async fn runtime_job_execute(
           exec_output_limit("bash", &["-lc", &cmd], CMD_TIMEOUT_INSTALL_STEP).await
             .map(|out| { if !out.is_empty() { logs.push(out); } })
             .map_err(|e| format!("[RUNTIME_INSTALL_FAILED] {}", e.trim()))
+        } else if runtime_id == "bun" {
+          logs.push("Installing Bun via official installer…".into());
+          let cmd = "curl -fsSL https://bun.sh/install | bash";
+          exec_output_limit("bash", &["-lc", cmd], CMD_TIMEOUT_INSTALL_STEP).await
+            .map(|out| { if !out.is_empty() { logs.push(out); } })
+            .map_err(|e| format!("[RUNTIME_INSTALL_FAILED] {}", e.trim()))
+        } else if runtime_id == "dart" {
+          let channel = if version.is_empty() || version == "stable" { "stable" } else { version.trim() };
+          logs.push(format!("Installing Dart SDK ({})…", channel));
+          let cmd = format!(
+            "curl -fsSL https://dl-ssl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/dart.gpg 2>/dev/null; \
+             echo 'deb [signed-by=/usr/share/keyrings/dart.gpg] https://storage.googleapis.com/download.dartlang.org/linux/debian {channel} main' \
+               > /etc/apt/sources.list.d/dart_{channel}.list && \
+             apt-get update -qq && apt-get install -y dart",
+            channel = channel
+          );
+          sudo_bash_install_step(&cmd, None, &mut logs).await
+            .map_err(|e| format!("[RUNTIME_INSTALL_FAILED] {}", e))
+        } else if runtime_id == "flutter" {
+          logs.push("Installing Flutter via snap…".into());
+          let cmd = "snap install flutter --classic";
+          sudo_bash_install_step(cmd, None, &mut logs).await
+            .map_err(|e| format!("[RUNTIME_INSTALL_FAILED] {}", e))
+        } else if runtime_id == "julia" {
+          logs.push("Installing Julia via juliaup…".into());
+          let cmd = "curl -fsSL https://install.julialang.org | sh -s -- -y";
+          exec_output_limit("bash", &["-lc", cmd], CMD_TIMEOUT_INSTALL_STEP).await
+            .map(|out| { if !out.is_empty() { logs.push(out); } })
+            .map_err(|e| format!("[RUNTIME_INSTALL_FAILED] {}", e.trim()))
         } else {
           let pkgs = runtime_system_packages(&runtime_id, pkg_mgr);
           if pkgs.is_empty() {
@@ -608,6 +687,31 @@ async fn runtime_job_execute(
           exec_output_limit("bash", &["-lc", "rustup self uninstall -y 2>/dev/null || true"], CMD_TIMEOUT_INSTALL_STEP).await
             .map(|out| { if !out.is_empty() { logs.push(out); } })
             .map_err(|e| format!("[RUNTIME_UNINSTALL_FAILED] {}", e.trim()))
+        } else if runtime_id == "bun" {
+          logs.push("Removing Bun (~/.bun)…".into());
+          exec_output_limit("bash", &["-lc", "rm -rf \"$HOME/.bun\" && sed -i '/BUN_INSTALL/d;/.bun\\/bin/d' \"$HOME/.bashrc\" \"$HOME/.zshrc\" 2>/dev/null || true"], CMD_TIMEOUT_INSTALL_STEP).await
+            .map(|out| { if !out.is_empty() { logs.push(out); } })
+            .map_err(|e| format!("[RUNTIME_UNINSTALL_FAILED] {}", e.trim()))
+        } else if runtime_id == "flutter" {
+          logs.push("Removing Flutter snap…".into());
+          sudo_bash_install_step("snap remove flutter", None, &mut logs).await
+            .map_err(|e| format!("[RUNTIME_UNINSTALL_FAILED] {}", e))
+        } else if runtime_id == "julia" {
+          // Try juliaup first, fall back to system package
+          let juliaup_ok = exec_output_limit("bash", &["-lc", "juliaup self uninstall -y 2>/dev/null"], CMD_TIMEOUT_INSTALL_STEP).await.is_ok();
+          if juliaup_ok {
+            logs.push("Julia removed via juliaup.".into());
+            Ok(())
+          } else {
+            let pkgs = runtime_system_packages(&runtime_id, pkg_mgr);
+            if pkgs.is_empty() {
+              logs.push("No system packages to remove for Julia.".into());
+              Ok(())
+            } else {
+              sudo_bash_install_step(&pkg_remove_cmd(pkg_mgr, &pkgs), None, &mut logs).await
+                .map_err(|e| format!("[RUNTIME_UNINSTALL_FAILED] {}", e))
+            }
+          }
         } else {
           let pkgs = runtime_system_packages(&runtime_id, pkg_mgr);
           if pkgs.is_empty() {
@@ -1813,25 +1917,49 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       Err(e) => json!({ "ok": true, "output": e, "code": 1 }),
     },
     "dh:runtime:status" => {
-      let checks = [
-        ("node", "Node.js", "node --version"),
-        ("python", "Python", "python3 --version"),
-        ("java", "Java", "java -version"),
-        ("go", "Go", "go version"),
-        ("rust", "Rust", "rustc --version"),
+      // (id, display name, primary command, args, fallback commands)
+      let checks: &[(&str, &str, &str, &[&str], &[&str])] = &[
+        ("node",   "Node.js",  "node",    &["--version"],  &[]),
+        ("python", "Python",   "python3", &["--version"],  &["python", "--version"]),
+        ("java",   "Java",     "java",    &["-version"],   &[]),
+        ("go",     "Go",       "go",      &["version"],    &[]),
+        ("rust",   "Rust",     "rustc",   &["--version"],  &[]),
+        ("php",    "PHP",      "php",     &["--version"],  &[]),
+        ("ruby",   "Ruby",     "ruby",    &["--version"],  &[]),
+        ("dotnet", ".NET",     "dotnet",  &["--version"],  &[]),
+        ("bun",    "Bun",      "bun",     &["--version"],  &[]),
+        ("zig",    "Zig",      "zig",     &["version"],    &[]),
+        ("c_cpp",  "C/C++",   "gcc",     &["--version"],  &[]),
+        ("matlab", "Octave",   "octave",  &["--version"],  &[]),
+        ("dart",   "Dart",     "dart",    &["--version"],  &[]),
+        ("flutter","Flutter",  "flutter", &["--version"],  &[]),
+        ("julia",  "Julia",    "julia",   &["--version"],  &[]),
+        ("lua",    "Lua",      "lua",     &["-v"],         &["lua5.4", "-v", "lua5.3", "-v"]),
+        ("lisp",   "SBCL",    "sbcl",    &["--version"],  &[]),
       ];
       let mut runtimes: Vec<Value> = Vec::new();
-      for (id, name, check) in checks {
-        let parts: Vec<&str> = check.split_whitespace().collect();
-        let cmd = parts[0];
-        let args = &parts[1..];
+      for (id, name, cmd, args, _fallbacks) in checks {
         match exec_result_limit(cmd, args, CMD_TIMEOUT_SHORT).await {
           Ok((stdout, stderr)) => {
-            let version = format!("{}{}", stdout, stderr).trim().to_string();
+            let version = format!("{}{}", stdout, stderr).trim().lines().next().unwrap_or("").to_string();
             runtimes.push(json!({ "id": id, "name": name, "installed": true, "version": version }));
           }
           Err(_) => {
-            runtimes.push(json!({ "id": id, "name": name, "installed": false }));
+            // Try fallback binary names (e.g. lua5.4)
+            let mut found = false;
+            for chunk in _fallbacks.chunks(2) {
+              if chunk.len() == 2 {
+                if let Ok((so, se)) = exec_result_limit(chunk[0], &[chunk[1]], CMD_TIMEOUT_SHORT).await {
+                  let version = format!("{}{}", so, se).trim().lines().next().unwrap_or("").to_string();
+                  runtimes.push(json!({ "id": id, "name": name, "installed": true, "version": version }));
+                  found = true;
+                  break;
+                }
+              }
+            }
+            if !found {
+              runtimes.push(json!({ "id": id, "name": name, "installed": false }));
+            }
           }
         }
       }
@@ -1847,7 +1975,13 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
               if let Some(list) = arr.as_array() {
                 for item in list.iter().take(25) {
                   if let (Some(v), Some(lts)) = (item.get("version").and_then(|x| x.as_str()), item.get("lts")) {
-                    let label = if lts.is_string() { format!("{} (LTS: {})", v, lts.as_str().unwrap()) } else if lts.as_bool().unwrap_or(false) { format!("{} (LTS)", v) } else { v.to_string() };
+                    let label = if lts.is_string() {
+                      format!("{} (LTS: {})", v, lts.as_str().unwrap())
+                    } else if lts.as_bool().unwrap_or(false) {
+                      format!("{} (LTS)", v)
+                    } else {
+                      v.to_string()
+                    };
                     versions.push(label);
                   }
                 }
@@ -1855,9 +1989,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
             }
           }
         },
-        "rust" => {
-          versions.extend(["stable".into(), "beta".into(), "nightly".into()]);
-        },
+        "rust" => versions.extend(["stable".into(), "beta".into(), "nightly".into()]),
         "python" => {
           if let Ok(raw) = exec_output_limit("curl", &["-fsSL", "https://endoflife.date/api/python.json"], CMD_TIMEOUT_SHORT).await {
             if let Ok(arr) = serde_json::from_str::<Value>(&raw) {
@@ -1884,29 +2016,106 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
             }
           }
         },
-        "java" => {
-          versions.extend(["21 (LTS)".into(), "17 (LTS)".into(), "11 (LTS)".into(), "8 (LTS)".into()]);
+        "java" => versions.extend(["21 (LTS)".into(), "17 (LTS)".into(), "11 (LTS)".into(), "8 (LTS)".into()]),
+        "php" => {
+          if let Ok(raw) = exec_output_limit("curl", &["-fsSL", "https://endoflife.date/api/php.json"], CMD_TIMEOUT_SHORT).await {
+            if let Ok(arr) = serde_json::from_str::<Value>(&raw) {
+              if let Some(list) = arr.as_array() {
+                for item in list.iter().take(10) {
+                  if let Some(v) = item.get("latest").and_then(|x| x.as_str()) {
+                    versions.push(v.to_string());
+                  }
+                }
+              }
+            }
+          }
         },
+        "ruby" => {
+          if let Ok(raw) = exec_output_limit("curl", &["-fsSL", "https://endoflife.date/api/ruby.json"], CMD_TIMEOUT_SHORT).await {
+            if let Ok(arr) = serde_json::from_str::<Value>(&raw) {
+              if let Some(list) = arr.as_array() {
+                for item in list.iter().take(10) {
+                  if let Some(v) = item.get("latest").and_then(|x| x.as_str()) {
+                    versions.push(v.to_string());
+                  }
+                }
+              }
+            }
+          }
+        },
+        "dotnet" => versions.extend(["9.0".into(), "8.0 (LTS)".into(), "7.0".into(), "6.0 (LTS)".into()]),
+        "bun" => {
+          if let Ok(raw) = exec_output_limit("curl", &["-fsSL", "https://api.github.com/repos/oven-sh/bun/releases?per_page=20"], CMD_TIMEOUT_SHORT).await {
+            if let Ok(arr) = serde_json::from_str::<Value>(&raw) {
+              if let Some(list) = arr.as_array() {
+                for item in list.iter().take(15) {
+                  if let Some(v) = item.get("tag_name").and_then(|x| x.as_str()) {
+                    versions.push(v.trim_start_matches("bun-v").to_string());
+                  }
+                }
+              }
+            }
+          }
+        },
+        "zig" => {
+          if let Ok(raw) = exec_output_limit("curl", &["-fsSL", "https://ziglang.org/download/index.json"], CMD_TIMEOUT_SHORT).await {
+            if let Ok(obj) = serde_json::from_str::<Value>(&raw) {
+              if let Some(map) = obj.as_object() {
+                for key in map.keys().take(10) {
+                  if key != "master" { versions.push(key.clone()); }
+                }
+              }
+            }
+          }
+        },
+        "julia" => {
+          if let Ok(raw) = exec_output_limit("curl", &["-fsSL", "https://endoflife.date/api/julia.json"], CMD_TIMEOUT_SHORT).await {
+            if let Ok(arr) = serde_json::from_str::<Value>(&raw) {
+              if let Some(list) = arr.as_array() {
+                for item in list.iter().take(10) {
+                  if let Some(v) = item.get("latest").and_then(|x| x.as_str()) {
+                    versions.push(v.to_string());
+                  }
+                }
+              }
+            }
+          }
+        },
+        // Static version lists for runtimes without a simple API
+        "c_cpp"   => versions.extend(["system (gcc/g++)".into()]),
+        "matlab"  => versions.extend(["system (octave)".into()]),
+        "dart"    => versions.extend(["stable".into(), "beta".into(), "dev".into()]),
+        "flutter" => versions.extend(["stable".into(), "beta".into(), "master".into()]),
+        "lua"     => versions.extend(["5.4".into(), "5.3".into()]),
+        "lisp"    => versions.extend(["system (sbcl)".into()]),
         _ => {}
       }
-      if versions.is_empty() {
-        versions.push("latest".into());
-      }
+      if versions.is_empty() { versions.push("latest".into()); }
       json!({ "ok": true, "versions": versions })
     },
     "dh:runtime:check-deps" => {
       let runtime_id = body.get("runtimeId").and_then(|v| v.as_str()).unwrap_or("node");
-      let mut tools: Vec<(&str, &str)> = match runtime_id {
-        "node"   => vec![("node", "node --version"), ("npm", "npm --version"), ("curl", "curl --version")],
-        "python" => vec![("python3", "python3 --version"), ("pip3", "pip3 --version")],
-        "go"     => vec![("go", "go version")],
-        "rust"   => vec![("cargo", "cargo --version"), ("rustup", "rustup --version")],
-        "java"   => vec![("java", "java -version"), ("javac", "javac -version")],
-        _        => vec![],
+      // (display name, shell command to probe)
+      let tools: Vec<(&str, &str)> = match runtime_id {
+        "node"    => vec![("node", "node --version"), ("npm", "npm --version"), ("curl", "curl --version")],
+        "python"  => vec![("python3", "python3 --version"), ("pip3", "pip3 --version")],
+        "go"      => vec![("go", "go version"), ("gcc", "gcc --version")],
+        "rust"    => vec![("rustc", "rustc --version"), ("cargo", "cargo --version"), ("rustup", "rustup --version")],
+        "java"    => vec![("java", "java -version"), ("javac", "javac -version")],
+        "php"     => vec![("php", "php --version"), ("composer", "composer --version")],
+        "ruby"    => vec![("ruby", "ruby --version"), ("gem", "gem --version")],
+        "dotnet"  => vec![("dotnet", "dotnet --version")],
+        "bun"     => vec![("bun", "bun --version"), ("unzip", "unzip -v"), ("curl", "curl --version")],
+        "zig"     => vec![("zig", "zig version"), ("tar", "tar --version")],
+        "c_cpp"   => vec![("gcc", "gcc --version"), ("g++", "g++ --version"), ("make", "make --version"), ("cmake", "cmake --version"), ("gdb", "gdb --version")],
+        "matlab"  => vec![("octave", "octave --version")],
+        "dart"    => vec![("dart", "dart --version"), ("curl", "curl --version")],
+        "flutter" => vec![("flutter", "flutter --version"), ("dart", "dart --version"), ("git", "git --version")],
+        "julia"   => vec![("julia", "julia --version"), ("curl", "curl --version")],
+        "lua"     => vec![("lua", "lua -v")],
+        "lisp"    => vec![("sbcl", "sbcl --version")],
+        _         => vec![],
       };
-      tools.push(("gcc", "gcc --version"));
-      tools.push(("make", "make --version"));
-      tools.push(("pkg-config", "pkg-config --version"));
       let mut deps: Vec<Value> = Vec::new();
       for (name, check_cmd) in tools {
         let parts: Vec<&str> = check_cmd.split_whitespace().collect();
@@ -1917,7 +2126,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
     },
     "dh:runtime:uninstall:preview" => {
       let runtime_id = body.get("runtimeId").and_then(|v| v.as_str()).unwrap_or("node");
-      let remove_mode = body.get("removeMode").and_then(|v| v.as_str()).unwrap_or("runtime_only");
+      let _remove_mode = body.get("removeMode").and_then(|v| v.as_str()).unwrap_or("runtime_only");
       let distro = exec_output("sh", &["-c", ". /etc/os-release 2>/dev/null; printf '%s' \"${ID:-unknown}\""])
         .await.unwrap_or_else(|_| "unknown".to_string());
       let distro = distro.trim().to_string();
@@ -1927,33 +2136,47 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       let mut pkg_vals: Vec<Value> = pkgs.iter().map(|p| json!(p)).collect();
       let note: String;
       
-      if runtime_id == "rust" {
-        note = "Rust is managed by rustup. This operation will run 'rustup self uninstall'.".to_string();
-        pkg_vals = vec![json!("rustup")];
-      } else if pkgs.is_empty() {
-        note = format!("No system packages found for {}. If installed via a local manager (nvm, pyenv, etc.), you may need to clean it manually.", runtime_id);
-      } else {
-        note = format!("System packages detected for {}. Removal will use {}.", runtime_id, pkg_mgr);
+      match runtime_id {
+        "rust" => {
+          note = "Rust is managed by rustup. This will run 'rustup self uninstall'.".to_string();
+          pkg_vals = vec![json!("rustup")];
+        },
+        "bun" => {
+          note = "Bun was installed via the official installer. This will remove ~/.bun.".to_string();
+          pkg_vals = vec![json!("~/.bun (directory)")];
+        },
+        "dart" => {
+          note = format!("Dart was installed via apt. Removal will use {}.", pkg_mgr);
+          pkg_vals = vec![json!("dart")];
+        },
+        "flutter" => {
+          note = "Flutter was installed via snap. This will run 'snap remove flutter'.".to_string();
+          pkg_vals = vec![json!("flutter (snap)")];
+        },
+        "julia" => {
+          if pkgs.is_empty() {
+            note = "Julia may have been installed via juliaup. This will run 'juliaup self uninstall' if available, otherwise removes the system package.".to_string();
+            pkg_vals = vec![json!("juliaup / julia")];
+          } else {
+            note = format!("Julia system packages detected. Removal will use {}.", pkg_mgr);
+          }
+        },
+        _ if pkgs.is_empty() => {
+          note = format!("No system packages found for {}. If installed via a version manager, remove it manually.", runtime_id);
+        },
+        _ => {
+          note = format!("Will remove {} system package(s) using {}.", pkg_vals.len(), pkg_mgr);
+        },
       }
-
-      let removable: Vec<Value> = vec![];
 
       json!({
         "ok": true,
         "distro": distro,
         "runtimePackages": pkg_vals,
-        "removableDeps": removable,
+        "removableDeps": [],
         "blockedSharedDeps": [],
         "finalPackages": pkg_vals,
-        "note": if remove_mode == "runtime_and_deps" {
-          if note.is_empty() {
-            "Auto dependency pruning is not implemented yet; removing runtime packages only.".to_string()
-          } else {
-            format!("{} Auto dependency pruning is not implemented yet; removing runtime packages only.", note)
-          }
-        } else {
-          note
-        }
+        "note": note
       })
     },
     "dh:diagnostics:bundle:create" => {
