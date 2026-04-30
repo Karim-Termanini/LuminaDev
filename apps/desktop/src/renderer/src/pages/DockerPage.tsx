@@ -1856,23 +1856,6 @@ const btnSmallDanger = {
   fontSize: 12,
 }
 
-const tabBtn = {
-  border: '1px solid var(--border)',
-  background: 'var(--bg-input)',
-  color: 'var(--text)',
-  borderRadius: 8,
-  padding: '5px 10px',
-  cursor: 'pointer',
-  fontSize: 12,
-  textTransform: 'capitalize' as const,
-}
-
-const tabBtnActive = {
-  ...tabBtn,
-  border: '1px solid var(--accent)',
-  color: 'var(--accent)',
-}
-
 const sideTab = {
   display: 'flex',
   alignItems: 'center',

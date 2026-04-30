@@ -81,7 +81,7 @@ export function SshPage(): ReactElement {
   useEffect(() => {
     void loadBookmarks()
     void loadPub()
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function loadBookmarks(): Promise<void> {
     try {
