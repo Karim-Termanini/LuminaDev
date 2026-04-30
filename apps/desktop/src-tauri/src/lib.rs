@@ -1393,6 +1393,33 @@ async fn runtime_job_execute(
               "Installing {} via mise (https://mise.jdx.dev) — downloads prebuilt binaries when available…",
               spec
             ));
+            // PHP/Ruby/Lua build-from-source dependencies (silent if not needed or no sudo)
+            let build_deps_cmd = if runtime_id == "php" {
+              // PHP builds from source; needs many devel headers on all distros
+              r#"
+              if command -v dnf >/dev/null 2>&1; then
+                sudo dnf install -y re2c bison autoconf libxml2-devel oniguruma-devel gd-devel libjpeg-devel libpng-devel freetype-devel libcurl-devel sqlite-devel readline-devel openssl-devel 2>/dev/null || true
+              elif command -v apt-get >/dev/null 2>&1; then
+                sudo apt-get install -y re2c bison autoconf libxml2-dev libonig-dev libgd-dev libjpeg-dev libpng-dev libfreetype6-dev libcurl4-openssl-dev libsqlite3-dev libreadline-dev libssl-dev 2>/dev/null || true
+              elif command -v pacman >/dev/null 2>&1; then
+                sudo pacman -S --needed --noconfirm re2c bison autoconf libxml2 oniguruma gd libjpeg libpng freetype2 curl sqlite readline openssl 2>/dev/null || true
+              fi"#
+            } else if runtime_id == "lua" {
+              r#"
+              if command -v dnf >/dev/null 2>&1; then
+                sudo dnf install -y readline-devel 2>/dev/null || true
+              elif command -v apt-get >/dev/null 2>&1; then
+                sudo apt-get install -y libreadline-dev 2>/dev/null || true
+              elif command -v pacman >/dev/null 2>&1; then
+                sudo pacman -S --needed --noconfirm readline 2>/dev/null || true
+              fi"#
+            } else {
+              ""
+            };
+            if !build_deps_cmd.is_empty() {
+              logs.push(format!("Pre-installing build dependencies for {}…", runtime_id));
+              let _ = sudo_bash_install_step(build_deps_cmd, password_opt, &mut logs, Some(app.clone()), Some(job_id.clone()), 5, 20).await;
+            }
             let cmd = format!(
               r#"set -e
                  export PATH="$HOME/.local/bin:$PATH"
@@ -2915,7 +2942,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
         ("c_cpp",   "C/C++",   "gcc --version 2>&1 | head -1"),
         ("matlab",  "Octave",  "octave --version 2>&1 | head -1"),
         ("dart",    "Dart",    "dart --version 2>&1 | head -1 || $HOME/.dart/dart-sdk/bin/dart --version 2>&1 | head -1"),
-        ("flutter", "Flutter", "flutter --version 2>&1 | head -1 || $HOME/.flutter-sdk/bin/flutter --version 2>&1 | head -1"),
+        ("flutter", "Flutter", "for d in \"$HOME/.local/share/lumina/flutter/stable\" \"$HOME/.local/share/lumina/flutter/beta\" \"$HOME/.local/share/lumina/flutter/master\" \"$HOME/flutter\" \"$HOME/.flutter-sdk\"; do [ -x \"$d/bin/flutter\" ] && { cat \"$d/version\" 2>/dev/null || echo installed; } && break; done; command -v flutter >/dev/null 2>&1 && { flutter --version 2>/dev/null | awk '/^Flutter/{print $2}'; }"),
         ("julia",   "Julia",   "export PATH=\"$HOME/.juliaup/bin:$PATH\"; julia --version 2>/dev/null || ~/.juliaup/bin/julia --version 2>/dev/null"),
         ("lua",     "Lua",     "export PATH=\"$HOME/.local/bin:$PATH\"; ([ -x \"$HOME/.local/bin/mise\" ] && eval \"$($HOME/.local/bin/mise activate bash)\" >/dev/null 2>&1 || true); lua -v 2>&1 || lua5.4 -v 2>&1 || lua5.3 -v 2>&1"),
         ("lisp",    "SBCL",    "sbcl --version"),
@@ -3053,15 +3080,12 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
                   }
                 }
                 "bun" => {
-                  // Bun installs a single binary to ~/.bun/bin/bun
+                  // Bun installs a single binary to ~/.bun/bin/bun; version already known
                   let bun_bin = format!("{}/.bun/bin/bun", std::env::var("HOME").unwrap_or_default());
                   if std::path::Path::new(&bun_bin).exists() {
-                    if let Ok(v) = exec_output_limit("bash", &["-c", &format!("\"{}\" --version 2>/dev/null", bun_bin)], CMD_TIMEOUT_SHORT).await {
-                      let v = v.trim().to_string();
-                      if !v.is_empty() {
-                        all_versions.push(json!({ "version": v, "path": bun_bin }));
-                      }
-                    }
+                    let v = version.trim().to_string();
+                    let display_ver = if v.is_empty() { "installed".to_string() } else { v };
+                    all_versions.push(json!({ "version": display_ver, "path": bun_bin }));
                   }
                 }
                 "dart" => {
@@ -3243,30 +3267,8 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
           }
         },
         "java" => {
-          let distro = exec_output("bash", &["-lc", "source /etc/os-release 2>/dev/null && printf '%s' \"${ID:-unknown}\""])
-            .await
-            .unwrap_or_else(|_| "unknown".to_string());
-          let pkg_mgr = runtime_pkg_mgr(distro.trim());
-          match pkg_mgr {
-            "dnf" => {
-              let candidates = [
-                ("25", "java-25-openjdk-devel"),
-                ("21 (LTS)", "java-21-openjdk-devel"),
-                ("17 (LTS)", "java-17-openjdk-devel"),
-                ("11 (LTS)", "java-11-openjdk-devel"),
-                ("8 (LTS)", "java-1.8.0-openjdk-devel"),
-              ];
-              for (label, pkg) in candidates {
-                if runtime_dnf_package_available(pkg).await {
-                  versions.push(label.to_string());
-                }
-              }
-              if versions.is_empty() {
-                versions.push("latest (repo)".into());
-              }
-            }
-            _ => versions.extend(["21 (LTS)".into(), "17 (LTS)".into(), "11 (LTS)".into(), "8 (LTS)".into()]),
-          }
+          // Local method: Temurin LTS releases, distro-independent
+          versions.extend(["21 (LTS)".into(), "17 (LTS)".into(), "11 (LTS)".into(), "8 (LTS)".into()]);
         },
         "php" => {
           if let Ok(raw) = exec_output_limit("curl", &["-fsSL", "https://endoflife.date/api/php.json"], CMD_TIMEOUT_SHORT).await {
