@@ -166,6 +166,8 @@ export const IPC = {
   terminalCreate: 'dh:terminal:create',
   terminalWrite: 'dh:terminal:write',
   terminalResize: 'dh:terminal:resize',
+  /** Renderer → main: drop stdin handle and release PTY/child tracking (call on unmount). */
+  terminalClose: 'dh:terminal:close',
   terminalData: 'dh:terminal:data',
   terminalExit: 'dh:terminal:exit',
   openExternalTerminal: 'dh:terminal:openExternal',

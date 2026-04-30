@@ -1895,6 +1895,8 @@ function ContainerTable(props: ContainerTableProps & { onConsole: (row: Containe
 function DockerTerminalModal({ container, onClose }: { container: ContainerRow; onClose: () => void }): ReactElement {
   const termWrapRef = useRef<HTMLDivElement>(null)
   const xtermRef = useRef<Terminal | null>(null)
+  const termIdRef = useRef<string | undefined>(undefined)
+  const unlistenRef = useRef<(() => void) | null>(null)
 
   useEffect(() => {
     if (!termWrapRef.current) return
@@ -1913,19 +1915,18 @@ function DockerTerminalModal({ container, onClose }: { container: ContainerRow; 
     term.focus()
     xtermRef.current = term
 
-    let tid: string | undefined = undefined
-
     void (async () => {
       const res = await window.dh.dockerTerminal({
         containerId: container.id,
         cols: term.cols,
         rows: term.rows
       })
-      if (!res.ok) {
-        term.writeln(`\r\nError creating terminal: ${res.error}`)
+      if (!res.ok || !res.id) {
+        term.writeln(`\r\nError creating terminal: ${res.ok ? 'missing id' : res.error}`)
         return
       }
-      tid = res.id
+      const tid = res.id
+      termIdRef.current = tid
 
       const offOut = window.dh.onTerminalData(({ id, data }) => {
         if (id === tid) term.write(data)
@@ -1936,18 +1937,17 @@ function DockerTerminalModal({ container, onClose }: { container: ContainerRow; 
           setTimeout(onClose, 1000)
         }
       })
-
-      term.onData((data) => {
-        if (tid) window.dh.terminalWrite(tid, data)
-      })
-      term.onResize(({ cols, rows }) => {
-        if (tid) window.dh.terminalResize(tid, cols, rows)
-      })
-
-      return () => {
+      unlistenRef.current = () => {
         offOut()
         offExit()
       }
+
+      term.onData((data) => {
+        window.dh.terminalWrite(tid, data)
+      })
+      term.onResize(({ cols, rows }) => {
+        window.dh.terminalResize(tid, cols, rows)
+      })
     })()
 
     const handleResize = () => fit.fit()
@@ -1955,6 +1955,11 @@ function DockerTerminalModal({ container, onClose }: { container: ContainerRow; 
 
     return () => {
       window.removeEventListener('resize', handleResize)
+      unlistenRef.current?.()
+      unlistenRef.current = null
+      const id = termIdRef.current
+      if (id) window.dh.terminalClose(id)
+      termIdRef.current = undefined
       term.dispose()
     }
   }, [container.id, onClose])

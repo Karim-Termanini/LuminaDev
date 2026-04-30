@@ -563,6 +563,12 @@ async fn ipc_send(channel: String, payload: Value, app: AppHandle, state: State<
       }
       Ok(())
     },
+    "dh:terminal:close" => {
+      let id = payload.get("id").and_then(|v| v.as_str()).unwrap_or_default().to_string();
+      let mut map = state.terminals.lock().await;
+      map.remove(&id);
+      Ok(())
+    },
     "dh:terminal:resize" => Ok(()),
     _ => {
       let _ = app.emit("dh:warn", json!({ "channel": channel, "kind": "unknown_ipc_send" }));
@@ -631,15 +637,18 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       }
     }),
     "dh:host:distro" => {
-      let distro = exec_output("bash", &["-lc", "source /etc/os-release >/dev/null 2>&1; echo ${ID:-linux}"])
-        .await
-        .unwrap_or_else(|_| "linux".to_string());
+      let distro = std::fs::read_to_string("/etc/os-release")
+        .unwrap_or_default()
+        .lines()
+        .find(|l| l.starts_with("ID="))
+        .map(|l| l.trim_start_matches("ID=").trim_matches('"').to_string())
+        .unwrap_or_else(|| "linux".to_string());
       json!(distro)
     },
     "dh:docker:check-installed" => {
-      let docker = exec_output("bash", &["-lc", "command -v docker >/dev/null 2>&1 && echo ok"]).await.is_ok();
-      let compose = exec_output("bash", &["-lc", "docker compose version >/dev/null 2>&1 && echo ok"]).await.is_ok();
-      let buildx = exec_output("bash", &["-lc", "docker buildx version >/dev/null 2>&1 && echo ok"]).await.is_ok();
+      let docker = exec_output_limit("docker", &["--version"], CMD_TIMEOUT_SHORT).await.is_ok();
+      let compose = exec_output_limit("docker", &["compose", "version"], CMD_TIMEOUT_SHORT).await.is_ok();
+      let buildx = exec_output_limit("docker", &["buildx", "version"], CMD_TIMEOUT_SHORT).await.is_ok();
       json!({ "docker": docker, "compose": compose, "buildx": buildx })
     },
     "dh:docker:list" => match exec_output("docker", &["ps", "-a", "--format", "{{json .}}"]).await {
@@ -814,10 +823,10 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       Err(e) => json!({ "ok": false, "error": format!("[DOCKER_PRUNE_FAILED] {}", e.trim()) }),
     },
     "dh:docker:prune:preview" => {
-      let containers = exec_output("bash", &["-lc", "docker ps -a -q --filter status=exited | wc -l"]).await.unwrap_or_else(|_| "0".to_string());
-      let images = exec_output("bash", &["-lc", "docker images -f dangling=true -q | wc -l"]).await.unwrap_or_else(|_| "0".to_string());
-      let volumes = exec_output("bash", &["-lc", "docker volume ls -qf dangling=true | wc -l"]).await.unwrap_or_else(|_| "0".to_string());
-      let networks = exec_output("bash", &["-lc", "docker network ls -qf dangling=true | wc -l"]).await.unwrap_or_else(|_| "0".to_string());
+      let containers = exec_output_limit("bash", &["-c", "docker ps -a -q --filter status=exited | wc -l"], CMD_TIMEOUT_SHORT).await.unwrap_or_else(|_| "0".to_string());
+      let images = exec_output_limit("bash", &["-c", "docker images -f dangling=true -q | wc -l"], CMD_TIMEOUT_SHORT).await.unwrap_or_else(|_| "0".to_string());
+      let volumes = exec_output_limit("bash", &["-c", "docker volume ls -qf dangling=true | wc -l"], CMD_TIMEOUT_SHORT).await.unwrap_or_else(|_| "0".to_string());
+      let networks = exec_output_limit("bash", &["-c", "docker network ls -qf dangling=true | wc -l"], CMD_TIMEOUT_SHORT).await.unwrap_or_else(|_| "0".to_string());
       json!({
         "ok": true,
         "preview": {
@@ -857,7 +866,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
     },
     "dh:docker:search" => {
       let term = body.as_str().unwrap_or_default();
-      match exec_output("curl", &["-fsSL", &format!("https://hub.docker.com/v2/search/repositories/?query={}&page_size=12", term)]).await {
+      match exec_output_limit("curl", &["-fsSL", &format!("https://hub.docker.com/v2/search/repositories/?query={}&page_size=12", term)], CMD_TIMEOUT_SHORT).await {
         Ok(raw) => match serde_json::from_str::<Value>(&raw) {
           Ok(v) => {
             let results: Vec<Value> = v
@@ -891,7 +900,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
         ("library", image.to_string())
       };
       let url = format!("https://hub.docker.com/v2/repositories/{}/{}/tags/?page_size=20", namespace, repo);
-      match exec_output("curl", &["-fsSL", &url]).await {
+      match exec_output_limit("curl", &["-fsSL", &url], CMD_TIMEOUT_SHORT).await {
         Ok(raw) => match serde_json::from_str::<Value>(&raw) {
           Ok(v) => {
             let tags: Vec<Value> = v
@@ -963,8 +972,10 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
           }
           let app_exit = app.clone();
           let id_exit = id.clone();
+          let state_exit = state.clone();
           tauri::async_runtime::spawn(async move {
             let _ = child.wait().await;
+            state_exit.terminals.lock().await.remove(&id_exit);
             let _ = app_exit.emit("dh:terminal:exit", json!({ "id": id_exit }));
           });
           json!({ "ok": true, "id": id })
@@ -1002,8 +1013,10 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
             }
             let app_exit = app.clone();
             let id_exit = id.clone();
+            let state_exit = state.clone();
             tauri::async_runtime::spawn(async move {
               let _ = child.wait().await;
+              state_exit.terminals.lock().await.remove(&id_exit);
               let _ = app_exit.emit("dh:terminal:exit", json!({ "id": id_exit }));
             });
             json!({ "ok": true, "id": id })
@@ -1138,7 +1151,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
            printf '{{\"branch\":\"%s\",\"tracking\":%s,\"ahead\":%s,\"behind\":%s,\"modified\":%s,\"created\":%s,\"deleted\":%s}}' \"$b\" \"${{t:+\\\"$t\\\"}}${{t: null}}\" \"$a\" \"$h\" \"$m\" \"$c\" \"$d\"",
           repo_path.replace('\'', "'\\''")
         );
-        match exec_output("bash", &["-lc", &script]).await {
+        match exec_output_limit("bash", &["-c", &script], CMD_TIMEOUT_SHORT).await {
           Ok(info_raw) => match serde_json::from_str::<Value>(&info_raw) {
             Ok(info) => json!({ "ok": true, "info": info }),
             Err(_) => json!({ "ok": false, "error": "[GIT_STATUS_FAILED] Could not parse git status output." }),
@@ -1183,7 +1196,10 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       ];
       let mut runtimes: Vec<Value> = Vec::new();
       for (id, name, check) in checks {
-        match exec_result("bash", &["-lc", check]).await {
+        let parts: Vec<&str> = check.split_whitespace().collect();
+        let cmd = parts[0];
+        let args = &parts[1..];
+        match exec_result_limit(cmd, args, CMD_TIMEOUT_SHORT).await {
           Ok((stdout, stderr)) => {
             let version = format!("{}{}", stdout, stderr).trim().to_string();
             runtimes.push(json!({ "id": id, "name": name, "installed": true, "version": version }));
@@ -1228,11 +1244,10 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       let kernel = exec_output("uname", &["-r"]).await.unwrap_or_else(|_| "unknown".to_string());
       let arch = exec_output("uname", &["-m"]).await.unwrap_or_else(|_| "unknown".to_string());
       let os_name = exec_output("uname", &["-s"]).await.unwrap_or_else(|_| "Linux".to_string());
-      let uptime = exec_output("bash", &["-lc", "cut -d. -f1 /proc/uptime 2>/dev/null || echo 0"])
-        .await
-        .unwrap_or_else(|_| "0".to_string())
-        .trim()
-        .parse::<u64>()
+      let uptime_str = std::fs::read_to_string("/proc/uptime").unwrap_or_default();
+      let uptime = uptime_str.split_whitespace().next()
+        .and_then(|v| v.split('.').next())
+        .and_then(|v| v.parse::<u64>().ok())
         .unwrap_or(0);
       json!({
         "ok": true,
@@ -1247,7 +1262,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
     },
     "dh:host:ports" => {
       let script = "ss -tulpnH 2>/dev/null | awk '{print $1\" \"$5\" \"$NF}'";
-      match exec_output("bash", &["-lc", script]).await {
+      match exec_output_limit("bash", &["-c", script], CMD_TIMEOUT_SHORT).await {
         Ok(out) => {
           let ports: Vec<Value> = out
             .lines()
@@ -1277,7 +1292,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
     },
     "dh:monitor:top-processes" => {
       let script = "ps -eo pid,comm,%cpu,%mem --sort=-%cpu | head -n 16";
-      match exec_output("bash", &["-lc", script]).await {
+      match exec_output_limit("bash", &["-c", script], CMD_TIMEOUT_SHORT).await {
         Ok(out) => {
           let processes: Vec<Value> = out
             .lines()
@@ -1351,8 +1366,8 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
           let free = p.get(3).and_then(|v| v.parse::<u64>().ok())?;
           Some((total / 1024 / 1024, free / 1024 / 1024))
         }).unwrap_or((0, 0));
-      let svc_out = exec_output("bash", &["-lc", "systemctl list-units --type=service --no-pager --plain --no-legend 2>/dev/null | head -30"]).await.unwrap_or_default();
-      let systemd: Vec<Value> = svc_out.lines().filter_map(|l| {
+      let svc_out = exec_output_limit("systemctl", &["list-units", "--type=service", "--no-pager", "--plain", "--no-legend"], CMD_TIMEOUT_SHORT).await.unwrap_or_default();
+      let systemd: Vec<Value> = svc_out.lines().take(30).filter_map(|l| {
         let p: Vec<&str> = l.split_whitespace().collect();
         if p.len() < 4 { return None; }
         let name = p[0].trim_end_matches(".service");
@@ -1384,7 +1399,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       let cmd = body.get("command").and_then(|v| v.as_str()).unwrap_or_default();
       match cmd {
         "nvidia_smi_short" => {
-          match exec_output("bash", &["-lc", "nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -n1"]).await {
+          match exec_output_limit("nvidia-smi", &["--query-gpu=name", "--format=csv,noheader"], CMD_TIMEOUT_SHORT).await {
             Ok(out) => json!({ "ok": true, "result": out.trim() }),
             Err(_) => json!({ "ok": true, "result": "GPU: unavailable" }),
           }
@@ -1394,7 +1409,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
           if unit.is_empty() {
             json!({ "ok": false, "result": Value::Null, "error": "[HOST_EXEC_INVALID] Missing unit." })
           } else {
-            match exec_output("systemctl", &["is-active", unit]).await {
+            match exec_output_limit("systemctl", &["is-active", unit], CMD_TIMEOUT_SHORT).await {
               Ok(out) => json!({ "ok": true, "result": out.trim() }),
               Err(_) => json!({ "ok": true, "result": "unknown" }),
             }

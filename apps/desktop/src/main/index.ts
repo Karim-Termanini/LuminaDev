@@ -2218,6 +2218,18 @@ function registerIpc(): void {
     terminals.get(payload.id)?.resize(payload.cols, payload.rows)
   })
 
+  ipcMain.on(IPC.terminalClose, (_e, payload: { id: string }) => {
+    const t = terminals.get(payload.id)
+    if (t) {
+      try {
+        t.kill()
+      } catch {
+        /* ignore */
+      }
+      terminals.delete(payload.id)
+    }
+  })
+
   ipcMain.handle(IPC.openExternalTerminal, async () => {
     const hasCommand = async (cmd: string): Promise<boolean> =>
       await new Promise((resolve) => {

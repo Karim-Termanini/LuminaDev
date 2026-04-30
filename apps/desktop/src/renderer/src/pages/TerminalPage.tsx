@@ -75,8 +75,10 @@ export function TerminalPage(): ReactElement {
       ro.disconnect()
       offOut()
       offExit()
-      term.dispose()
+      const sid = sessionRef.current
+      if (sid) window.dh.terminalClose(sid)
       sessionRef.current = null
+      term.dispose()
     }
   }, [])
 
