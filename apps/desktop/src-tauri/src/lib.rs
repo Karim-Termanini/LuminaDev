@@ -2099,31 +2099,32 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
     },
     "dh:runtime:check-deps" => {
       let runtime_id = body.get("runtimeId").and_then(|v| v.as_str()).unwrap_or("node");
-      // (display name, shell command to probe)
+      // Use login shell so ~/.juliaup/bin, ~/.bun/bin, ~/.dotnet, nvm etc. are in PATH
       let tools: Vec<(&str, &str)> = match runtime_id {
         "node"    => vec![("node", "node --version"), ("npm", "npm --version"), ("curl", "curl --version")],
-        "python"  => vec![("python3", "python3 --version"), ("pip3", "pip3 --version")],
+        "python"  => vec![("python3", "python3 --version 2>&1 || python --version 2>&1"), ("pip3", "pip3 --version 2>&1 || pip --version 2>&1")],
         "go"      => vec![("go", "go version"), ("gcc", "gcc --version")],
         "rust"    => vec![("rustc", "rustc --version"), ("cargo", "cargo --version"), ("rustup", "rustup --version")],
-        "java"    => vec![("java", "java -version"), ("javac", "javac -version")],
-        "php"     => vec![("php", "php --version"), ("composer", "composer --version")],
+        "java"    => vec![("java", "java -version 2>&1"), ("javac", "javac -version 2>&1")],
+        "php"     => vec![("php", "php --version 2>&1 | head -1"), ("composer", "composer --version 2>/dev/null")],
         "ruby"    => vec![("ruby", "ruby --version"), ("gem", "gem --version")],
-        "dotnet"  => vec![("dotnet", "dotnet --version")],
-        "bun"     => vec![("bun", "bun --version"), ("unzip", "unzip -v"), ("curl", "curl --version")],
+        "dotnet"  => vec![("dotnet", "dotnet --version 2>/dev/null || ~/.dotnet/dotnet --version 2>/dev/null")],
+        "bun"     => vec![("bun", "bun --version 2>/dev/null || ~/.bun/bin/bun --version 2>/dev/null"), ("unzip", "unzip -v"), ("curl", "curl --version")],
         "zig"     => vec![("zig", "zig version"), ("tar", "tar --version")],
         "c_cpp"   => vec![("gcc", "gcc --version"), ("g++", "g++ --version"), ("make", "make --version"), ("cmake", "cmake --version"), ("gdb", "gdb --version")],
         "matlab"  => vec![("octave", "octave --version")],
-        "dart"    => vec![("dart", "dart --version"), ("curl", "curl --version")],
-        "flutter" => vec![("flutter", "flutter --version"), ("dart", "dart --version"), ("git", "git --version")],
-        "julia"   => vec![("julia", "julia --version"), ("curl", "curl --version")],
-        "lua"     => vec![("lua", "lua -v")],
+        "dart"    => vec![("dart", "dart --version 2>&1"), ("curl", "curl --version")],
+        "flutter" => vec![("flutter", "flutter --version 2>&1 | head -1"), ("dart", "dart --version 2>&1"), ("git", "git --version")],
+        "julia"   => vec![("julia", "julia --version 2>/dev/null || ~/.juliaup/bin/julia --version 2>/dev/null"), ("curl", "curl --version")],
+        "lua"     => vec![("lua", "lua -v 2>&1 || lua5.4 -v 2>&1")],
         "lisp"    => vec![("sbcl", "sbcl --version")],
         _         => vec![],
       };
       let mut deps: Vec<Value> = Vec::new();
-      for (name, check_cmd) in tools {
-        let parts: Vec<&str> = check_cmd.split_whitespace().collect();
-        let ok = exec_result_limit(parts[0], &parts[1..], CMD_TIMEOUT_SHORT).await.is_ok();
+      for (name, shell_cmd) in tools {
+        let ok = exec_result_limit("bash", &["-lc", shell_cmd], CMD_TIMEOUT_SHORT).await
+          .map(|(so, se)| !format!("{}{}", so, se).trim().is_empty())
+          .unwrap_or(false);
         deps.push(json!({ "name": name, "status": if ok { "installed" } else { "missing" }, "ok": ok }));
       }
       json!({ "ok": true, "dependencies": deps })

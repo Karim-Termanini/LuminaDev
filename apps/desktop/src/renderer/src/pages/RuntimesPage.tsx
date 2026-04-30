@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react'
-import { useEffect, useState, useCallback, useMemo } from 'react'
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import type { RuntimeStatus, JobSummary } from '@linux-dev-home/shared'
 import { assertRuntimeOk } from './runtimeContract'
 import { humanizeRuntimeError } from './runtimeError'
@@ -164,6 +164,21 @@ export function RuntimesPage(): ReactElement {
     }, 3000)
     return () => clearInterval(t)
   }, [refreshStatus, refreshDeps, showWizard, wizardStep])
+
+  // Auto-refresh status + deps when the active job finishes so the user
+  // doesn't have to manually trigger a recheck after install/uninstall.
+  const prevJobStateRef = useRef<string | undefined>(undefined)
+  useEffect(() => {
+    const currentState = activeJob?.state
+    if (
+      prevJobStateRef.current === 'running' &&
+      (currentState === 'completed' || currentState === 'failed')
+    ) {
+      void refreshStatus()
+      void refreshDeps()
+    }
+    prevJobStateRef.current = currentState
+  }, [activeJob?.state, refreshStatus, refreshDeps])
 
   const selectedRuntime = useMemo(() => runtimes.find(r => r.id === selectedId), [runtimes, selectedId])
   const activeJob = useMemo(() => {
