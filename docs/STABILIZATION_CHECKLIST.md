@@ -6,6 +6,7 @@ It is intentionally limited to reliability, safety, process discipline, and trut
 Execution split (Agent B vs Rust/IPC): [AGENT_WORK_PLAN.md](./AGENT_WORK_PLAN.md).
 
 Status legend:
+
 - `open` = not started
 - `in_progress` = actively being implemented
 - `done` = acceptance criteria verified
@@ -108,6 +109,7 @@ Status legend:
 ## Exit Rule (Stabilization Gate Pass)
 
 Stabilization is considered complete only when:
+
 1. Items **1, 2, 3, 5** are marked `done` with evidence.
 2. Item **4** remains enforced throughout and does not regress.
 3. `pnpm smoke` is green at the final checkpoint.
@@ -118,6 +120,7 @@ Stabilization is considered complete only when:
 
 - **Status:** `in_progress` — Rust IPC done; packaging/Flatpak deferred; no semver/release pressure until product-complete (see [AGENT_WORK_PLAN.md](./AGENT_WORK_PLAN.md))
 - **Scope:** Replace Electron runtime shell with Tauri before first public release while preserving existing behavior.
+- **Maintainer sequencing (stack → product on Tauri):** complete **Tauri-only** (nothing mandatory on Electron) → **remove Electron** from the repo → continue [`phasesPlan.md`](../phasesPlan.md) product work (including **Phase 7 — Maintenance** and later) **entirely on Tauri**; heavy Flatpak/Flathub CI remains **last**. Details: [AGENT_WORK_PLAN.md](./AGENT_WORK_PLAN.md) (product constraints).
 - **Stage 0 (baseline + freeze):** `done`
 - **Stage 1 (Tauri skeleton + API bridge):** `done`
 - **Stage 2 (Rust-native backend port):** `done` — all IPC channels native; Node bridge removed
@@ -131,17 +134,23 @@ Stabilization is considered complete only when:
   - `pnpm smoke` passed on 2026-04-29
 
 - **Stage 2 evidence (2026-04-30):**
-  - All remaining channels ported to Rust native:
-    - `dh:metrics` — `/proc/meminfo`, `/proc/loadavg`, `/proc/cpuinfo`, `df`
+  - All remaining channels ported; Node bridge removed:
+    - `dh:metrics` — reads `/proc/meminfo`, `/proc/loadavg`, `/proc/cpuinfo`, `df`
     - `dh:host:exec` — `systemctl is-active`, `nvidia-smi`
-    - `dh:docker:create` — docker CLI with ports/env/volumes/autoStart; returns `id` on success
-    - `dh:ssh:list:dir` — native `ssh ls`
-    - `dh:ssh:setup:remote:key` — native `ssh` + `sshpass`
-    - `dh:docker:remap-port`, `dh:docker:install` — Rust: install guards Flatpak + sudo preflight; remap clones then `docker stop` + `docker rm` source when stop succeeds (`sourceStopped`, `sourceRemoved`, notes in JSON)
-  - `invoke_node_bridge()` removed from `lib.rs`
-  - `apps/desktop/scripts/tauri-ipc-bridge.mjs` deleted
-  - Node.js no longer required at app runtime
-  - `pnpm smoke` passed after changes
+    - `dh:docker:create` — docker CLI with ports/env/volumes/autoStart; returns `id`
+    - `dh:ssh:list:dir` — `ssh ls`
+    - `dh:ssh:setup:remote:key` — `ssh` + `sshpass`
+    - `dh:docker:install` — Flatpak + sudo preflight; wizard runs distro package steps on native
+    - `dh:docker:remap-port` — clones container with new `-p`, then stop/remove original
+  - `invoke_node_bridge()` removed; `tauri-ipc-bridge.mjs` deleted
+  - Node.js not required at runtime
+  - `pnpm smoke` passed
+
+  **Known accuracy notes (not blockers):**
+  - Job runner (`job:start`, `job:list`): UI pipeline ready; `runtime_install` uses sleep-based simulation, not real package execution yet. `job:start` returns `{ id }` (no `ok` field); `job:list` returns bare array — intentional, matches renderer typings.
+  - Security probes (`dh:monitor:security`, `security-drilldown`): logic in Rust, but commands run via `bash -c` (`ufw`, `getenforce`, `sshd -T`, `journalctl`, `ss`). Not pure Rust, not a bug.
+  - Runtime versions (`dh:runtime:get-versions`): Node/Go/Python fetch from public APIs via `curl`; all other runtimes return `["latest"]`. `check-deps` and `uninstall:preview` are stubs returning empty arrays.
+  - Electron stack still in repo (`dev:electron`, `build:electron`, `main/`, `preload/`). Default path is Tauri. Removal is a separate step after product-complete.
 
 - **Stage 3 evidence (2026-04-29):**
   - All 63 `window.dh.*` call sites across 8 pages verified against bridge
