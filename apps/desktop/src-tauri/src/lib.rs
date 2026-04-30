@@ -637,20 +637,56 @@ async fn runtime_job_execute(
         } else if runtime_id == "dart" {
           let channel = if version.is_empty() || version == "stable" { "stable" } else { version.trim() };
           logs.push(format!("Installing Dart SDK ({})…", channel));
-          let cmd = format!(
-            "curl -fsSL https://dl-ssl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/dart.gpg 2>/dev/null; \
-             echo 'deb [signed-by=/usr/share/keyrings/dart.gpg] https://storage.googleapis.com/download.dartlang.org/linux/debian {channel} main' \
-               > /etc/apt/sources.list.d/dart_{channel}.list && \
-             apt-get update -qq && apt-get install -y dart",
-            channel = channel
-          );
-          sudo_bash_install_step(&cmd, password_opt, &mut logs).await
-            .map_err(|e| format!("[RUNTIME_INSTALL_FAILED] {}", e))
+          if pkg_mgr == "apt" {
+            let cmd = format!(
+              "curl -fsSL https://dl-ssl.google.com/linux/linux_signing_key.pub \
+                 | gpg --dearmor -o /usr/share/keyrings/dart.gpg 2>/dev/null && \
+               echo 'deb [signed-by=/usr/share/keyrings/dart.gpg] \
+                 https://storage.googleapis.com/download.dartlang.org/linux/debian {channel} main' \
+                 > /etc/apt/sources.list.d/dart_{channel}.list && \
+               apt-get update -qq && apt-get install -y dart",
+              channel = channel
+            );
+            sudo_bash_install_step(&cmd, password_opt, &mut logs).await
+              .map_err(|e| format!("[RUNTIME_INSTALL_FAILED] {}", e))
+          } else {
+            // Fedora / Arch: download SDK zip directly into ~/.dart
+            let cmd = format!(
+              r#"curl -fsSL "https://storage.googleapis.com/dart-archive/channels/{channel}/release/latest/sdk/dartsdk-linux-x64-release.zip" -o /tmp/dart-sdk.zip && \
+               mkdir -p "$HOME/.dart" && \
+               unzip -q -o /tmp/dart-sdk.zip -d "$HOME/.dart" && \
+               rm /tmp/dart-sdk.zip && \
+               grep -q 'dart-sdk' "$HOME/.bashrc" || echo 'export PATH="$HOME/.dart/dart-sdk/bin:$PATH"' >> "$HOME/.bashrc""#,
+              channel = channel
+            );
+            exec_output_limit("bash", &["-lc", &cmd], CMD_TIMEOUT_INSTALL_STEP).await
+              .map(|out| { if !out.is_empty() { logs.push(out); } })
+              .map_err(|e| format!("[RUNTIME_INSTALL_FAILED] {}", e.trim()))
+          }
         } else if runtime_id == "flutter" {
-          logs.push("Installing Flutter via snap…".into());
-          let cmd = "snap install flutter --classic";
-          sudo_bash_install_step(cmd, password_opt, &mut logs).await
-            .map_err(|e| format!("[RUNTIME_INSTALL_FAILED] {}", e))
+          let has_snap = exec_output_limit("which", &["snap"], CMD_TIMEOUT_SHORT).await.is_ok();
+          if has_snap {
+            logs.push("Installing Flutter via snap…".into());
+            sudo_bash_install_step("snap install flutter --classic", password_opt, &mut logs).await
+              .map_err(|e| format!("[RUNTIME_INSTALL_FAILED] {}", e))
+          } else {
+            logs.push("snap not found — downloading Flutter SDK tarball into ~/.flutter-sdk…".into());
+            let cmd = r#"
+              FLUTTER_JSON=$(curl -fsSL https://storage.googleapis.com/flutter_infra_release/releases/releases_linux.json 2>/dev/null)
+              FLUTTER_ARCHIVE=$(echo "$FLUTTER_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); print(next(r['archive'] for r in d['releases'] if r['channel']=='stable'))" 2>/dev/null)
+              if [ -z "$FLUTTER_ARCHIVE" ]; then
+                echo "Could not resolve latest Flutter release URL" >&2; exit 1
+              fi
+              curl -fsSL "https://storage.googleapis.com/flutter_infra_release/releases/$FLUTTER_ARCHIVE" -o /tmp/flutter.tar.xz
+              mkdir -p "$HOME/.flutter-sdk"
+              tar xf /tmp/flutter.tar.xz -C "$HOME/.flutter-sdk" --strip-components=1
+              rm /tmp/flutter.tar.xz
+              grep -q 'flutter-sdk' "$HOME/.bashrc" || echo 'export PATH="$HOME/.flutter-sdk/bin:$PATH"' >> "$HOME/.bashrc"
+            "#;
+            exec_output_limit("bash", &["-lc", cmd], CMD_TIMEOUT_INSTALL_STEP).await
+              .map(|out| { if !out.is_empty() { logs.push(out); } })
+              .map_err(|e| format!("[RUNTIME_INSTALL_FAILED] {}", e.trim()))
+          }
         } else if runtime_id == "julia" {
           logs.push("Installing Julia via juliaup…".into());
           let cmd = "curl -fsSL https://install.julialang.org | sh -s -- -y";
@@ -1946,8 +1982,8 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
         ("zig",     "Zig",     "zig version"),
         ("c_cpp",   "C/C++",   "gcc --version 2>&1 | head -1"),
         ("matlab",  "Octave",  "octave --version 2>&1 | head -1"),
-        ("dart",    "Dart",    "dart --version 2>&1 | head -1"),
-        ("flutter", "Flutter", "flutter --version 2>&1 | head -1"),
+        ("dart",    "Dart",    "dart --version 2>&1 | head -1 || $HOME/.dart/dart-sdk/bin/dart --version 2>&1 | head -1"),
+        ("flutter", "Flutter", "flutter --version 2>&1 | head -1 || $HOME/.flutter-sdk/bin/flutter --version 2>&1 | head -1"),
         ("julia",   "Julia",   "julia --version 2>/dev/null || ~/.juliaup/bin/julia --version 2>/dev/null"),
         ("lua",     "Lua",     "lua -v 2>&1 || lua5.4 -v 2>&1 || lua5.3 -v 2>&1"),
         ("lisp",    "SBCL",    "sbcl --version"),
@@ -2113,8 +2149,8 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
         "zig"     => vec![("zig", "zig version"), ("tar", "tar --version")],
         "c_cpp"   => vec![("gcc", "gcc --version"), ("g++", "g++ --version"), ("make", "make --version"), ("cmake", "cmake --version"), ("gdb", "gdb --version")],
         "matlab"  => vec![("octave", "octave --version")],
-        "dart"    => vec![("dart", "dart --version 2>&1"), ("curl", "curl --version")],
-        "flutter" => vec![("flutter", "flutter --version 2>&1 | head -1"), ("dart", "dart --version 2>&1"), ("git", "git --version")],
+        "dart"    => vec![("dart", "dart --version 2>&1 || $HOME/.dart/dart-sdk/bin/dart --version 2>&1"), ("curl", "curl --version")],
+        "flutter" => vec![("flutter", "flutter --version 2>&1 | head -1 || $HOME/.flutter-sdk/bin/flutter --version 2>&1 | head -1"), ("dart", "dart --version 2>&1 || $HOME/.dart/dart-sdk/bin/dart --version 2>&1"), ("git", "git --version")],
         "julia"   => vec![("julia", "julia --version 2>/dev/null || ~/.juliaup/bin/julia --version 2>/dev/null"), ("curl", "curl --version")],
         "lua"     => vec![("lua", "lua -v 2>&1 || lua5.4 -v 2>&1")],
         "lisp"    => vec![("sbcl", "sbcl --version")],
