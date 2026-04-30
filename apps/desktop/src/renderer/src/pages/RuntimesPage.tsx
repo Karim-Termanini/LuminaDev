@@ -69,6 +69,7 @@ export function RuntimesPage(): ReactElement {
   const [selectedVersion, setSelectedVersion] = useState<string>('latest')
   const [versionsLoading, setVersionsLoading] = useState(false)
   const [addToPath, setAddToPath] = useState(true)
+  const [sudoPassword, setSudoPassword] = useState('')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   const VERSIONS_CACHE_KEY = 'dh:runtimes:versions-cache:v1'
@@ -241,6 +242,7 @@ export function RuntimesPage(): ReactElement {
       method: installMethod,
       version: selectedVersion,
       addToPath,
+      sudoPassword,
     })
   }
 
@@ -250,7 +252,8 @@ export function RuntimesPage(): ReactElement {
     await window.dh.jobStart({
       kind: 'runtime_update',
       runtimeId: selectedId,
-      method: installMethod
+      method: installMethod,
+      sudoPassword,
     })
   }
 
@@ -261,6 +264,7 @@ export function RuntimesPage(): ReactElement {
       runtimeId: selectedId,
       method: installMethod,
       removeMode,
+      sudoPassword,
     })
   }
 
@@ -613,6 +617,22 @@ export function RuntimesPage(): ReactElement {
                               </div>
                            </label>
                         </div>
+
+                        <div className="hp-card">
+                           <div style={{ fontWeight: 600, marginBottom: 6 }}>Sudo password</div>
+                           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 10 }}>
+                             Required for system-wide installs (apt / dnf / pacman). Leave blank if you have passwordless sudo.
+                           </div>
+                           <input
+                             type="password"
+                             placeholder="Enter sudo password…"
+                             value={sudoPassword}
+                             onChange={(e) => setSudoPassword(e.target.value)}
+                             style={{ width: '100%', boxSizing: 'border-box' }}
+                             className="hp-input"
+                             autoComplete="current-password"
+                           />
+                        </div>
                      </div>
                    )}
 
@@ -638,7 +658,7 @@ export function RuntimesPage(): ReactElement {
                                 💡 <strong>Note:</strong> Some missing headers might be required for building.
                              </div>
                              <button 
-                              onClick={() => window.dh.jobStart({ kind: 'install_deps', runtimeId: selectedId })}
+                              onClick={() => window.dh.jobStart({ kind: 'install_deps', runtimeId: selectedId, sudoPassword })}
                                className="hp-btn" 
                                style={{ background: 'var(--accent)', color: 'white', border: 'none', padding: '6px 12px', fontSize: 11, fontWeight: 700 }}
                              >

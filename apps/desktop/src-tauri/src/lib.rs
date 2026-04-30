@@ -542,8 +542,10 @@ async fn runtime_job_execute(
   method: String,
   version: String,
   _remove_mode: String,
+  sudo_password: String,
 ) {
   let mut logs: Vec<String> = vec![format!("job={} runtime={} method={}", kind, runtime_id, method)];
+  let password_opt: Option<&str> = if sudo_password.is_empty() { None } else { Some(&sudo_password) };
   let mut final_state = "completed";
 
   let distro = exec_output("bash", &["-lc", "source /etc/os-release 2>/dev/null && printf '%s' \"${ID:-unknown}\""])
@@ -642,12 +644,12 @@ async fn runtime_job_execute(
              apt-get update -qq && apt-get install -y dart",
             channel = channel
           );
-          sudo_bash_install_step(&cmd, None, &mut logs).await
+          sudo_bash_install_step(&cmd, password_opt, &mut logs).await
             .map_err(|e| format!("[RUNTIME_INSTALL_FAILED] {}", e))
         } else if runtime_id == "flutter" {
           logs.push("Installing Flutter via snap…".into());
           let cmd = "snap install flutter --classic";
-          sudo_bash_install_step(cmd, None, &mut logs).await
+          sudo_bash_install_step(cmd, password_opt, &mut logs).await
             .map_err(|e| format!("[RUNTIME_INSTALL_FAILED] {}", e))
         } else if runtime_id == "julia" {
           logs.push("Installing Julia via juliaup…".into());
@@ -671,7 +673,7 @@ async fn runtime_job_execute(
                 _ => format!("apt-get install -y {}", p.join(" ")),
               }
             };
-            sudo_bash_install_step(&cmd, None, &mut logs).await
+            sudo_bash_install_step(&cmd, password_opt, &mut logs).await
               .map_err(|e| format!("[RUNTIME_INSTALL_FAILED] {}", e))
           }
         }
@@ -688,7 +690,7 @@ async fn runtime_job_execute(
             Ok(())
           } else {
             let cmd = pkg_upgrade_cmd(pkg_mgr, &pkgs);
-            sudo_bash_install_step(&cmd, None, &mut logs).await
+            sudo_bash_install_step(&cmd, password_opt, &mut logs).await
               .map_err(|e| format!("[RUNTIME_UPDATE_FAILED] {}", e))
           }
         }
@@ -705,7 +707,7 @@ async fn runtime_job_execute(
             .map_err(|e| format!("[RUNTIME_UNINSTALL_FAILED] {}", e.trim()))
         } else if runtime_id == "flutter" {
           logs.push("Removing Flutter snap…".into());
-          sudo_bash_install_step("snap remove flutter", None, &mut logs).await
+          sudo_bash_install_step("snap remove flutter", password_opt, &mut logs).await
             .map_err(|e| format!("[RUNTIME_UNINSTALL_FAILED] {}", e))
         } else if runtime_id == "julia" {
           // Try juliaup first, fall back to system package
@@ -719,7 +721,7 @@ async fn runtime_job_execute(
               logs.push("No system packages to remove for Julia.".into());
               Ok(())
             } else {
-              sudo_bash_install_step(&pkg_remove_cmd(pkg_mgr, &pkgs), None, &mut logs).await
+              sudo_bash_install_step(&pkg_remove_cmd(pkg_mgr, &pkgs), password_opt, &mut logs).await
                 .map_err(|e| format!("[RUNTIME_UNINSTALL_FAILED] {}", e))
             }
           }
@@ -730,7 +732,7 @@ async fn runtime_job_execute(
             Ok(())
           } else {
             let cmd = pkg_remove_cmd(pkg_mgr, &pkgs);
-            sudo_bash_install_step(&cmd, None, &mut logs).await
+            sudo_bash_install_step(&cmd, password_opt, &mut logs).await
               .map_err(|e| format!("[RUNTIME_UNINSTALL_FAILED] {}", e))
           }
         }
@@ -1745,6 +1747,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       let method = body.get("method").and_then(|v| v.as_str()).unwrap_or("system").to_string();
       let version = body.get("version").and_then(|v| v.as_str()).unwrap_or("").to_string();
       let remove_mode = body.get("removeMode").and_then(|v| v.as_str()).unwrap_or("runtime_only").to_string();
+      let sudo_password = body.get("sudoPassword").and_then(|v| v.as_str()).unwrap_or("").to_string();
       {
         let mut jobs = state.jobs.lock().await;
         jobs.push(json!({
@@ -1759,7 +1762,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       let jid = id.clone();
       let app2 = app.clone();
       tauri::async_runtime::spawn(async move {
-        runtime_job_execute(app2, jid, kind, runtime_id, method, version, remove_mode).await;
+        runtime_job_execute(app2, jid, kind, runtime_id, method, version, remove_mode, sudo_password).await;
       });
       json!({ "id": id })
     }
@@ -1929,49 +1932,40 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
     },
     "dh:runtime:status" => {
       // (id, display name, primary command, args, fallback commands)
-      let checks: &[(&str, &str, &str, &[&str], &[&str])] = &[
-        ("node",   "Node.js",  "node",    &["--version"],  &[]),
-        ("python", "Python",   "python3", &["--version"],  &["python", "--version"]),
-        ("java",   "Java",     "java",    &["-version"],   &[]),
-        ("go",     "Go",       "go",      &["version"],    &[]),
-        ("rust",   "Rust",     "rustc",   &["--version"],  &[]),
-        ("php",    "PHP",      "php",     &["--version"],  &[]),
-        ("ruby",   "Ruby",     "ruby",    &["--version"],  &[]),
-        ("dotnet", ".NET",     "dotnet",  &["--version"],  &[]),
-        ("bun",    "Bun",      "bun",     &["--version"],  &[]),
-        ("zig",    "Zig",      "zig",     &["version"],    &[]),
-        ("c_cpp",  "C/C++",   "gcc",     &["--version"],  &[]),
-        ("matlab", "Octave",   "octave",  &["--version"],  &[]),
-        ("dart",   "Dart",     "dart",    &["--version"],  &[]),
-        ("flutter","Flutter",  "flutter", &["--version"],  &[]),
-        ("julia",  "Julia",    "julia",   &["--version"],  &[]),
-        ("lua",    "Lua",      "lua",     &["-v"],         &["lua5.4", "-v", "lua5.3", "-v"]),
-        ("lisp",   "SBCL",    "sbcl",    &["--version"],  &[]),
+      // Use a login shell so ~/.bashrc / ~/.profile PATH additions are active
+      // (covers juliaup, nvm, bun, pyenv, etc. installed to user home dirs).
+      let checks: &[(&str, &str, &str)] = &[
+        ("node",    "Node.js", "node --version"),
+        ("python",  "Python",  "python3 --version 2>&1 || python --version 2>&1"),
+        ("java",    "Java",    "java -version 2>&1"),
+        ("go",      "Go",      "go version"),
+        ("rust",    "Rust",    "rustc --version"),
+        ("php",     "PHP",     "php --version 2>&1 | head -1"),
+        ("ruby",    "Ruby",    "ruby --version"),
+        ("dotnet",  ".NET",    "dotnet --version 2>/dev/null || ~/.dotnet/dotnet --version 2>/dev/null"),
+        ("bun",     "Bun",     "bun --version 2>/dev/null || ~/.bun/bin/bun --version 2>/dev/null"),
+        ("zig",     "Zig",     "zig version"),
+        ("c_cpp",   "C/C++",   "gcc --version 2>&1 | head -1"),
+        ("matlab",  "Octave",  "octave --version 2>&1 | head -1"),
+        ("dart",    "Dart",    "dart --version 2>&1 | head -1"),
+        ("flutter", "Flutter", "flutter --version 2>&1 | head -1"),
+        ("julia",   "Julia",   "julia --version 2>/dev/null || ~/.juliaup/bin/julia --version 2>/dev/null"),
+        ("lua",     "Lua",     "lua -v 2>&1 || lua5.4 -v 2>&1 || lua5.3 -v 2>&1"),
+        ("lisp",    "SBCL",    "sbcl --version"),
       ];
       let mut runtimes: Vec<Value> = Vec::new();
-      for (id, name, cmd, args, _fallbacks) in checks {
-        match exec_result_limit(cmd, args, CMD_TIMEOUT_SHORT).await {
+      for (id, name, shell_cmd) in checks {
+        match exec_result_limit("bash", &["-lc", shell_cmd], CMD_TIMEOUT_SHORT).await {
           Ok((stdout, stderr)) => {
-            let version = format!("{}{}", stdout, stderr).trim().lines().next().unwrap_or("").to_string();
-            runtimes.push(json!({ "id": id, "name": name, "installed": true, "version": version }));
-          }
-          Err(_) => {
-            // Try fallback binary names (e.g. lua5.4)
-            let mut found = false;
-            for chunk in _fallbacks.chunks(2) {
-              if chunk.len() == 2 {
-                if let Ok((so, se)) = exec_result_limit(chunk[0], &[chunk[1]], CMD_TIMEOUT_SHORT).await {
-                  let version = format!("{}{}", so, se).trim().lines().next().unwrap_or("").to_string();
-                  runtimes.push(json!({ "id": id, "name": name, "installed": true, "version": version }));
-                  found = true;
-                  break;
-                }
-              }
-            }
-            if !found {
+            let combined = format!("{}{}", stdout, stderr);
+            let version = combined.trim().lines().next().unwrap_or("").to_string();
+            if version.is_empty() {
               runtimes.push(json!({ "id": id, "name": name, "installed": false }));
+            } else {
+              runtimes.push(json!({ "id": id, "name": name, "installed": true, "version": version }));
             }
           }
+          Err(_) => runtimes.push(json!({ "id": id, "name": name, "installed": false })),
         }
       }
       json!({ "ok": true, "runtimes": runtimes })
