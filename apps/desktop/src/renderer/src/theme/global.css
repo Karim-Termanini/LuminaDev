@@ -59,6 +59,30 @@ textarea {
   font-family: var(--font-ui);
 }
 
+select,
+select.hp-input,
+select.hp-input:disabled {
+  -webkit-appearance: none;
+  appearance: none;
+  background-color: var(--bg-input) !important;
+  color: var(--text) !important;
+  border: 1px solid var(--border) !important;
+}
+
+select:disabled,
+select.hp-input:disabled {
+  background-color: var(--bg-input) !important;
+  color: var(--text-muted) !important;
+  opacity: 0.85;
+  -webkit-text-fill-color: var(--text-muted);
+}
+
+option,
+option:disabled {
+  background-color: var(--bg-input) !important;
+  color: var(--text) !important;
+}
+
 .codicon {
   font-size: 18px;
   vertical-align: middle;

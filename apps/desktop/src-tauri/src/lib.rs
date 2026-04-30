@@ -1,20 +1,20 @@
 use serde_json::{json, Value};
 use std::collections::HashMap;
-use std::path::Path;
-use std::path::PathBuf;
+use std::io::{Read, Write};
+use std::path::{Path, PathBuf};
 use std::process::Stdio;
-use std::time::Duration;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::sync::{Arc, Mutex as StdMutex};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
 use tauri::{AppHandle, Emitter, Manager, State};
-use tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader};
-use tokio::process::{ChildStdin, Command};
+use tokio::process::Command;
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
 struct TerminalSession {
-  stdin: ChildStdin,
-  /// Best-effort host PID for `terminal:close` (Unix: `libc::kill`).
-  pid: Option<u32>,
+  master: Arc<StdMutex<Box<dyn MasterPty + Send>>>,
+  child: Arc<StdMutex<Box<dyn Child + Send + Sync>>>,
+  writer: Arc<StdMutex<Box<dyn Write + Send>>>,
 }
 
 #[derive(Default)]
@@ -27,18 +27,17 @@ struct AppState {
   disk_prev: Mutex<Option<(u64, u64, std::time::Instant)>>,
 }
 
-#[cfg(unix)]
-fn kill_pid_best_effort(pid: u32) {
-  if pid == 0 {
-    return;
-  }
-  unsafe {
-    libc::kill(pid as libc::pid_t, libc::SIGTERM);
+async fn close_all_terminal_sessions(state: &AppState) {
+  let mut map = state.terminals.lock().await;
+  let sessions: Vec<TerminalSession> = map.drain().map(|(_, s)| s).collect();
+  drop(map);
+  for session in sessions {
+    if let Ok(mut child) = session.child.lock() {
+      let _ = child.kill();
+      let _ = child.wait();
+    }
   }
 }
-
-#[cfg(not(unix))]
-fn kill_pid_best_effort(_pid: u32) {}
 
 fn app_file(app: &AppHandle, name: &str) -> Result<PathBuf, String> {
   let dir = app
@@ -755,6 +754,11 @@ async fn docker_remap_port_invoke(body: &Value) -> Value {
   let id = body.get("id").and_then(|v| v.as_str()).unwrap_or_default();
   let old_hp = body.get("oldHostPort").and_then(|v| v.as_u64()).unwrap_or(0);
   let new_hp = body.get("newHostPort").and_then(|v| v.as_u64()).unwrap_or(0);
+  let requested_network = body
+    .get("networkMode")
+    .and_then(|v| v.as_str())
+    .map(|s| s.trim())
+    .filter(|s| !s.is_empty());
   if id.is_empty() || old_hp == 0 || new_hp == 0 || old_hp == new_hp {
     return json!({ "ok": false, "error": "[DOCKER_INVALID_REQUEST] id and two distinct host ports (1-65535) are required." });
   }
@@ -787,6 +791,12 @@ async fn docker_remap_port_invoke(body: &Value) -> Value {
     old_name.to_string()
   };
   let mut new_name = sanitize_docker_name(&format!("{base}-p{new_hp}"));
+  let current_network_mode = info
+    .pointer("/HostConfig/NetworkMode")
+    .and_then(|v| v.as_str())
+    .unwrap_or("bridge")
+    .to_string();
+  let target_network_mode = requested_network.unwrap_or(current_network_mode.as_str()).to_string();
 
   let mut bindings = info
     .pointer("/HostConfig/PortBindings")
@@ -827,6 +837,8 @@ async fn docker_remap_port_invoke(body: &Value) -> Value {
 
   let build_create_args = |name_try: &str| -> Vec<String> {
     let mut args: Vec<String> = vec!["create".into(), "--name".into(), name_try.to_string()];
+    args.push("--network".into());
+    args.push(target_network_mode.to_string());
     if let Some(true) = info.pointer("/Config/Tty").and_then(|v| v.as_bool()) {
       args.push("-t".into());
     }
@@ -948,9 +960,16 @@ async fn ipc_send(channel: String, payload: Value, app: AppHandle, state: State<
     "dh:terminal:write" => {
       let id = payload.get("id").and_then(|v| v.as_str()).unwrap_or_default().to_string();
       let data = payload.get("data").and_then(|v| v.as_str()).unwrap_or_default().to_string();
-      let mut map = state.terminals.lock().await;
-      if let Some(session) = map.get_mut(&id) {
-        session.stdin.write_all(data.as_bytes()).await.map_err(|e| format!("[TERMINAL_WRITE_FAILED] {}", e))?;
+      let map = state.terminals.lock().await;
+      if let Some(session) = map.get(&id) {
+        let mut writer = session
+          .writer
+          .lock()
+          .map_err(|_| "[TERMINAL_WRITE_FAILED] writer lock poisoned".to_string())?;
+        writer
+          .write_all(data.as_bytes())
+          .map_err(|e| format!("[TERMINAL_WRITE_FAILED] {}", e))?;
+        writer.flush().map_err(|e| format!("[TERMINAL_WRITE_FAILED] {}", e))?;
       }
       Ok(())
     },
@@ -958,14 +977,29 @@ async fn ipc_send(channel: String, payload: Value, app: AppHandle, state: State<
       let id = payload.get("id").and_then(|v| v.as_str()).unwrap_or_default().to_string();
       let mut map = state.terminals.lock().await;
       if let Some(session) = map.remove(&id) {
-        if let Some(pid) = session.pid {
-          kill_pid_best_effort(pid);
+        if let Ok(mut child) = session.child.lock() {
+          let _ = child.kill();
         }
-        drop(session.stdin);
       }
       Ok(())
     },
-    "dh:terminal:resize" => Ok(()),
+    "dh:terminal:resize" => {
+      let id = payload.get("id").and_then(|v| v.as_str()).unwrap_or_default().to_string();
+      let cols = payload.get("cols").and_then(|v| v.as_u64()).unwrap_or(80) as u16;
+      let rows = payload.get("rows").and_then(|v| v.as_u64()).unwrap_or(24) as u16;
+      let map = state.terminals.lock().await;
+      if let Some(session) = map.get(&id) {
+        if let Ok(master) = session.master.lock() {
+          let _ = master.resize(PtySize {
+            rows,
+            cols,
+            pixel_width: 0,
+            pixel_height: 0,
+          });
+        }
+      }
+      Ok(())
+    },
     _ => {
       let _ = app.emit("dh:warn", json!({ "channel": channel, "kind": "unknown_ipc_send" }));
       Ok(())
@@ -1064,7 +1098,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
           .lines()
           .filter_map(|line| serde_json::from_str::<Value>(line).ok())
           .map(|v| {
-            let networks: Vec<String> = v
+            let mut networks: Vec<String> = v
               .get("Networks")
               .and_then(|x| x.as_str())
               .unwrap_or_default()
@@ -1072,6 +1106,11 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
               .map(|s| s.trim().to_string())
               .filter(|s| !s.is_empty())
               .collect();
+            // `docker ps --format {{.Networks}}` is occasionally empty for running containers
+            // that are actually on the default bridge; avoid misclassifying them as `none`.
+            if networks.is_empty() {
+              networks.push("bridge".to_string());
+            }
             let volumes: Vec<String> = v
               .get("Mounts")
               .and_then(|x| x.as_str())
@@ -1107,7 +1146,25 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
           "start" => vec!["start", id],
           "stop" => vec!["stop", id],
           "restart" => vec!["restart", id],
-          "remove" => vec!["rm", "-f", id],
+          "remove" => {
+            let remove_volumes = body.get("removeVolumes").and_then(|v| v.as_bool()).unwrap_or(false);
+            let remove_image = body.get("removeImage").and_then(|v| v.as_bool()).unwrap_or(false);
+            let image_ref = body.get("image").and_then(|v| v.as_str()).unwrap_or_default().to_string();
+            let remove_args: Vec<&str> = if remove_volumes {
+              vec!["rm", "-f", "-v", id]
+            } else {
+              vec!["rm", "-f", id]
+            };
+            match exec_output("docker", &remove_args).await {
+              Ok(_) => {
+                if remove_image && !image_ref.trim().is_empty() {
+                  let _ = exec_output("docker", &["rmi", image_ref.trim()]).await;
+                }
+                return Ok(json!({ "ok": true }));
+              }
+              Err(e) => return Ok(json!({ "ok": false, "error": format!("[DOCKER_ACTION_FAILED] {}", e.trim()) })),
+            }
+          }
           _ => vec![],
         };
         if args.is_empty() {
@@ -1388,70 +1445,87 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
     "dh:terminal:create" => {
       let cols = body.get("cols").and_then(|v| v.as_u64()).unwrap_or(120) as u16;
       let rows = body.get("rows").and_then(|v| v.as_u64()).unwrap_or(34) as u16;
-      let cmd = body.get("cmd").and_then(|v| v.as_str()).unwrap_or("sh").to_string();
-      let args: Vec<String> = body
-        .get("args")
-        .and_then(|v| v.as_array())
-        .map(|arr| arr.iter().filter_map(|x| x.as_str().map(|s| s.to_string())).collect())
-        .unwrap_or_else(|| vec![
-          "-lc".to_string(),
-          "export COLUMNS=100; alias ls='ls -C --color=auto'; if command -v script >/dev/null 2>&1; then exec script -qfec \"${SHELL:-bash} -i\" /dev/null; else exec ${SHELL:-bash} -i; fi".to_string(),
-        ]);
-      let _ = (cols, rows);
-      match Command::new(cmd).args(args)
-        .env("TERM", "xterm-256color")
-        .env("COLORTERM", "truecolor")
-        .stdin(std::process::Stdio::piped()).stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped()).spawn() {
-        Ok(mut child) => {
-          let id = Uuid::new_v4().to_string();
-          let pid = child.id();
-          if let Some(stdin) = child.stdin.take() {
-            state.terminals.lock().await.insert(id.clone(), TerminalSession { stdin, pid });
+      let cmd_name = body
+        .get("cmd")
+        .and_then(|v| v.as_str())
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| {
+          if Path::new("/usr/bin/bash").exists() || Path::new("/bin/bash").exists() {
+            "bash".to_string()
+          } else {
+            "sh".to_string()
           }
-          if let Some(stdout) = child.stdout.take() {
-            let app_out = app.clone();
-            let id_out = id.clone();
-            tauri::async_runtime::spawn(async move {
-              let mut reader = BufReader::new(stdout);
-              let mut buf = vec![0_u8; 4096];
-              loop {
-                match reader.read(&mut buf).await {
-                  Ok(0) => break,
-                  Ok(n) => {
-                    let data = String::from_utf8_lossy(&buf[..n]).to_string();
-                    let _ = app_out.emit("dh:terminal:data", json!({ "id": id_out, "data": data }));
-                  }
-                  Err(_) => break,
-                }
+        });
+      let pty_system = native_pty_system();
+      match pty_system.openpty(PtySize {
+        rows,
+        cols,
+        pixel_width: 0,
+        pixel_height: 0,
+      }) {
+        Ok(pair) => {
+          let mut cmd = CommandBuilder::new(&cmd_name);
+          cmd.env("TERM", "xterm-256color");
+          if let Some(args) = body.get("args").and_then(|v| v.as_array()) {
+            for arg in args {
+              if let Some(s) = arg.as_str() {
+                cmd.arg(s);
               }
-            });
+            }
+          } else {
+            if cmd_name == "bash" {
+              cmd.args(["--noprofile", "--norc", "-i"]);
+            } else {
+              cmd.arg("-i");
+            }
           }
-          if let Some(stderr) = child.stderr.take() {
-            let app_err = app.clone();
-            let id_err = id.clone();
-            tauri::async_runtime::spawn(async move {
-              let mut reader = BufReader::new(stderr);
-              let mut buf = vec![0_u8; 4096];
-              loop {
-                match reader.read(&mut buf).await {
-                  Ok(0) => break,
-                  Ok(n) => {
-                    let data = String::from_utf8_lossy(&buf[..n]).to_string();
-                    let _ = app_err.emit("dh:terminal:data", json!({ "id": id_err, "data": data }));
+          match pair.slave.spawn_command(cmd) {
+            Ok(child) => {
+              let id = Uuid::new_v4().to_string();
+              let master = Arc::new(StdMutex::new(pair.master));
+              let child = Arc::new(StdMutex::new(child));
+              let writer = match master.lock() {
+                Ok(guard) => match guard.take_writer() {
+                  Ok(w) => Arc::new(StdMutex::new(w)),
+                  Err(e) => return Ok(json!({ "ok": false, "error": format!("[TERMINAL_CREATE_FAILED] {}", e) })),
+                },
+                Err(_) => return Ok(json!({ "ok": false, "error": "[TERMINAL_CREATE_FAILED] PTY lock poisoned." })),
+              };
+              let app_out = app.clone();
+              let id_out = id.clone();
+              let master_for_reader = Arc::clone(&master);
+              std::thread::spawn(move || {
+                let mut reader = {
+                  let guard = match master_for_reader.lock() {
+                    Ok(g) => g,
+                    Err(_) => return,
+                  };
+                  match guard.try_clone_reader() {
+                    Ok(r) => r,
+                    Err(_) => return,
                   }
-                  Err(_) => break,
+                };
+                let mut buf = [0u8; 8192];
+                while let Ok(n) = reader.read(&mut buf) {
+                  if n == 0 {
+                    break;
+                  }
+                  let data = String::from_utf8_lossy(&buf[..n]).to_string();
+                  let _ = app_out.emit("dh:terminal:data", json!({ "id": id_out, "data": data }));
                 }
-              }
-            });
+                let _ = app_out.emit("dh:terminal:exit", json!({ "id": id_out }));
+              });
+              state
+                .terminals
+                .lock()
+                .await
+                .insert(id.clone(), TerminalSession { master, child, writer });
+              json!({ "ok": true, "id": id })
+            }
+            Err(e) => json!({ "ok": false, "error": format!("[TERMINAL_CREATE_FAILED] {}", e) }),
           }
-          let app_exit = app.clone();
-          let id_exit = id.clone();
-          tauri::async_runtime::spawn(async move {
-            let _ = child.wait().await;
-            app_exit.state::<AppState>().terminals.lock().await.remove(&id_exit);
-            let _ = app_exit.emit("dh:terminal:exit", json!({ "id": id_exit }));
-          });
-          json!({ "ok": true, "id": id })
         }
         Err(e) => json!({ "ok": false, "error": format!("[TERMINAL_CREATE_FAILED] {}", e) }),
       }
@@ -1461,68 +1535,63 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       if container_id.is_empty() {
         json!({ "ok": false, "error": "[DOCKER_TERMINAL_FAILED] Missing containerId." })
       } else {
-        let run_cmd = format!(
-          "export COLUMNS=100; alias ls='ls -C --color=auto'; if command -v script >/dev/null 2>&1; then exec script -qfec \"docker exec -it {} sh -lc 'export COLUMNS=100; alias ls=\\\"ls -C --color=auto\\\"; if command -v bash >/dev/null 2>&1; then exec bash --noprofile --norc -i; else exec sh -i; fi'\" /dev/null; else exec docker exec -i {} sh -lc 'export COLUMNS=100; alias ls=\\\"ls -C --color=auto\\\"; if command -v bash >/dev/null 2>&1; then exec bash --noprofile --norc -i; else exec sh -i; fi'; fi",
-          container_id, container_id
-        );
-        match Command::new("sh")
-          .arg("-c")
-          .arg(run_cmd)
-          .stdin(std::process::Stdio::piped())
-          .stdout(std::process::Stdio::piped())
-          .stderr(std::process::Stdio::piped())
-          .spawn()
-        {
-          Ok(mut child) => {
-            let id = Uuid::new_v4().to_string();
-            let pid = child.id();
-            if let Some(stdin) = child.stdin.take() {
-              state.terminals.lock().await.insert(id.clone(), TerminalSession { stdin, pid });
-            }
-            if let Some(stdout) = child.stdout.take() {
-              let app_out = app.clone();
-              let id_out = id.clone();
-              tauri::async_runtime::spawn(async move {
-                let mut reader = BufReader::new(stdout);
-                let mut buf = vec![0_u8; 4096];
-                loop {
-                  match reader.read(&mut buf).await {
-                    Ok(0) => break,
-                    Ok(n) => {
-                      let data = String::from_utf8_lossy(&buf[..n]).to_string();
-                      let _ = app_out.emit("dh:terminal:data", json!({ "id": id_out, "data": data }));
+        let cols = body.get("cols").and_then(|v| v.as_u64()).unwrap_or(120) as u16;
+        let rows = body.get("rows").and_then(|v| v.as_u64()).unwrap_or(34) as u16;
+        let pty_system = native_pty_system();
+        match pty_system.openpty(PtySize {
+          rows,
+          cols,
+          pixel_width: 0,
+          pixel_height: 0,
+        }) {
+          Ok(pair) => {
+            let mut cmd = CommandBuilder::new("docker");
+            cmd.args(["exec", "-it", container_id, "sh"]);
+            match pair.slave.spawn_command(cmd) {
+              Ok(child) => {
+                let id = Uuid::new_v4().to_string();
+                let master = Arc::new(StdMutex::new(pair.master));
+                let child = Arc::new(StdMutex::new(child));
+                let writer = match master.lock() {
+                  Ok(guard) => match guard.take_writer() {
+                    Ok(w) => Arc::new(StdMutex::new(w)),
+                    Err(e) => return Ok(json!({ "ok": false, "error": format!("[DOCKER_TERMINAL_FAILED] {}", e) })),
+                  },
+                  Err(_) => return Ok(json!({ "ok": false, "error": "[DOCKER_TERMINAL_FAILED] PTY lock poisoned." })),
+                };
+                let app_out = app.clone();
+                let id_out = id.clone();
+                let master_for_reader = Arc::clone(&master);
+                std::thread::spawn(move || {
+                  let mut reader = {
+                    let guard = match master_for_reader.lock() {
+                      Ok(g) => g,
+                      Err(_) => return,
+                    };
+                    match guard.try_clone_reader() {
+                      Ok(r) => r,
+                      Err(_) => return,
                     }
-                    Err(_) => break,
-                  }
-                }
-              });
-            }
-            if let Some(stderr) = child.stderr.take() {
-              let app_err = app.clone();
-              let id_err = id.clone();
-              tauri::async_runtime::spawn(async move {
-                let mut reader = BufReader::new(stderr);
-                let mut buf = vec![0_u8; 4096];
-                loop {
-                  match reader.read(&mut buf).await {
-                    Ok(0) => break,
-                    Ok(n) => {
-                      let data = String::from_utf8_lossy(&buf[..n]).to_string();
-                      let _ = app_err.emit("dh:terminal:data", json!({ "id": id_err, "data": data }));
+                  };
+                  let mut buf = [0u8; 8192];
+                  while let Ok(n) = reader.read(&mut buf) {
+                    if n == 0 {
+                      break;
                     }
-                    Err(_) => break,
+                    let data = String::from_utf8_lossy(&buf[..n]).to_string();
+                    let _ = app_out.emit("dh:terminal:data", json!({ "id": id_out, "data": data }));
                   }
-                }
-              });
+                  let _ = app_out.emit("dh:terminal:exit", json!({ "id": id_out }));
+                });
+                state
+                  .terminals
+                  .lock()
+                  .await
+                  .insert(id.clone(), TerminalSession { master, child, writer });
+                json!({ "ok": true, "id": id })
+              }
+              Err(e) => json!({ "ok": false, "error": format!("[DOCKER_TERMINAL_FAILED] {}", e) }),
             }
-            let app_exit = app.clone();
-            let id_exit = id.clone();
-            tauri::async_runtime::spawn(async move {
-              let _ = child.wait().await;
-              app_exit.state::<AppState>().terminals.lock().await.remove(&id_exit);
-              let _ = app_exit.emit("dh:terminal:exit", json!({ "id": id_exit }));
-            });
-            json!({ "ok": true, "id": id })
           }
           Err(e) => json!({ "ok": false, "error": format!("[DOCKER_TERMINAL_FAILED] {}", e) }),
         }
@@ -2275,6 +2344,11 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
         json!({ "ok": false, "error": "[DOCKER_INVALID_REQUEST] Missing image or name." })
       } else {
         let mut args = vec!["create".to_string(), "--name".to_string(), name.to_string()];
+        let network_mode = body.get("networkMode").and_then(|v| v.as_str()).unwrap_or("bridge");
+        if !network_mode.trim().is_empty() {
+          args.push("--network".to_string());
+          args.push(network_mode.trim().to_string());
+        }
         if let Some(ports) = body.get("ports").and_then(|v| v.as_array()) {
           for p in ports {
             let host = p.get("hostPort").and_then(|v| v.as_u64()).unwrap_or(0);
@@ -2304,7 +2378,14 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
         }
         args.push(image.to_string());
         if let Some(cmd_str) = body.get("command").and_then(|v| v.as_str()) {
-          if !cmd_str.is_empty() { args.push(cmd_str.to_string()); }
+          if !cmd_str.is_empty() {
+            args.push(cmd_str.to_string());
+          }
+        } else if image.to_lowercase().contains("bash") {
+          // UX default: keep utility bash containers running without requiring manual terminal input.
+          args.push("sh".to_string());
+          args.push("-c".to_string());
+          args.push("while true; do sleep 3600; done".to_string());
         }
         let refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
         match exec_output("docker", &refs).await {
@@ -2391,6 +2472,12 @@ pub fn run() {
     .plugin(tauri_plugin_opener::init())
     .manage(AppState::default())
     .invoke_handler(tauri::generate_handler![ipc_invoke, ipc_send])
-    .run(tauri::generate_context!())
-    .expect("error while running tauri application");
+    .build(tauri::generate_context!())
+    .expect("error while building tauri application")
+    .run(|app, event| {
+      if let tauri::RunEvent::ExitRequested { .. } = event {
+        let state = app.state::<AppState>();
+        tauri::async_runtime::block_on(close_all_terminal_sessions(&state));
+      }
+    });
 }

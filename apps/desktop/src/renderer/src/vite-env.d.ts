@@ -8,7 +8,13 @@ declare global {
   interface Window {
     dh: {
       dockerList: () => Promise<unknown>
-      dockerAction: (payload: { id: string; action: string }) => Promise<{ ok: boolean; error?: string }>
+      dockerAction: (payload: {
+        id: string
+        action: string
+        removeVolumes?: boolean
+        removeImage?: boolean
+        image?: string
+      }) => Promise<{ ok: boolean; error?: string }>
       dockerLogs: (payload: { id: string; tail?: number }) => Promise<unknown>
       dockerCreate: (payload: {
         image: string
@@ -18,9 +24,10 @@ declare global {
         env?: string[]
         volumes?: Array<{ hostPath: string; containerPath: string }>
         autoStart?: boolean
+        networkMode?: string
       }) => Promise<unknown>
       dockerPull: (payload: { image: string }) => Promise<unknown>
-      dockerRemapPort: (payload: { id: string; oldHostPort: number; newHostPort: number }) => Promise<unknown>
+      dockerRemapPort: (payload: { id: string; oldHostPort: number; newHostPort: number; networkMode?: string }) => Promise<unknown>
       dockerImagesList: () => Promise<unknown>
       dockerImageAction: (payload: { id: string; action: 'remove'; force?: boolean }) => Promise<unknown>
       dockerVolumesList: () => Promise<unknown>
