@@ -98,6 +98,22 @@ export function MonitorPage(): ReactElement {
   }, [])
 
   const refreshGithub = useCallback(async () => {
+    const CACHE_KEY = 'dh_github_events_cache'
+    const CACHE_TTL = 300_000 // 5 minutes
+    const now = Date.now()
+    
+    try {
+      const cached = localStorage.getItem(CACHE_KEY)
+      if (cached) {
+        const { timestamp, events } = JSON.parse(cached) as { timestamp: number, events: GithubEvent[] }
+        if (now - timestamp < CACHE_TTL && events.length > 0) {
+          setGithubCommits(events)
+          setGithubStatus(null)
+          return
+        }
+      }
+    } catch { /* ignore cache errors */ }
+
     try {
       const resp = await fetch('https://api.github.com/users/Karim-Termanini/events/public')
       if (!resp.ok) {
@@ -132,8 +148,10 @@ export function MonitorPage(): ReactElement {
         }
         return e
       }))
+      
       setGithubCommits(enriched)
       setGithubStatus(enriched.length === 0 ? 'No recent public push events found.' : null)
+      localStorage.setItem(CACHE_KEY, JSON.stringify({ timestamp: now, events: enriched }))
     } catch {
       setGithubStatus(
         githubCommits.length > 0
