@@ -6,7 +6,6 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'lcov'],
       include: [
-        'src/main/dockerError.ts',
         'src/renderer/src/pages/dockerContract.ts',
         'src/renderer/src/pages/dockerError.ts',
       ],
