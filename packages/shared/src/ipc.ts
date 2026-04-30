@@ -185,6 +185,7 @@ export const IPC = {
   filePickSave: 'dh:dialog:file:save',
   sshListDir: 'dh:ssh:list:dir',
   sshSetupRemoteKey: 'dh:ssh:setup:remote:key',
+  sshEnableLocal: 'dh:ssh:enable:local',
   sessionInfo: 'dh:session:info',
   layoutGet: 'dh:layout:get',
   layoutSet: 'dh:layout:set',

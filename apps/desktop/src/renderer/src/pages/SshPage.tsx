@@ -20,6 +20,7 @@ type Session = {
   port: number
   status: 'connecting' | 'connected' | 'disconnected'
   startTime: number
+  isTransfer?: boolean
 }
 
 export function SshPage(): ReactElement {
@@ -32,10 +33,20 @@ export function SshPage(): ReactElement {
   const [status, setStatus] = useState('')
   const [bookmarks, setBookmarks] = useState<SshBookmark[]>([])
 
+  const [enableLocalLog, setEnableLocalLog] = useState('')
+  const [enableLocalBusy, setEnableLocalBusy] = useState(false)
+  const [showPrereqs, setShowPrereqs] = useState(false)
+
   const [newBmName, setNewBmName] = useState('')
   const [newBmUser, setNewBmUser] = useState('')
   const [newBmHost, setNewBmHost] = useState('')
   const [newBmPort, setNewBmPort] = useState('22')
+
+  const [editBmId, setEditBmId] = useState<string | null>(null)
+  const [editBmName, setEditBmName] = useState('')
+  const [editBmUser, setEditBmUser] = useState('')
+  const [editBmHost, setEditBmHost] = useState('')
+  const [editBmPort, setEditBmPort] = useState('')
 
   const [passModalSess, setPassModalSess] = useState<Session | null>(null)
   const [passInput, setPassInput] = useState('')
@@ -69,7 +80,8 @@ export function SshPage(): ReactElement {
 
   useEffect(() => {
     void loadBookmarks()
-  }, [])
+    void loadPub()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function loadBookmarks(): Promise<void> {
     try {
@@ -125,6 +137,19 @@ export function SshPage(): ReactElement {
     }
   }
 
+  async function enableLocalSsh(): Promise<void> {
+    setEnableLocalBusy(true)
+    setEnableLocalLog('')
+    try {
+      const res = await window.dh.sshEnableLocal()
+      setEnableLocalLog(res.log + (res.error ? `\n✗ ${humanizeSshError(res.error)}` : ''))
+    } catch (e) {
+      setEnableLocalLog(`✗ ${humanizeSshError(e)}`)
+    } finally {
+      setEnableLocalBusy(false)
+    }
+  }
+
   async function copyPub(): Promise<void> {
     if (!pubKey) {
       alert('Please load the key first.')
@@ -148,8 +173,8 @@ export function SshPage(): ReactElement {
     const sess = passModalSess
     const password = passInput
     
-    setPassModalSess(null)
-    setPassInput('')
+    // setPassModalSess(null) // Keep it open for now
+    // setPassInput('') // Don't clear yet
     setBusy(true)
     setStatus(`Activating remote browser for ${sess.host}...`)
 
@@ -170,6 +195,8 @@ export function SshPage(): ReactElement {
 
       if (setupRes.ok) {
         setStatus(`Remote browser activated for ${sess.host}! ✅`)
+        setPassModalSess(null)
+        setPassInput('')
       } else {
         setStatus(`Failed to activate: ${humanizeSshError(setupRes.error)}`)
       }
@@ -224,9 +251,27 @@ export function SshPage(): ReactElement {
     void saveBookmarks(next)
   }
 
+  function startEditBookmark(bm: SshBookmark): void {
+    setEditBmId(bm.id)
+    setEditBmName(bm.name)
+    setEditBmUser(bm.user)
+    setEditBmHost(bm.host)
+    setEditBmPort(String(bm.port))
+  }
+
+  function saveEditBookmark(): void {
+    if (!editBmId || !editBmHost) return
+    const next = bookmarks.map((b) =>
+      b.id === editBmId
+        ? { ...b, name: editBmName.trim() || b.name, user: editBmUser.trim() || b.user, host: editBmHost.trim(), port: Number(editBmPort) || 22 }
+        : b,
+    )
+    void saveBookmarks(next)
+    setEditBmId(null)
+  }
+
   // --- Embedded Terminal Logic ---
-  
-  // Cleanup terminal when unmounting modal
+
   useEffect(() => {
     if (!activeTermSession || !termWrapRef.current) return
     const el = termWrapRef.current
@@ -240,74 +285,142 @@ export function SshPage(): ReactElement {
     const fit = new FitAddon()
     term.loadAddon(fit)
     term.open(el)
-    fit.fit()
     xtermRef.current = term
     fitRef.current = fit
 
-    void (async () => {
-      const sshArgs = ['-p', String(activeTermSession.port), `${activeTermSession.user}@${activeTermSession.host}`]
-      const res = (await window.dh.terminalCreate({ 
-        cols: term.cols, 
-        rows: term.rows,
-        cmd: 'ssh',
-        args: sshArgs
-      })) as
-        | { ok: true; id: string }
-        | { ok: false; error: string }
-      if (!res.ok) {
-        term.writeln(`\r\nError creating terminal: ${res.error}`)
-        return
-      }
-      embedTermIdRef.current = res.id
-      // Update session with termId
-      setSessions((prev) => prev.map(s => s.id === activeTermSession.id ? { ...s, termId: res.id, status: 'connected' } : s))
+    // Terminal ID is resolved asynchronously. Buffer data/exit events that
+    // arrive before we know the ID (SSH can fail in <1ms on unreachable hosts).
+    let terminalId: string | undefined
+    const earlyData: Array<{ id: string; data: string }> = []
+    const earlyExits = new Set<string>()
 
-      // If there is a pending transfer command, run it immediately
-      const transferCmd = pendingTransferCmdRef.current
-      if (transferCmd) {
-        pendingTransferCmdRef.current = null
-        setTimeout(() => {
-          window.dh.terminalWrite(res.id, transferCmd + '\r')
-        }, 300)
-      }
-    })()
+    // For SSH sessions: auto-close 2s after the remote shell is running.
+    // We detect "shell running" by counting newlines — password prompt has 0,
+    // shell startup (fish/bash motd + prompt) produces 3+.
+    let shellLineCount = 0
+    let autoCloseTimer: ReturnType<typeof setTimeout> | null = null
 
-    const onData = (d: string): void => {
-      const tid = embedTermIdRef.current
-      if (tid) window.dh.terminalWrite(tid, d)
+    const scheduleAutoClose = (): void => {
+      if (activeTermSession.isTransfer) return
+      if (autoCloseTimer) clearTimeout(autoCloseTimer)
+      autoCloseTimer = setTimeout(() => {
+        setSessions((prev) =>
+          prev.map((s) =>
+            s.id === activeTermSession.id ? { ...s, status: 'connected' } : s,
+          ),
+        )
+        setActiveTermSession(null)
+      }, 2000)
     }
-    term.onData(onData)
 
     const offOut = window.dh.onTerminalData(({ id, data }) => {
-      if (id === embedTermIdRef.current) term.write(data)
-    })
-    
-    const offExit = window.dh.onTerminalExit(({ id }) => {
-      if (id === embedTermIdRef.current) {
-        term.writeln('\r\n[session ended]')
-        setSessions((prev) => prev.map(s => s.id === activeTermSession.id ? { ...s, status: 'disconnected', termId: undefined } : s))
+      if (terminalId !== undefined) {
+        if (id === terminalId) {
+          term.write(data)
+          shellLineCount += (data.match(/\n/g) ?? []).length
+          if (shellLineCount >= 3) scheduleAutoClose()
+        }
+      } else {
+        earlyData.push({ id, data })
       }
+    })
+
+    const handleExit = (): void => {
+      setSessions((prev) =>
+        prev.map((s) =>
+          s.id === activeTermSession.id ? { ...s, status: 'disconnected', termId: undefined } : s,
+        ),
+      )
+      setTimeout(() => setActiveTermSession(null), 1500)
+    }
+
+    const offExit = window.dh.onTerminalExit(({ id }) => {
+      if (terminalId !== undefined) {
+        if (id === terminalId) handleExit()
+      } else {
+        earlyExits.add(id)
+      }
+    })
+
+    term.onData((d: string) => {
+      if (terminalId) window.dh.terminalWrite(terminalId, d)
     })
 
     const ro = new ResizeObserver(() => {
       fit.fit()
-      const tid = embedTermIdRef.current
-      if (tid) window.dh.terminalResize(tid, term.cols, term.rows)
+      if (terminalId) window.dh.terminalResize(terminalId, term.cols, term.rows)
     })
     ro.observe(el)
 
+    // Defer terminal creation until after layout so fit.fit() reads real dimensions.
+    requestAnimationFrame(() => {
+      fit.fit()
+
+      const transferCmd = pendingTransferCmdRef.current
+      if (transferCmd) pendingTransferCmdRef.current = null
+
+      // Transfer sessions run SCP/rsync locally; SSH sessions connect to remote.
+      const termCmd = activeTermSession.isTransfer ? 'bash' : 'ssh'
+      const termArgs = activeTermSession.isTransfer
+        ? ['-c', `${transferCmd ?? 'echo "No transfer command"'}; echo; echo "[transfer done — closing in 2s]"; sleep 2`]
+        : [
+            '-o', 'StrictHostKeyChecking=no',
+            '-o', 'PubkeyAuthentication=no',
+            '-o', 'PasswordAuthentication=yes',
+            '-p', String(activeTermSession.port),
+            `${activeTermSession.user}@${activeTermSession.host}`,
+          ]
+
+      void (async () => {
+        const res = (await window.dh.terminalCreate({
+          cols: term.cols,
+          rows: term.rows,
+          cmd: termCmd,
+          args: termArgs,
+        })) as { ok: true; id: string } | { ok: false; error: string }
+
+        if (!res.ok) {
+          term.writeln(`\r\nError creating terminal: ${res.error}`)
+          return
+        }
+
+        terminalId = res.id
+        embedTermIdRef.current = res.id
+
+        // Flush buffered output/exits that arrived before we had the ID.
+        for (const { id, data } of earlyData) {
+          if (id === res.id) {
+            term.write(data)
+            shellLineCount += (data.match(/\n/g) ?? []).length
+          }
+        }
+        earlyData.length = 0
+        if (shellLineCount >= 3) scheduleAutoClose()
+
+        if (earlyExits.has(res.id)) {
+          handleExit()
+        } else {
+          setSessions((prev) =>
+            prev.map((s) =>
+              s.id === activeTermSession.id ? { ...s, termId: res.id, status: 'connected' } : s,
+            ),
+          )
+        }
+      })()
+    })
+
     return () => {
+      if (autoCloseTimer) clearTimeout(autoCloseTimer)
       ro.disconnect()
       offOut()
       offExit()
-      const tid = embedTermIdRef.current
-      if (tid) window.dh.terminalClose(tid)
+      if (terminalId) window.dh.terminalClose(terminalId)
       embedTermIdRef.current = undefined
       term.dispose()
       xtermRef.current = null
       fitRef.current = null
     }
-  }, [activeTermSession]) // Re-run if we open a new modal for a specific session
+  }, [activeTermSession])
 
   async function handleConnect(bm: SshBookmark): Promise<void> {
     // Check if local identity exists, if not, generate one silently
@@ -353,9 +466,16 @@ export function SshPage(): ReactElement {
     setRemoteBrowsing(true)
     setFtStatus('Browsing remote directory...')
     try {
-      const res = await window.dh.sshListDir({ user: ftSession.user, host: ftSession.host, port: ftSession.port, remotePath: path })
+      const res = await window.dh.sshListDir({
+        user: ftSession.user,
+        host: ftSession.host,
+        port: ftSession.port,
+        remotePath: path || '.'
+      })
       if (res.ok) {
-        setRemoteEntries(res.entries.filter(e => e !== '.'))
+        // Filter out current dir marker, keep parent marker for navigation
+        const clean = res.entries.filter(e => e !== './' && e !== '.')
+        setRemoteEntries(clean)
         setFtRemotePath(path)
         setFtStatus('')
       } else {
@@ -382,9 +502,11 @@ export function SshPage(): ReactElement {
     } else {
       if (!ftRemotePath.trim()) { setFtStatus('Please select a remote source file/folder.'); return }
       const localDest = ftLocalDestDir || '.'
-      cmd = ftTool === 'scp'
+      // mkdir -p ensures destination directory exists before scp/rsync
+      const mkdirPrefix = `mkdir -p "${localDest}" && `
+      cmd = mkdirPrefix + (ftTool === 'scp'
         ? `scp -P ${ftSession.port} -r ${remote}:"${ftRemotePath}" "${localDest}"`
-        : `rsync -avz -e 'ssh -p ${ftSession.port}' ${remote}:"${ftRemotePath}" "${localDest}"`
+        : `rsync -avz -e 'ssh -p ${ftSession.port}' ${remote}:"${ftRemotePath}" "${localDest}"`)
     }
 
     const sId = Date.now().toString()
@@ -397,6 +519,7 @@ export function SshPage(): ReactElement {
       port: ftSession.port,
       status: 'connecting',
       startTime: Date.now(),
+      isTransfer: true,
     }
     setPendingTransferCmd(cmd)
     setSessions((prev) => [newSession, ...prev])
@@ -430,6 +553,37 @@ export function SshPage(): ReactElement {
             {SSH_FLATPAK_HINT}
           </p>
         </header>
+
+        {/* Enable SSH on This Machine */}
+        <section>
+          <h2 style={{ fontSize: 18, marginBottom: 12 }}>SSH Server</h2>
+          <div className="hp-card" style={{ flexDirection: 'column', gap: 12 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 }}>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>Enable SSH on This Machine</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                  Starts the SSH daemon and opens port 22 in the firewall (ufw / firewalld). Requires passwordless sudo or polkit access.
+                </div>
+              </div>
+              <button
+                type="button"
+                className="hp-btn hp-btn-primary"
+                style={{ whiteSpace: 'nowrap', flexShrink: 0 }}
+                onClick={() => void enableLocalSsh()}
+                disabled={enableLocalBusy}
+              >
+                {enableLocalBusy ? '⏳ Enabling...' : 'Enable SSH'}
+              </button>
+            </div>
+            {enableLocalLog && (
+              <pre style={{ margin: 0, fontSize: 11, fontFamily: 'monospace', background: 'var(--bg)', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', whiteSpace: 'pre-wrap', color: 'var(--text-muted)' }}>
+                {enableLocalLog}
+              </pre>
+            )}
+          </div>
+        </section>
+
+        <hr style={{ border: 0, borderTop: '1px solid var(--border)' }} />
 
         {/* SSH Identity Wizard Section */}
         <section>
@@ -524,28 +678,52 @@ export function SshPage(): ReactElement {
             <div style={{ color: 'var(--text-muted)' }}>No saved servers yet.</div>
           ) : (
             <div style={{ display: 'grid', gap: 8 }}>
-              {bookmarks.map((bm) => (
-                <div key={bm.id} style={{ ...card, padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: 15 }}>{bm.name}</div>
-                    <div className="mono" style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 4 }}>
-                      {bm.user}@{bm.host}:{bm.port}
+              {bookmarks.map((bm) =>
+                editBmId === bm.id ? (
+                  <div key={bm.id} style={{ ...card, padding: '12px 16px', flexDirection: 'column', gap: 12 }}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'flex-end' }}>
+                      <div style={{ flex: '1 1 120px', minWidth: 0 }}>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 3 }}>Label</div>
+                        <input value={editBmName} onChange={(e) => setEditBmName(e.target.value)} className="hp-input" style={{ width: '100%' }} />
+                      </div>
+                      <div style={{ flex: '1 1 90px', minWidth: 0 }}>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 3 }}>User</div>
+                        <input value={editBmUser} onChange={(e) => setEditBmUser(e.target.value)} className="hp-input" style={{ width: '100%' }} />
+                      </div>
+                      <div style={{ flex: '1.5 1 160px', minWidth: 0 }}>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 3 }}>Host</div>
+                        <input value={editBmHost} onChange={(e) => setEditBmHost(e.target.value)} className="hp-input" style={{ width: '100%' }} />
+                      </div>
+                      <div style={{ flex: '0.5 1 60px', minWidth: 0 }}>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 3 }}>Port</div>
+                        <input value={editBmPort} onChange={(e) => setEditBmPort(e.target.value)} className="hp-input" style={{ width: '100%' }} />
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                      <button type="button" className="hp-btn" onClick={() => setEditBmId(null)}>Cancel</button>
+                      <button type="button" className="hp-btn hp-btn-primary" onClick={saveEditBookmark}>Save</button>
                     </div>
                   </div>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <button type="button" className="hp-btn" onClick={() => handleConnect(bm)}>Connect</button>
-                    <button type="button" className="hp-btn hp-btn-danger" onClick={() => deleteBookmark(bm.id)}>Remove</button>
+                ) : (
+                  <div key={bm.id} style={{ ...card, padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: 15 }}>{bm.name}</div>
+                      <div className="mono" style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 4 }}>
+                        {bm.user}@{bm.host}:{bm.port}
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button type="button" className="hp-btn" onClick={() => handleConnect(bm)}>Connect</button>
+                      <button type="button" className="hp-btn" onClick={() => startEditBookmark(bm)}>Edit</button>
+                      <button type="button" className="hp-btn hp-btn-danger" onClick={() => deleteBookmark(bm.id)}>Remove</button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                )
+              )}
             </div>
           )}
         </section>
       </div>
-
-      {/* RIGHT COLUMN: Connection History & Active Sessions */}
-
-
 
       {/* RIGHT COLUMN: Connection History & Active Sessions */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -554,6 +732,87 @@ export function SshPage(): ReactElement {
           <span className="mono" style={{ fontSize: 12, color: 'var(--text-muted)' }}>
             {connectedCount} active / {sessions.length} total
           </span>
+        </div>
+
+        {/* Prerequisites accordion */}
+        <div style={{ background: 'var(--bg-widget)', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+          <button
+            type="button"
+            onClick={() => setShowPrereqs(v => !v)}
+            style={{ width: '100%', background: 'none', border: 'none', color: 'var(--text)', cursor: 'pointer', padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, fontWeight: 600 }}
+          >
+            <span>📋 Remote Device Prerequisites</span>
+            <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{showPrereqs ? '▲' : '▼'}</span>
+          </button>
+          {showPrereqs && (
+            <div style={{ padding: '0 14px 14px', display: 'flex', flexDirection: 'column', gap: 12, fontSize: 12 }}>
+              <p style={{ margin: 0, color: 'var(--text-muted)', lineHeight: 1.6 }}>
+                The <b>remote machine</b> must have SSH running and port 22 open before you can connect. Run the commands matching its distro:
+              </p>
+
+              {([
+                {
+                  label: 'Fedora / RHEL / CentOS (firewalld)',
+                  color: '#3b82f6',
+                  cmds: [
+                    'sudo systemctl enable --now sshd',
+                    'sudo firewall-cmd --add-service=ssh --permanent',
+                    'sudo firewall-cmd --reload',
+                  ],
+                },
+                {
+                  label: 'Ubuntu / Debian (ufw)',
+                  color: '#f97316',
+                  cmds: [
+                    'sudo systemctl enable --now ssh',
+                    'sudo ufw allow ssh',
+                    'sudo ufw enable',
+                  ],
+                },
+                {
+                  label: 'Arch Linux (ufw)',
+                  color: '#1d9bf0',
+                  cmds: [
+                    'sudo systemctl enable --now sshd',
+                    'sudo ufw allow ssh',
+                    'sudo ufw enable',
+                    'sudo systemctl enable --now ufw',
+                  ],
+                },
+                {
+                  label: 'openSUSE (firewalld)',
+                  color: '#22c55e',
+                  cmds: [
+                    'sudo systemctl enable --now sshd',
+                    'sudo firewall-cmd --add-service=ssh --permanent',
+                    'sudo firewall-cmd --reload',
+                  ],
+                },
+                {
+                  label: 'No managed firewall (iptables/manual)',
+                  color: '#a855f7',
+                  cmds: [
+                    'sudo systemctl enable --now sshd',
+                    'sudo iptables -A INPUT -p tcp --dport 22 -j ACCEPT',
+                  ],
+                },
+              ] as const).map(({ label, color, cmds }) => (
+                <div key={label}>
+                  <div style={{ fontWeight: 600, marginBottom: 4, color }}>▸ {label}</div>
+                  <pre style={{ margin: 0, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 4, padding: '6px 10px', fontSize: 11, fontFamily: 'monospace', overflowX: 'auto', lineHeight: 1.7 }}>
+                    {cmds.join('\n')}
+                  </pre>
+                </div>
+              ))}
+
+              <div style={{ marginTop: 4, padding: '8px 10px', background: 'rgba(124,77,255,0.08)', border: '1px solid rgba(124,77,255,0.2)', borderRadius: 6, color: 'var(--text-muted)', lineHeight: 1.6 }}>
+                <b style={{ color: 'var(--accent)' }}>Local machine</b> also needs <span className="mono">ssh</span> and <span className="mono">sshpass</span> installed.<br />
+                Fedora: <span className="mono">sudo dnf install openssh sshpass</span><br />
+                Ubuntu/Debian: <span className="mono">sudo apt install openssh-client sshpass</span><br />
+                Arch: <span className="mono">sudo pacman -S openssh sshpass</span>
+              </div>
+            </div>
+          )}
         </div>
         
         {sessions.length === 0 ? (
@@ -717,25 +976,44 @@ export function SshPage(): ReactElement {
 
                 {/* Remote Browser results inside modal */}
                 {remoteEntries.length > 0 && (
-                  <div style={{ marginTop: 8, background: 'var(--bg-input)', border: '1px solid var(--border)', borderRadius: 6, maxHeight: 150, overflowY: 'auto' }}>
-                    {remoteEntries.map(entry => (
-                      <div key={entry} 
-                        style={{ padding: '6px 12px', cursor: 'pointer', fontSize: 12, borderBottom: '1px solid var(--border)', display: 'flex', gap: 8 }}
-                        onClick={() => {
-                          if (entry === '..') {
-                            const parent = ftRemotePath.replace(/\/[^/]+\/?$/, '') || '/'
-                            void browseRemote(parent)
-                          } else if (!entry.includes('.')) {
-                            const newPath = ftRemotePath.replace(/\/$/, '') + '/' + entry
-                            void browseRemote(newPath)
-                          } else {
-                            setFtRemotePath(ftRemotePath.replace(/\/$/, '') + '/' + entry)
-                          }
-                        }}
-                      >
-                        {entry.includes('.') ? '📄' : '📁'} {entry}
-                      </div>
-                    ))}
+                  <div style={{ marginTop: 8, background: 'var(--bg-input)', border: '1px solid var(--border)', borderRadius: 6, maxHeight: 200, overflowY: 'auto' }}>
+                    {remoteEntries.map(entry => {
+                      const isDir = entry.endsWith('/') || entry === '../'
+                      const cleanName = entry.replace(/\/$/, '')
+                      
+                      return (
+                        <div key={entry} 
+                          style={{ 
+                            padding: '8px 12px', 
+                            cursor: 'pointer', 
+                            fontSize: 12, 
+                            borderBottom: '1px solid var(--border)', 
+                            display: 'flex', 
+                            alignItems: 'center',
+                            gap: 10,
+                            transition: 'background 0.2s',
+                          }}
+                          className="hover-bg-widget"
+                          onClick={() => {
+                            if (entry === '../') {
+                              const parent = ftRemotePath.replace(/\/[^/]+\/?$/, '') || '/'
+                              void browseRemote(parent)
+                            } else if (isDir) {
+                              const newPath = ftRemotePath.replace(/\/$/, '') + '/' + cleanName
+                              void browseRemote(newPath)
+                            } else {
+                              // It's a file
+                              setFtRemotePath(ftRemotePath.replace(/\/$/, '') + '/' + cleanName)
+                            }
+                          }}
+                        >
+                          <span style={{ fontSize: 16 }}>{isDir ? '📁' : '📄'}</span>
+                          <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {entry === '../' ? '.. (Parent Directory)' : cleanName}
+                          </span>
+                        </div>
+                      )
+                    })}
                   </div>
                 )}
               </div>
@@ -763,6 +1041,11 @@ export function SshPage(): ReactElement {
             <div style={{ flex: 1, minHeight: 400, background: '#0a0a0a', borderRadius: 8, padding: 8, overflow: 'hidden' }}>
               <div ref={termWrapRef} style={{ width: '100%', height: '100%' }} />
             </div>
+            {!activeTermSession.isTransfer && (
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center', paddingTop: 6 }}>
+                Type <span className="mono" style={{ color: 'var(--accent)' }}>exit</span> to end the session — window closes automatically
+              </div>
+            )}
           </div>
         </div>
       )}

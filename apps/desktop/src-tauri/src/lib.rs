@@ -166,8 +166,9 @@ async fn exec_sshpass_ssh(
       .arg("-p")
       .arg(password)
       .arg("ssh")
-      .arg("-o")
-      .arg("StrictHostKeyChecking=no")
+      .arg("-o").arg("StrictHostKeyChecking=no")
+      .arg("-o").arg("PreferredAuthentications=password")
+      .arg("-o").arg("PubkeyAuthentication=no")
       .arg("-p")
       .arg(port)
       .arg(remote)
@@ -747,8 +748,8 @@ async fn docker_remap_port_invoke(body: &Value) -> Value {
     .and_then(|v| v.as_str())
     .map(|s| s.trim())
     .filter(|s| !s.is_empty());
-  if id.is_empty() || old_hp == 0 || new_hp == 0 || old_hp == new_hp {
-    return json!({ "ok": false, "error": "[DOCKER_INVALID_REQUEST] id and two distinct host ports (1-65535) are required." });
+  if id.is_empty() || old_hp == 0 || new_hp == 0 {
+    return json!({ "ok": false, "error": "[DOCKER_INVALID_REQUEST] id and host ports (1-65535) are required." });
   }
 
   let inspect_raw = match exec_output("docker", &["inspect", id]).await {
@@ -785,6 +786,11 @@ async fn docker_remap_port_invoke(body: &Value) -> Value {
     .unwrap_or("bridge")
     .to_string();
   let target_network_mode = requested_network.unwrap_or(current_network_mode.as_str()).to_string();
+
+  // Nothing to do: same port AND same network.
+  if old_hp == new_hp && target_network_mode == current_network_mode {
+    return json!({ "ok": false, "error": "[DOCKER_INVALID_REQUEST] port and network are identical — nothing to change." });
+  }
 
   let mut bindings = info
     .pointer("/HostConfig/PortBindings")
@@ -963,11 +969,21 @@ async fn ipc_send(channel: String, payload: Value, app: AppHandle, state: State<
     },
     "dh:terminal:close" => {
       let id = payload.get("id").and_then(|v| v.as_str()).unwrap_or_default().to_string();
-      let mut map = state.terminals.lock().await;
-      if let Some(session) = map.remove(&id) {
-        if let Ok(mut child) = session.child.lock() {
-          let _ = child.kill();
-        }
+      let session = {
+        let mut map = state.terminals.lock().await;
+        map.remove(&id)
+      };
+      if let Some(session) = session {
+        // Kill child first, then wait for it to exit so the PTY reader thread
+        // gets a clean EOF before the master fd is dropped. Without this wait
+        // the reader thread can access freed PTY memory → heap corruption.
+        tokio::task::spawn_blocking(move || {
+          if let Ok(mut child) = session.child.lock() {
+            let _ = child.kill();
+            let _ = child.wait();
+          }
+          // session (and master) dropped here, after child has exited
+        });
       }
       Ok(())
     },
@@ -1775,7 +1791,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
           let fingerprint = exec_output("ssh-keygen", &["-lf", &pub_path]).await.unwrap_or_default();
           json!({ "ok": true, "pub": pubkey.trim(), "fingerprint": fingerprint.trim() })
         }
-        Err(_) => json!({ "ok": false, "pub": "", "fingerprint": "", "error": "[SSH_KEY_NOT_FOUND] Missing public key." }),
+        Err(_) => json!({ "ok": false, "pub": "", "fingerprint": "", "error": "[SSH_NO_KEY] Missing public key." }),
       }
     }
     "dh:ssh:test:github" => match exec_result_limit("ssh", &["-T", "git@github.com"], CMD_TIMEOUT_DEFAULT).await {
@@ -2407,7 +2423,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       let remote_path = body.get("remotePath").and_then(|v| v.as_str()).unwrap_or(".");
       let remote = format!("{}@{}", user, host_str);
       let port_str = port.to_string();
-      let ls_cmd = format!("ls -1 '{}'", remote_path.replace('\'', r"'\''"));
+      let ls_cmd = format!("ls -aF1 '{}'", remote_path.replace('\'', r"'\''"));
       match exec_result_limit(
         "ssh",
         &["-o", "StrictHostKeyChecking=no", "-p", &port_str, &remote, &ls_cmd],
@@ -2434,12 +2450,25 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
         let port_str = port.to_string();
         let remote = format!("{}@{}", user, host_str);
         let safe_key = public_key.replace('\'', r"'\''");
+        // Wrap in `bash -c '...'` so it works regardless of the remote user's
+        // login shell (fish, zsh, dash, etc. all accept this invocation).
+        // Key is double-quoted inside the single-quoted bash string; SSH public
+        // keys never contain `"` so this is safe.
         let setup_cmd = format!(
-          "mkdir -p ~/.ssh && chmod 700 ~/.ssh && printf '%s\\n' '{}' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys",
-          safe_key
+          concat!(
+            "bash -c '",
+            "mkdir -p ~/.ssh && ",
+            "touch ~/.ssh/authorized_keys && ",
+            "chmod 700 ~/.ssh && ",
+            "grep -qF \"{key}\" ~/.ssh/authorized_keys || ",
+            "printf \"%s\\n\" \"{key}\" >> ~/.ssh/authorized_keys && ",
+            "chmod 600 ~/.ssh/authorized_keys",
+            "'"
+          ),
+          key = safe_key
         );
         let result = if !password.is_empty() {
-          exec_sshpass_ssh(password, &port_str, &remote, &setup_cmd, CMD_TIMEOUT_LONG).await
+          exec_sshpass_ssh(password, &port_str, &remote, &setup_cmd, CMD_TIMEOUT_SSH).await
         } else {
           exec_result_limit(
             "ssh",
@@ -2451,6 +2480,54 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
         match result {
           Ok(_) => json!({ "ok": true }),
           Err(e) => json!({ "ok": false, "error": format!("[SSH_SETUP_KEY_FAILED] {}", e.trim()) }),
+        }
+      }
+    },
+    "dh:ssh:enable:local" => {
+      // Use pkexec so the desktop shows a native polkit password dialog.
+      // We write a small helper script, run it elevated, then clean up.
+      let script = concat!(
+        "#!/bin/sh\n",
+        "# Enable SSH daemon (Fedora: sshd, Debian/Ubuntu: ssh)\n",
+        "systemctl enable --now sshd 2>/dev/null || systemctl enable --now ssh\n",
+        "# Open firewall\n",
+        "if command -v firewall-cmd > /dev/null 2>&1; then\n",
+        "  firewall-cmd --add-service=ssh --permanent && firewall-cmd --reload\n",
+        "elif command -v ufw > /dev/null 2>&1; then\n",
+        "  ufw allow ssh\n",
+        "fi\n",
+      );
+
+      let tmp_path = std::env::temp_dir().join("lumina-ssh-enable.sh");
+      if let Err(e) = std::fs::write(&tmp_path, script) {
+        return Ok(json!({ "ok": false, "log": "", "error": format!("[SSH_ENABLE_LOCAL_FAILED] {}", e) }));
+      }
+
+      #[cfg(unix)]
+      {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(&tmp_path, std::fs::Permissions::from_mode(0o755));
+      }
+
+      let script_str = tmp_path.to_string_lossy().to_string();
+      // CMD_TIMEOUT_LONG gives the user enough time to interact with the polkit dialog
+      let result = exec_output_limit("pkexec", &[&script_str], CMD_TIMEOUT_LONG).await;
+      let _ = std::fs::remove_file(&tmp_path);
+
+      match result {
+        Ok(out) => {
+          let log = format!("✓ SSH daemon enabled\n✓ Firewall configured\n{}", out.trim());
+          json!({ "ok": true, "log": log.trim_end() })
+        }
+        Err(e) => {
+          let msg = e.trim().to_string();
+          // pkexec exit 126 = user dismissed the dialog (cancelled)
+          let cancelled = msg.contains("126") || msg.to_lowercase().contains("cancel") || msg.is_empty();
+          if cancelled {
+            json!({ "ok": false, "log": "✗ Cancelled by user", "error": "[SSH_ENABLE_LOCAL_FAILED] Authentication cancelled." })
+          } else {
+            json!({ "ok": false, "log": format!("✗ {}", msg), "error": format!("[SSH_ENABLE_LOCAL_FAILED] {}", msg) })
+          }
         }
       }
     },
