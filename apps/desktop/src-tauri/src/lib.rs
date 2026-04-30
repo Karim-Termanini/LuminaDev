@@ -620,6 +620,68 @@ fn pkg_upgrade_cmd(pkg_mgr: &str, packages: &[&str]) -> String {
   }
 }
 
+/// First whitespace-delimited token (e.g. "v22.0.0 (LTS: Foo)" → "v22.0.0").
+fn lumina_first_version_token(raw: &str) -> Option<String> {
+  let t = raw.trim();
+  if t.is_empty() || t.eq_ignore_ascii_case("latest") || t.eq_ignore_ascii_case("stable") || t.starts_with("system ") {
+    return None;
+  }
+  Some(t.split_whitespace().next().unwrap_or(t).trim().trim_start_matches("go").to_string())
+}
+
+/// After runtime_install succeeds, probe `bash -lc` for the toolchain.
+async fn runtime_append_verify(runtime_id: &str, method: &str, requested_version: &str, logs: &mut Vec<String>) {
+  logs.push(format!(
+    "VERIFY: login shell check requested_version={:?} install_method={} …",
+    requested_version.trim(),
+    method
+  ));
+  let probe = match runtime_id {
+    "node" => "command -v node >/dev/null 2>&1 && node --version 2>&1 || echo MISSING",
+    "python" => "command -v python3 >/dev/null 2>&1 && python3 --version 2>&1 || echo MISSING",
+    "go" => "command -v go >/dev/null 2>&1 && go version 2>&1 || echo MISSING",
+    "rust" => "command -v rustc >/dev/null 2>&1 && rustc --version 2>&1 || echo MISSING",
+    "java" => "command -v java >/dev/null 2>&1 && java -version 2>&1 | head -1 || echo MISSING",
+    "php" => "command -v php >/dev/null 2>&1 && php --version 2>&1 | head -1 || echo MISSING",
+    "ruby" => "command -v ruby >/dev/null 2>&1 && ruby --version 2>&1 || echo MISSING",
+    "dotnet" => "command -v dotnet >/dev/null 2>&1 && dotnet --version 2>&1 || ($HOME/.dotnet/dotnet --version 2>&1) || echo MISSING",
+    "bun" => "command -v bun >/dev/null 2>&1 && bun --version 2>&1 || ($HOME/.bun/bin/bun --version 2>&1) || echo MISSING",
+    "zig" => "command -v zig >/dev/null 2>&1 && zig version 2>&1 || echo MISSING",
+    "c_cpp" => "command -v gcc >/dev/null 2>&1 && gcc --version 2>&1 | head -1 || echo MISSING",
+    "matlab" => "command -v octave >/dev/null 2>&1 && octave --version 2>&1 | head -1 || echo MISSING",
+    "dart" => "command -v dart >/dev/null 2>&1 && dart --version 2>&1 | head -1 || ($HOME/.dart/dart-sdk/bin/dart --version 2>&1 | head -1) || echo MISSING",
+    "flutter" => "command -v flutter >/dev/null 2>&1 && flutter --version 2>&1 | head -1 || ($HOME/.flutter-sdk/bin/flutter --version 2>&1 | head -1) || echo MISSING",
+    "julia" => "command -v julia >/dev/null 2>&1 && julia --version 2>&1 || ($HOME/.juliaup/bin/julia --version 2>&1) || echo MISSING",
+    "lua" => "(command -v lua5.4 >/dev/null 2>&1 && lua5.4 -v 2>&1) || (command -v lua >/dev/null 2>&1 && lua -v 2>&1) || echo MISSING",
+    "lisp" => "command -v sbcl >/dev/null 2>&1 && sbcl --version 2>&1 || echo MISSING",
+    _ => {
+      logs.push(format!("VERIFY: skipped (unknown runtime '{}')", runtime_id));
+      return;
+    }
+  };
+  match exec_result_limit("bash", &["-lc", probe], CMD_TIMEOUT_SHORT).await {
+    Ok((stdout, stderr)) => {
+      let line = format!("{}{}", stdout, stderr)
+        .lines()
+        .find(|l| !l.trim().is_empty())
+        .map(|x| x.trim().to_string())
+        .unwrap_or_default();
+      if line.contains("MISSING") || line.is_empty() {
+        logs.push(format!("VERIFY FAIL: {} not found on PATH after install.", runtime_id));
+      } else if method == "system" && matches!(runtime_id, "node" | "python" | "go") {
+        logs.push(format!(
+          "VERIFY OK: {} (Reminder: install_method=system — distro fixed its own release; picker choice {:?} was not pinned.)",
+          line, requested_version.trim()
+        ));
+      } else {
+        logs.push(format!("VERIFY OK: {}", line));
+        logs.push("Smoke test passed".to_string());
+      }
+    }
+    Err(e) => logs.push(format!("VERIFY FAIL: {}", e.trim())),
+  }
+}
+
 fn pkg_remove_cmd(pkg_mgr: &str, packages: &[&str]) -> String {
   let pkgs = packages.join(" ");
   match pkg_mgr {
@@ -672,7 +734,7 @@ async fn runtime_job_execute(
           let cmd = format!("curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain {}", tc);
           runtime_bash_user_step(&cmd, &mut logs).await.map_err(|e| format!("{}", e))
         } else if runtime_id == "node" && method == "local" {
-          let v = if version.is_empty() { "lts/*" } else { version.trim() };
+          let v = lumina_first_version_token(&version).unwrap_or_else(|| "lts/*".into());
           let cmd = format!(
             "curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.0/install.sh | bash \
              && export NVM_DIR=\"$HOME/.nvm\" \
@@ -681,7 +743,7 @@ async fn runtime_job_execute(
           );
           runtime_bash_user_step(&cmd, &mut logs).await.map_err(|e| format!("{}", e))
         } else if runtime_id == "go" && method == "local" {
-          let v = if version.is_empty() { "1.22.2" } else { version.trim() };
+          let v = lumina_first_version_token(&version).unwrap_or_else(|| "1.22.2".into());
           let cmd = format!(
             "mkdir -p \"$HOME/.local/share/lumina/go\" \
              && cd \"$HOME/.local/share/lumina/go\" \
@@ -694,7 +756,7 @@ async fn runtime_job_execute(
           );
           runtime_bash_user_step(&cmd, &mut logs).await.map_err(|e| format!("{}", e))
         } else if runtime_id == "python" && method == "local" {
-          let v = if version.is_empty() { "3.12.2" } else { version.trim() };
+          let v = lumina_first_version_token(&version).unwrap_or_else(|| "3.12.2".into());
           let cmd = format!(
             "curl https://pyenv.run | bash \
              && export PYENV_ROOT=\"$HOME/.pyenv\" \
@@ -774,6 +836,11 @@ async fn runtime_job_execute(
           runtime_bash_user_step(cmd, &mut logs).await.map_err(|e| format!("{}", e))
         } else {
           let pkgs = runtime_system_packages(&runtime_id, pkg_mgr);
+          if method.trim() == "system" && !pkgs.is_empty() {
+            logs.push(
+              "NOTE: System installs use distro package names only—your Target Version choice is ignored. Pick Local for Node.js, Python, or Go if you want the selected version.".to_string(),
+            );
+          }
           if pkgs.is_empty() {
             logs.push(format!("No system packages known for '{}' on {}. Try local/rustup method.", runtime_id, distro));
             Ok(())
@@ -873,6 +940,11 @@ async fn runtime_job_execute(
       if let Some(j) = jobs.iter_mut().find(|j| j.get("id").and_then(|v| v.as_str()) == Some(job_id.as_str())) {
         j["progress"] = json!(85);
       }
+      drop(jobs);
+
+      if matches!(kind.as_str(), "runtime_install" | "install_deps") {
+        runtime_append_verify(&runtime_id, &method, &version, &mut logs).await;
+      }
     }
   }
 
@@ -881,7 +953,7 @@ async fn runtime_job_execute(
   if let Some(j) = jobs.iter_mut().find(|j| j.get("id").and_then(|v| v.as_str()) == Some(job_id.as_str())) {
     j["state"] = json!(final_state);
     j["progress"] = json!(if final_state == "completed" { 100 } else { 0 });
-    j["logTail"] = json!(logs.into_iter().rev().take(20).collect::<Vec<String>>().into_iter().rev().collect::<Vec<String>>());
+    j["logTail"] = json!(logs.into_iter().rev().take(48).collect::<Vec<String>>().into_iter().rev().collect::<Vec<String>>());
   }
 }
 
