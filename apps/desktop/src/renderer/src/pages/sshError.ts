@@ -11,6 +11,7 @@ export function humanizeSshError(err: unknown): string {
   if (code === 'SSH_FILE_NOT_FOUND') return `Local file or SSH identity not found.`
   if (code === 'SSH_TOOL_MISSING') return `SSH tools are missing on your host system.`
   if (code === 'SSH_NO_KEY') return `No SSH key found. Please generate one first.`
+  if (code === 'SSH_ENABLE_LOCAL_FAILED') return `Could not enable SSH daemon. ${detail}`
   if (code === 'HOST_COMMAND_TIMEOUT') {
     return `A host command took too long and was stopped. ${detail}`.trim()
   }

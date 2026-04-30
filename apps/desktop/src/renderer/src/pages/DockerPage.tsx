@@ -316,7 +316,7 @@ export function DockerPage(): ReactElement {
     const oldHost = Number.parseInt(oldPortRaw, 10)
     const newHost = Number.parseInt(remapNewPort, 10)
     if (!selectedId || !Number.isFinite(oldHost) || !Number.isFinite(newHost)) {
-      setRemapFeedback('Choose a container and enter numeric host ports.')
+      setRemapFeedback('Choose a container and enter numeric host ports. Use the same port to change only the network.')
       return
     }
     setRemapBusy(true)
@@ -638,7 +638,7 @@ export function DockerPage(): ReactElement {
   const rowsWithPorts = rows.filter((r) => r.ports !== '—')
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 1240, margin: '0 auto', paddingInline: 12 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20, paddingInline: 12 }}>
       <header>
         <div className="mono" style={{ color: 'var(--accent)', fontSize: 12, marginBottom: 8 }}>
           DOCKER.SURFACE
@@ -713,22 +713,35 @@ export function DockerPage(): ReactElement {
         </div>
       ) : null}
 
-      <div style={{ overflowX: 'auto', paddingBottom: 2 }}>
-        <div style={{ display: 'flex', gap: 8, minWidth: 'max-content' }}>
-          {(['scheme', 'create', 'containers', 'images', 'volumes', 'networks', 'ports', 'cleanup'] as const).map((t) => (
+      <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+        {/* Sidebar nav */}
+        <nav style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 140, flexShrink: 0 }}>
+          {(
+            [
+              { id: 'scheme',     icon: '🗺', label: 'Scheme'     },
+              { id: 'create',     icon: '➕', label: 'Create'     },
+              { id: 'containers', icon: '📦', label: 'Containers' },
+              { id: 'images',     icon: '🖼', label: 'Images'     },
+              { id: 'volumes',    icon: '💾', label: 'Volumes'    },
+              { id: 'networks',   icon: '🌐', label: 'Networks'   },
+              { id: 'ports',      icon: '🔌', label: 'Ports'      },
+              { id: 'cleanup',    icon: '🧹', label: 'Cleanup'    },
+            ] as const
+          ).map(({ id, icon, label }) => (
             <button
-              key={t}
+              key={id}
               type="button"
-              style={tab === t ? tabBtnActive : tabBtn}
-              onClick={() => setTab(t)}
+              onClick={() => setTab(id)}
+              style={tab === id ? sideTabActive : sideTab}
             >
-              {t}
+              <span style={{ fontSize: 15 }}>{icon}</span>
+              <span>{label}</span>
             </button>
           ))}
-        </div>
-      </div>
+        </nav>
 
-      <section className="hp-card">
+        {/* Content pane */}
+        <section className="hp-card" style={{ flex: 1, minWidth: 0 }}>
         {!docker ? <div style={{ color: 'var(--text-muted)' }}>Checking Docker daemon…</div> : null}
         {docker && !docker.ok ? <div style={{ color: 'var(--orange)' }}>{humanizeDockerError(docker.error)}</div> : null}
         {docker?.ok && tab === 'create' ? (
@@ -1334,16 +1347,16 @@ export function DockerPage(): ReactElement {
                           />
                         </label>
                         <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13 }}>
-                          <span style={{ fontWeight: 600 }}>New host port</span>
+                          <span style={{ fontWeight: 600 }}>New host port <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>(same = keep port)</span></span>
                           <input
                             className="hp-input"
                             type="number"
                             min={1}
                             max={65535}
-                            placeholder="8081"
+                            placeholder="same or new"
                             value={remapNewPort}
                             onChange={(e) => setRemapNewPort(e.target.value)}
-                            style={{ width: 120 }}
+                            style={{ width: 140 }}
                           />
                         </label>
                         <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13, minWidth: 180 }}>
@@ -1467,7 +1480,8 @@ export function DockerPage(): ReactElement {
             </div>
           </div>
         ) : null}
-      </section>
+        </section>
+      </div>
 
       {showInstallModal && (
         <div style={modalOverlay}>
@@ -1856,6 +1870,30 @@ const tabBtn = {
 const tabBtnActive = {
   ...tabBtn,
   border: '1px solid var(--accent)',
+  color: 'var(--accent)',
+}
+
+const sideTab = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 8,
+  border: '1px solid transparent',
+  background: 'transparent',
+  color: 'var(--text-muted)',
+  borderRadius: 8,
+  padding: '8px 12px',
+  cursor: 'pointer',
+  fontSize: 13,
+  fontWeight: 500,
+  textAlign: 'left' as const,
+  width: '100%',
+  transition: 'background 0.15s, color 0.15s',
+}
+
+const sideTabActive = {
+  ...sideTab,
+  background: 'color-mix(in srgb, var(--accent) 12%, transparent)',
+  border: '1px solid color-mix(in srgb, var(--accent) 35%, transparent)',
   color: 'var(--accent)',
 }
 

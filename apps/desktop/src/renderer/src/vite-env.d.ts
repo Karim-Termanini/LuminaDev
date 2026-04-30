@@ -62,6 +62,7 @@ declare global {
       filePickSave: () => Promise<string | null>
       sshListDir: (payload: { user: string; host: string; port: number; remotePath: string }) => Promise<{ ok: boolean; entries: string[]; error?: string }>
       sshSetupRemoteKey: (payload: { user: string; host: string; port: number; password: string; publicKey: string }) => Promise<{ ok: boolean; error?: string }>
+      sshEnableLocal: () => Promise<{ ok: boolean; log: string; error?: string }>
       onTerminalData: (handler: (msg: { id: string; data: string }) => void) => () => void
       onTerminalExit: (handler: (msg: { id: string }) => void) => () => void
       openExternal: (url: string) => Promise<unknown>

@@ -74,6 +74,7 @@ function createTauriDhApi(): DhApi {
     },
     sshListDir: (payload) => tauriInvoke(IPC.sshListDir, payload),
     sshSetupRemoteKey: (payload) => tauriInvoke(IPC.sshSetupRemoteKey, payload),
+    sshEnableLocal: () => tauriInvoke(IPC.sshEnableLocal),
     onTerminalData: (handler) => {
       let unlisten: (() => void) | null = null
       void listen<{ id: string; data: string }>(IPC.terminalData, (event) => {
