@@ -41,8 +41,10 @@ fn write_json(path: &PathBuf, value: &Value) -> Result<(), String> {
 
 /// Default wall-clock bound for host `exec_output` / `exec_result` (prevents hung IPC).
 const CMD_TIMEOUT_DEFAULT: Duration = Duration::from_secs(180);
-/// Short probe (sudo -n, quick shell checks).
+/// Short probe (sudo -n, quick shell checks, `ssh -T` smoke test).
 const CMD_TIMEOUT_SHORT: Duration = Duration::from_secs(30);
+/// Remote SSH ops (list dir, key install) — network-bound.
+const CMD_TIMEOUT_SSH: Duration = Duration::from_secs(120);
 /// `git clone`, `docker pull`, `docker compose up -d`, and similar long host work.
 const CMD_TIMEOUT_LONG: Duration = Duration::from_secs(900);
 /// Single `sudo bash -c` step during Docker engine install.
@@ -1196,7 +1198,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
         Err(_) => json!({ "ok": false, "pub": "", "fingerprint": "", "error": "[SSH_KEY_NOT_FOUND] Missing public key." }),
       }
     }
-    "dh:ssh:test:github" => match exec_result("ssh", &["-T", "git@github.com"]).await {
+    "dh:ssh:test:github" => match exec_result_limit("ssh", &["-T", "git@github.com"], CMD_TIMEOUT_DEFAULT).await {
       Ok((stdout, stderr)) => json!({ "ok": true, "output": format!("{}{}", stdout, stderr), "code": 0 }),
       Err(e) => json!({ "ok": true, "output": e, "code": 1 }),
     },
@@ -1496,7 +1498,13 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       let remote = format!("{}@{}", user, host_str);
       let port_str = port.to_string();
       let ls_cmd = format!("ls -1 '{}'", remote_path.replace('\'', r"'\''"));
-      match exec_result("ssh", &["-o", "StrictHostKeyChecking=no", "-p", &port_str, &remote, &ls_cmd]).await {
+      match exec_result_limit(
+        "ssh",
+        &["-o", "StrictHostKeyChecking=no", "-p", &port_str, &remote, &ls_cmd],
+        CMD_TIMEOUT_SSH,
+      )
+      .await
+      {
         Ok((stdout, _)) => {
           let entries: Vec<&str> = stdout.lines().filter(|l| !l.is_empty()).collect();
           json!({ "ok": true, "entries": entries })
@@ -1525,9 +1533,14 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
             "sshpass -p '{}' ssh -o StrictHostKeyChecking=no -p {} {} \"{}\"",
             password.replace('\'', r"'\''"), port_str, remote, setup_cmd.replace('"', "\\\"")
           );
-          exec_result("bash", &["-lc", &script]).await
+          exec_result_limit("bash", &["-lc", &script], CMD_TIMEOUT_LONG).await
         } else {
-          exec_result("ssh", &["-o", "StrictHostKeyChecking=no", "-p", &port_str, &remote, &setup_cmd]).await
+          exec_result_limit(
+            "ssh",
+            &["-o", "StrictHostKeyChecking=no", "-p", &port_str, &remote, &setup_cmd],
+            CMD_TIMEOUT_SSH,
+          )
+          .await
         };
         match result {
           Ok(_) => json!({ "ok": true }),
