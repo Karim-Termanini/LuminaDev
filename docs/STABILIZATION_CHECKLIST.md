@@ -158,6 +158,7 @@ Stabilization is considered complete only when:
 - **Remaining before Stage 5 (when you declare product-ready):**
   - Run `pnpm smoke` on `main` before any tagged release
   - Flatpak offline build / Flathub — **last** (long CI); enable when ready
+  - **No `git tag` / GitHub Release** until the maintainer explicitly declares the product complete (no routine pre-release tags from automation).
 
 ---
 

@@ -59,6 +59,8 @@ export function SshPage(): ReactElement {
   const xtermRef = useRef<Terminal | null>(null)
   const fitRef = useRef<FitAddon | null>(null)
   const pendingTransferCmdRef = useRef<string | null>(null)
+  /** Active embedded SSH terminal session id (for `terminalClose` on unmount). */
+  const embedTermIdRef = useRef<string | undefined>(undefined)
   const connectedCount = sessions.filter((s) => s.status === 'connected').length
 
   function setPendingTransferCmd(cmd: string): void {
@@ -242,8 +244,6 @@ export function SshPage(): ReactElement {
     xtermRef.current = term
     fitRef.current = fit
 
-    let tid: string | undefined = undefined
-
     void (async () => {
       const sshArgs = ['-p', String(activeTermSession.port), `${activeTermSession.user}@${activeTermSession.host}`]
       const res = (await window.dh.terminalCreate({ 
@@ -258,9 +258,9 @@ export function SshPage(): ReactElement {
         term.writeln(`\r\nError creating terminal: ${res.error}`)
         return
       }
-      tid = res.id
+      embedTermIdRef.current = res.id
       // Update session with termId
-      setSessions((prev) => prev.map(s => s.id === activeTermSession.id ? { ...s, termId: tid, status: 'connected' } : s))
+      setSessions((prev) => prev.map(s => s.id === activeTermSession.id ? { ...s, termId: res.id, status: 'connected' } : s))
 
       // If there is a pending transfer command, run it immediately
       const transferCmd = pendingTransferCmdRef.current
@@ -273,16 +273,17 @@ export function SshPage(): ReactElement {
     })()
 
     const onData = (d: string): void => {
+      const tid = embedTermIdRef.current
       if (tid) window.dh.terminalWrite(tid, d)
     }
     term.onData(onData)
 
     const offOut = window.dh.onTerminalData(({ id, data }) => {
-      if (id === tid) term.write(data)
+      if (id === embedTermIdRef.current) term.write(data)
     })
     
     const offExit = window.dh.onTerminalExit(({ id }) => {
-      if (id === tid) {
+      if (id === embedTermIdRef.current) {
         term.writeln('\r\n[session ended]')
         setSessions((prev) => prev.map(s => s.id === activeTermSession.id ? { ...s, status: 'disconnected', termId: undefined } : s))
       }
@@ -290,6 +291,7 @@ export function SshPage(): ReactElement {
 
     const ro = new ResizeObserver(() => {
       fit.fit()
+      const tid = embedTermIdRef.current
       if (tid) window.dh.terminalResize(tid, term.cols, term.rows)
     })
     ro.observe(el)
@@ -298,6 +300,9 @@ export function SshPage(): ReactElement {
       ro.disconnect()
       offOut()
       offExit()
+      const tid = embedTermIdRef.current
+      if (tid) window.dh.terminalClose(tid)
+      embedTermIdRef.current = undefined
       term.dispose()
       xtermRef.current = null
       fitRef.current = null
@@ -328,7 +333,7 @@ export function SshPage(): ReactElement {
 
   function handleDisconnect(sess: Session): void {
     if (sess.termId) {
-      window.dh.terminalWrite(sess.termId, '\r~.\rexit\r')
+      window.dh.terminalClose(sess.termId)
     }
     setSessions((prev) => prev.map((s) => s.id === sess.id ? { ...s, status: 'disconnected', termId: undefined } : s))
   }

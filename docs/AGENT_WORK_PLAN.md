@@ -5,7 +5,8 @@
 ## قيود المنتج (متفق عليها)
 
 - **لا ضغط «إصدار»** قبل ما يُعتبر البرنامج مكتملًا من وجهة نظر المنتج؛ لا نبني خطط موازية حول semver أو نشر دوري إلا عند الطلب الصريح.
-- **Flatpak في النهاية**: مسار التعبئة والـ GitHub Actions المرتبط به ثقيل؛ يُفعَّل بعد استقرار المنتج والـ CI الأساسي، وليس كأولوية زمنية.
+- **لا `git tag` ولا GitHub Release** حتى يُعلن المنتج «مكتملًا» صراحةً من صاحب المشروع — لا وسوم تجريبية دورية ولا ضغط إصدار من الأتمتة.
+- **Flatpak في النهاية**: مسار التعبئة والـ GitHub Actions المرتبط به ثقيل؛ يُفعَّل بعد استقرار المنتج والـ CI الأساسي، وليس كأولوية زمنية. **اختبارات/Job لـ Flatpak في CI = آخر خطوة** قبل أو بعد بوابة الإصدار حسب الموافقة الصريحة فقط.
 
 ---
 
@@ -28,7 +29,7 @@
 | A1 | تدقيق القنوات | مطابقة `packages/shared/src/ipc.ts` مع `ipc_invoke` / مسار Tauri. **`done` (تدقيق أولي 2026-04-30)** — انظر قسم «لقطة A1» أدناه؛ إصلاح `dh:docker:create` لإرجاع `id`. |
 | A2 | `dh:docker:install` | **`done`** — خطوات `apt`/`dnf`/`pacman` عبر `sudo -S` + سجل `log` في الرد؛ رفض في Flatpak / بدون sudo صالح. |
 | A3 | `dh:docker:remap-port` | **`done`** — inspect + create + start؛ ثم **`docker stop`** + **`docker rm`** للمصدر عند نجاح الإيقاف + حقول `sourceStopped` / `sourceRemoved` / ملاحظات في الرد. |
-| A4 | حدود الصلاحيات | مراجعة سريعة لمسارات Docker socket وSSH وأوامر shell: timeouts، allowlists، رسائل خطأ حتمية. |
+| A4 | حدود الصلاحيات | مراجعة سريعة لمسارات Docker socket وSSH وأوامر shell: timeouts، allowlists، رسائل خطأ حتمية. **`جزئي` (2026-04-30):** `exec_*_limit` + `tokio::time::timeout`؛ `/etc/os-release` و`/proc/uptime`؛ `curl`/طرفية خارجية 30s؛ **`docker pull` / `compose up`** 900s؛ **`git clone` / `sshpass` setup** 900s؛ **`ssh` list-dir / setup بدون كلمة** 120s؛ **`ssh -T github`** 180s؛ `[HOST_COMMAND_TIMEOUT]` + humanize؛ **`dh:terminal:close`** مربوط؛ باقي تضييق `bash -lc` لاحقًا. |
 | A5 | Flatpak (لاحقًا) | **جزئي:** manifest Tauri + README؛ **بدون** job في GitHub Actions حتى يُقرّ اختبار بطيء؛ Docker عبر `flatpak override` كالوثائق. |
 
 ---

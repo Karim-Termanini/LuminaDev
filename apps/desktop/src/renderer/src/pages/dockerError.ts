@@ -9,6 +9,9 @@ export function humanizeDockerError(err: unknown): string {
   if (code === 'DOCKER_CONFLICT') return `Docker conflict. ${detail}`
   if (code === 'DOCKER_TIMEOUT') return `Docker operation timed out. ${detail}`
   if (code === 'DOCKER_INVALID_REQUEST') return `Invalid Docker request. ${detail}`
+  if (code === 'HOST_COMMAND_TIMEOUT') {
+    return `A host command took too long and was stopped. ${detail}`.trim()
+  }
   if (code === 'DOCKER_INSTALL_NOT_SUPPORTED') {
     return `Automated install is not available in this build (likely Flatpak). ${detail}`.trim()
   }

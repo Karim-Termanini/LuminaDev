@@ -43,6 +43,9 @@ function createTauriDhApi(): DhApi {
     terminalResize: (id, cols, rows) => {
       void invoke('ipc_send', { channel: IPC.terminalResize, payload: { id, cols, rows } })
     },
+    terminalClose: (id) => {
+      void invoke('ipc_send', { channel: IPC.terminalClose, payload: { id } })
+    },
     openExternalTerminal: () => tauriInvoke(IPC.openExternalTerminal),
     gitClone: (payload) => tauriInvoke(IPC.gitClone, payload),
     gitStatus: (payload) => tauriInvoke(IPC.gitStatus, payload),

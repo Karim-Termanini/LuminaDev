@@ -39,6 +39,7 @@ declare global {
       terminalCreate: (payload: { cols: number; rows: number; cmd?: string; args?: string[] }) => Promise<{ ok: boolean; id?: string; error?: string }>
       terminalWrite: (id: string, data: string) => void
       terminalResize: (id: string, cols: number, rows: number) => void
+      terminalClose: (id: string) => void
       openExternalTerminal: () => Promise<{ ok: boolean; error?: string }>
       gitClone: (payload: { url: string; targetDir: string }) => Promise<{ ok: boolean; error?: string }>
       gitStatus: (payload: { repoPath: string }) => Promise<{ ok: boolean; info: { branch: string; tracking: string | null; ahead: number; behind: number; modified: number; created: number; deleted: number }; error?: string }>

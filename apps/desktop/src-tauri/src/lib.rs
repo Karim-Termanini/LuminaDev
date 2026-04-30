@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Stdio;
+use std::time::Duration;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
@@ -38,32 +39,71 @@ fn write_json(path: &PathBuf, value: &Value) -> Result<(), String> {
   std::fs::write(path, content).map_err(|e| format!("[STORE_WRITE_ERROR] {}", e))
 }
 
+/// Default wall-clock bound for host `exec_output` / `exec_result` (prevents hung IPC).
+const CMD_TIMEOUT_DEFAULT: Duration = Duration::from_secs(180);
+/// Short probe (sudo -n, quick shell checks, `ssh -T` smoke test).
+const CMD_TIMEOUT_SHORT: Duration = Duration::from_secs(30);
+/// Remote SSH ops (list dir, key install) — network-bound.
+const CMD_TIMEOUT_SSH: Duration = Duration::from_secs(120);
+/// `git clone`, `docker pull`, `docker compose up -d`, and similar long host work.
+const CMD_TIMEOUT_LONG: Duration = Duration::from_secs(900);
+/// Single `sudo bash -c` step during Docker engine install.
+const CMD_TIMEOUT_INSTALL_STEP: Duration = Duration::from_secs(900);
+
+async fn exec_output_limit(cmd: &str, args: &[&str], limit: Duration) -> Result<String, String> {
+  let fut = async {
+    let output = Command::new(cmd)
+      .args(args)
+      .output()
+      .await
+      .map_err(|e| format!("[EXEC_ERROR] {}", e))?;
+    if output.status.success() {
+      Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    } else {
+      Err(String::from_utf8_lossy(&output.stderr).trim().to_string())
+    }
+  };
+  match tokio::time::timeout(limit, fut).await {
+    Ok(inner) => inner,
+    Err(_) => Err(format!(
+      "[HOST_COMMAND_TIMEOUT] {} {}",
+      cmd,
+      args.join(" ")
+    )),
+  }
+}
+
 async fn exec_output(cmd: &str, args: &[&str]) -> Result<String, String> {
-  let output = Command::new(cmd)
-    .args(args)
-    .output()
-    .await
-    .map_err(|e| format!("[EXEC_ERROR] {}", e))?;
-  if output.status.success() {
-    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
-  } else {
-    Err(String::from_utf8_lossy(&output.stderr).trim().to_string())
+  exec_output_limit(cmd, args, CMD_TIMEOUT_DEFAULT).await
+}
+
+async fn exec_result_limit(cmd: &str, args: &[&str], limit: Duration) -> Result<(String, String), String> {
+  let fut = async {
+    let output = Command::new(cmd)
+      .args(args)
+      .output()
+      .await
+      .map_err(|e| format!("[EXEC_ERROR] {}", e))?;
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    if output.status.success() {
+      Ok((stdout, stderr))
+    } else {
+      Err(if stderr.trim().is_empty() { stdout } else { stderr })
+    }
+  };
+  match tokio::time::timeout(limit, fut).await {
+    Ok(inner) => inner,
+    Err(_) => Err(format!(
+      "[HOST_COMMAND_TIMEOUT] {} {}",
+      cmd,
+      args.join(" ")
+    )),
   }
 }
 
 async fn exec_result(cmd: &str, args: &[&str]) -> Result<(String, String), String> {
-  let output = Command::new(cmd)
-    .args(args)
-    .output()
-    .await
-    .map_err(|e| format!("[EXEC_ERROR] {}", e))?;
-  let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-  let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-  if output.status.success() {
-    Ok((stdout, stderr))
-  } else {
-    Err(if stderr.trim().is_empty() { stdout } else { stderr })
-  }
+  exec_result_limit(cmd, args, CMD_TIMEOUT_DEFAULT).await
 }
 
 fn now_ms() -> u64 {
@@ -241,10 +281,16 @@ async fn sudo_bash_install_step(cmd: &str, password: Option<&str>, logs: &mut Ve
     drop(child.stdin.take());
   }
 
-  let out = child
-    .wait_with_output()
-    .await
-    .map_err(|e| format!("[DOCKER_INSTALL_FAILED] {}", e))?;
+  let out = match tokio::time::timeout(CMD_TIMEOUT_INSTALL_STEP, child.wait_with_output()).await {
+    Ok(Ok(o)) => o,
+    Ok(Err(e)) => return Err(format!("[DOCKER_INSTALL_FAILED] {}", e)),
+    Err(_) => {
+      return Err(
+        "[HOST_COMMAND_TIMEOUT] sudo install step exceeded wall clock (check for orphaned apt/dnf/pacman on host)"
+          .to_string(),
+      );
+    }
+  };
   let stdout = String::from_utf8_lossy(&out.stdout);
   let stderr = String::from_utf8_lossy(&out.stderr);
   for line in stdout.lines() {
@@ -271,7 +317,9 @@ async fn sudo_bash_install_step(cmd: &str, password: Option<&str>, logs: &mut Ve
 }
 
 async fn sudo_passwordless_ok() -> bool {
-  exec_output("sudo", &["-n", "true"]).await.is_ok()
+  exec_output_limit("sudo", &["-n", "true"], CMD_TIMEOUT_SHORT)
+    .await
+    .is_ok()
 }
 
 async fn docker_install_invoke(body: &Value) -> Value {
@@ -517,6 +565,12 @@ async fn ipc_send(channel: String, payload: Value, app: AppHandle, state: State<
       }
       Ok(())
     },
+    "dh:terminal:close" => {
+      let id = payload.get("id").and_then(|v| v.as_str()).unwrap_or_default().to_string();
+      let mut map = state.terminals.lock().await;
+      map.remove(&id);
+      Ok(())
+    },
     "dh:terminal:resize" => Ok(()),
     _ => {
       let _ = app.emit("dh:warn", json!({ "channel": channel, "kind": "unknown_ipc_send" }));
@@ -585,15 +639,18 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       }
     }),
     "dh:host:distro" => {
-      let distro = exec_output("bash", &["-lc", "source /etc/os-release >/dev/null 2>&1; echo ${ID:-linux}"])
-        .await
-        .unwrap_or_else(|_| "linux".to_string());
+      let distro = std::fs::read_to_string("/etc/os-release")
+        .unwrap_or_default()
+        .lines()
+        .find(|l| l.starts_with("ID="))
+        .map(|l| l.trim_start_matches("ID=").trim_matches('"').to_string())
+        .unwrap_or_else(|| "linux".to_string());
       json!(distro)
     },
     "dh:docker:check-installed" => {
-      let docker = exec_output("bash", &["-lc", "command -v docker >/dev/null 2>&1 && echo ok"]).await.is_ok();
-      let compose = exec_output("bash", &["-lc", "docker compose version >/dev/null 2>&1 && echo ok"]).await.is_ok();
-      let buildx = exec_output("bash", &["-lc", "docker buildx version >/dev/null 2>&1 && echo ok"]).await.is_ok();
+      let docker = exec_output_limit("docker", &["--version"], CMD_TIMEOUT_SHORT).await.is_ok();
+      let compose = exec_output_limit("docker", &["compose", "version"], CMD_TIMEOUT_SHORT).await.is_ok();
+      let buildx = exec_output_limit("docker", &["buildx", "version"], CMD_TIMEOUT_SHORT).await.is_ok();
       json!({ "docker": docker, "compose": compose, "buildx": buildx })
     },
     "dh:docker:list" => match exec_output("docker", &["ps", "-a", "--format", "{{json .}}"]).await {
@@ -768,10 +825,10 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       Err(e) => json!({ "ok": false, "error": format!("[DOCKER_PRUNE_FAILED] {}", e.trim()) }),
     },
     "dh:docker:prune:preview" => {
-      let containers = exec_output("bash", &["-lc", "docker ps -a -q --filter status=exited | wc -l"]).await.unwrap_or_else(|_| "0".to_string());
-      let images = exec_output("bash", &["-lc", "docker images -f dangling=true -q | wc -l"]).await.unwrap_or_else(|_| "0".to_string());
-      let volumes = exec_output("bash", &["-lc", "docker volume ls -qf dangling=true | wc -l"]).await.unwrap_or_else(|_| "0".to_string());
-      let networks = exec_output("bash", &["-lc", "docker network ls -qf dangling=true | wc -l"]).await.unwrap_or_else(|_| "0".to_string());
+      let containers = exec_output_limit("bash", &["-c", "docker ps -a -q --filter status=exited | wc -l"], CMD_TIMEOUT_SHORT).await.unwrap_or_else(|_| "0".to_string());
+      let images = exec_output_limit("bash", &["-c", "docker images -f dangling=true -q | wc -l"], CMD_TIMEOUT_SHORT).await.unwrap_or_else(|_| "0".to_string());
+      let volumes = exec_output_limit("bash", &["-c", "docker volume ls -qf dangling=true | wc -l"], CMD_TIMEOUT_SHORT).await.unwrap_or_else(|_| "0".to_string());
+      let networks = exec_output_limit("bash", &["-c", "docker network ls -qf dangling=true | wc -l"], CMD_TIMEOUT_SHORT).await.unwrap_or_else(|_| "0".to_string());
       json!({
         "ok": true,
         "preview": {
@@ -803,7 +860,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       if image.is_empty() {
         json!({ "ok": false, "error": "[DOCKER_PULL_FAILED] Missing image name." })
       } else {
-        match exec_result("docker", &["pull", image]).await {
+        match exec_result_limit("docker", &["pull", image], CMD_TIMEOUT_LONG).await {
           Ok((stdout, stderr)) => json!({ "ok": true, "log": format!("{}{}", stdout, stderr) }),
           Err(e) => json!({ "ok": false, "error": format!("[DOCKER_PULL_FAILED] {}", e.trim()) }),
         }
@@ -811,7 +868,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
     },
     "dh:docker:search" => {
       let term = body.as_str().unwrap_or_default();
-      match exec_output("curl", &["-fsSL", &format!("https://hub.docker.com/v2/search/repositories/?query={}&page_size=12", term)]).await {
+      match exec_output_limit("curl", &["-fsSL", &format!("https://hub.docker.com/v2/search/repositories/?query={}&page_size=12", term)], CMD_TIMEOUT_SHORT).await {
         Ok(raw) => match serde_json::from_str::<Value>(&raw) {
           Ok(v) => {
             let results: Vec<Value> = v
@@ -845,7 +902,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
         ("library", image.to_string())
       };
       let url = format!("https://hub.docker.com/v2/repositories/{}/{}/tags/?page_size=20", namespace, repo);
-      match exec_output("curl", &["-fsSL", &url]).await {
+      match exec_output_limit("curl", &["-fsSL", &url], CMD_TIMEOUT_SHORT).await {
         Ok(raw) => match serde_json::from_str::<Value>(&raw) {
           Ok(v) => {
             let tags: Vec<Value> = v
@@ -863,7 +920,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
         Err(e) => json!({ "ok": false, "error": format!("[DOCKER_TAGS_FAILED] {}", e.trim()) }),
       }
     },
-    "dh:compose:up" | "dh:compose:logs" => {
+    "dh:compose:up" => {
       let profile = body.get("profile").and_then(|v| v.as_str()).unwrap_or("web-dev");
       let dir = find_repo_root(&std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")))
         .join("docker")
@@ -871,18 +928,34 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
         .join(profile)
         .to_string_lossy()
         .to_string();
-      let cmd = if channel == "dh:compose:up" {
-        format!("cd '{}' && docker compose up -d", dir.replace('\'', "'\\''"))
-      } else {
-        format!("cd '{}' && docker compose logs --tail 200", dir.replace('\'', "'\\''"))
-      };
-      match exec_result("bash", &["-lc", &cmd]).await {
+      let cmd = format!("cd '{}' && docker compose up -d", dir.replace('\'', "'\\''"));
+      match exec_result_limit("bash", &["-lc", &cmd], CMD_TIMEOUT_LONG).await {
+        Ok((stdout, stderr)) => json!({ "ok": true, "log": format!("{}{}", stdout, stderr) }),
+        Err(e) => json!({ "ok": false, "log": "", "error": format!("[DOCKER_COMPOSE_FAILED] {}", e.trim()) }),
+      }
+    },
+    "dh:compose:logs" => {
+      let profile = body.get("profile").and_then(|v| v.as_str()).unwrap_or("web-dev");
+      let dir = find_repo_root(&std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")))
+        .join("docker")
+        .join("compose")
+        .join(profile)
+        .to_string_lossy()
+        .to_string();
+      let cmd = format!("cd '{}' && docker compose logs --tail 200", dir.replace('\'', "'\\''"));
+      match exec_result_limit("bash", &["-lc", &cmd], CMD_TIMEOUT_DEFAULT).await {
         Ok((stdout, stderr)) => json!({ "ok": true, "log": format!("{}{}", stdout, stderr) }),
         Err(e) => json!({ "ok": false, "log": "", "error": format!("[DOCKER_COMPOSE_FAILED] {}", e.trim()) }),
       }
     },
     "dh:terminal:openExternal" => {
-      let launched = exec_output("bash", &["-lc", "for t in xdg-terminal-emulator gnome-console kitty alacritty gnome-terminal konsole xfce4-terminal xterm; do command -v $t >/dev/null 2>&1 && ($t >/dev/null 2>&1 &); if [ $? -eq 0 ]; then echo ok; exit 0; fi; done; exit 1"]).await.is_ok();
+      let launched = exec_output_limit(
+        "bash",
+        &["-lc", "for t in xdg-terminal-emulator gnome-console kitty alacritty gnome-terminal konsole xfce4-terminal xterm; do command -v $t >/dev/null 2>&1 && ($t >/dev/null 2>&1 &); if [ $? -eq 0 ]; then echo ok; exit 0; fi; done; exit 1"],
+        CMD_TIMEOUT_SHORT,
+      )
+      .await
+      .is_ok();
       if launched {
         json!({ "ok": true })
       } else {
@@ -919,6 +992,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
           let id_exit = id.clone();
           tauri::async_runtime::spawn(async move {
             let _ = child.wait().await;
+            app_exit.state::<AppState>().terminals.lock().await.remove(&id_exit);
             let _ = app_exit.emit("dh:terminal:exit", json!({ "id": id_exit }));
           });
           json!({ "ok": true, "id": id })
@@ -958,6 +1032,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
             let id_exit = id.clone();
             tauri::async_runtime::spawn(async move {
               let _ = child.wait().await;
+              app_exit.state::<AppState>().terminals.lock().await.remove(&id_exit);
               let _ = app_exit.emit("dh:terminal:exit", json!({ "id": id_exit }));
             });
             json!({ "ok": true, "id": id })
@@ -1061,9 +1136,16 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       if url.is_empty() || target_dir.is_empty() {
         json!({ "ok": false, "error": "[GIT_CLONE_FAILED] Missing url or targetDir." })
       } else {
-        match exec_output("git", &["clone", url, target_dir]).await {
+        match exec_output_limit("git", &["clone", url, target_dir], CMD_TIMEOUT_LONG).await {
           Ok(_) => json!({ "ok": true }),
-          Err(e) => json!({ "ok": false, "error": format!("[GIT_CLONE_FAILED] {}", e.trim()) }),
+          Err(e) => {
+            let msg = if e.starts_with("[HOST_COMMAND_TIMEOUT]") {
+              format!("[GIT_TIMEOUT] {}", e.trim())
+            } else {
+              format!("[GIT_CLONE_FAILED] {}", e.trim())
+            };
+            json!({ "ok": false, "error": msg })
+          }
         }
       }
     },
@@ -1085,7 +1167,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
            printf '{{\"branch\":\"%s\",\"tracking\":%s,\"ahead\":%s,\"behind\":%s,\"modified\":%s,\"created\":%s,\"deleted\":%s}}' \"$b\" \"${{t:+\\\"$t\\\"}}${{t: null}}\" \"$a\" \"$h\" \"$m\" \"$c\" \"$d\"",
           repo_path.replace('\'', "'\\''")
         );
-        match exec_output("bash", &["-lc", &script]).await {
+        match exec_output_limit("bash", &["-c", &script], CMD_TIMEOUT_SHORT).await {
           Ok(info_raw) => match serde_json::from_str::<Value>(&info_raw) {
             Ok(info) => json!({ "ok": true, "info": info }),
             Err(_) => json!({ "ok": false, "error": "[GIT_STATUS_FAILED] Could not parse git status output." }),
@@ -1116,7 +1198,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
         Err(_) => json!({ "ok": false, "pub": "", "fingerprint": "", "error": "[SSH_KEY_NOT_FOUND] Missing public key." }),
       }
     }
-    "dh:ssh:test:github" => match exec_result("ssh", &["-T", "git@github.com"]).await {
+    "dh:ssh:test:github" => match exec_result_limit("ssh", &["-T", "git@github.com"], CMD_TIMEOUT_DEFAULT).await {
       Ok((stdout, stderr)) => json!({ "ok": true, "output": format!("{}{}", stdout, stderr), "code": 0 }),
       Err(e) => json!({ "ok": true, "output": e, "code": 1 }),
     },
@@ -1130,7 +1212,10 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       ];
       let mut runtimes: Vec<Value> = Vec::new();
       for (id, name, check) in checks {
-        match exec_result("bash", &["-lc", check]).await {
+        let parts: Vec<&str> = check.split_whitespace().collect();
+        let cmd = parts[0];
+        let args = &parts[1..];
+        match exec_result_limit(cmd, args, CMD_TIMEOUT_SHORT).await {
           Ok((stdout, stderr)) => {
             let version = format!("{}{}", stdout, stderr).trim().to_string();
             runtimes.push(json!({ "id": id, "name": name, "installed": true, "version": version }));
@@ -1175,11 +1260,10 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       let kernel = exec_output("uname", &["-r"]).await.unwrap_or_else(|_| "unknown".to_string());
       let arch = exec_output("uname", &["-m"]).await.unwrap_or_else(|_| "unknown".to_string());
       let os_name = exec_output("uname", &["-s"]).await.unwrap_or_else(|_| "Linux".to_string());
-      let uptime = exec_output("bash", &["-lc", "cut -d. -f1 /proc/uptime 2>/dev/null || echo 0"])
-        .await
-        .unwrap_or_else(|_| "0".to_string())
-        .trim()
-        .parse::<u64>()
+      let uptime_str = std::fs::read_to_string("/proc/uptime").unwrap_or_default();
+      let uptime = uptime_str.split_whitespace().next()
+        .and_then(|v| v.split('.').next())
+        .and_then(|v| v.parse::<u64>().ok())
         .unwrap_or(0);
       json!({
         "ok": true,
@@ -1194,7 +1278,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
     },
     "dh:host:ports" => {
       let script = "ss -tulpnH 2>/dev/null | awk '{print $1\" \"$5\" \"$NF}'";
-      match exec_output("bash", &["-lc", script]).await {
+      match exec_output_limit("bash", &["-c", script], CMD_TIMEOUT_SHORT).await {
         Ok(out) => {
           let ports: Vec<Value> = out
             .lines()
@@ -1224,7 +1308,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
     },
     "dh:monitor:top-processes" => {
       let script = "ps -eo pid,comm,%cpu,%mem --sort=-%cpu | head -n 16";
-      match exec_output("bash", &["-lc", script]).await {
+      match exec_output_limit("bash", &["-c", script], CMD_TIMEOUT_SHORT).await {
         Ok(out) => {
           let processes: Vec<Value> = out
             .lines()
@@ -1298,8 +1382,8 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
           let free = p.get(3).and_then(|v| v.parse::<u64>().ok())?;
           Some((total / 1024 / 1024, free / 1024 / 1024))
         }).unwrap_or((0, 0));
-      let svc_out = exec_output("bash", &["-lc", "systemctl list-units --type=service --no-pager --plain --no-legend 2>/dev/null | head -30"]).await.unwrap_or_default();
-      let systemd: Vec<Value> = svc_out.lines().filter_map(|l| {
+      let svc_out = exec_output_limit("systemctl", &["list-units", "--type=service", "--no-pager", "--plain", "--no-legend"], CMD_TIMEOUT_SHORT).await.unwrap_or_default();
+      let systemd: Vec<Value> = svc_out.lines().take(30).filter_map(|l| {
         let p: Vec<&str> = l.split_whitespace().collect();
         if p.len() < 4 { return None; }
         let name = p[0].trim_end_matches(".service");
@@ -1331,7 +1415,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       let cmd = body.get("command").and_then(|v| v.as_str()).unwrap_or_default();
       match cmd {
         "nvidia_smi_short" => {
-          match exec_output("bash", &["-lc", "nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -n1"]).await {
+          match exec_output_limit("nvidia-smi", &["--query-gpu=name", "--format=csv,noheader"], CMD_TIMEOUT_SHORT).await {
             Ok(out) => json!({ "ok": true, "result": out.trim() }),
             Err(_) => json!({ "ok": true, "result": "GPU: unavailable" }),
           }
@@ -1341,7 +1425,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
           if unit.is_empty() {
             json!({ "ok": false, "result": Value::Null, "error": "[HOST_EXEC_INVALID] Missing unit." })
           } else {
-            match exec_output("systemctl", &["is-active", unit]).await {
+            match exec_output_limit("systemctl", &["is-active", unit], CMD_TIMEOUT_SHORT).await {
               Ok(out) => json!({ "ok": true, "result": out.trim() }),
               Err(_) => json!({ "ok": true, "result": "unknown" }),
             }
@@ -1414,7 +1498,13 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       let remote = format!("{}@{}", user, host_str);
       let port_str = port.to_string();
       let ls_cmd = format!("ls -1 '{}'", remote_path.replace('\'', r"'\''"));
-      match exec_result("ssh", &["-o", "StrictHostKeyChecking=no", "-p", &port_str, &remote, &ls_cmd]).await {
+      match exec_result_limit(
+        "ssh",
+        &["-o", "StrictHostKeyChecking=no", "-p", &port_str, &remote, &ls_cmd],
+        CMD_TIMEOUT_SSH,
+      )
+      .await
+      {
         Ok((stdout, _)) => {
           let entries: Vec<&str> = stdout.lines().filter(|l| !l.is_empty()).collect();
           json!({ "ok": true, "entries": entries })
@@ -1443,9 +1533,14 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
             "sshpass -p '{}' ssh -o StrictHostKeyChecking=no -p {} {} \"{}\"",
             password.replace('\'', r"'\''"), port_str, remote, setup_cmd.replace('"', "\\\"")
           );
-          exec_result("bash", &["-lc", &script]).await
+          exec_result_limit("bash", &["-lc", &script], CMD_TIMEOUT_LONG).await
         } else {
-          exec_result("ssh", &["-o", "StrictHostKeyChecking=no", "-p", &port_str, &remote, &setup_cmd]).await
+          exec_result_limit(
+            "ssh",
+            &["-o", "StrictHostKeyChecking=no", "-p", &port_str, &remote, &setup_cmd],
+            CMD_TIMEOUT_SSH,
+          )
+          .await
         };
         match result {
           Ok(_) => json!({ "ok": true }),

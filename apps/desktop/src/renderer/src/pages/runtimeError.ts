@@ -10,6 +10,9 @@ export function humanizeRuntimeError(err: unknown): string {
   if (code === 'RUNTIME_NO_SPACE') return `No space left on device. ${detail}`
   if (code === 'RUNTIME_INVALID_VERSION') return `The requested version is not available. ${detail}`
   if (code === 'RUNTIME_DEP_FAIL') return `Failed to install required system dependencies. ${detail}`
+  if (code === 'HOST_COMMAND_TIMEOUT') {
+    return `A host command took too long and was stopped. ${detail}`.trim()
+  }
 
   return detail || 'Runtime operation failed.'
 }
