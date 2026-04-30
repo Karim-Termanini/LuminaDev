@@ -1394,8 +1394,8 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
         .and_then(|v| v.as_array())
         .map(|arr| arr.iter().filter_map(|x| x.as_str().map(|s| s.to_string())).collect())
         .unwrap_or_else(|| vec![
-          "-lc".to_string(),
-          "export COLUMNS=100; alias ls='ls -C --color=auto'; if command -v script >/dev/null 2>&1; then exec script -qfec \"${SHELL:-bash} -i\" /dev/null; else exec ${SHELL:-bash} -i; fi".to_string(),
+          "-c".to_string(),
+          "if command -v script >/dev/null 2>&1; then exec script -qfec \"if command -v bash >/dev/null 2>&1; then exec bash --noprofile --norc -i; else exec sh -i; fi\" /dev/null; else if command -v bash >/dev/null 2>&1; then exec bash --noprofile --norc -i; else exec sh -i; fi; fi".to_string(),
         ]);
       let _ = (cols, rows);
       match Command::new(cmd).args(args)
@@ -1462,8 +1462,9 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
         json!({ "ok": false, "error": "[DOCKER_TERMINAL_FAILED] Missing containerId." })
       } else {
         let run_cmd = format!(
-          "export COLUMNS=100; alias ls='ls -C --color=auto'; if command -v script >/dev/null 2>&1; then exec script -qfec \"docker exec -it {} sh -lc 'export COLUMNS=100; alias ls=\\\"ls -C --color=auto\\\"; if command -v bash >/dev/null 2>&1; then exec bash --noprofile --norc -i; else exec sh -i; fi'\" /dev/null; else exec docker exec -i {} sh -lc 'export COLUMNS=100; alias ls=\\\"ls -C --color=auto\\\"; if command -v bash >/dev/null 2>&1; then exec bash --noprofile --norc -i; else exec sh -i; fi'; fi",
-          container_id, container_id
+          "if command -v script >/dev/null 2>&1; then exec script -qfec \"docker exec -it {} sh -i\" /dev/null; else exec docker exec -i {} sh -i; fi",
+          container_id
+          ,container_id
         );
         match Command::new("sh")
           .arg("-c")

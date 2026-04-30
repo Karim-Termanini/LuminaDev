@@ -2005,6 +2005,12 @@ function DockerTerminalModal({ container, onClose }: { container: ContainerRow; 
       const tid = res.id
       termIdRef.current = tid
 
+      const onData = (d: string): void => {
+        const id = termIdRef.current
+        if (id) window.dh.terminalWrite(id, d)
+      }
+      term.onData(onData)
+
       const offOut = window.dh.onTerminalData(({ id, data }) => {
         if (id === tid) term.write(data)
       })
@@ -2019,9 +2025,6 @@ function DockerTerminalModal({ container, onClose }: { container: ContainerRow; 
         offExit()
       }
 
-      term.onData((data) => {
-        window.dh.terminalWrite(tid, data)
-      })
       term.onResize(({ cols, rows }) => {
         window.dh.terminalResize(tid, cols, rows)
       })

@@ -86,7 +86,16 @@ export function TerminalPage(): ReactElement {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 420 }}>
-      <h1 style={{ margin: 0 }}>Embedded terminal</h1>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+        <h1 style={{ margin: 0 }}>Embedded terminal</h1>
+        <button 
+          className="hp-btn hp-btn-primary" 
+          onClick={() => void window.dh.openExternalTerminal()}
+          title="Open your system's native terminal"
+        >
+          <span className="codicon codicon-terminal" aria-hidden /> Open External Terminal
+        </button>
+      </div>
       {err ? (
         <div style={{ color: 'var(--orange)', marginBottom: 8 }}>
           {err}
