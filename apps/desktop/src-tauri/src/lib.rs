@@ -1395,7 +1395,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
         .map(|arr| arr.iter().filter_map(|x| x.as_str().map(|s| s.to_string())).collect())
         .unwrap_or_else(|| vec![
           "-lc".to_string(),
-          "if command -v script >/dev/null 2>&1; then exec script -qfec \"${SHELL:-bash} -i\" /dev/null; else exec ${SHELL:-bash} -i; fi".to_string(),
+          "export COLUMNS=100; alias ls='ls -C --color=auto'; if command -v script >/dev/null 2>&1; then exec script -qfec \"${SHELL:-bash} -i\" /dev/null; else exec ${SHELL:-bash} -i; fi".to_string(),
         ]);
       let _ = (cols, rows);
       match Command::new(cmd).args(args)
@@ -1426,6 +1426,24 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
               }
             });
           }
+          if let Some(stderr) = child.stderr.take() {
+            let app_err = app.clone();
+            let id_err = id.clone();
+            tauri::async_runtime::spawn(async move {
+              let mut reader = BufReader::new(stderr);
+              let mut buf = vec![0_u8; 4096];
+              loop {
+                match reader.read(&mut buf).await {
+                  Ok(0) => break,
+                  Ok(n) => {
+                    let data = String::from_utf8_lossy(&buf[..n]).to_string();
+                    let _ = app_err.emit("dh:terminal:data", json!({ "id": id_err, "data": data }));
+                  }
+                  Err(_) => break,
+                }
+              }
+            });
+          }
           let app_exit = app.clone();
           let id_exit = id.clone();
           tauri::async_runtime::spawn(async move {
@@ -1444,11 +1462,11 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
         json!({ "ok": false, "error": "[DOCKER_TERMINAL_FAILED] Missing containerId." })
       } else {
         let run_cmd = format!(
-          "if command -v script >/dev/null 2>&1; then exec script -qfec \"docker exec -it {} sh\" /dev/null; else exec docker exec -i {} sh; fi",
+          "export COLUMNS=100; alias ls='ls -C --color=auto'; if command -v script >/dev/null 2>&1; then exec script -qfec \"docker exec -it {} sh -lc 'export COLUMNS=100; alias ls=\\\"ls -C --color=auto\\\"; if command -v bash >/dev/null 2>&1; then exec bash --noprofile --norc -i; else exec sh -i; fi'\" /dev/null; else exec docker exec -i {} sh -lc 'export COLUMNS=100; alias ls=\\\"ls -C --color=auto\\\"; if command -v bash >/dev/null 2>&1; then exec bash --noprofile --norc -i; else exec sh -i; fi'; fi",
           container_id, container_id
         );
         match Command::new("sh")
-          .arg("-lc")
+          .arg("-c")
           .arg(run_cmd)
           .stdin(std::process::Stdio::piped())
           .stdout(std::process::Stdio::piped())
@@ -1473,6 +1491,24 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
                     Ok(n) => {
                       let data = String::from_utf8_lossy(&buf[..n]).to_string();
                       let _ = app_out.emit("dh:terminal:data", json!({ "id": id_out, "data": data }));
+                    }
+                    Err(_) => break,
+                  }
+                }
+              });
+            }
+            if let Some(stderr) = child.stderr.take() {
+              let app_err = app.clone();
+              let id_err = id.clone();
+              tauri::async_runtime::spawn(async move {
+                let mut reader = BufReader::new(stderr);
+                let mut buf = vec![0_u8; 4096];
+                loop {
+                  match reader.read(&mut buf).await {
+                    Ok(0) => break,
+                    Ok(n) => {
+                      let data = String::from_utf8_lossy(&buf[..n]).to_string();
+                      let _ = app_err.emit("dh:terminal:data", json!({ "id": id_err, "data": data }));
                     }
                     Err(_) => break,
                   }

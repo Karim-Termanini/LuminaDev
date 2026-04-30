@@ -44,6 +44,7 @@ export function MonitorPage(): ReactElement {
   const [securityDrilldown, setSecurityDrilldown] = useState<HostSecurityDrilldown | null>(null)
   const [copiedReport, setCopiedReport] = useState(false)
   const [activeTab, setActiveTab] = useState<MonitorTabId>('overview')
+  const [portsView, setPortsView] = useState<'listen' | 'all'>('all')
   const [monitorError, setMonitorError] = useState<string | null>(null)
 
   const refreshLive = useCallback(async () => {
@@ -168,8 +169,8 @@ export function MonitorPage(): ReactElement {
   const swapUsed = m ? Math.max(0, m.swapTotalMb - m.swapFreeMb) : 0
   const swapPct = m && m.swapTotalMb > 0 ? Math.round((swapUsed / m.swapTotalMb) * 100) : 0
   const diskPct = m ? Math.round(((m.diskTotalGb - m.diskFreeGb) / m.diskTotalGb) * 100) : 0
-  const listeningPortRows = ports
-    .filter((p) => p.state.toLowerCase().includes('listen'))
+  const visiblePortRows = ports
+    .filter((p) => portsView === 'all' || p.state.toLowerCase().includes('listen'))
     .reduce<HostPortRow[]>((acc, cur) => {
       const idx = acc.findIndex((x) => x.protocol === cur.protocol && x.port === cur.port)
       if (idx === -1) {
@@ -179,7 +180,7 @@ export function MonitorPage(): ReactElement {
       }
       return acc
     }, [])
-  const listeningPorts = listeningPortRows.length
+  const listeningPorts = ports.filter((p) => p.state.toLowerCase().includes('listen')).length
   const runningContainers = containers.filter((c) => c.state === 'running').length
   const dockerNetworks = dockerNetworkCount
   const alerts: string[] = []
@@ -320,8 +321,32 @@ export function MonitorPage(): ReactElement {
 
       {/* Engineering Hub Row - 2 Columns */}
       <div id="monitor-docker" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: 20 }}>
-        <MetricCard title="ACTIVE PORTS (LISTEN)" value={`${listeningPorts}`} subValue="Open listening sockets" titleColor="#66bb6a" valueColor="#81c784">
+        <MetricCard
+          title={portsView === 'listen' ? 'ACTIVE PORTS (LISTEN)' : 'ACTIVE PORTS (ALL)'}
+          value={`${visiblePortRows.length}`}
+          subValue={portsView === 'listen' ? 'Open listening sockets' : 'All discovered sockets'}
+          titleColor="#66bb6a"
+          valueColor="#81c784"
+        >
           <div style={{ maxHeight: 300, overflow: 'auto', marginTop: 10 }}>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+              <button
+                type="button"
+                className="hp-btn"
+                onClick={() => setPortsView('listen')}
+                style={{ opacity: portsView === 'listen' ? 1 : 0.65 }}
+              >
+                LISTEN only
+              </button>
+              <button
+                type="button"
+                className="hp-btn"
+                onClick={() => setPortsView('all')}
+                style={{ opacity: portsView === 'all' ? 1 : 0.65 }}
+              >
+                Show all
+              </button>
+            </div>
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 10 }}>
               Listening sockets refresh automatically (about every 10 seconds).
             </div>
@@ -335,14 +360,14 @@ export function MonitorPage(): ReactElement {
                 </tr>
               </thead>
               <tbody>
-                {listeningPortRows.length === 0 ? (
+                {visiblePortRows.length === 0 ? (
                   <tr>
                     <td colSpan={4} style={{ padding: '12px 4px', color: 'var(--text-muted)' }}>
                       No listening ports detected.
                     </td>
                   </tr>
                 ) : (
-                  listeningPortRows.slice(0, 25).map((p, i) => {
+                  visiblePortRows.slice(0, 25).map((p, i) => {
                   const isListening = p.state.toLowerCase().includes('listen')
                   const stateColor = isListening ? 'var(--green)' : '#ffb74d'
                   const stateBg = isListening ? 'rgba(0,230,118,0.12)' : 'rgba(255,183,77,0.14)'

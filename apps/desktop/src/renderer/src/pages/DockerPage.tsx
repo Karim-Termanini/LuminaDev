@@ -139,7 +139,11 @@ export function DockerPage(): ReactElement {
         window.dh.dockerImagesList().catch(e => ({ ok: false, error: String(e) })),
         window.dh.dockerVolumesList().catch(e => ({ ok: false, error: String(e) })),
         window.dh.dockerNetworksList().catch(e => ({ ok: false, error: String(e) }))
-      ]) as any[]
+      ]) as [
+        { ok: boolean; rows: ImageRow[]; error?: string },
+        { ok: boolean; rows: VolumeRow[]; error?: string },
+        { ok: boolean; rows: NetworkRow[]; error?: string }
+      ]
 
       if (imgRes.ok) setImages(imgRes.rows)
       if (netRes.ok) setNetworks(netRes.rows)
@@ -1170,9 +1174,18 @@ export function DockerPage(): ReactElement {
                           className="hp-input"
                           value={remapContainerId}
                           onChange={(e) => setRemapContainerId(e.target.value)}
+                          style={{
+                            width: '100%',
+                            background: '#1e1e1e',
+                            color: '#e8e8e8',
+                            border: '1px solid var(--border)',
+                            height: 38,
+                            appearance: 'none',
+                            padding: '0 12px'
+                          }}
                         >
                           {rowsWithPorts.map((r) => (
-                            <option key={r.id} value={r.id}>
+                            <option key={r.id} value={r.id} style={{ background: '#1e1e1e', color: '#e8e8e8' }}>
                               {r.name} ({r.id.slice(0, 12)}) — {r.ports}
                             </option>
                           ))}
@@ -1876,7 +1889,7 @@ function ContainerTable(props: ContainerTableProps & { onConsole: (row: Containe
       {rows.length === 0 ? (
         <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>No containers in this group.</div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 16 }}>
           {rows.map((r) => {
             const isRunning = r.state.toLowerCase() === 'running'
             return (
@@ -1965,8 +1978,12 @@ function DockerTerminalModal({ container, onClose }: { container: ContainerRow; 
     const term = new Terminal({
       cursorBlink: true,
       fontFamily: 'JetBrains Mono, monospace',
-      fontSize: 13,
-      theme: { background: '#0a0a0a', foreground: '#e8e8e8', cursor: '#7c4dff' },
+      convertEol: true,
+      theme: {
+        background: '#0d0d0d',
+        foreground: '#e8e8e8',
+        cursor: '#7c4dff',
+      },
     })
     const fit = new FitAddon()
     term.loadAddon(fit)
@@ -2031,7 +2048,14 @@ function DockerTerminalModal({ container, onClose }: { container: ContainerRow; 
           <div style={{ fontWeight: 600 }}>Terminal: {container.name}</div>
           <button onClick={onClose} style={closeBtn}>&times;</button>
         </div>
-        <div ref={termWrapRef} style={{ flex: 1, background: '#0a0a0a', borderRadius: 8, padding: 8, overflow: 'hidden' }} />
+        <div
+          ref={termWrapRef}
+          onClick={() => {
+            const ta = termWrapRef.current?.querySelector('.xterm-helper-textarea') as HTMLTextAreaElement | null
+            ta?.focus()
+          }}
+          style={{ flex: 1, background: '#0a0a0a', borderRadius: 8, padding: 8, overflow: 'hidden' }}
+        />
       </div>
     </div>
   )

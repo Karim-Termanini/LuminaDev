@@ -19,6 +19,7 @@ export function TerminalPage(): ReactElement {
     const term = new Terminal({
       cursorBlink: true,
       fontFamily: 'JetBrains Mono, monospace',
+      convertEol: true,
       theme: {
         background: '#0d0d0d',
         foreground: '#e8e8e8',
