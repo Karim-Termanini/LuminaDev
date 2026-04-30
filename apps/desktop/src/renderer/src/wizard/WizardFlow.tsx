@@ -259,3 +259,13 @@ const input = {
   boxSizing: 'border-box' as const,
 }
 
+const pre = {
+  background: '#0a0a0a',
+  padding: 10,
+  borderRadius: 6,
+  border: '1px solid var(--border)',
+  whiteSpace: 'pre-wrap' as const,
+  wordBreak: 'break-all' as const,
+  fontSize: 12,
+}
+
