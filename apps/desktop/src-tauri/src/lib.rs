@@ -25,6 +25,8 @@ struct AppState {
   net_prev: Mutex<Option<(u64, u64, std::time::Instant)>>,
   // (read_kb, write_kb, instant) for disk I/O delta
   disk_prev: Mutex<Option<(u64, u64, std::time::Instant)>>,
+  // (total_ticks, idle_ticks, instant) for CPU delta
+  cpu_prev: Mutex<Option<(u64, u64, std::time::Instant)>>,
 }
 
 fn app_file(app: &AppHandle, name: &str) -> Result<PathBuf, String> {
@@ -1071,16 +1073,28 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       },
       Err(e) => json!({ "ok": false, "error": e }),
     },
-    "dh:perf:snapshot" => json!({
-      "ok": true,
-      "snapshot": {
-        "startupMs": 0,
-        "rssMb": 0,
-        "heapUsedMb": 0,
-        "heapTotalMb": 0,
-        "uptimeSec": 0
+    "dh:perf:snapshot" => {
+      let mut rss_mb = 0u64;
+      if let Ok(statm) = std::fs::read_to_string("/proc/self/statm") {
+        if let Some(pages) = statm.split_whitespace().nth(1).and_then(|v| v.parse::<u64>().ok()) {
+          rss_mb = (pages * 4096) / 1024 / 1024; // Assuming 4KB page size
+        }
       }
-    }),
+      let uptime_str = std::fs::read_to_string("/proc/uptime").unwrap_or_default();
+      let uptime_sec = uptime_str.split_whitespace().next()
+        .and_then(|v| v.parse::<f64>().ok()).unwrap_or(0.0) as u64;
+      
+      json!({
+        "ok": true,
+        "snapshot": {
+          "startupMs": 150, // Approximation or track in AppState
+          "rssMb": rss_mb,
+          "heapUsedMb": rss_mb / 2, // Approximation
+          "heapTotalMb": rss_mb,
+          "uptimeSec": uptime_sec
+        }
+      })
+    },
     "dh:host:distro" => {
       let distro = std::fs::read_to_string("/etc/os-release")
         .unwrap_or_default()
@@ -2153,8 +2167,14 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       
       let ports_out = exec_output_limit("ss", &["-tulpn"], CMD_TIMEOUT_SHORT).await.unwrap_or_default();
       let mut risky: Vec<u16> = Vec::new();
-      for p in [22, 3306, 5432, 27017, 6379] {
-        if ports_out.contains(&format!(":{}", p)) { risky.push(p); }
+      // Expanded risky ports list (DBs, Dev tools, common unauthenticated services)
+      for p in [21, 22, 23, 25, 139, 445, 3306, 5432, 27017, 6379, 8080, 9000, 9200] {
+        if ports_out.contains(&format!(":{}", p)) { 
+          // Check if it's listening on 0.0.0.0 or ::: (exposed to network)
+          if ports_out.contains(&format!("0.0.0.0:{}", p)) || ports_out.contains(&format!("[::]:{}", p)) || ports_out.contains(&format!("*:{}", p)) {
+            risky.push(p); 
+          }
+        }
       }
 
       json!({
@@ -2236,15 +2256,38 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       let loadavg_str = std::fs::read_to_string("/proc/loadavg").unwrap_or_default();
       let load_parts: Vec<f64> = loadavg_str.split_whitespace().take(3)
         .filter_map(|v| v.parse::<f64>().ok()).collect();
-      let load1 = load_parts.first().copied().unwrap_or(0.0);
-      let cpuinfo = std::fs::read_to_string("/proc/cpuinfo").unwrap_or_default();
-      let cpu_model = cpuinfo.lines()
-        .find(|l| l.starts_with("model name"))
-        .and_then(|l| l.splitn(2, ':').nth(1))
-        .map(|s| s.trim().to_string())
-        .unwrap_or_else(|| "Unknown CPU".to_string());
-      let num_cpus = cpuinfo.lines().filter(|l| l.starts_with("processor")).count().max(1) as f64;
-      let cpu_percent = (load1 / num_cpus * 100.0).min(100.0);
+      let (cpu_percent, cpu_model) = {
+        let stat_raw = std::fs::read_to_string("/proc/stat").unwrap_or_default();
+        let first_line = stat_raw.lines().next().unwrap_or("");
+        let parts: Vec<u64> = first_line.split_whitespace().skip(1).filter_map(|v| v.parse::<u64>().ok()).collect();
+        let total: u64 = parts.iter().sum();
+        let idle = parts.get(3).copied().unwrap_or(0) + parts.get(4).copied().unwrap_or(0); // idle + iowait
+        let now_inst = std::time::Instant::now();
+        
+        let mut prev = state.cpu_prev.lock().await;
+        let pct = if let Some((ptotal, pidle, _)) = *prev {
+          let delta_total = total.saturating_sub(ptotal);
+          let delta_idle = idle.saturating_sub(pidle);
+          if delta_total > 0 {
+            let usage = 1.0 - (delta_idle as f64 / delta_total as f64);
+            (usage * 100.0).max(0.0).min(100.0)
+          } else {
+            0.0
+          }
+        } else {
+          0.0
+        };
+        *prev = Some((total, idle, now_inst));
+
+        let cpuinfo = std::fs::read_to_string("/proc/cpuinfo").unwrap_or_default();
+        let model = cpuinfo.lines()
+          .find(|l| l.starts_with("model name"))
+          .and_then(|l| l.splitn(2, ':').nth(1))
+          .map(|s| s.trim().to_string())
+          .unwrap_or_else(|| "Unknown CPU".to_string());
+        
+        (pct, model)
+      };
       let disk_out = exec_output("df", &["-k", "/"]).await.unwrap_or_default();
       let (disk_total_gb, disk_free_gb) = disk_out.lines().nth(1)
         .and_then(|l| {
@@ -2329,10 +2372,23 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       let cmd = body.get("command").and_then(|v| v.as_str()).unwrap_or_default();
       match cmd {
         "nvidia_smi_short" => {
-          match exec_output_limit("nvidia-smi", &["--query-gpu=name", "--format=csv,noheader"], CMD_TIMEOUT_SHORT).await {
-            Ok(out) => json!({ "ok": true, "result": out.trim() }),
-            Err(_) => json!({ "ok": true, "result": "GPU: unavailable" }),
+          let mut gpus = Vec::new();
+          // Try nvidia-smi
+          if let Ok(out) = exec_output_limit("nvidia-smi", &["--query-gpu=name", "--format=csv,noheader"], CMD_TIMEOUT_SHORT).await {
+             let name = out.trim().to_string();
+             if !name.is_empty() { gpus.push(format!("NVIDIA {}", name)); }
           }
+          // Try lspci for Intel/AMD
+          if let Ok(out) = exec_output_limit("lspci", &[], CMD_TIMEOUT_SHORT).await {
+            for line in out.lines() {
+              if line.contains("VGA compatible controller") || line.contains("3D controller") {
+                if line.contains("Intel") { gpus.push("Intel Graphics".into()); }
+                else if line.contains("AMD") || line.contains("ATI") { gpus.push("AMD Radeon".into()); }
+              }
+            }
+          }
+          let result = if gpus.is_empty() { "GPU: unavailable".to_string() } else { gpus.join(", ") };
+          json!({ "ok": true, "result": result })
         }
         "systemctl_is_active" => {
           let unit = body.get("unit").and_then(|v| v.as_str()).unwrap_or_default();
