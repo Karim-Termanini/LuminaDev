@@ -92,6 +92,8 @@ export function RuntimesPage(): ReactElement {
   const [addToPath, setAddToPath] = useState(true)
   const [sudoPassword, setSudoPassword] = useState('')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [settingActivePath, setSettingActivePath] = useState<string | null>(null)
+  const [removingVersionPath, setRemovingVersionPath] = useState<string | null>(null)
 
   const VERSIONS_CACHE_KEY = 'dh:runtimes:versions-cache:v1'
   const VERSIONS_CACHE_TTL = 5 * 60 * 1000 // 5 minutes
@@ -175,6 +177,41 @@ export function RuntimesPage(): ReactElement {
       setIsRefreshing(false)
     }
   }, [])
+
+  const setRuntimeActive = useCallback(
+    async (path: string) => {
+      setSettingActivePath(path)
+      setErrorMessage(null)
+      try {
+        const res = await window.dh.runtimeSetActive({ runtimeId: selectedId, path })
+        assertRuntimeOk(res, 'Failed to set active runtime.')
+        await refreshStatus()
+      } catch (e) {
+        setErrorMessage(humanizeRuntimeError(e))
+      } finally {
+        setSettingActivePath(null)
+      }
+    },
+    [refreshStatus, selectedId],
+  )
+
+  const removeVersion = useCallback(
+    async (version: string, path: string) => {
+      if (!window.confirm(`Remove ${selectedId} ${version}?\n\nThis will delete the installation directory. This cannot be undone.`)) return
+      setRemovingVersionPath(path)
+      setErrorMessage(null)
+      try {
+        const res = await window.dh.runtimeRemoveVersion({ runtimeId: selectedId, version, path })
+        assertRuntimeOk(res, 'Failed to remove version.')
+        await refreshStatus()
+      } catch (e) {
+        setErrorMessage(humanizeRuntimeError(e))
+      } finally {
+        setRemovingVersionPath(null)
+      }
+    },
+    [refreshStatus, selectedId],
+  )
 
   useEffect(() => {
     void refreshStatus()
@@ -541,11 +578,52 @@ export function RuntimesPage(): ReactElement {
                         <div style={{ fontSize: 14, fontWeight: 700 }}>Version {v.version}</div>
                         <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, fontFamily: 'monospace' }}>{v.path}</div>
                       </div>
-                      {v.path === selectedRuntime.path && (
-                        <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--green)', padding: '2px 8px', borderRadius: 10, border: '1px solid rgba(0,230,118,0.3)', background: 'rgba(0,230,118,0.05)' }}>
-                          ACTIVE
-                        </span>
-                      )}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        {v.path === selectedRuntime.path && (
+                          <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--green)', padding: '2px 8px', borderRadius: 10, border: '1px solid rgba(0,230,118,0.3)', background: 'rgba(0,230,118,0.05)' }}>
+                            ACTIVE
+                          </span>
+                        )}
+                        {v.path !== selectedRuntime.path && (
+                          <button
+                            type="button"
+                            onClick={() => void setRuntimeActive(v.path)}
+                            disabled={installInProgress || settingActivePath === v.path}
+                            style={{
+                              fontSize: 11,
+                              fontWeight: 800,
+                              padding: '6px 10px',
+                              borderRadius: 10,
+                              border: '1px solid var(--border)',
+                              background: 'rgba(255,255,255,0.04)',
+                              color: 'var(--text-main)',
+                              cursor: installInProgress || settingActivePath === v.path ? 'default' : 'pointer',
+                              opacity: installInProgress || settingActivePath === v.path ? 0.55 : 1,
+                            }}
+                          >
+                            {settingActivePath === v.path ? 'Switching…' : 'Set active'}
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => void removeVersion(v.version, v.path)}
+                          disabled={installInProgress || removingVersionPath === v.path || v.path === selectedRuntime.path}
+                          title={v.path === selectedRuntime.path ? 'Cannot remove active version' : `Remove ${v.version}`}
+                          style={{
+                            fontSize: 11,
+                            fontWeight: 800,
+                            padding: '6px 10px',
+                            borderRadius: 10,
+                            border: '1px solid rgba(255,82,82,0.3)',
+                            background: 'rgba(255,82,82,0.08)',
+                            color: v.path === selectedRuntime.path ? 'var(--text-muted)' : '#ff5252',
+                            cursor: installInProgress || removingVersionPath === v.path || v.path === selectedRuntime.path ? 'default' : 'pointer',
+                            opacity: installInProgress || removingVersionPath === v.path || v.path === selectedRuntime.path ? 0.4 : 1,
+                          }}
+                        >
+                          {removingVersionPath === v.path ? 'Removing…' : 'Remove'}
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>

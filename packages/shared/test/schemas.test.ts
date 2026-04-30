@@ -10,6 +10,7 @@ import {
   HostExecRequestSchema,
   RuntimeCheckDepsRequestSchema,
   RuntimeGetVersionsRequestSchema,
+  RuntimeSetActiveRequestSchema,
   RuntimeUninstallPreviewRequestSchema,
   SshGenerateSchema,
   StoreSetRequestSchema,
@@ -76,10 +77,23 @@ describe('schemas', () => {
 
   it('validates runtime version/check-deps request payload bounds', () => {
     expect(RuntimeGetVersionsRequestSchema.parse({ runtimeId: 'node' })).toEqual({ runtimeId: 'node' })
+    expect(RuntimeGetVersionsRequestSchema.parse({ runtimeId: 'node', method: 'local' })).toEqual({
+      runtimeId: 'node',
+      method: 'local',
+    })
     expect(RuntimeCheckDepsRequestSchema.parse({ runtimeId: 'python' })).toEqual({ runtimeId: 'python' })
     expect(() =>
       RuntimeGetVersionsRequestSchema.parse({ runtimeId: '' })
     ).toThrow()
+  })
+
+  it('validates runtime set-active payload', () => {
+    expect(RuntimeSetActiveRequestSchema.parse({ runtimeId: 'go', path: '/home/u/.local/share/lumina/go/1.22.0/bin/go' })).toEqual({
+      runtimeId: 'go',
+      path: '/home/u/.local/share/lumina/go/1.22.0/bin/go',
+    })
+    expect(() => RuntimeSetActiveRequestSchema.parse({ runtimeId: '', path: '/x' })).toThrow()
+    expect(() => RuntimeSetActiveRequestSchema.parse({ runtimeId: 'go', path: '' })).toThrow()
   })
 
   it('validates runtime uninstall preview payload and default mode', () => {
