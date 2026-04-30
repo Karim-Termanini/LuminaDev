@@ -15,6 +15,7 @@ export function TerminalPage(): ReactElement {
   useEffect(() => {
     const el = wrapRef.current
     if (!el) return
+    let cancelled = false
 
     const term = new Terminal({
       cursorBlink: true,
@@ -35,6 +36,10 @@ export function TerminalPage(): ReactElement {
     void (async () => {
       try {
         const res = await window.dh.terminalCreate({ cols: term.cols, rows: term.rows })
+        if (cancelled) {
+          if (res.ok && res.id) window.dh.terminalClose(res.id)
+          return
+        }
         if (!res.ok) {
           setErr(humanizeTerminalError(res.error))
           setFallbackHint(true)
@@ -57,7 +62,9 @@ export function TerminalPage(): ReactElement {
 
     const onData = (d: string): void => {
       const id = sessionRef.current
-      if (id) window.dh.terminalWrite(id, d)
+      if (id) {
+        window.dh.terminalWrite(id, d)
+      }
     }
     term.onData(onData)
 
@@ -80,6 +87,7 @@ export function TerminalPage(): ReactElement {
     ro.observe(el)
 
     return () => {
+      cancelled = true
       ro.disconnect()
       offOut()
       offExit()

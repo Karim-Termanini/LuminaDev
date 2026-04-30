@@ -521,6 +521,67 @@ This file is a living engineering memory, not static documentation.
   - no behavioral logic changed; UI-only refinements on existing flows
   - typography and contrast updates localized to renderer theme/page components
 
+### Phase 7 Docker & Terminal Hardening (2026-04-30)
+
+- **Docker Terminal Stabilization (PTY Implementation):**
+  - Replaced legacy `tokio::process::Command` pipes with `portable-pty` for authentic TTY support.
+  - **Memory Safety:** Implemented `Arc<StdMutex<TerminalSession>>` pattern to ensure thread-safe access between the background reader thread and the IPC writer handler.
+  - **Input Reliability:** Added a dedicated `writer` handle to `TerminalSession` to ensure deterministic `stdin` writing with explicit `flush()`, resolving "character swallowing" and input lag.
+  - **Error Fixes:** Resolved "Not a tty" and "no job control" shell warnings by providing a real pseudo-terminal environment.
+- **Docker UX & Lifecycle Hardening:**
+  - **Keep-alive Logic:** Utility containers (e.g. `bash`, `alpine`) now default to a background sleep loop (`while true; do sleep 3600; done`) if no command is provided, preventing immediate container exit after creation.
+  - **Network Detection:** Implemented fallback logic for containers on the default `bridge` network where `docker ps --format {{.Networks}}` occasionally returns empty strings.
+  - **Network Customization:** Added `--network` support to the `docker:create` IPC flow.
+- **SSH Integration Expansion:**
+  - Added `dh:ssh:list:dir` for remote file exploration.
+  - Added `dh:ssh:setup:remote:key` with `sshpass` fallback support for automated remote key deployment.
+- **UI/UX Refinements (Batch 6):**
+  - **Terminal Fallback:** Restored "Open External Terminal" button to provide native shell interaction as a backup to the embedded PTY.
+  - **Theming Fixes:** Applied `appearance: none` and explicit dark backgrounds to `select` elements in `DockerPage.tsx` to fix white-on-white text in the Port Remapping UI.
+  - **Responsive Layout:** Increased grid `minmax` to `340px` for container cards to prevent overflow and layout breaking on narrower viewports.
+- **Verification Evidence:**
+  - `pnpm typecheck` green.
+  - Docker terminal confirmed interactive with working prompts and echo (no duplicate characters).
+  - Alpine/Bash containers confirmed staying active after creation.
+
+---
+
+## 12) Continuous Incident Log (Batch 2)
+
+#### 2026-04-30 — Terminal Input "Staircase" and "No Echo"
+- **Area:** IPC / Terminal / PTY
+- **Symptom:** User typed but saw nothing (no echo), or output was shifted horizontally (missing CRLF).
+- **Root cause:** Use of standard pipes instead of a real PTY. Shells (bash/sh) disable interactive features when not connected to a TTY.
+- **Impact:** Embedded terminal was functionally unusable for interactive sessions.
+- **Fix implemented:** Migrated backend to `portable-pty` and enabled `convertEol: true` in xterm.js.
+- **Preventive action:** Never use raw pipes for interactive shells in the future. Always use a PTY crate.
+- **Status:** resolved
+
+#### 2026-04-30 — Rust Memory Corruption (segfault) in Terminal
+- **Area:** Backend / Rust / Threads
+- **Symptom:** App crashed with `free(): corrupted unsorted chunks` when opening a terminal.
+- **Root cause:** Race condition between the PTY reader thread and the IPC handler thread accessing the same PTY Master without safe synchronization (Arc/Mutex).
+- **Impact:** Immediate app crash.
+- **Fix implemented:** Wrapped `MasterPty` and `Child` in `Arc<StdMutex<...>>` in the `TerminalSession` struct.
+- **Preventive action:** Any native resource shared between threads in Rust must use `Arc<Mutex>` or equivalent sync primitives.
+- **Status:** resolved
+
+#### 2026-04-30 — Duplicate characters ("llss") in Terminal
+- **Area:** Terminal / IO
+- **Symptom:** Typing one character resulted in two being displayed.
+- **Root cause:** Over-engineering the shell startup with `script` command to fake a TTY. `script` echos input back to stdout while the shell also echos, leading to double characters.
+- **Impact:** Visual corruption and confusing interaction.
+- **Fix implemented:** Removed `script` hack after implementing real PTY backend.
+- **Status:** resolved
+
+#### 2026-04-30 — UI Card Overflow in Docker Dashboard
+- **Area:** CSS / Responsive UI
+- **Symptom:** Container cards were too small for their content, causing text overlap and layout breaking.
+- **Root cause:** `grid-template-columns` used a `minmax(300px, 1fr)` which was too narrow for the container metadata.
+- **Impact:** Poor readability and broken "Premium" aesthetic.
+- **Fix implemented:** Updated to `minmax(340px, 1fr)` in `DockerPage.tsx`.
+- **Status:** resolved
+
 ### Tauri migration kickoff (pre-release freeze)
 
 - Decision:
@@ -551,7 +612,7 @@ This file is a living engineering memory, not static documentation.
   - mitigation applied:
     - CI workflow updated to install required Tauri Linux dependencies before Tauri build job
 
-### Agent B renderer parity pass (2026-04-29)
+### renderer parity pass (2026-04-29)
 
 - Renderer parity audit completed across all 8 target pages:
   - `DockerPage`, `TerminalPage`, `MaintenancePage`, `MonitorPage`, `RegistryPage`, `RuntimesPage`, `SshPage`, `GitConfigPage`

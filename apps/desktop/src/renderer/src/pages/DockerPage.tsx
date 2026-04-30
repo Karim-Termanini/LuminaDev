@@ -75,12 +75,14 @@ export function DockerPage(): ReactElement {
   const [refreshing, setRefreshing] = useState(false)
   const [createdInfo, setCreatedInfo] = useState<string>('')
   const [customNames, setCustomNames] = useState<Record<string, string>>({})
+  const [exampleNetworks, setExampleNetworks] = useState<Record<string, string>>({})
   const [pullImage, setPullImage] = useState('')
   const [customImage, setCustomImage] = useState('nginx:latest')
   const [customName, setCustomName] = useState('')
   const [customPortsText, setCustomPortsText] = useState('8080:80')
   const [customVolumesText, setCustomVolumesText] = useState('')
   const [customEnvText, setCustomEnvText] = useState('')
+  const [customNetworkMode, setCustomNetworkMode] = useState('bridge')
   const [autoStart, setAutoStart] = useState(true)
   const [createVolumeName, setCreateVolumeName] = useState('')
   const [createNetworkName, setCreateNetworkName] = useState('')
@@ -106,8 +108,22 @@ export function DockerPage(): ReactElement {
   const [remapContainerId, setRemapContainerId] = useState('')
   const [remapOldPort, setRemapOldPort] = useState('')
   const [remapNewPort, setRemapNewPort] = useState('')
+  const [remapNetworkMode, setRemapNetworkMode] = useState('bridge')
   const [remapBusy, setRemapBusy] = useState(false)
   const [remapFeedback, setRemapFeedback] = useState<string | null>(null)
+  const [removeDialog, setRemoveDialog] = useState<{
+    open: boolean
+    id: string
+    image: string
+    removeVolumes: boolean
+    removeImage: boolean
+  }>({
+    open: false,
+    id: '',
+    image: '',
+    removeVolumes: false,
+    removeImage: false,
+  })
   const detectedInstallFamily: InstallDistroId | null = ['ubuntu', 'debian', 'linuxmint', 'pop', 'elementary', 'raspbian'].includes(hostDistroId)
     ? 'ubuntu'
     : ['fedora', 'rhel', 'centos', 'rocky', 'alma', 'amzn'].includes(hostDistroId)
@@ -210,6 +226,18 @@ export function DockerPage(): ReactElement {
   }, [tab])
 
   useEffect(() => {
+    if (!pruneInfo) return
+    const t = window.setTimeout(() => setPruneInfo(''), 6000)
+    return () => window.clearTimeout(t)
+  }, [pruneInfo])
+
+  useEffect(() => {
+    if (!createdInfo) return
+    const t = window.setTimeout(() => setCreatedInfo(''), 6000)
+    return () => window.clearTimeout(t)
+  }, [createdInfo])
+
+  useEffect(() => {
     if (tab !== 'ports' || !docker?.ok) return
     const withP = docker.rows.filter((r) => r.ports !== '—')
     if (withP.length === 0) {
@@ -219,7 +247,15 @@ export function DockerPage(): ReactElement {
     setRemapContainerId((current) =>
       current && withP.some((r) => r.id === current) ? current : withP[0].id,
     )
+    setRemapOldPort((current) => current || extractFirstHostPort(withP[0].ports))
   }, [tab, docker])
+
+  useEffect(() => {
+    if (!remapContainerId) return
+    const selected = docker?.ok ? docker.rows.find((r) => r.id === remapContainerId) : undefined
+    const firstNet = selected?.networks?.[0]
+    if (firstNet) setRemapNetworkMode(firstNet)
+  }, [remapContainerId, docker])
 
 
   useEffect(() => {
@@ -274,10 +310,12 @@ export function DockerPage(): ReactElement {
   }
 
   async function runRemapPort(): Promise<void> {
-    const oldHost = Number.parseInt(remapOldPort, 10)
+    const selectedId = remapContainerId.trim() || rowsWithPorts[0]?.id || ''
+    const selected = rowsWithPorts.find((r) => r.id === selectedId)
+    const oldPortRaw = remapOldPort || (selected ? extractFirstHostPort(selected.ports) : '')
+    const oldHost = Number.parseInt(oldPortRaw, 10)
     const newHost = Number.parseInt(remapNewPort, 10)
-    const id = remapContainerId.trim()
-    if (!id || !Number.isFinite(oldHost) || !Number.isFinite(newHost)) {
+    if (!selectedId || !Number.isFinite(oldHost) || !Number.isFinite(newHost)) {
       setRemapFeedback('Choose a container and enter numeric host ports.')
       return
     }
@@ -285,9 +323,10 @@ export function DockerPage(): ReactElement {
     setRemapFeedback(null)
     try {
       const res = (await window.dh.dockerRemapPort({
-        id,
+        id: selectedId,
         oldHostPort: oldHost,
         newHostPort: newHost,
+        networkMode: remapNetworkMode,
       })) as { ok: boolean; error?: string }
       if (res.ok) {
         setRemapFeedback('Remap finished. Container list refreshed.')
@@ -306,13 +345,41 @@ export function DockerPage(): ReactElement {
 
   async function runAction(id: string, action: 'start' | 'stop' | 'restart' | 'remove'): Promise<void> {
     if (action === 'remove') {
-      const yes = window.confirm('Remove this stopped container? This cannot be undone.')
-      if (!yes) return
+      const row = rows.find((r) => r.id === id)
+      setRemoveDialog({
+        open: true,
+        id,
+        image: row?.image ?? '',
+        removeVolumes: false,
+        removeImage: false,
+      })
+      return
     }
     setBusy(true)
     try {
       const res = await window.dh.dockerAction({ id, action })
       assertDockerOk(res, 'Container action failed.')
+      await refreshAll()
+    } catch (e) {
+      setErr(humanizeDockerError(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function confirmRemoveContainer(): Promise<void> {
+    if (!removeDialog.id) return
+    setBusy(true)
+    try {
+      const res = await window.dh.dockerAction({
+        id: removeDialog.id,
+        action: 'remove',
+        removeVolumes: removeDialog.removeVolumes,
+        removeImage: removeDialog.removeImage,
+        image: removeDialog.image,
+      })
+      assertDockerOk(res, 'Container removal failed.')
+      setRemoveDialog((s) => ({ ...s, open: false }))
       await refreshAll()
     } catch (e) {
       setErr(humanizeDockerError(e))
@@ -424,11 +491,15 @@ export function DockerPage(): ReactElement {
     try {
       const res = (await window.dh.dockerCleanupRun(pruneSelection)) as {
         ok: boolean
-        reclaimedBytes: number
+        reclaimedBytes: number | string | null | undefined
         error?: string
       }
       assertDockerOk(res, 'Docker cleanup failed.')
-      const mb = Math.round((res.reclaimedBytes / (1024 * 1024)) * 10) / 10
+      const reclaimedBytes = typeof res.reclaimedBytes === 'number'
+        ? res.reclaimedBytes
+        : Number.parseFloat(String(res.reclaimedBytes ?? '0'))
+      const safeBytes = Number.isFinite(reclaimedBytes) && reclaimedBytes > 0 ? reclaimedBytes : 0
+      const mb = Math.round((safeBytes / (1024 * 1024)) * 10) / 10
       setPruneInfo(`Cleanup finished. Reclaimed ~${mb} MB.`)
       await refreshAll()
       await previewCleanup()
@@ -492,11 +563,13 @@ export function DockerPage(): ReactElement {
   function applyExampleToForm(example: CreateExample): void {
     const key = `${example.title}-${example.image}`
     const typedName = (customNames[key] ?? '').trim()
+    const selectedNetwork = (exampleNetworks[key] ?? '').trim()
     setCustomImage(example.image)
     setCustomName(typedName)
     setCustomPortsText(example.ports ?? '')
     setCustomVolumesText(example.volumes ?? '')
     setCustomEnvText(example.env ?? '')
+    setCustomNetworkMode(selectedNetwork || 'bridge')
     setCreatedInfo(`Filled form from example: ${example.title}`)
   }
 
@@ -536,6 +609,7 @@ export function DockerPage(): ReactElement {
         volumes,
         env,
         autoStart,
+        networkMode: customNetworkMode,
       })) as { ok: boolean; id?: string; error?: string }
       if (!res.ok || !res.id) {
         throw new Error(res.error || 'Container creation failed.')
@@ -612,19 +686,28 @@ export function DockerPage(): ReactElement {
         <div className="hp-status-alert success">
           <span style={{ fontSize: 18 }}>✔</span>
           <span>{pruneInfo}</span>
+          <button type="button" className="hp-btn" style={{ marginInlineStart: 'auto' }} onClick={() => setPruneInfo('')}>
+            Close
+          </button>
         </div>
       ) : null}
       {createdInfo ? (
         <div className="hp-status-alert success">
           <span style={{ fontSize: 18 }}>✔</span>
           <span>{createdInfo}</span>
+          <button type="button" className="hp-btn" style={{ marginInlineStart: 'auto' }} onClick={() => setCreatedInfo('')}>
+            Close
+          </button>
         </div>
       ) : null}
       {err ? (
         <div className="hp-status-alert warning">
           <span style={{ fontSize: 18 }}>⚠</span>
           <span>{err}</span>
-          <button type="button" className="hp-btn" onClick={() => void refreshAll()} style={{ marginLeft: 10, marginInlineStart: 'auto' }}>
+          <button type="button" className="hp-btn" onClick={() => setErr('')} style={{ marginInlineStart: 'auto' }}>
+            Close
+          </button>
+          <button type="button" className="hp-btn" onClick={() => void refreshAll()} style={{ marginLeft: 10 }}>
             Retry
           </button>
         </div>
@@ -755,6 +838,22 @@ export function DockerPage(): ReactElement {
                 <textarea value={customPortsText} onChange={(e) => setCustomPortsText(e.target.value)} placeholder="Ports: host:container per line (e.g. 8080:80)" className="hp-input" style={{ minHeight: 60 }} />
                 <textarea value={customVolumesText} onChange={(e) => setCustomVolumesText(e.target.value)} placeholder="Volumes: /host/path:/container/path per line" className="hp-input" style={{ minHeight: 60 }} />
                 <textarea value={customEnvText} onChange={(e) => setCustomEnvText(e.target.value)} placeholder="Env: KEY=VALUE per line" className="hp-input" style={{ minHeight: 60 }} />
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13 }}>
+                  <span style={{ fontWeight: 600 }}>Network mode</span>
+                  <select className="hp-input" value={customNetworkMode} onChange={(e) => setCustomNetworkMode(e.target.value)}>
+                    <option value="bridge">bridge</option>
+                    <option value="host">host</option>
+                    <option value="none">none</option>
+                    {networks
+                      .map((n) => n.name)
+                      .filter((name, idx, arr) => !['bridge', 'host', 'none'].includes(name) && arr.indexOf(name) === idx)
+                      .map((name) => (
+                        <option key={name} value={name}>
+                          {name}
+                        </option>
+                      ))}
+                  </select>
+                </label>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
                   <input type="checkbox" checked={autoStart} onChange={(e) => setAutoStart(e.target.checked)} />
                   Auto start after create
@@ -796,6 +895,30 @@ export function DockerPage(): ReactElement {
                     className="hp-input"
                     disabled={busy}
                   />
+                  <select
+                    className="hp-input"
+                    value={exampleNetworks[`${ex.title}-${ex.image}`] ?? 'bridge'}
+                    onChange={(e) =>
+                      setExampleNetworks((prev) => ({
+                        ...prev,
+                        [`${ex.title}-${ex.image}`]: e.target.value,
+                      }))
+                    }
+                    disabled={busy}
+                    style={{ marginTop: 8 }}
+                  >
+                    <option value="bridge">bridge</option>
+                    <option value="host">host</option>
+                    <option value="none">none</option>
+                    {networks
+                      .map((n) => n.name)
+                      .filter((name, idx, arr) => !['bridge', 'host', 'none'].includes(name) && arr.indexOf(name) === idx)
+                      .map((name) => (
+                        <option key={name} value={name}>
+                          {name}
+                        </option>
+                      ))}
+                  </select>
                 </div>
                 <button
                   type="button"
@@ -1173,7 +1296,12 @@ export function DockerPage(): ReactElement {
                         <select
                           className="hp-input"
                           value={remapContainerId}
-                          onChange={(e) => setRemapContainerId(e.target.value)}
+                          onChange={(e) => {
+                            const nextId = e.target.value
+                            setRemapContainerId(nextId)
+                            const next = rowsWithPorts.find((r) => r.id === nextId)
+                            if (next) setRemapOldPort(extractFirstHostPort(next.ports))
+                          }}
                           style={{
                             width: '100%',
                             background: '#1e1e1e',
@@ -1217,6 +1345,21 @@ export function DockerPage(): ReactElement {
                             onChange={(e) => setRemapNewPort(e.target.value)}
                             style={{ width: 120 }}
                           />
+                        </label>
+                        <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13, minWidth: 180 }}>
+                          <span style={{ fontWeight: 600 }}>Target network</span>
+                          <select
+                            className="hp-input"
+                            value={remapNetworkMode}
+                            onChange={(e) => setRemapNetworkMode(e.target.value)}
+                          >
+                            {networks.map((n) => (
+                              <option key={n.name} value={n.name}>
+                                {n.name}
+                              </option>
+                            ))}
+                            {networks.length === 0 ? <option value="bridge">bridge</option> : null}
+                          </select>
                         </label>
                         <button
                           type="button"
@@ -1612,6 +1755,45 @@ export function DockerPage(): ReactElement {
           onClose={closeTerminal} 
         />
       )}
+
+      {removeDialog.open ? (
+        <div style={modalOverlay}>
+          <div style={{ ...modalContent, maxWidth: 520 }}>
+            <h3 style={{ marginTop: 0, marginBottom: 10 }}>Remove Container</h3>
+            <p style={{ marginTop: 0, color: 'var(--text-muted)', fontSize: 13 }}>
+              Confirm removal options (like Windows dialog behavior).
+            </p>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <input
+                type="checkbox"
+                checked={removeDialog.removeVolumes}
+                onChange={(e) => setRemoveDialog((s) => ({ ...s, removeVolumes: e.target.checked }))}
+              />
+              <span>Also remove attached volumes (`docker rm -v`)</span>
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+              <input
+                type="checkbox"
+                checked={removeDialog.removeImage}
+                onChange={(e) => setRemoveDialog((s) => ({ ...s, removeImage: e.target.checked }))}
+              />
+              <span>Also remove image ({removeDialog.image || 'unknown'})</span>
+            </label>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button
+                type="button"
+                className="hp-btn"
+                onClick={() => setRemoveDialog((s) => ({ ...s, open: false }))}
+              >
+                Cancel
+              </button>
+              <button type="button" className="hp-btn hp-btn-danger" onClick={() => void confirmRemoveContainer()} disabled={busy}>
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -1873,6 +2055,11 @@ function parseEnvLines(text: string): string[] {
     .filter(Boolean)
 }
 
+function extractFirstHostPort(ports: string): string {
+  const m = ports.match(/:(\d+)->/)
+  return m?.[1] ?? ''
+}
+
 type ContainerTableProps = {
   title: string
   rows: ContainerRow[]
@@ -1974,6 +2161,7 @@ function DockerTerminalModal({ container, onClose }: { container: ContainerRow; 
   useEffect(() => {
     if (!termWrapRef.current) return
     const el = termWrapRef.current
+    let cancelled = false
 
     const term = new Terminal({
       cursorBlink: true,
@@ -2001,7 +2189,12 @@ function DockerTerminalModal({ container, onClose }: { container: ContainerRow; 
           rows: term.rows
         })
       } catch (e) {
+        if (cancelled) return
         term.writeln(`\r\nError creating terminal: ${e instanceof Error ? e.message : String(e)}`)
+        return
+      }
+      if (cancelled) {
+        if (res.ok && res.id) window.dh.terminalClose(res.id)
         return
       }
       if (!res.ok || !res.id) {
@@ -2013,7 +2206,9 @@ function DockerTerminalModal({ container, onClose }: { container: ContainerRow; 
 
       const onData = (d: string): void => {
         const id = termIdRef.current
-        if (id) window.dh.terminalWrite(id, d)
+        if (id) {
+          window.dh.terminalWrite(id, d)
+        }
       }
       term.onData(onData)
 
@@ -2022,8 +2217,8 @@ function DockerTerminalModal({ container, onClose }: { container: ContainerRow; 
       })
       const offExit = window.dh.onTerminalExit(({ id }) => {
         if (id === tid) {
-          term.writeln('\r\nProcess exited.')
-          setTimeout(onClose, 1000)
+          term.writeln('\r\n[process exited — terminal remains open]')
+          termIdRef.current = undefined
         }
       })
       unlistenRef.current = () => {
@@ -2040,6 +2235,7 @@ function DockerTerminalModal({ container, onClose }: { container: ContainerRow; 
     window.addEventListener('resize', handleResize)
 
     return () => {
+      cancelled = true
       window.removeEventListener('resize', handleResize)
       unlistenRef.current?.()
       unlistenRef.current = null
