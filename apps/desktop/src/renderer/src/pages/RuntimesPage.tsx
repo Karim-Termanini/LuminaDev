@@ -71,7 +71,25 @@ export function RuntimesPage(): ReactElement {
   const [addToPath, setAddToPath] = useState(true)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
+  const VERSIONS_CACHE_KEY = 'dh:runtimes:versions-cache:v1'
+  const VERSIONS_CACHE_TTL = 5 * 60 * 1000 // 5 minutes
+
   const loadVersionsForRuntime = useCallback(async (runtimeId: string, resetDefault: boolean) => {
+    // Check localStorage cache first
+    try {
+      const raw = localStorage.getItem(VERSIONS_CACHE_KEY)
+      if (raw) {
+        const cache = JSON.parse(raw) as Record<string, { ts: number; versions: string[] }>
+        const entry = cache[runtimeId]
+        if (entry && Date.now() - entry.ts < VERSIONS_CACHE_TTL && entry.versions.length > 0) {
+          setAvailableVersions(entry.versions)
+          if (resetDefault) setSelectedVersion(pickDefaultRuntimeVersion(runtimeId, entry.versions))
+          else setSelectedVersion((prev) => (entry.versions.includes(prev) ? prev : pickDefaultRuntimeVersion(runtimeId, entry.versions)))
+          return
+        }
+      }
+    } catch { /* ignore cache read errors */ }
+
     setVersionsLoading(true)
     try {
       const res = await window.dh.getAvailableVersions(runtimeId)
@@ -84,13 +102,20 @@ export function RuntimesPage(): ReactElement {
       } else {
         setSelectedVersion((prev) => (vs.includes(prev) ? prev : pickDefaultRuntimeVersion(runtimeId, vs)))
       }
+      // Write to cache
+      try {
+        const raw = localStorage.getItem(VERSIONS_CACHE_KEY)
+        const cache: Record<string, { ts: number; versions: string[] }> = raw ? JSON.parse(raw) : {}
+        cache[runtimeId] = { ts: Date.now(), versions: vs }
+        localStorage.setItem(VERSIONS_CACHE_KEY, JSON.stringify(cache))
+      } catch { /* ignore cache write errors */ }
     } catch (e) {
       setAvailableVersions(['latest'])
       setErrorMessage(humanizeRuntimeError(e))
     } finally {
       setVersionsLoading(false)
     }
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   /** Same as load but for the currently selected runtime (wizard Refresh button). */
   const refreshVersionsList = useCallback(

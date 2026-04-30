@@ -544,6 +544,25 @@ This file is a living engineering memory, not static documentation.
   - Docker terminal confirmed interactive with working prompts and echo (no duplicate characters).
   - Alpine/Bash containers confirmed staying active after creation.
 
+### Monitor & SSH Infrastructure Hardening (2026-04-30)
+
+- **Monitor Backend Hardening:**
+  - **Accurate CPU Metrics:** Replaced delayed "load average" with real-time CPU usage calculation using `/proc/stat` ticks delta across update intervals.
+  - **Truthful App Performance:** Replaced static 0 values in `dh:perf:snapshot` with real RSS memory usage (from `/proc/self/statm`) and true process uptime.
+  - **Enhanced GPU Detection:** Expanded hardware probes to detect Intel and AMD GPUs via `lspci` fallbacks when `nvidia-smi` is unavailable.
+  - **Security Logic Hardening:** Updated "Risky Ports" detection to distinguish between local-only (`127.0.0.1`) and exposed (`0.0.0.0`) ports, reducing false positives for local dev servers.
+- **SSH Stability & UX:**
+  - **Metadata Accuracy:** Refined `dh:ssh:list:dir` to use `ls -aF1` for precise directory/file/link differentiation.
+  - **Idempotent Key Setup:** Hardened `dh:ssh:setup:remote:key` to prevent duplicate entries in the remote `authorized_keys` file.
+- **Frontend Optimization & UX:**
+  - **API Rate-Limit Protection:** Implemented 5-minute `localStorage` caching for GitHub event fetching in `MonitorPage.tsx` to prevent temporary IP bans.
+  - **Terminal Aesthetics (Batch 7):** Standardized 16px padding for all embedded terminals (Main Terminal, Docker Modal, SSH Session) for improved readability.
+- **Verification Evidence:**
+  - Verified real-time CPU spikes during heavy workloads.
+  - Support bundle confirms real RSS/Uptime metrics.
+  - GitHub dashboard remains functional after multiple refreshes (cached).
+  - Terminal text no longer touches the container edges.
+
 ---
 
 ## 12) Continuous Incident Log (Batch 2)
@@ -580,6 +599,23 @@ This file is a living engineering memory, not static documentation.
 - **Root cause:** `grid-template-columns` used a `minmax(300px, 1fr)` which was too narrow for the container metadata.
 - **Impact:** Poor readability and broken "Premium" aesthetic.
 - **Fix implemented:** Updated to `minmax(340px, 1fr)` in `DockerPage.tsx`.
+- **Status:** resolved
+
+#### 2026-04-30 — GitHub API Rate Limiting in Monitor
+- **Area:** Frontend / External API
+- **Symptom:** Monitor dashboard failed to show GitHub news after several app restarts.
+- **Root cause:** Excessive polling of the public GitHub API without authentication or caching.
+- **Impact:** User-facing news section broke with 403 Forbidden errors.
+- **Fix implemented:** Added 5-minute client-side caching in `localStorage`.
+- **Preventive action:** All external API integrations must implement TTL-based caching by default.
+- **Status:** resolved
+
+#### 2026-04-30 — Inaccurate CPU usage in Dashboard
+- **Area:** Backend / Metrics
+- **Symptom:** CPU usage showed 0% or static "Load Average" which didn't reflect real-time spikes.
+- **Root cause:** Relying on `loadavg` (which is a 1/5/15 minute average) instead of calculating the delta of CPU ticks.
+- **Impact:** Misleading system health reports.
+- **Fix implemented:** Implemented tick-delta calculation using `/proc/stat`.
 - **Status:** resolved
 
 ### Tauri migration kickoff (pre-release freeze)

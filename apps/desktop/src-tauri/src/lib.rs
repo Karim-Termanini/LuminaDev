@@ -472,10 +472,10 @@ fn runtime_system_packages(runtime_id: &str, pkg_mgr: &str) -> Vec<&'static str>
     ("ruby", "dnf")    => vec!["ruby", "ruby-devel"],
     ("ruby", "pacman") => vec!["ruby"],
     ("ruby", "zypper") => vec!["ruby"],
-    // .NET
+    // .NET — pacman: dotnet-sdk is AUR-only, handled separately in install job
     ("dotnet", "apt")    => vec!["dotnet-sdk-8.0"],
     ("dotnet", "dnf")    => vec!["dotnet-sdk-8.0"],
-    ("dotnet", "pacman") => vec!["dotnet-sdk-8.0"],
+    ("dotnet", "pacman") => vec![], // AUR — use Microsoft install script instead
     ("dotnet", "zypper") => vec!["dotnet-sdk-8.0"],
     // Zig
     ("zig", "apt")    => vec!["zig"],
@@ -612,6 +612,17 @@ async fn runtime_job_execute(
             v = v
           );
           logs.push(format!("Installing Python {} via pyenv…", v));
+          exec_output_limit("bash", &["-lc", &cmd], CMD_TIMEOUT_INSTALL_STEP).await
+            .map(|out| { if !out.is_empty() { logs.push(out); } })
+            .map_err(|e| format!("[RUNTIME_INSTALL_FAILED] {}", e.trim()))
+        } else if runtime_id == "dotnet" && pkg_mgr == "pacman" {
+          // dotnet-sdk-8.0 is AUR-only on Arch; use Microsoft's install script instead
+          let v = if version.is_empty() || version.starts_with("system") { "8.0" } else { version.trim() };
+          logs.push(format!("Installing .NET {} via Microsoft install script (Arch)…", v));
+          let cmd = format!(
+            "curl -fsSL https://dot.net/v1/dotnet-install.sh | bash -s -- --channel {} --install-dir \"$HOME/.dotnet\"",
+            v
+          );
           exec_output_limit("bash", &["-lc", &cmd], CMD_TIMEOUT_INSTALL_STEP).await
             .map(|out| { if !out.is_empty() { logs.push(out); } })
             .map_err(|e| format!("[RUNTIME_INSTALL_FAILED] {}", e.trim()))
@@ -2160,6 +2171,10 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
           } else {
             note = format!("Julia system packages detected. Removal will use {}.", pkg_mgr);
           }
+        },
+        "dotnet" if pkg_mgr == "pacman" => {
+          note = "On Arch, .NET was installed via Microsoft's install script to ~/.dotnet. Remove that directory manually or run: rm -rf ~/.dotnet".to_string();
+          pkg_vals = vec![json!("~/.dotnet (directory)")];
         },
         _ if pkgs.is_empty() => {
           note = format!("No system packages found for {}. If installed via a version manager, remove it manually.", runtime_id);
