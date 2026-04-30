@@ -211,6 +211,7 @@ Use this to audit which pages show live data and which show stubs/static content
 
 Run on a real Tauri build (`pnpm --filter desktop build:tauri` or distro package).
 Legend: `[x]` verified, `[-]` intentionally skipped with reason.
+Route-by-route live/partial/stub truth table: [`ROUTE_STATUS.md`](./ROUTE_STATUS.md).
 
 ### App startup
 

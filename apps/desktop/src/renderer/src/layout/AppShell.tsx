@@ -6,19 +6,26 @@ import { EnvironmentBanner } from './EnvironmentBanner'
 import { TopBar } from './TopBar'
 import { WidgetLayoutProvider } from './WidgetLayoutContext'
 
+type RouteStatus = 'live' | 'partial' | 'stub'
+
 const nav = [
-  { to: '/dashboard', label: 'Dashboard', icon: 'dashboard' },
-  { to: '/system', label: 'Monitor', icon: 'pulse' },
-  { to: '/workstation', label: 'Workstation', icon: 'device-desktop' },
-  { to: '/docker', label: 'Docker', icon: 'package' },
-  { to: '/ssh', label: 'SSH', icon: 'key' },
-  { to: '/git-config', label: 'Git Config', icon: 'git-branch' },
-  { to: '/registry', label: 'Registry', icon: 'package' },
-  { to: '/profiles', label: 'Profiles', icon: 'account' },
-  { to: '/terminal', label: 'Terminal', icon: 'terminal' },
-  { to: '/runtimes', label: 'Runtimes', icon: 'zap' },
-  { to: '/maintenance', label: 'Maintenance', icon: 'shield' },
+  { to: '/dashboard', label: 'Dashboard', icon: 'dashboard', status: 'partial' as RouteStatus },
+  { to: '/system', label: 'Monitor', icon: 'pulse', status: 'partial' as RouteStatus },
+  { to: '/docker', label: 'Docker', icon: 'package', status: 'live' as RouteStatus },
+  { to: '/ssh', label: 'SSH', icon: 'key', status: 'partial' as RouteStatus },
+  { to: '/git-config', label: 'Git Config', icon: 'git-branch', status: 'live' as RouteStatus },
+  { to: '/registry', label: 'Registry', icon: 'package', status: 'partial' as RouteStatus },
+  { to: '/profiles', label: 'Profiles', icon: 'account', status: 'stub' as RouteStatus },
+  { to: '/terminal', label: 'Terminal', icon: 'terminal', status: 'partial' as RouteStatus },
+  { to: '/runtimes', label: 'Runtimes', icon: 'zap', status: 'partial' as RouteStatus },
+  { to: '/maintenance', label: 'Maintenance', icon: 'shield', status: 'partial' as RouteStatus },
 ] as const
+
+const statusStyles: Record<RouteStatus, { label: string; color: string; bg: string; border: string }> = {
+  live: { label: 'LIVE', color: 'var(--green)', bg: 'rgba(0, 230, 118, 0.1)', border: 'rgba(0, 230, 118, 0.25)' },
+  partial: { label: 'PARTIAL', color: 'var(--yellow)', bg: 'rgba(255, 193, 7, 0.1)', border: 'rgba(255, 193, 7, 0.25)' },
+  stub: { label: 'STUB', color: '#ff8a80', bg: 'rgba(255, 82, 82, 0.1)', border: 'rgba(255, 82, 82, 0.25)' },
+}
 
 export function AppShell({ children }: { children: ReactNode }): ReactElement {
   return (
@@ -66,7 +73,23 @@ export function AppShell({ children }: { children: ReactNode }): ReactElement {
               })}
             >
               <span className={`codicon codicon-${item.icon}`} aria-hidden />
-              {item.label}
+              <span style={{ flex: 1 }}>{item.label}</span>
+              <span
+                className="mono"
+                title={`Route status: ${item.status}`}
+                style={{
+                  fontSize: 9,
+                  fontWeight: 700,
+                  letterSpacing: '0.04em',
+                  color: statusStyles[item.status].color,
+                  border: `1px solid ${statusStyles[item.status].border}`,
+                  background: statusStyles[item.status].bg,
+                  borderRadius: 999,
+                  padding: '2px 6px',
+                }}
+              >
+                {statusStyles[item.status].label}
+              </span>
             </NavLink>
           ))}
         </nav>

@@ -478,7 +478,7 @@ async fn runtime_job_execute(
   _remove_mode: String,
 ) {
   let mut logs: Vec<String> = vec![format!("job={} runtime={} method={}", kind, runtime_id, method)];
-  let mut final_state = "done";
+  let mut final_state = "completed";
 
   let distro = exec_output("bash", &["-lc", "source /etc/os-release 2>/dev/null && printf '%s' \"${ID:-unknown}\""])
     .await
@@ -493,6 +493,13 @@ async fn runtime_job_execute(
     logs.push("[RUNTIME_INSTALL_FAILED] Flatpak sandbox: cannot run host package managers. Install the runtime on the host and expose it via Flatpak overrides.".to_string());
     final_state = "failed";
   } else {
+    {
+      let st = app.state::<AppState>();
+      let mut jobs = st.jobs.lock().await;
+      if let Some(j) = jobs.iter_mut().find(|j| j.get("id").and_then(|v| v.as_str()) == Some(job_id.as_str())) {
+        j["progress"] = json!(30);
+      }
+    }
     let result: Result<(), String> = match kind.as_str() {
       "runtime_install" | "install_deps" => {
         if runtime_id == "rust" {
@@ -511,6 +518,34 @@ async fn runtime_job_execute(
              && nvm install {}", v
           );
           logs.push(format!("Running nvm install {}", v));
+          exec_output_limit("bash", &["-lc", &cmd], CMD_TIMEOUT_INSTALL_STEP).await
+            .map(|out| { if !out.is_empty() { logs.push(out); } })
+            .map_err(|e| format!("[RUNTIME_INSTALL_FAILED] {}", e.trim()))
+        } else if runtime_id == "go" && method == "local" {
+          let v = if version.is_empty() { "1.22.2" } else { version.trim() };
+          let target_dir = "$HOME/.local/share/lumina/go";
+          let cmd = format!(
+            "mkdir -p {target_dir} && cd {target_dir} \
+             && curl -LO https://go.dev/dl/go{v}.linux-amd64.tar.gz \
+             && tar -C {target_dir} -xzf go{v}.linux-amd64.tar.gz --strip-components=1 \
+             && rm go{v}.linux-amd64.tar.gz",
+            v = v, target_dir = target_dir
+          );
+          logs.push(format!("Downloading and extracting Go {} to {}…", v, target_dir));
+          exec_output_limit("bash", &["-lc", &cmd], CMD_TIMEOUT_INSTALL_STEP).await
+            .map(|out| { if !out.is_empty() { logs.push(out); } })
+            .map_err(|e| format!("[RUNTIME_INSTALL_FAILED] {}", e.trim()))
+        } else if runtime_id == "python" && method == "local" {
+          let v = if version.is_empty() { "3.12.2" } else { version.trim() };
+          let cmd = format!(
+            "curl https://pyenv.run | bash \
+             && export PYENV_ROOT=\"$HOME/.pyenv\" \
+             && [[ -d $PYENV_ROOT/bin ]] && export PATH=\"$PYENV_ROOT/bin:$PATH\" \
+             && eval \"$(pyenv init -)\" \
+             && pyenv install {v} && pyenv global {v}",
+            v = v
+          );
+          logs.push(format!("Installing Python {} via pyenv…", v));
           exec_output_limit("bash", &["-lc", &cmd], CMD_TIMEOUT_INSTALL_STEP).await
             .map(|out| { if !out.is_empty() { logs.push(out); } })
             .map_err(|e| format!("[RUNTIME_INSTALL_FAILED] {}", e.trim()))
@@ -577,6 +612,12 @@ async fn runtime_job_execute(
     if let Err(e) = result {
       logs.push(format!("ERROR: {}", e));
       final_state = "failed";
+    } else {
+      let st = app.state::<AppState>();
+      let mut jobs = st.jobs.lock().await;
+      if let Some(j) = jobs.iter_mut().find(|j| j.get("id").and_then(|v| v.as_str()) == Some(job_id.as_str())) {
+        j["progress"] = json!(85);
+      }
     }
   }
 
@@ -584,8 +625,8 @@ async fn runtime_job_execute(
   let mut jobs = st.jobs.lock().await;
   if let Some(j) = jobs.iter_mut().find(|j| j.get("id").and_then(|v| v.as_str()) == Some(job_id.as_str())) {
     j["state"] = json!(final_state);
-    j["progress"] = json!(if final_state == "done" { 100 } else { 0 });
-    j["logTail"] = json!(logs);
+    j["progress"] = json!(if final_state == "completed" { 100 } else { 0 });
+    j["logTail"] = json!(logs.into_iter().rev().take(20).collect::<Vec<String>>().into_iter().rev().collect::<Vec<String>>());
   }
 }
 
@@ -1239,12 +1280,15 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
     "dh:terminal:create" => {
       let cols = body.get("cols").and_then(|v| v.as_u64()).unwrap_or(120) as u16;
       let rows = body.get("rows").and_then(|v| v.as_u64()).unwrap_or(34) as u16;
-      let cmd = body.get("cmd").and_then(|v| v.as_str()).unwrap_or("bash").to_string();
+      let cmd = body.get("cmd").and_then(|v| v.as_str()).unwrap_or("sh").to_string();
       let args: Vec<String> = body
         .get("args")
         .and_then(|v| v.as_array())
         .map(|arr| arr.iter().filter_map(|x| x.as_str().map(|s| s.to_string())).collect())
-        .unwrap_or_else(|| vec!["-i".to_string()]);
+        .unwrap_or_else(|| vec![
+          "-lc".to_string(),
+          "if command -v script >/dev/null 2>&1; then exec script -qfec \"${SHELL:-bash} -i\" /dev/null; else exec ${SHELL:-bash} -i; fi".to_string(),
+        ]);
       let _ = (cols, rows);
       match Command::new(cmd).args(args).stdin(std::process::Stdio::piped()).stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped()).spawn() {
         Ok(mut child) => {
@@ -1330,8 +1374,9 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
         jobs.push(json!({
           "id": id,
           "kind": kind,
+          "runtimeId": runtime_id,
           "state": "running",
-          "progress": 5,
+          "progress": 10,
           "logTail": [format!("Starting {} for {}…", kind, runtime_id)]
         }));
       }
@@ -1531,17 +1576,76 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       }
       json!({ "ok": true, "runtimes": runtimes })
     },
-    "dh:runtime:get-versions" => json!({ "ok": true, "versions": [] }),
+    "dh:runtime:get-versions" => {
+      let runtime_id = body.get("runtimeId").and_then(|v| v.as_str()).unwrap_or("node");
+      let mut versions: Vec<String> = Vec::new();
+      match runtime_id {
+        "node" => {
+          if let Ok(raw) = exec_output_limit("curl", &["-fsSL", "https://nodejs.org/dist/index.json"], CMD_TIMEOUT_SHORT).await {
+            if let Ok(arr) = serde_json::from_str::<Value>(&raw) {
+              if let Some(list) = arr.as_array() {
+                for item in list.iter().take(25) {
+                  if let (Some(v), Some(lts)) = (item.get("version").and_then(|x| x.as_str()), item.get("lts")) {
+                    let label = if lts.is_string() { format!("{} (LTS: {})", v, lts.as_str().unwrap()) } else if lts.as_bool().unwrap_or(false) { format!("{} (LTS)", v) } else { v.to_string() };
+                    versions.push(label);
+                  }
+                }
+              }
+            }
+          }
+        },
+        "rust" => {
+          versions.extend(["stable".into(), "beta".into(), "nightly".into()]);
+        },
+        "python" => {
+          if let Ok(raw) = exec_output_limit("curl", &["-fsSL", "https://endoflife.date/api/python.json"], CMD_TIMEOUT_SHORT).await {
+            if let Ok(arr) = serde_json::from_str::<Value>(&raw) {
+              if let Some(list) = arr.as_array() {
+                for item in list.iter().take(20) {
+                  if let Some(v) = item.get("latest").and_then(|x| x.as_str()) {
+                    versions.push(v.to_string());
+                  }
+                }
+              }
+            }
+          }
+        },
+        "go" => {
+          if let Ok(raw) = exec_output_limit("curl", &["-fsSL", "https://go.dev/dl/?mode=json&include=all"], CMD_TIMEOUT_SHORT).await {
+            if let Ok(arr) = serde_json::from_str::<Value>(&raw) {
+              if let Some(list) = arr.as_array() {
+                for item in list.iter().take(30) {
+                  if let Some(v) = item.get("version").and_then(|x| x.as_str()) {
+                    versions.push(v.trim_start_matches("go").to_string());
+                  }
+                }
+              }
+            }
+          }
+        },
+        "java" => {
+          versions.extend(["21 (LTS)".into(), "17 (LTS)".into(), "11 (LTS)".into(), "8 (LTS)".into()]);
+        },
+        _ => {}
+      }
+      if versions.is_empty() {
+        versions.push("latest".into());
+      }
+      json!({ "ok": true, "versions": versions })
+    },
     "dh:runtime:check-deps" => {
       let runtime_id = body.get("runtimeId").and_then(|v| v.as_str()).unwrap_or("node");
-      let tools: &[(&str, &str)] = match runtime_id {
-        "node"   => &[("node", "node --version"), ("npm", "npm --version"), ("curl", "curl --version")],
-        "python" => &[("python3", "python3 --version"), ("pip3", "pip3 --version")],
-        "go"     => &[("go", "go version")],
-        "rust"   => &[("cargo", "cargo --version"), ("rustup", "rustup --version")],
-        "java"   => &[("java", "java -version"), ("javac", "javac -version")],
-        _        => &[],
+      let mut tools: Vec<(&str, &str)> = match runtime_id {
+        "node"   => vec![("node", "node --version"), ("npm", "npm --version"), ("curl", "curl --version")],
+        "python" => vec![("python3", "python3 --version"), ("pip3", "pip3 --version")],
+        "go"     => vec![("go", "go version")],
+        "rust"   => vec![("cargo", "cargo --version"), ("rustup", "rustup --version")],
+        "java"   => vec![("java", "java -version"), ("javac", "javac -version")],
+        _        => vec![],
       };
+      tools.push(("gcc", "gcc --version"));
+      tools.push(("make", "make --version"));
+      tools.push(("pkg-config", "pkg-config --version"));
       let mut deps: Vec<Value> = Vec::new();
       for (name, check_cmd) in tools {
         let parts: Vec<&str> = check_cmd.split_whitespace().collect();
@@ -1553,20 +1657,26 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
     "dh:runtime:uninstall:preview" => {
       let runtime_id = body.get("runtimeId").and_then(|v| v.as_str()).unwrap_or("node");
       let remove_mode = body.get("removeMode").and_then(|v| v.as_str()).unwrap_or("runtime_only");
-      let distro = exec_output("bash", &["-lc", "source /etc/os-release 2>/dev/null && printf '%s' \"${ID:-unknown}\""])
+      let distro = exec_output("sh", &["-c", ". /etc/os-release 2>/dev/null; printf '%s' \"${ID:-unknown}\""])
         .await.unwrap_or_else(|_| "unknown".to_string());
       let distro = distro.trim().to_string();
       let pkg_mgr = runtime_pkg_mgr(&distro);
       let pkgs = runtime_system_packages(runtime_id, pkg_mgr);
-      let pkg_vals: Vec<Value> = pkgs.iter().map(|p| json!(p)).collect();
-      let note: Option<&str> = if pkgs.is_empty() {
-        Some("No system packages found. If installed via version manager (nvm/rustup/pyenv), remove manually.")
-      } else if runtime_id == "rust" {
-        Some("Rust is managed by rustup; uninstall via 'rustup self uninstall'.")
+      
+      let mut pkg_vals: Vec<Value> = pkgs.iter().map(|p| json!(p)).collect();
+      let note: String;
+      
+      if runtime_id == "rust" {
+        note = "Rust is managed by rustup. This operation will run 'rustup self uninstall'.".to_string();
+        pkg_vals = vec![json!("rustup")];
+      } else if pkgs.is_empty() {
+        note = format!("No system packages found for {}. If installed via a local manager (nvm, pyenv, etc.), you may need to clean it manually.", runtime_id);
       } else {
-        None
-      };
-      let removable = if remove_mode == "runtime_and_deps" { pkg_vals.clone() } else { vec![] };
+        note = format!("System packages detected for {}. Removal will use {}.", runtime_id, pkg_mgr);
+      }
+
+      let removable: Vec<Value> = vec![];
+
       json!({
         "ok": true,
         "distro": distro,
@@ -1574,7 +1684,15 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
         "removableDeps": removable,
         "blockedSharedDeps": [],
         "finalPackages": pkg_vals,
-        "note": note
+        "note": if remove_mode == "runtime_and_deps" {
+          if note.is_empty() {
+            "Auto dependency pruning is not implemented yet; removing runtime packages only.".to_string()
+          } else {
+            format!("{} Auto dependency pruning is not implemented yet; removing runtime packages only.", note)
+          }
+        } else {
+          note
+        }
       })
     },
     "dh:diagnostics:bundle:create" => {
@@ -1672,17 +1790,39 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
         Err(e) => json!({ "ok": false, "processes": [], "error": format!("[MONITOR_TOP_FAILED] {}", e.trim()) }),
       }
     },
-    "dh:monitor:security" => json!({
-      "ok": true,
-      "snapshot": {
-        "firewall": "unknown",
-        "selinux": "unknown",
-        "sshPermitRootLogin": "unknown",
-        "sshPasswordAuth": "unknown",
-        "failedAuth24h": 0,
-        "riskyOpenPorts": []
+    "dh:monitor:security" => {
+      let firewall = if exec_output_limit("ufw", &["status"], CMD_TIMEOUT_SHORT).await.map(|o| o.contains("active")).unwrap_or(false) {
+        "active"
+      } else if exec_output_limit("firewall-cmd", &["--state"], CMD_TIMEOUT_SHORT).await.map(|o| o.contains("running")).unwrap_or(false) {
+        "active"
+      } else {
+        "inactive"
+      };
+      let selinux = exec_output_limit("sestatus", &[], CMD_TIMEOUT_SHORT).await
+        .map(|o| if o.contains("enabled") { "enabled" } else { "disabled" })
+        .unwrap_or_else(|_| "unknown");
+      let ssh_config = exec_output_limit("bash", &["-c", "grep -E '^(PermitRootLogin|PasswordAuthentication)' /etc/ssh/sshd_config"], CMD_TIMEOUT_SHORT).await.unwrap_or_default();
+      let root_login = if ssh_config.contains("PermitRootLogin yes") { "yes" } else { "no" };
+      let pw_auth = if ssh_config.contains("PasswordAuthentication no") { "no" } else { "yes" };
+      
+      let ports_out = exec_output_limit("ss", &["-tulpn"], CMD_TIMEOUT_SHORT).await.unwrap_or_default();
+      let mut risky: Vec<u16> = Vec::new();
+      for p in [22, 3306, 5432, 27017, 6379] {
+        if ports_out.contains(&format!(":{}", p)) { risky.push(p); }
       }
-    }),
+
+      json!({
+        "ok": true,
+        "snapshot": {
+          "firewall": firewall,
+          "selinux": selinux,
+          "sshPermitRootLogin": root_login,
+          "sshPasswordAuth": pw_auth,
+          "failedAuth24h": 0, // Requires journalctl parsing, keeping 0 for now as safe default
+          "riskyOpenPorts": risky
+        }
+      })
+    },
     "dh:monitor:security-drilldown" => json!({
       "ok": true,
       "drilldown": { "failedAuthSamples": [], "riskyPortOwners": [] }

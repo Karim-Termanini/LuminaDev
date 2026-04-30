@@ -120,7 +120,7 @@ export function RuntimesPage(): ReactElement {
         setErrorMessage(humanizeRuntimeError(res.error))
       }
       const jobs = await window.dh.jobsList() as JobSummary[]
-      setActiveJobs(jobs.filter(j => j.kind.startsWith('install_') || j.kind.startsWith('update_') || j.kind.startsWith('uninstall_')))
+      setActiveJobs(jobs.filter((j) => j.kind.startsWith('runtime_') || j.kind === 'install_deps'))
     } catch (e) {
       setErrorMessage(e instanceof Error ? e.message : String(e))
     } finally {
@@ -141,16 +141,22 @@ export function RuntimesPage(): ReactElement {
 
   const selectedRuntime = useMemo(() => runtimes.find(r => r.id === selectedId), [runtimes, selectedId])
   const activeJob = useMemo(() => {
-    const jobsForRuntime = activeJobs.filter(j => j.kind === `install_${selectedId}`)
-      .concat(activeJobs.filter(j => j.kind === `update_${selectedId}`))
-      .concat(activeJobs.filter(j => j.kind === `uninstall_${selectedId}`))
+    const jobsForRuntime = activeJobs.filter((j) => {
+      const runtimeId = (j as JobSummary & { runtimeId?: string }).runtimeId
+      if (runtimeId) return runtimeId === selectedId
+      return j.logTail.some((line) => line.includes(`runtime=${selectedId}`) || line.includes(`for ${selectedId}`))
+    })
     return jobsForRuntime[jobsForRuntime.length - 1]
   }, [activeJobs, selectedId])
   const installInProgress = activeJob?.state === 'running'
   const isUninstallJob = activeJob?.kind === `uninstall_${selectedId}`
   const isUpdateJob = activeJob?.kind === `update_${selectedId}`
   const latestUpdateJob = useMemo(() => {
-    const updates = activeJobs.filter(j => j.kind === `update_${selectedId}`)
+    const updates = activeJobs.filter((j) => j.kind === 'runtime_update').filter((j) => {
+      const runtimeId = (j as JobSummary & { runtimeId?: string }).runtimeId
+      if (runtimeId) return runtimeId === selectedId
+      return j.logTail.some((line) => line.includes(`runtime=${selectedId}`) || line.includes(`for ${selectedId}`))
+    })
     return updates[updates.length - 1]
   }, [activeJobs, selectedId])
   const updateOutcome = useMemo<'already_latest' | 'updated' | undefined>(() => {

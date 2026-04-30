@@ -1,5 +1,6 @@
 import type { ReactElement } from 'react'
 import { useEffect, useState } from 'react'
+import type { HostSecuritySnapshot } from '@linux-dev-home/shared'
 
 const UNITS = ['docker', 'ssh', 'nginx'] as const
 
@@ -78,6 +79,62 @@ export function DashboardKernelsPage(): ReactElement {
           ))}
         </div>
       </section>
+
+      <SecuritySection />
+    </div>
+  )
+}
+
+function SecuritySection(): ReactElement {
+  const [data, setData] = useState<HostSecuritySnapshot | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  async function fetch() {
+    setLoading(true)
+    try {
+      const res = await window.dh.monitorSecurity()
+      if (res.ok) setData(res.snapshot)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    void fetch()
+  }, [])
+
+  if (loading) return <div style={{ color: 'var(--text-muted)', fontSize: 14 }}>Scanning security…</div>
+  if (!data) return <div style={{ color: 'var(--orange)', fontSize: 14 }}>Security probe failed.</div>
+
+  return (
+    <section style={card}>
+      <div className="hp-card-header">
+        <div className="hp-card-title">Security hardening</div>
+        <div className="hp-card-subtitle">Host-level configuration audit.</div>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12, marginTop: 12 }}>
+        <SecurityItem label="Firewall" value={data.firewall} ok={data.firewall === 'active'} />
+        <SecurityItem label="SELinux" value={data.selinux} ok={data.selinux === 'enabled'} />
+        <SecurityItem label="SSH Root Login" value={data.sshPermitRootLogin} ok={data.sshPermitRootLogin === 'no'} />
+        <SecurityItem label="SSH Password Auth" value={data.sshPasswordAuth} ok={data.sshPasswordAuth === 'no'} />
+      </div>
+      {data.riskyOpenPorts.length > 0 && (
+        <div style={{ marginTop: 16, padding: 10, background: 'rgba(255, 68, 68, 0.1)', borderRadius: 8, border: '1px solid rgba(255, 68, 68, 0.2)' }}>
+          <div style={{ fontSize: 13, color: 'var(--red)', fontWeight: 600 }}>⚠️ Risky open ports detected</div>
+          <div className="mono" style={{ fontSize: 12, marginTop: 4 }}>{data.riskyOpenPorts.join(', ')}</div>
+        </div>
+      )}
+    </section>
+  )
+}
+
+function SecurityItem({ label, value, ok }: { label: string; value: string; ok: boolean }): ReactElement {
+  return (
+    <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10, background: '#141414' }}>
+      <div className="mono" style={{ fontSize: 11, color: 'var(--text-muted)' }}>{label}</div>
+      <div style={{ marginTop: 4, color: ok ? 'var(--green)' : 'var(--orange)', fontWeight: 600, fontSize: 14 }}>
+        {value.toUpperCase()}
+      </div>
     </div>
   )
 }
