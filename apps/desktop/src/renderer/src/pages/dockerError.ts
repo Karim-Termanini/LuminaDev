@@ -10,10 +10,10 @@ export function humanizeDockerError(err: unknown): string {
   if (code === 'DOCKER_TIMEOUT') return `Docker operation timed out. ${detail}`
   if (code === 'DOCKER_INVALID_REQUEST') return `Invalid Docker request. ${detail}`
   if (code === 'DOCKER_INSTALL_NOT_SUPPORTED') {
-    return `Automated install is not available in this build yet. ${detail}`.trim()
+    return `Automated install is not available in this build (likely Flatpak). ${detail}`.trim()
   }
   if (code === 'DOCKER_REMAP_NOT_SUPPORTED') {
-    return `Port remapping from the UI is not supported. ${detail}`.trim()
+    return `Port remapping is not supported in this build (likely Flatpak). ${detail}`.trim()
   }
   if (code === 'DOCKER_INSTALL_FAILED') {
     return `Docker install step failed. ${detail}`.trim()
