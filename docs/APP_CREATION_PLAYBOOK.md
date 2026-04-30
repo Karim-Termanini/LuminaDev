@@ -418,7 +418,7 @@ This file is a living engineering memory, not static documentation.
 - Mandatory CI jobs:
   - Lint + typecheck + unit tests (`bash scripts/smoke-ci.sh`)
   - Production dependency audit (`pnpm audit --prod --audit-level=high`)
-  - Native Linux build (includes `node-pty` rebuild)
+  - Native Linux build (`pnpm --filter desktop build:tauri`; WebKit + Rust in CI)
   - Flatpak offline build smoke (`flatpak-builder ...offline.yml`)
 - SAST enabled through CodeQL workflow.
 - Dependabot configured for npm and GitHub Actions updates.

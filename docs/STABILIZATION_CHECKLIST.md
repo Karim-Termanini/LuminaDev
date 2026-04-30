@@ -154,6 +154,7 @@ Stabilization is considered complete only when:
   - `quality-gate` job: trimmed to only `build-essential python3` (WebKit deps were unnecessary)
   - `native-linux-build`: Rust toolchain + cache present, Tauri build green in CI
   - Flatpak: `flatpak/io.github.karimodora.LinuxDevHome.tauri.yml` added for local/Flathub prep — **not** in GitHub Actions until a dedicated slow job is added
+  - Default dev entry: `apps/desktop` `pnpm dev` → `tauri dev`; Electron preserved as `pnpm dev:electron` / `pnpm build:electron` (e.g. `pack:linux`); root `pnpm build` runs renderer bundle + compose copy (no Electron emit)
 
 - **Remaining before Stage 5 (when you declare product-ready):**
   - Run `pnpm smoke` on `main` before any tagged release

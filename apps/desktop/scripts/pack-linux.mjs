@@ -14,7 +14,7 @@ function run(cmd, args, opts) {
 }
 
 run('pnpm', ['--filter', '@linux-dev-home/shared', 'build'], { cwd: repoRoot })
-run('pnpm', ['build'], { cwd: desktopRoot })
+run('pnpm', ['build:electron'], { cwd: desktopRoot })
 
 rmSync(stage, { recursive: true, force: true })
 

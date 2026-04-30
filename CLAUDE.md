@@ -6,11 +6,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 pnpm install                        # Install all deps
-pnpm dev                            # Electron-vite dev server
+pnpm dev                            # Tauri dev (default shell; needs Rust + WebKit deps locally)
 pnpm test                           # Unit tests (shared + desktop)
 pnpm typecheck                      # TypeScript across workspace
 pnpm lint                           # ESLint
-pnpm build                          # Production build + copy compose profiles
+pnpm build                          # Renderer production bundle + copy compose profiles (no Rust)
 pnpm smoke                          # Full CI gate: typecheck + test + lint
 pnpm test:integration               # Docker IPC integration tests (needs Docker daemon)
 pnpm test:e2e                       # Critical scenarios E2E
@@ -19,7 +19,10 @@ pnpm test:coverage                  # Vitest with coverage
 # Run a single test file
 cd apps/desktop && pnpm exec vitest run src/renderer/src/pages/dockerContract.test.ts
 
-# Rebuild native module after install
+# Legacy Electron shell (optional)
+cd apps/desktop && pnpm dev:electron
+
+# Electron native PTY rebuild (only if you use dev:electron / build:electron)
 cd apps/desktop && pnpm exec electron-rebuild -f -w node-pty
 ```
 
@@ -27,22 +30,22 @@ cd apps/desktop && pnpm exec electron-rebuild -f -w node-pty
 
 **Monorepo** with two packages:
 - `packages/shared` — IPC channel names (`IPC` const), Zod request/response schemas, TypeScript types, widget registry. Built before desktop.
-- `apps/desktop` — Electron app (electron-vite). Three layers: main process, preload, renderer.
+- `apps/desktop` — **Tauri-first** desktop app: Rust handlers in `src-tauri`, React renderer. **Electron** (`electron-vite`, main, preload) remains for parity and `pack:linux` until fully retired.
 
 ### IPC data flow
 
-```
-Renderer (React) → window.dh.* → Preload (contextBridge) → ipcMain handlers → Node/Docker/OS
-```
+**Tauri (default):** Renderer → `desktopApiBridge.ts` → `invoke` / `ipc_send` → Rust `ipc_invoke` / handlers → host.
 
-- `window.dh` typed in `apps/desktop/src/preload/index.ts` via `contextBridge.exposeInMainWorld`
+**Electron (legacy):** Renderer → `window.dh.*` → preload (`contextBridge`) → `ipcMain` → Node/Docker/OS.
+
+- `window.dh` typed in `apps/desktop/src/preload/index.ts` when running under Electron.
 - All channel names come from `IPC` in `@linux-dev-home/shared`
-- All request payloads validated at main-process entry with Zod schemas from `@linux-dev-home/shared`
-- `apps/desktop/src/renderer/src/api/desktopApiBridge.ts` — alternative Tauri runtime adapter; at runtime the renderer detects `__TAURI_INTERNALS__` and uses Tauri invoke instead of `window.dh`
+- All request payloads validated at the IPC boundary (Zod in shared schemas; Rust or Node entry points).
+- `apps/desktop/src/renderer/src/api/desktopApiBridge.ts` — Tauri transport; when `__TAURI_INTERNALS__` is absent, falls back to `window.dh`.
 
-### Main process (`apps/desktop/src/main/index.ts`)
+### Main process (`apps/desktop/src/main/index.ts`) — Electron only
 
-Single large file that registers all `ipcMain.handle` handlers for: Docker (dockerode), SSH (execFile), Git (simple-git), terminal (node-pty), metrics (os/statfs), job runner, layout/store persistence, and compose profiles.
+Registers `ipcMain.handle` for the legacy shell: Docker (dockerode), SSH, Git (simple-git), terminal (`node-pty`), metrics, job runner, layout/store, compose profiles. **Shipped path uses Rust** in `src-tauri/src/lib.rs`.
 
 ### Error contracts
 

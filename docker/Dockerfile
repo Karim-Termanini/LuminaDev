@@ -10,8 +10,7 @@ WORKDIR /workspace
 
 COPY . .
 
-RUN pnpm install \
-  && cd apps/desktop && pnpm exec electron-rebuild -f -w node-pty
+RUN pnpm install
 
 ENV CI=1
 

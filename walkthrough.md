@@ -95,7 +95,7 @@ This section records the **docs + checklist + smoke** closure for Agent B (not a
 
 | Item | Detail |
 |------|--------|
-| Fewer `bash -lc` probes | Prefer direct reads (`/etc/os-release`, `/proc/uptime`) and direct CLI (`docker --version`, `systemctl`, `nvidia-smi`) where safe in `apps/desktop/src-tauri/src/lib.rs`. |
-| Timeouts | `exec_output_limit` / `exec_result_limit` with `CMD_TIMEOUT_DEFAULT` (180s), `CMD_TIMEOUT_SHORT` (30s), `CMD_TIMEOUT_SSH` (120s) for `ssh` list-dir / key-setup without password, `CMD_TIMEOUT_LONG` (900s) for `git clone`, `docker pull`, `docker compose up`, `sshpass` key-setup, and `sudo` install steps. |
+| Fewer `bash -lc` probes | `docker compose` uses `docker` + `current_dir` (no `cd … &&` shell); prune preview counts `docker` lines in Rust; `ps` / `sshpass` argv where possible; `sh -c` only for `ss|awk`; `git:status` still one `bash -c` (JSON aggregate). |
+| Timeouts | `exec_output_limit` / `exec_result_limit` with `CMD_TIMEOUT_DEFAULT` (180s), `CMD_TIMEOUT_SHORT` (30s), `CMD_TIMEOUT_SSH` (120s) for `ssh` list-dir / key-setup without password, `CMD_TIMEOUT_LONG` (900s) for `git clone`, `docker pull`, `docker compose` in profile dir, `sshpass` key-setup, and `sudo` install steps. |
 | `HOST_COMMAND_TIMEOUT` | Returned on wall-clock exceed; humanized in `dockerError`, `gitError`, `sshError`, `dashboardError`, `runtimeError`. |
-| **`dh:terminal:close`** | Declared in `packages/shared/src/ipc.ts`; Tauri `ipc_send` removes `ChildStdin` from map; Electron **kills** the PTY via `ipcMain.on(IPC.terminalClose, …)`. Renderer calls `window.dh.terminalClose(id)` on unmount for **TerminalPage**, **DockerTerminalModal**, **SshPage** embed; **SshPage** disconnect uses `terminalClose`. |
+| **`dh:terminal:close`** | `packages/shared/src/ipc.ts`; Tauri `ipc_send` drops session and **SIGTERM** child PID on Unix (`libc::kill`); Electron kills PTY in `ipcMain`. Renderer calls `terminalClose` on unmount (**TerminalPage**, **DockerTerminalModal**, **SshPage**). |
