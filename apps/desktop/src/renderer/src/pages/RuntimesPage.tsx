@@ -161,12 +161,21 @@ export function RuntimesPage(): ReactElement {
     const t = setInterval(() => {
       void refreshStatus()
       if (showWizard && wizardStep === 2) void refreshDeps()
-    }, 3000)
+    }, 500)
     return () => clearInterval(t)
   }, [refreshStatus, refreshDeps, showWizard, wizardStep])
 
-  // Auto-refresh status + deps when the active job finishes so the user
-  // doesn't have to manually trigger a recheck after install/uninstall.
+  const selectedRuntime = useMemo(() => runtimes.find(r => r.id === selectedId), [runtimes, selectedId])
+  const activeJob = useMemo(() => {
+    const jobsForRuntime = activeJobs.filter((j) => {
+      const runtimeId = (j as JobSummary & { runtimeId?: string }).runtimeId
+      if (runtimeId) return runtimeId === selectedId
+      return j.logTail.some((line) => line.includes(`runtime=${selectedId}`) || line.includes(`for ${selectedId}`))
+    })
+    return jobsForRuntime[jobsForRuntime.length - 1]
+  }, [activeJobs, selectedId])
+
+  // Auto-refresh status + deps when the active job finishes (must be after activeJob is defined).
   const prevJobStateRef = useRef<string | undefined>(undefined)
   useEffect(() => {
     const currentState = activeJob?.state
@@ -180,15 +189,6 @@ export function RuntimesPage(): ReactElement {
     prevJobStateRef.current = currentState
   }, [activeJob?.state, refreshStatus, refreshDeps])
 
-  const selectedRuntime = useMemo(() => runtimes.find(r => r.id === selectedId), [runtimes, selectedId])
-  const activeJob = useMemo(() => {
-    const jobsForRuntime = activeJobs.filter((j) => {
-      const runtimeId = (j as JobSummary & { runtimeId?: string }).runtimeId
-      if (runtimeId) return runtimeId === selectedId
-      return j.logTail.some((line) => line.includes(`runtime=${selectedId}`) || line.includes(`for ${selectedId}`))
-    })
-    return jobsForRuntime[jobsForRuntime.length - 1]
-  }, [activeJobs, selectedId])
   const installInProgress = activeJob?.state === 'running'
   const isUninstallJob = activeJob?.kind === `uninstall_${selectedId}`
   const isUpdateJob = activeJob?.kind === `update_${selectedId}`
@@ -657,12 +657,43 @@ export function RuntimesPage(): ReactElement {
                         <p style={{ color: 'var(--text-muted)', marginBottom: 32 }}>We found the following requirements for building/running {selectedRuntime?.name}.</p>
                         
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                           {dependencies.length > 0 ? dependencies.map(d => (
-                             <div key={d.name} style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 16px', background: 'rgba(255,255,255,0.03)', borderRadius: 8, border: '1px solid var(--border)' }}>
-                                <span style={{ fontWeight: 600 }}>{d.name}</span>
-                                <span style={{ color: d.ok ? 'var(--green)' : 'var(--orange)', fontSize: 12, fontWeight: 700 }}>{d.status}</span>
-                             </div>
-                           )) : (
+                           {dependencies.length > 0 ? dependencies.map((d, idx) => {
+                             const isInstalling = activeJob?.kind === 'install_deps' && activeJob?.state === 'running';
+                             const totalDeps = dependencies.length;
+                             const depProgressWeight = 100 / totalDeps;
+                             const currentDepIdx = Math.floor((activeJob?.progress || 0) / depProgressWeight);
+                             const isCurrent = isInstalling && currentDepIdx === idx;
+                             const isFinished = isInstalling && currentDepIdx > idx;
+                             
+                             // Calculate sub-progress for current item
+                             const itemSubProgress = isCurrent ? ((activeJob?.progress || 0) % depProgressWeight) * (100 / depProgressWeight) : (isFinished ? 100 : 0);
+
+                             return (
+                               <div key={d.name} style={{ position: 'relative', overflow: 'hidden', padding: '12px 16px', background: 'rgba(255,255,255,0.03)', borderRadius: 8, border: '1px solid var(--border)' }}>
+                                  {/* Background progress bar */}
+                                  {(isCurrent || isFinished) && (
+                                    <div style={{ 
+                                      position: 'absolute', 
+                                      bottom: 0, left: 0, height: 3, 
+                                      width: `${itemSubProgress}%`, 
+                                      background: isFinished ? 'var(--green)' : 'var(--accent)',
+                                      transition: 'width 0.3s ease'
+                                    }} />
+                                  )}
+                                  
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', position: 'relative', zIndex: 1 }}>
+                                    <span style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
+                                      {d.name}
+                                      {isCurrent && <span className="codicon codicon-loading codicon-modifier-spin" style={{ fontSize: 12, color: 'var(--accent)' }} />}
+                                      {isFinished && <span className="codicon codicon-pass" style={{ fontSize: 12, color: 'var(--green)' }} />}
+                                    </span>
+                                    <span style={{ color: d.ok || isFinished ? 'var(--green)' : 'var(--orange)', fontSize: 12, fontWeight: 700 }}>
+                                      {isFinished ? 'Installed' : (isCurrent ? 'Installing...' : d.status)}
+                                    </span>
+                                  </div>
+                               </div>
+                             );
+                           }) : (
                              <div style={{ textAlign: 'center', padding: 20, opacity: 0.5 }}>Checking requirements...</div>
                            )}
                         </div>
