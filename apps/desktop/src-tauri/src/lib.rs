@@ -677,6 +677,11 @@ fn runtime_java_system_packages_for_version(pkg_mgr: &str, requested_version: &s
   }
 }
 
+async fn runtime_dnf_package_available(pkg: &str) -> bool {
+  let cmd = format!("dnf -q list --available '{}' >/dev/null 2>&1", pkg);
+  exec_result_limit("bash", &["-lc", &cmd], CMD_TIMEOUT_SHORT).await.is_ok()
+}
+
 fn pkg_upgrade_cmd(pkg_mgr: &str, packages: &[&str]) -> String {
   let pkgs = packages.join(" ");
   match pkg_mgr {
@@ -901,6 +906,10 @@ async fn runtime_job_execute(
                 for (idx, pkg) in pkgs.iter().enumerate() {
                   let base = (idx as u32 * 100) / pkgs.len() as u32;
                   let weight = 100 / pkgs.len() as u32;
+                  if pkg_mgr == "dnf" && !runtime_dnf_package_available(pkg).await {
+                    logs.push(format!("NOTE: {} is not available in current Fedora repositories; skipping candidate.", pkg));
+                    continue;
+                  }
                   let cmd = match pkg_mgr {
                     "apt" => format!("DEBIAN_FRONTEND=noninteractive apt-get install -y {}", pkg),
                     "dnf" => format!("dnf install -y {}", pkg),
@@ -916,11 +925,6 @@ async fn runtime_job_execute(
                       break;
                     }
                     Err(e) => {
-                      let e_lower = e.to_lowercase();
-                      if pkg_mgr == "dnf" && e_lower.contains("no match for argument") && idx + 1 < pkgs.len() {
-                        logs.push(format!("NOTE: {} unavailable on this Fedora repo set; trying fallback package…", pkg));
-                        continue;
-                      }
                       loop_res = Err(format!("[RUNTIME_INSTALL_FAILED] Failed to install {}: {}", pkg, e));
                       break;
                     }
