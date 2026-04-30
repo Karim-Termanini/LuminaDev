@@ -634,9 +634,10 @@ export function RuntimesPage(): ReactElement {
                         </div>
 
                         <div className="hp-card">
-                           <div style={{ fontWeight: 600, marginBottom: 6 }}>Sudo password</div>
+                           <div style={{ fontWeight: 600, marginBottom: 6 }}>Sudo password (optional)</div>
                            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 10 }}>
-                             Required for system-wide installs (apt / dnf / pacman). Leave blank if you have passwordless sudo.
+                             For system installs (dnf / apt / snap): paste your sudo password here, or leave blank — a
+                             graphical password prompt (pkexec) usually opens. Leave blank too if passwordless sudo is enabled.
                            </div>
                            <input
                              type="password"

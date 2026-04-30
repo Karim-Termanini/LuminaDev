@@ -7,6 +7,7 @@ use std::sync::{Arc, Mutex as StdMutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
 use tauri::{AppHandle, Emitter, Manager, State};
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
 use tokio::process::Command;
 use tokio::sync::Mutex;
 use uuid::Uuid;
@@ -61,6 +62,22 @@ const CMD_TIMEOUT_SSH: Duration = Duration::from_secs(120);
 const CMD_TIMEOUT_LONG: Duration = Duration::from_secs(900);
 /// Single `sudo bash -c` step during Docker engine install.
 const CMD_TIMEOUT_INSTALL_STEP: Duration = Duration::from_secs(900);
+
+/// Run a bootstrap script without elevation (writes under $HOME only).
+async fn runtime_bash_user_step(cmd: &str, logs: &mut Vec<String>) -> Result<(), String> {
+  logs.push(format!("RUNNING (user shell, no sudo): {}", cmd));
+  match exec_result_limit("bash", &["-lc", cmd], CMD_TIMEOUT_INSTALL_STEP).await {
+    Ok((stdout, stderr)) => {
+      for line in stdout.lines().chain(stderr.lines()) {
+        if !line.trim().is_empty() {
+          logs.push(format!("OUT: {}", line));
+        }
+      }
+      Ok(())
+    }
+    Err(e) => Err(format!("[RUNTIME_INSTALL_FAILED] {}", e.trim())),
+  }
+}
 
 async fn exec_output_limit(cmd: &str, args: &[&str], limit: Duration) -> Result<String, String> {
   let fut = async {
@@ -359,68 +376,148 @@ fn docker_install_build_steps(distro: &str, components: Option<&Vec<Value>>) -> 
   Some(steps)
 }
 
-async fn sudo_bash_install_step(cmd: &str, password: Option<&str>, logs: &mut Vec<String>) -> Result<(), String> {
+async fn sudo_bash_install_step(cmd: &str, password: Option<&str>, logs: &mut Vec<String>, app: Option<tauri::AppHandle>, job_id: Option<String>, base_progress: u32, step_weight: u32) -> Result<(), String> {
   logs.push(format!("RUNNING: {}", cmd));
-  let mut child = Command::new("sudo")
-    .arg("-S")
-    .arg("-p")
-    .arg("")
-    .arg("bash")
-    .arg("-c")
-    .arg(cmd)
-    .stdin(Stdio::piped())
-    .stdout(Stdio::piped())
-    .stderr(Stdio::piped())
-    .spawn()
-    .map_err(|e| format!("[DOCKER_INSTALL_FAILED] {}", e))?;
 
-  if let Some(pw) = password {
-    if !pw.is_empty() {
-      use tokio::io::AsyncWriteExt;
-      if let Some(mut stdin) = child.stdin.take() {
+  let pw_trim = password.and_then(|p| {
+    let t = p.trim();
+    if t.is_empty() {
+      None
+    } else {
+      Some(t)
+    }
+  });
+
+  let pwless = sudo_passwordless_ok().await;
+
+  enum SpawnMode<'a> {
+    Pkexec,
+    SudoPwless,
+    SudoStdin(&'a str),
+  }
+
+  let mode = if pwless {
+    SpawnMode::SudoPwless
+  } else if let Some(pw) = pw_trim {
+    SpawnMode::SudoStdin(pw)
+  } else {
+    logs.push("AUTH: system privilege dialog — enter your login password there (leave Lumina sudo field blank if using this)".into());
+    SpawnMode::Pkexec
+  };
+
+  let mut child = match mode {
+    SpawnMode::Pkexec => Command::new("pkexec")
+      .args(["bash", "-c", cmd])
+      .stdin(Stdio::null())
+      .stdout(Stdio::piped())
+      .stderr(Stdio::piped())
+      .spawn()
+      .map_err(|e| format!("[ELEVATED_CMD_FAILED] pkexec spawn: {}", e))?,
+    SpawnMode::SudoPwless => Command::new("sudo")
+      .args(["bash", "-c", cmd])
+      .stdin(Stdio::null())
+      .stdout(Stdio::piped())
+      .stderr(Stdio::piped())
+      .spawn()
+      .map_err(|e| format!("[ELEVATED_CMD_FAILED] sudo spawn: {}", e))?,
+    SpawnMode::SudoStdin(pw) => {
+      let mut c = Command::new("sudo")
+        .arg("-S")
+        .arg("-p")
+        .arg("")
+        .arg("bash")
+        .arg("-c")
+        .arg(cmd)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("[ELEVATED_CMD_FAILED] sudo spawn: {}", e))?;
+      if let Some(mut stdin) = c.stdin.take() {
         stdin
           .write_all(format!("{pw}\n").as_bytes())
           .await
-          .map_err(|e| format!("[DOCKER_INSTALL_FAILED] {}", e))?;
+          .map_err(|e| format!("[ELEVATED_CMD_FAILED] stdin: {}", e))?;
         let _ = stdin.shutdown().await;
       }
-    }
-  } else {
-    drop(child.stdin.take());
-  }
-
-  let out = match tokio::time::timeout(CMD_TIMEOUT_INSTALL_STEP, child.wait_with_output()).await {
-    Ok(Ok(o)) => o,
-    Ok(Err(e)) => return Err(format!("[DOCKER_INSTALL_FAILED] {}", e)),
-    Err(_) => {
-      return Err(
-        "[HOST_COMMAND_TIMEOUT] sudo install step exceeded wall clock (check for orphaned apt/dnf/pacman on host)"
-          .to_string(),
-      );
+      c
     }
   };
-  let stdout = String::from_utf8_lossy(&out.stdout);
-  let stderr = String::from_utf8_lossy(&out.stderr);
-  for line in stdout.lines() {
-    if !line.is_empty() {
-      logs.push(format!("OUT: {line}"));
+
+  let stdout = child.stdout.take().unwrap();
+  let stderr = child.stderr.take().unwrap();
+  let mut reader = tokio::io::BufReader::new(stdout).lines();
+  let mut err_reader = tokio::io::BufReader::new(stderr).lines();
+
+  let job_id_clone = job_id.clone();
+  let app_clone = app.clone();
+
+  // Read stdout and update logs/progress
+  let mut last_progress_update = std::time::Instant::now();
+  
+  loop {
+    tokio::select! {
+      res = reader.next_line() => {
+        match res {
+          Ok(Some(line)) => {
+            if !line.trim().is_empty() {
+              logs.push(format!("OUT: {}", line.clone()));
+            }
+            // Coarse progress parsing for apt/dnf/pacman or curl -L#
+            if let (Some(app), Some(jid)) = (&app_clone, &job_id_clone) {
+              if last_progress_update.elapsed().as_millis() > 500 {
+                let mut bonus = 0;
+                if line.contains("%") {
+                   let parts: Vec<&str> = line.split('%').collect();
+                   if let Some(p_str) = parts[0].split_whitespace().last() {
+                     if let Ok(p) = p_str.parse::<u32>() {
+                       bonus = (p * step_weight) / 100;
+                     }
+                   }
+                } else if line.contains("/") && (line.contains("(") || line.contains("[")) {
+                   if let Some(caps) = line.find('/') {
+                      let start_search = &line[..caps];
+                      let start = start_search.rfind(|c: char| !c.is_digit(10)).map(|idx| idx + 1).unwrap_or(0);
+                      let end_search = &line[caps+1..];
+                      let end = end_search.find(|c: char| !c.is_digit(10)).unwrap_or(end_search.len());
+                      let cur = line[start..caps].trim().parse::<u32>().unwrap_or(0);
+                      let total = line[caps+1..caps+1+end].trim().parse::<u32>().unwrap_or(1);
+                      if total > 0 { bonus = (cur * step_weight) / total; }
+                   }
+                }
+                
+                let prog = base_progress + bonus;
+                let st = app.state::<AppState>();
+                let mut jobs = st.jobs.lock().await;
+                if let Some(j) = jobs.iter_mut().find(|j| j.get("id").and_then(|v| v.as_str()) == Some(jid.as_str())) {
+                  j["progress"] = json!(prog.min(base_progress + step_weight));
+                }
+                last_progress_update = std::time::Instant::now();
+              }
+            }
+          }
+          _ => break,
+        }
+      }
+      res = err_reader.next_line() => {
+        match res {
+          Ok(Some(line)) => {
+            if line.contains("[sudo] password") { continue; }
+            if !line.trim().is_empty() {
+              logs.push(format!("ERR: {}", line));
+            }
+          }
+          _ => break,
+        }
+      }
     }
   }
-  for line in stderr.lines() {
-    if line.contains("[sudo] password") {
-      continue;
-    }
-    if !line.trim().is_empty() {
-      logs.push(format!("ERR: {line}"));
-    }
-  }
-  if out.status.success() {
+
+  let status = child.wait().await.map_err(|e| format!("[DOCKER_INSTALL_FAILED] {}", e))?;
+  if status.success() {
     Ok(())
   } else {
-    Err(format!(
-      "[DOCKER_INSTALL_FAILED] command exited with status {}",
-      out.status
-    ))
+    Err(format!("[PROCESS_EXIT_ERROR] Command failed with code {}", status.code().unwrap_or(-1)))
   }
 }
 
@@ -573,10 +670,7 @@ async fn runtime_job_execute(
         if runtime_id == "rust" {
           let tc = if version.is_empty() { "stable" } else { version.trim() };
           let cmd = format!("curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain {}", tc);
-          logs.push(format!("Running: {}", cmd));
-          exec_output_limit("bash", &["-lc", &cmd], CMD_TIMEOUT_INSTALL_STEP).await
-            .map(|out| { if !out.is_empty() { logs.push(out); } })
-            .map_err(|e| format!("[RUNTIME_INSTALL_FAILED] {}", e.trim()))
+          runtime_bash_user_step(&cmd, &mut logs).await.map_err(|e| format!("{}", e))
         } else if runtime_id == "node" && method == "local" {
           let v = if version.is_empty() { "lts/*" } else { version.trim() };
           let cmd = format!(
@@ -585,24 +679,20 @@ async fn runtime_job_execute(
              && [ -s \"$NVM_DIR/nvm.sh\" ] && . \"$NVM_DIR/nvm.sh\" \
              && nvm install {}", v
           );
-          logs.push(format!("Running nvm install {}", v));
-          exec_output_limit("bash", &["-lc", &cmd], CMD_TIMEOUT_INSTALL_STEP).await
-            .map(|out| { if !out.is_empty() { logs.push(out); } })
-            .map_err(|e| format!("[RUNTIME_INSTALL_FAILED] {}", e.trim()))
+          runtime_bash_user_step(&cmd, &mut logs).await.map_err(|e| format!("{}", e))
         } else if runtime_id == "go" && method == "local" {
           let v = if version.is_empty() { "1.22.2" } else { version.trim() };
-          let target_dir = "$HOME/.local/share/lumina/go";
           let cmd = format!(
-            "mkdir -p {target_dir} && cd {target_dir} \
-             && curl -LO https://go.dev/dl/go{v}.linux-amd64.tar.gz \
-             && tar -C {target_dir} -xzf go{v}.linux-amd64.tar.gz --strip-components=1 \
-             && rm go{v}.linux-amd64.tar.gz",
-            v = v, target_dir = target_dir
+            "mkdir -p \"$HOME/.local/share/lumina/go\" \
+             && cd \"$HOME/.local/share/lumina/go\" \
+             && curl -L -o go{v}.tar.gz \"https://go.dev/dl/go{v}.linux-amd64.tar.gz\" \
+             && tar -xzf go{v}.tar.gz --strip-components=1 \
+             && rm go{v}.tar.gz \
+             && grep -q lumina-go \"$HOME/.bashrc\" \
+             || echo 'export PATH=\"$HOME/.local/share/lumina/go/bin:$PATH\"  # lumina-go' >> \"$HOME/.bashrc\"",
+            v = v
           );
-          logs.push(format!("Downloading and extracting Go {} to {}…", v, target_dir));
-          exec_output_limit("bash", &["-lc", &cmd], CMD_TIMEOUT_INSTALL_STEP).await
-            .map(|out| { if !out.is_empty() { logs.push(out); } })
-            .map_err(|e| format!("[RUNTIME_INSTALL_FAILED] {}", e.trim()))
+          runtime_bash_user_step(&cmd, &mut logs).await.map_err(|e| format!("{}", e))
         } else if runtime_id == "python" && method == "local" {
           let v = if version.is_empty() { "3.12.2" } else { version.trim() };
           let cmd = format!(
@@ -613,27 +703,22 @@ async fn runtime_job_execute(
              && pyenv install {v} && pyenv global {v}",
             v = v
           );
-          logs.push(format!("Installing Python {} via pyenv…", v));
-          exec_output_limit("bash", &["-lc", &cmd], CMD_TIMEOUT_INSTALL_STEP).await
-            .map(|out| { if !out.is_empty() { logs.push(out); } })
-            .map_err(|e| format!("[RUNTIME_INSTALL_FAILED] {}", e.trim()))
+          runtime_bash_user_step(&cmd, &mut logs).await.map_err(|e| format!("{}", e))
         } else if runtime_id == "dotnet" && pkg_mgr == "pacman" {
           // dotnet-sdk-8.0 is AUR-only on Arch; use Microsoft's install script instead
           let v = if version.is_empty() || version.starts_with("system") { "8.0" } else { version.trim() };
           logs.push(format!("Installing .NET {} via Microsoft install script (Arch)…", v));
           let cmd = format!(
-            "curl -fsSL https://dot.net/v1/dotnet-install.sh | bash -s -- --channel {} --install-dir \"$HOME/.dotnet\"",
+            "curl -fsSL https://dot.net/v1/dotnet-install.sh | bash -s -- --channel {} --install-dir \"$HOME/.dotnet\" \
+             && grep -q dotnet-install \"$HOME/.bashrc\" || echo 'export PATH=\"$HOME/.dotnet:$HOME/.dotnet/tools:$PATH\"' >> \"$HOME/.bashrc\"",
             v
           );
-          exec_output_limit("bash", &["-lc", &cmd], CMD_TIMEOUT_INSTALL_STEP).await
-            .map(|out| { if !out.is_empty() { logs.push(out); } })
-            .map_err(|e| format!("[RUNTIME_INSTALL_FAILED] {}", e.trim()))
+          runtime_bash_user_step(&cmd, &mut logs).await.map_err(|e| format!("{}", e))
         } else if runtime_id == "bun" {
           logs.push("Installing Bun via official installer…".into());
-          let cmd = "curl -fsSL https://bun.sh/install | bash";
-          exec_output_limit("bash", &["-lc", cmd], CMD_TIMEOUT_INSTALL_STEP).await
-            .map(|out| { if !out.is_empty() { logs.push(out); } })
-            .map_err(|e| format!("[RUNTIME_INSTALL_FAILED] {}", e.trim()))
+          runtime_bash_user_step("curl -fsSL https://bun.sh/install | bash", &mut logs)
+            .await
+            .map_err(|e| format!("{}", e))
         } else if runtime_id == "dart" {
           let channel = if version.is_empty() || version == "stable" { "stable" } else { version.trim() };
           logs.push(format!("Installing Dart SDK ({})…", channel));
@@ -647,7 +732,7 @@ async fn runtime_job_execute(
                apt-get update -qq && apt-get install -y dart",
               channel = channel
             );
-            sudo_bash_install_step(&cmd, password_opt, &mut logs).await
+            sudo_bash_install_step(&cmd, password_opt, &mut logs, Some(app.clone()), Some(job_id.clone()), 20, 70).await
               .map_err(|e| format!("[RUNTIME_INSTALL_FAILED] {}", e))
           } else {
             // Fedora / Arch: download SDK zip directly into ~/.dart
@@ -659,15 +744,13 @@ async fn runtime_job_execute(
                grep -q 'dart-sdk' "$HOME/.bashrc" || echo 'export PATH="$HOME/.dart/dart-sdk/bin:$PATH"' >> "$HOME/.bashrc""#,
               channel = channel
             );
-            exec_output_limit("bash", &["-lc", &cmd], CMD_TIMEOUT_INSTALL_STEP).await
-              .map(|out| { if !out.is_empty() { logs.push(out); } })
-              .map_err(|e| format!("[RUNTIME_INSTALL_FAILED] {}", e.trim()))
+            runtime_bash_user_step(&cmd, &mut logs).await.map_err(|e| format!("{}", e))
           }
         } else if runtime_id == "flutter" {
           let has_snap = exec_output_limit("which", &["snap"], CMD_TIMEOUT_SHORT).await.is_ok();
           if has_snap {
             logs.push("Installing Flutter via snap…".into());
-            sudo_bash_install_step("snap install flutter --classic", password_opt, &mut logs).await
+            sudo_bash_install_step("snap install flutter --classic", password_opt, &mut logs, Some(app.clone()), Some(job_id.clone()), 10, 85).await
               .map_err(|e| format!("[RUNTIME_INSTALL_FAILED] {}", e))
           } else {
             logs.push("snap not found — downloading Flutter SDK tarball into ~/.flutter-sdk…".into());
@@ -683,34 +766,38 @@ async fn runtime_job_execute(
               rm /tmp/flutter.tar.xz
               grep -q 'flutter-sdk' "$HOME/.bashrc" || echo 'export PATH="$HOME/.flutter-sdk/bin:$PATH"' >> "$HOME/.bashrc"
             "#;
-            exec_output_limit("bash", &["-lc", cmd], CMD_TIMEOUT_INSTALL_STEP).await
-              .map(|out| { if !out.is_empty() { logs.push(out); } })
-              .map_err(|e| format!("[RUNTIME_INSTALL_FAILED] {}", e.trim()))
+            runtime_bash_user_step(cmd, &mut logs).await.map_err(|e| format!("{}", e))
           }
         } else if runtime_id == "julia" {
           logs.push("Installing Julia via juliaup…".into());
           let cmd = "curl -fsSL https://install.julialang.org | sh -s -- -y";
-          exec_output_limit("bash", &["-lc", cmd], CMD_TIMEOUT_INSTALL_STEP).await
-            .map(|out| { if !out.is_empty() { logs.push(out); } })
-            .map_err(|e| format!("[RUNTIME_INSTALL_FAILED] {}", e.trim()))
+          runtime_bash_user_step(cmd, &mut logs).await.map_err(|e| format!("{}", e))
         } else {
           let pkgs = runtime_system_packages(&runtime_id, pkg_mgr);
           if pkgs.is_empty() {
             logs.push(format!("No system packages known for '{}' on {}. Try local/rustup method.", runtime_id, distro));
             Ok(())
           } else {
-            let cmd = {
-              let p: Vec<&str> = pkgs.clone();
-              match pkg_mgr {
-                "apt" => format!("DEBIAN_FRONTEND=noninteractive apt-get install -y {}", p.join(" ")),
-                "dnf" => format!("dnf install -y {}", p.join(" ")),
-                "pacman" => format!("pacman -S --needed --noconfirm {}", p.join(" ")),
-                "zypper" => format!("zypper install -y {}", p.join(" ")),
-                _ => format!("apt-get install -y {}", p.join(" ")),
+            let total = pkgs.len();
+            let mut loop_res = Ok(());
+            for (idx, pkg) in pkgs.iter().enumerate() {
+              let base = (idx as u32 * 100) / total as u32;
+              let weight = 100 / total as u32;
+              let cmd = match pkg_mgr {
+                "apt" => format!("DEBIAN_FRONTEND=noninteractive apt-get install -y {}", pkg),
+                "dnf" => format!("dnf install -y {}", pkg),
+                "pacman" => format!("pacman -S --needed --noconfirm {}", pkg),
+                "zypper" => format!("zypper install -y {}", pkg),
+                _ => format!("apt-get install -y {}", pkg),
+              };
+              logs.push(format!("Installing dependency {} of {}: {}…", idx + 1, total, pkg));
+              let step_res = sudo_bash_install_step(&cmd, password_opt, &mut logs, Some(app.clone()), Some(job_id.clone()), base, weight).await;
+              if let Err(e) = step_res {
+                loop_res = Err(format!("[RUNTIME_INSTALL_FAILED] Failed to install {}: {}", pkg, e));
+                break;
               }
-            };
-            sudo_bash_install_step(&cmd, password_opt, &mut logs).await
-              .map_err(|e| format!("[RUNTIME_INSTALL_FAILED] {}", e))
+            }
+            loop_res
           }
         }
       }
@@ -726,7 +813,7 @@ async fn runtime_job_execute(
             Ok(())
           } else {
             let cmd = pkg_upgrade_cmd(pkg_mgr, &pkgs);
-            sudo_bash_install_step(&cmd, password_opt, &mut logs).await
+            sudo_bash_install_step(&cmd, password_opt, &mut logs, Some(app.clone()), Some(job_id.clone()), 10, 85).await
               .map_err(|e| format!("[RUNTIME_UPDATE_FAILED] {}", e))
           }
         }
@@ -743,7 +830,7 @@ async fn runtime_job_execute(
             .map_err(|e| format!("[RUNTIME_UNINSTALL_FAILED] {}", e.trim()))
         } else if runtime_id == "flutter" {
           logs.push("Removing Flutter snap…".into());
-          sudo_bash_install_step("snap remove flutter", password_opt, &mut logs).await
+          sudo_bash_install_step("snap remove flutter", password_opt, &mut logs, Some(app.clone()), Some(job_id.clone()), 10, 85).await
             .map_err(|e| format!("[RUNTIME_UNINSTALL_FAILED] {}", e))
         } else if runtime_id == "julia" {
           // juliaup self uninstall doesn't accept -y; pipe stdin to confirm,
@@ -767,7 +854,7 @@ async fn runtime_job_execute(
             Ok(())
           } else {
             let cmd = pkg_remove_cmd(pkg_mgr, &pkgs);
-            sudo_bash_install_step(&cmd, password_opt, &mut logs).await
+            sudo_bash_install_step(&cmd, password_opt, &mut logs, Some(app.clone()), Some(job_id.clone()), 10, 85).await
               .map_err(|e| format!("[RUNTIME_UNINSTALL_FAILED] {}", e))
           }
         }
@@ -885,7 +972,7 @@ async fn docker_install_invoke(body: &Value) -> Value {
   };
 
   for cmd in steps {
-    match sudo_bash_install_step(&cmd, password, &mut logs).await {
+    match sudo_bash_install_step(&cmd, password, &mut logs, None, None, 0, 0).await {
       Ok(()) => {}
       Err(e) => return json!({ "ok": false, "log": logs, "error": e }),
     }
@@ -1782,7 +1869,12 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       let method = body.get("method").and_then(|v| v.as_str()).unwrap_or("system").to_string();
       let version = body.get("version").and_then(|v| v.as_str()).unwrap_or("").to_string();
       let remove_mode = body.get("removeMode").and_then(|v| v.as_str()).unwrap_or("runtime_only").to_string();
-      let sudo_password = body.get("sudoPassword").and_then(|v| v.as_str()).unwrap_or("").to_string();
+      let sudo_password = body
+        .get("sudoPassword")
+        .or_else(|| body.get("sudo_password"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
       {
         let mut jobs = state.jobs.lock().await;
         jobs.push(json!({
