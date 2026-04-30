@@ -682,6 +682,16 @@ async fn runtime_dnf_package_available(pkg: &str) -> bool {
   exec_result_limit("bash", &["-lc", &cmd], CMD_TIMEOUT_SHORT).await.is_ok()
 }
 
+async fn runtime_system_package_installed(pkg_mgr: &str, pkg: &str) -> bool {
+  let cmd = match pkg_mgr {
+    "dnf" | "zypper" => format!("rpm -q '{}' >/dev/null 2>&1", pkg),
+    "apt" => format!("dpkg -s '{}' >/dev/null 2>&1", pkg),
+    "pacman" => format!("pacman -Qi '{}' >/dev/null 2>&1", pkg),
+    _ => return false,
+  };
+  exec_result_limit("bash", &["-lc", &cmd], CMD_TIMEOUT_SHORT).await.is_ok()
+}
+
 fn pkg_upgrade_cmd(pkg_mgr: &str, packages: &[&str]) -> String {
   let pkgs = packages.join(" ");
   match pkg_mgr {
@@ -895,6 +905,9 @@ async fn runtime_job_execute(
                     "[RUNTIME_INSTALL_FAILED] Requested Java {} is not available in Fedora repositories on this machine (missing package: {}). Use Isolated Script (Local) for exact version installs.",
                     maj, pkg
                   ))
+                } else if runtime_system_package_installed(pkg_mgr, &pkg).await {
+                  logs.push(format!("NOTE: Java package {} is already installed; nothing to do.", pkg));
+                  Ok(())
                 } else {
                   let cmd = match pkg_mgr {
                     "apt" => format!("DEBIAN_FRONTEND=noninteractive apt-get install -y {}", pkg),
@@ -1018,6 +1031,10 @@ async fn runtime_job_execute(
             for (idx, pkg) in pkgs.iter().enumerate() {
               let base = (idx as u32 * 100) / total as u32;
               let weight = 100 / total as u32;
+              if runtime_system_package_installed(pkg_mgr, pkg).await {
+                logs.push(format!("NOTE: {} already installed; skipping.", pkg));
+                continue;
+              }
               let cmd = match pkg_mgr {
                 "apt" => format!("DEBIAN_FRONTEND=noninteractive apt-get install -y {}", pkg),
                 "dnf" => format!("dnf install -y {}", pkg),
