@@ -788,6 +788,7 @@ async fn runtime_job_execute(
   let mut logs: Vec<String> = vec![format!("job={} runtime={} method={}", kind, runtime_id, method)];
   let password_opt: Option<&str> = if sudo_password.is_empty() { None } else { Some(&sudo_password) };
   let mut final_state = "completed";
+  let mut effective_verify_method = method.clone();
 
   let distro = exec_output("bash", &["-lc", "source /etc/os-release 2>/dev/null && printf '%s' \"${ID:-unknown}\""])
     .await
@@ -1024,6 +1025,7 @@ async fn runtime_job_execute(
             logs.push(
               "NOTE: Local installer is not implemented for this runtime on this distro. Falling back to system package manager.".to_string(),
             );
+            effective_verify_method = "system".to_string();
           }
           if method.trim() == "system" && !pkgs.is_empty() && matches!(runtime_id.as_str(), "node" | "python" | "go") {
             logs.push(
@@ -1132,7 +1134,7 @@ async fn runtime_job_execute(
       drop(jobs);
 
       if matches!(kind.as_str(), "runtime_install" | "install_deps") {
-        runtime_append_verify(&runtime_id, &method, &version, &mut logs).await;
+        runtime_append_verify(&runtime_id, &effective_verify_method, &version, &mut logs).await;
       }
     }
   }
