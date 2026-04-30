@@ -69,8 +69,22 @@ export function WizardFlow({ onComplete }: { onComplete: () => void }): ReactEle
             ) : (
               <div>
                 <p style={{ color: 'var(--red)' }}>Docker daemon could not be reached.</p>
-                <p>If you are using Flatpak, you may need to grant socket access:</p>
-                <pre style={pre}>flatpak override --user --talk-name=org.freedesktop.Flatpak io.github.karimodora.LinuxDevHome</pre>
+                <p style={{ color: 'var(--text-muted)' }}>
+                  No terminal steps required here. Open Docker page and use <strong>Install / Setup</strong>,
+                  then press <strong>Retry check</strong>.
+                </p>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    style={btn}
+                    onClick={() => {
+                      setDockerOk(null)
+                      void window.dh.dockerList().then((res: unknown) => setDockerOk((res as { ok: boolean }).ok))
+                    }}
+                  >
+                    Retry check
+                  </button>
+                </div>
               </div>
             )}
             <div style={actions}>
@@ -245,12 +259,3 @@ const input = {
   boxSizing: 'border-box' as const,
 }
 
-const pre = {
-  background: '#0a0a0a',
-  padding: 10,
-  borderRadius: 6,
-  border: '1px solid var(--border)',
-  whiteSpace: 'pre-wrap' as const,
-  wordBreak: 'break-all' as const,
-  fontSize: 12,
-}

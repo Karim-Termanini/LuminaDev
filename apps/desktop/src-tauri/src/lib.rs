@@ -6,7 +6,7 @@ use std::process::Stdio;
 use std::time::Duration;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter, Manager, State};
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::io::{AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{ChildStdin, Command};
 use tokio::sync::Mutex;
 use uuid::Uuid;
@@ -226,6 +226,28 @@ fn parse_size_mb(raw: &str) -> u64 {
   mb.round() as u64
 }
 
+fn is_physical_disk_name(name: &str) -> bool {
+  let is_sd = name.starts_with("sd") && name.len() == 3;
+  let is_vd = name.starts_with("vd") && name.len() == 3;
+  let is_xvd = name.starts_with("xvd") && name.len() == 4;
+  let is_nvme = name.starts_with("nvme") && name.contains('n') && !name.contains('p');
+  let is_mmc = name.starts_with("mmcblk") && !name.contains('p');
+  is_sd || is_vd || is_xvd || is_nvme || is_mmc
+}
+
+fn ss_process_from_line(line: &str) -> String {
+  if let Some(start) = line.find("users:((\"") {
+    let sub = &line[start + 9..];
+    if let Some(end) = sub.find('"') {
+      let process = sub[..end].trim();
+      if !process.is_empty() {
+        return process.to_string();
+      }
+    }
+  }
+  "unknown".to_string()
+}
+
 fn find_repo_root(start: &Path) -> PathBuf {
   let mut cur = start.to_path_buf();
   for _ in 0..8 {
@@ -279,7 +301,7 @@ fn docker_install_build_steps(distro: &str, components: Option<&Vec<Value>>) -> 
       "systemctl enable --now docker && docker --version".into(),
     ],
     "fedora" => vec![
-      "dnf -y install dnf-plugins-core && dnf config-manager --add-repo https://download.docker.com/linux/fedora/docker-ce.repo".into(),
+      "dnf -y install dnf-plugins-core && curl -fsSL https://download.docker.com/linux/fedora/docker-ce.repo -o /etc/yum.repos.d/docker-ce.repo".into(),
       "dnf install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin".into(),
       "systemctl enable --now docker && docker --version".into(),
     ],
@@ -649,6 +671,29 @@ async fn docker_install_invoke(body: &Value) -> Value {
   if !matches!(distro, "ubuntu" | "fedora" | "arch") {
     return json!({ "ok": false, "log": Vec::<String>::new(), "error": "[DOCKER_INVALID_REQUEST] Unsupported distro." });
   }
+  let host_distro_id = std::fs::read_to_string("/etc/os-release")
+    .unwrap_or_default()
+    .lines()
+    .find(|l| l.starts_with("ID="))
+    .map(|l| l.trim_start_matches("ID=").trim_matches('"').to_string())
+    .unwrap_or_else(|| "linux".to_string())
+    .to_lowercase();
+  let distro_family = |id: &str| -> &'static str {
+    match id {
+      "ubuntu" | "debian" | "linuxmint" | "pop" | "elementary" | "raspbian" => "ubuntu",
+      "fedora" | "rhel" | "centos" | "rocky" | "alma" | "amzn" => "fedora",
+      "arch" | "manjaro" | "endeavouros" | "garuda" => "arch",
+      _ => "unknown",
+    }
+  };
+  let host_family = distro_family(&host_distro_id);
+  if host_family != "unknown" && host_family != distro {
+    return json!({
+      "ok": false,
+      "log": vec![format!("Host distro detected as '{}' (family: {}). Installer selection was '{}'.", host_distro_id, host_family, distro)],
+      "error": format!("[DOCKER_INSTALL_FAILED] Selected distro '{}' does not match host distro '{}'. Choose '{}' in the installer.", distro, host_distro_id, host_family),
+    });
+  }
   let password = body.get("password").and_then(|v| v.as_str());
   let pw_nonempty = password.map(|p| !p.is_empty()).unwrap_or(false);
   if !pw_nonempty && !sudo_passwordless_ok().await {
@@ -659,12 +704,44 @@ async fn docker_install_invoke(body: &Value) -> Value {
     });
   }
 
-  let components = body.get("components").and_then(|v| v.as_array());
-  let Some(steps) = docker_install_build_steps(distro, components) else {
+  let requested_components: Vec<String> = body
+    .get("components")
+    .and_then(|v| v.as_array())
+    .map(|arr| {
+      arr.iter()
+        .filter_map(|x| x.as_str().map(std::string::ToString::to_string))
+        .collect::<Vec<String>>()
+    })
+    .unwrap_or_default();
+  let docker_installed = exec_output_limit("docker", &["--version"], CMD_TIMEOUT_SHORT).await.is_ok();
+  let compose_installed = exec_output_limit("docker", &["compose", "version"], CMD_TIMEOUT_SHORT).await.is_ok();
+  let buildx_installed = exec_output_limit("docker", &["buildx", "version"], CMD_TIMEOUT_SHORT).await.is_ok();
+
+  let mut effective_components = requested_components;
+  if effective_components.is_empty() {
+    effective_components = vec!["docker".into(), "compose".into(), "buildx".into()];
+  }
+  effective_components.retain(|c| match c.as_str() {
+    "docker" => !docker_installed,
+    "compose" => !compose_installed,
+    "buildx" => !buildx_installed,
+    _ => false,
+  });
+
+  let mut logs: Vec<String> = Vec::new();
+  logs.push(format!(
+    "Detected install status => docker: {}, compose: {}, buildx: {}",
+    docker_installed, compose_installed, buildx_installed
+  ));
+  if effective_components.is_empty() {
+    logs.push("Nothing to install: requested Docker components are already present.".to_string());
+    return json!({ "ok": true, "log": logs });
+  }
+  let effective_json: Vec<Value> = effective_components.into_iter().map(Value::String).collect();
+  let Some(steps) = docker_install_build_steps(distro, Some(&effective_json)) else {
     return json!({ "ok": false, "log": Vec::<String>::new(), "error": "[DOCKER_INVALID_REQUEST] Unsupported distro." });
   };
 
-  let mut logs: Vec<String> = Vec::new();
   for cmd in steps {
     match sudo_bash_install_step(&cmd, password, &mut logs).await {
       Ok(()) => {}
@@ -900,7 +977,18 @@ async fn ipc_send(channel: String, payload: Value, app: AppHandle, state: State<
 async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, state: State<'_, AppState>) -> Result<Value, String> {
   let body = payload.unwrap_or_else(|| json!({}));
   let res = match channel.as_str() {
-    "dh:session:info" => json!({ "ok": true, "mode": "tauri", "platform": std::env::consts::OS }),
+    "dh:session:info" => {
+      let flatpak_id = std::env::var("FLATPAK_ID").ok();
+      let kind = if flatpak_id.is_some() { "flatpak" } else { "native" };
+      json!({
+        "ok": true,
+        "mode": "tauri",
+        "kind": kind,
+        "flatpakId": flatpak_id,
+        "platform": std::env::consts::OS,
+        "summary": format!("Tauri/{} ({})", kind, std::env::consts::OS)
+      })
+    },
     "dh:store:get" => {
       let key = body.get("key").and_then(|v| v.as_str()).unwrap_or_default();
       match app_file(&app, "store.json") {
@@ -970,22 +1058,38 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       let buildx = exec_output_limit("docker", &["buildx", "version"], CMD_TIMEOUT_SHORT).await.is_ok();
       json!({ "docker": docker, "compose": compose, "buildx": buildx })
     },
-    "dh:docker:list" => match exec_output("docker", &["ps", "-a", "--format", "{{json .}}"]).await {
+    "dh:docker:list" => match exec_output("docker", &["ps", "-a", "--format", "{\"ID\":\"{{.ID}}\",\"Names\":\"{{.Names}}\",\"Image\":\"{{.Image}}\",\"State\":\"{{.State}}\",\"Status\":\"{{.Status}}\",\"Ports\":\"{{.Ports}}\",\"Networks\":\"{{.Networks}}\",\"Mounts\":\"{{.Mounts}}\"}"]).await {
       Ok(out) => {
         let rows: Vec<Value> = out
           .lines()
           .filter_map(|line| serde_json::from_str::<Value>(line).ok())
           .map(|v| {
+            let networks: Vec<String> = v
+              .get("Networks")
+              .and_then(|x| x.as_str())
+              .unwrap_or_default()
+              .split(',')
+              .map(|s| s.trim().to_string())
+              .filter(|s| !s.is_empty())
+              .collect();
+            let volumes: Vec<String> = v
+              .get("Mounts")
+              .and_then(|x| x.as_str())
+              .unwrap_or_default()
+              .split(',')
+              .map(|s| s.trim().to_string())
+              .filter(|s| !s.is_empty())
+              .collect();
             json!({
               "id": v.get("ID").and_then(|x| x.as_str()).unwrap_or_default(),
-              "name": v.get("Names").and_then(|x| x.as_str()).unwrap_or_default(),
+              "name": v.get("Names").and_then(|x| x.as_str()).map(|s| s.trim_start_matches('/')).unwrap_or_default(),
               "image": v.get("Image").and_then(|x| x.as_str()).unwrap_or_default(),
               "imageId": "",
               "state": v.get("State").and_then(|x| x.as_str()).unwrap_or("unknown"),
               "status": v.get("Status").and_then(|x| x.as_str()).unwrap_or("unknown"),
               "ports": v.get("Ports").and_then(|x| x.as_str()).filter(|x| !x.is_empty()).unwrap_or("—"),
-              "networks": [],
-              "volumes": []
+              "networks": networks,
+              "volumes": volumes
             })
           })
           .collect();
@@ -1023,8 +1127,8 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
         json!({ "ok": false, "log": "", "error": "[DOCKER_LOGS_FAILED] Missing id." })
       } else {
         match exec_result("docker", &["logs", "--tail", &tail, id]).await {
-          Ok((stdout, stderr)) => json!({ "ok": true, "log": format!("{}{}", stdout, stderr) }),
-          Err(e) => json!({ "ok": false, "log": "", "error": format!("[DOCKER_LOGS_FAILED] {}", e.trim()) }),
+          Ok((stdout, stderr)) => json!({ "ok": true, "text": format!("{}{}", stdout, stderr) }),
+          Err(e) => json!({ "ok": false, "text": "", "error": format!("[DOCKER_LOGS_FAILED] {}", e.trim()) }),
         }
       }
     },
@@ -1042,7 +1146,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
               "id": id,
               "repoTags": [format!("{}:{}", repository, tag)],
               "sizeMb": parse_size_mb(size),
-              "createdAt": 0
+              "createdAt": v.get("CreatedAt").and_then(|x| x.as_str()).unwrap_or_default()
             })
           })
           .collect();
@@ -1308,9 +1412,17 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
             let app_out = app.clone();
             let id_out = id.clone();
             tauri::async_runtime::spawn(async move {
-              let mut lines = BufReader::new(stdout).lines();
-              while let Ok(Some(line)) = lines.next_line().await {
-                let _ = app_out.emit("dh:terminal:data", json!({ "id": id_out, "data": format!("{}\n", line) }));
+              let mut reader = BufReader::new(stdout);
+              let mut buf = vec![0_u8; 4096];
+              loop {
+                match reader.read(&mut buf).await {
+                  Ok(0) => break,
+                  Ok(n) => {
+                    let data = String::from_utf8_lossy(&buf[..n]).to_string();
+                    let _ = app_out.emit("dh:terminal:data", json!({ "id": id_out, "data": data }));
+                  }
+                  Err(_) => break,
+                }
               }
             });
           }
@@ -1331,9 +1443,13 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       if container_id.is_empty() {
         json!({ "ok": false, "error": "[DOCKER_TERMINAL_FAILED] Missing containerId." })
       } else {
-        let args = vec!["exec".to_string(), "-i".to_string(), container_id.to_string(), "sh".to_string()];
-        match Command::new("docker")
-          .args(args)
+        let run_cmd = format!(
+          "if command -v script >/dev/null 2>&1; then exec script -qfec \"docker exec -it {} sh\" /dev/null; else exec docker exec -i {} sh; fi",
+          container_id, container_id
+        );
+        match Command::new("sh")
+          .arg("-lc")
+          .arg(run_cmd)
           .stdin(std::process::Stdio::piped())
           .stdout(std::process::Stdio::piped())
           .stderr(std::process::Stdio::piped())
@@ -1349,9 +1465,17 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
               let app_out = app.clone();
               let id_out = id.clone();
               tauri::async_runtime::spawn(async move {
-                let mut lines = BufReader::new(stdout).lines();
-                while let Ok(Some(line)) = lines.next_line().await {
-                  let _ = app_out.emit("dh:terminal:data", json!({ "id": id_out, "data": format!("{}\n", line) }));
+                let mut reader = BufReader::new(stdout);
+                let mut buf = vec![0_u8; 4096];
+                loop {
+                  match reader.read(&mut buf).await {
+                    Ok(0) => break,
+                    Ok(n) => {
+                      let data = String::from_utf8_lossy(&buf[..n]).to_string();
+                      let _ = app_out.emit("dh:terminal:data", json!({ "id": id_out, "data": data }));
+                    }
+                    Err(_) => break,
+                  }
                 }
               });
             }
@@ -1765,7 +1889,10 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       let memory_usage = format!("{} GB", mem_total_gb);
       // Package count
       let packages = exec_output_limit("sh", &["-c",
-        "pacman -Q 2>/dev/null | wc -l || dpkg -l 2>/dev/null | grep -c '^ii' || rpm -qa 2>/dev/null | wc -l || echo 0"
+        "if command -v rpm >/dev/null 2>&1; then rpm -qa 2>/dev/null | wc -l; \
+         elif command -v dpkg >/dev/null 2>&1; then dpkg -l 2>/dev/null | awk '/^ii/{c++}END{print c+0}'; \
+         elif command -v pacman >/dev/null 2>&1; then pacman -Q 2>/dev/null | wc -l; \
+         else echo 0; fi"
       ], CMD_TIMEOUT_SHORT).await.unwrap_or_else(|_| "0".to_string());
       // Resolution via xrandr or wlr-randr
       let resolution = exec_output_limit("sh", &["-c",
@@ -1792,27 +1919,61 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       })
     },
     "dh:host:ports" => {
-      let script = "ss -tulpnH 2>/dev/null | awk '{print $1\" \"$5\" \"$NF}'";
+      let mut docker_port_owner: HashMap<String, String> = HashMap::new();
+      if let Ok(docker_out) = exec_output_limit("docker", &["ps", "--format", "{{.Names}}\t{{.Ports}}"], CMD_TIMEOUT_SHORT).await {
+        for line in docker_out.lines() {
+          let mut it = line.splitn(2, '\t');
+          let name = it.next().unwrap_or_default().trim();
+          let ports = it.next().unwrap_or_default().trim();
+          if name.is_empty() || ports.is_empty() {
+            continue;
+          }
+          for part in ports.split(',') {
+            let p = part.trim();
+            if let Some((left, right)) = p.split_once("->") {
+              let host_port = left
+                .split(':')
+                .last()
+                .and_then(|v| v.parse::<u16>().ok());
+              let proto = if right.trim().ends_with("/udp") { "udp" } else { "tcp" };
+              if let Some(port) = host_port {
+                docker_port_owner.insert(format!("{}:{}", proto, port), format!("docker:{}", name));
+              }
+            }
+          }
+        }
+      }
+      let script = "ss -tulpnH 2>/dev/null";
       match exec_output_limit("sh", &["-c", script], CMD_TIMEOUT_SHORT).await {
         Ok(out) => {
           let ports: Vec<Value> = out
             .lines()
             .filter_map(|line| {
               let parts: Vec<&str> = line.split_whitespace().collect();
-              if parts.len() < 2 {
+              if parts.len() < 5 {
                 return None;
               }
               let protocol = if parts[0].starts_with("udp") { "udp" } else { "tcp" };
-              let port = parts[1]
+              let state = parts[1].to_string();
+              let port = parts[4]
                 .split(':')
                 .last()
                 .and_then(|p| p.parse::<u16>().ok())
                 .unwrap_or(0);
+              if port == 0 {
+                return None;
+              }
+              let mut service = ss_process_from_line(line);
+              if service == "unknown" {
+                if let Some(owner) = docker_port_owner.get(&format!("{}:{}", protocol, port)) {
+                  service = owner.clone();
+                }
+              }
               Some(json!({
                 "protocol": protocol,
                 "port": port,
-                "state": "LISTEN",
-                "service": parts.get(2).copied().unwrap_or("")
+                "state": state,
+                "service": service
               }))
             })
             .collect();
@@ -1858,9 +2019,21 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       let selinux = exec_output_limit("sestatus", &[], CMD_TIMEOUT_SHORT).await
         .map(|o| if o.contains("enabled") { "enabled" } else { "disabled" })
         .unwrap_or_else(|_| "unknown");
-      let ssh_config = exec_output_limit("bash", &["-c", "grep -E '^(PermitRootLogin|PasswordAuthentication)' /etc/ssh/sshd_config"], CMD_TIMEOUT_SHORT).await.unwrap_or_default();
-      let root_login = if ssh_config.contains("PermitRootLogin yes") { "yes" } else { "no" };
-      let pw_auth = if ssh_config.contains("PasswordAuthentication no") { "no" } else { "yes" };
+      let ssh_config = exec_output_limit("bash", &["-c", "sshd -T 2>/dev/null | awk '/permitrootlogin|passwordauthentication/'"], CMD_TIMEOUT_SHORT).await.unwrap_or_default();
+      let root_login = if ssh_config.contains("permitrootlogin yes") { "yes" } else { "no" };
+      let pw_auth = if ssh_config.contains("passwordauthentication no") { "no" } else { "yes" };
+      let failed_auth_24h = exec_output_limit(
+        "bash",
+        &[
+          "-c",
+          "journalctl --since '24 hours ago' -u sshd --no-pager 2>/dev/null | grep -Ei 'failed password|invalid user|authentication failure' | wc -l",
+        ],
+        CMD_TIMEOUT_SHORT,
+      )
+      .await
+      .ok()
+      .and_then(|s| s.trim().parse::<i32>().ok())
+      .unwrap_or(0);
       
       let ports_out = exec_output_limit("ss", &["-tulpn"], CMD_TIMEOUT_SHORT).await.unwrap_or_default();
       let mut risky: Vec<u16> = Vec::new();
@@ -1875,15 +2048,59 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
           "selinux": selinux,
           "sshPermitRootLogin": root_login,
           "sshPasswordAuth": pw_auth,
-          "failedAuth24h": 0, // Requires journalctl parsing, keeping 0 for now as safe default
+          "failedAuth24h": failed_auth_24h,
           "riskyOpenPorts": risky
         }
       })
     },
-    "dh:monitor:security-drilldown" => json!({
-      "ok": true,
-      "drilldown": { "failedAuthSamples": [], "riskyPortOwners": [] }
-    }),
+    "dh:monitor:security-drilldown" => {
+      let failed_auth_raw = exec_output_limit(
+        "bash",
+        &[
+          "-c",
+          "journalctl --since '48 hours ago' -u sshd --no-pager 2>/dev/null | grep -Ei 'failed password|invalid user|authentication failure' | tail -n 20",
+        ],
+        CMD_TIMEOUT_SHORT,
+      )
+      .await
+      .unwrap_or_default();
+      let failed_auth_samples: Vec<String> = failed_auth_raw
+        .lines()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+
+      let ss_out = exec_output_limit("ss", &["-tulpn", "-H"], CMD_TIMEOUT_SHORT).await.unwrap_or_default();
+      let risky_set: std::collections::HashSet<u16> = [22, 3306, 5432, 27017, 6379].iter().cloned().collect();
+      let mut risky_port_owners: Vec<Value> = Vec::new();
+      for line in ss_out.lines() {
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if let Some(local) = parts.get(4) {
+          if let Some(port_str) = local.split(':').last() {
+            if let Ok(port) = port_str.parse::<u16>() {
+              if risky_set.contains(&port) {
+                let mut process = "unknown".to_string();
+                let mut pid = None;
+                if let Some(start) = line.find("users:((\"") {
+                  let sub = &line[start + 9..];
+                  if let Some(end) = sub.find('"') {
+                    process = sub[..end].to_string();
+                    if let Some(p_start) = sub.find("pid=") {
+                      let p_sub = &sub[p_start + 4..];
+                      if let Some(p_end) = p_sub.find(',') {
+                        pid = p_sub[..p_end].parse::<i32>().ok();
+                      }
+                    }
+                  }
+                }
+                risky_port_owners.push(json!({ "port": port, "process": process, "pid": pid }));
+              }
+            }
+          }
+        }
+      }
+      json!({ "ok": true, "drilldown": { "failedAuthSamples": failed_auth_samples, "riskyPortOwners": risky_port_owners } })
+    },
     "dh:metrics" => {
       let meminfo = std::fs::read_to_string("/proc/meminfo").unwrap_or_default();
       let parse_kb = |key: &str| -> u64 {
@@ -1945,10 +2162,8 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       let disk_raw = std::fs::read_to_string("/proc/diskstats").unwrap_or_default();
       let (disk_read_now, disk_write_now) = disk_raw.lines().fold((0u64, 0u64), |acc, l| {
         let p: Vec<&str> = l.split_whitespace().collect();
-        // only physical disks (sda, nvme0n1, vda, etc.) — skip partitions (>= 3 chars name and ends in digit)
         let name = p.get(2).copied().unwrap_or("");
-        let is_part = name.chars().last().map(|c| c.is_ascii_digit()).unwrap_or(false) && name.len() > 3;
-        if is_part { return acc; }
+        if !is_physical_disk_name(name) { return acc; }
         let r = p.get(5).and_then(|v| v.parse::<u64>().ok()).unwrap_or(0);
         let w = p.get(9).and_then(|v| v.parse::<u64>().ok()).unwrap_or(0);
         (acc.0 + r, acc.1 + w)

@@ -22,7 +22,7 @@ export type ImageRow = {
   id: string
   repoTags: string[]
   sizeMb: number
-  createdAt: number
+  createdAt: string
 }
 
 export type VolumeRow = {

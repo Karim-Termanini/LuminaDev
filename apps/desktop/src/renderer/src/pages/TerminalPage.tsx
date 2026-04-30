@@ -3,8 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { FitAddon } from '@xterm/addon-fit'
 import { Terminal } from '@xterm/xterm'
 import '@xterm/xterm/css/xterm.css'
-import { TERMINAL_OPEN_EXTERNAL_HINT, TERMINAL_PTY_HINT } from './environmentHints'
-import { assertTerminalOk } from './terminalContract'
+import { TERMINAL_OPEN_EXTERNAL_HINT } from './environmentHints'
 import { humanizeTerminalError } from './terminalError'
 
 export function TerminalPage(): ReactElement {
@@ -30,6 +29,7 @@ export function TerminalPage(): ReactElement {
     term.loadAddon(fit)
     term.open(el)
     fit.fit()
+    term.focus()
 
     void (async () => {
       const res = await window.dh.terminalCreate({ cols: term.cols, rows: term.rows })
@@ -66,6 +66,7 @@ export function TerminalPage(): ReactElement {
 
     const ro = new ResizeObserver(() => {
       fit.fit()
+      term.focus()
       const id = sessionRef.current
       if (id) window.dh.terminalResize(id, term.cols, term.rows)
     })
@@ -82,30 +83,9 @@ export function TerminalPage(): ReactElement {
     }
   }, [])
 
-  async function openExternal(): Promise<void> {
-    try {
-      const r = await window.dh.openExternalTerminal()
-      assertTerminalOk(r, 'Failed to open external terminal.')
-    } catch (e) {
-      setErr(humanizeTerminalError(e))
-    }
-  }
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 420 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h1 style={{ margin: 0 }}>Embedded terminal</h1>
-        <button
-          type="button"
-          onClick={() => void openExternal()}
-          style={{ cursor: 'pointer', padding: '8px 12px' }}
-        >
-          Open external terminal
-        </button>
-      </div>
-      <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>
-        {TERMINAL_PTY_HINT}
-      </p>
+      <h1 style={{ margin: 0 }}>Embedded terminal</h1>
       {err ? (
         <div style={{ color: 'var(--orange)', marginBottom: 8 }}>
           {err}
@@ -114,6 +94,10 @@ export function TerminalPage(): ReactElement {
       ) : null}
       <div
         ref={wrapRef}
+        onClick={() => {
+          const xtermScreen = wrapRef.current?.querySelector('.xterm-helper-textarea') as HTMLTextAreaElement | null
+          xtermScreen?.focus()
+        }}
         style={{
           flex: 1,
           minHeight: 360,
