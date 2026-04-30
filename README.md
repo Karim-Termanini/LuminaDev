@@ -83,6 +83,7 @@ Privilege behavior matrix and verification steps: [docs/PRIVILEGE_BOUNDARY_MATRI
 ## ✅ Stabilization Tracker
 
 See [docs/STABILIZATION_CHECKLIST.md](docs/STABILIZATION_CHECKLIST.md) for remaining reliability/safety/process closure items and acceptance criteria.
+Snapshot (stages + PRs + what’s left): [docs/STATUS.md](docs/STATUS.md).
 For reusable engineering lessons and incident-driven build process, see [docs/APP_CREATION_PLAYBOOK.md](docs/APP_CREATION_PLAYBOOK.md).
 Commit and PR quality rules: [docs/COMMIT_QUALITY_RULES.md](docs/COMMIT_QUALITY_RULES.md).
 Documentation audit record: [docs/DOCS_AUDIT_2026-04.md](docs/DOCS_AUDIT_2026-04.md).
