@@ -60,9 +60,7 @@ export function GitConfigPage(): ReactElement {
   const [sortKey, setSortKey] = useState<'key' | 'value'>('key')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [showSensitiveOnly, setShowSensitiveOnly] = useState(false)
-  const [maskedKeys, setMaskedKeys] = useState<Set<string>>(
-    () => new Set(SENSITIVE_KEYS)
-  )
+  const [maskedKeys, setMaskedKeys] = useState<Set<string>>(() => new Set<string>())
 
   const loadConfig = useCallback(async () => {
     setBusy(true)

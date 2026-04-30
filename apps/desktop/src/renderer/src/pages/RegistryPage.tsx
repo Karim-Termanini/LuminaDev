@@ -7,7 +7,7 @@ import { humanizeDockerError } from './dockerError'
 import { assertGitRecentList } from './registryContract'
 
 export function RegistryPage(): ReactElement {
-  const [url, setUrl] = useState('https://github.com/octocat/Hello-World.git')
+  const [url, setUrl] = useState('')
   const [target, setTarget] = useState('')
   const [recent, setRecent] = useState<GitRepoEntry[]>([])
   const [status, setStatus] = useState<string | null>(null)
@@ -193,7 +193,7 @@ export function RegistryPage(): ReactElement {
                 <div style={{ marginTop: 8, fontSize: 11, color: 'var(--accent)', display: 'flex', justifyContent: 'space-between' }}>
                   <span>★ {r.star_count}</span>
                   <button type="button" style={{ ...btnLink }} onClick={() => {
-                    void window.dh.openExternal(`https://hub.docker.com/_/${r.name.includes('/') ? 'r/' + r.name : r.name}`)
+                    void window.dh.openExternal(r.name.includes('/') ? `https://hub.docker.com/r/${r.name}` : `https://hub.docker.com/_/${r.name}`)
                   }}>View Hub ↗</button>
                 </div>
               </div>

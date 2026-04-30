@@ -151,7 +151,7 @@ export function MonitorPage(): ReactElement {
   if (m && m.cpuUsagePercent >= 85) alerts.push(`High CPU usage: ${m.cpuUsagePercent.toFixed(1)}%`)
   if (memPct >= 90) alerts.push(`High RAM usage: ${memPct}%`)
   if (swapPct >= 80 && (m?.swapTotalMb ?? 0) > 0) alerts.push(`High swap usage: ${swapPct}%`)
-  if ((security?.riskyOpenPorts.length ?? 0) > 0) alerts.push(`Risky open ports: ${security?.riskyOpenPorts.join(', ')}`)
+  if ((security?.riskyOpenPorts?.length ?? 0) > 0) alerts.push(`Risky open ports: ${security?.riskyOpenPorts?.join(', ')}`)
   if ((security?.failedAuth24h ?? 0) > 20) alerts.push(`Elevated failed SSH auth attempts (24h): ${security?.failedAuth24h}`)
   const securityRiskCount =
     (security?.firewall === 'inactive' ? 1 : 0) +

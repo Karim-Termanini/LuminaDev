@@ -92,7 +92,7 @@ export function DockerPage(): ReactElement {
   const [installBusy, setInstallBusy] = useState(false)
   const [pruneSelection, setPruneSelection] = useState({ containers: true, images: true, volumes: false, networks: false })
   const [prunePreview, setPrunePreview] = useState<{ containers: number; images: number; volumes: number; networks: number } | null>(null)
-  const [installedFeatures] = useState<{ docker: boolean; compose: boolean; buildx: boolean }>({ docker: false, compose: false, buildx: false })
+  const [installedFeatures, setInstalledFeatures] = useState<{ docker: boolean; compose: boolean; buildx: boolean }>({ docker: false, compose: false, buildx: false })
   const [selectedFeatures, setSelectedFeatures] = useState<string[]>(['docker', 'compose', 'buildx'])
   const [hubResults, setHubResults] = useState<Array<{ name: string; description: string; star_count: number; is_official: boolean }>>([])
   const [isSearchingHub, setIsSearchingHub] = useState(false)
@@ -152,6 +152,9 @@ export function DockerPage(): ReactElement {
         setSessionKind(info.kind === 'flatpak' ? 'flatpak' : 'native')
       })
       .catch(() => setSessionKind('unknown'))
+    void window.dh.dockerCheckInstalled()
+      .then((res) => setInstalledFeatures(res))
+      .catch(() => {/* leave defaults */})
   }, [])
 
   useEffect(() => {

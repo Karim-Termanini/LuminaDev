@@ -770,8 +770,8 @@ function calculateGuardianScore(
 ): number {
   if (!m) return 100
   let score = 100
-  const memPct = Math.round(((m.totalMemMb - m.freeMemMb) / m.totalMemMb) * 100)
-  const diskPct = Math.round(((m.diskTotalGb - m.diskFreeGb) / m.diskTotalGb) * 100)
+  const memPct = m.totalMemMb > 0 ? Math.round(((m.totalMemMb - m.freeMemMb) / m.totalMemMb) * 100) : 0
+  const diskPct = m.diskTotalGb > 0 ? Math.round(((m.diskTotalGb - m.diskFreeGb) / m.diskTotalGb) * 100) : 0
   if (m.cpuUsagePercent > 85) score -= 18
   if (memPct > 90) score -= 22
   if (diskPct > 92) score -= 20
