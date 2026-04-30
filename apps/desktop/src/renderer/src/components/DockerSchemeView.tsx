@@ -191,16 +191,18 @@ export function DockerSchemeView({ containers, networks }: SchemeProps) {
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
 
   useEffect(() => {
+    if (!containers || !networks) return
     const newNodes: Node[] = []
     const newEdges: Edge[] = []
 
     // Group containers by primary network
     const networkContainers: Record<string, ContainerRow[]> = {}
     networks.forEach((n) => {
-      networkContainers[n.name] = []
+      if (n && n.name) networkContainers[n.name] = []
     })
 
     containers.forEach((c) => {
+      if (!c) return
       const primaryNet = c.networks && c.networks.length > 0 ? c.networks[0] : 'none'
       if (!networkContainers[primaryNet]) {
         networkContainers[primaryNet] = []

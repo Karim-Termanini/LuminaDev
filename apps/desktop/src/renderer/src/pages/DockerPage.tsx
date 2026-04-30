@@ -72,6 +72,7 @@ export function DockerPage(): ReactElement {
   const [logText, setLogText] = useState<string>('')
   const [pruneInfo, setPruneInfo] = useState<string>('')
   const [busy, setBusy] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
   const [createdInfo, setCreatedInfo] = useState<string>('')
   const [customNames, setCustomNames] = useState<Record<string, string>>({})
   const [pullImage, setPullImage] = useState('')
@@ -94,6 +95,7 @@ export function DockerPage(): ReactElement {
   const [prunePreview, setPrunePreview] = useState<{ containers: number; images: number; volumes: number; networks: number } | null>(null)
   const [installedFeatures, setInstalledFeatures] = useState<{ docker: boolean; compose: boolean; buildx: boolean }>({ docker: false, compose: false, buildx: false })
   const [selectedFeatures, setSelectedFeatures] = useState<string[]>(['docker', 'compose', 'buildx'])
+  const [hostDistroId, setHostDistroId] = useState<string>('linux')
   const [hubResults, setHubResults] = useState<Array<{ name: string; description: string; star_count: number; is_official: boolean }>>([])
   const [isSearchingHub, setIsSearchingHub] = useState(false)
   const [availableTags, setAvailableTags] = useState<string[]>([])
@@ -106,12 +108,21 @@ export function DockerPage(): ReactElement {
   const [remapNewPort, setRemapNewPort] = useState('')
   const [remapBusy, setRemapBusy] = useState(false)
   const [remapFeedback, setRemapFeedback] = useState<string | null>(null)
+  const detectedInstallFamily: InstallDistroId | null = ['ubuntu', 'debian', 'linuxmint', 'pop', 'elementary', 'raspbian'].includes(hostDistroId)
+    ? 'ubuntu'
+    : ['fedora', 'rhel', 'centos', 'rocky', 'alma', 'amzn'].includes(hostDistroId)
+      ? 'fedora'
+      : ['arch', 'manjaro', 'endeavouros', 'garuda'].includes(hostDistroId)
+        ? 'arch'
+        : null
 
   const closeTerminal = useCallback(() => setActiveTermContainer(null), [])
 
   const refreshAll = useCallback(async () => {
+    setRefreshing(true)
     try {
       setErr('')
+      // 1. Get primary list (containers)
       const d = (await window.dh.dockerList()) as
         | { ok: true; rows: ContainerRow[] }
         | { ok: false; error: string }
@@ -122,19 +133,40 @@ export function DockerPage(): ReactElement {
         setNetworks([])
         return
       }
-      const img = (await window.dh.dockerImagesList()) as { ok: boolean; rows: ImageRow[]; error?: string }
-      const vol = (await window.dh.dockerVolumesList()) as { ok: boolean; rows: VolumeRow[]; error?: string }
-      const net = (await window.dh.dockerNetworksList()) as { ok: boolean; rows: NetworkRow[]; error?: string }
-      assertDockerOk(img, 'Failed to list images.')
-      assertDockerOk(vol, 'Failed to list volumes.')
-      assertDockerOk(net, 'Failed to list networks.')
-      setImages(img.rows)
-      setVolumes(vol.rows)
-      setNetworks(net.rows)
+
+      // 2. Poll others in parallel, failing gracefully for sub-sections
+      const [imgRes, volRes, netRes] = await Promise.all([
+        window.dh.dockerImagesList().catch(e => ({ ok: false, error: String(e) })),
+        window.dh.dockerVolumesList().catch(e => ({ ok: false, error: String(e) })),
+        window.dh.dockerNetworksList().catch(e => ({ ok: false, error: String(e) }))
+      ]) as [
+        { ok: boolean; rows: ImageRow[]; error?: string },
+        { ok: boolean; rows: VolumeRow[]; error?: string },
+        { ok: boolean; rows: NetworkRow[]; error?: string }
+      ]
+
+      if (imgRes.ok) setImages(imgRes.rows)
+      if (netRes.ok) setNetworks(netRes.rows)
+      if (volRes.ok) {
+        const vRows = volRes.rows as VolumeRow[]
+        const containers = d.rows as ContainerRow[]
+        const mapped = vRows.map(v => {
+          const usedBy = containers
+            .filter(c => c.volumes?.includes(v.name))
+            .map(c => c.name)
+          return { ...v, usedBy }
+        })
+        setVolumes(mapped)
+      }
+
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e)
       setDocker({ ok: false, error: message })
-      setErr(message)
+      // Only setErr for the very first failure or persistent major failures
+      // to avoid spamming the UI during polling if daemon goes away
+      setErr(prev => prev === message ? prev : message)
+    } finally {
+      setRefreshing(false)
     }
   }, [])
 
@@ -145,6 +177,20 @@ export function DockerPage(): ReactElement {
   }, [refreshAll])
 
   useEffect(() => {
+    void window.dh
+      .getHostDistro()
+      .then((raw) => {
+        const distro = String(raw ?? 'linux').toLowerCase()
+        setHostDistroId(distro)
+        if (['ubuntu', 'debian', 'linuxmint', 'pop', 'elementary', 'raspbian'].includes(distro)) {
+          setInstallDistro('ubuntu')
+        } else if (['fedora', 'rhel', 'centos', 'rocky', 'alma', 'amzn'].includes(distro)) {
+          setInstallDistro('fedora')
+        } else if (['arch', 'manjaro', 'endeavouros', 'garuda'].includes(distro)) {
+          setInstallDistro('arch')
+        }
+      })
+      .catch(() => setHostDistroId('linux'))
     void window.dh
       .sessionInfo()
       .then((s) => {
@@ -530,8 +576,8 @@ export function DockerPage(): ReactElement {
       </header>
 
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', rowGap: 8 }}>
-        <button type="button" className="hp-btn" onClick={() => void refreshAll()} disabled={busy}>
-          Refresh
+        <button type="button" className="hp-btn" onClick={() => void refreshAll()} disabled={busy || refreshing}>
+          {refreshing ? 'Refreshing…' : 'Refresh'}
         </button>
         <button type="button" style={btnWarn} onClick={() => void runPrune()} disabled={busy}>
           Cleanup unused (prune)
@@ -544,6 +590,12 @@ export function DockerPage(): ReactElement {
             setInstallError(null)
             setSudoPassword('')
             setInstallLogs([])
+            void window.dh
+              .dockerCheckInstalled()
+              .then((res) => setInstalledFeatures(res))
+              .catch(() => {
+                /* ignore refresh errors */
+              })
             setShowInstallModal(true)
           }}
         >
@@ -848,7 +900,7 @@ export function DockerPage(): ReactElement {
                         {img.repoTags.join(', ') || '<none>'}
                       </div>
                       <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                        {img.sizeMb} MB • {new Date(img.createdAt).toLocaleDateString()}
+                        {img.sizeMb} MB • {img.createdAt}
                       </div>
                       <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
                         <button 
@@ -1122,9 +1174,18 @@ export function DockerPage(): ReactElement {
                           className="hp-input"
                           value={remapContainerId}
                           onChange={(e) => setRemapContainerId(e.target.value)}
+                          style={{
+                            width: '100%',
+                            background: '#1e1e1e',
+                            color: '#e8e8e8',
+                            border: '1px solid var(--border)',
+                            height: 38,
+                            appearance: 'none',
+                            padding: '0 12px'
+                          }}
                         >
                           {rowsWithPorts.map((r) => (
-                            <option key={r.id} value={r.id}>
+                            <option key={r.id} value={r.id} style={{ background: '#1e1e1e', color: '#e8e8e8' }}>
                               {r.name} ({r.id.slice(0, 12)}) — {r.ports}
                             </option>
                           ))}
@@ -1343,6 +1404,14 @@ export function DockerPage(): ReactElement {
                   <p style={{ margin: 0, fontSize: 14, color: 'var(--text-muted)' }}>
                     Pick the package family for install commands (<span className="mono">apt</span>, <span className="mono">dnf</span>, or <span className="mono">pacman</span>).
                   </p>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                    Detected host distro: <span className="mono">{hostDistroId}</span>
+                  </div>
+                  {detectedInstallFamily ? (
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                      Installer locked to: <span className="mono">{detectedInstallFamily}</span>
+                    </div>
+                  ) : null}
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
                     {(
                       [
@@ -1368,6 +1437,7 @@ export function DockerPage(): ReactElement {
                           type="radio"
                           name="install-distro"
                           checked={installDistro === d.id}
+                          disabled={Boolean(detectedInstallFamily) && d.id !== detectedInstallFamily}
                           onChange={() => setInstallDistro(d.id)}
                         />
                         <span style={{ fontWeight: 600, fontSize: 13 }}>{d.label}</span>
@@ -1819,7 +1889,7 @@ function ContainerTable(props: ContainerTableProps & { onConsole: (row: Containe
       {rows.length === 0 ? (
         <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>No containers in this group.</div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 16 }}>
           {rows.map((r) => {
             const isRunning = r.state.toLowerCase() === 'running'
             return (
@@ -1843,7 +1913,7 @@ function ContainerTable(props: ContainerTableProps & { onConsole: (row: Containe
                   <div className="mono" style={{ fontSize: 11, background: 'var(--bg)', padding: '6px 8px', borderRadius: 6, display: 'flex', flexWrap: 'wrap', gap: '4px 8px' }} title={r.ports}>
                     {r.ports.split(',').map((p, idx) => {
                       const part = p.trim()
-                      const hostPortMatch = part.match(/^(\d+):/)
+                      const hostPortMatch = part.match(/:(\d+)->/)
                       if (hostPortMatch && isRunning) {
                         const hp = hostPortMatch[1]
                         return (
@@ -1908,8 +1978,12 @@ function DockerTerminalModal({ container, onClose }: { container: ContainerRow; 
     const term = new Terminal({
       cursorBlink: true,
       fontFamily: 'JetBrains Mono, monospace',
-      fontSize: 13,
-      theme: { background: '#0a0a0a', foreground: '#e8e8e8', cursor: '#7c4dff' },
+      convertEol: true,
+      theme: {
+        background: '#0d0d0d',
+        foreground: '#e8e8e8',
+        cursor: '#7c4dff',
+      },
     })
     const fit = new FitAddon()
     term.loadAddon(fit)
@@ -1974,7 +2048,14 @@ function DockerTerminalModal({ container, onClose }: { container: ContainerRow; 
           <div style={{ fontWeight: 600 }}>Terminal: {container.name}</div>
           <button onClick={onClose} style={closeBtn}>&times;</button>
         </div>
-        <div ref={termWrapRef} style={{ flex: 1, background: '#0a0a0a', borderRadius: 8, padding: 8, overflow: 'hidden' }} />
+        <div
+          ref={termWrapRef}
+          onClick={() => {
+            const ta = termWrapRef.current?.querySelector('.xterm-helper-textarea') as HTMLTextAreaElement | null
+            ta?.focus()
+          }}
+          style={{ flex: 1, background: '#0a0a0a', borderRadius: 8, padding: 8, overflow: 'hidden' }}
+        />
       </div>
     </div>
   )

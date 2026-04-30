@@ -36,12 +36,15 @@ export function MonitorPage(): ReactElement {
   const [cpuHistory, setCpuHistory] = useState<number[]>(new Array(30).fill(0))
   const [netHistory, setNetHistory] = useState<{ rx: number, tx: number }[]>(new Array(30).fill({ rx: 0, tx: 0 }))
   const [githubCommits, setGithubCommits] = useState<GithubEvent[]>([])
+  const [githubStatus, setGithubStatus] = useState<string | null>(null)
   const [containers, setContainers] = useState<ContainerRow[]>([])
+  const [dockerNetworkCount, setDockerNetworkCount] = useState(0)
   const [topProcesses, setTopProcesses] = useState<TopProcessRow[]>([])
   const [security, setSecurity] = useState<HostSecuritySnapshot | null>(null)
   const [securityDrilldown, setSecurityDrilldown] = useState<HostSecurityDrilldown | null>(null)
   const [copiedReport, setCopiedReport] = useState(false)
   const [activeTab, setActiveTab] = useState<MonitorTabId>('overview')
+  const [portsView, setPortsView] = useState<'listen' | 'all'>('all')
   const [monitorError, setMonitorError] = useState<string | null>(null)
 
   const refreshLive = useCallback(async () => {
@@ -54,6 +57,8 @@ export function MonitorPage(): ReactElement {
 
       const c = (await window.dh.dockerList()) as { ok: boolean; rows: ContainerRow[] }
       if (c.ok) setContainers(c.rows)
+      const n = (await window.dh.dockerNetworksList()) as { ok: boolean; rows?: Array<{ id: string }> }
+      if (n.ok) setDockerNetworkCount((n.rows ?? []).length)
       setMonitorError(null)
     } catch (e) {
       setMonitorError(humanizeDashboardError(e))
@@ -95,7 +100,22 @@ export function MonitorPage(): ReactElement {
   const refreshGithub = useCallback(async () => {
     try {
       const resp = await fetch('https://api.github.com/users/Karim-Termanini/events/public')
-      if (!resp.ok) return
+      if (!resp.ok) {
+        if (resp.status === 403) {
+          setGithubStatus(
+            githubCommits.length > 0
+              ? 'GitHub API rate-limited right now. Showing last cached activity.'
+              : 'GitHub API rate-limited right now. Activity feed will resume automatically.'
+          )
+        } else {
+          setGithubStatus(
+            githubCommits.length > 0
+              ? `GitHub feed unavailable (${resp.status}). Showing last cached activity.`
+              : `GitHub feed unavailable (${resp.status}).`
+          )
+        }
+        return
+      }
       const data = await resp.json() as GithubEvent[]
       const pushEvents = data.filter((e) => e.type === 'PushEvent').slice(0, 10)
       const enriched = await Promise.all(pushEvents.map(async (e) => {
@@ -113,10 +133,15 @@ export function MonitorPage(): ReactElement {
         return e
       }))
       setGithubCommits(enriched)
+      setGithubStatus(enriched.length === 0 ? 'No recent public push events found.' : null)
     } catch {
-      /* ignore transient network errors */
+      setGithubStatus(
+        githubCommits.length > 0
+          ? 'GitHub feed request failed (network/transient). Showing last cached activity.'
+          : 'GitHub feed request failed (network/transient).'
+      )
     }
-  }, [])
+  }, [githubCommits])
 
   useEffect(() => {
     void (async () => {
@@ -144,9 +169,20 @@ export function MonitorPage(): ReactElement {
   const swapUsed = m ? Math.max(0, m.swapTotalMb - m.swapFreeMb) : 0
   const swapPct = m && m.swapTotalMb > 0 ? Math.round((swapUsed / m.swapTotalMb) * 100) : 0
   const diskPct = m ? Math.round(((m.diskTotalGb - m.diskFreeGb) / m.diskTotalGb) * 100) : 0
+  const visiblePortRows = ports
+    .filter((p) => portsView === 'all' || p.state.toLowerCase().includes('listen'))
+    .reduce<HostPortRow[]>((acc, cur) => {
+      const idx = acc.findIndex((x) => x.protocol === cur.protocol && x.port === cur.port)
+      if (idx === -1) {
+        acc.push(cur)
+      } else if (acc[idx].service === 'unknown' && cur.service !== 'unknown') {
+        acc[idx] = cur
+      }
+      return acc
+    }, [])
   const listeningPorts = ports.filter((p) => p.state.toLowerCase().includes('listen')).length
   const runningContainers = containers.filter((c) => c.state === 'running').length
-  const dockerNetworks = new Set(containers.flatMap((c) => c.networks ?? [])).size
+  const dockerNetworks = dockerNetworkCount
   const alerts: string[] = []
   if (m && m.cpuUsagePercent >= 85) alerts.push(`High CPU usage: ${m.cpuUsagePercent.toFixed(1)}%`)
   if (memPct >= 90) alerts.push(`High RAM usage: ${memPct}%`)
@@ -285,8 +321,32 @@ export function MonitorPage(): ReactElement {
 
       {/* Engineering Hub Row - 2 Columns */}
       <div id="monitor-docker" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: 20 }}>
-        <MetricCard title="ACTIVE PORTS (LISTEN)" value={`${listeningPorts}`} subValue="Open listening sockets" titleColor="#66bb6a" valueColor="#81c784">
+        <MetricCard
+          title={portsView === 'listen' ? 'ACTIVE PORTS (LISTEN)' : 'ACTIVE PORTS (ALL)'}
+          value={`${visiblePortRows.length}`}
+          subValue={portsView === 'listen' ? 'Open listening sockets' : 'All discovered sockets'}
+          titleColor="#66bb6a"
+          valueColor="#81c784"
+        >
           <div style={{ maxHeight: 300, overflow: 'auto', marginTop: 10 }}>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+              <button
+                type="button"
+                className="hp-btn"
+                onClick={() => setPortsView('listen')}
+                style={{ opacity: portsView === 'listen' ? 1 : 0.65 }}
+              >
+                LISTEN only
+              </button>
+              <button
+                type="button"
+                className="hp-btn"
+                onClick={() => setPortsView('all')}
+                style={{ opacity: portsView === 'all' ? 1 : 0.65 }}
+              >
+                Show all
+              </button>
+            </div>
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 10 }}>
               Listening sockets refresh automatically (about every 10 seconds).
             </div>
@@ -296,17 +356,18 @@ export function MonitorPage(): ReactElement {
                   <th style={{ padding: '8px 4px' }}>PROTO</th>
                   <th style={{ padding: '8px 4px' }}>PORT</th>
                   <th style={{ padding: '8px 4px' }}>STATE</th>
+                  <th style={{ padding: '8px 4px' }}>PROCESS</th>
                 </tr>
               </thead>
               <tbody>
-                {ports.length === 0 ? (
+                {visiblePortRows.length === 0 ? (
                   <tr>
-                    <td colSpan={3} style={{ padding: '12px 4px', color: 'var(--text-muted)' }}>
-                      No listening ports detected (or `ss`/`netstat` is unavailable in this environment).
+                    <td colSpan={4} style={{ padding: '12px 4px', color: 'var(--text-muted)' }}>
+                      No listening ports detected.
                     </td>
                   </tr>
                 ) : (
-                  ports.slice(0, 25).map((p, i) => {
+                  visiblePortRows.slice(0, 25).map((p, i) => {
                   const isListening = p.state.toLowerCase().includes('listen')
                   const stateColor = isListening ? 'var(--green)' : '#ffb74d'
                   const stateBg = isListening ? 'rgba(0,230,118,0.12)' : 'rgba(255,183,77,0.14)'
@@ -319,6 +380,7 @@ export function MonitorPage(): ReactElement {
                         {p.state}
                       </span>
                     </td>
+                    <td style={{ padding: '8px 4px' }} className="mono">{p.service || 'unknown'}</td>
                   </tr>
                   )
                   })
@@ -533,6 +595,9 @@ export function MonitorPage(): ReactElement {
             <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
               Auto-refresh every 30 seconds.
             </div>
+            {githubStatus && githubCommits.length > 0 ? (
+              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{githubStatus}</div>
+            ) : null}
             {githubCommits.length > 0 ? githubCommits.map((e, i) => (
               <div key={i} style={{ padding: '12px', background: 'rgba(255,255,255,0.02)', borderRadius: 8, border: '1px solid var(--border)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
@@ -555,7 +620,7 @@ export function MonitorPage(): ReactElement {
                   )}
                 </div>
               </div>
-            )) : <div style={{ color: 'var(--text-muted)' }}>No recent activity found.</div>}
+            )) : <div style={{ color: 'var(--text-muted)' }}>{githubStatus ?? 'No recent activity found.'}</div>}
           </div>
         </MetricCard>
       </div>
