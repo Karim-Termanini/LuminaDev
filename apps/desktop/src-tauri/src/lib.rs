@@ -877,16 +877,30 @@ async fn runtime_job_execute(
             if pkg_mgr == "dnf" && runtime_java_major(&version) == Some(8) {
               Err("[RUNTIME_INSTALL_FAILED] Fedora repositories on this host do not provide java-1.8.0-openjdk-devel. Use Isolated Script (Local) for Java 8.".to_string())
             } else {
-              let pkgs = runtime_java_system_packages_for_version(pkg_mgr, &version);
+              let requested_major = runtime_java_major(&version).unwrap_or(21);
+              let mut pkgs = runtime_java_system_packages_for_version(pkg_mgr, &version);
+              if pkg_mgr == "dnf" {
+                // Fedora often only ships latest and latest LTS streams.
+                // Try requested package first, then known available fallbacks.
+                let mut candidates: Vec<String> = vec![];
+                let requested = pkgs.first().cloned().unwrap_or_else(|| "java-latest-openjdk-devel".to_string());
+                candidates.push(requested.clone());
+                for c in ["java-21-openjdk-devel", "java-25-openjdk-devel", "java-latest-openjdk-devel"] {
+                  if c != requested {
+                    candidates.push(c.to_string());
+                  }
+                }
+                pkgs = candidates;
+              }
               if pkgs.is_empty() {
                 logs.push(format!("No Java packages known for '{}' on {}.", version, distro));
                 Ok(())
               } else {
-                let total = pkgs.len();
                 let mut loop_res = Ok(());
+                let mut installed_pkg: Option<String> = None;
                 for (idx, pkg) in pkgs.iter().enumerate() {
-                  let base = (idx as u32 * 100) / total as u32;
-                  let weight = 100 / total as u32;
+                  let base = (idx as u32 * 100) / pkgs.len() as u32;
+                  let weight = 100 / pkgs.len() as u32;
                   let cmd = match pkg_mgr {
                     "apt" => format!("DEBIAN_FRONTEND=noninteractive apt-get install -y {}", pkg),
                     "dnf" => format!("dnf install -y {}", pkg),
@@ -894,11 +908,34 @@ async fn runtime_job_execute(
                     "zypper" => format!("zypper install -y {}", pkg),
                     _ => format!("apt-get install -y {}", pkg),
                   };
-                  logs.push(format!("Installing dependency {} of {}: {}…", idx + 1, total, pkg));
+                  logs.push(format!("Installing Java package candidate {} of {}: {}…", idx + 1, pkgs.len(), pkg));
                   let step_res = sudo_bash_install_step(&cmd, password_opt, &mut logs, Some(app.clone()), Some(job_id.clone()), base, weight).await;
-                  if let Err(e) = step_res {
-                    loop_res = Err(format!("[RUNTIME_INSTALL_FAILED] Failed to install {}: {}", pkg, e));
-                    break;
+                  match step_res {
+                    Ok(()) => {
+                      installed_pkg = Some(pkg.clone());
+                      break;
+                    }
+                    Err(e) => {
+                      let e_lower = e.to_lowercase();
+                      if pkg_mgr == "dnf" && e_lower.contains("no match for argument") && idx + 1 < pkgs.len() {
+                        logs.push(format!("NOTE: {} unavailable on this Fedora repo set; trying fallback package…", pkg));
+                        continue;
+                      }
+                      loop_res = Err(format!("[RUNTIME_INSTALL_FAILED] Failed to install {}: {}", pkg, e));
+                      break;
+                    }
+                  }
+                }
+                if loop_res.is_ok() {
+                  if let Some(pkg) = installed_pkg {
+                    if pkg_mgr == "dnf" && !pkg.contains(&requested_major.to_string()) {
+                      logs.push(format!(
+                        "NOTE: Requested Java {} is not available in Fedora repos on this machine; installed fallback package {} instead.",
+                        requested_major, pkg
+                      ));
+                    }
+                  } else {
+                    loop_res = Err("[RUNTIME_INSTALL_FAILED] No Java package candidate could be installed.".to_string());
                   }
                 }
                 loop_res
