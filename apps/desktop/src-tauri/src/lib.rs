@@ -1060,7 +1060,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       } else {
         json!({ "ok": false, "error": "[TERMINAL_NOT_FOUND] Could not spawn host terminal." })
       }
-    }
+    },
     "dh:terminal:create" => {
       let cols = body.get("cols").and_then(|v| v.as_u64()).unwrap_or(120) as u16;
       let rows = body.get("rows").and_then(|v| v.as_u64()).unwrap_or(34) as u16;
