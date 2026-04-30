@@ -9,5 +9,8 @@ export function humanizeGitError(err: unknown): string {
   if (code === 'GIT_TIMEOUT') return `Git operation timed out. ${detail}`
   if (code === 'GIT_NETWORK') return `Git network error. ${detail}`
   if (code === 'GIT_INVALID_REQUEST') return `Invalid Git request. ${detail}`
+  if (code === 'HOST_COMMAND_TIMEOUT') {
+    return `A host command took too long and was stopped. ${detail}`.trim()
+  }
   return detail || 'Git operation failed.'
 }

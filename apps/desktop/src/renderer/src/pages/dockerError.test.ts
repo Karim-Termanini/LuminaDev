@@ -9,6 +9,7 @@ describe('humanizeDockerError', () => {
     expect(humanizeDockerError('[DOCKER_CONFLICT] already in use')).toContain('Docker conflict')
     expect(humanizeDockerError('[DOCKER_TIMEOUT] request timed out')).toContain('timed out')
     expect(humanizeDockerError('[DOCKER_INVALID_REQUEST] bad payload')).toContain('Invalid Docker request')
+    expect(humanizeDockerError('[HOST_COMMAND_TIMEOUT] docker ps')).toContain('too long')
     expect(humanizeDockerError('[DOCKER_INSTALL_NOT_SUPPORTED] use manual install')).toContain('not available')
     expect(humanizeDockerError('[DOCKER_INSTALL_NOT_SUPPORTED] use manual install')).toMatch(/flatpak/i)
     expect(humanizeDockerError('[DOCKER_REMAP_NOT_SUPPORTED] use CLI')).toContain('not supported')

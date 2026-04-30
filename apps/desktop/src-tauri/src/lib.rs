@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Stdio;
+use std::time::Duration;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
@@ -38,32 +39,69 @@ fn write_json(path: &PathBuf, value: &Value) -> Result<(), String> {
   std::fs::write(path, content).map_err(|e| format!("[STORE_WRITE_ERROR] {}", e))
 }
 
+/// Default wall-clock bound for host `exec_output` / `exec_result` (prevents hung IPC).
+const CMD_TIMEOUT_DEFAULT: Duration = Duration::from_secs(180);
+/// Short probe (sudo -n, quick shell checks).
+const CMD_TIMEOUT_SHORT: Duration = Duration::from_secs(30);
+/// `git clone` and similar large transfers.
+const CMD_TIMEOUT_LONG: Duration = Duration::from_secs(900);
+/// Single `sudo bash -c` step during Docker engine install.
+const CMD_TIMEOUT_INSTALL_STEP: Duration = Duration::from_secs(900);
+
+async fn exec_output_limit(cmd: &str, args: &[&str], limit: Duration) -> Result<String, String> {
+  let fut = async {
+    let output = Command::new(cmd)
+      .args(args)
+      .output()
+      .await
+      .map_err(|e| format!("[EXEC_ERROR] {}", e))?;
+    if output.status.success() {
+      Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    } else {
+      Err(String::from_utf8_lossy(&output.stderr).trim().to_string())
+    }
+  };
+  match tokio::time::timeout(limit, fut).await {
+    Ok(inner) => inner,
+    Err(_) => Err(format!(
+      "[HOST_COMMAND_TIMEOUT] {} {}",
+      cmd,
+      args.join(" ")
+    )),
+  }
+}
+
 async fn exec_output(cmd: &str, args: &[&str]) -> Result<String, String> {
-  let output = Command::new(cmd)
-    .args(args)
-    .output()
-    .await
-    .map_err(|e| format!("[EXEC_ERROR] {}", e))?;
-  if output.status.success() {
-    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
-  } else {
-    Err(String::from_utf8_lossy(&output.stderr).trim().to_string())
+  exec_output_limit(cmd, args, CMD_TIMEOUT_DEFAULT).await
+}
+
+async fn exec_result_limit(cmd: &str, args: &[&str], limit: Duration) -> Result<(String, String), String> {
+  let fut = async {
+    let output = Command::new(cmd)
+      .args(args)
+      .output()
+      .await
+      .map_err(|e| format!("[EXEC_ERROR] {}", e))?;
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    if output.status.success() {
+      Ok((stdout, stderr))
+    } else {
+      Err(if stderr.trim().is_empty() { stdout } else { stderr })
+    }
+  };
+  match tokio::time::timeout(limit, fut).await {
+    Ok(inner) => inner,
+    Err(_) => Err(format!(
+      "[HOST_COMMAND_TIMEOUT] {} {}",
+      cmd,
+      args.join(" ")
+    )),
   }
 }
 
 async fn exec_result(cmd: &str, args: &[&str]) -> Result<(String, String), String> {
-  let output = Command::new(cmd)
-    .args(args)
-    .output()
-    .await
-    .map_err(|e| format!("[EXEC_ERROR] {}", e))?;
-  let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-  let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-  if output.status.success() {
-    Ok((stdout, stderr))
-  } else {
-    Err(if stderr.trim().is_empty() { stdout } else { stderr })
-  }
+  exec_result_limit(cmd, args, CMD_TIMEOUT_DEFAULT).await
 }
 
 fn now_ms() -> u64 {
@@ -241,10 +279,16 @@ async fn sudo_bash_install_step(cmd: &str, password: Option<&str>, logs: &mut Ve
     drop(child.stdin.take());
   }
 
-  let out = child
-    .wait_with_output()
-    .await
-    .map_err(|e| format!("[DOCKER_INSTALL_FAILED] {}", e))?;
+  let out = match tokio::time::timeout(CMD_TIMEOUT_INSTALL_STEP, child.wait_with_output()).await {
+    Ok(Ok(o)) => o,
+    Ok(Err(e)) => return Err(format!("[DOCKER_INSTALL_FAILED] {}", e)),
+    Err(_) => {
+      return Err(
+        "[HOST_COMMAND_TIMEOUT] sudo install step exceeded wall clock (check for orphaned apt/dnf/pacman on host)"
+          .to_string(),
+      );
+    }
+  };
   let stdout = String::from_utf8_lossy(&out.stdout);
   let stderr = String::from_utf8_lossy(&out.stderr);
   for line in stdout.lines() {
@@ -271,7 +315,9 @@ async fn sudo_bash_install_step(cmd: &str, password: Option<&str>, logs: &mut Ve
 }
 
 async fn sudo_passwordless_ok() -> bool {
-  exec_output("sudo", &["-n", "true"]).await.is_ok()
+  exec_output_limit("sudo", &["-n", "true"], CMD_TIMEOUT_SHORT)
+    .await
+    .is_ok()
 }
 
 async fn docker_install_invoke(body: &Value) -> Value {
@@ -1061,9 +1107,16 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       if url.is_empty() || target_dir.is_empty() {
         json!({ "ok": false, "error": "[GIT_CLONE_FAILED] Missing url or targetDir." })
       } else {
-        match exec_output("git", &["clone", url, target_dir]).await {
+        match exec_output_limit("git", &["clone", url, target_dir], CMD_TIMEOUT_LONG).await {
           Ok(_) => json!({ "ok": true }),
-          Err(e) => json!({ "ok": false, "error": format!("[GIT_CLONE_FAILED] {}", e.trim()) }),
+          Err(e) => {
+            let msg = if e.starts_with("[HOST_COMMAND_TIMEOUT]") {
+              format!("[GIT_TIMEOUT] {}", e.trim())
+            } else {
+              format!("[GIT_CLONE_FAILED] {}", e.trim())
+            };
+            json!({ "ok": false, "error": msg })
+          }
         }
       }
     },
