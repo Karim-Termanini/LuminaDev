@@ -15,7 +15,6 @@ import { RegistryPage } from './pages/RegistryPage'
 import { MonitorPage } from './pages/MonitorPage'
 import { SshPage } from './pages/SshPage'
 import { TerminalPage } from './pages/TerminalPage'
-import { WorkstationPage } from './pages/WorkstationPage'
 import { RuntimesPage } from './pages/RuntimesPage'
 import { MaintenancePage } from './pages/MaintenancePage'
 import { WizardFlow } from './wizard/WizardFlow'
@@ -49,7 +48,6 @@ export default function App(): ReactElement | null {
           <Route path="logs" element={<DashboardLogsPage />} />
         </Route>
         <Route path="/system" element={<MonitorPage />} />
-        <Route path="/workstation" element={<WorkstationPage />} />
         <Route path="/docker" element={<DockerPage />} />
         <Route path="/ssh" element={<SshPage />} />
         <Route path="/git-config" element={<GitConfigPage />} />

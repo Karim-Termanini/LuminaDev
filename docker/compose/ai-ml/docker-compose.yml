@@ -1,5 +1,17 @@
 services:
-  ml-stub:
-    image: python:3.12-slim
-    command: ["python", "-c", "print('AI/ML profile stub: install GPU drivers on the host for CUDA workloads.')"]
-    restart: "no"
+  pytorch:
+    image: pytorch/pytorch:latest
+    container_name: lumina-ai-pytorch
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./notebooks:/workspace/notebooks
+    command: jupyter notebook --ip=0.0.0.0 --port=8888 --no-browser --allow-root --NotebookApp.token=''
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped

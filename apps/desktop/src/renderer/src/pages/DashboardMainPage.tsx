@@ -170,22 +170,25 @@ export function DashboardMainPage(): ReactElement {
           description="Dockerized web stack with nginx placeholder and hot-reload friendly layout."
           icon="globe"
           onInit={() => void initProfile('web-dev')}
+          status="live"
         />
         <ProfileCard
           tag="PROFILE_02"
-          title="Python Data Science"
-          accent="var(--orange)"
-          description="Jupyter + scientific Python image stub for notebooks and datasets."
+          title="Data Science"
+          accent="var(--green)"
+          description="Pandas, NumPy, Matplotlib & Jupyter Lab. Standard analytics stack."
           icon="graph"
           onInit={() => void initProfile('data-science')}
+          status="live"
         />
         <ProfileCard
           tag="PROFILE_03"
           title="AI/ML Local"
           accent="var(--blue)"
-          description="PyTorch/CUDA-friendly compose stub—drivers stay on the host."
+          description="PyTorch + Jupyter environment. Ready for CUDA workloads (requires host drivers)."
           icon="hubot"
           onInit={() => void initProfile('ai-ml')}
+          status="live"
         />
         <ProfileCard
           tag="PROFILE_04"
@@ -194,6 +197,7 @@ export function DashboardMainPage(): ReactElement {
           description="React Native / Flutter environment stub."
           icon="device-mobile"
           onInit={() => void initProfile('mobile')}
+          status="planned"
         />
         <ProfileCard
           tag="PROFILE_05"
@@ -202,6 +206,7 @@ export function DashboardMainPage(): ReactElement {
           description="Godot/Unity/Unreal minimal engine stub."
           icon="play-circle"
           onInit={() => void initProfile('game-dev')}
+          status="planned"
         />
         <ProfileCard
           tag="PROFILE_06"
@@ -210,6 +215,7 @@ export function DashboardMainPage(): ReactElement {
           description="Local minikube/k3d or Terraform runner stub."
           icon="server-environment"
           onInit={() => void initProfile('infra')}
+          status="planned"
         />
         <ProfileCard
           tag="PROFILE_07"
@@ -218,6 +224,7 @@ export function DashboardMainPage(): ReactElement {
           description="Native desktop application build environment."
           icon="window"
           onInit={() => void initProfile('desktop-gui')}
+          status="planned"
         />
         <ProfileCard
           tag="PROFILE_08"
@@ -226,6 +233,7 @@ export function DashboardMainPage(): ReactElement {
           description="Jekyll/Hugo/Docusaurus writing environment."
           icon="book"
           onInit={() => void initProfile('docs')}
+          status="live"
         />
         <ProfileCard
           tag="PROFILE_09"
@@ -234,6 +242,7 @@ export function DashboardMainPage(): ReactElement {
           description="Clean slate alpine image for general scripting."
           icon="blank"
           onInit={() => void initProfile('empty')}
+          status="live"
         />
         {customProfiles.map((p, i) => (
           <ProfileCard
@@ -244,6 +253,7 @@ export function DashboardMainPage(): ReactElement {
             description={`Custom profile based on ${p.baseTemplate}.`}
             icon="code"
             onInit={() => void initProfile(p.baseTemplate)}
+            status="live"
           />
         ))}
       </div>
@@ -409,7 +419,9 @@ function ProfileCard(props: {
   accent: string
   icon: string
   onInit: () => void
+  status: 'live' | 'planned'
 }): ReactElement {
+  const isPlanned = props.status === 'planned'
   return (
     <article
       style={{
@@ -421,35 +433,57 @@ function ProfileCard(props: {
         flexDirection: 'column',
         gap: 12,
         position: 'relative',
+        opacity: isPlanned ? 0.7 : 1,
       }}
     >
-      <span
-        className="mono"
-        style={{ position: 'absolute', top: 14, right: 14, color: 'var(--text-muted)', fontSize: 11 }}
-      >
-        {props.tag}
-      </span>
-      <span className={`codicon codicon-${props.icon}`} style={{ fontSize: 28, color: props.accent }} />
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <span className={`codicon codicon-${props.icon}`} style={{ fontSize: 28, color: props.accent }} />
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+          <span className="mono" style={{ color: 'var(--text-muted)', fontSize: 10 }}>
+            {props.tag}
+          </span>
+          {isPlanned && (
+            <span
+              style={{
+                background: 'rgba(255, 193, 7, 0.1)',
+                color: 'var(--yellow)',
+                fontSize: 9,
+                fontWeight: 800,
+                padding: '2px 6px',
+                borderRadius: 4,
+                border: '1px solid rgba(255, 193, 7, 0.2)',
+                letterSpacing: '0.05em',
+              }}
+            >
+              PLANNED
+            </span>
+          )}
+        </div>
+      </div>
       <h3 style={{ margin: 0, fontSize: 17 }}>{props.title}</h3>
       <p style={{ margin: 0, color: 'var(--text-muted)', flex: 1, fontSize: 14 }}>{props.description}</p>
       <button
         type="button"
         onClick={props.onInit}
+        disabled={isPlanned}
         style={{
           alignSelf: 'flex-start',
           border: 'none',
           background: 'none',
-          color: props.accent,
+          color: isPlanned ? 'var(--text-muted)' : props.accent,
           fontWeight: 600,
-          cursor: 'pointer',
+          cursor: isPlanned ? 'default' : 'pointer',
           padding: 0,
+          fontSize: 13,
+          opacity: isPlanned ? 0.5 : 1,
         }}
       >
-        INITIALIZE →
+        {isPlanned ? 'COMING SOON' : 'INITIALIZE →'}
       </button>
     </article>
   )
 }
+
 
 function MetricBar(props: {
   label: string
