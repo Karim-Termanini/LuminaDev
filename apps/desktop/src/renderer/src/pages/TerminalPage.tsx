@@ -129,6 +129,7 @@ export function TerminalPage(): ReactElement {
           borderRadius: 'var(--radius)',
           overflow: 'hidden',
           background: '#0d0d0d',
+          padding: '16px',
         }}
       />
     </div>

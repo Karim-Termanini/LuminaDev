@@ -7,6 +7,7 @@ use std::sync::{Arc, Mutex as StdMutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
 use tauri::{AppHandle, Emitter, Manager, State};
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
 use tokio::process::Command;
 use tokio::sync::Mutex;
 use uuid::Uuid;
@@ -61,6 +62,22 @@ const CMD_TIMEOUT_SSH: Duration = Duration::from_secs(120);
 const CMD_TIMEOUT_LONG: Duration = Duration::from_secs(900);
 /// Single `sudo bash -c` step during Docker engine install.
 const CMD_TIMEOUT_INSTALL_STEP: Duration = Duration::from_secs(900);
+
+/// Run a bootstrap script without elevation (writes under $HOME only).
+async fn runtime_bash_user_step(cmd: &str, logs: &mut Vec<String>) -> Result<(), String> {
+  logs.push(format!("RUNNING (user shell, no sudo): {}", cmd));
+  match exec_result_limit("bash", &["-lc", cmd], CMD_TIMEOUT_INSTALL_STEP).await {
+    Ok((stdout, stderr)) => {
+      for line in stdout.lines().chain(stderr.lines()) {
+        if !line.trim().is_empty() {
+          logs.push(format!("OUT: {}", line));
+        }
+      }
+      Ok(())
+    }
+    Err(e) => Err(format!("[RUNTIME_INSTALL_FAILED] {}", e.trim())),
+  }
+}
 
 async fn exec_output_limit(cmd: &str, args: &[&str], limit: Duration) -> Result<String, String> {
   let fut = async {
@@ -359,68 +376,148 @@ fn docker_install_build_steps(distro: &str, components: Option<&Vec<Value>>) -> 
   Some(steps)
 }
 
-async fn sudo_bash_install_step(cmd: &str, password: Option<&str>, logs: &mut Vec<String>) -> Result<(), String> {
+async fn sudo_bash_install_step(cmd: &str, password: Option<&str>, logs: &mut Vec<String>, app: Option<tauri::AppHandle>, job_id: Option<String>, base_progress: u32, step_weight: u32) -> Result<(), String> {
   logs.push(format!("RUNNING: {}", cmd));
-  let mut child = Command::new("sudo")
-    .arg("-S")
-    .arg("-p")
-    .arg("")
-    .arg("bash")
-    .arg("-c")
-    .arg(cmd)
-    .stdin(Stdio::piped())
-    .stdout(Stdio::piped())
-    .stderr(Stdio::piped())
-    .spawn()
-    .map_err(|e| format!("[DOCKER_INSTALL_FAILED] {}", e))?;
 
-  if let Some(pw) = password {
-    if !pw.is_empty() {
-      use tokio::io::AsyncWriteExt;
-      if let Some(mut stdin) = child.stdin.take() {
+  let pw_trim = password.and_then(|p| {
+    let t = p.trim();
+    if t.is_empty() {
+      None
+    } else {
+      Some(t)
+    }
+  });
+
+  let pwless = sudo_passwordless_ok().await;
+
+  enum SpawnMode<'a> {
+    Pkexec,
+    SudoPwless,
+    SudoStdin(&'a str),
+  }
+
+  let mode = if pwless {
+    SpawnMode::SudoPwless
+  } else if let Some(pw) = pw_trim {
+    SpawnMode::SudoStdin(pw)
+  } else {
+    logs.push("AUTH: system privilege dialog — enter your login password there (leave Lumina sudo field blank if using this)".into());
+    SpawnMode::Pkexec
+  };
+
+  let mut child = match mode {
+    SpawnMode::Pkexec => Command::new("pkexec")
+      .args(["bash", "-c", cmd])
+      .stdin(Stdio::null())
+      .stdout(Stdio::piped())
+      .stderr(Stdio::piped())
+      .spawn()
+      .map_err(|e| format!("[ELEVATED_CMD_FAILED] pkexec spawn: {}", e))?,
+    SpawnMode::SudoPwless => Command::new("sudo")
+      .args(["bash", "-c", cmd])
+      .stdin(Stdio::null())
+      .stdout(Stdio::piped())
+      .stderr(Stdio::piped())
+      .spawn()
+      .map_err(|e| format!("[ELEVATED_CMD_FAILED] sudo spawn: {}", e))?,
+    SpawnMode::SudoStdin(pw) => {
+      let mut c = Command::new("sudo")
+        .arg("-S")
+        .arg("-p")
+        .arg("")
+        .arg("bash")
+        .arg("-c")
+        .arg(cmd)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("[ELEVATED_CMD_FAILED] sudo spawn: {}", e))?;
+      if let Some(mut stdin) = c.stdin.take() {
         stdin
           .write_all(format!("{pw}\n").as_bytes())
           .await
-          .map_err(|e| format!("[DOCKER_INSTALL_FAILED] {}", e))?;
+          .map_err(|e| format!("[ELEVATED_CMD_FAILED] stdin: {}", e))?;
         let _ = stdin.shutdown().await;
       }
-    }
-  } else {
-    drop(child.stdin.take());
-  }
-
-  let out = match tokio::time::timeout(CMD_TIMEOUT_INSTALL_STEP, child.wait_with_output()).await {
-    Ok(Ok(o)) => o,
-    Ok(Err(e)) => return Err(format!("[DOCKER_INSTALL_FAILED] {}", e)),
-    Err(_) => {
-      return Err(
-        "[HOST_COMMAND_TIMEOUT] sudo install step exceeded wall clock (check for orphaned apt/dnf/pacman on host)"
-          .to_string(),
-      );
+      c
     }
   };
-  let stdout = String::from_utf8_lossy(&out.stdout);
-  let stderr = String::from_utf8_lossy(&out.stderr);
-  for line in stdout.lines() {
-    if !line.is_empty() {
-      logs.push(format!("OUT: {line}"));
+
+  let stdout = child.stdout.take().unwrap();
+  let stderr = child.stderr.take().unwrap();
+  let mut reader = tokio::io::BufReader::new(stdout).lines();
+  let mut err_reader = tokio::io::BufReader::new(stderr).lines();
+
+  let job_id_clone = job_id.clone();
+  let app_clone = app.clone();
+
+  // Read stdout and update logs/progress
+  let mut last_progress_update = std::time::Instant::now();
+  
+  loop {
+    tokio::select! {
+      res = reader.next_line() => {
+        match res {
+          Ok(Some(line)) => {
+            if !line.trim().is_empty() {
+              logs.push(format!("OUT: {}", line.clone()));
+            }
+            // Coarse progress parsing for apt/dnf/pacman or curl -L#
+            if let (Some(app), Some(jid)) = (&app_clone, &job_id_clone) {
+              if last_progress_update.elapsed().as_millis() > 500 {
+                let mut bonus = 0;
+                if line.contains("%") {
+                   let parts: Vec<&str> = line.split('%').collect();
+                   if let Some(p_str) = parts[0].split_whitespace().last() {
+                     if let Ok(p) = p_str.parse::<u32>() {
+                       bonus = (p * step_weight) / 100;
+                     }
+                   }
+                } else if line.contains("/") && (line.contains("(") || line.contains("[")) {
+                   if let Some(caps) = line.find('/') {
+                      let start_search = &line[..caps];
+                      let start = start_search.rfind(|c: char| !c.is_digit(10)).map(|idx| idx + 1).unwrap_or(0);
+                      let end_search = &line[caps+1..];
+                      let end = end_search.find(|c: char| !c.is_digit(10)).unwrap_or(end_search.len());
+                      let cur = line[start..caps].trim().parse::<u32>().unwrap_or(0);
+                      let total = line[caps+1..caps+1+end].trim().parse::<u32>().unwrap_or(1);
+                      if total > 0 { bonus = (cur * step_weight) / total; }
+                   }
+                }
+                
+                let prog = base_progress + bonus;
+                let st = app.state::<AppState>();
+                let mut jobs = st.jobs.lock().await;
+                if let Some(j) = jobs.iter_mut().find(|j| j.get("id").and_then(|v| v.as_str()) == Some(jid.as_str())) {
+                  j["progress"] = json!(prog.min(base_progress + step_weight));
+                }
+                last_progress_update = std::time::Instant::now();
+              }
+            }
+          }
+          _ => break,
+        }
+      }
+      res = err_reader.next_line() => {
+        match res {
+          Ok(Some(line)) => {
+            if line.contains("[sudo] password") { continue; }
+            if !line.trim().is_empty() {
+              logs.push(format!("ERR: {}", line));
+            }
+          }
+          _ => break,
+        }
+      }
     }
   }
-  for line in stderr.lines() {
-    if line.contains("[sudo] password") {
-      continue;
-    }
-    if !line.trim().is_empty() {
-      logs.push(format!("ERR: {line}"));
-    }
-  }
-  if out.status.success() {
+
+  let status = child.wait().await.map_err(|e| format!("[DOCKER_INSTALL_FAILED] {}", e))?;
+  if status.success() {
     Ok(())
   } else {
-    Err(format!(
-      "[DOCKER_INSTALL_FAILED] command exited with status {}",
-      out.status
-    ))
+    Err(format!("[PROCESS_EXIT_ERROR] Command failed with code {}", status.code().unwrap_or(-1)))
   }
 }
 
@@ -442,23 +539,73 @@ fn runtime_pkg_mgr(distro: &str) -> &'static str {
 
 fn runtime_system_packages(runtime_id: &str, pkg_mgr: &str) -> Vec<&'static str> {
   match (runtime_id, pkg_mgr) {
-    ("node", "apt") => vec!["nodejs", "npm"],
-    ("node", "dnf") => vec!["nodejs", "npm"],
+    // Node
+    ("node", "apt")    => vec!["nodejs", "npm"],
+    ("node", "dnf")    => vec!["nodejs", "npm"],
     ("node", "pacman") => vec!["nodejs", "npm"],
     ("node", "zypper") => vec!["nodejs", "npm"],
-    ("python", "apt") => vec!["python3", "python3-pip"],
-    ("python", "dnf") => vec!["python3", "python3-pip"],
+    // Python
+    ("python", "apt")    => vec!["python3", "python3-pip"],
+    ("python", "dnf")    => vec!["python3", "python3-pip"],
     ("python", "pacman") => vec!["python", "python-pip"],
     ("python", "zypper") => vec!["python3", "python3-pip"],
-    ("go", "apt") => vec!["golang"],
-    ("go", "dnf") => vec!["golang"],
+    // Go
+    ("go", "apt")    => vec!["golang"],
+    ("go", "dnf")    => vec!["golang"],
     ("go", "pacman") => vec!["go"],
     ("go", "zypper") => vec!["go"],
-    ("java", "apt") => vec!["default-jdk"],
-    ("java", "dnf") => vec!["java-latest-openjdk-devel"],
+    // Java
+    ("java", "apt")    => vec!["default-jdk"],
+    ("java", "dnf")    => vec!["java-latest-openjdk-devel"],
     ("java", "pacman") => vec!["jdk-openjdk"],
     ("java", "zypper") => vec!["java-21-openjdk-devel"],
-    _ => vec![],  // rust: always via rustup; unknown: empty
+    // PHP
+    ("php", "apt")    => vec!["php", "php-cli", "php-common"],
+    ("php", "dnf")    => vec!["php", "php-cli"],
+    ("php", "pacman") => vec!["php"],
+    ("php", "zypper") => vec!["php8", "php8-cli"],
+    // Ruby
+    ("ruby", "apt")    => vec!["ruby", "ruby-dev"],
+    ("ruby", "dnf")    => vec!["ruby", "ruby-devel"],
+    ("ruby", "pacman") => vec!["ruby"],
+    ("ruby", "zypper") => vec!["ruby"],
+    // .NET — pacman: dotnet-sdk is AUR-only, handled separately in install job
+    ("dotnet", "apt")    => vec!["dotnet-sdk-8.0"],
+    ("dotnet", "dnf")    => vec!["dotnet-sdk-8.0"],
+    ("dotnet", "pacman") => vec![], // AUR — use Microsoft install script instead
+    ("dotnet", "zypper") => vec!["dotnet-sdk-8.0"],
+    // Zig
+    ("zig", "apt")    => vec!["zig"],
+    ("zig", "dnf")    => vec!["zig"],
+    ("zig", "pacman") => vec!["zig"],
+    ("zig", "zypper") => vec!["zig"],
+    // C/C++ toolchain
+    ("c_cpp", "apt")    => vec!["gcc", "g++", "make", "cmake", "gdb"],
+    ("c_cpp", "dnf")    => vec!["gcc", "gcc-c++", "make", "cmake", "gdb"],
+    ("c_cpp", "pacman") => vec!["gcc", "make", "cmake", "gdb"],
+    ("c_cpp", "zypper") => vec!["gcc", "gcc-c++", "make", "cmake", "gdb"],
+    // MATLAB-compatible (Octave)
+    ("matlab", "apt")    => vec!["octave"],
+    ("matlab", "dnf")    => vec!["octave"],
+    ("matlab", "pacman") => vec!["octave"],
+    ("matlab", "zypper") => vec!["octave"],
+    // Julia
+    ("julia", "apt")    => vec!["julia"],
+    ("julia", "dnf")    => vec!["julia"],
+    ("julia", "pacman") => vec!["julia"],
+    ("julia", "zypper") => vec!["julia"],
+    // Lua
+    ("lua", "apt")    => vec!["lua5.4"],
+    ("lua", "dnf")    => vec!["lua"],
+    ("lua", "pacman") => vec!["lua"],
+    ("lua", "zypper") => vec!["lua54"],
+    // Lisp (SBCL)
+    ("lisp", "apt")    => vec!["sbcl"],
+    ("lisp", "dnf")    => vec!["sbcl"],
+    ("lisp", "pacman") => vec!["sbcl"],
+    ("lisp", "zypper") => vec!["sbcl"],
+    // bun & dart & flutter: always via local installer — no reliable system package
+    _ => vec![],
   }
 }
 
@@ -470,6 +617,68 @@ fn pkg_upgrade_cmd(pkg_mgr: &str, packages: &[&str]) -> String {
     "pacman" => format!("pacman -Syu --noconfirm {}", pkgs),
     "zypper" => format!("zypper update -y {}", pkgs),
     _ => format!("apt-get install --only-upgrade -y {}", pkgs),
+  }
+}
+
+/// First whitespace-delimited token (e.g. "v22.0.0 (LTS: Foo)" → "v22.0.0").
+fn lumina_first_version_token(raw: &str) -> Option<String> {
+  let t = raw.trim();
+  if t.is_empty() || t.eq_ignore_ascii_case("latest") || t.eq_ignore_ascii_case("stable") || t.starts_with("system ") {
+    return None;
+  }
+  Some(t.split_whitespace().next().unwrap_or(t).trim().trim_start_matches("go").to_string())
+}
+
+/// After runtime_install succeeds, probe `bash -lc` for the toolchain.
+async fn runtime_append_verify(runtime_id: &str, method: &str, requested_version: &str, logs: &mut Vec<String>) {
+  logs.push(format!(
+    "VERIFY: login shell check requested_version={:?} install_method={} …",
+    requested_version.trim(),
+    method
+  ));
+  let probe = match runtime_id {
+    "node" => "command -v node >/dev/null 2>&1 && node --version 2>&1 || echo MISSING",
+    "python" => "command -v python3 >/dev/null 2>&1 && python3 --version 2>&1 || echo MISSING",
+    "go" => "command -v go >/dev/null 2>&1 && go version 2>&1 || echo MISSING",
+    "rust" => "command -v rustc >/dev/null 2>&1 && rustc --version 2>&1 || echo MISSING",
+    "java" => "command -v java >/dev/null 2>&1 && java -version 2>&1 | head -1 || echo MISSING",
+    "php" => "command -v php >/dev/null 2>&1 && php --version 2>&1 | head -1 || echo MISSING",
+    "ruby" => "command -v ruby >/dev/null 2>&1 && ruby --version 2>&1 || echo MISSING",
+    "dotnet" => "command -v dotnet >/dev/null 2>&1 && dotnet --version 2>&1 || ($HOME/.dotnet/dotnet --version 2>&1) || echo MISSING",
+    "bun" => "command -v bun >/dev/null 2>&1 && bun --version 2>&1 || ($HOME/.bun/bin/bun --version 2>&1) || echo MISSING",
+    "zig" => "command -v zig >/dev/null 2>&1 && zig version 2>&1 || echo MISSING",
+    "c_cpp" => "command -v gcc >/dev/null 2>&1 && gcc --version 2>&1 | head -1 || echo MISSING",
+    "matlab" => "command -v octave >/dev/null 2>&1 && octave --version 2>&1 | head -1 || echo MISSING",
+    "dart" => "command -v dart >/dev/null 2>&1 && dart --version 2>&1 | head -1 || ($HOME/.dart/dart-sdk/bin/dart --version 2>&1 | head -1) || echo MISSING",
+    "flutter" => "command -v flutter >/dev/null 2>&1 && flutter --version 2>&1 | head -1 || ($HOME/.flutter-sdk/bin/flutter --version 2>&1 | head -1) || echo MISSING",
+    "julia" => "command -v julia >/dev/null 2>&1 && julia --version 2>&1 || ($HOME/.juliaup/bin/julia --version 2>&1) || echo MISSING",
+    "lua" => "(command -v lua5.4 >/dev/null 2>&1 && lua5.4 -v 2>&1) || (command -v lua >/dev/null 2>&1 && lua -v 2>&1) || echo MISSING",
+    "lisp" => "command -v sbcl >/dev/null 2>&1 && sbcl --version 2>&1 || echo MISSING",
+    _ => {
+      logs.push(format!("VERIFY: skipped (unknown runtime '{}')", runtime_id));
+      return;
+    }
+  };
+  match exec_result_limit("bash", &["-lc", probe], CMD_TIMEOUT_SHORT).await {
+    Ok((stdout, stderr)) => {
+      let line = format!("{}{}", stdout, stderr)
+        .lines()
+        .find(|l| !l.trim().is_empty())
+        .map(|x| x.trim().to_string())
+        .unwrap_or_default();
+      if line.contains("MISSING") || line.is_empty() {
+        logs.push(format!("VERIFY FAIL: {} not found on PATH after install.", runtime_id));
+      } else if method == "system" && matches!(runtime_id, "node" | "python" | "go") {
+        logs.push(format!(
+          "VERIFY OK: {} (Reminder: install_method=system — distro fixed its own release; picker choice {:?} was not pinned.)",
+          line, requested_version.trim()
+        ));
+      } else {
+        logs.push(format!("VERIFY OK: {}", line));
+        logs.push("Smoke test passed".to_string());
+      }
+    }
+    Err(e) => logs.push(format!("VERIFY FAIL: {}", e.trim())),
   }
 }
 
@@ -492,8 +701,10 @@ async fn runtime_job_execute(
   method: String,
   version: String,
   _remove_mode: String,
+  sudo_password: String,
 ) {
   let mut logs: Vec<String> = vec![format!("job={} runtime={} method={}", kind, runtime_id, method)];
+  let password_opt: Option<&str> = if sudo_password.is_empty() { None } else { Some(&sudo_password) };
   let mut final_state = "completed";
 
   let distro = exec_output("bash", &["-lc", "source /etc/os-release 2>/dev/null && printf '%s' \"${ID:-unknown}\""])
@@ -521,38 +732,31 @@ async fn runtime_job_execute(
         if runtime_id == "rust" {
           let tc = if version.is_empty() { "stable" } else { version.trim() };
           let cmd = format!("curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain {}", tc);
-          logs.push(format!("Running: {}", cmd));
-          exec_output_limit("bash", &["-lc", &cmd], CMD_TIMEOUT_INSTALL_STEP).await
-            .map(|out| { if !out.is_empty() { logs.push(out); } })
-            .map_err(|e| format!("[RUNTIME_INSTALL_FAILED] {}", e.trim()))
+          runtime_bash_user_step(&cmd, &mut logs).await.map_err(|e| format!("{}", e))
         } else if runtime_id == "node" && method == "local" {
-          let v = if version.is_empty() { "lts/*" } else { version.trim() };
+          let v = lumina_first_version_token(&version).unwrap_or_else(|| "lts/*".into());
           let cmd = format!(
             "curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.0/install.sh | bash \
              && export NVM_DIR=\"$HOME/.nvm\" \
              && [ -s \"$NVM_DIR/nvm.sh\" ] && . \"$NVM_DIR/nvm.sh\" \
              && nvm install {}", v
           );
-          logs.push(format!("Running nvm install {}", v));
-          exec_output_limit("bash", &["-lc", &cmd], CMD_TIMEOUT_INSTALL_STEP).await
-            .map(|out| { if !out.is_empty() { logs.push(out); } })
-            .map_err(|e| format!("[RUNTIME_INSTALL_FAILED] {}", e.trim()))
+          runtime_bash_user_step(&cmd, &mut logs).await.map_err(|e| format!("{}", e))
         } else if runtime_id == "go" && method == "local" {
-          let v = if version.is_empty() { "1.22.2" } else { version.trim() };
-          let target_dir = "$HOME/.local/share/lumina/go";
+          let v = lumina_first_version_token(&version).unwrap_or_else(|| "1.22.2".into());
           let cmd = format!(
-            "mkdir -p {target_dir} && cd {target_dir} \
-             && curl -LO https://go.dev/dl/go{v}.linux-amd64.tar.gz \
-             && tar -C {target_dir} -xzf go{v}.linux-amd64.tar.gz --strip-components=1 \
-             && rm go{v}.linux-amd64.tar.gz",
-            v = v, target_dir = target_dir
+            "mkdir -p \"$HOME/.local/share/lumina/go\" \
+             && cd \"$HOME/.local/share/lumina/go\" \
+             && curl -L -o go{v}.tar.gz \"https://go.dev/dl/go{v}.linux-amd64.tar.gz\" \
+             && tar -xzf go{v}.tar.gz --strip-components=1 \
+             && rm go{v}.tar.gz \
+             && grep -q lumina-go \"$HOME/.bashrc\" \
+             || echo 'export PATH=\"$HOME/.local/share/lumina/go/bin:$PATH\"  # lumina-go' >> \"$HOME/.bashrc\"",
+            v = v
           );
-          logs.push(format!("Downloading and extracting Go {} to {}…", v, target_dir));
-          exec_output_limit("bash", &["-lc", &cmd], CMD_TIMEOUT_INSTALL_STEP).await
-            .map(|out| { if !out.is_empty() { logs.push(out); } })
-            .map_err(|e| format!("[RUNTIME_INSTALL_FAILED] {}", e.trim()))
+          runtime_bash_user_step(&cmd, &mut logs).await.map_err(|e| format!("{}", e))
         } else if runtime_id == "python" && method == "local" {
-          let v = if version.is_empty() { "3.12.2" } else { version.trim() };
+          let v = lumina_first_version_token(&version).unwrap_or_else(|| "3.12.2".into());
           let cmd = format!(
             "curl https://pyenv.run | bash \
              && export PYENV_ROOT=\"$HOME/.pyenv\" \
@@ -561,28 +765,106 @@ async fn runtime_job_execute(
              && pyenv install {v} && pyenv global {v}",
             v = v
           );
-          logs.push(format!("Installing Python {} via pyenv…", v));
-          exec_output_limit("bash", &["-lc", &cmd], CMD_TIMEOUT_INSTALL_STEP).await
-            .map(|out| { if !out.is_empty() { logs.push(out); } })
-            .map_err(|e| format!("[RUNTIME_INSTALL_FAILED] {}", e.trim()))
+          runtime_bash_user_step(&cmd, &mut logs).await.map_err(|e| format!("{}", e))
+        } else if runtime_id == "dotnet" && pkg_mgr == "pacman" {
+          // dotnet-sdk-8.0 is AUR-only on Arch; use Microsoft's install script instead
+          let v = if version.is_empty() || version.starts_with("system") { "8.0" } else { version.trim() };
+          logs.push(format!("Installing .NET {} via Microsoft install script (Arch)…", v));
+          let cmd = format!(
+            "curl -fsSL https://dot.net/v1/dotnet-install.sh | bash -s -- --channel {} --install-dir \"$HOME/.dotnet\" \
+             && grep -q dotnet-install \"$HOME/.bashrc\" || echo 'export PATH=\"$HOME/.dotnet:$HOME/.dotnet/tools:$PATH\"' >> \"$HOME/.bashrc\"",
+            v
+          );
+          runtime_bash_user_step(&cmd, &mut logs).await.map_err(|e| format!("{}", e))
+        } else if runtime_id == "bun" {
+          logs.push("Installing Bun via official installer…".into());
+          runtime_bash_user_step("curl -fsSL https://bun.sh/install | bash", &mut logs)
+            .await
+            .map_err(|e| format!("{}", e))
+        } else if runtime_id == "dart" {
+          let channel = if version.is_empty() || version == "stable" { "stable" } else { version.trim() };
+          logs.push(format!("Installing Dart SDK ({})…", channel));
+          if pkg_mgr == "apt" {
+            let cmd = format!(
+              "curl -fsSL https://dl-ssl.google.com/linux/linux_signing_key.pub \
+                 | gpg --dearmor -o /usr/share/keyrings/dart.gpg 2>/dev/null && \
+               echo 'deb [signed-by=/usr/share/keyrings/dart.gpg] \
+                 https://storage.googleapis.com/download.dartlang.org/linux/debian {channel} main' \
+                 > /etc/apt/sources.list.d/dart_{channel}.list && \
+               apt-get update -qq && apt-get install -y dart",
+              channel = channel
+            );
+            sudo_bash_install_step(&cmd, password_opt, &mut logs, Some(app.clone()), Some(job_id.clone()), 20, 70).await
+              .map_err(|e| format!("[RUNTIME_INSTALL_FAILED] {}", e))
+          } else {
+            // Fedora / Arch: download SDK zip directly into ~/.dart
+            let cmd = format!(
+              r#"curl -fsSL "https://storage.googleapis.com/dart-archive/channels/{channel}/release/latest/sdk/dartsdk-linux-x64-release.zip" -o /tmp/dart-sdk.zip && \
+               mkdir -p "$HOME/.dart" && \
+               unzip -q -o /tmp/dart-sdk.zip -d "$HOME/.dart" && \
+               rm /tmp/dart-sdk.zip && \
+               grep -q 'dart-sdk' "$HOME/.bashrc" || echo 'export PATH="$HOME/.dart/dart-sdk/bin:$PATH"' >> "$HOME/.bashrc""#,
+              channel = channel
+            );
+            runtime_bash_user_step(&cmd, &mut logs).await.map_err(|e| format!("{}", e))
+          }
+        } else if runtime_id == "flutter" {
+          let has_snap = exec_output_limit("which", &["snap"], CMD_TIMEOUT_SHORT).await.is_ok();
+          if has_snap {
+            logs.push("Installing Flutter via snap…".into());
+            sudo_bash_install_step("snap install flutter --classic", password_opt, &mut logs, Some(app.clone()), Some(job_id.clone()), 10, 85).await
+              .map_err(|e| format!("[RUNTIME_INSTALL_FAILED] {}", e))
+          } else {
+            logs.push("snap not found — downloading Flutter SDK tarball into ~/.flutter-sdk…".into());
+            let cmd = r#"
+              FLUTTER_JSON=$(curl -fsSL https://storage.googleapis.com/flutter_infra_release/releases/releases_linux.json 2>/dev/null)
+              FLUTTER_ARCHIVE=$(echo "$FLUTTER_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); print(next(r['archive'] for r in d['releases'] if r['channel']=='stable'))" 2>/dev/null)
+              if [ -z "$FLUTTER_ARCHIVE" ]; then
+                echo "Could not resolve latest Flutter release URL" >&2; exit 1
+              fi
+              curl -fsSL "https://storage.googleapis.com/flutter_infra_release/releases/$FLUTTER_ARCHIVE" -o /tmp/flutter.tar.xz
+              mkdir -p "$HOME/.flutter-sdk"
+              tar xf /tmp/flutter.tar.xz -C "$HOME/.flutter-sdk" --strip-components=1
+              rm /tmp/flutter.tar.xz
+              grep -q 'flutter-sdk' "$HOME/.bashrc" || echo 'export PATH="$HOME/.flutter-sdk/bin:$PATH"' >> "$HOME/.bashrc"
+            "#;
+            runtime_bash_user_step(cmd, &mut logs).await.map_err(|e| format!("{}", e))
+          }
+        } else if runtime_id == "julia" {
+          logs.push("Installing Julia via juliaup…".into());
+          let cmd = "curl -fsSL https://install.julialang.org | sh -s -- -y";
+          runtime_bash_user_step(cmd, &mut logs).await.map_err(|e| format!("{}", e))
         } else {
           let pkgs = runtime_system_packages(&runtime_id, pkg_mgr);
+          if method.trim() == "system" && !pkgs.is_empty() {
+            logs.push(
+              "NOTE: System installs use distro package names only—your Target Version choice is ignored. Pick Local for Node.js, Python, or Go if you want the selected version.".to_string(),
+            );
+          }
           if pkgs.is_empty() {
             logs.push(format!("No system packages known for '{}' on {}. Try local/rustup method.", runtime_id, distro));
             Ok(())
           } else {
-            let cmd = {
-              let p: Vec<&str> = pkgs.clone();
-              match pkg_mgr {
-                "apt" => format!("DEBIAN_FRONTEND=noninteractive apt-get install -y {}", p.join(" ")),
-                "dnf" => format!("dnf install -y {}", p.join(" ")),
-                "pacman" => format!("pacman -S --needed --noconfirm {}", p.join(" ")),
-                "zypper" => format!("zypper install -y {}", p.join(" ")),
-                _ => format!("apt-get install -y {}", p.join(" ")),
+            let total = pkgs.len();
+            let mut loop_res = Ok(());
+            for (idx, pkg) in pkgs.iter().enumerate() {
+              let base = (idx as u32 * 100) / total as u32;
+              let weight = 100 / total as u32;
+              let cmd = match pkg_mgr {
+                "apt" => format!("DEBIAN_FRONTEND=noninteractive apt-get install -y {}", pkg),
+                "dnf" => format!("dnf install -y {}", pkg),
+                "pacman" => format!("pacman -S --needed --noconfirm {}", pkg),
+                "zypper" => format!("zypper install -y {}", pkg),
+                _ => format!("apt-get install -y {}", pkg),
+              };
+              logs.push(format!("Installing dependency {} of {}: {}…", idx + 1, total, pkg));
+              let step_res = sudo_bash_install_step(&cmd, password_opt, &mut logs, Some(app.clone()), Some(job_id.clone()), base, weight).await;
+              if let Err(e) = step_res {
+                loop_res = Err(format!("[RUNTIME_INSTALL_FAILED] Failed to install {}: {}", pkg, e));
+                break;
               }
-            };
-            sudo_bash_install_step(&cmd, None, &mut logs).await
-              .map_err(|e| format!("[RUNTIME_INSTALL_FAILED] {}", e))
+            }
+            loop_res
           }
         }
       }
@@ -598,7 +880,7 @@ async fn runtime_job_execute(
             Ok(())
           } else {
             let cmd = pkg_upgrade_cmd(pkg_mgr, &pkgs);
-            sudo_bash_install_step(&cmd, None, &mut logs).await
+            sudo_bash_install_step(&cmd, password_opt, &mut logs, Some(app.clone()), Some(job_id.clone()), 10, 85).await
               .map_err(|e| format!("[RUNTIME_UPDATE_FAILED] {}", e))
           }
         }
@@ -608,6 +890,30 @@ async fn runtime_job_execute(
           exec_output_limit("bash", &["-lc", "rustup self uninstall -y 2>/dev/null || true"], CMD_TIMEOUT_INSTALL_STEP).await
             .map(|out| { if !out.is_empty() { logs.push(out); } })
             .map_err(|e| format!("[RUNTIME_UNINSTALL_FAILED] {}", e.trim()))
+        } else if runtime_id == "bun" {
+          logs.push("Removing Bun (~/.bun)…".into());
+          exec_output_limit("bash", &["-lc", "rm -rf \"$HOME/.bun\" && sed -i '/BUN_INSTALL/d;/.bun\\/bin/d' \"$HOME/.bashrc\" \"$HOME/.zshrc\" 2>/dev/null || true"], CMD_TIMEOUT_INSTALL_STEP).await
+            .map(|out| { if !out.is_empty() { logs.push(out); } })
+            .map_err(|e| format!("[RUNTIME_UNINSTALL_FAILED] {}", e.trim()))
+        } else if runtime_id == "flutter" {
+          logs.push("Removing Flutter snap…".into());
+          sudo_bash_install_step("snap remove flutter", password_opt, &mut logs, Some(app.clone()), Some(job_id.clone()), 10, 85).await
+            .map_err(|e| format!("[RUNTIME_UNINSTALL_FAILED] {}", e))
+        } else if runtime_id == "julia" {
+          // juliaup self uninstall doesn't accept -y; pipe stdin to confirm,
+          // then fall back to manual directory removal if juliaup isn't found.
+          let cmd = r#"
+            if command -v juliaup > /dev/null 2>&1 || [ -x "$HOME/.juliaup/bin/juliaup" ]; then
+              JULIAUP="$( command -v juliaup 2>/dev/null || echo "$HOME/.juliaup/bin/juliaup" )"
+              echo y | "$JULIAUP" self uninstall 2>/dev/null || true
+            fi
+            rm -rf "$HOME/.juliaup" "$HOME/.julia" 2>/dev/null || true
+            sed -i '/juliaup/d;/\.julia/d' "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.profile" "$HOME/.bash_profile" 2>/dev/null || true
+          "#;
+          logs.push("Removing Julia via juliaup and cleaning home directories…".into());
+          exec_output_limit("bash", &["-lc", cmd], CMD_TIMEOUT_INSTALL_STEP).await
+            .map(|out| { if !out.is_empty() { logs.push(out); } })
+            .map_err(|e| format!("[RUNTIME_UNINSTALL_FAILED] {}", e.trim()))
         } else {
           let pkgs = runtime_system_packages(&runtime_id, pkg_mgr);
           if pkgs.is_empty() {
@@ -615,7 +921,7 @@ async fn runtime_job_execute(
             Ok(())
           } else {
             let cmd = pkg_remove_cmd(pkg_mgr, &pkgs);
-            sudo_bash_install_step(&cmd, None, &mut logs).await
+            sudo_bash_install_step(&cmd, password_opt, &mut logs, Some(app.clone()), Some(job_id.clone()), 10, 85).await
               .map_err(|e| format!("[RUNTIME_UNINSTALL_FAILED] {}", e))
           }
         }
@@ -634,6 +940,11 @@ async fn runtime_job_execute(
       if let Some(j) = jobs.iter_mut().find(|j| j.get("id").and_then(|v| v.as_str()) == Some(job_id.as_str())) {
         j["progress"] = json!(85);
       }
+      drop(jobs);
+
+      if matches!(kind.as_str(), "runtime_install" | "install_deps") {
+        runtime_append_verify(&runtime_id, &method, &version, &mut logs).await;
+      }
     }
   }
 
@@ -642,7 +953,7 @@ async fn runtime_job_execute(
   if let Some(j) = jobs.iter_mut().find(|j| j.get("id").and_then(|v| v.as_str()) == Some(job_id.as_str())) {
     j["state"] = json!(final_state);
     j["progress"] = json!(if final_state == "completed" { 100 } else { 0 });
-    j["logTail"] = json!(logs.into_iter().rev().take(20).collect::<Vec<String>>().into_iter().rev().collect::<Vec<String>>());
+    j["logTail"] = json!(logs.into_iter().rev().take(48).collect::<Vec<String>>().into_iter().rev().collect::<Vec<String>>());
   }
 }
 
@@ -733,7 +1044,7 @@ async fn docker_install_invoke(body: &Value) -> Value {
   };
 
   for cmd in steps {
-    match sudo_bash_install_step(&cmd, password, &mut logs).await {
+    match sudo_bash_install_step(&cmd, password, &mut logs, None, None, 0, 0).await {
       Ok(()) => {}
       Err(e) => return json!({ "ok": false, "log": logs, "error": e }),
     }
@@ -1630,6 +1941,12 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       let method = body.get("method").and_then(|v| v.as_str()).unwrap_or("system").to_string();
       let version = body.get("version").and_then(|v| v.as_str()).unwrap_or("").to_string();
       let remove_mode = body.get("removeMode").and_then(|v| v.as_str()).unwrap_or("runtime_only").to_string();
+      let sudo_password = body
+        .get("sudoPassword")
+        .or_else(|| body.get("sudo_password"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
       {
         let mut jobs = state.jobs.lock().await;
         jobs.push(json!({
@@ -1644,7 +1961,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       let jid = id.clone();
       let app2 = app.clone();
       tauri::async_runtime::spawn(async move {
-        runtime_job_execute(app2, jid, kind, runtime_id, method, version, remove_mode).await;
+        runtime_job_execute(app2, jid, kind, runtime_id, method, version, remove_mode, sudo_password).await;
       });
       json!({ "id": id })
     }
@@ -1813,26 +2130,41 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       Err(e) => json!({ "ok": true, "output": e, "code": 1 }),
     },
     "dh:runtime:status" => {
-      let checks = [
-        ("node", "Node.js", "node --version"),
-        ("python", "Python", "python3 --version"),
-        ("java", "Java", "java -version"),
-        ("go", "Go", "go version"),
-        ("rust", "Rust", "rustc --version"),
+      // (id, display name, primary command, args, fallback commands)
+      // Use a login shell so ~/.bashrc / ~/.profile PATH additions are active
+      // (covers juliaup, nvm, bun, pyenv, etc. installed to user home dirs).
+      let checks: &[(&str, &str, &str)] = &[
+        ("node",    "Node.js", "node --version"),
+        ("python",  "Python",  "python3 --version 2>&1 || python --version 2>&1"),
+        ("java",    "Java",    "java -version 2>&1"),
+        ("go",      "Go",      "go version"),
+        ("rust",    "Rust",    "rustc --version"),
+        ("php",     "PHP",     "php --version 2>&1 | head -1"),
+        ("ruby",    "Ruby",    "ruby --version"),
+        ("dotnet",  ".NET",    "dotnet --version 2>/dev/null || ~/.dotnet/dotnet --version 2>/dev/null"),
+        ("bun",     "Bun",     "bun --version 2>/dev/null || ~/.bun/bin/bun --version 2>/dev/null"),
+        ("zig",     "Zig",     "zig version"),
+        ("c_cpp",   "C/C++",   "gcc --version 2>&1 | head -1"),
+        ("matlab",  "Octave",  "octave --version 2>&1 | head -1"),
+        ("dart",    "Dart",    "dart --version 2>&1 | head -1 || $HOME/.dart/dart-sdk/bin/dart --version 2>&1 | head -1"),
+        ("flutter", "Flutter", "flutter --version 2>&1 | head -1 || $HOME/.flutter-sdk/bin/flutter --version 2>&1 | head -1"),
+        ("julia",   "Julia",   "julia --version 2>/dev/null || ~/.juliaup/bin/julia --version 2>/dev/null"),
+        ("lua",     "Lua",     "lua -v 2>&1 || lua5.4 -v 2>&1 || lua5.3 -v 2>&1"),
+        ("lisp",    "SBCL",    "sbcl --version"),
       ];
       let mut runtimes: Vec<Value> = Vec::new();
-      for (id, name, check) in checks {
-        let parts: Vec<&str> = check.split_whitespace().collect();
-        let cmd = parts[0];
-        let args = &parts[1..];
-        match exec_result_limit(cmd, args, CMD_TIMEOUT_SHORT).await {
+      for (id, name, shell_cmd) in checks {
+        match exec_result_limit("bash", &["-lc", shell_cmd], CMD_TIMEOUT_SHORT).await {
           Ok((stdout, stderr)) => {
-            let version = format!("{}{}", stdout, stderr).trim().to_string();
-            runtimes.push(json!({ "id": id, "name": name, "installed": true, "version": version }));
+            let combined = format!("{}{}", stdout, stderr);
+            let version = combined.trim().lines().next().unwrap_or("").to_string();
+            if version.is_empty() {
+              runtimes.push(json!({ "id": id, "name": name, "installed": false }));
+            } else {
+              runtimes.push(json!({ "id": id, "name": name, "installed": true, "version": version }));
+            }
           }
-          Err(_) => {
-            runtimes.push(json!({ "id": id, "name": name, "installed": false }));
-          }
+          Err(_) => runtimes.push(json!({ "id": id, "name": name, "installed": false })),
         }
       }
       json!({ "ok": true, "runtimes": runtimes })
@@ -1847,7 +2179,13 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
               if let Some(list) = arr.as_array() {
                 for item in list.iter().take(25) {
                   if let (Some(v), Some(lts)) = (item.get("version").and_then(|x| x.as_str()), item.get("lts")) {
-                    let label = if lts.is_string() { format!("{} (LTS: {})", v, lts.as_str().unwrap()) } else if lts.as_bool().unwrap_or(false) { format!("{} (LTS)", v) } else { v.to_string() };
+                    let label = if lts.is_string() {
+                      format!("{} (LTS: {})", v, lts.as_str().unwrap())
+                    } else if lts.as_bool().unwrap_or(false) {
+                      format!("{} (LTS)", v)
+                    } else {
+                      v.to_string()
+                    };
                     versions.push(label);
                   }
                 }
@@ -1855,9 +2193,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
             }
           }
         },
-        "rust" => {
-          versions.extend(["stable".into(), "beta".into(), "nightly".into()]);
-        },
+        "rust" => versions.extend(["stable".into(), "beta".into(), "nightly".into()]),
         "python" => {
           if let Ok(raw) = exec_output_limit("curl", &["-fsSL", "https://endoflife.date/api/python.json"], CMD_TIMEOUT_SHORT).await {
             if let Ok(arr) = serde_json::from_str::<Value>(&raw) {
@@ -1884,40 +2220,118 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
             }
           }
         },
-        "java" => {
-          versions.extend(["21 (LTS)".into(), "17 (LTS)".into(), "11 (LTS)".into(), "8 (LTS)".into()]);
+        "java" => versions.extend(["21 (LTS)".into(), "17 (LTS)".into(), "11 (LTS)".into(), "8 (LTS)".into()]),
+        "php" => {
+          if let Ok(raw) = exec_output_limit("curl", &["-fsSL", "https://endoflife.date/api/php.json"], CMD_TIMEOUT_SHORT).await {
+            if let Ok(arr) = serde_json::from_str::<Value>(&raw) {
+              if let Some(list) = arr.as_array() {
+                for item in list.iter().take(10) {
+                  if let Some(v) = item.get("latest").and_then(|x| x.as_str()) {
+                    versions.push(v.to_string());
+                  }
+                }
+              }
+            }
+          }
         },
+        "ruby" => {
+          if let Ok(raw) = exec_output_limit("curl", &["-fsSL", "https://endoflife.date/api/ruby.json"], CMD_TIMEOUT_SHORT).await {
+            if let Ok(arr) = serde_json::from_str::<Value>(&raw) {
+              if let Some(list) = arr.as_array() {
+                for item in list.iter().take(10) {
+                  if let Some(v) = item.get("latest").and_then(|x| x.as_str()) {
+                    versions.push(v.to_string());
+                  }
+                }
+              }
+            }
+          }
+        },
+        "dotnet" => versions.extend(["9.0".into(), "8.0 (LTS)".into(), "7.0".into(), "6.0 (LTS)".into()]),
+        "bun" => {
+          if let Ok(raw) = exec_output_limit("curl", &["-fsSL", "https://api.github.com/repos/oven-sh/bun/releases?per_page=20"], CMD_TIMEOUT_SHORT).await {
+            if let Ok(arr) = serde_json::from_str::<Value>(&raw) {
+              if let Some(list) = arr.as_array() {
+                for item in list.iter().take(15) {
+                  if let Some(v) = item.get("tag_name").and_then(|x| x.as_str()) {
+                    versions.push(v.trim_start_matches("bun-v").to_string());
+                  }
+                }
+              }
+            }
+          }
+        },
+        "zig" => {
+          if let Ok(raw) = exec_output_limit("curl", &["-fsSL", "https://ziglang.org/download/index.json"], CMD_TIMEOUT_SHORT).await {
+            if let Ok(obj) = serde_json::from_str::<Value>(&raw) {
+              if let Some(map) = obj.as_object() {
+                for key in map.keys().take(10) {
+                  if key != "master" { versions.push(key.clone()); }
+                }
+              }
+            }
+          }
+        },
+        "julia" => {
+          if let Ok(raw) = exec_output_limit("curl", &["-fsSL", "https://endoflife.date/api/julia.json"], CMD_TIMEOUT_SHORT).await {
+            if let Ok(arr) = serde_json::from_str::<Value>(&raw) {
+              if let Some(list) = arr.as_array() {
+                for item in list.iter().take(10) {
+                  if let Some(v) = item.get("latest").and_then(|x| x.as_str()) {
+                    versions.push(v.to_string());
+                  }
+                }
+              }
+            }
+          }
+        },
+        // Static version lists for runtimes without a simple API
+        "c_cpp"   => versions.extend(["system (gcc/g++)".into()]),
+        "matlab"  => versions.extend(["system (octave)".into()]),
+        "dart"    => versions.extend(["stable".into(), "beta".into(), "dev".into()]),
+        "flutter" => versions.extend(["stable".into(), "beta".into(), "master".into()]),
+        "lua"     => versions.extend(["5.4".into(), "5.3".into()]),
+        "lisp"    => versions.extend(["system (sbcl)".into()]),
         _ => {}
       }
-      if versions.is_empty() {
-        versions.push("latest".into());
-      }
+      if versions.is_empty() { versions.push("latest".into()); }
       json!({ "ok": true, "versions": versions })
     },
     "dh:runtime:check-deps" => {
       let runtime_id = body.get("runtimeId").and_then(|v| v.as_str()).unwrap_or("node");
-      let mut tools: Vec<(&str, &str)> = match runtime_id {
-        "node"   => vec![("node", "node --version"), ("npm", "npm --version"), ("curl", "curl --version")],
-        "python" => vec![("python3", "python3 --version"), ("pip3", "pip3 --version")],
-        "go"     => vec![("go", "go version")],
-        "rust"   => vec![("cargo", "cargo --version"), ("rustup", "rustup --version")],
-        "java"   => vec![("java", "java -version"), ("javac", "javac -version")],
-        _        => vec![],
+      // Use login shell so ~/.juliaup/bin, ~/.bun/bin, ~/.dotnet, nvm etc. are in PATH
+      let tools: Vec<(&str, &str)> = match runtime_id {
+        "node"    => vec![("node", "node --version"), ("npm", "npm --version"), ("curl", "curl --version")],
+        "python"  => vec![("python3", "python3 --version 2>&1 || python --version 2>&1"), ("pip3", "pip3 --version 2>&1 || pip --version 2>&1")],
+        "go"      => vec![("go", "go version"), ("gcc", "gcc --version")],
+        "rust"    => vec![("rustc", "rustc --version"), ("cargo", "cargo --version"), ("rustup", "rustup --version")],
+        "java"    => vec![("java", "java -version 2>&1"), ("javac", "javac -version 2>&1")],
+        "php"     => vec![("php", "php --version 2>&1 | head -1"), ("composer", "composer --version 2>/dev/null")],
+        "ruby"    => vec![("ruby", "ruby --version"), ("gem", "gem --version")],
+        "dotnet"  => vec![("dotnet", "dotnet --version 2>/dev/null || ~/.dotnet/dotnet --version 2>/dev/null")],
+        "bun"     => vec![("bun", "bun --version 2>/dev/null || ~/.bun/bin/bun --version 2>/dev/null"), ("unzip", "unzip -v"), ("curl", "curl --version")],
+        "zig"     => vec![("zig", "zig version"), ("tar", "tar --version")],
+        "c_cpp"   => vec![("gcc", "gcc --version"), ("g++", "g++ --version"), ("make", "make --version"), ("cmake", "cmake --version"), ("gdb", "gdb --version")],
+        "matlab"  => vec![("octave", "octave --version")],
+        "dart"    => vec![("dart", "dart --version 2>&1 || $HOME/.dart/dart-sdk/bin/dart --version 2>&1"), ("curl", "curl --version")],
+        "flutter" => vec![("flutter", "flutter --version 2>&1 | head -1 || $HOME/.flutter-sdk/bin/flutter --version 2>&1 | head -1"), ("dart", "dart --version 2>&1 || $HOME/.dart/dart-sdk/bin/dart --version 2>&1"), ("git", "git --version")],
+        "julia"   => vec![("julia", "julia --version 2>/dev/null || ~/.juliaup/bin/julia --version 2>/dev/null"), ("curl", "curl --version")],
+        "lua"     => vec![("lua", "lua -v 2>&1 || lua5.4 -v 2>&1")],
+        "lisp"    => vec![("sbcl", "sbcl --version")],
+        _         => vec![],
       };
-      tools.push(("gcc", "gcc --version"));
-      tools.push(("make", "make --version"));
-      tools.push(("pkg-config", "pkg-config --version"));
       let mut deps: Vec<Value> = Vec::new();
-      for (name, check_cmd) in tools {
-        let parts: Vec<&str> = check_cmd.split_whitespace().collect();
-        let ok = exec_result_limit(parts[0], &parts[1..], CMD_TIMEOUT_SHORT).await.is_ok();
+      for (name, shell_cmd) in tools {
+        let ok = exec_result_limit("bash", &["-lc", shell_cmd], CMD_TIMEOUT_SHORT).await
+          .map(|(so, se)| !format!("{}{}", so, se).trim().is_empty())
+          .unwrap_or(false);
         deps.push(json!({ "name": name, "status": if ok { "installed" } else { "missing" }, "ok": ok }));
       }
       json!({ "ok": true, "dependencies": deps })
     },
     "dh:runtime:uninstall:preview" => {
       let runtime_id = body.get("runtimeId").and_then(|v| v.as_str()).unwrap_or("node");
-      let remove_mode = body.get("removeMode").and_then(|v| v.as_str()).unwrap_or("runtime_only");
+      let _remove_mode = body.get("removeMode").and_then(|v| v.as_str()).unwrap_or("runtime_only");
       let distro = exec_output("sh", &["-c", ". /etc/os-release 2>/dev/null; printf '%s' \"${ID:-unknown}\""])
         .await.unwrap_or_else(|_| "unknown".to_string());
       let distro = distro.trim().to_string();
@@ -1927,33 +2341,47 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       let mut pkg_vals: Vec<Value> = pkgs.iter().map(|p| json!(p)).collect();
       let note: String;
       
-      if runtime_id == "rust" {
-        note = "Rust is managed by rustup. This operation will run 'rustup self uninstall'.".to_string();
-        pkg_vals = vec![json!("rustup")];
-      } else if pkgs.is_empty() {
-        note = format!("No system packages found for {}. If installed via a local manager (nvm, pyenv, etc.), you may need to clean it manually.", runtime_id);
-      } else {
-        note = format!("System packages detected for {}. Removal will use {}.", runtime_id, pkg_mgr);
+      match runtime_id {
+        "rust" => {
+          note = "Rust is managed by rustup. This will run 'rustup self uninstall'.".to_string();
+          pkg_vals = vec![json!("rustup")];
+        },
+        "bun" => {
+          note = "Bun was installed via the official installer. This will remove ~/.bun.".to_string();
+          pkg_vals = vec![json!("~/.bun (directory)")];
+        },
+        "dart" => {
+          note = format!("Dart was installed via apt. Removal will use {}.", pkg_mgr);
+          pkg_vals = vec![json!("dart")];
+        },
+        "flutter" => {
+          note = "Flutter was installed via snap. This will run 'snap remove flutter'.".to_string();
+          pkg_vals = vec![json!("flutter (snap)")];
+        },
+        "julia" => {
+          note = "Removes juliaup + cleans ~/.juliaup and ~/.julia. No sudo needed.".to_string();
+          pkg_vals = vec![json!("~/.juliaup"), json!("~/.julia")];
+        },
+        "dotnet" if pkg_mgr == "pacman" => {
+          note = "On Arch, .NET was installed via Microsoft's install script to ~/.dotnet. Remove that directory manually or run: rm -rf ~/.dotnet".to_string();
+          pkg_vals = vec![json!("~/.dotnet (directory)")];
+        },
+        _ if pkgs.is_empty() => {
+          note = format!("No system packages found for {}. If installed via a version manager, remove it manually.", runtime_id);
+        },
+        _ => {
+          note = format!("Will remove {} system package(s) using {}.", pkg_vals.len(), pkg_mgr);
+        },
       }
-
-      let removable: Vec<Value> = vec![];
 
       json!({
         "ok": true,
         "distro": distro,
         "runtimePackages": pkg_vals,
-        "removableDeps": removable,
+        "removableDeps": [],
         "blockedSharedDeps": [],
         "finalPackages": pkg_vals,
-        "note": if remove_mode == "runtime_and_deps" {
-          if note.is_empty() {
-            "Auto dependency pruning is not implemented yet; removing runtime packages only.".to_string()
-          } else {
-            format!("{} Auto dependency pruning is not implemented yet; removing runtime packages only.", note)
-          }
-        } else {
-          note
-        }
+        "note": note
       })
     },
     "dh:diagnostics:bundle:create" => {

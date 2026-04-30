@@ -1039,7 +1039,7 @@ export function SshPage(): ReactElement {
               </button>
             </div>
             <div style={{ flex: 1, minHeight: 400, background: '#0a0a0a', borderRadius: 8, padding: 8, overflow: 'hidden' }}>
-              <div ref={termWrapRef} style={{ width: '100%', height: '100%' }} />
+              <div ref={termWrapRef} style={{ width: '100%', height: '100%', padding: '16px' }} />
             </div>
             {!activeTermSession.isTransfer && (
               <div style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center', paddingTop: 6 }}>

@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react'
-import { useEffect, useState, useCallback, useMemo } from 'react'
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import type { RuntimeStatus, JobSummary } from '@linux-dev-home/shared'
 import { assertRuntimeOk } from './runtimeContract'
 import { humanizeRuntimeError } from './runtimeError'
@@ -51,6 +51,27 @@ function pickDefaultRuntimeVersion(runtimeId: string, versions: string[]): strin
   return versions[0]
 }
 
+/** Suggested version command for onboarding copy (login shell PATH may apply). */
+const RUNTIME_VERIFY_CMD: Record<string, string> = {
+  node: 'node --version',
+  python: 'python3 --version',
+  go: 'go version',
+  rust: 'rustc --version',
+  java: 'java -version',
+  php: 'php --version',
+  ruby: 'ruby --version',
+  dotnet: 'dotnet --version',
+  bun: 'bun --version',
+  zig: 'zig version',
+  c_cpp: 'gcc --version',
+  matlab: 'octave --version',
+  dart: 'dart --version',
+  flutter: 'flutter --version',
+  julia: 'julia --version',
+  lua: 'lua -v',
+  lisp: 'sbcl --version',
+}
+
 export function RuntimesPage(): ReactElement {
   const [runtimes, setRuntimes] = useState<RuntimeStatus[]>([])
   const [activeJobs, setActiveJobs] = useState<JobSummary[]>([])
@@ -58,7 +79,7 @@ export function RuntimesPage(): ReactElement {
   const [selectedId, setSelectedId] = useState<string>('node')
   const [showWizard, setShowWizard] = useState(false)
   const [wizardStep, setWizardStep] = useState(1)
-  const [installMethod, setInstallMethod] = useState<'system' | 'local'>('system')
+  const [installMethod, setInstallMethod] = useState<'system' | 'local'>('local')
   const [dependencies, setDependencies] = useState<Array<{ name: string; status: string; ok: boolean }>>([])
   const [showUninstallModal, setShowUninstallModal] = useState(false)
   const [removeMode, setRemoveMode] = useState<'runtime_only' | 'runtime_and_deps'>('runtime_only')
@@ -69,9 +90,28 @@ export function RuntimesPage(): ReactElement {
   const [selectedVersion, setSelectedVersion] = useState<string>('latest')
   const [versionsLoading, setVersionsLoading] = useState(false)
   const [addToPath, setAddToPath] = useState(true)
+  const [sudoPassword, setSudoPassword] = useState('')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
+  const VERSIONS_CACHE_KEY = 'dh:runtimes:versions-cache:v1'
+  const VERSIONS_CACHE_TTL = 5 * 60 * 1000 // 5 minutes
+
   const loadVersionsForRuntime = useCallback(async (runtimeId: string, resetDefault: boolean) => {
+    // Check localStorage cache first
+    try {
+      const raw = localStorage.getItem(VERSIONS_CACHE_KEY)
+      if (raw) {
+        const cache = JSON.parse(raw) as Record<string, { ts: number; versions: string[] }>
+        const entry = cache[runtimeId]
+        if (entry && Date.now() - entry.ts < VERSIONS_CACHE_TTL && entry.versions.length > 0) {
+          setAvailableVersions(entry.versions)
+          if (resetDefault) setSelectedVersion(pickDefaultRuntimeVersion(runtimeId, entry.versions))
+          else setSelectedVersion((prev) => (entry.versions.includes(prev) ? prev : pickDefaultRuntimeVersion(runtimeId, entry.versions)))
+          return
+        }
+      }
+    } catch { /* ignore cache read errors */ }
+
     setVersionsLoading(true)
     try {
       const res = await window.dh.getAvailableVersions(runtimeId)
@@ -84,13 +124,20 @@ export function RuntimesPage(): ReactElement {
       } else {
         setSelectedVersion((prev) => (vs.includes(prev) ? prev : pickDefaultRuntimeVersion(runtimeId, vs)))
       }
+      // Write to cache
+      try {
+        const raw = localStorage.getItem(VERSIONS_CACHE_KEY)
+        const cache: Record<string, { ts: number; versions: string[] }> = raw ? JSON.parse(raw) : {}
+        cache[runtimeId] = { ts: Date.now(), versions: vs }
+        localStorage.setItem(VERSIONS_CACHE_KEY, JSON.stringify(cache))
+      } catch { /* ignore cache write errors */ }
     } catch (e) {
       setAvailableVersions(['latest'])
       setErrorMessage(humanizeRuntimeError(e))
     } finally {
       setVersionsLoading(false)
     }
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   /** Same as load but for the currently selected runtime (wizard Refresh button). */
   const refreshVersionsList = useCallback(
@@ -135,7 +182,7 @@ export function RuntimesPage(): ReactElement {
     const t = setInterval(() => {
       void refreshStatus()
       if (showWizard && wizardStep === 2) void refreshDeps()
-    }, 3000)
+    }, 500)
     return () => clearInterval(t)
   }, [refreshStatus, refreshDeps, showWizard, wizardStep])
 
@@ -148,6 +195,21 @@ export function RuntimesPage(): ReactElement {
     })
     return jobsForRuntime[jobsForRuntime.length - 1]
   }, [activeJobs, selectedId])
+
+  // Auto-refresh status + deps when the active job finishes (must be after activeJob is defined).
+  const prevJobStateRef = useRef<string | undefined>(undefined)
+  useEffect(() => {
+    const currentState = activeJob?.state
+    if (
+      prevJobStateRef.current === 'running' &&
+      (currentState === 'completed' || currentState === 'failed')
+    ) {
+      void refreshStatus()
+      void refreshDeps()
+    }
+    prevJobStateRef.current = currentState
+  }, [activeJob?.state, refreshStatus, refreshDeps])
+
   const installInProgress = activeJob?.state === 'running'
   const isUninstallJob = activeJob?.kind === `uninstall_${selectedId}`
   const isUpdateJob = activeJob?.kind === `update_${selectedId}`
@@ -167,6 +229,11 @@ export function RuntimesPage(): ReactElement {
     return undefined
   }, [latestUpdateJob])
   const effectiveUpdateOutcome = updateOutcome ?? persistedUpdateOutcomes[selectedId]
+
+  const suggestVerifyCmd = RUNTIME_VERIFY_CMD[selectedId] ?? `${selectedId} --version`
+  const lastJobTail = activeJob?.logTail ?? []
+  const logHasVerifyOk = lastJobTail.some((l) => /VERIFY OK/i.test(l))
+  const logHasVerifyFail = lastJobTail.some((l) => l.includes('VERIFY FAIL:'))
 
   useEffect(() => {
     try {
@@ -216,6 +283,7 @@ export function RuntimesPage(): ReactElement {
       method: installMethod,
       version: selectedVersion,
       addToPath,
+      sudoPassword,
     })
   }
 
@@ -225,7 +293,8 @@ export function RuntimesPage(): ReactElement {
     await window.dh.jobStart({
       kind: 'runtime_update',
       runtimeId: selectedId,
-      method: installMethod
+      method: installMethod,
+      sudoPassword,
     })
   }
 
@@ -236,6 +305,7 @@ export function RuntimesPage(): ReactElement {
       runtimeId: selectedId,
       method: installMethod,
       removeMode,
+      sudoPassword,
     })
   }
 
@@ -518,7 +588,7 @@ export function RuntimesPage(): ReactElement {
                                 }}
                               >
                                  <div style={{ fontWeight: 700, fontSize: 14 }}>System Package Manager</div>
-                                 <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Uses DNF / APT to install globally. Recommended.</div>
+                                 <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>DNF / APT with fixed distro package names—the version dropdown does not change what the OS installs.</div>
                               </button>
                               <button 
                                 onClick={() => setInstallMethod('local')}
@@ -528,7 +598,7 @@ export function RuntimesPage(): ReactElement {
                                 }}
                               >
                                  <div style={{ fontWeight: 700, fontSize: 14 }}>Isolated Script (Local)</div>
-                                 <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Installs to user scope without sudo. Safer, and can auto-update PATH.</div>
+                                 <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>User-scope install without sudo where supported; Node, Python, and Go use the version you picked.</div>
                               </button>
                            </div>
                         </div>
@@ -573,6 +643,24 @@ export function RuntimesPage(): ReactElement {
                            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
                              Lists are loaded from upstream APIs where possible; use Refresh after a new release if you do not change language.
                            </div>
+                           {installMethod === 'system' && (
+                             <div
+                               role="note"
+                               style={{
+                                 marginTop: 14,
+                                 padding: '10px 12px',
+                                 borderRadius: 10,
+                                 border: '1px solid rgba(255, 183, 77, 0.45)',
+                                 background: 'rgba(255, 183, 77, 0.1)',
+                                 fontSize: 12,
+                                 color: 'var(--text-main)',
+                                 lineHeight: 1.45,
+                               }}
+                             >
+                               With <strong>System</strong>, the target version shown above is informational only for most languages—we call fixed package names (<code className="mono">nodejs</code>, etc.). Pick <strong>Local</strong>
+                               {' '}for Node.js, Python, or Go if you want the selected version installed.
+                             </div>
+                           )}
                         </div>
 
                         <div className="hp-card">
@@ -588,6 +676,23 @@ export function RuntimesPage(): ReactElement {
                               </div>
                            </label>
                         </div>
+
+                        <div className="hp-card">
+                           <div style={{ fontWeight: 600, marginBottom: 6 }}>Sudo password (optional)</div>
+                           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 10 }}>
+                             For system installs (dnf / apt / snap): paste your sudo password here, or leave blank — a
+                             graphical password prompt (pkexec) usually opens. Leave blank too if passwordless sudo is enabled.
+                           </div>
+                           <input
+                             type="password"
+                             placeholder="Enter sudo password…"
+                             value={sudoPassword}
+                             onChange={(e) => setSudoPassword(e.target.value)}
+                             style={{ width: '100%', boxSizing: 'border-box' }}
+                             className="hp-input"
+                             autoComplete="current-password"
+                           />
+                        </div>
                      </div>
                    )}
 
@@ -597,12 +702,43 @@ export function RuntimesPage(): ReactElement {
                         <p style={{ color: 'var(--text-muted)', marginBottom: 32 }}>We found the following requirements for building/running {selectedRuntime?.name}.</p>
                         
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                           {dependencies.length > 0 ? dependencies.map(d => (
-                             <div key={d.name} style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 16px', background: 'rgba(255,255,255,0.03)', borderRadius: 8, border: '1px solid var(--border)' }}>
-                                <span style={{ fontWeight: 600 }}>{d.name}</span>
-                                <span style={{ color: d.ok ? 'var(--green)' : 'var(--orange)', fontSize: 12, fontWeight: 700 }}>{d.status}</span>
-                             </div>
-                           )) : (
+                           {dependencies.length > 0 ? dependencies.map((d, idx) => {
+                             const isInstalling = activeJob?.kind === 'install_deps' && activeJob?.state === 'running';
+                             const totalDeps = dependencies.length;
+                             const depProgressWeight = 100 / totalDeps;
+                             const currentDepIdx = Math.floor((activeJob?.progress || 0) / depProgressWeight);
+                             const isCurrent = isInstalling && currentDepIdx === idx;
+                             const isFinished = isInstalling && currentDepIdx > idx;
+                             
+                             // Calculate sub-progress for current item
+                             const itemSubProgress = isCurrent ? ((activeJob?.progress || 0) % depProgressWeight) * (100 / depProgressWeight) : (isFinished ? 100 : 0);
+
+                             return (
+                               <div key={d.name} style={{ position: 'relative', overflow: 'hidden', padding: '12px 16px', background: 'rgba(255,255,255,0.03)', borderRadius: 8, border: '1px solid var(--border)' }}>
+                                  {/* Background progress bar */}
+                                  {(isCurrent || isFinished) && (
+                                    <div style={{ 
+                                      position: 'absolute', 
+                                      bottom: 0, left: 0, height: 3, 
+                                      width: `${itemSubProgress}%`, 
+                                      background: isFinished ? 'var(--green)' : 'var(--accent)',
+                                      transition: 'width 0.3s ease'
+                                    }} />
+                                  )}
+                                  
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', position: 'relative', zIndex: 1 }}>
+                                    <span style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
+                                      {d.name}
+                                      {isCurrent && <span className="codicon codicon-loading codicon-modifier-spin" style={{ fontSize: 12, color: 'var(--accent)' }} />}
+                                      {isFinished && <span className="codicon codicon-pass" style={{ fontSize: 12, color: 'var(--green)' }} />}
+                                    </span>
+                                    <span style={{ color: d.ok || isFinished ? 'var(--green)' : 'var(--orange)', fontSize: 12, fontWeight: 700 }}>
+                                      {isFinished ? 'Installed' : (isCurrent ? 'Installing...' : d.status)}
+                                    </span>
+                                  </div>
+                               </div>
+                             );
+                           }) : (
                              <div style={{ textAlign: 'center', padding: 20, opacity: 0.5 }}>Checking requirements...</div>
                            )}
                         </div>
@@ -613,7 +749,7 @@ export function RuntimesPage(): ReactElement {
                                 💡 <strong>Note:</strong> Some missing headers might be required for building.
                              </div>
                              <button 
-                              onClick={() => window.dh.jobStart({ kind: 'install_deps', runtimeId: selectedId })}
+                              onClick={() => window.dh.jobStart({ kind: 'install_deps', runtimeId: selectedId, sudoPassword })}
                                className="hp-btn" 
                                style={{ background: 'var(--accent)', color: 'white', border: 'none', padding: '6px 12px', fontSize: 11, fontWeight: 700 }}
                              >
@@ -657,10 +793,24 @@ export function RuntimesPage(): ReactElement {
                           marginTop: 32, flex: 1, background: 'black', padding: 20, borderRadius: 12, 
                           fontFamily: 'monospace', fontSize: 12, overflowY: 'auto', border: '1px solid rgba(255,255,255,0.1)'
                         }}>
-                           {activeJob?.logTail.map((l, i) => (
-                             <div key={i} style={{ color: l.startsWith('[ERR]') ? '#ff5252' : '#eee', marginBottom: 4 }}>{l}</div>
-                           ))}
-                           {activeJob?.state === 'completed' && <div style={{ color: 'var(--green)', fontWeight: 700, marginTop: 10 }}>✔ Installation complete.</div>}
+                           {activeJob?.logTail.map((l, i) => {
+                             const lc = l.toLowerCase()
+                             const color =
+                               l.startsWith('[ERR]') || l.includes('VERIFY FAIL:')
+                                 ? '#ff5252'
+                                 : lc.includes('verify ok:')
+                                   ? '#69f0ae'
+                                   : '#eee'
+                             return (
+                               <div key={i} style={{ color, marginBottom: 4 }}>{l}</div>
+                             )
+                           })}
+                           {activeJob?.state === 'completed' && !logHasVerifyFail && (
+                             <div style={{ color: 'var(--green)', fontWeight: 700, marginTop: 10 }}>✔ Job finished. Check VERIFY lines below if present.</div>
+                           )}
+                           {activeJob?.state === 'completed' && logHasVerifyFail && (
+                             <div style={{ color: '#ff8a65', fontWeight: 700, marginTop: 10 }}>Job finished but post-install VERIFY reported a problem—see log.</div>
+                           )}
                         </div>
                      </div>
                    )}
@@ -668,23 +818,38 @@ export function RuntimesPage(): ReactElement {
                    {wizardStep === 4 && (
                      <div style={{ textAlign: 'center', paddingTop: 60 }}>
                         <div style={{ 
-                          width: 80, height: 80, borderRadius: '50%', background: 'var(--green)', 
+                          width: 80, height: 80, borderRadius: '50%', background: activeJob?.state === 'failed' ? 'rgba(255,82,82,0.85)' : 'var(--green)', 
                           margin: '0 auto 24px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 40, color: 'white'
                         }}>
-                           ✔
+                           {activeJob?.state === 'failed' ? '✗' : '✔'}
                         </div>
-                        <h2 style={{ fontSize: 28, fontWeight: 800 }}>Successfully Installed!</h2>
-                        <p style={{ color: 'var(--text-muted)', fontSize: 16, maxWidth: 400, margin: '16px auto 40px' }}>
-                          {selectedRuntime?.name} is now ready for use. 
-                          {activeJob?.logTail.some(l => l.includes('Smoke test passed')) ? (
+                        <h2 style={{ fontSize: 28, fontWeight: 800 }}>
+                          {activeJob?.state === 'failed' ? 'Install did not finish' : 'Installer finished'}
+                        </h2>
+                        <p style={{ color: 'var(--text-muted)', fontSize: 16, maxWidth: 460, margin: '16px auto 40px' }}>
+                          Review step 3 job log—the <strong>VERIFY</strong> lines show what a login shell could find on PATH. 
+                          {logHasVerifyOk && (
                             <span style={{ color: 'var(--green)', display: 'block', marginTop: 8, fontSize: 14 }}>
                                <span className="codicon codicon-pass" style={{ verticalAlign: 'middle', marginRight: 6 }} />
-                               Post-install verification passed.
+                               Post-install check reported a toolchain on PATH.
                             </span>
-                          ) : (
+                          )}
+                          {!logHasVerifyOk && !logHasVerifyFail && activeJob?.state === 'completed' && (
                             <span style={{ color: 'var(--orange)', display: 'block', marginTop: 8, fontSize: 14 }}>
                                <span className="codicon codicon-warning" style={{ verticalAlign: 'middle', marginRight: 6 }} />
-                               Verification skipped or pending shell restart.
+                               No VERIFY OK line yet—retry after opening a new terminal.
+                            </span>
+                          )}
+                          {logHasVerifyFail && (
+                            <span style={{ color: '#ff8a65', display: 'block', marginTop: 8, fontSize: 14 }}>
+                               <span className="codicon codicon-error" style={{ verticalAlign: 'middle', marginRight: 6 }} />
+                               VERIFY failed—the binary was not visible on PATH in a login shell.
+                            </span>
+                          )}
+                          {installMethod === 'system' && activeJob?.state === 'completed' && ['node', 'python', 'go'].includes(selectedId) && (
+                            <span style={{ display: 'block', marginTop: 10, fontSize: 13, color: 'var(--text-muted)' }}>
+                              You used <strong>System</strong>; the distro may have only confirmed packages already on disk.
+                              Choose <strong>Local</strong> next time if you want the version you picked in the dropdown.
                             </span>
                           )}
                         </p>
@@ -693,7 +858,7 @@ export function RuntimesPage(): ReactElement {
                            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>NEXT STEPS:</div>
                            <div style={{ fontSize: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
                               <span>• Restart any open terminals</span>
-                              <span>• Try running <code>{selectedId} --version</code></span>
+                              <span>• Try running <code className="mono">{suggestVerifyCmd}</code> in a new terminal</span>
                               <span>• Start building something amazing!</span>
                            </div>
                         </div>

@@ -17,7 +17,7 @@ const nav = [
   { to: '/registry', label: 'Registry', icon: 'package', status: 'partial' as RouteStatus },
   { to: '/profiles', label: 'Profiles', icon: 'account', status: 'stub' as RouteStatus },
   { to: '/terminal', label: 'Terminal', icon: 'terminal', status: 'live' as RouteStatus },
-  { to: '/runtimes', label: 'Runtimes', icon: 'zap', status: 'partial' as RouteStatus },
+  { to: '/runtimes', label: 'Runtimes', icon: 'zap', status: 'live' as RouteStatus },
   { to: '/maintenance', label: 'Maintenance', icon: 'shield', status: 'partial' as RouteStatus },
 ] as const
 
