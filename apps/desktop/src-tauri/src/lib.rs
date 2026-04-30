@@ -27,18 +27,6 @@ struct AppState {
   disk_prev: Mutex<Option<(u64, u64, std::time::Instant)>>,
 }
 
-async fn close_all_terminal_sessions(state: &AppState) {
-  let mut map = state.terminals.lock().await;
-  let sessions: Vec<TerminalSession> = map.drain().map(|(_, s)| s).collect();
-  drop(map);
-  for session in sessions {
-    if let Ok(mut child) = session.child.lock() {
-      let _ = child.kill();
-      let _ = child.wait();
-    }
-  }
-}
-
 fn app_file(app: &AppHandle, name: &str) -> Result<PathBuf, String> {
   let dir = app
     .path()
@@ -1546,7 +1534,14 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
         }) {
           Ok(pair) => {
             let mut cmd = CommandBuilder::new("docker");
-            cmd.args(["exec", "-it", container_id, "sh"]);
+            cmd.args([
+              "exec",
+              "-it",
+              container_id,
+              "sh",
+              "-lc",
+              "if command -v bash >/dev/null 2>&1; then exec bash --noprofile --norc -i; else exec sh -i; fi",
+            ]);
             match pair.slave.spawn_command(cmd) {
               Ok(child) => {
                 let id = Uuid::new_v4().to_string();
@@ -2472,12 +2467,6 @@ pub fn run() {
     .plugin(tauri_plugin_opener::init())
     .manage(AppState::default())
     .invoke_handler(tauri::generate_handler![ipc_invoke, ipc_send])
-    .build(tauri::generate_context!())
-    .expect("error while building tauri application")
-    .run(|app, event| {
-      if let tauri::RunEvent::ExitRequested { .. } = event {
-        let state = app.state::<AppState>();
-        tauri::async_runtime::block_on(close_all_terminal_sessions(&state));
-      }
-    });
+    .run(tauri::generate_context!())
+    .expect("error while running tauri application");
 }
