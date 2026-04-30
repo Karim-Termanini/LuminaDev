@@ -66,8 +66,30 @@ const CMD_TIMEOUT_INSTALL_STEP: Duration = Duration::from_secs(900);
 /// Run a bootstrap script without elevation (writes under $HOME only).
 async fn runtime_bash_user_step(cmd: &str, logs: &mut Vec<String>) -> Result<(), String> {
   logs.push(format!("RUNNING (user shell, no sudo): {}", cmd));
-  match exec_result_limit("bash", &["-lc", cmd], CMD_TIMEOUT_INSTALL_STEP).await {
-    Ok((stdout, stderr)) => {
+  let fut = async {
+    // Use non-login shell here to avoid user rc/profile parse failures from
+    // blocking local installers (nvm/pyenv/etc). Commands explicitly source
+    // their own bootstrap scripts where needed.
+    let output = Command::new("bash")
+      .arg("-c")
+      .arg(cmd)
+      // nvm aborts when npm prefix is preconfigured globally.
+      .env_remove("npm_config_prefix")
+      .env_remove("NPM_CONFIG_PREFIX")
+      .output()
+      .await
+      .map_err(|e| format!("[EXEC_ERROR] {}", e))?;
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    if output.status.success() {
+      Ok((stdout, stderr))
+    } else {
+      Err(if stderr.trim().is_empty() { stdout } else { stderr })
+    }
+  };
+
+  match tokio::time::timeout(CMD_TIMEOUT_INSTALL_STEP, fut).await {
+    Ok(Ok((stdout, stderr))) => {
       for line in stdout.lines().chain(stderr.lines()) {
         if !line.trim().is_empty() {
           logs.push(format!("OUT: {}", line));
@@ -75,7 +97,8 @@ async fn runtime_bash_user_step(cmd: &str, logs: &mut Vec<String>) -> Result<(),
       }
       Ok(())
     }
-    Err(e) => Err(format!("[RUNTIME_INSTALL_FAILED] {}", e.trim())),
+    Ok(Err(e)) => Err(format!("[RUNTIME_INSTALL_FAILED] {}", e.trim())),
+    Err(_) => Err("[RUNTIME_INSTALL_FAILED] [HOST_COMMAND_TIMEOUT] bash -c <runtime-user-step>".to_string()),
   }
 }
 
@@ -609,6 +632,51 @@ fn runtime_system_packages(runtime_id: &str, pkg_mgr: &str) -> Vec<&'static str>
   }
 }
 
+fn runtime_java_major(requested_version: &str) -> Option<u32> {
+  let token = lumina_first_version_token(requested_version)?;
+  let digits: String = token.chars().take_while(|c| c.is_ascii_digit()).collect();
+  if digits.is_empty() {
+    None
+  } else {
+    digits.parse::<u32>().ok()
+  }
+}
+
+fn runtime_java_system_packages_for_version(pkg_mgr: &str, requested_version: &str) -> Vec<String> {
+  let major = runtime_java_major(requested_version).unwrap_or(21);
+  match pkg_mgr {
+    "dnf" => match major {
+      8 => vec!["java-1.8.0-openjdk-devel".to_string()],
+      11 => vec!["java-11-openjdk-devel".to_string()],
+      17 => vec!["java-17-openjdk-devel".to_string()],
+      21 => vec!["java-21-openjdk-devel".to_string()],
+      _ => vec!["java-latest-openjdk-devel".to_string()],
+    },
+    "apt" => match major {
+      8 => vec!["openjdk-8-jdk".to_string()],
+      11 => vec!["openjdk-11-jdk".to_string()],
+      17 => vec!["openjdk-17-jdk".to_string()],
+      21 => vec!["openjdk-21-jdk".to_string()],
+      _ => vec!["default-jdk".to_string()],
+    },
+    "pacman" => match major {
+      8 => vec!["jdk8-openjdk".to_string()],
+      11 => vec!["jdk11-openjdk".to_string()],
+      17 => vec!["jdk17-openjdk".to_string()],
+      21 => vec!["jdk21-openjdk".to_string()],
+      _ => vec!["jdk-openjdk".to_string()],
+    },
+    "zypper" => match major {
+      8 => vec!["java-1_8_0-openjdk-devel".to_string()],
+      11 => vec!["java-11-openjdk-devel".to_string()],
+      17 => vec!["java-17-openjdk-devel".to_string()],
+      21 => vec!["java-21-openjdk-devel".to_string()],
+      _ => vec!["java-21-openjdk-devel".to_string()],
+    },
+    _ => vec!["default-jdk".to_string()],
+  }
+}
+
 fn pkg_upgrade_cmd(pkg_mgr: &str, packages: &[&str]) -> String {
   let pkgs = packages.join(" ");
   match pkg_mgr {
@@ -637,21 +705,22 @@ async fn runtime_append_verify(runtime_id: &str, method: &str, requested_version
     method
   ));
   let probe = match runtime_id {
-    "node" => "command -v node >/dev/null 2>&1 && node --version 2>&1 || echo MISSING",
-    "python" => "command -v python3 >/dev/null 2>&1 && python3 --version 2>&1 || echo MISSING",
-    "go" => "command -v go >/dev/null 2>&1 && go version 2>&1 || echo MISSING",
-    "rust" => "command -v rustc >/dev/null 2>&1 && rustc --version 2>&1 || echo MISSING",
+    "node" => "([ -s \"$NVM_DIR/nvm.sh\" ] && . \"$NVM_DIR/nvm.sh\" && node --version 2>&1) || (command -v node >/dev/null 2>&1 && node --version 2>&1) || echo MISSING",
+    "python" => "([ -d \"$HOME/.pyenv\" ] && export PYENV_ROOT=\"$HOME/.pyenv\" && export PATH=\"$PYENV_ROOT/bin:$PATH\" && eval \"$(pyenv init -)\" && python3 --version 2>&1) || (command -v python3 >/dev/null 2>&1 && python3 --version 2>&1) || echo MISSING",
+    "go" => "([ -x \"$HOME/.local/share/lumina/go/bin/go\" ] && \"$HOME/.local/share/lumina/go/bin/go\" version 2>&1) || (command -v go >/dev/null 2>&1 && go version 2>&1) || echo MISSING",
+    "rust" => "([ -x \"$HOME/.cargo/bin/rustc\" ] && \"$HOME/.cargo/bin/rustc\" --version 2>&1) || (command -v rustc >/dev/null 2>&1 && rustc --version 2>&1) || echo MISSING",
+    "java" if method == "local" => "([ -x \"$HOME/.local/share/lumina/java/current/bin/java\" ] && \"$HOME/.local/share/lumina/java/current/bin/java\" -version 2>&1 | head -1) || echo MISSING",
     "java" => "command -v java >/dev/null 2>&1 && java -version 2>&1 | head -1 || echo MISSING",
     "php" => "command -v php >/dev/null 2>&1 && php --version 2>&1 | head -1 || echo MISSING",
     "ruby" => "command -v ruby >/dev/null 2>&1 && ruby --version 2>&1 || echo MISSING",
-    "dotnet" => "command -v dotnet >/dev/null 2>&1 && dotnet --version 2>&1 || ($HOME/.dotnet/dotnet --version 2>&1) || echo MISSING",
-    "bun" => "command -v bun >/dev/null 2>&1 && bun --version 2>&1 || ($HOME/.bun/bin/bun --version 2>&1) || echo MISSING",
+    "dotnet" => "([ -x \"$HOME/.dotnet/dotnet\" ] && \"$HOME/.dotnet/dotnet\" --version 2>&1) || (command -v dotnet >/dev/null 2>&1 && dotnet --version 2>&1) || echo MISSING",
+    "bun" => "([ -x \"$HOME/.bun/bin/bun\" ] && \"$HOME/.bun/bin/bun\" --version 2>&1) || (command -v bun >/dev/null 2>&1 && bun --version 2>&1) || echo MISSING",
     "zig" => "command -v zig >/dev/null 2>&1 && zig version 2>&1 || echo MISSING",
     "c_cpp" => "command -v gcc >/dev/null 2>&1 && gcc --version 2>&1 | head -1 || echo MISSING",
     "matlab" => "command -v octave >/dev/null 2>&1 && octave --version 2>&1 | head -1 || echo MISSING",
-    "dart" => "command -v dart >/dev/null 2>&1 && dart --version 2>&1 | head -1 || ($HOME/.dart/dart-sdk/bin/dart --version 2>&1 | head -1) || echo MISSING",
-    "flutter" => "command -v flutter >/dev/null 2>&1 && flutter --version 2>&1 | head -1 || ($HOME/.flutter-sdk/bin/flutter --version 2>&1 | head -1) || echo MISSING",
-    "julia" => "command -v julia >/dev/null 2>&1 && julia --version 2>&1 || ($HOME/.juliaup/bin/julia --version 2>&1) || echo MISSING",
+    "dart" => "([ -x \"$HOME/.dart/dart-sdk/bin/dart\" ] && \"$HOME/.dart/dart-sdk/bin/dart\" --version 2>&1 | head -1) || (command -v dart >/dev/null 2>&1 && dart --version 2>&1 | head -1) || echo MISSING",
+    "flutter" => "([ -x \"$HOME/.flutter-sdk/bin/flutter\" ] && \"$HOME/.flutter-sdk/bin/flutter\" --version 2>&1 | head -1) || (command -v flutter >/dev/null 2>&1 && flutter --version 2>&1 | head -1) || echo MISSING",
+    "julia" => "([ -x \"$HOME/.juliaup/bin/julia\" ] && \"$HOME/.juliaup/bin/julia\" --version 2>&1) || (command -v julia >/dev/null 2>&1 && julia --version 2>&1) || echo MISSING",
     "lua" => "(command -v lua5.4 >/dev/null 2>&1 && lua5.4 -v 2>&1) || (command -v lua >/dev/null 2>&1 && lua -v 2>&1) || echo MISSING",
     "lisp" => "command -v sbcl >/dev/null 2>&1 && sbcl --version 2>&1 || echo MISSING",
     _ => {
@@ -668,14 +737,22 @@ async fn runtime_append_verify(runtime_id: &str, method: &str, requested_version
         .unwrap_or_default();
       if line.contains("MISSING") || line.is_empty() {
         logs.push(format!("VERIFY FAIL: {} not found on PATH after install.", runtime_id));
-      } else if method == "system" && matches!(runtime_id, "node" | "python" | "go") {
-        logs.push(format!(
-          "VERIFY OK: {} (Reminder: install_method=system — distro fixed its own release; picker choice {:?} was not pinned.)",
-          line, requested_version.trim()
-        ));
       } else {
-        logs.push(format!("VERIFY OK: {}", line));
-        logs.push("Smoke test passed".to_string());
+        let ver_token = lumina_first_version_token(requested_version).unwrap_or_default();
+        let mut is_match = true;
+        if !ver_token.is_empty() && method != "system" {
+          // Loose check: see if the version token (e.g. "8" or "21" or "3.12") is in the output
+          if !line.contains(&ver_token) {
+            is_match = false;
+          }
+        }
+
+        if !is_match {
+          logs.push(format!("VERIFY WARNING: version mismatch! Got {:?}, expected token {:?}. Ensure your shell is fresh or check if another version is overriding this one.", line, ver_token));
+        } else {
+          logs.push(format!("VERIFY OK: {}", line));
+          logs.push("Smoke test passed".to_string());
+        }
       }
     }
     Err(e) => logs.push(format!("VERIFY FAIL: {}", e.trim())),
@@ -739,7 +816,10 @@ async fn runtime_job_execute(
             "curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.0/install.sh | bash \
              && export NVM_DIR=\"$HOME/.nvm\" \
              && [ -s \"$NVM_DIR/nvm.sh\" ] && . \"$NVM_DIR/nvm.sh\" \
-             && nvm install {}", v
+             && unset npm_config_prefix NPM_CONFIG_PREFIX npm_CONFIG_PREFIX \
+             && export NPM_CONFIG_USERCONFIG=/dev/null \
+             && nvm install {} \
+             && nvm use --delete-prefix {}", v, v
           );
           runtime_bash_user_step(&cmd, &mut logs).await.map_err(|e| format!("{}", e))
         } else if runtime_id == "go" && method == "local" {
@@ -758,14 +838,73 @@ async fn runtime_job_execute(
         } else if runtime_id == "python" && method == "local" {
           let v = lumina_first_version_token(&version).unwrap_or_else(|| "3.12.2".into());
           let cmd = format!(
-            "curl https://pyenv.run | bash \
+            "if [ ! -d \"$HOME/.pyenv\" ]; then curl https://pyenv.run | bash; fi \
              && export PYENV_ROOT=\"$HOME/.pyenv\" \
              && [[ -d $PYENV_ROOT/bin ]] && export PATH=\"$PYENV_ROOT/bin:$PATH\" \
              && eval \"$(pyenv init -)\" \
-             && pyenv install {v} && pyenv global {v}",
+             && (pyenv versions --bare | grep -qx '{v}' || pyenv install {v}) \
+             && pyenv global {v}",
             v = v
           );
           runtime_bash_user_step(&cmd, &mut logs).await.map_err(|e| format!("{}", e))
+        } else if runtime_id == "java" {
+          if method.trim() == "local" {
+            let major = runtime_java_major(&version).unwrap_or(21);
+            logs.push(format!("Installing Java {} locally via Adoptium…", major));
+            let cmd = format!(
+              r#"set -e
+                 LUMINA_JAVA_DIR="$HOME/.local/share/lumina/java"
+                 mkdir -p "$LUMINA_JAVA_DIR"
+                 TMP_JAVA="/tmp/lumina-java-{major}.tar.gz"
+                 curl -fsSL "https://api.adoptium.net/v3/binary/latest/{major}/ga/linux/x64/jdk/hotspot/normal/eclipse" -o "$TMP_JAVA"
+                 TARGET_DIR="$LUMINA_JAVA_DIR/jdk-{major}"
+                 rm -rf "$TARGET_DIR" "$LUMINA_JAVA_DIR/current"
+                 mkdir -p "$TARGET_DIR"
+                 tar -xzf "$TMP_JAVA" -C "$TARGET_DIR" --strip-components=1
+                 rm -f "$TMP_JAVA"
+                 ln -s "$TARGET_DIR" "$LUMINA_JAVA_DIR/current"
+                 for f in "$HOME/.bashrc" "$HOME/.bash_profile" "$HOME/.profile"; do
+                   if [ -f "$f" ] && ! grep -q 'lumina-java' "$f"; then
+                     printf '\n# lumina-java\nexport JAVA_HOME="$HOME/.local/share/lumina/java/current"\nexport PATH="$JAVA_HOME/bin:$PATH"\n' >> "$f"
+                   fi
+                 done
+                 [ -x "$LUMINA_JAVA_DIR/current/bin/java" ]
+                 "$LUMINA_JAVA_DIR/current/bin/java" -version 2>&1 | head -1"#,
+              major = major
+            );
+            runtime_bash_user_step(&cmd, &mut logs).await.map_err(|e| format!("{}", e))
+          } else {
+            if pkg_mgr == "dnf" && runtime_java_major(&version) == Some(8) {
+              Err("[RUNTIME_INSTALL_FAILED] Fedora repositories on this host do not provide java-1.8.0-openjdk-devel. Use Isolated Script (Local) for Java 8.".to_string())
+            } else {
+              let pkgs = runtime_java_system_packages_for_version(pkg_mgr, &version);
+              if pkgs.is_empty() {
+                logs.push(format!("No Java packages known for '{}' on {}.", version, distro));
+                Ok(())
+              } else {
+                let total = pkgs.len();
+                let mut loop_res = Ok(());
+                for (idx, pkg) in pkgs.iter().enumerate() {
+                  let base = (idx as u32 * 100) / total as u32;
+                  let weight = 100 / total as u32;
+                  let cmd = match pkg_mgr {
+                    "apt" => format!("DEBIAN_FRONTEND=noninteractive apt-get install -y {}", pkg),
+                    "dnf" => format!("dnf install -y {}", pkg),
+                    "pacman" => format!("pacman -S --needed --noconfirm {}", pkg),
+                    "zypper" => format!("zypper install -y {}", pkg),
+                    _ => format!("apt-get install -y {}", pkg),
+                  };
+                  logs.push(format!("Installing dependency {} of {}: {}…", idx + 1, total, pkg));
+                  let step_res = sudo_bash_install_step(&cmd, password_opt, &mut logs, Some(app.clone()), Some(job_id.clone()), base, weight).await;
+                  if let Err(e) = step_res {
+                    loop_res = Err(format!("[RUNTIME_INSTALL_FAILED] Failed to install {}: {}", pkg, e));
+                    break;
+                  }
+                }
+                loop_res
+              }
+            }
+          }
         } else if runtime_id == "dotnet" && pkg_mgr == "pacman" {
           // dotnet-sdk-8.0 is AUR-only on Arch; use Microsoft's install script instead
           let v = if version.is_empty() || version.starts_with("system") { "8.0" } else { version.trim() };
@@ -836,7 +975,16 @@ async fn runtime_job_execute(
           runtime_bash_user_step(cmd, &mut logs).await.map_err(|e| format!("{}", e))
         } else {
           let pkgs = runtime_system_packages(&runtime_id, pkg_mgr);
-          if method.trim() == "system" && !pkgs.is_empty() {
+          if method.trim() == "local"
+            && !matches!(runtime_id.as_str(), "node" | "python" | "go" | "rust" | "bun" | "dart" | "flutter" | "julia")
+            && !(runtime_id == "dotnet" && pkg_mgr == "pacman")
+            && !pkgs.is_empty()
+          {
+            logs.push(
+              "NOTE: Local installer is not implemented for this runtime on this distro. Falling back to system package manager.".to_string(),
+            );
+          }
+          if method.trim() == "system" && !pkgs.is_empty() && matches!(runtime_id.as_str(), "node" | "python" | "go") {
             logs.push(
               "NOTE: System installs use distro package names only—your Target Version choice is ignored. Pick Local for Node.js, Python, or Go if you want the selected version.".to_string(),
             );
@@ -2161,7 +2309,115 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
             if version.is_empty() {
               runtimes.push(json!({ "id": id, "name": name, "installed": false }));
             } else {
-              runtimes.push(json!({ "id": id, "name": name, "installed": true, "version": version }));
+              let mut detected_path: Option<String> = None;
+              let mut all_versions: Vec<Value> = Vec::new();
+              match *id {
+                "node" => {
+                  if let Ok(p) = exec_output_limit("bash", &["-lc", "command -v node || true"], CMD_TIMEOUT_SHORT).await {
+                    let p = p.trim();
+                    if !p.is_empty() {
+                      detected_path = Some(p.to_string());
+                    }
+                  }
+                  if let Ok(raw) = exec_output_limit(
+                    "bash",
+                    &["-lc", "if [ -d \"$HOME/.nvm/versions/node\" ]; then for d in \"$HOME/.nvm/versions/node\"/*; do [ -d \"$d\" ] || continue; b=$(basename \"$d\"); printf '%s\\t%s\\n' \"$b\" \"$d/bin/node\"; done; fi"],
+                    CMD_TIMEOUT_SHORT,
+                  ).await {
+                    for line in raw.lines() {
+                      let mut parts = line.splitn(2, '\t');
+                      let v = parts.next().unwrap_or("").trim();
+                      let p = parts.next().unwrap_or("").trim();
+                      if !v.is_empty() && !p.is_empty() {
+                        all_versions.push(json!({ "version": v, "path": p }));
+                      }
+                    }
+                  }
+                }
+                "python" => {
+                  if let Ok(p) = exec_output_limit("bash", &["-lc", "command -v python3 || command -v python || true"], CMD_TIMEOUT_SHORT).await {
+                    let p = p.trim();
+                    if !p.is_empty() {
+                      detected_path = Some(p.to_string());
+                    }
+                  }
+                  if let Ok(raw) = exec_output_limit(
+                    "bash",
+                    &["-lc", "if [ -d \"$HOME/.pyenv/versions\" ]; then for d in \"$HOME/.pyenv/versions\"/*; do [ -d \"$d\" ] || continue; b=$(basename \"$d\"); printf '%s\\t%s\\n' \"$b\" \"$d/bin/python\"; done; fi"],
+                    CMD_TIMEOUT_SHORT,
+                  ).await {
+                    for line in raw.lines() {
+                      let mut parts = line.splitn(2, '\t');
+                      let v = parts.next().unwrap_or("").trim();
+                      let p = parts.next().unwrap_or("").trim();
+                      if !v.is_empty() && !p.is_empty() {
+                        all_versions.push(json!({ "version": v, "path": p }));
+                      }
+                    }
+                  }
+                }
+                "java" => {
+                  if let Ok(p) = exec_output_limit(
+                    "bash",
+                    &["-lc", "if [ -x \"$HOME/.local/share/lumina/java/current/bin/java\" ]; then echo \"$HOME/.local/share/lumina/java/current/bin/java\"; else command -v java || true; fi"],
+                    CMD_TIMEOUT_SHORT,
+                  ).await {
+                    let p = p.trim();
+                    if !p.is_empty() {
+                      detected_path = Some(p.to_string());
+                    }
+                  }
+                  if let Ok(raw) = exec_output_limit(
+                    "bash",
+                    &["-lc", "if [ -d \"$HOME/.local/share/lumina/java\" ]; then for d in \"$HOME/.local/share/lumina/java\"/jdk-*; do [ -d \"$d\" ] || continue; b=$(basename \"$d\" | sed 's/^jdk-//'); printf '%s\\t%s\\n' \"$b\" \"$d/bin/java\"; done; fi"],
+                    CMD_TIMEOUT_SHORT,
+                  ).await {
+                    for line in raw.lines() {
+                      let mut parts = line.splitn(2, '\t');
+                      let v = parts.next().unwrap_or("").trim();
+                      let p = parts.next().unwrap_or("").trim();
+                      if !v.is_empty() && !p.is_empty() {
+                        all_versions.push(json!({ "version": v, "path": p }));
+                      }
+                    }
+                  }
+                }
+                "go" => {
+                  if let Ok(p) = exec_output_limit(
+                    "bash",
+                    &["-lc", "if [ -x \"$HOME/.local/share/lumina/go/bin/go\" ]; then echo \"$HOME/.local/share/lumina/go/bin/go\"; else command -v go || true; fi"],
+                    CMD_TIMEOUT_SHORT,
+                  ).await {
+                    let p = p.trim();
+                    if !p.is_empty() {
+                      detected_path = Some(p.to_string());
+                    }
+                  }
+                  if let Ok(raw) = exec_output_limit(
+                    "bash",
+                    &["-lc", "if [ -x \"$HOME/.local/share/lumina/go/bin/go\" ]; then \"$HOME/.local/share/lumina/go/bin/go\" version 2>/dev/null | awk '{print $3\"\\t\"ENVIRON[\"HOME\"]\"/.local/share/lumina/go/bin/go\"}'; fi"],
+                    CMD_TIMEOUT_SHORT,
+                  ).await {
+                    for line in raw.lines() {
+                      let mut parts = line.splitn(2, '\t');
+                      let v = parts.next().unwrap_or("").trim().trim_start_matches("go");
+                      let p = parts.next().unwrap_or("").trim();
+                      if !v.is_empty() && !p.is_empty() {
+                        all_versions.push(json!({ "version": v, "path": p }));
+                      }
+                    }
+                  }
+                }
+                _ => {}
+              }
+              runtimes.push(json!({
+                "id": id,
+                "name": name,
+                "installed": true,
+                "version": version,
+                "path": detected_path,
+                "allVersions": all_versions
+              }));
             }
           }
           Err(_) => runtimes.push(json!({ "id": id, "name": name, "installed": false })),
