@@ -733,7 +733,7 @@ async fn runtime_append_verify(runtime_id: &str, method: &str, requested_version
   let probe = match runtime_id {
     "node" => "([ -s \"$NVM_DIR/nvm.sh\" ] && . \"$NVM_DIR/nvm.sh\" && node --version 2>&1) || (command -v node >/dev/null 2>&1 && node --version 2>&1) || echo MISSING",
     "python" => "([ -d \"$HOME/.pyenv\" ] && export PYENV_ROOT=\"$HOME/.pyenv\" && export PATH=\"$PYENV_ROOT/bin:$PATH\" && eval \"$(pyenv init -)\" && python3 --version 2>&1) || (command -v python3 >/dev/null 2>&1 && python3 --version 2>&1) || echo MISSING",
-    "go" => "([ -x \"$HOME/.local/share/lumina/go/bin/go\" ] && \"$HOME/.local/share/lumina/go/bin/go\" version 2>&1) || (command -v go >/dev/null 2>&1 && go version 2>&1) || echo MISSING",
+    "go" => "([ -x \"$HOME/.local/share/lumina/go/current/bin/go\" ] && \"$HOME/.local/share/lumina/go/current/bin/go\" version 2>&1) || ([ -x \"$HOME/.local/share/lumina/go/bin/go\" ] && \"$HOME/.local/share/lumina/go/bin/go\" version 2>&1) || (command -v go >/dev/null 2>&1 && go version 2>&1) || echo MISSING",
     "rust" => "([ -x \"$HOME/.cargo/bin/rustc\" ] && \"$HOME/.cargo/bin/rustc\" --version 2>&1) || (command -v rustc >/dev/null 2>&1 && rustc --version 2>&1) || echo MISSING",
     "java" if method == "local" => "([ -x \"$HOME/.local/share/lumina/java/current/bin/java\" ] && \"$HOME/.local/share/lumina/java/current/bin/java\" -version 2>&1 | head -1) || echo MISSING",
     "java" => "command -v java >/dev/null 2>&1 && java -version 2>&1 | head -1 || echo MISSING",
@@ -852,13 +852,20 @@ async fn runtime_job_execute(
         } else if runtime_id == "go" && method == "local" {
           let v = lumina_first_version_token(&version).unwrap_or_else(|| "1.22.2".into());
           let cmd = format!(
-            "mkdir -p \"$HOME/.local/share/lumina/go\" \
-             && cd \"$HOME/.local/share/lumina/go\" \
-             && curl -L -o go{v}.tar.gz \"https://go.dev/dl/go{v}.linux-amd64.tar.gz\" \
-             && tar -xzf go{v}.tar.gz --strip-components=1 \
-             && rm go{v}.tar.gz \
+            "set -e \
+             && GO_BASE=\"$HOME/.local/share/lumina/go\" \
+             && GO_VER_DIR=\"$GO_BASE/{v}\" \
+             && mkdir -p \"$GO_BASE\" \
+             && if [ ! -x \"$GO_VER_DIR/bin/go\" ]; then \
+                  curl -L -o \"/tmp/lumina-go-{v}.tar.gz\" \"https://go.dev/dl/go{v}.linux-amd64.tar.gz\"; \
+                  rm -rf \"$GO_VER_DIR\"; \
+                  mkdir -p \"$GO_VER_DIR\"; \
+                  tar -xzf \"/tmp/lumina-go-{v}.tar.gz\" -C \"$GO_VER_DIR\" --strip-components=1; \
+                  rm -f \"/tmp/lumina-go-{v}.tar.gz\"; \
+                fi \
+             && ln -sfn \"$GO_VER_DIR\" \"$GO_BASE/current\" \
              && grep -q lumina-go \"$HOME/.bashrc\" \
-             || echo 'export PATH=\"$HOME/.local/share/lumina/go/bin:$PATH\"  # lumina-go' >> \"$HOME/.bashrc\"",
+             || echo 'export PATH=\"$HOME/.local/share/lumina/go/current/bin:$PATH\"  # lumina-go' >> \"$HOME/.bashrc\"",
             v = v
           );
           runtime_bash_user_step(&cmd, &mut logs).await.map_err(|e| format!("{}", e))
@@ -884,11 +891,16 @@ async fn runtime_job_execute(
                  mkdir -p "$LUMINA_JAVA_DIR"
                  TMP_JAVA="/tmp/lumina-java-{major}.tar.gz"
                  curl -fsSL "https://api.adoptium.net/v3/binary/latest/{major}/ga/linux/x64/jdk/hotspot/normal/eclipse" -o "$TMP_JAVA"
-                 TARGET_DIR="$LUMINA_JAVA_DIR/jdk-{major}"
-                 rm -rf "$TARGET_DIR" "$LUMINA_JAVA_DIR/current"
-                 mkdir -p "$TARGET_DIR"
-                 tar -xzf "$TMP_JAVA" -C "$TARGET_DIR" --strip-components=1
+                 TMP_EXTRACT="$LUMINA_JAVA_DIR/.tmp-jdk-{major}-$$"
+                 rm -rf "$TMP_EXTRACT"
+                 mkdir -p "$TMP_EXTRACT"
+                 tar -xzf "$TMP_JAVA" -C "$TMP_EXTRACT" --strip-components=1
                  rm -f "$TMP_JAVA"
+                 DETECTED_VER=$("$TMP_EXTRACT/bin/java" -version 2>&1 | awk -F\" '/version/ {{print $2; exit}}')
+                 [ -n "$DETECTED_VER" ] || DETECTED_VER="{major}"
+                 SAFE_VER=$(printf '%s' "$DETECTED_VER" | tr '/ ' '__')
+                 TARGET_DIR="$LUMINA_JAVA_DIR/jdk-$SAFE_VER"
+                 if [ ! -d "$TARGET_DIR" ]; then mv "$TMP_EXTRACT" "$TARGET_DIR"; else rm -rf "$TMP_EXTRACT"; fi
                  ln -s "$TARGET_DIR" "$LUMINA_JAVA_DIR/current"
                  for f in "$HOME/.bashrc" "$HOME/.bash_profile" "$HOME/.profile"; do
                    if [ -f "$f" ] && ! grep -q 'lumina-java' "$f"; then
@@ -932,7 +944,7 @@ async fn runtime_job_execute(
                   if let Err(e) = step_res {
                     Err(format!("[RUNTIME_INSTALL_FAILED] Failed to install {}: {}", pkg, e))
                   } else {
-                    if pkg_mgr == "dnf" {
+                  if pkg_mgr == "dnf" {
                       let alt_cmd = format!(
                         "JAVA_BIN=$(rpm -ql {pkg} 2>/dev/null | awk '/\\/bin\\/java$/'\"'\"'{{print; exit}}'\"'\"') ; \
                          JAVAC_BIN=$(rpm -ql {pkg} 2>/dev/null | awk '/\\/bin\\/javac$/'\"'\"'{{print; exit}}'\"'\"') ; \
@@ -940,7 +952,7 @@ async fn runtime_job_execute(
                          [ -n \"$JAVAC_BIN\" ] && alternatives --set javac \"$JAVAC_BIN\" || true",
                         pkg = pkg
                       );
-                      let _ = sudo_bash_install_step(&alt_cmd, password_opt, &mut logs, Some(app.clone()), Some(job_id.clone()), 85, 10).await;
+                    let _ = sudo_bash_install_step(&alt_cmd, password_opt, &mut logs, Some(app.clone()), Some(job_id.clone()), 85, 10).await;
                     }
                     Ok(())
                   }
@@ -2433,7 +2445,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
                 "go" => {
                   if let Ok(p) = exec_output_limit(
                     "bash",
-                    &["-lc", "if [ -x \"$HOME/.local/share/lumina/go/bin/go\" ]; then echo \"$HOME/.local/share/lumina/go/bin/go\"; else command -v go || true; fi"],
+                    &["-lc", "if [ -x \"$HOME/.local/share/lumina/go/current/bin/go\" ]; then echo \"$HOME/.local/share/lumina/go/current/bin/go\"; elif [ -x \"$HOME/.local/share/lumina/go/bin/go\" ]; then echo \"$HOME/.local/share/lumina/go/bin/go\"; else command -v go || true; fi"],
                     CMD_TIMEOUT_SHORT,
                   ).await {
                     let p = p.trim();
@@ -2443,7 +2455,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
                   }
                   if let Ok(raw) = exec_output_limit(
                     "bash",
-                    &["-lc", "if [ -x \"$HOME/.local/share/lumina/go/bin/go\" ]; then \"$HOME/.local/share/lumina/go/bin/go\" version 2>/dev/null | awk '{print $3\"\\t\"ENVIRON[\"HOME\"]\"/.local/share/lumina/go/bin/go\"}'; fi"],
+                    &["-lc", "if [ -d \"$HOME/.local/share/lumina/go\" ]; then for d in \"$HOME/.local/share/lumina/go\"/*; do [ -d \"$d\" ] || continue; b=$(basename \"$d\"); [ \"$b\" = \"current\" ] && continue; [ -x \"$d/bin/go\" ] || continue; ver=$($d/bin/go version 2>/dev/null | awk '{print $3}' | sed 's/^go//'); printf '%s\\t%s\\n' \"$ver\" \"$d/bin/go\"; done; fi"],
                     CMD_TIMEOUT_SHORT,
                   ).await {
                     for line in raw.lines() {

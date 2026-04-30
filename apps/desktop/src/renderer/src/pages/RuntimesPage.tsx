@@ -231,6 +231,10 @@ export function RuntimesPage(): ReactElement {
   }, [latestUpdateJob])
   const effectiveUpdateOutcome = updateOutcome ?? persistedUpdateOutcomes[selectedId]
   const displayedVersions = availableVersions
+  const systemHasRealVersionChoice = useMemo(
+    () => !(installMethod === 'system' && displayedVersions.length === 1 && /system \(repo default\)|local installer \(recommended\)/i.test(displayedVersions[0] || '')),
+    [installMethod, displayedVersions],
+  )
 
   const suggestVerifyCmd = RUNTIME_VERIFY_CMD[selectedId] ?? `${selectedId} --version`
   const lastJobTail = activeJob?.logTail ?? []
@@ -614,7 +618,7 @@ export function RuntimesPage(): ReactElement {
 
                         <div className="hp-card" style={{ marginBottom: 20 }}>
                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, gap: 12 }}>
-                             <div style={{ fontWeight: 600 }}>Target Version</div>
+                             <div style={{ fontWeight: 600 }}>{installMethod === 'system' && !systemHasRealVersionChoice ? 'Repository Track' : 'Target Version'}</div>
                              <button
                                type="button"
                                className="hp-btn-icon"
@@ -644,7 +648,7 @@ export function RuntimesPage(): ReactElement {
                              className="hp-input" 
                              style={{ width: '100%', opacity: versionsLoading && displayedVersions.length === 0 ? 0.6 : 1 }} 
                              value={selectedVersion} 
-                             disabled={versionsLoading && displayedVersions.length === 0}
+                             disabled={(versionsLoading && displayedVersions.length === 0) || (installMethod === 'system' && !systemHasRealVersionChoice)}
                              onChange={(e) => setSelectedVersion(e.target.value)}
                            >
                              {displayedVersions.map(v => <option key={v} value={v}>{v}</option>)}
