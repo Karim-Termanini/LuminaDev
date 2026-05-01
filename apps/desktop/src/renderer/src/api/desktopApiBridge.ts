@@ -52,6 +52,7 @@ function createTauriDhApi(): DhApi {
     gitRecentList: () => tauriInvoke(IPC.gitRecentList),
     gitRecentAdd: (payload) => tauriInvoke(IPC.gitRecentAdd, payload),
     gitConfigSet: (payload) => tauriInvoke(IPC.gitConfigSet, payload),
+    gitConfigSetKey: (payload) => tauriInvoke(IPC.gitConfigSetKey, payload),
     gitConfigList: (payload) => tauriInvoke(IPC.gitConfigList, payload),
     sshGenerate: (payload) => tauriInvoke(IPC.sshGenerate, payload),
     sshGetPub: (payload) => tauriInvoke(IPC.sshGetPub, payload),

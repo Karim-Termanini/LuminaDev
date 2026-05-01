@@ -53,6 +53,7 @@ declare global {
       gitRecentList: () => Promise<{ ok: boolean; repos: import('@linux-dev-home/shared').GitRepoEntry[]; error?: string }>
       gitRecentAdd: (payload: { path: string }) => Promise<{ ok: boolean; error?: string }>
       gitConfigSet: (payload: { name: string; email: string; defaultBranch?: string; defaultEditor?: string; target: 'sandbox'|'host' }) => Promise<{ ok: boolean; error?: string }>
+      gitConfigSetKey: (payload: { key: string; value?: string }) => Promise<{ ok: boolean; error?: string }>
       gitConfigList: (payload: { target: 'sandbox'|'host' }) => Promise<{ ok: boolean; rows: Array<{ key: string; value: string }>; error?: string }>
       sshGenerate: (payload: { target: 'sandbox'|'host'; email?: string }) => Promise<{ ok: boolean; error?: string }>
       sshGetPub: (payload: { target: 'sandbox'|'host' }) => Promise<{ ok: boolean; pub: string; fingerprint: string; error?: string }>

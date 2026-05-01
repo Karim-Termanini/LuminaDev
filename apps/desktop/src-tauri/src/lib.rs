@@ -2846,6 +2846,32 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
         json!({ "ok": false, "error": format!("[GIT_CONFIG_SET_FAILED] {}", err.trim()) })
       }
     }
+    "dh:git:config:set-key" => {
+      let key = body.get("key").and_then(|v| v.as_str()).unwrap_or_default();
+      let value = body.get("value").and_then(|v| v.as_str());
+      const ALLOWED: &[&str] = &[
+        "pull.rebase", "fetch.prune", "fetch.prunetags",
+        "commit.gpgsign", "user.signingkey", "gpg.format",
+        "credential.helper",
+        "core.autocrlf", "core.eol", "core.fscache", "core.preloadindex",
+        "core.longpaths", "core.ignorecase", "core.symlinks",
+        "branch.autosetuprebase", "merge.ff", "rebase.autostash",
+        "gc.auto", "pack.threads", "http.sslverify",
+        "user.name", "user.email", "init.defaultbranch", "core.editor",
+      ];
+      if !ALLOWED.contains(&key) {
+        return Ok(json!({ "ok": false, "error": format!("[GIT_CONFIG_KEY_DENIED] Key '{}' is not permitted.", key) }));
+      }
+      let result = match value {
+        Some(v) => exec_output("git", &["config", "--global", key, v]).await,
+        None => exec_output("git", &["config", "--global", "--unset", key]).await,
+      };
+      match result {
+        Ok(_) | Err(_) if value.is_none() => json!({ "ok": true }),
+        Ok(_) => json!({ "ok": true }),
+        Err(e) => json!({ "ok": false, "error": format!("[GIT_CONFIG_SET_FAILED] {}", e.trim()) }),
+      }
+    },
     "dh:git:config:list" => match exec_output("git", &["config", "--global", "--list"]).await {
       Ok(out) => {
         let rows: Vec<Value> = out
