@@ -4,7 +4,9 @@ import { humanizeDockerError } from './dockerError'
 describe('humanizeDockerError', () => {
   it('maps stable docker error prefixes to user-safe messages', () => {
     expect(humanizeDockerError('[DOCKER_UNAVAILABLE] cannot connect to docker daemon')).toContain('Docker daemon/socket unavailable')
+    expect(humanizeDockerError('[DOCKER_UNAVAILABLE] cannot connect to docker daemon')).toContain('/var/run/docker.sock')
     expect(humanizeDockerError('[DOCKER_PERMISSION_DENIED] permission denied')).toContain('Docker permission denied')
+    expect(humanizeDockerError('[DOCKER_PERMISSION_DENIED] permission denied')).toContain('flatpak override')
     expect(humanizeDockerError('[DOCKER_NOT_FOUND] no such container')).toContain('not found')
     expect(humanizeDockerError('[DOCKER_CONFLICT] already in use')).toContain('Docker conflict')
     expect(humanizeDockerError('[DOCKER_TIMEOUT] request timed out')).toContain('timed out')

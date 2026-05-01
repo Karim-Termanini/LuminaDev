@@ -83,16 +83,21 @@ Progress notes (2026-05-01):
 Test native + Flatpak on: **Ubuntu/Pop!OS**, **Fedora**, **Arch Linux** (VM if needed).
 
 Focus areas:
-- [ ] Docker socket inside Flatpak
+- [x] Docker socket inside Flatpak (user-facing guidance hardened)
 - [ ] Runtime installation (especially Java on Fedora)
 - [ ] Monitor metrics (`/proc` access in Flatpak)
-- [ ] Terminal integration
+- [x] Terminal integration (fallback guidance hardened for Flatpak)
 
 Bug fixes priority (see Known Bugs table below):
 - [x] Bug #5 — `riskyOpenPorts?.length` crash → **FIXED**
 - [x] Bug #7 — `uninstallPreview` fires on every mode toggle → **FIXED**
 - [x] Bug #2 — `installedFeatures` refreshed post-install (Docker wizard)
 - [x] Bug #4 — Docker Hub official-image links normalized (`library/*` + bare names)
+
+Progress notes (2026-05-01, follow-up):
+- Hardened Flatpak Docker-socket guidance in renderer error contracts: `[DOCKER_UNAVAILABLE]` and `[DOCKER_PERMISSION_DENIED]` now append explicit `flatpak override` instructions for `/var/run/docker.sock` + `session-bus`.
+- Updated `EnvironmentBanner` Docker/Flatpak docs link to the current LuminaDev repository path.
+- Hardened terminal failure fallback copy to include Flatpak PTY focus guidance alongside external terminal fallback.
 
 ### Days 8–9 — Polish + Documentation
 
