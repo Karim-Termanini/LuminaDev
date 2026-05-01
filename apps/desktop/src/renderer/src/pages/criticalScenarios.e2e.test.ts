@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { humanizeDockerError } from './dockerError'
 import {
+  DOCKER_FLATPAK_SOCKET_HINT,
   SSH_FLATPAK_HINT,
   TERMINAL_OPEN_EXTERNAL_HINT,
   TERMINAL_PTY_HINT,
@@ -11,6 +12,8 @@ describe('critical user-facing scenarios (e2e-lite)', () => {
   it('docker action failure maps to actionable message', () => {
     const msg = humanizeDockerError('[DOCKER_UNAVAILABLE] daemon socket not reachable')
     expect(msg).toContain('Docker daemon/socket unavailable')
+    expect(msg).toContain('/var/run/docker.sock')
+    expect(DOCKER_FLATPAK_SOCKET_HINT).toContain('session-bus')
   })
 
   it('ssh page contains flatpak permission guidance', () => {
