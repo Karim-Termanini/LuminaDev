@@ -104,10 +104,15 @@ Progress notes (2026-05-01, follow-up):
 
 ### Days 8–9 — Polish + Documentation
 
-- [ ] Fix UI bugs found during cross-distro testing
-- [ ] Update `README.md`: "Current Status" + "Known Limitations" sections
-- [ ] Write basic `CONTRIBUTING.md`
-- [ ] Update this file to reflect reality
+- [x] Fix UI bugs found during cross-distro testing
+- [x] Update `README.md`: "Current Status" + "Known Limitations" sections
+- [x] Write basic `CONTRIBUTING.md`
+- [x] Update this file to reflect reality
+
+Progress notes (2026-05-01, docs pass):
+- README now uses explicit `Current Status` and `Known Limitations` headings and documents the `lib.rs` monolith as a maintenance follow-up.
+- Added root `CONTRIBUTING.md` with setup, quality-gate commands, commit/PR rules, and Flatpak boundary references.
+- Cross-distro/UI bug loop includes fixed Docker wizard refresh, Docker Hub official-link normalization, and Flatpak-specific fallback guidance hardening.
 
 ### Day 10 — Internal Release
 
