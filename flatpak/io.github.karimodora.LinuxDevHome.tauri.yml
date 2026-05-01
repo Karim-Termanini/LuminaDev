@@ -30,14 +30,15 @@ modules:
       append-path: /usr/lib/sdk/rust-stable/bin:/usr/lib/sdk/node20/bin
       env:
         NPM_CONFIG_LOGLEVEL: info
+      build-args:
+        - --share=network
     sources:
       - type: dir
         path: ..
     build-commands:
-      - corepack enable && corepack prepare pnpm@9.14.2 --activate
-      - pnpm install --frozen-lockfile
-      - pnpm --filter @linux-dev-home/shared build
-      - pnpm --filter desktop build:web
+      - npx -y pnpm@9.14.2 install --frozen-lockfile
+      - npx -y pnpm@9.14.2 --filter @linux-dev-home/shared build
+      - npx -y pnpm@9.14.2 --filter desktop build:web
       - (cd apps/desktop/src-tauri && cargo build --release)
       - install -Dm755 apps/desktop/src-tauri/target/release/lumina-dev /app/bin/linux-dev-home
       - install -Dm644 data/io.github.karimodora.LinuxDevHome.desktop /app/share/applications/io.github.karimodora.LinuxDevHome.desktop
