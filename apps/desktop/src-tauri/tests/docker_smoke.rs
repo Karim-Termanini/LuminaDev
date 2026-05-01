@@ -36,6 +36,10 @@ fn docker_version_smoke() {
     eprintln!("Skipping test: docker CLI not available on PATH");
     return;
   }
+  if !docker_daemon_available() {
+    eprintln!("Skipping test: docker daemon is not running");
+    return;
+  }
 
   let Some(output) = docker_cmd(&["version"]) else {
     eprintln!("Skipping test: docker CLI not available on PATH");
