@@ -144,7 +144,7 @@ export const MaintenanceStateStoreSchema = z.object({
 })
 
 /** Keys with typed payloads persisted under userData (`store_<key>.json`). */
-export const StoreKeySchema = z.enum(['custom_profiles', 'wizard_state', 'ssh_bookmarks', 'maintenance_state'])
+export const StoreKeySchema = z.enum(['custom_profiles', 'wizard_state', 'ssh_bookmarks', 'maintenance_state', 'active_profile'])
 
 export const StoreGetRequestSchema = z.object({
   key: StoreKeySchema,
@@ -172,6 +172,10 @@ export const StoreSetRequestSchema = z.discriminatedUnion('key', [
   z.object({
     key: z.literal('maintenance_state'),
     data: MaintenanceStateStoreSchema,
+  }),
+  z.object({
+    key: z.literal('active_profile'),
+    data: z.string().min(1).max(128),
   }),
 ])
 export const ComposeUpRequestSchema = z.object({

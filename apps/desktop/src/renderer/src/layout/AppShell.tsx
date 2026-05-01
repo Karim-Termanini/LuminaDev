@@ -109,16 +109,22 @@ export function AppShell({ children }: { children: ReactNode }): ReactElement {
               e.preventDefault()
               void window.dh.openExternal('https://github.com/')
             }}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              color: 'var(--text-muted)',
-              fontSize: 13,
-            }}
+            style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-muted)', fontSize: 13 }}
           >
             <span className="codicon codicon-book" aria-hidden />
             Docs
+          </a>
+          <a
+            href="#"
+            onClick={(e) => {
+              e.preventDefault()
+              void window.dh.storeSet({ key: 'wizard_state', data: { completed: false, showOnStartup: true } })
+                .then(() => window.location.reload())
+            }}
+            style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-muted)', fontSize: 13 }}
+          >
+            <span className="codicon codicon-wand" aria-hidden />
+            Setup Wizard
           </a>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6 }}>
             <span
