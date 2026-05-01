@@ -115,8 +115,8 @@ Progress notes (2026-05-01, docs pass):
 
 ### Day 10 — Internal Release
 
-- [ ] Tag: `v0.2.0-alpha`
-- [ ] GitHub Release (draft): AppImage if easy, Flatpak bundle if successful
+- [x] Tag: `v0.2.0-alpha`
+- [x] GitHub Release (draft): AppImage if easy, Flatpak bundle if successful
 - [x] Clear install instructions + Known Issues list in release notes (draft: `docs/RELEASE_NOTES_v0.2.0-alpha.md`)
 
 ---
