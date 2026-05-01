@@ -10,6 +10,12 @@ Thanks for contributing.
 pnpm install
 ```
 
+### 🏗️ Rust backend modularization (Tauri)
+
+- **Prefer new modules over growing `lib.rs`:** Put new behavior in focused files under `apps/desktop/src-tauri/src/` (for example `runtime_jobs.rs`, `runtime_verify.rs`) and keep `lib.rs` mostly wiring (`mod …`, `use …`, dispatch).
+- **Small glue in `lib.rs` is OK:** Tiny helpers that only exist to connect IPC to modules are fine; avoid pasting large feature bodies into `lib.rs`.
+- **Goal:** keep `lib.rs` readable as an entry point, not as an everything-file.
+
 2. Run local quality gates before opening a PR:
 
 ```bash
