@@ -69,6 +69,11 @@ export const HostExecRequestSchema = z.object({
     'nvidia_smi_short',
     'flatpak_spawn_echo',
     'docker_install_step',
+    /** Fixed whitelisted host probes; output shown in-app (Maintenance runbook). */
+    'maintenance_docker_system_df',
+    'maintenance_docker_ps_table',
+    'maintenance_journalctl_docker',
+    'maintenance_du_cache_tail',
   ] as const),
   unit: z.string().max(128).optional(),
   distro: z.enum(['ubuntu', 'fedora', 'arch']).optional(),

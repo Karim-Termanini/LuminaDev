@@ -22,7 +22,7 @@ Status legend:
 | `/profiles` | stub | Profile productization flow is present but still mostly scaffolding/import-first UX. |
 | `/terminal` | partial | Embedded terminal works; host/sandbox differences still affect behavior. |
 | `/runtimes` | partial | Status/version/deps/uninstall preview are live; install/update/remove backend is in active hardening. |
-| `/maintenance` | partial | Page is functional for core checks and cleanup, but includes checklist-style/product-phase scaffolding. |
+| `/maintenance` | partial | Guardian scoring and diagnostics IPC are real; Integrity includes dismissible/auto-clearing status and **in-app** host probes (Docker df/ps, journalctl, cache `du`) via whitelisted `hostExec`—no clipboard-to-terminal runbook. Compose health, cleanup, bundles, tasks, and job runner work; no arbitrary host shell or full remediation. |
 
 ## Update Rule
 

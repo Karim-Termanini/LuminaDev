@@ -171,6 +171,17 @@ async fn runtime_bash_user_step(
   }
 }
 
+/// Bound text returned from maintenance host probes (UTF-8 safe).
+fn truncate_probe_output(s: &str) -> String {
+    const MAX_CHARS: usize = 48_000;
+    let count = s.chars().count();
+    if count <= MAX_CHARS {
+        return s.to_string();
+    }
+    let head: String = s.chars().take(MAX_CHARS).collect();
+    format!("{head}\n… (output truncated)")
+}
+
 async fn exec_output_limit(cmd: &str, args: &[&str], limit: Duration) -> Result<String, String> {
   let fut = async {
     let output = Command::new(cmd)
@@ -4130,6 +4141,81 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
             }
           }
         }
+        "maintenance_docker_system_df" => match exec_output_limit(
+          "docker",
+          &["system", "df"],
+          CMD_TIMEOUT_DEFAULT,
+        )
+        .await
+        {
+          Ok(out) => json!({ "ok": true, "result": truncate_probe_output(&out) }),
+          Err(e) => json!({ "ok": false, "result": Value::Null, "error": format!("[HOST_EXEC_FAILED] {}", e) }),
+        },
+        "maintenance_docker_ps_table" => match exec_output_limit(
+          "docker",
+          &[
+            "ps",
+            "--format",
+            "table {{.Names}}\t{{.Status}}\t{{.RunningFor}}",
+          ],
+          CMD_TIMEOUT_DEFAULT,
+        )
+        .await
+        {
+          Ok(out) => json!({ "ok": true, "result": truncate_probe_output(&out) }),
+          Err(e) => json!({ "ok": false, "result": Value::Null, "error": format!("[HOST_EXEC_FAILED] {}", e) }),
+        },
+        "maintenance_journalctl_docker" => {
+          match exec_result_limit(
+            "journalctl",
+            &[
+              "-u",
+              "docker",
+              "--since",
+              "2 hours ago",
+              "--no-pager",
+              "-n",
+              "800",
+            ],
+            CMD_TIMEOUT_LONG,
+          )
+          .await
+          {
+            Ok((stdout, stderr)) => {
+              let mut out = stdout;
+              if !stderr.trim().is_empty() {
+                if !out.trim().is_empty() {
+                  out.push_str("\n--- stderr ---\n");
+                }
+                out.push_str(&stderr);
+              }
+              json!({ "ok": true, "result": truncate_probe_output(out.trim()) })
+            }
+            Err(e) => json!({ "ok": false, "result": Value::Null, "error": format!("[HOST_EXEC_FAILED] {}", e) }),
+          }
+        }
+        "maintenance_du_cache_tail" => match std::env::var("HOME") {
+          Ok(home) if !home.trim().is_empty() => {
+            if home.contains('\'') || home.contains('\n') || home.contains('\r') {
+              json!({ "ok": false, "result": Value::Null, "error": "[HOST_EXEC_INVALID] HOME path not supported." })
+            } else {
+              let cache = format!("{}/.cache", home.trim_end_matches('/'));
+              if cache.contains('\'') {
+                json!({ "ok": false, "result": Value::Null, "error": "[HOST_EXEC_INVALID] cache path not supported." })
+              } else {
+                let script = format!(
+                  "if [ -d '{}' ]; then du -sh '{}'/* 2>/dev/null | sort -h | tail -n 25; else echo '(no ~/.cache directory)'; fi",
+                  cache, cache
+                );
+                match exec_output_limit("bash", &["-lc", &script], CMD_TIMEOUT_LONG).await {
+                  Ok(out) => json!({ "ok": true, "result": truncate_probe_output(&out) }),
+                  Err(e) => json!({ "ok": false, "result": Value::Null, "error": format!("[HOST_EXEC_FAILED] {}", e) }),
+                }
+              }
+            }
+          }
+          _ => json!({ "ok": false, "result": Value::Null, "error": "[HOST_EXEC_INVALID] HOME unset." }),
+        },
         _ => json!({ "ok": false, "result": Value::Null, "error": "[HOST_EXEC_NOT_ALLOWED] command not allowed" }),
       }
     },
