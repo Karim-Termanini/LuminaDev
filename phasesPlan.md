@@ -94,7 +94,6 @@ Bug fixes priority (see Known Bugs table below):
 - [x] Bug #7 — `uninstallPreview` fires on every mode toggle → **FIXED**
 - [x] Bug #2 — `installedFeatures` refreshed post-install (Docker wizard)
 - [x] Bug #4 — Docker Hub official-image links normalized (`library/*` + bare names)
-
 Progress notes (2026-05-01, follow-up):
 - Hardened Flatpak Docker-socket guidance in renderer error contracts: `[DOCKER_UNAVAILABLE]` and `[DOCKER_PERMISSION_DENIED]` now append explicit `flatpak override` instructions for `/var/run/docker.sock` + `session-bus`.
 - Updated `EnvironmentBanner` Docker/Flatpak docs link to the current LuminaDev repository path.
