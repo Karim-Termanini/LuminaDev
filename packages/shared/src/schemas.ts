@@ -255,3 +255,13 @@ export type StoreGetRequest = z.infer<typeof StoreGetRequestSchema>
 export type StoreSetRequest = z.infer<typeof StoreSetRequestSchema>
 export type WizardStateStore = z.infer<typeof WizardStateStoreSchema>
 export type SshBookmark = { id: string; name: string; user: string; host: string; port: number }
+
+/** Normalize a persisted `active_profile` value: canonical enum or legacy aliases → ComposeProfile | null. */
+export function parseStoredActiveProfile(data: unknown): ComposeProfile | null {
+  if (typeof data !== 'string') return null
+  const val = data.trim()
+  if (val === 'minimal') return 'empty'
+  if (val === 'desktop-qt') return 'desktop-gui'
+  const parsed = ComposeProfileSchema.safeParse(val)
+  return parsed.success ? parsed.data : null
+}
