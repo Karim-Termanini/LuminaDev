@@ -2,6 +2,7 @@ import {
   type ComposeProfile,
   type ContainerRow,
   type HostMetricsResponse,
+  parseStoredActiveProfile,
 } from '@linux-dev-home/shared'
 import type { CSSProperties, ReactElement } from 'react'
 import { useCallback, useEffect, useState } from 'react'
@@ -18,7 +19,7 @@ export function DashboardMainPage(): ReactElement {
   const [snap, setSnap] = useState<HostMetricsResponse | null>(null)
   const [metricsError, setMetricsError] = useState<string | null>(null)
   const [composeMsg, setComposeMsg] = useState<string | null>(null)
-  const [activeProfile, setActiveProfile] = useState<string | null>(null)
+  const [activeProfile, setActiveProfile] = useState<ComposeProfile | null>(null)
 
   const refresh = useCallback(async () => {
     try {
@@ -40,6 +41,15 @@ export function DashboardMainPage(): ReactElement {
     } catch (e) {
       setMetricsError(e instanceof Error ? e.message : String(e))
     }
+    try {
+      const ap = (await window.dh.storeGet({ key: 'active_profile' })) as {
+        ok: boolean
+        data?: unknown
+      }
+      setActiveProfile(ap.ok ? parseStoredActiveProfile(ap.data) : null)
+    } catch {
+      /* keep last known */
+    }
   }, [])
 
   useEffect(() => {
@@ -47,12 +57,6 @@ export function DashboardMainPage(): ReactElement {
     const id = setInterval(() => void refresh(), 4000)
     return () => clearInterval(id)
   }, [refresh])
-
-  useEffect(() => {
-    void window.dh.storeGet({ key: 'active_profile' })
-      .then((res) => { if (res.ok && typeof res.data === 'string') setActiveProfile(res.data) })
-      .catch(() => { /* best effort */ })
-  }, [])
 
   async function initProfile(profile: ComposeProfile): Promise<void> {
     setComposeMsg(`Starting ${profile}…`)

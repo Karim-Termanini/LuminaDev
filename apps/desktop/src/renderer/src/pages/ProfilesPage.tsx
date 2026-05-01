@@ -1,10 +1,15 @@
-import { CustomProfilesStoreSchema, type CustomProfileEntry } from '@linux-dev-home/shared'
+import {
+  CustomProfilesStoreSchema,
+  type ComposeProfile,
+  type CustomProfileEntry,
+  parseStoredActiveProfile,
+} from '@linux-dev-home/shared'
 import type { ReactElement } from 'react'
 import { useEffect, useMemo, useState } from 'react'
 
 export function ProfilesPage(): ReactElement {
   const [profiles, setProfiles] = useState<CustomProfileEntry[]>([])
-  const [activeProfile, setActiveProfile] = useState<string | null>(null)
+  const [activeProfile, setActiveProfile] = useState<ComposeProfile | null>(null)
   const [importText, setImportText] = useState('')
   const [status, setStatus] = useState<string | null>(null)
 
@@ -22,7 +27,7 @@ export function ProfilesPage(): ReactElement {
     }
     try {
       const ar = (await window.dh.storeGet({ key: 'active_profile' })) as { ok: boolean; data: unknown }
-      if (ar.ok && typeof ar.data === 'string') setActiveProfile(ar.data)
+      if (ar.ok) setActiveProfile(parseStoredActiveProfile(ar.data))
     } catch { /* ignore */ }
   }
 
@@ -127,7 +132,10 @@ export function ProfilesPage(): ReactElement {
       <section style={card}>
         <div style={{ fontWeight: 600, marginBottom: 10 }}>Custom profiles</div>
         {profiles.length === 0 ? (
-          <div style={{ color: 'var(--text-muted)' }}>No custom profiles yet. Create one from the Dashboard or import JSON below.</div>
+          <div style={{ color: 'var(--text-muted)' }}>
+            No custom profiles yet. Import JSON below or pick a preset in the Setup Wizard; the dashboard
+            highlights the active compose preset only.
+          </div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(280px,1fr))', gap: 10 }}>
             {profiles.map((p, i) => {
