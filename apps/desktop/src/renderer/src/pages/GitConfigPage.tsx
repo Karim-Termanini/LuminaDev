@@ -350,6 +350,129 @@ function BehaviorToggle({ label, description, checked, onChange, disabled }: {
 
 // ─── Overview Section ─────────────────────────────────────────────────────────
 
+// ─── Git Doctor ───────────────────────────────────────────────────────────────
+
+type DoctorSeverity = 'critical' | 'warning' | 'info' | 'ok'
+type DoctorFinding = {
+  id: string
+  severity: DoctorSeverity
+  title: string
+  detail: string
+  fix?: { label: string; action: () => void }
+}
+
+function runDiagnostics(cfg: Map<string, string>, onSetKey: (k: string, v?: string) => Promise<void>): DoctorFinding[] {
+  const findings: DoctorFinding[] = []
+
+  // Identity
+  if (!cfg.get('user.name')?.trim())
+    findings.push({ id: 'no-name', severity: 'critical', title: 'No user name configured', detail: 'Every commit requires an author name. Set it in Identity.' })
+  if (!cfg.get('user.email')?.trim())
+    findings.push({ id: 'no-email', severity: 'critical', title: 'No email configured', detail: 'Git attaches email to every commit. Required for push to GitHub/GitLab.' })
+  else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cfg.get('user.email')!))
+    findings.push({ id: 'bad-email', severity: 'warning', title: 'Email format looks invalid', detail: `Current value: "${cfg.get('user.email')}"` })
+
+  // Default branch
+  if (!cfg.get('init.defaultbranch'))
+    findings.push({ id: 'no-branch', severity: 'warning', title: 'No default branch set', detail: 'New repos will use Git\'s built-in default (often "master"). Set to "main" for modern convention.', fix: { label: 'Set to main', action: () => void onSetKey('init.defaultbranch', 'main') } })
+
+  // Credential helper
+  const helper = cfg.get('credential.helper') ?? ''
+  if (!helper)
+    findings.push({ id: 'no-cred', severity: 'critical', title: 'No credential helper', detail: 'Git will prompt for password on every push/pull. Set a helper to cache credentials.', fix: { label: 'Use store (basic)', action: () => void onSetKey('credential.helper', 'store') } })
+  else if (/\bstore\b/.test(helper))
+    findings.push({ id: 'plaintext-cred', severity: 'warning', title: 'Credentials stored in plaintext', detail: 'credential.helper=store writes passwords to ~/.git-credentials unencrypted. Use libsecret or manager instead.' })
+
+  // SSL
+  if (cfg.get('http.sslverify') === 'false')
+    findings.push({ id: 'no-ssl', severity: 'critical', title: 'SSL verification disabled', detail: 'http.sslverify=false exposes connections to man-in-the-middle attacks.', fix: { label: 'Re-enable', action: () => void onSetKey('http.sslverify', 'true') } })
+
+  // Performance
+  if (!cfg.get('core.preloadindex'))
+    findings.push({ id: 'no-preload', severity: 'info', title: 'core.preloadindex not set', detail: 'Enables parallel stat calls during git status — faster on large repos.', fix: { label: 'Enable', action: () => void onSetKey('core.preloadindex', 'true') } })
+  if (!cfg.get('fetch.prune'))
+    findings.push({ id: 'no-prune', severity: 'info', title: 'fetch.prune not set', detail: 'Stale remote-tracking branches accumulate. Enable auto-prune on fetch.', fix: { label: 'Enable', action: () => void onSetKey('fetch.prune', 'true') } })
+
+  // Deprecated / dangerous
+  if (cfg.get('pull.ff') === 'only')
+    findings.push({ id: 'pull-ff-only', severity: 'info', title: 'pull.ff=only is set', detail: 'This prevents merge commits on pull but fails if remote has diverged. Consider pull.rebase=true instead.' })
+  if (cfg.has('credential.username'))
+    findings.push({ id: 'cred-username', severity: 'warning', title: 'credential.username in global config', detail: 'Storing a username globally can cause authentication issues across multiple accounts.' })
+
+  if (findings.length === 0)
+    findings.push({ id: 'all-ok', severity: 'ok', title: 'No issues found', detail: 'Git configuration looks healthy.' })
+
+  return findings
+}
+
+function GitDoctor({ cfg, onSetKey, onSection }: {
+  cfg: Map<string, string>
+  onSetKey: (k: string, v?: string) => Promise<void>
+  onSection: (s: Section) => void
+}): ReactElement {
+  const [scanned, setScanned] = useState(false)
+  const [findings, setFindings] = useState<DoctorFinding[]>([])
+
+  function scan(): void {
+    setFindings(runDiagnostics(cfg, onSetKey))
+    setScanned(true)
+  }
+
+  const severityColors: Record<DoctorSeverity, { bg: string; color: string; label: string }> = {
+    critical: { bg: '#fee2e2', color: '#991b1b', label: 'CRITICAL' },
+    warning:  { bg: '#fef9c3', color: '#854d0e', label: 'WARNING' },
+    info:     { bg: '#dbeafe', color: '#1e40af', label: 'INFO' },
+    ok:       { bg: '#dcfce7', color: '#166534', label: 'OK' },
+  }
+
+  const critCount = findings.filter(f => f.severity === 'critical').length
+  const warnCount = findings.filter(f => f.severity === 'warning').length
+
+  return (
+    <div className="hp-card">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <div>
+          <div className="hp-section-title" style={{ marginBottom: 2 }}>Git Doctor</div>
+          <div className="hp-muted" style={{ fontSize: 12 }}>
+            {scanned
+              ? critCount + warnCount === 0
+                ? 'No issues detected.'
+                : `${critCount} critical · ${warnCount} warnings`
+              : 'Scan your config for misconfigurations, security issues, and performance gaps.'}
+          </div>
+        </div>
+        <button type="button" className="hp-btn hp-btn-primary" onClick={scan}>
+          {scanned ? 'Re-scan' : 'Scan Configuration'}
+        </button>
+      </div>
+
+      {scanned && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+          {findings.map((f, i) => {
+            const c = severityColors[f.severity]
+            return (
+              <div key={f.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 0', borderBottom: i < findings.length - 1 ? '1px solid var(--border)' : undefined }}>
+                <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 3, background: c.bg, color: c.color, whiteSpace: 'nowrap', marginTop: 2 }}>
+                  {c.label}
+                </span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 600, fontSize: 13 }}>{f.title}</div>
+                  <div className="hp-muted" style={{ fontSize: 12, marginTop: 2 }}>{f.detail}</div>
+                </div>
+                {f.fix && (
+                  <button type="button" className="hp-btn" style={{ fontSize: 11, padding: '3px 10px', flexShrink: 0 }} onClick={() => { f.fix!.action(); setTimeout(scan, 400) }}>
+                    {f.fix.label}
+                  </button>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function OverviewSection({ cfg, onSection, onSetKey }: {
   cfg: Map<string, string>
   onSection: (s: Section) => void
@@ -431,6 +554,8 @@ function OverviewSection({ cfg, onSection, onSetKey }: {
           </div>
         </div>
       )}
+
+      <GitDoctor cfg={cfg} onSetKey={onSetKey} onSection={onSection} />
 
       <div className="hp-card">
         <div className="hp-section-title">Quick Actions</div>
