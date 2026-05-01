@@ -34,11 +34,11 @@ Progress notes (2026-05-01):
   - [x] `docker info`, `docker ps --all`, `docker version`
   - [x] Prune dry-run (images, volumes, build cache)
   - [x] Error case: Docker daemon not running
-- [ ] Integration tests:
+- [x] Integration tests:
   - [x] Job Runner with a long task (Rust-side command loop simulation)
   - [x] Streaming logs
   - [x] Cancellation
-- [ ] Add CI workflows (only if better than existing CIs):
+- [x] Add CI workflows (only if better than existing CIs):
   - [x] `ci.yml` — now runs Rust smoke tests (`docker_smoke`) + Job Runner tests before frontend/Tauri build on every PR/push
   - [x] `smoke-tests.yml` — Rust tests + Docker smoke + job runner
   - [x] `flatpak.yml` — Flatpak build + bundle + basic run test
@@ -117,7 +117,7 @@ Progress notes (2026-05-01, docs pass):
 
 - [ ] Tag: `v0.2.0-alpha`
 - [ ] GitHub Release (draft): AppImage if easy, Flatpak bundle if successful
-- [ ] Clear install instructions + Known Issues list in release notes
+- [x] Clear install instructions + Known Issues list in release notes (draft: `docs/RELEASE_NOTES_v0.2.0-alpha.md`)
 
 ---
 
