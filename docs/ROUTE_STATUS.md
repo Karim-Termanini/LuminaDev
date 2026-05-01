@@ -10,14 +10,14 @@ Status legend:
 
 | Route | Status | Notes |
 | --- | --- | --- |
-| `/dashboard` | partial | Preset grid reads `active_profile` (compose preset id) for highlight; Docker/metrics panes work; several profile cards are explicitly `PLANNED`/disabled. |
-| `/dashboard/widgets` | stub | Widget tips/placeholder page; not a full widget management surface yet. |
-| `/dashboard/kernels` | partial | Live host probes (GPU/services/security) but still a lightweight snapshot page. |
-| `/dashboard/logs` | partial | Reads job/compose log snippets; not a full observability/log platform. |
+| `/dashboard` | partial | 9 preset environment cards; active profile highlighted; slim container count + metrics strip with links to Docker and Monitor. Sub-pages (widgets/kernels/logs) are static stubs. |
+| `/dashboard/widgets` | stub | Static placeholder; no real widget management. |
+| `/dashboard/kernels` | stub | Static one-shot snapshot; no polling, no actions. |
+| `/dashboard/logs` | stub | Static log snippet display; no live streaming or filtering. |
 | `/system` | partial | Metrics and monitor data are live; some sections still bounded snapshots. |
 | `/docker` | live | Main Docker slice (list/actions/logs/images/volumes/networks/cleanup/remap) is functional with guardrails. |
 | `/ssh` | partial | Core SSH key/test/setup flows work; advanced transfer/remote UX still evolving. |
-| `/git-config` | live | Global git config list/set/validate flow is operational. |
+| `/git-config` | partial | Identity/behavior/security/inspector sections work via IPC; Git Doctor and backup/restore not yet implemented. |
 | `/registry` | partial | Search/tags/path actions work; broader registry/repo workflows remain minimal. |
 | `/profiles` | partial | CRUD + duplicate + export/import work; **Set Active** writes `active_profile` as the entry's `baseTemplate` (`ComposeProfile`). On-login actions and deeper preset/dashboard unification (e.g. auto compose from active) still evolving. |
 | `/terminal` | partial | Embedded terminal works; host/sandbox differences still affect behavior. |

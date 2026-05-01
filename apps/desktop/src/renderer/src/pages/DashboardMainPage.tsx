@@ -4,12 +4,11 @@ import {
   type HostMetricsResponse,
   parseStoredActiveProfile,
 } from '@linux-dev-home/shared'
-import type { CSSProperties, ReactElement } from 'react'
+import type { ReactElement } from 'react'
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { assertDockerOk } from './dockerContract'
-import { humanizeDockerError } from './dockerError'
 import { humanizeDashboardError } from './dashboardError'
+import { humanizeDockerError } from './dockerError'
 
 
 export function DashboardMainPage(): ReactElement {
@@ -69,7 +68,6 @@ export function DashboardMainPage(): ReactElement {
     void refresh()
   }
 
-  const rows = docker?.ok ? docker.rows.slice(0, 8) : []
   const m = snap?.metrics
 
   return (
@@ -215,158 +213,52 @@ export function DashboardMainPage(): ReactElement {
         />
       </div>
 
-      <div
+      <section
         style={{
-          display: 'grid',
-          gridTemplateColumns: '2fr 1fr',
-          gap: 16,
-          alignItems: 'stretch',
+          background: 'var(--bg-widget)',
+          border: '1px solid var(--border)',
+          borderRadius: 'var(--radius)',
+          padding: '12px 16px',
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: 24,
+          alignItems: 'center',
         }}
       >
-        <section
-          style={{
-            background: 'var(--bg-widget)',
-            border: '1px solid var(--border)',
-            borderRadius: 'var(--radius)',
-            padding: 16,
-          }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: 12,
-            }}
-          >
-            <div style={{ fontWeight: 600 }}>What&apos;s running</div>
-            <div className="mono" style={{ color: 'var(--text-muted)', fontSize: 12 }}>
-              {docker?.ok ? `${docker.rows.length} containers` : 'Docker offline'}
-            </div>
-          </div>
-          {!docker ? (
-            <div style={{ color: 'var(--text-muted)' }}>Loading Docker…</div>
-          ) : !docker.ok ? (
-            <div style={{ color: 'var(--orange)' }}>{docker.error}</div>
-          ) : rows.length === 0 ? (
-            <div style={{ color: 'var(--text-muted)' }}>No containers reported.</div>
-          ) : (
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-              <thead>
-                <tr style={{ color: 'var(--text-muted)', textAlign: 'left' }}>
-                  <th style={{ padding: '8px 4px' }}>Name</th>
-                  <th>Status</th>
-                  <th>Ports</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r) => (
-                  <tr key={r.id} style={{ borderTop: '1px solid var(--border)' }}>
-                    <td style={{ padding: '8px 4px' }}>
-                      <div style={{ fontWeight: 600 }}>{r.name}</div>
-                      <div className="mono" style={{ color: 'var(--text-muted)', fontSize: 11 }}>
-                        {r.image}
-                      </div>
-                    </td>
-                    <td>
-                      <StatusPill state={r.state} />
-                    </td>
-                    <td className="mono" style={{ fontSize: 12 }}>
-                      {r.ports}
-                    </td>
-                    <td style={{ textAlign: 'right' }}>
-                      <button
-                        type="button"
-                        style={tinyBtn}
-                        onClick={() => void dockerAction(r.id, 'restart')}
-                      >
-                        restart
-                      </button>
-                      <button
-                        type="button"
-                        style={tinyBtn}
-                        onClick={() => void dockerAction(r.id, 'stop')}
-                      >
-                        stop
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </section>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <section
-            style={{
-              background: 'var(--bg-widget)',
-              border: '1px solid var(--border)',
-              borderRadius: 'var(--radius)',
-              padding: 16,
-            }}
-          >
-            {metricsError ? (
-              <div style={{ color: 'var(--orange)', fontSize: 12 }}>{metricsError}</div>
-            ) : m ? (
-              <>
-                <MetricBar label="CPU" value={`${m.cpuUsagePercent}%`} pct={m.cpuUsagePercent} tone="purple" />
-                <MetricBar
-                  label="RAM"
-                  value={`${((m.totalMemMb - m.freeMemMb)/1024).toFixed(1)} / ${(m.totalMemMb/1024).toFixed(1)} GB`}
-                  pct={Math.min(100, Math.round(((m.totalMemMb - m.freeMemMb) / m.totalMemMb) * 100))}
-                  tone="orange"
-                />
-                <MetricBar
-                  label={`DISK (${m.diskTotalGb} GB)`}
-                  value={`${m.diskFreeGb} GB free`}
-                  pct={
-                    m.diskTotalGb > 0
-                      ? Math.min(100, Math.round(((m.diskTotalGb - m.diskFreeGb) / m.diskTotalGb) * 100))
-                      : 0
-                  }
-                  tone="blue"
-                />
-              </>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span className="codicon codicon-package" style={{ color: 'var(--text-muted)' }} aria-hidden />
+          <span style={{ fontSize: 13 }}>
+            {!docker ? '—' : !docker.ok ? (
+              <span style={{ color: 'var(--orange)' }}>Docker offline</span>
             ) : (
-              <div style={{ color: 'var(--text-muted)' }}>Collecting metrics…</div>
+              <><strong>{docker.rows.filter(r => r.state === 'running').length}</strong> running / {docker.rows.length} total</>
             )}
-          </section>
-          <section
-            style={{
-              background: 'var(--bg-widget)',
-              border: '1px solid var(--border)',
-              borderRadius: 'var(--radius)',
-              padding: 16,
-              position: 'relative',
-              overflow: 'hidden',
-            }}
-          >
-            <div className="codicon codicon-zap" style={{ color: 'var(--accent)', fontSize: 22 }} />
-            <div style={{ fontWeight: 600, marginTop: 8 }}>Update Available</div>
-            <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>
-              Check Flathub release notes when this app ships a stable bundle.
-            </p>
-            <button type="button" style={linkish} onClick={() => void window.dh.openExternal('https://flathub.org')}>
-              View on Flathub
-            </button>
-          </section>
+          </span>
+          <Link to="/docker" style={{ fontSize: 12, color: 'var(--accent)', marginLeft: 4 }}>Open Docker →</Link>
         </div>
-      </div>
+        {m && (
+          <>
+            <div style={{ fontSize: 13 }}>
+              <span style={{ color: 'var(--text-muted)' }}>CPU </span>
+              <strong style={{ color: m.cpuUsagePercent > 85 ? 'var(--red)' : m.cpuUsagePercent > 60 ? 'var(--yellow)' : 'var(--green)' }}>
+                {m.cpuUsagePercent.toFixed(0)}%
+              </strong>
+            </div>
+            <div style={{ fontSize: 13 }}>
+              <span style={{ color: 'var(--text-muted)' }}>RAM </span>
+              <strong>{((m.totalMemMb - m.freeMemMb) / 1024).toFixed(1)} / {(m.totalMemMb / 1024).toFixed(1)} GB</strong>
+            </div>
+            <div style={{ fontSize: 13 }}>
+              <span style={{ color: 'var(--text-muted)' }}>Disk </span>
+              <strong>{m.diskFreeGb} GB free</strong>
+            </div>
+            <Link to="/system" style={{ fontSize: 12, color: 'var(--accent)' }}>Full Monitor →</Link>
+          </>
+        )}
+      </section>
     </div>
   )
 
-  async function dockerAction(id: string, action: 'start' | 'stop' | 'restart'): Promise<void> {
-    if (!window.confirm(`${action} this container?`)) return
-    try {
-      const res = await window.dh.dockerAction({ id, action })
-      assertDockerOk(res, 'Container action failed.')
-      void refresh()
-    } catch (e) {
-      setComposeMsg(humanizeDockerError(e))
-    }
-  }
 }
 
 function ProfileCard(props: {
@@ -448,87 +340,3 @@ function ProfileCard(props: {
 }
 
 
-function MetricBar(props: {
-  label: string
-  value: string
-  pct: number
-  tone: 'purple' | 'orange' | 'blue'
-}): ReactElement {
-  const colors = {
-    purple: 'var(--accent)',
-    orange: 'var(--orange)',
-    blue: 'var(--blue)',
-  } as const
-  return (
-    <div style={{ marginBottom: 12 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-        <span>{props.label}</span>
-        <span className="mono">{props.value}</span>
-      </div>
-      <div
-        style={{
-          marginTop: 6,
-          height: 8,
-          borderRadius: 999,
-          background: '#2a2a2a',
-          overflow: 'hidden',
-        }}
-      >
-        <div
-          style={{
-            height: '100%',
-            width: `${Math.min(100, props.pct)}%`,
-            background: colors[props.tone],
-            transition: 'width 0.3s ease',
-          }}
-        />
-      </div>
-    </div>
-  )
-}
-
-function StatusPill({ state }: { state: string }): ReactElement {
-  const up = state === 'running'
-  return (
-    <span
-      className="mono"
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 6,
-        fontSize: 12,
-        color: up ? 'var(--green)' : 'var(--yellow)',
-      }}
-    >
-      <span
-        style={{
-          width: 8,
-          height: 8,
-          borderRadius: 999,
-          background: up ? 'var(--green)' : 'var(--yellow)',
-        }}
-      />
-      {state.toUpperCase()}
-    </span>
-  )
-}
-
-const tinyBtn: CSSProperties = {
-  background: 'var(--bg-input)',
-  border: '1px solid var(--border)',
-  color: 'var(--text)',
-  borderRadius: 4,
-  padding: '4px 8px',
-  marginLeft: 6,
-  fontSize: 11,
-  cursor: 'pointer',
-}
-
-const linkish: CSSProperties = {
-  background: 'none',
-  border: 'none',
-  color: 'var(--accent)',
-  cursor: 'pointer',
-  padding: 0,
-  fontWeight: 600,
-}

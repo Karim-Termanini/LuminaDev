@@ -32,7 +32,7 @@ pub(crate) async fn runtime_job_execute(
       let st = app.state::<AppState>();
       let mut jobs = st.jobs.lock().await;
       if let Some(j) = jobs.iter_mut().find(|j| j.get("id").and_then(|v| v.as_str()) == Some(job_id.as_str())) {
-        j["progress"] = json!(30);
+        j["progress"] = json!(5);
       }
     }
     let result: Result<(), String> = match kind.as_str() {
@@ -51,7 +51,7 @@ pub(crate) async fn runtime_job_execute(
                fi"#,
             safe_tc = safe_tc
           );
-          runtime_bash_user_step(&cmd, &mut logs, Some(app.clone()), Some(job_id.clone()), 30, 65).await.map_err(|e| format!("{}", e))
+          runtime_bash_user_step(&cmd, &mut logs, Some(app.clone()), Some(job_id.clone()), 5, 90).await.map_err(|e| format!("{}", e))
         } else if runtime_id == "node" && method == "local" {
           let v = lumina_first_version_token(&version).unwrap_or_else(|| "lts/*".into());
           // nvm refuses to operate when ~/.npmrc pins npm prefix/globalconfig; strip those keys (with backup).
@@ -73,7 +73,7 @@ pub(crate) async fn runtime_job_execute(
                nvm use --delete-prefix {v}"#,
             v = v
           );
-          runtime_bash_user_step(&cmd, &mut logs, Some(app.clone()), Some(job_id.clone()), 30, 65).await.map_err(|e| format!("{}", e))
+          runtime_bash_user_step(&cmd, &mut logs, Some(app.clone()), Some(job_id.clone()), 5, 90).await.map_err(|e| format!("{}", e))
         } else if runtime_id == "go" && method == "local" {
           let v = lumina_first_version_token(&version).unwrap_or_else(|| "1.22.2".into());
           let cmd = format!(
@@ -93,7 +93,7 @@ pub(crate) async fn runtime_job_execute(
              || echo 'export PATH=\"$HOME/.local/share/lumina/go/current/bin:$PATH\"  # lumina-go' >> \"$HOME/.bashrc\"",
             v = v
           );
-          runtime_bash_user_step(&cmd, &mut logs, Some(app.clone()), Some(job_id.clone()), 30, 65).await.map_err(|e| format!("{}", e))
+          runtime_bash_user_step(&cmd, &mut logs, Some(app.clone()), Some(job_id.clone()), 5, 90).await.map_err(|e| format!("{}", e))
         } else if runtime_id == "zig" && method == "local" {
           let mut v = lumina_first_version_token(&version).unwrap_or_else(|| "0.13.0".into());
           v = v.trim().trim_start_matches('v').trim().to_string();
@@ -120,7 +120,7 @@ pub(crate) async fn runtime_job_execute(
              || echo 'export PATH=\"$HOME/.local/share/lumina/zig/current:$PATH\"  # lumina-zig' >> \"$HOME/.bashrc\"",
             v = v
           );
-          runtime_bash_user_step(&cmd, &mut logs, Some(app.clone()), Some(job_id.clone()), 30, 65).await.map_err(|e| format!("{}", e))
+          runtime_bash_user_step(&cmd, &mut logs, Some(app.clone()), Some(job_id.clone()), 5, 90).await.map_err(|e| format!("{}", e))
         } else if runtime_id == "python" && method == "local" {
           if pkg_mgr == "dnf" {
             if let Some(pw) = password_opt.filter(|p| !p.is_empty()) {
@@ -145,7 +145,7 @@ pub(crate) async fn runtime_job_execute(
              && pyenv global {v}",
             v = v
           );
-          runtime_bash_user_step(&cmd, &mut logs, Some(app.clone()), Some(job_id.clone()), 30, 65).await.map_err(|e| format!("{}", e))
+          runtime_bash_user_step(&cmd, &mut logs, Some(app.clone()), Some(job_id.clone()), 5, 90).await.map_err(|e| format!("{}", e))
         } else if runtime_id == "java" {
           if method.trim() == "local" {
             let major = runtime_java_major(&version).unwrap_or(21);
@@ -176,7 +176,7 @@ pub(crate) async fn runtime_job_execute(
                  "$LUMINA_JAVA_DIR/current/bin/java" -version 2>&1 | head -1"#,
               major = major
             );
-            runtime_bash_user_step(&cmd, &mut logs, Some(app.clone()), Some(job_id.clone()), 30, 65).await.map_err(|e| format!("{}", e))
+            runtime_bash_user_step(&cmd, &mut logs, Some(app.clone()), Some(job_id.clone()), 5, 90).await.map_err(|e| format!("{}", e))
           } else {
             if pkg_mgr == "dnf" && runtime_java_major(&version) == Some(8) {
               Err("[RUNTIME_INSTALL_FAILED] Fedora repositories on this host do not provide java-1.8.0-openjdk-devel. Use Isolated Script (Local) for Java 8.".to_string())
@@ -239,13 +239,13 @@ pub(crate) async fn runtime_job_execute(
              || echo 'export PATH=\"$HOME/.dotnet:$HOME/.dotnet/tools:$PATH\"  # Microsoft .NET (lumina)' >> \"$HOME/.bashrc\"",
             ch = ch
           );
-          runtime_bash_user_step(&cmd, &mut logs, Some(app.clone()), Some(job_id.clone()), 30, 65).await.map_err(|e| format!("{}", e))
+          runtime_bash_user_step(&cmd, &mut logs, Some(app.clone()), Some(job_id.clone()), 5, 90).await.map_err(|e| format!("{}", e))
         } else if runtime_id == "bun" {
           let ver = lumina_first_version_token(&version).unwrap_or_default();
           let ver = ver.trim().trim_start_matches('v').to_string();
           if ver.is_empty() {
             logs.push("Installing Bun via official installer (latest)…".into());
-            runtime_bash_user_step("curl -fsSL https://bun.sh/install | bash", &mut logs, Some(app.clone()), Some(job_id.clone()), 30, 65)
+            runtime_bash_user_step("curl -fsSL https://bun.sh/install | bash", &mut logs, Some(app.clone()), Some(job_id.clone()), 5, 90)
               .await
               .map_err(|e| format!("{}", e))
           } else {
@@ -254,7 +254,7 @@ pub(crate) async fn runtime_job_execute(
               "curl -fsSL https://bun.sh/install | bash -s \"bun-v{}\"",
               ver.replace('"', "").replace('\'', "")
             );
-            runtime_bash_user_step(&cmd, &mut logs, Some(app.clone()), Some(job_id.clone()), 30, 65).await.map_err(|e| format!("{}", e))
+            runtime_bash_user_step(&cmd, &mut logs, Some(app.clone()), Some(job_id.clone()), 5, 90).await.map_err(|e| format!("{}", e))
           }
         } else if runtime_id == "dart" {
           let (channel, release) = lumina_dart_channel_release(&version);
@@ -288,7 +288,7 @@ pub(crate) async fn runtime_job_execute(
               channel = channel,
               rel = rel_safe
             );
-            runtime_bash_user_step(&cmd, &mut logs, Some(app.clone()), Some(job_id.clone()), 30, 65).await.map_err(|e| format!("{}", e))
+            runtime_bash_user_step(&cmd, &mut logs, Some(app.clone()), Some(job_id.clone()), 5, 90).await.map_err(|e| format!("{}", e))
           }
         } else if runtime_id == "flutter" {
           let has_snap = exec_output_limit("which", &["snap"], CMD_TIMEOUT_SHORT).await.is_ok();
@@ -321,7 +321,7 @@ pub(crate) async fn runtime_job_execute(
             "#,
               ch = flutter_ch
             );
-            runtime_bash_user_step(&cmd, &mut logs, Some(app.clone()), Some(job_id.clone()), 30, 65).await.map_err(|e| format!("{}", e))
+            runtime_bash_user_step(&cmd, &mut logs, Some(app.clone()), Some(job_id.clone()), 5, 90).await.map_err(|e| format!("{}", e))
           }
         } else if (runtime_id == "php" || runtime_id == "ruby" || runtime_id == "lua") && method == "local" {
           if runtime_id == "php" {
@@ -392,7 +392,7 @@ fi"#;
                  fi"#,
               spec = safe_spec
             );
-            runtime_bash_user_step(&cmd, &mut logs, Some(app.clone()), Some(job_id.clone()), 30, 65).await.map_err(|e| format!("{}", e))
+            runtime_bash_user_step(&cmd, &mut logs, Some(app.clone()), Some(job_id.clone()), 5, 90).await.map_err(|e| format!("{}", e))
           }
           }
         } else if runtime_id == "julia" {
@@ -440,7 +440,7 @@ fi"#;
               want = safe
             )
           };
-          runtime_bash_user_step(&cmd, &mut logs, Some(app.clone()), Some(job_id.clone()), 30, 65).await.map_err(|e| format!("{}", e))
+          runtime_bash_user_step(&cmd, &mut logs, Some(app.clone()), Some(job_id.clone()), 5, 90).await.map_err(|e| format!("{}", e))
         } else {
           let pkgs = runtime_system_packages(&runtime_id, pkg_mgr);
           if method.trim() == "local"
@@ -494,18 +494,39 @@ fi"#;
       }
       "runtime_update" => {
         if runtime_id == "rust" {
-          exec_output_limit("bash", &["-lc", "rustup update"], CMD_TIMEOUT_INSTALL_STEP).await
-            .map(|out| { if !out.is_empty() { logs.push(out); } })
-            .map_err(|e| format!("[RUNTIME_UPDATE_FAILED] {}", e.trim()))
+          match exec_output_limit("bash", &["-lc", "unset RUSTUP_TOOLCHAIN; rustup update 2>&1"], CMD_TIMEOUT_INSTALL_STEP).await {
+            Ok(out) => {
+              if !out.is_empty() { logs.push(out.clone()); }
+              let lower = out.to_lowercase();
+              if lower.contains("unchanged") || lower.contains("already") || lower.contains("no change") {
+                logs.push("already latest — rustup reports no updates.".to_string());
+              } else {
+                logs.push("update finished successfully".to_string());
+              }
+              Ok(())
+            }
+            Err(e) => Err(format!("[RUNTIME_UPDATE_FAILED] {}", e.trim())),
+          }
         } else {
           let pkgs = runtime_system_packages(&runtime_id, pkg_mgr);
           if pkgs.is_empty() {
             logs.push(format!("No system packages to update for '{}' on {}.", runtime_id, distro));
+            logs.push("already latest — no packages registered for this runtime.".to_string());
             Ok(())
           } else {
             let cmd = pkg_upgrade_cmd(pkg_mgr, &pkgs);
-            sudo_bash_install_step(&cmd, password_opt, &mut logs, Some(app.clone()), Some(job_id.clone()), 10, 85).await
-              .map_err(|e| format!("[RUNTIME_UPDATE_FAILED] {}", e))
+            match sudo_bash_install_step(&cmd, password_opt, &mut logs, Some(app.clone()), Some(job_id.clone()), 10, 85).await {
+              Ok(()) => {
+                let combined = logs.join("\n").to_lowercase();
+                if combined.contains("nothing to do") || combined.contains("0 upgraded") || combined.contains("nothing to upgrade") || combined.contains("there is nothing to do") {
+                  logs.push("already latest — package manager reports nothing to upgrade.".to_string());
+                } else {
+                  logs.push("update finished successfully".to_string());
+                }
+                Ok(())
+              }
+              Err(e) => Err(format!("[RUNTIME_UPDATE_FAILED] {}", e)),
+            }
           }
         }
       }
