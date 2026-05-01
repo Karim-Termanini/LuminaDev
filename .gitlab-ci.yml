@@ -46,7 +46,7 @@ build-app:
   stage: build
   script:
     - pnpm install
-    - pnpm build:web
+    - pnpm --filter desktop build:web
     - cd apps/desktop && npx tauri build
   only:
     - main
