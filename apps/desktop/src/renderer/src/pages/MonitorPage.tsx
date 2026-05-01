@@ -233,7 +233,7 @@ export function MonitorPage(): ReactElement {
     (security?.firewall === 'inactive' ? 1 : 0) +
     (security?.sshPermitRootLogin === 'yes' ? 1 : 0) +
     (security?.sshPasswordAuth === 'yes' ? 1 : 0) +
-    ((security?.riskyOpenPorts.length ?? 0) > 0 ? 1 : 0) +
+    ((security?.riskyOpenPorts?.length ?? 0) > 0 ? 1 : 0) +
     ((security?.failedAuth24h ?? 0) > 20 ? 1 : 0)
   const copySystemReport = async () => {
     const report = [
@@ -549,7 +549,7 @@ export function MonitorPage(): ReactElement {
             <SettingsRow label="SSH root login" value={security?.sshPermitRootLogin ?? 'unknown'} />
             <SettingsRow label="SSH password auth" value={security?.sshPasswordAuth ?? 'unknown'} />
             <SettingsRow label="Failed auth (24h)" value={String(security?.failedAuth24h ?? 0)} />
-            <SettingsRow label="Risky open ports" value={(security?.riskyOpenPorts.length ?? 0) > 0 ? security!.riskyOpenPorts.join(', ') : 'none'} />
+            <SettingsRow label="Risky open ports" value={(security?.riskyOpenPorts?.length ?? 0) > 0 ? security!.riskyOpenPorts.join(', ') : 'none'} />
             <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10, background: 'rgba(255,255,255,0.02)', maxHeight: 180, overflow: 'auto' }}>
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>FAILED AUTH SAMPLES (24H)</div>
               {(securityDrilldown?.failedAuthSamples.length ?? 0) === 0 ? (

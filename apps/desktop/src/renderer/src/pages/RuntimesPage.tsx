@@ -367,10 +367,9 @@ export function RuntimesPage(): ReactElement {
     setShowUninstallModal(true)
   }
 
-  useEffect(() => {
-    if (!showUninstallModal || !selectedRuntime?.installed) return
+  const fetchUninstallPreview = useCallback((runtimeId: string, mode: typeof removeMode) => {
     setLoadingUninstallPreview(true)
-    void window.dh.runtimeUninstallPreview({ runtimeId: selectedId, removeMode })
+    void window.dh.runtimeUninstallPreview({ runtimeId, removeMode: mode })
       .then((res) => {
         if (res.ok) {
           setUninstallPreview({
@@ -387,7 +386,14 @@ export function RuntimesPage(): ReactElement {
         }
       })
       .finally(() => setLoadingUninstallPreview(false))
-  }, [showUninstallModal, selectedId, removeMode, selectedRuntime?.installed])
+  }, [])
+
+  // Fetch preview when modal opens or selected runtime changes — NOT on every removeMode toggle.
+  useEffect(() => {
+    if (!showUninstallModal || !selectedRuntime?.installed) return
+    fetchUninstallPreview(selectedId, removeMode)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showUninstallModal, selectedId, selectedRuntime?.installed, fetchUninstallPreview])
 
   const cancelInstall = async () => {
     if (activeJob) {
@@ -1022,7 +1028,7 @@ export function RuntimesPage(): ReactElement {
 
             <div style={{ display: 'flex', gap: 12, marginTop: 16 }}>
               <button
-                onClick={() => setRemoveMode('runtime_only')}
+                onClick={() => { setRemoveMode('runtime_only'); fetchUninstallPreview(selectedId, 'runtime_only') }}
                 style={{
                   flex: 1,
                   padding: 14,
@@ -1038,7 +1044,7 @@ export function RuntimesPage(): ReactElement {
                 <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>Removes language package only.</div>
               </button>
               <button
-                onClick={() => setRemoveMode('runtime_and_deps')}
+                onClick={() => { setRemoveMode('runtime_and_deps'); fetchUninstallPreview(selectedId, 'runtime_and_deps') }}
                 style={{
                   flex: 1,
                   padding: 14,
