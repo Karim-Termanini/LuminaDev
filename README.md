@@ -4,7 +4,7 @@ Linux developer workstation dashboard, focused on safe click-first flows for Doc
 
 > **Runtime migration:** Tauri backend port complete. All `ipc_invoke` channels run Rust-native; Node.js bridge removed. File/folder pickers on Tauri use `@tauri-apps/plugin-dialog` from the renderer (not `dh:dialog:*` over invoke). Ongoing work is tracked in [Agent work plan](docs/AGENT_WORK_PLAN.md) and [Stabilization Checklist](docs/STABILIZATION_CHECKLIST.md).
 
-## Project Status (truthful snapshot)
+## Current Status
 
 This project is in active development. Features below are split by maturity:
 
@@ -32,11 +32,12 @@ Until Docker vertical slice hardening is complete:
 4. Documentation must use `Implemented / Partial / Planned` wording only.
 5. Commit hygiene: no micro-churn commits; each commit must represent one reviewable change with a descriptive message.
 
-## Known Limits
+## Known Limitations
 
 - Flatpak sessions require explicit host overrides for some operations (Docker socket, SSH paths).
 - Some cleanup operations are manual-assisted due to host privilege boundaries.
 - Flatpak builds may need host overrides for Docker socket, SSH, and terminal PTY access.
+- `apps/desktop/src-tauri/src/lib.rs` is still monolithic; behavior is stable, but maintainability would improve by splitting IPC domains into focused Rust modules.
 
 ## 🛠️ Prerequisites
 

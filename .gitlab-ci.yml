@@ -23,7 +23,7 @@ stages:
 
 # الخطوة الأولى: تثبيت المتطلبات الأساسية للنظام (Tauri Dependencies)
 before_script:
-  - apt-get update -y && apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf curl build-essential wget docker.io
+  - apt-get update -y && apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf curl build-essential wget docker.io xdg-utils
   - curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
   - apt-get install -y nodejs
   - corepack enable
