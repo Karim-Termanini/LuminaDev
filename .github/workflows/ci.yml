@@ -86,6 +86,11 @@ jobs:
           git config --global url."https://github.com/".insteadOf git@github.com:
           git config --global url."https://github.com/".insteadOf ssh://git@github.com/
       - run: pnpm install --frozen-lockfile
+      - name: Rust smoke tests (Docker + Job Runner)
+        working-directory: apps/desktop/src-tauri
+        run: |
+          cargo test --test docker_smoke -- --nocapture
+          cargo test job_runner -- --nocapture
       - name: Build frontend bundle
         run: pnpm --filter desktop build:web
       - name: Build Tauri Linux app

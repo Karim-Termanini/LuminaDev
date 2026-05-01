@@ -39,13 +39,13 @@ importers:
         specifier: workspace:*
         version: link:../../packages/shared
       '@tauri-apps/api':
-        specifier: ^2.8.0
+        specifier: 2.10.1
         version: 2.10.1
       '@tauri-apps/plugin-dialog':
-        specifier: ^2.4.0
+        specifier: 2.7.0
         version: 2.7.0
       '@tauri-apps/plugin-opener':
-        specifier: ^2.4.0
+        specifier: 2.5.3
         version: 2.5.3
       '@vscode/codicons':
         specifier: ^0.0.36
@@ -73,7 +73,7 @@ importers:
         version: 3.25.76
     devDependencies:
       '@tauri-apps/cli':
-        specifier: ^2.8.1
+        specifier: 2.10.1
         version: 2.10.1
       '@types/node':
         specifier: ^22.9.0
