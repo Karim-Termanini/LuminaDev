@@ -1,14 +1,13 @@
 use std::process::Command;
 
-fn docker_cmd(args: &[&str]) -> std::process::Output {
-  Command::new("docker")
-    .args(args)
-    .output()
-    .expect("failed to launch docker command")
+fn docker_cmd(args: &[&str]) -> Option<std::process::Output> {
+  Command::new("docker").args(args).output().ok()
 }
 
 fn docker_builder_supports_dry_run() -> bool {
-  let output = docker_cmd(&["builder", "prune", "--help"]);
+  let Some(output) = docker_cmd(&["builder", "prune", "--help"]) else {
+    return false;
+  };
   if !output.status.success() {
     return false;
   }
@@ -17,11 +16,15 @@ fn docker_builder_supports_dry_run() -> bool {
 }
 
 fn docker_available() -> bool {
-  docker_cmd(&["--version"]).status.success()
+  docker_cmd(&["--version"])
+    .map(|o| o.status.success())
+    .unwrap_or(false)
 }
 
 fn docker_daemon_available() -> bool {
-  docker_cmd(&["info"]).status.success()
+  docker_cmd(&["info"])
+    .map(|o| o.status.success())
+    .unwrap_or(false)
 }
 
 #[test]
@@ -31,7 +34,10 @@ fn docker_version_smoke() {
     return;
   }
 
-  let output = docker_cmd(&["version"]);
+  let Some(output) = docker_cmd(&["version"]) else {
+    eprintln!("Skipping test: docker CLI not available on PATH");
+    return;
+  };
   assert!(
     output.status.success(),
     "docker version failed: {}",
@@ -50,7 +56,10 @@ fn docker_info_smoke() {
     return;
   }
 
-  let output = docker_cmd(&["info"]);
+  let Some(output) = docker_cmd(&["info"]) else {
+    eprintln!("Skipping test: docker CLI not available on PATH");
+    return;
+  };
   assert!(
     output.status.success(),
     "docker info failed: {}",
@@ -69,7 +78,10 @@ fn docker_ps_all_smoke() {
     return;
   }
 
-  let output = docker_cmd(&["ps", "--all"]);
+  let Some(output) = docker_cmd(&["ps", "--all"]) else {
+    eprintln!("Skipping test: docker CLI not available on PATH");
+    return;
+  };
   assert!(
     output.status.success(),
     "docker ps --all failed: {}",
@@ -96,7 +108,10 @@ fn docker_prune_preview_smoke() {
   ];
 
   for args in preview_cmds {
-    let output = docker_cmd(args);
+    let Some(output) = docker_cmd(args) else {
+      eprintln!("Skipping test: docker CLI not available on PATH");
+      return;
+    };
     assert!(
       output.status.success(),
       "docker {:?} failed: {}",
@@ -106,7 +121,10 @@ fn docker_prune_preview_smoke() {
   }
 
   if docker_builder_supports_dry_run() {
-    let output = docker_cmd(&["builder", "prune", "-a", "--dry-run"]);
+    let Some(output) = docker_cmd(&["builder", "prune", "-a", "--dry-run"]) else {
+      eprintln!("Skipping buildx dry-run assertion: docker CLI not available");
+      return;
+    };
     assert!(
       output.status.success(),
       "docker builder prune dry-run failed: {}",
@@ -125,11 +143,13 @@ fn docker_daemon_not_running_error_case() {
   }
 
   // Force an invalid socket to simulate daemon-down behavior.
-  let output = Command::new("docker")
+  let Ok(output) = Command::new("docker")
     .env("DOCKER_HOST", "unix:///tmp/luminadev-nonexistent-docker.sock")
     .args(["info"])
-    .output()
-    .expect("failed to launch docker command");
+    .output() else {
+      eprintln!("Skipping test: docker CLI not available on PATH");
+      return;
+    };
 
   assert!(
     !output.status.success(),
