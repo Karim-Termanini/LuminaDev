@@ -43,7 +43,7 @@ declare global {
       hostExec: (payload: unknown) => Promise<{ ok: boolean; result: unknown; error?: string }>
       composeUp: (payload: { profile: ComposeProfile }) => Promise<{ ok: boolean; log: string; error?: string }>
       composeLogs: (payload: { profile: ComposeProfile }) => Promise<{ ok: boolean; log: string; error?: string }>
-      terminalCreate: (payload: { cols: number; rows: number; cmd?: string; args?: string[] }) => Promise<{ ok: boolean; id?: string; error?: string }>
+      terminalCreate: (payload: { cols: number; rows: number; cmd?: string; args?: string[]; env?: Record<string, string> }) => Promise<{ ok: boolean; id?: string; error?: string }>
       terminalWrite: (id: string, data: string) => void
       terminalResize: (id: string, cols: number, rows: number) => void
       terminalClose: (id: string) => void
@@ -103,6 +103,7 @@ declare global {
       runtimeRemoveVersion: (payload: { runtimeId: string; version: string; path: string }) => Promise<{ ok: boolean; error?: string }>
       perfSnapshot: () => Promise<{ ok: boolean; snapshot?: import('@linux-dev-home/shared').PerfSnapshot; error?: string }>
       diagnosticsBundleCreate: (payload: { report: unknown; includeSensitive?: boolean }) => Promise<{ ok: boolean; path?: string; error?: string }>
+      terminalGetAllEnv: () => Promise<{ ok: boolean; env: Record<string, string>; error?: string }>
     }
   }
 }

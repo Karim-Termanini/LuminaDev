@@ -214,6 +214,7 @@ export const IPC = {
   runtimeRemoveVersion: 'dh:runtime:remove-version',
   perfSnapshot: 'dh:perf:snapshot',
   diagnosticsBundleCreate: 'dh:diagnostics:bundle:create',
+  terminalGetAllEnv: 'dh:terminal:get-all-env',
 } as const
 
 export type DockerActionPayload = { id: string; action: DockerContainerAction }

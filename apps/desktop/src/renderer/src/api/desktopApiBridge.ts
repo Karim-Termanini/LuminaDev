@@ -129,6 +129,7 @@ function createTauriDhApi(): DhApi {
     runtimeRemoveVersion: (payload) => tauriInvoke(IPC.runtimeRemoveVersion, payload),
     perfSnapshot: () => tauriInvoke(IPC.perfSnapshot),
     diagnosticsBundleCreate: (payload) => tauriInvoke(IPC.diagnosticsBundleCreate, payload),
+    terminalGetAllEnv: () => tauriInvoke(IPC.terminalGetAllEnv),
   } satisfies DhApi
 }
 

@@ -914,6 +914,42 @@ fn lumina_dart_release_segment(raw: &str) -> String {
   "latest".into()
 }
 
+/// Lines from `bash -lc` while sourcing profiles (before the probe) — do not show as runtime version.
+fn lumina_shell_profile_noise_line(line: &str) -> bool {
+  let t = line.trim();
+  if t.is_empty() {
+    return true;
+  }
+  if t.contains(": No such file or directory")
+    || t.contains(": Command not found")
+    || t.contains(": command not found")
+  {
+    return true;
+  }
+  if t.contains(": line ")
+    && (t.contains(".bash_profile")
+      || t.contains(".bashrc")
+      || t.contains(".profile")
+      || t.contains(".zprofile")
+      || t.contains(".zshrc"))
+  {
+    return true;
+  }
+  t.starts_with("bash: ") || t.starts_with("sh: ") || t.starts_with("zsh:")
+}
+
+/// Join stdout and stderr with a newline so missing `\\n` on stdout does not concatenate stderr (e.g. `3.27.4/home/...`).
+/// Prefer the first non-empty line that is not shell startup noise (Java may only print on stderr).
+fn lumina_probe_meaningful_line(stdout: &str, stderr: &str) -> String {
+  let merged = format!("{}\n{}", stdout.trim_end(), stderr.trim_end());
+  merged
+    .lines()
+    .map(str::trim)
+    .find(|l| !l.is_empty() && !lumina_shell_profile_noise_line(l))
+    .unwrap_or("")
+    .to_string()
+}
+
 fn lumina_home_dir() -> Result<PathBuf, String> {
   std::env::var_os("HOME")
     .map(PathBuf::from)
@@ -991,11 +1027,7 @@ async fn runtime_append_verify(runtime_id: &str, method: &str, requested_version
   };
   match exec_result_limit("bash", &["-lc", probe], CMD_TIMEOUT_SHORT).await {
     Ok((stdout, stderr)) => {
-      let line = format!("{}{}", stdout, stderr)
-        .lines()
-        .find(|l| !l.trim().is_empty())
-        .map(|x| x.trim().to_string())
-        .unwrap_or_default();
+      let line = lumina_probe_meaningful_line(&stdout, &stderr);
       if line.contains("MISSING") || line.is_empty() {
         logs.push(format!("VERIFY FAIL: {} not found on PATH after install.", runtime_id));
       } else {
@@ -2599,6 +2631,13 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
         Ok(pair) => {
           let mut cmd = CommandBuilder::new(&cmd_name);
           cmd.env("TERM", "xterm-256color");
+          if let Some(env_map) = body.get("env").and_then(|v| v.as_object()) {
+            for (key, val) in env_map {
+              if let Some(s) = val.as_str() {
+                cmd.env(key, s);
+              }
+            }
+          }
           if let Some(args) = body.get("args").and_then(|v| v.as_array()) {
             for arg in args {
               if let Some(s) = arg.as_str() {
@@ -2660,6 +2699,10 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
         }
         Err(e) => json!({ "ok": false, "error": format!("[TERMINAL_CREATE_FAILED] {}", e) }),
       }
+    }
+    "dh:terminal:get-all-env" => {
+      let envs: HashMap<String, String> = std::env::vars().collect();
+      json!({ "ok": true, "env": envs })
     }
     "dh:docker:terminal" => {
       let container_id = body.get("containerId").and_then(|v| v.as_str()).unwrap_or_default();
@@ -2984,8 +3027,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       for (id, name, shell_cmd) in checks {
         match exec_result_limit("bash", &["-lc", shell_cmd], CMD_TIMEOUT_SHORT).await {
           Ok((stdout, stderr)) => {
-            let combined = format!("{}{}", stdout, stderr);
-            let version = combined.trim().lines().next().unwrap_or("").to_string();
+            let version = lumina_probe_meaningful_line(&stdout, &stderr);
             if version.is_empty() {
               runtimes.push(json!({ "id": id, "name": name, "installed": false }));
             } else {

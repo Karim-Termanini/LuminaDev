@@ -337,7 +337,22 @@ function OverviewSection({ cfg, onSection, onSetKey }: {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
             {suggestions.map((s, i) => (
               <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 0', borderBottom: i < suggestions.length - 1 ? '1px solid var(--border)' : undefined }}>
-                <span style={{ fontSize: 14, marginTop: 1 }}>{s.priority === 'high' ? '🔴' : '🟡'}</span>
+                <span
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 700,
+                    textTransform: 'uppercase',
+                    letterSpacing: 0.5,
+                    marginTop: 2,
+                    padding: '2px 6px',
+                    borderRadius: 4,
+                    background: s.priority === 'high' ? '#fee2e2' : '#fef9c3',
+                    color: s.priority === 'high' ? '#991b1b' : '#854d0e',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {s.priority === 'high' ? 'High' : 'Medium'}
+                </span>
                 <div style={{ flex: 1, fontSize: 13 }}>{s.text}</div>
                 {s.action && (
                   <button type="button" className="hp-btn" style={{ fontSize: 11, padding: '3px 10px' }} onClick={s.action}>
@@ -386,9 +401,19 @@ function IdentitySection({ cfg, busy, onSave }: {
     setEditor(cfg.get('core.editor') ?? '')
   }, [cfg])
 
+  function handleValidateOnly(): void {
+    const errs = validateIdentity(name, email, branch)
+    setErrors(errs)
+    if (errs.length) {
+      setStatus('')
+    } else {
+      setStatus('Validation passed. You can apply to write global Git config.')
+    }
+  }
+
   async function handleApply(): Promise<void> {
     const errs = validateIdentity(name, email, branch)
-    if (errs.length) { setErrors(errs); return }
+    if (errs.length) { setErrors(errs); setStatus(''); return }
     setErrors([])
     setStatus('')
     await onSave({ name, email, branch, editor })
@@ -465,15 +490,18 @@ function IdentitySection({ cfg, busy, onSave }: {
 
       {errors.length > 0 && (
         <div className="hp-status-alert warning">
-          <span style={{ fontSize: 16 }}>⚠</span>
+          <span style={{ fontWeight: 700 }}>Warning</span>
           <ul style={{ margin: 0, paddingLeft: 16 }}>{errors.map((m) => <li key={m}>{m}</li>)}</ul>
         </div>
       )}
-      {status && <div className="hp-status-alert success"><span>✔</span><span>{status}</span></div>}
+      {status && !errors.length && <div className="hp-status-alert success"><span style={{ fontWeight: 700 }}>OK</span><span>{status}</span></div>}
 
       <div className="hp-row-wrap" style={{ gap: 10 }}>
+        <button type="button" className="hp-btn" onClick={handleValidateOnly} disabled={busy}>
+          Validate
+        </button>
         <button type="button" className="hp-btn hp-btn-primary" onClick={() => void handleApply()} disabled={busy}>
-          Apply Identity
+          Apply
         </button>
       </div>
     </div>
@@ -663,9 +691,11 @@ function BehaviorSection({ cfg, busy, onSetKey, onApplyPreset }: {
         <div>
           <div style={{ padding: '12px 0', borderBottom: '1px solid var(--border)' }}>
             <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 4 }}>Line Ending Mode</div>
-            <div className="hp-muted" style={{ fontSize: 12, marginBottom: 8 }}>core.autocrlf — how Git handles CRLF/LF conversion.</div>
+            <div className="hp-muted" style={{ fontSize: 12, marginBottom: 8 }}>
+              core.autocrlf — normalizes line endings on checkout/commit. On Linux, Input is usually best.
+            </div>
             <div className="hp-row-wrap" style={{ gap: 8 }}>
-              {[['input', 'Input (Linux/macOS)'], ['false', 'Off'], ['true', 'Auto (Windows)']].map(([v, l]) => (
+              {[['input', 'Input'], ['false', 'Off']].map(([v, l]) => (
                 <button
                   key={v}
                   type="button"
@@ -677,6 +707,11 @@ function BehaviorSection({ cfg, busy, onSetKey, onApplyPreset }: {
                 </button>
               ))}
             </div>
+            {cfg.get('core.autocrlf') === 'true' && (
+              <div className="hp-muted" style={{ fontSize: 11, marginTop: 8 }}>
+                Your config has <span className="mono">core.autocrlf=true</span> (legacy Windows-oriented). Choose Input or Off above to change it, or edit the raw value in Config Inspector.
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -695,6 +730,8 @@ function InspectorSection({ rows, loading }: { rows: ConfigRow[]; loading: boole
   const [sortKey, setSortKey] = useState<'key' | 'value'>('key')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [revealed, setRevealed] = useState<Set<string>>(new Set())
+  /** When false, sensitive values are masked unless individually revealed. */
+  const [showSensitiveValues, setShowSensitiveValues] = useState(false)
 
   function toggleReveal(key: string): void {
     setRevealed((prev) => {
@@ -725,6 +762,11 @@ function InspectorSection({ rows, loading }: { rows: ConfigRow[]; loading: boole
     all: 'All', identity: 'Identity', security: 'Security', performance: 'Performance', advanced: 'Advanced',
   }
 
+  function cellValue(r: ConfigRow): string {
+    if (showSensitiveValues && isSensitive(r.key)) return r.value
+    return maskValue(r.key, r.value, revealed)
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div className="hp-card">
@@ -745,6 +787,18 @@ function InspectorSection({ rows, loading }: { rows: ConfigRow[]; loading: boole
             ))}
           </div>
         </div>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, marginBottom: 12, cursor: loading ? 'default' : 'pointer' }}>
+          <input
+            type="checkbox"
+            checked={showSensitiveValues}
+            onChange={(e) => {
+              setShowSensitiveValues(e.target.checked)
+              if (e.target.checked) setRevealed(new Set())
+            }}
+            disabled={loading}
+          />
+          <span>Show sensitive values (tokens, helpers, signing keys)</span>
+        </label>
         <div className="hp-muted" style={{ fontSize: 11, marginBottom: 8 }}>
           {filtered.length} of {rows.length} entries
         </div>
@@ -779,8 +833,8 @@ function InspectorSection({ rows, loading }: { rows: ConfigRow[]; loading: boole
                     <tr key={r.key} className="hp-table-row" style={{ background: risk ? 'rgba(239,68,68,0.04)' : undefined }}>
                       <td className="mono" style={{ padding: '9px 6px', fontSize: 12 }}>{r.key}</td>
                       <td className="mono" style={{ padding: '9px 6px', fontSize: 12 }}>
-                        {maskValue(r.key, r.value, revealed)}
-                        {sensitive && (
+                        {cellValue(r)}
+                        {sensitive && !showSensitiveValues && (
                           <button type="button" className="hp-btn" style={{ marginLeft: 6, fontSize: 10, padding: '1px 6px' }} onClick={() => toggleReveal(r.key)}>
                             {revealed.has(r.key) ? 'Hide' : 'Show'}
                           </button>
@@ -793,7 +847,7 @@ function InspectorSection({ rows, loading }: { rows: ConfigRow[]; loading: boole
                       </td>
                       <td style={{ padding: '9px 6px' }}>
                         {risk ? (
-                          <span title={risk} style={{ fontSize: 11, color: '#ef4444', cursor: 'help' }}>⚠ Risk</span>
+                          <span title={risk} style={{ fontSize: 11, color: '#ef4444', cursor: 'help' }}>Risk</span>
                         ) : (
                           <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>—</span>
                         )}
@@ -812,12 +866,12 @@ function InspectorSection({ rows, loading }: { rows: ConfigRow[]; loading: boole
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
-const NAV_ITEMS: { id: Section; label: string; icon: string }[] = [
-  { id: 'overview', label: 'Overview', icon: '◉' },
-  { id: 'identity', label: 'Identity', icon: '👤' },
-  { id: 'security', label: 'Security', icon: '🔒' },
-  { id: 'behavior', label: 'Behavior', icon: '⚙' },
-  { id: 'inspector', label: 'Config Inspector', icon: '🔍' },
+const NAV_ITEMS: { id: Section; label: string }[] = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'identity', label: 'Identity' },
+  { id: 'security', label: 'Security' },
+  { id: 'behavior', label: 'Behavior' },
+  { id: 'inspector', label: 'Config Inspector' },
 ]
 
 export function GitConfigPage(): ReactElement {
@@ -936,7 +990,6 @@ export function GitConfigPage(): ReactElement {
               borderLeft: section === item.id ? '3px solid var(--accent)' : '3px solid transparent',
             }}
           >
-            <span style={{ fontSize: 14 }}>{item.icon}</span>
             {item.label}
           </button>
         ))}
@@ -964,7 +1017,7 @@ export function GitConfigPage(): ReactElement {
             boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
             pointerEvents: 'none',
           }}>
-            {toast.ok ? '✔ ' : '✘ '}{toast.msg}
+            {toast.ok ? 'OK: ' : 'Error: '}{toast.msg}
           </div>
         )}
 
