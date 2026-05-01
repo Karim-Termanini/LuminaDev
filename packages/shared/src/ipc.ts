@@ -207,8 +207,10 @@ export const IPC = {
   monitorSecurityDrilldown: 'dh:monitor:security-drilldown',
   runtimeStatus: 'dh:runtime:status',
   runtimeGetVersions: 'dh:runtime:get-versions',
+  runtimeSetActive: 'dh:runtime:set-active',
   runtimeCheckDeps: 'dh:runtime:check-deps',
   runtimeUninstallPreview: 'dh:runtime:uninstall:preview',
+  runtimeRemoveVersion: 'dh:runtime:remove-version',
   perfSnapshot: 'dh:perf:snapshot',
   diagnosticsBundleCreate: 'dh:diagnostics:bundle:create',
 } as const

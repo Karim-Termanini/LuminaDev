@@ -92,17 +92,20 @@ export function RuntimesPage(): ReactElement {
   const [addToPath, setAddToPath] = useState(true)
   const [sudoPassword, setSudoPassword] = useState('')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [settingActivePath, setSettingActivePath] = useState<string | null>(null)
+  const [removingVersionPath, setRemovingVersionPath] = useState<string | null>(null)
 
   const VERSIONS_CACHE_KEY = 'dh:runtimes:versions-cache:v1'
   const VERSIONS_CACHE_TTL = 5 * 60 * 1000 // 5 minutes
 
-  const loadVersionsForRuntime = useCallback(async (runtimeId: string, resetDefault: boolean) => {
+  const loadVersionsForRuntime = useCallback(async (runtimeId: string, method: 'system' | 'local', resetDefault: boolean) => {
+    const cacheKey = `${runtimeId}:${method}`
     // Check localStorage cache first
     try {
       const raw = localStorage.getItem(VERSIONS_CACHE_KEY)
       if (raw) {
         const cache = JSON.parse(raw) as Record<string, { ts: number; versions: string[] }>
-        const entry = cache[runtimeId]
+        const entry = cache[cacheKey]
         if (entry && Date.now() - entry.ts < VERSIONS_CACHE_TTL && entry.versions.length > 0) {
           setAvailableVersions(entry.versions)
           if (resetDefault) setSelectedVersion(pickDefaultRuntimeVersion(runtimeId, entry.versions))
@@ -114,7 +117,7 @@ export function RuntimesPage(): ReactElement {
 
     setVersionsLoading(true)
     try {
-      const res = await window.dh.getAvailableVersions(runtimeId)
+      const res = await window.dh.getAvailableVersions(runtimeId, method)
       assertRuntimeOk(res, 'Failed to fetch runtime versions.')
       const vs = res.versions
       setAvailableVersions(vs)
@@ -128,7 +131,7 @@ export function RuntimesPage(): ReactElement {
       try {
         const raw = localStorage.getItem(VERSIONS_CACHE_KEY)
         const cache: Record<string, { ts: number; versions: string[] }> = raw ? JSON.parse(raw) : {}
-        cache[runtimeId] = { ts: Date.now(), versions: vs }
+        cache[cacheKey] = { ts: Date.now(), versions: vs }
         localStorage.setItem(VERSIONS_CACHE_KEY, JSON.stringify(cache))
       } catch { /* ignore cache write errors */ }
     } catch (e) {
@@ -141,8 +144,8 @@ export function RuntimesPage(): ReactElement {
 
   /** Same as load but for the currently selected runtime (wizard Refresh button). */
   const refreshVersionsList = useCallback(
-    (resetDefault: boolean) => loadVersionsForRuntime(selectedId, resetDefault),
-    [selectedId, loadVersionsForRuntime],
+    (resetDefault: boolean) => loadVersionsForRuntime(selectedId, installMethod, resetDefault),
+    [selectedId, installMethod, loadVersionsForRuntime],
   )
 
   const refreshDeps = useCallback(async () => {
@@ -175,16 +178,54 @@ export function RuntimesPage(): ReactElement {
     }
   }, [])
 
+  const setRuntimeActive = useCallback(
+    async (path: string) => {
+      setSettingActivePath(path)
+      setErrorMessage(null)
+      try {
+        const res = await window.dh.runtimeSetActive({ runtimeId: selectedId, path })
+        assertRuntimeOk(res, 'Failed to set active runtime.')
+        await refreshStatus()
+      } catch (e) {
+        setErrorMessage(humanizeRuntimeError(e))
+      } finally {
+        setSettingActivePath(null)
+      }
+    },
+    [refreshStatus, selectedId],
+  )
+
+  const removeVersion = useCallback(
+    async (version: string, path: string) => {
+      if (!window.confirm(`Remove ${selectedId} ${version}?\n\nThis will delete the installation directory. This cannot be undone.`)) return
+      setRemovingVersionPath(path)
+      setErrorMessage(null)
+      try {
+        const res = await window.dh.runtimeRemoveVersion({ runtimeId: selectedId, version, path })
+        assertRuntimeOk(res, 'Failed to remove version.')
+        await refreshStatus()
+      } catch (e) {
+        setErrorMessage(humanizeRuntimeError(e))
+      } finally {
+        setRemovingVersionPath(null)
+      }
+    },
+    [refreshStatus, selectedId],
+  )
+
   useEffect(() => {
     void refreshStatus()
     if (showWizard && wizardStep === 2) void refreshDeps()
-    
+
+    // Fast poll (800ms) only while a job is running; 3s idle to avoid CPU spike
+    const hasRunningJob = activeJobs.some((j) => j.state === 'running')
+    const interval = hasRunningJob ? 800 : 3000
     const t = setInterval(() => {
       void refreshStatus()
       if (showWizard && wizardStep === 2) void refreshDeps()
-    }, 500)
+    }, interval)
     return () => clearInterval(t)
-  }, [refreshStatus, refreshDeps, showWizard, wizardStep])
+  }, [refreshStatus, refreshDeps, showWizard, wizardStep, activeJobs])
 
   const selectedRuntime = useMemo(() => runtimes.find(r => r.id === selectedId), [runtimes, selectedId])
   const activeJob = useMemo(() => {
@@ -229,6 +270,11 @@ export function RuntimesPage(): ReactElement {
     return undefined
   }, [latestUpdateJob])
   const effectiveUpdateOutcome = updateOutcome ?? persistedUpdateOutcomes[selectedId]
+  const displayedVersions = availableVersions
+  const systemHasRealVersionChoice = useMemo(
+    () => !(installMethod === 'system' && displayedVersions.length === 1 && /system \(repo default\)|local installer \(recommended\)/i.test(displayedVersions[0] || '')),
+    [installMethod, displayedVersions],
+  )
 
   const suggestVerifyCmd = RUNTIME_VERIFY_CMD[selectedId] ?? `${selectedId} --version`
   const lastJobTail = activeJob?.logTail ?? []
@@ -265,14 +311,21 @@ export function RuntimesPage(): ReactElement {
   useEffect(() => {
     setAvailableVersions([])
     setSelectedVersion('latest')
-    void loadVersionsForRuntime(selectedId, true)
-  }, [selectedId, loadVersionsForRuntime])
+    void loadVersionsForRuntime(selectedId, installMethod, true)
+  }, [selectedId, installMethod, loadVersionsForRuntime])
+
+  useEffect(() => {
+    if (displayedVersions.length === 0) return
+    setSelectedVersion((prev) => (
+      displayedVersions.includes(prev) ? prev : pickDefaultRuntimeVersion(selectedId, displayedVersions)
+    ))
+  }, [displayedVersions, selectedId])
 
   const startInstall = async (id: string) => {
     setSelectedId(id)
     setShowWizard(true)
     setWizardStep(1)
-    void loadVersionsForRuntime(id, true)
+    void loadVersionsForRuntime(id, installMethod, true)
   }
 
   const runInstall = async () => {
@@ -528,11 +581,52 @@ export function RuntimesPage(): ReactElement {
                         <div style={{ fontSize: 14, fontWeight: 700 }}>Version {v.version}</div>
                         <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, fontFamily: 'monospace' }}>{v.path}</div>
                       </div>
-                      {v.path === selectedRuntime.path && (
-                        <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--green)', padding: '2px 8px', borderRadius: 10, border: '1px solid rgba(0,230,118,0.3)', background: 'rgba(0,230,118,0.05)' }}>
-                          ACTIVE
-                        </span>
-                      )}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        {v.path === selectedRuntime.path && (
+                          <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--green)', padding: '2px 8px', borderRadius: 10, border: '1px solid rgba(0,230,118,0.3)', background: 'rgba(0,230,118,0.05)' }}>
+                            ACTIVE
+                          </span>
+                        )}
+                        {v.path !== selectedRuntime.path && (
+                          <button
+                            type="button"
+                            onClick={() => void setRuntimeActive(v.path)}
+                            disabled={installInProgress || settingActivePath === v.path}
+                            style={{
+                              fontSize: 11,
+                              fontWeight: 800,
+                              padding: '6px 10px',
+                              borderRadius: 10,
+                              border: '1px solid var(--border)',
+                              background: 'rgba(255,255,255,0.04)',
+                              color: 'var(--text-main)',
+                              cursor: installInProgress || settingActivePath === v.path ? 'default' : 'pointer',
+                              opacity: installInProgress || settingActivePath === v.path ? 0.55 : 1,
+                            }}
+                          >
+                            {settingActivePath === v.path ? 'Switching…' : 'Set active'}
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => void removeVersion(v.version, v.path)}
+                          disabled={installInProgress || removingVersionPath === v.path || v.path === selectedRuntime.path}
+                          title={v.path === selectedRuntime.path ? 'Cannot remove active version' : `Remove ${v.version}`}
+                          style={{
+                            fontSize: 11,
+                            fontWeight: 800,
+                            padding: '6px 10px',
+                            borderRadius: 10,
+                            border: '1px solid rgba(255,82,82,0.3)',
+                            background: 'rgba(255,82,82,0.08)',
+                            color: v.path === selectedRuntime.path ? 'var(--text-muted)' : '#ff5252',
+                            cursor: installInProgress || removingVersionPath === v.path || v.path === selectedRuntime.path ? 'default' : 'pointer',
+                            opacity: installInProgress || removingVersionPath === v.path || v.path === selectedRuntime.path ? 0.4 : 1,
+                          }}
+                        >
+                          {removingVersionPath === v.path ? 'Removing…' : 'Remove'}
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -605,7 +699,7 @@ export function RuntimesPage(): ReactElement {
 
                         <div className="hp-card" style={{ marginBottom: 20 }}>
                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, gap: 12 }}>
-                             <div style={{ fontWeight: 600 }}>Target Version</div>
+                             <div style={{ fontWeight: 600 }}>{installMethod === 'system' && !systemHasRealVersionChoice ? 'Repository Track' : 'Target Version'}</div>
                              <button
                                type="button"
                                className="hp-btn-icon"
@@ -633,16 +727,26 @@ export function RuntimesPage(): ReactElement {
                            </div>
                            <select 
                              className="hp-input" 
-                             style={{ width: '100%', opacity: versionsLoading && availableVersions.length === 0 ? 0.6 : 1 }} 
+                             style={{ width: '100%', opacity: versionsLoading && displayedVersions.length === 0 ? 0.6 : 1 }} 
                              value={selectedVersion} 
-                             disabled={versionsLoading && availableVersions.length === 0}
+                             disabled={(versionsLoading && displayedVersions.length === 0) || (installMethod === 'system' && !systemHasRealVersionChoice)}
                              onChange={(e) => setSelectedVersion(e.target.value)}
                            >
-                             {availableVersions.map(v => <option key={v} value={v}>{v}</option>)}
+                             {displayedVersions.map(v => <option key={v} value={v}>{v}</option>)}
                            </select>
                            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
                              Lists are loaded from upstream APIs where possible; use Refresh after a new release if you do not change language.
                            </div>
+                           {selectedId === 'java' && installMethod === 'system' && (
+                             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
+                               System list shows only Java versions currently available from your distro repositories.
+                             </div>
+                           )}
+                           {installMethod === 'system' && selectedId !== 'java' && (
+                             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
+                               System mode now shows only repository-backed choices for this runtime on your distro.
+                             </div>
+                           )}
                            {installMethod === 'system' && (
                              <div
                                role="note"

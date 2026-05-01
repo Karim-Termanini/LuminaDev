@@ -121,9 +121,11 @@ function createTauriDhApi(): DhApi {
     monitorSecurity: () => tauriInvoke(IPC.monitorSecurity),
     monitorSecurityDrilldown: () => tauriInvoke(IPC.monitorSecurityDrilldown),
     runtimeStatus: () => tauriInvoke(IPC.runtimeStatus),
-    getAvailableVersions: (runtimeId) => tauriInvoke(IPC.runtimeGetVersions, { runtimeId }),
+    getAvailableVersions: (runtimeId, method) => tauriInvoke(IPC.runtimeGetVersions, { runtimeId, method }),
+    runtimeSetActive: (payload) => tauriInvoke(IPC.runtimeSetActive, payload),
     checkDependencies: (runtimeId) => tauriInvoke(IPC.runtimeCheckDeps, { runtimeId }),
     runtimeUninstallPreview: (payload) => tauriInvoke(IPC.runtimeUninstallPreview, payload),
+    runtimeRemoveVersion: (payload) => tauriInvoke(IPC.runtimeRemoveVersion, payload),
     perfSnapshot: () => tauriInvoke(IPC.perfSnapshot),
     diagnosticsBundleCreate: (payload) => tauriInvoke(IPC.diagnosticsBundleCreate, payload),
   } satisfies DhApi

@@ -213,6 +213,12 @@ export const SshTestGithubSchema = z.object({
 
 export const RuntimeGetVersionsRequestSchema = z.object({
   runtimeId: z.string().min(1).max(64).optional(),
+  method: z.enum(['system', 'local']).optional(),
+})
+
+export const RuntimeSetActiveRequestSchema = z.object({
+  runtimeId: z.string().min(1).max(64),
+  path: z.string().min(1).max(4096),
 })
 
 export const RuntimeCheckDepsRequestSchema = z.object({
