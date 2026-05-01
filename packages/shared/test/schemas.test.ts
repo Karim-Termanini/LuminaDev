@@ -24,6 +24,12 @@ describe('schemas', () => {
     ).toThrow()
   })
 
+  it('accepts maintenance host probes', () => {
+    expect(HostExecRequestSchema.parse({ command: 'maintenance_docker_system_df' })).toEqual({
+      command: 'maintenance_docker_system_df',
+    })
+  })
+
   it('accepts docker logs with bounds', () => {
     expect(DockerLogsRequestSchema.parse({ id: 'abc', tail: 100 })).toEqual({
       id: 'abc',

@@ -68,10 +68,12 @@ Route: extend **Workstation** or add **/docker** in nav when the section gets la
 
 ---
 
-## Phase 4 — Git configuration UI
+## Phase 4 — Git Configuration UI
 
-- **Set name / email / default branch / default editor** — form + **Validate** + **Apply** (write `git config --global` via allowlisted exec or libgit2 if you prefer).
-- **List all** — `git config --global --list` parsed into a **sortable table** with search; **sensitive values** masked optional toggle.
+**Status (implemented):** Professional Git environment management panel with Identity, Security, and Behavior centers. Includes smart suggestions (Git Doctor logic), security scoring, preset templates (Pro/Safe/OS), and a searchable config inspector with sensitive value masking.
+
+- **Set name / email / default branch / default editor** — Dedicated Identity Center with validation.
+- **List all** — Advanced Config Inspector with category filters and search.
 
 
 ## Windows-style dialogs + buttons + settings panels
@@ -337,14 +339,14 @@ Ship **2–3 languages first** (Node + Rust + Python), then template-copy for th
 
 ---
 
-## Phase 7 — Maintenance
+## Phase 7 — Maintenance (Guardian)
 
-Define **what “Guardian layers” means in code** (otherwise it stays marketing):
+**Status (implemented):** Centralized health logic in `maintenanceGuardian.ts` with five deductive layers (compute, memory, disk, fleet, security); Overview dashboard with layer-specific tiles; maintenance job runner footer; diagnostics bundle exporter; Docker resource pruning and task management.
 
-- **System overview** — aggregate health from metrics + docker + disk.
+- **System overview** — aggregate health from metrics + docker + disk via `evaluateGuardian`.
 - **Infrastructure status** — compose profile health + last run times.
 - **Maintenance tasks** — user-defined checklist + optional cron hints (copy command only if needed).
-- **Active tasks** — surface **running job runner** from Phase 0.
+- **Active tasks** — surface **running job runner** in footer.
 
 ---
 

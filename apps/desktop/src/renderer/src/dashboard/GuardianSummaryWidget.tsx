@@ -3,6 +3,8 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import type { HostMetricsResponse, HostSecuritySnapshot, ContainerRow } from '@linux-dev-home/shared'
 
+import { evaluateGuardian } from '../pages/maintenanceGuardian'
+
 export function GuardianSummaryWidget(): ReactElement {
   const [score, setScore] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
@@ -12,18 +14,11 @@ export function GuardianSummaryWidget(): ReactElement {
       try {
         const m = await window.dh.metrics() as HostMetricsResponse & { ok: boolean; error?: string }
         const sRes = await window.dh.monitorSecurity() as { ok: boolean; snapshot: HostSecuritySnapshot; error?: string }
-        await window.dh.dockerList() as { ok: boolean, rows: ContainerRow[] }
-        if (!m.ok || !sRes.ok) return
-        const s = sRes.snapshot
-        
-        // Simple score calculation logic (mirroring MaintenancePage)
-        let sCore = 100
-        if (m.metrics.cpuUsagePercent > 80) sCore -= 15
-        const memPct = Math.round(((m.metrics.totalMemMb - m.metrics.freeMemMb) / m.metrics.totalMemMb) * 100)
-        if (memPct > 90) sCore -= 20
-        if (s.firewall !== 'active') sCore -= 20
-        
-        setScore(Math.max(0, sCore))
+        const d = (await window.dh.dockerList()) as { ok: boolean; rows: ContainerRow[] }
+        const containers = d.ok ? d.rows : []
+        const snap = sRes.ok ? sRes.snapshot : null
+        const g = evaluateGuardian(m.ok ? m.metrics : undefined, snap, containers)
+        setScore(g.score)
       } catch {
         /* ignore */
       } finally {

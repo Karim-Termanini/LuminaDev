@@ -5,15 +5,13 @@ import { humanizeDashboardError } from './dashboardError'
 import { humanizeDockerError } from './dockerError'
 import { humanizeRuntimeError } from './runtimeError'
 import { collectAccessibilitySnapshot, evaluateAccessibilitySnapshot } from './accessibilityAudit'
+import { evaluateGuardian } from './maintenanceGuardian'
+import { OPS_RUNBOOK, maintenanceStatusTone } from './maintenancePageHelpers'
+import './MaintenancePage.css'
 
 const CRON_HINTS = ['0 */6 * * *', '0 3 * * *', '30 2 * * 0']
-const OPS_COMMAND_TEMPLATES = [
-  'docker system df',
-  'docker ps --format "table {{.Names}}\\t{{.Status}}\\t{{.RunningFor}}"',
-  'journalctl -u docker --since "2 hours ago"',
-  'du -sh ~/.cache/* | sort -h | tail',
-]
 const SYSTEMD_UNITS = ['docker', 'ssh', 'nginx', 'ufw'] as const
+const STATUS_AUTO_DISMISS_MS = 12_000
 const profileIds = ComposeProfileSchema.options
 const TABS = [
   'Overview / Health Dashboard',
@@ -29,7 +27,45 @@ type CleanupPreview = { containers: number; images: number; volumes: number; net
 type TabId = (typeof TABS)[number]
 type DiagnosticCheck = { id: string; label: string; ok: boolean; details: string }
 type PerfSnapshot = { startupMs: number; rssMb: number; heapUsedMb: number; heapTotalMb: number; uptimeSec: number }
-const PAGE_MAX_WIDTH = 1320
+
+type RunbookOp = (typeof OPS_RUNBOOK)[number]
+
+const MAINT_TAB_META: Record<TabId, { icon: string; short: string }> = {
+  'Overview / Health Dashboard': { icon: 'dashboard', short: 'Overview' },
+  'System Cleanup': { icon: 'trash', short: 'Cleanup' },
+  'Docker Maintenance': { icon: 'package', short: 'Docker' },
+  'Data & Profiles': { icon: 'folder', short: 'Data' },
+  'Logs & History': { icon: 'history', short: 'Logs' },
+  'Scheduled / Automation': { icon: 'watch', short: 'Schedule' },
+}
+
+function MaintenanceRunbookStrip({
+  runbookBusyId,
+  onRun,
+}: {
+  runbookBusyId: string | null
+  onRun: (op: RunbookOp) => void
+}): ReactElement {
+  return (
+    <>
+      <div className="maint-runbook-label">Host diagnostics</div>
+      <div className="maint-runbook-grid">
+        {OPS_RUNBOOK.map((op) => (
+          <button
+            key={op.id}
+            type="button"
+            className="maint-runbook-tile"
+            disabled={runbookBusyId !== null}
+            onClick={() => void onRun(op)}
+          >
+            <span className={`codicon codicon-${op.icon}`} aria-hidden />
+            <span>{runbookBusyId === op.id ? 'Running…' : op.label}</span>
+          </button>
+        ))}
+      </div>
+    </>
+  )
+}
 
 export function MaintenancePage(): ReactElement {
   const [activeTab, setActiveTab] = useState<TabId>('Overview / Health Dashboard')
@@ -56,6 +92,9 @@ export function MaintenancePage(): ReactElement {
   const [diagnostics, setDiagnostics] = useState<DiagnosticCheck[]>([])
   const [includeSensitiveBundle, setIncludeSensitiveBundle] = useState(false)
   const [status, setStatus] = useState('')
+  const [runbook, setRunbook] = useState<{ title: string; text: string } | null>(null)
+  const [runbookBusyId, setRunbookBusyId] = useState<string | null>(null)
+  const [commandPeek, setCommandPeek] = useState<string | null>(null)
 
   const saveState = useCallback(async (next: MaintenanceStateStore) => {
     setSavingState(true)
@@ -155,9 +194,16 @@ export function MaintenancePage(): ReactElement {
     }
   }, [refreshLive, refreshStatic])
 
+  useEffect(() => {
+    if (!status.trim()) return
+    const id = window.setTimeout(() => setStatus(''), STATUS_AUTO_DISMISS_MS)
+    return () => window.clearTimeout(id)
+  }, [status])
+
   const m = metrics?.metrics
   const runningContainers = containers.filter((c) => c.state === 'running').length
-  const guardianScore = useMemo(() => calculateGuardianScore(m, security, containers), [m, security, containers])
+  const guardian = useMemo(() => evaluateGuardian(m, security, containers), [m, security, containers])
+  const activeJobCount = useMemo(() => jobs.filter((j) => j.state === 'running').length, [jobs])
   const degradedProfiles = state.profileHealth.filter((p) => p.health === 'degraded').length
   const lastMaintenanceDaysAgo = state.lastMaintenanceAtIso
     ? Math.floor((Date.now() - new Date(state.lastMaintenanceAtIso).getTime()) / (1000 * 3600 * 24))
@@ -306,14 +352,25 @@ export function MaintenancePage(): ReactElement {
     await saveState({ ...state, tasks: state.tasks.filter((t) => t.id !== taskId) })
   }
 
-  async function copyCommand(cmd: string): Promise<void> {
+  const runHostProbe = useCallback(async (op: RunbookOp) => {
+    setRunbookBusyId(op.id)
+    setCommandPeek(null)
     try {
-      await navigator.clipboard.writeText(cmd)
-      setStatus('Command copied to clipboard.')
+      const res = (await window.dh.hostExec({ command: op.probe })) as {
+        ok: boolean
+        result?: unknown
+        error?: string
+      }
+      const text = res.ok
+        ? (typeof res.result === 'string' ? res.result : JSON.stringify(res.result ?? '')) || '(empty)'
+        : res.error ?? 'Request failed'
+      setRunbook({ title: op.label, text })
     } catch (e) {
-      setStatus(e instanceof Error ? e.message : String(e))
+      setRunbook({ title: op.label, text: e instanceof Error ? e.message : String(e) })
+    } finally {
+      setRunbookBusyId(null)
     }
-  }
+  }, [])
 
   async function runDiagnosticsWizard(): Promise<void> {
     setRunningDiagnostics(true)
@@ -409,7 +466,7 @@ export function MaintenancePage(): ReactElement {
     const payload = {
       generatedAt: new Date().toISOString(),
       summary: {
-        guardianScore,
+        guardianScore: guardian.score,
         degradedProfiles,
         riskyPorts: security?.riskyOpenPorts.length ?? 0,
       },
@@ -431,55 +488,65 @@ export function MaintenancePage(): ReactElement {
   }
 
   return (
-    <div
-      className="hp-page-stack"
-      style={{
-        gap: 24,
-        paddingBottom: 36,
-        maxWidth: PAGE_MAX_WIDTH,
-        margin: '0 auto',
-        paddingInline: 16,
-      }}
-    >
-      <header>
-        <h1 className="hp-title">Maintenance</h1>
-        <p className="hp-muted" style={{ marginTop: 6, lineHeight: 1.5 }}>
-          {degradedProfiles > 0 ? `${degradedProfiles} profile issues detected.` : 'Your workstation is healthy.'}
-          {' '}Last maintenance: {lastMaintenanceDaysAgo === null ? 'never' : `${lastMaintenanceDaysAgo} day(s) ago`}.
+    <div className="maint-page">
+      <header className="maint-hero">
+        <div className="maint-hero-eyebrow">Workspace care</div>
+        <h1 className="maint-hero-title">Maintenance</h1>
+        <p className="maint-hero-sub">
+          {degradedProfiles > 0 ? `${degradedProfiles} profile issues detected.` : 'Your workstation looks healthy.'}{' '}
+          Last maintenance: {lastMaintenanceDaysAgo === null ? 'never' : `${lastMaintenanceDaysAgo} day(s) ago`}.
         </p>
       </header>
 
-      <section className="hp-card">
-        <div
-          className="hp-row-wrap"
-          style={{
-            rowGap: 10,
-            overflowX: 'auto',
-            paddingBottom: 2,
-            scrollbarWidth: 'thin',
-          }}
-        >
+      <section className="hp-card maint-tabs-panel">
+        <nav className="maint-tabs-scroll" aria-label="Maintenance sections">
           {TABS.map((tab) => (
-            <button key={tab} className={`hp-btn ${activeTab === tab ? 'hp-btn-primary' : ''}`} onClick={() => setActiveTab(tab)}>
-              {tab}
+            <button
+              key={tab}
+              type="button"
+              className={`maint-tab ${activeTab === tab ? 'maint-tab-active' : ''}`}
+              title={tab}
+              onClick={() => setActiveTab(tab)}
+            >
+              <span className={`codicon codicon-${MAINT_TAB_META[tab].icon}`} aria-hidden />
+              <span>{MAINT_TAB_META[tab].short}</span>
+              <span className="maint-tab-full">{tab}</span>
             </button>
           ))}
-        </div>
+        </nav>
       </section>
 
       {(activeTab === 'Overview / Health Dashboard' || activeTab === 'System Cleanup') ? (
       <section className="hp-card">
+        {activeTab === 'Overview / Health Dashboard' && activeJobCount > 0 ? (
+          <div className="maint-job-banner">
+            <span style={{ fontSize: 14 }}>
+              <strong>{activeJobCount}</strong> job{activeJobCount === 1 ? '' : 's'} running (install, diagnostics, etc.).
+            </span>
+            <button
+              type="button"
+              className="hp-btn hp-btn-primary"
+              style={{ fontSize: 12 }}
+              onClick={() => document.getElementById('maintenance-job-runner')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+            >
+              View job runner
+            </button>
+          </div>
+        ) : null}
         <div className="hp-grid-2" style={{ gap: 18, alignItems: 'stretch' }}>
           <div style={{ minHeight: 130, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-            <div className="hp-section-title">System Overview</div>
-            <div style={{ fontSize: 32, fontWeight: 800, lineHeight: 1.2 }}>
-              {guardianScore}% <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>health</span>
+            <div className="hp-section-title">System overview</div>
+            <div className="maint-score-wrap">
+              <div>
+                <div className="maint-score-num">{guardian.score === null ? '—' : `${guardian.score}%`}</div>
+                <div className="maint-score-sub">Guardian health</div>
+              </div>
             </div>
-            <div className="hp-row-wrap" style={{ marginTop: 10, fontSize: 12, color: 'var(--text-muted)', rowGap: 6 }}>
-              <span>CPU {m?.cpuUsagePercent.toFixed(1) ?? '0.0'}%</span>
-              <span>Mem {m ? Math.round(((m.totalMemMb - m.freeMemMb) / m.totalMemMb) * 100) : 0}%</span>
-              <span>Disk {m ? Math.round(((m.diskTotalGb - m.diskFreeGb) / m.diskTotalGb) * 100) : 0}%</span>
-              <span>Docker {runningContainers}/{containers.length}</span>
+            <div className="maint-kpi-row">
+              <span className="maint-kpi">CPU {m?.cpuUsagePercent.toFixed(1) ?? '—'}%</span>
+              <span className="maint-kpi">Mem {m ? Math.round(((m.totalMemMb - m.freeMemMb) / m.totalMemMb) * 100) : '—'}%</span>
+              <span className="maint-kpi">Disk {m ? Math.round(((m.diskTotalGb - m.diskFreeGb) / m.diskTotalGb) * 100) : '—'}%</span>
+              <span className="maint-kpi">Docker {runningContainers}/{containers.length}</span>
             </div>
           </div>
           <div style={{ minHeight: 130 }}>
@@ -495,6 +562,32 @@ export function MaintenancePage(): ReactElement {
             </div>
           </div>
         </div>
+        {activeTab === 'Overview / Health Dashboard' ? (
+          <div className="maint-divider">
+            <div className="hp-section-title">Guardian layers</div>
+            <p className="hp-muted" style={{ fontSize: 12, lineHeight: 1.55, marginTop: 6, marginBottom: 14 }}>
+              Each layer reads a specific IPC signal. The headline score is <strong>100</strong> minus the deductions shown on
+              failing layers (floored at 0). This is the coded definition of “Guardian” in this app — not a separate marketing score.
+            </p>
+            <div className="maint-layer-grid">
+              {guardian.layers.map((layer) => (
+                <div
+                  key={layer.id}
+                  className={`maint-layer-tile ${layer.ok ? 'maint-layer-tile--ok' : 'maint-layer-tile--warn'}`}
+                >
+                  <div style={{ fontWeight: 750, fontSize: 14, letterSpacing: '-0.01em' }}>{layer.title}</div>
+                  <div className="hp-muted" style={{ fontSize: 10, marginTop: 6, lineHeight: 1.4 }}>{layer.signals}</div>
+                  <div style={{ marginTop: 10, fontSize: 13, lineHeight: 1.45 }}>{layer.detail}</div>
+                  {layer.deduction > 0 ? (
+                    <div style={{ marginTop: 10, fontSize: 11, fontWeight: 800, color: 'var(--orange)' }}>−{layer.deduction} pts</div>
+                  ) : (
+                    <div style={{ marginTop: 10, fontSize: 11, fontWeight: 800, color: 'var(--green)' }}>−0 pts</div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
       </section>
       ) : null}
 
@@ -587,7 +680,7 @@ export function MaintenancePage(): ReactElement {
         </div>
         <div style={{ marginTop: 12, display: 'grid', gap: 8 }}>
           {state.tasks.length === 0 ? (
-            <div className="hp-muted">No maintenance tasks yet.</div>
+            <div className="hp-muted">No maintenance tasks yet. Use the host actions below — output opens in a panel (no terminal copy/paste).</div>
           ) : (
             state.tasks.map((task) => (
               <div key={task.id} style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 10 }}>
@@ -601,25 +694,25 @@ export function MaintenancePage(): ReactElement {
                 {task.cronHint ? <div className="mono hp-muted" style={{ fontSize: 11, marginTop: 6 }}>cron: {task.cronHint}</div> : null}
                 {task.commandHint ? (
                   <div className="hp-row-wrap" style={{ marginTop: 6 }}>
-                    <span className="mono" style={{ fontSize: 11 }}>{task.commandHint}</span>
-                    <button className="hp-btn" onClick={() => void copyCommand(task.commandHint ?? '')}>Copy command</button>
+                    <button type="button" className="hp-btn" onClick={() => setCommandPeek(task.commandHint ?? '')}>
+                      View command hint
+                    </button>
                   </div>
                 ) : null}
               </div>
             ))
           )}
         </div>
-        <div className="hp-row-wrap" style={{ marginTop: 12 }}>
-          {OPS_COMMAND_TEMPLATES.map((cmd) => (
-            <button key={cmd} className="hp-btn" onClick={() => void copyCommand(cmd)}>Copy: {cmd}</button>
-          ))}
-        </div>
+        <MaintenanceRunbookStrip runbookBusyId={runbookBusyId} onRun={runHostProbe} />
       </section>
       ) : null}
 
       {(activeTab === 'Logs & History' || activeTab === 'Overview / Health Dashboard') ? (
-      <section className="hp-card">
-        <div className="hp-section-title">Job Runner</div>
+      <section className="hp-card" id="maintenance-job-runner">
+        <div className="hp-section-title">Job Runner (active tasks)</div>
+        <p className="hp-muted" style={{ fontSize: 12, marginTop: 4, marginBottom: 10 }}>
+          Long-running work from the Phase 0 job runner (install runtimes, etc.). Polls with the maintenance page refresh.
+        </p>
         <div className="hp-table-wrap" style={{ borderRadius: 10, border: '1px solid var(--border)' }}>
           <table className="hp-table">
             <thead>
@@ -705,49 +798,87 @@ export function MaintenancePage(): ReactElement {
 
       {(activeTab === 'Logs & History' || activeTab === 'Overview / Health Dashboard') ? (
         <section className="hp-card">
-          <div className="hp-section-title">Integrity & Diagnostics</div>
-          <div className="hp-row-wrap" style={{ marginBottom: 12, rowGap: 8 }}>
+          <div className="hp-section-title">Integrity & diagnostics</div>
+          <div className="maint-toolbar">
             <button className="hp-btn hp-btn-primary" onClick={() => void runDiagnosticsWizard()} disabled={runningDiagnostics}>
-              {runningDiagnostics ? 'Running diagnostics...' : 'Run diagnostics wizard'}
+              <span className="codicon codicon-run-all" aria-hidden style={{ fontSize: 15 }} />
+              {runningDiagnostics ? 'Running…' : 'Run diagnostics'}
             </button>
-            <button className="hp-btn" onClick={() => void exportDiagnosticReport()}>
-              Export diagnostic report
+            <button type="button" className="hp-btn" onClick={() => void exportDiagnosticReport()}>
+              <span className="codicon codicon-export" aria-hidden style={{ fontSize: 15 }} />
+              Export report
             </button>
-            <label className="hp-muted" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <label className="hp-muted" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
               <input
                 type="checkbox"
                 checked={includeSensitiveBundle}
                 onChange={(e) => setIncludeSensitiveBundle(e.target.checked)}
               />
-              Include sensitive diagnostics
+              Include sensitive bundle
             </label>
           </div>
-          <div style={{ display: 'grid', gap: 8 }}>
+          <div className="maint-diag-list">
             {diagnostics.length === 0 ? (
-              <div className="hp-muted">No diagnostics run yet.</div>
+              <div className="hp-muted" style={{ padding: '8px 0' }}>
+                No diagnostics run yet. Run checks above, then use host actions for deeper probes.
+              </div>
             ) : (
               diagnostics.map((d) => (
-                <div key={d.id} style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10 }}>
-                  <div className="hp-row-wrap" style={{ justifyContent: 'space-between' }}>
-                    <strong>{d.label}</strong>
-                    <StatusPill state={d.ok ? 'success' : 'failed'} />
-                  </div>
-                  <div className="mono hp-muted" style={{ marginTop: 6, fontSize: 11 }}>{d.details}</div>
+                <div key={d.id} className={`maint-diag-row ${d.ok ? 'maint-diag-row--pass' : 'maint-diag-row--fail'}`}>
+                  <strong style={{ fontSize: 14 }}>{d.label}</strong>
+                  <StatusPill state={d.ok ? 'success' : 'failed'} />
+                  <div className="maint-diag-detail mono hp-muted">{d.details}</div>
                 </div>
               ))
             )}
           </div>
+          <MaintenanceRunbookStrip runbookBusyId={runbookBusyId} onRun={runHostProbe} />
         </section>
       ) : null}
 
-      {status ? <div className={`hp-status-alert ${/saved|copied|finished|completed|passed|exported/i.test(status) ? 'success' : 'warning'}`}>{status}</div> : null}
+      {runbook ? (
+        <section className="hp-card maint-output-panel" aria-live="polite">
+          <div className="maint-output-head">
+            <h2 className="maint-output-title">{runbook.title}</h2>
+            <button type="button" className="hp-btn" onClick={() => setRunbook(null)}>
+              Close
+            </button>
+          </div>
+          <pre className="maint-output-body">{runbook.text}</pre>
+        </section>
+      ) : null}
+
+      {commandPeek ? (
+        <section className="hp-card maint-output-panel">
+          <div className="maint-output-head">
+            <h2 className="maint-output-title">Command hint</h2>
+            <button type="button" className="hp-btn" onClick={() => setCommandPeek(null)}>
+              Close
+            </button>
+          </div>
+          <pre className="maint-output-body maint-output-body--compact">{commandPeek}</pre>
+        </section>
+      ) : null}
+
+      {status ? (
+        <div
+          role="status"
+          className={`hp-status-alert ${maintenanceStatusTone(status) === 'success' ? 'success' : 'warning'}`}
+          style={{ justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}
+        >
+          <span style={{ flex: '1 1 220px', minWidth: 0 }}>{status}</span>
+          <button type="button" className="hp-btn" onClick={() => setStatus('')} aria-label="Dismiss notification">
+            Dismiss
+          </button>
+        </div>
+      ) : null}
     </div>
   )
 }
 
 function StatusPill({ state }: { state: string }): ReactElement {
   const color =
-    state === 'running' || state === 'healthy' || state === 'active'
+    state === 'running' || state === 'healthy' || state === 'active' || state === 'success'
       ? 'var(--green)'
       : state === 'completed'
         ? 'var(--accent)'
@@ -757,27 +888,16 @@ function StatusPill({ state }: { state: string }): ReactElement {
             ? 'var(--red)'
             : 'var(--text-muted)'
   return (
-    <span style={{ border: `1px solid ${color}55`, color, borderRadius: 999, padding: '2px 8px', fontSize: 11, fontWeight: 700 }}>
+    <span
+      className="maint-status-pill"
+      style={{
+        border: `1px solid ${color}66`,
+        color,
+        background: `${color}14`,
+        boxShadow: `0 0 20px -8px ${color}`,
+      }}
+    >
       {state.toUpperCase()}
     </span>
   )
-}
-
-function calculateGuardianScore(
-  m: HostMetricsResponse['metrics'] | undefined,
-  security: HostSecuritySnapshot | null,
-  containers: ContainerRow[]
-): number {
-  if (!m) return 100
-  let score = 100
-  const memPct = m.totalMemMb > 0 ? Math.round(((m.totalMemMb - m.freeMemMb) / m.totalMemMb) * 100) : 0
-  const diskPct = m.diskTotalGb > 0 ? Math.round(((m.diskTotalGb - m.diskFreeGb) / m.diskTotalGb) * 100) : 0
-  if (m.cpuUsagePercent > 85) score -= 18
-  if (memPct > 90) score -= 22
-  if (diskPct > 92) score -= 20
-  if (security?.firewall !== 'active') score -= 15
-  if (security?.sshPasswordAuth === 'yes') score -= 10
-  const running = containers.filter((c) => c.state === 'running').length
-  if (containers.length > 0 && running / containers.length < 0.3) score -= 8
-  return Math.max(0, score)
 }
