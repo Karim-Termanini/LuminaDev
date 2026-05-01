@@ -20,7 +20,7 @@ jobs:
       - name: Install Flatpak runtimes
         run: |
           flatpak install --user -y --noninteractive flathub org.gnome.Platform//49 org.gnome.Sdk//49
-          flatpak install --user -y --noninteractive flathub org.freedesktop.Sdk.Extension.rust-stable org.freedesktop.Sdk.Extension.node20
+          flatpak install --user -y --noninteractive flathub org.freedesktop.Sdk.Extension.rust-stable//25.08 org.freedesktop.Sdk.Extension.node20//25.08
       - name: Build Flatpak bundle
         uses: flatpak/flatpak-github-actions/flatpak-builder@v6
         with:
