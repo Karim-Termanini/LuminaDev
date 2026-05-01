@@ -65,11 +65,18 @@ Progress notes (2026-05-01):
 ### Day 5 — Deep Audit: Critical Paths
 
 Manually review:
-- [ ] All `tauri::command` handlers that use `shell::Command` or exec
-- [ ] Timeouts and error handling in Job Runner
-- [ ] Capabilities in `tauri.conf.json` (every command explicitly allowed)
-- [ ] Docker integration in Rust (socket connection + error messages)
-- [ ] Maintenance Guardian logic (health scoring, aggregate metrics)
+- [x] All `tauri::command` handlers that use `shell::Command` or exec
+- [x] Timeouts and error handling in Job Runner
+- [x] Capabilities in `tauri.conf.json` (every command explicitly allowed)
+- [x] Docker integration in Rust (socket connection + error messages)
+- [x] Maintenance Guardian logic (health scoring, aggregate metrics)
+
+Progress notes (2026-05-01):
+- Audited host command execution paths (`exec_output_limit`, `exec_result_limit`, Docker/SSH/curl command entry points) and timeout bounds (`CMD_TIMEOUT_SHORT/DEFAULT/LONG/INSTALL_STEP`) in `apps/desktop/src-tauri/src/lib.rs`.
+- Fixed Job Runner cancellation race: cancelled jobs could be overwritten to `completed` at finalization. Added cancellation-precedence final-state resolution (`effective_runtime_job_final_state`) and tests.
+- Capability audit: command surface remains constrained to `ipc_invoke` + `ipc_send` handlers; capability file `apps/desktop/src-tauri/capabilities/default.json` grants `core:default`, `dialog:default`, `opener:default` only.
+- Docker integration audit: reviewed all `dh:docker:*` channels in Rust dispatcher for prefixed error contracts (`[DOCKER_*]`) and timeout-bounded command execution.
+- Maintenance Guardian audit/fix: clamped RAM/disk derived percentages to `0..100` in `evaluateGuardian(...)` and expanded tests for high-pressure + impossible-metric edge cases.
 
 ### Days 6–7 — Cross-Distro Testing + Bug Fixing
 
@@ -84,8 +91,8 @@ Focus areas:
 Bug fixes priority (see Known Bugs table below):
 - [x] Bug #5 — `riskyOpenPorts?.length` crash → **FIXED**
 - [x] Bug #7 — `uninstallPreview` fires on every mode toggle → **FIXED**
-- [ ] Bug #2 — `installedFeatures` not refreshed post-install (Docker wizard)
-- [ ] Bug #4 — Docker Hub link broken for official images (needs manual verify)
+- [x] Bug #2 — `installedFeatures` refreshed post-install (Docker wizard)
+- [x] Bug #4 — Docker Hub official-image links normalized (`library/*` + bare names)
 
 ### Days 8–9 — Polish + Documentation
 
@@ -167,7 +174,7 @@ All five stabilization checklist items `done`. `pnpm smoke` green. See [`docs/ST
 - [x] Docker Hub search + tag picker
 - [x] In-container terminal (`dockerTerminal` IPC)
 
-Known issue: `installedFeatures` only refreshed on mount — wizard may show Docker missing on re-open after mid-session install. (Bug #2, medium priority.)
+Known issue addressed: install wizard now refreshes `installedFeatures` on open and after successful install, so mid-session installs are reflected without reload.
 
 ---
 
@@ -282,9 +289,9 @@ See Days 1–2 and Day 10 in sprint above. Full checklist in [`docs/FLATHUB_CHEC
 | # | Page | Bug | Status |
 |---|------|-----|--------|
 | 1 | GitConfigPage | Mask toggle inverted | ✅ FIXED |
-| 2 | DockerPage | `installedFeatures` not refreshed post-install | ⚠ OPEN — medium, fix Days 6–7 |
+| 2 | DockerPage | `installedFeatures` not refreshed post-install | ✅ FIXED |
 | 3 | RegistryPage | `octocat/Hello-World` placeholder | ✅ FIXED |
-| 4 | RegistryPage | Docker Hub link broken for official images | ❓ Needs manual check |
+| 4 | RegistryPage | Docker Hub link broken for official images | ✅ FIXED |
 | 5 | MonitorPage | `riskyOpenPorts?.length` crash | ✅ FIXED |
 | 6 | MaintenancePage | `memPct`/`diskPct` from null `m` | ✅ FIXED |
 | 7 | RuntimesPage | `uninstallPreview` fires on every mode toggle | ✅ FIXED |

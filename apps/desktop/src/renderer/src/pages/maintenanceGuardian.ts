@@ -90,8 +90,10 @@ export function evaluateGuardian(
   }
 
   const m = metrics
-  const memPct = m.totalMemMb > 0 ? Math.round(((m.totalMemMb - m.freeMemMb) / m.totalMemMb) * 100) : 0
-  const diskPct = m.diskTotalGb > 0 ? Math.round(((m.diskTotalGb - m.diskFreeGb) / m.diskTotalGb) * 100) : 0
+  const rawMemPct = m.totalMemMb > 0 ? Math.round(((m.totalMemMb - m.freeMemMb) / m.totalMemMb) * 100) : 0
+  const rawDiskPct = m.diskTotalGb > 0 ? Math.round(((m.diskTotalGb - m.diskFreeGb) / m.diskTotalGb) * 100) : 0
+  const memPct = Math.max(0, Math.min(100, rawMemPct))
+  const diskPct = Math.max(0, Math.min(100, rawDiskPct))
   const running = containers.filter((c) => c.state === 'running').length
   const total = containers.length
   const ratio = total > 0 ? running / total : 1

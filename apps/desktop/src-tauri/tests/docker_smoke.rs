@@ -1,7 +1,10 @@
 use std::process::Command;
 
 fn docker_cmd(args: &[&str]) -> Option<std::process::Output> {
-  Command::new("docker").args(args).output().ok()
+  Command::new("docker")
+    .args(args)
+    .output()
+    .ok()
 }
 
 fn docker_builder_supports_dry_run() -> bool {
