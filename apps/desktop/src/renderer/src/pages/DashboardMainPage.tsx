@@ -1,10 +1,8 @@
 import {
-  CustomProfileEntrySchema,
-  CustomProfilesStoreSchema,
   type ComposeProfile,
   type ContainerRow,
-  type CustomProfileEntry,
   type HostMetricsResponse,
+  parseStoredActiveProfile,
 } from '@linux-dev-home/shared'
 import type { CSSProperties, ReactElement } from 'react'
 import { useCallback, useEffect, useState } from 'react'
@@ -13,7 +11,6 @@ import { assertDockerOk } from './dockerContract'
 import { humanizeDockerError } from './dockerError'
 import { humanizeDashboardError } from './dashboardError'
 
-import { CustomProfileWizardModal } from '../dashboard/CustomProfileWizardModal'
 
 export function DashboardMainPage(): ReactElement {
   const [docker, setDocker] = useState<
@@ -22,8 +19,7 @@ export function DashboardMainPage(): ReactElement {
   const [snap, setSnap] = useState<HostMetricsResponse | null>(null)
   const [metricsError, setMetricsError] = useState<string | null>(null)
   const [composeMsg, setComposeMsg] = useState<string | null>(null)
-  const [wizardOpen, setWizardOpen] = useState(false)
-  const [customProfiles, setCustomProfiles] = useState<CustomProfileEntry[]>([])
+  const [activeProfile, setActiveProfile] = useState<ComposeProfile | null>(null)
 
   const refresh = useCallback(async () => {
     try {
@@ -45,6 +41,15 @@ export function DashboardMainPage(): ReactElement {
     } catch (e) {
       setMetricsError(e instanceof Error ? e.message : String(e))
     }
+    try {
+      const ap = (await window.dh.storeGet({ key: 'active_profile' })) as {
+        ok: boolean
+        data?: unknown
+      }
+      setActiveProfile(ap.ok ? parseStoredActiveProfile(ap.data) : null)
+    } catch {
+      /* keep last known */
+    }
   }, [])
 
   useEffect(() => {
@@ -52,20 +57,6 @@ export function DashboardMainPage(): ReactElement {
     const id = setInterval(() => void refresh(), 4000)
     return () => clearInterval(id)
   }, [refresh])
-
-  useEffect(() => {
-    void (async () => {
-      try {
-        const profiles = await window.dh.storeGet({ key: 'custom_profiles' })
-        if (profiles) {
-          const parsed = CustomProfilesStoreSchema.safeParse(profiles)
-          if (parsed.success) setCustomProfiles(parsed.data)
-        }
-      } catch {
-        /* ignore */
-      }
-    })()
-  }, [])
 
   async function initProfile(profile: ComposeProfile): Promise<void> {
     setComposeMsg(`Starting ${profile}…`)
@@ -116,45 +107,14 @@ export function DashboardMainPage(): ReactElement {
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', justifyContent: 'space-between' }}>
         <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)', maxWidth: 720 }}>
-          Dashboard cards and Docker overview stay on{' '}
-          <span style={{ color: 'var(--text)', fontWeight: 600 }}>Main</span>. Pin
-          widgets and shortcuts on the dedicated{' '}
-          <Link to="/dashboard/widgets" style={{ color: 'var(--accent)', fontWeight: 600 }}>
-            Widget
+          Select a preset environment to initialize its compose stack. Active profile highlighted.
+          Change active profile from the{' '}
+          <Link to="/profiles" style={{ color: 'var(--accent)', fontWeight: 600 }}>
+            Profiles
           </Link>{' '}
-          page (top bar tab).
+          page or the Setup Wizard.
         </p>
-        <button
-          type="button"
-          onClick={() => setWizardOpen(true)}
-          style={{
-            border: '1px dashed var(--border)',
-            background: 'transparent',
-            color: 'var(--accent)',
-            borderRadius: 8,
-            padding: '10px 16px',
-            fontWeight: 600,
-            cursor: 'pointer',
-            fontSize: 13,
-            flexShrink: 0,
-          }}
-        >
-          <span className="codicon codicon-settings-gear" style={{ marginRight: 8 }} aria-hidden />
-          Custom profile…
-        </button>
       </div>
-
-      <CustomProfileWizardModal
-        open={wizardOpen}
-        onClose={() => setWizardOpen(false)}
-        onSave={async (data) => {
-          const entry = CustomProfileEntrySchema.parse(data)
-          const next = CustomProfilesStoreSchema.parse([...customProfiles, entry])
-          setCustomProfiles(next)
-          await window.dh.storeSet({ key: 'custom_profiles', data: next })
-          setWizardOpen(false)
-        }}
-      />
 
       <div
         style={{
@@ -171,6 +131,7 @@ export function DashboardMainPage(): ReactElement {
           icon="globe"
           onInit={() => void initProfile('web-dev')}
           status="live"
+          isActive={activeProfile === 'web-dev'}
         />
         <ProfileCard
           tag="PROFILE_02"
@@ -180,6 +141,7 @@ export function DashboardMainPage(): ReactElement {
           icon="graph"
           onInit={() => void initProfile('data-science')}
           status="live"
+          isActive={activeProfile === 'data-science'}
         />
         <ProfileCard
           tag="PROFILE_03"
@@ -189,6 +151,7 @@ export function DashboardMainPage(): ReactElement {
           icon="hubot"
           onInit={() => void initProfile('ai-ml')}
           status="live"
+          isActive={activeProfile === 'ai-ml'}
         />
         <ProfileCard
           tag="PROFILE_04"
@@ -198,6 +161,7 @@ export function DashboardMainPage(): ReactElement {
           icon="device-mobile"
           onInit={() => void initProfile('mobile')}
           status="planned"
+          isActive={activeProfile === 'mobile'}
         />
         <ProfileCard
           tag="PROFILE_05"
@@ -207,6 +171,7 @@ export function DashboardMainPage(): ReactElement {
           icon="play-circle"
           onInit={() => void initProfile('game-dev')}
           status="planned"
+          isActive={activeProfile === 'game-dev'}
         />
         <ProfileCard
           tag="PROFILE_06"
@@ -216,6 +181,7 @@ export function DashboardMainPage(): ReactElement {
           icon="server-environment"
           onInit={() => void initProfile('infra')}
           status="planned"
+          isActive={activeProfile === 'infra'}
         />
         <ProfileCard
           tag="PROFILE_07"
@@ -225,6 +191,7 @@ export function DashboardMainPage(): ReactElement {
           icon="window"
           onInit={() => void initProfile('desktop-gui')}
           status="planned"
+          isActive={activeProfile === 'desktop-gui'}
         />
         <ProfileCard
           tag="PROFILE_08"
@@ -234,6 +201,7 @@ export function DashboardMainPage(): ReactElement {
           icon="book"
           onInit={() => void initProfile('docs')}
           status="live"
+          isActive={activeProfile === 'docs'}
         />
         <ProfileCard
           tag="PROFILE_09"
@@ -243,19 +211,8 @@ export function DashboardMainPage(): ReactElement {
           icon="blank"
           onInit={() => void initProfile('empty')}
           status="live"
+          isActive={activeProfile === 'empty'}
         />
-        {customProfiles.map((p, i) => (
-          <ProfileCard
-            key={i}
-            tag="CUSTOM"
-            title={p.name}
-            accent="var(--accent)"
-            description={`Custom profile based on ${p.baseTemplate}.`}
-            icon="code"
-            onInit={() => void initProfile(p.baseTemplate)}
-            status="live"
-          />
-        ))}
       </div>
 
       <div
@@ -420,15 +377,16 @@ function ProfileCard(props: {
   icon: string
   onInit: () => void
   status: 'live' | 'planned'
+  isActive?: boolean
 }): ReactElement {
   const isPlanned = props.status === 'planned'
   return (
     <article
       style={{
-        background: 'var(--bg-widget)',
-        border: '1px solid var(--border)',
+        background: props.isActive ? `color-mix(in srgb, ${props.accent} 8%, var(--bg-widget))` : 'var(--bg-widget)',
+        border: props.isActive ? `2px solid ${props.accent}` : '1px solid var(--border)',
         borderRadius: 'var(--radius)',
-        padding: 18,
+        padding: props.isActive ? 17 : 18,
         display: 'flex',
         flexDirection: 'column',
         gap: 12,
@@ -442,6 +400,11 @@ function ProfileCard(props: {
           <span className="mono" style={{ color: 'var(--text-muted)', fontSize: 10 }}>
             {props.tag}
           </span>
+          {props.isActive && (
+            <span style={{ fontSize: 9, fontWeight: 800, padding: '2px 6px', borderRadius: 4, background: props.accent, color: '#fff', letterSpacing: '0.05em' }}>
+              ACTIVE
+            </span>
+          )}
           {isPlanned && (
             <span
               style={{

@@ -8,6 +8,7 @@ import {
   GitCloneRequestSchema,
   GitConfigSetSchema,
   HostExecRequestSchema,
+  parseStoredActiveProfile,
   RuntimeCheckDepsRequestSchema,
   RuntimeGetVersionsRequestSchema,
   RuntimeSetActiveRequestSchema,
@@ -144,5 +145,19 @@ describe('schemas', () => {
     expect(() =>
       CustomProfilesStoreSchema.parse([{ name: 'x', baseTemplate: 'not-real' as never }])
     ).toThrow()
+  })
+
+  it('parses active_profile store set with compose enum only', () => {
+    const v = StoreSetRequestSchema.parse({ key: 'active_profile', data: 'web-dev' })
+    expect(v).toEqual({ key: 'active_profile', data: 'web-dev' })
+    expect(() => StoreSetRequestSchema.parse({ key: 'active_profile', data: 'not-a-profile' as never })).toThrow()
+  })
+
+  it('parseStoredActiveProfile accepts canonical and legacy ids', () => {
+    expect(parseStoredActiveProfile('empty')).toBe('empty')
+    expect(parseStoredActiveProfile('minimal')).toBe('empty')
+    expect(parseStoredActiveProfile('desktop-qt')).toBe('desktop-gui')
+    expect(parseStoredActiveProfile('typo')).toBe(null)
+    expect(parseStoredActiveProfile(null)).toBe(null)
   })
 })

@@ -10,11 +10,18 @@ Thanks for contributing.
 pnpm install
 ```
 
-### 🏗️ Rust backend modularization (Tauri)
+### 🏗️ Architecture & Modularization Policy
 
-- **Prefer new modules over growing `lib.rs`:** Put new behavior in focused files under `apps/desktop/src-tauri/src/` (for example `runtime_jobs.rs`, `runtime_verify.rs`) and keep `lib.rs` mostly wiring (`mod …`, `use …`, dispatch).
-- **Small glue in `lib.rs` is OK:** Tiny helpers that only exist to connect IPC to modules are fine; avoid pasting large feature bodies into `lib.rs`.
-- **Goal:** keep `lib.rs` readable as an entry point, not as an everything-file.
+- **No `lib.rs` Bloat:** As of v0.2.0-alpha, adding new logic or functions directly to `apps/desktop/src-tauri/src/lib.rs` is strictly prohibited.
+- **New Modules First:** Every new feature or IPC handler group must be created in its own `.rs` file (e.g., `runtime_jobs.rs`).
+- **Clean Interface:** `lib.rs` should only serve as the entry point and dispatcher, keeping its size manageable.
+
+### 🚀 CI & Push Policy
+
+- **Bundle Your Pushes:** Do not push every single micro-commit. Instead, bundle related commits locally and perform a single `git push` only after completing a significant milestone or "Vertical Slice".
+- **Respect CI Resources:** This keeps the CI pipeline clean and saves precious build time on GitLab/GitHub.
+
+### 🧪 Quality Gate Policy
 
 2. Run local quality gates before opening a PR:
 
