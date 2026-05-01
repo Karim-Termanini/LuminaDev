@@ -11,23 +11,28 @@ Cosmetic work (theming, drag-drop polish) is blocked until after Day 10.
 
 ### Days 1–2 — Flatpak Setup + Build
 
-- [ ] `flatpak install flathub org.gnome.Platform//48 org.gnome.Sdk//48`
+- [ ] `flatpak install flathub org.gnome.Platform//49 org.gnome.Sdk//49`
 - [ ] `flatpak install flathub org.freedesktop.Sdk.Extension.rust-stable`
-- [ ] Create `packaging/flatpak/com.luminadev.LuminaDev.yml` manifest (GNOME Platform runtime, cargo module)
-- [ ] Local build: `flatpak-builder --force-clean build-dir com.luminadev.LuminaDev.yml`
-- [ ] Local run: `flatpak-builder --run build-dir com.luminadev.LuminaDev.yml lumina-dev`
+- [x] Manifest exists: `flatpak/io.github.karimodora.LinuxDevHome.tauri.yml` (GNOME Platform runtime + cargo module)
+- [x] Local build: `flatpak-builder --user --install --force-clean flatpak-build-tauri flatpak/io.github.karimodora.LinuxDevHome.tauri.yml --install-deps-from=flathub`
+- [x] Local run: `flatpak run io.github.karimodora.LinuxDevHome`
 - [ ] Record all errors: permissions, missing deps, cargo offline issues
 - [ ] Fix common issues:
   - Docker socket → `--socket=session-bus` + `docker.sock` custom permission
   - Host commands → `flatpak-spawn --host` in Rust or `--allow=devel`
   - Rust deps → run `flatpak-cargo-generator` → `generated-sources.json`
 
+Progress notes (2026-05-01):
+- `corepack enable` failed in Flatpak build (`EROFS`); fixed by switching manifest build commands to `npx pnpm@9.14.2 ...`.
+- `npx` fetch for `pnpm` initially failed with `EAI_AGAIN registry.npmjs.org`; fixed by adding module `build-args: --share=network` in `flatpak/io.github.karimodora.LinuxDevHome.tauri.yml`.
+- Build now passes end-to-end; app installs as `io.github.karimodora.LinuxDevHome` and basic runtime sanity check passes.
+
 ### Days 3–4 — Smoke Tests + Docker Integration Tests
 
 - [ ] Add Rust smoke tests in `src-tauri/tests/`:
-  - `docker info`, `docker ps --all`, `docker version`
-  - Prune dry-run (images, volumes, build cache)
-  - Error case: Docker daemon not running
+  - [x] `docker info`, `docker ps --all`, `docker version`
+  - [x] Prune dry-run (images, volumes, build cache)
+  - [x] Error case: Docker daemon not running
 - [ ] Integration tests:
   - Job Runner with a long task (e.g. small `docker pull`)
   - Streaming logs
@@ -36,6 +41,10 @@ Cosmetic work (theming, drag-drop polish) is blocked until after Day 10.
   - `ci.yml` — typecheck + lint + build + tauri build on every PR/push to main
   - `smoke-tests.yml` — Rust tests + Docker smoke + job runner
   - `flatpak.yml` — Flatpak build + bundle + basic run test
+
+Progress notes (2026-05-01):
+- Added `apps/desktop/src-tauri/tests/docker_smoke.rs` with 5 tests covering Docker version/info/ps, prune preview probes, and daemon-down error simulation.
+- Test command: `cd apps/desktop/src-tauri && cargo test --test docker_smoke -- --nocapture` (passing locally).
 
 ### Day 5 — Deep Audit: Critical Paths
 
