@@ -1,16 +1,89 @@
 # LuminaDev — Product Phases Plan
 
-> Living document. Update status markers when a phase ships or behavior changes.
-> Route-level truth table: [`docs/ROUTE_STATUS.md`](docs/ROUTE_STATUS.md)
-> Release gate criteria: [`docs/STABILIZATION_CHECKLIST.md`](docs/STABILIZATION_CHECKLIST.md)
+> Living document. Route truth table: [`docs/ROUTE_STATUS.md`](docs/ROUTE_STATUS.md) | Release gate: [`docs/STABILIZATION_CHECKLIST.md`](docs/STABILIZATION_CHECKLIST.md)
 
 ---
 
-## Thoughts / Priorities
+## 🎯 Immediate Sprint (from `thoghts.md`) — DO THIS NOW
 
-1. **Days 1–5 (Stability):** Stick to `thoghts.md` exactly (Flatpak + Tests). Ensures foundation is solid.
-2. **During Days 6–7 (Bug Fixing):** Prioritize **Known Bugs** below (Docker stats, `riskyOpenPorts`), not random churn.
-3. **Ignore cosmetic features:** Drag-and-drop refinement and theming can remain partial through Alpha.
+**Critical paths only: Flatpak → Tests → Audit → Cross-distro → Release.**
+Cosmetic work (theming, drag-drop polish) is blocked until after Day 10.
+
+### Days 1–2 — Flatpak Setup + Build
+
+- [ ] `flatpak install flathub org.gnome.Platform//48 org.gnome.Sdk//48`
+- [ ] `flatpak install flathub org.freedesktop.Sdk.Extension.rust-stable`
+- [ ] Create `packaging/flatpak/com.luminadev.LuminaDev.yml` manifest (GNOME Platform runtime, cargo module)
+- [ ] Local build: `flatpak-builder --force-clean build-dir com.luminadev.LuminaDev.yml`
+- [ ] Local run: `flatpak-builder --run build-dir com.luminadev.LuminaDev.yml lumina-dev`
+- [ ] Record all errors: permissions, missing deps, cargo offline issues
+- [ ] Fix common issues:
+  - Docker socket → `--socket=session-bus` + `docker.sock` custom permission
+  - Host commands → `flatpak-spawn --host` in Rust or `--allow=devel`
+  - Rust deps → run `flatpak-cargo-generator` → `generated-sources.json`
+
+### Days 3–4 — Smoke Tests + Docker Integration Tests
+
+- [ ] Add Rust smoke tests in `src-tauri/tests/`:
+  - `docker info`, `docker ps --all`, `docker version`
+  - Prune dry-run (images, volumes, build cache)
+  - Error case: Docker daemon not running
+- [ ] Integration tests:
+  - Job Runner with a long task (e.g. small `docker pull`)
+  - Streaming logs
+  - Cancellation
+- [ ] Add CI workflows (only if better than existing CIs):
+  - `ci.yml` — typecheck + lint + build + tauri build on every PR/push to main
+  - `smoke-tests.yml` — Rust tests + Docker smoke + job runner
+  - `flatpak.yml` — Flatpak build + bundle + basic run test
+
+### Day 5 — Deep Audit: Critical Paths
+
+Manually review:
+- [ ] All `tauri::command` handlers that use `shell::Command` or exec
+- [ ] Timeouts and error handling in Job Runner
+- [ ] Capabilities in `tauri.conf.json` (every command explicitly allowed)
+- [ ] Docker integration in Rust (socket connection + error messages)
+- [ ] Maintenance Guardian logic (health scoring, aggregate metrics)
+
+### Days 6–7 — Cross-Distro Testing + Bug Fixing
+
+Test native + Flatpak on: **Ubuntu/Pop!OS**, **Fedora**, **Arch Linux** (VM if needed).
+
+Focus areas:
+- [ ] Docker socket inside Flatpak
+- [ ] Runtime installation (especially Java on Fedora)
+- [ ] Monitor metrics (`/proc` access in Flatpak)
+- [ ] Terminal integration
+
+Bug fixes priority (see Known Bugs table below):
+- [x] Bug #5 — `riskyOpenPorts?.length` crash → **FIXED**
+- [x] Bug #7 — `uninstallPreview` fires on every mode toggle → **FIXED**
+- [ ] Bug #2 — `installedFeatures` not refreshed post-install (Docker wizard)
+- [ ] Bug #4 — Docker Hub link broken for official images (needs manual verify)
+
+### Days 8–9 — Polish + Documentation
+
+- [ ] Fix UI bugs found during cross-distro testing
+- [ ] Update `README.md`: "Current Status" + "Known Limitations" sections
+- [ ] Write basic `CONTRIBUTING.md`
+- [ ] Update this file to reflect reality
+
+### Day 10 — Internal Release
+
+- [ ] Tag: `v0.2.0-alpha`
+- [ ] GitHub Release (draft): AppImage if easy, Flatpak bundle if successful
+- [ ] Clear install instructions + Known Issues list in release notes
+
+---
+
+## What is NOT Alpha scope (explicitly deprioritized)
+
+- ❌ Drag-and-drop polish (basic HTML5 reorder already works — good enough)
+- ❌ Theme surface rollout across all routes (Maintenance theme is pilot; others wait)
+- ❌ Phase 8 Settings, Phase 10 Extensions, Phase 12 Cloud Git
+- ❌ Profiles `setActive` / on-login actions
+- ❌ Git Doctor, Policy Lock, Visual Change Preview
 
 ---
 
@@ -25,18 +98,9 @@
 
 ---
 
-## Core Principles
-
-1. **Click-first UX** — Every flow has buttons, wizards, and status chips. Terminal is optional.
-2. **Two trust levels** — Flatpak / user home (no root) vs host / system (needs sudo / PolicyKit). Always explicit.
-3. **One IPC + schema layer** — `@linux-dev-home/shared` Zod schemas for every action. Main process owns policy checks, timeouts, allowlists.
-4. **Profiles = data** — A profile is a JSON document: nav items, widget layout, compose stacks, env presets, post-actions.
-
----
-
 ## Quality Gate ✅ PASSED
 
-All five stabilization checklist items verified `done` — commit discipline, IPC coverage, privilege boundary matrix, scope freeze, docs truthfulness. `pnpm smoke` green. See [`docs/STABILIZATION_CHECKLIST.md`](docs/STABILIZATION_CHECKLIST.md).
+All five stabilization checklist items `done`. `pnpm smoke` green. See [`docs/STABILIZATION_CHECKLIST.md`](docs/STABILIZATION_CHECKLIST.md).
 
 ---
 
@@ -53,292 +117,174 @@ All five stabilization checklist items verified `done` — commit discipline, IP
 ## Phase 1 — Dashboard: Profiles + Custom Layout 🔄 PARTIAL
 
 ### Verified shipped
-- [x] 9 preset profile cards on grid: Web Dev, Mobile, Game Dev, Infra/K8s, and 5 more (PROFILE_01–09)
+- [x] 9 preset profile cards on grid: Web Dev, Mobile, Game Dev, Infra/K8s, + 5 more (PROFILE_01–09)
 - [x] `CustomProfileWizardModal` — name → template → stacks → widgets → save to `custom_profiles` store
-- [x] Widget drag-and-drop reorder wired up (`DashboardWidgetDeck.tsx` HTML5 drag + `reorderWidgets` in `DashboardWidgetsPage`)
+- [x] Widget drag-and-drop reorder (HTML5, wired end-to-end in `DashboardWidgetDeck` + `DashboardWidgetsPage`)
 - [x] Widget layout load/save via `layoutGet` / `layoutSet` IPC
-- [x] `DashboardWidgetsPage`, `DashboardKernelsPage`, `DashboardLogsPage` all present and routed
+- [x] `DashboardWidgetsPage`, `DashboardKernelsPage`, `DashboardLogsPage` present and routed
 
-### Verified missing
-- [ ] Dashboard preset cards NOT linked to profile store — preset cards launch compose directly, custom profiles stored separately (two sources of truth)
-- [ ] Real Alpine `sleep infinity` compose stubs per preset profile
-- [ ] No `setActive` / on-login actions on profiles (verified: `ProfilesPage.tsx` has `duplicateAt` but no `setActive`)
+### Verified missing (not Alpha scope)
+- [ ] Preset cards not linked to profile store — two sources of truth
+- [ ] Alpine `sleep infinity` compose stubs per preset
+- [ ] No `setActive` / on-login actions
 
 ---
 
 ## Phase 2 — Docker ✅ SHIPPED (`/docker` → `live`)
 
-- [x] Container list (5s refresh) / start / stop / restart / remove / logs modal
+- [x] Container list / start / stop / restart / remove / logs modal
 - [x] Images: list / pull with tag picker / remove / prune
-- [x] Volumes: list / create / remove ("in use by" guard)
+- [x] Volumes: list / create / remove (with "in use by" guard)
 - [x] Networks: list / create / remove
-- [x] Cleanup: prune preview with reclaim estimate + selective run
+- [x] Cleanup: prune preview + selective run
 - [x] Port remap: clone container with new `-p`, stop/remove original
 - [x] Install wizard: native (distro steps with sudo) / Flatpak (warning + links)
-- [x] Docker Hub search + tag picker (`dockerSearch` / `dockerGetTags`)
+- [x] Docker Hub search + tag picker
 - [x] In-container terminal (`dockerTerminal` IPC)
 
-**Known issue (verified):** `installedFeatures` initialized to all-false at mount and only refreshed on mount + certain tab changes — install wizard may show Docker missing on page re-open after install completes mid-session. Low severity.
+Known issue: `installedFeatures` only refreshed on mount — wizard may show Docker missing on re-open after mid-session install. (Bug #2, medium priority.)
 
 ---
 
 ## Phase 3 — SSH ✅ SHIPPED (`/ssh` → `partial`)
 
 - [x] Key generation (ed25519), passphrase optional
-- [x] Public key display + copy button + fingerprint field
-- [x] GitHub SSH test (`ssh -T git@github.com`) with output
-- [x] Remote key setup via `sshSetupRemoteKey` (sshpass, password in component state only, never persisted)
+- [x] Public key display + copy + fingerprint
+- [x] GitHub SSH test with output
+- [x] Remote key setup (`sshSetupRemoteKey`, password in component state only)
 - [x] `sshListDir` for remote directory browsing
-- [x] `sshEnableLocal` for local SSH daemon setup
-- [x] SSH bookmarks save/load from store (`ssh_bookmarks` key)
-- [x] Flatpak note: `~/.ssh` needs `--filesystem=home` override (documented in `PRIVILEGE_BOUNDARY_MATRIX.md`)
-
-### Remaining
-- [ ] OS keyring integration for passphrase (later polish)
-- [ ] Advanced remote file transfer UX
+- [x] `sshEnableLocal` for local SSH daemon
+- [x] SSH bookmarks save/load from store
+- [x] Flatpak note in UI (`~/.ssh` needs `--filesystem=home`)
 
 ---
 
 ## Phase 4 — Git Environment Manager ✅ SHIPPED (`/git-config` → `live`)
 
-Sidebar-nav panel with 5 sections:
-
-- [x] **Overview** — 4 health score cards (Identity / Security / Performance / Compatibility) + total score + smart suggestions with one-click fix
-- [x] **Identity Center** — name, email, branch quick-picks (main/master/develop), editor quick-picks (VS Code/vim/nano/emacs/nvim), profile label (Personal / Work / Open Source)
-- [x] **Security Center** — SECURE / ATTENTION / RISK rows: credential helper, commit signing, SSL verify, cookie file. Inline action buttons.
-- [x] **Behavior Settings** — toggle switches: Rebase on Pull, Auto Prune, Auto Prune Tags, Index Preload, FS Cache, Auto Stash, Commit Signing, Line Ending Mode (3-way button)
-- [x] **Preset Templates** — Beginner Safe / Developer Pro / Open Source Ready / High Security / Corporate Policy (apply curated key sets in one click)
-- [x] **Config Inspector** — search + category filter (Identity/Security/Performance/Advanced) + sort + risk indicators + sensitive value masking with Show/Hide
-- [x] Backend `dh:git:config:set-key` with allowlist of 20 safe writable keys
-- [x] Toast notifications for all actions
-
-### Planned (later polish)
-- [ ] Git Doctor: "Scan Configuration" — detect misconfigs, deprecated settings, performance bottlenecks
-- [ ] Policy Lock: enforce and lock keys for corporate environments
-- [ ] Visual Change Preview: diff view before apply + undo
-- [ ] Backup / Restore: export / import `.gitconfig` snapshot (lives in Maintenance)
+- [x] Overview: 4 health score cards + total score + smart suggestions with one-click fix
+- [x] Identity Center: name, email, branch quick-picks, editor quick-picks, profile label
+- [x] Security Center: SECURE/ATTENTION/RISK rows with inline action buttons
+- [x] Behavior Settings: toggle switches for 7 git behaviors + 3-way line ending
+- [x] Preset Templates: 5 curated presets applied in one click
+- [x] Config Inspector: search + category filter + sort + risk indicators + sensitive masking
+- [x] Backend `dh:git:config:set-key` with 20-key allowlist
+- [x] Toast notifications
 
 ---
 
 ## Phase 5 — Monitor 🔄 PARTIAL (`/system` → `partial`)
 
-- [x] CPU %, memory, swap, disk, load average (2s refresh from `/proc`)
-- [x] Real net Mbps + disk Mbps via two-pass `/proc/net/dev` + `/proc/diskstats` delta in `AppState`
-- [x] Top N processes (`ps`, strict row cap)
-- [x] Listening ports table (LISTEN state filter corrected)
-- [x] Security snapshot: firewall, SELinux, SSH auth, failed logins 24h, risky ports
-- [x] Security drilldown: failed auth samples, risky port process owners
-- [x] System info: 14 fields (hostname, OS, kernel, arch, uptime, IP, distro, shell, DE, WM, GPU, memory, packages, resolution)
-- [x] GitHub commits feed widget (public API, rate-limited)
+- [x] CPU %, memory, swap, disk, load avg (2s refresh)
+- [x] Real net/disk Mbps via two-pass `/proc` delta
+- [x] Top N processes, listening ports, security snapshot + drilldown
+- [x] System info: 14 fields
+- [x] GitHub commits feed widget
 
-### Verified missing / issues
-- [ ] Per-container Docker stats stream not wired
-- [ ] LAN host discovery deferred (privacy-sensitive, intentional)
-- [ ] **Bug:** `security?.riskyOpenPorts.length` at lines 230, 236, 552 — if `security` is non-null but `riskyOpenPorts` is undefined (malformed IPC response), `.length` throws. Should be `security?.riskyOpenPorts?.length`. (Low probability, medium severity.)
+Missing: per-container stats stream, LAN discovery (intentional).
 
 ---
 
 ## Phase 6 — Runtimes 🔄 PARTIAL (`/runtimes` → `partial`)
 
-### Verified shipped (17 runtimes)
-Node.js, Python, Go, Rust, Java (Temurin), Bun, Zig, Dart, Flutter, Julia, PHP, Ruby, Lua, .NET, C/C++ (gcc), Octave (MATLAB), SBCL (Lisp)
+17 runtimes: Node, Python, Go, Rust, Java, Bun, Zig, Dart, Flutter, Julia, PHP, Ruby, Lua, .NET, C/C++, Octave, SBCL
 
-- [x] Local method per runtime: nvm, pyenv (3.10+ only), rustup, Temurin tarball, Go/Dart/Flutter/Bun/Zig SDK tarballs, juliaup, system packages (PHP/Ruby/Lua)
-- [x] System method: dnf / apt / pacman per runtime
-- [x] Real streaming progress bars (BufReader live stdout+stderr)
-- [x] `check-deps` live tool probes
-- [x] `uninstall-preview` distro-aware package list
-- [x] `remove-version` for isolated installs (lumina dir, nvm, pyenv, rustup, mise)
-- [x] `allVersions` detection for all runtimes: Rust (rustup toolchain list), Bun (`~/.bun`), Dart (`~/.dart/dart-sdk`), Flutter (reads version file, no binary spawn), Julia (juliaup list)
-- [x] Python version list filters EOL releases (only maintained 3.10+ shown)
-- [x] PHP local redirects to system packages (source compile is impractical/too slow)
-- [x] 4-step install wizard inside RuntimesPage (select → deps → install → verify)
+- [x] Local + system install methods per runtime
+- [x] Real streaming progress (BufReader live)
+- [x] `check-deps`, `uninstall-preview`, `remove-version`
+- [x] `allVersions` detection for all runtimes
+- [x] Python filters EOL, PHP uses system packages
 
-### Verified missing / issues
-- [ ] `removableDeps` always empty — no real dep graph implemented
-- [ ] Ruby source compile via mise is slow on Fedora (no prebuilt binary backend)
-- [ ] **Bug:** `uninstallPreview` useEffect deps include `removeMode` — IPC fires on every mode toggle, not just on modal open. Should debounce or split the effect. (Verified: `[showUninstallModal, selectedId, removeMode, selectedRuntime?.installed]`)
+Missing: real dep graph (`removableDeps` always empty), Ruby slow on Fedora.
 
 ---
 
 ## Phase 7 — Maintenance 🔄 PARTIAL (`/maintenance` → `partial`)
 
-- [x] `maintenanceGuardian.ts` — five deductive layers: Compute, Memory, Disk, Fleet (Docker), Security
-- [x] `evaluateGuardian()` shared between `/maintenance` page and `GuardianSummaryWidget` (dashboard parity confirmed)
-- [x] Overview: aggregate health score + per-layer tiles with accent colors
-- [x] Active jobs banner pinned to footer
-- [x] Diagnostics bundle: JSON export (metrics + security + job log + optional sensitive data)
-- [x] Docker resource cleanup: prune containers/images/volumes with preview
-- [x] Compose profile health + launch + logs
-- [x] Integrity: dismissible status, in-app host probes (docker df/ps, journalctl, cache du) via whitelisted `hostExec` — no clipboard-to-terminal runbook
+- [x] `maintenanceGuardian.ts` — 5 layers (Compute/Memory/Disk/Fleet/Security)
+- [x] `evaluateGuardian()` shared with `GuardianSummaryWidget` (dashboard parity)
+- [x] Health overview + layer tiles + active jobs footer
+- [x] Diagnostics bundle export
+- [x] Docker cleanup + compose health
+- [x] Integrity: in-app host probes via whitelisted `hostExec`
 
-### Verified missing
-- [ ] User-defined maintenance task checklist with cron hint display
-- [ ] Backup / Restore for git config snapshot
-- [ ] Extra signals on layer tiles (per-layer I/O, network throughput)
+Missing: user-defined task checklist, git config backup/restore.
 
 ---
 
-## Phase 8 — Settings 📋 PLANNED
+## Phase 8 — Settings 📋 PLANNED (post-Alpha)
 
-- [ ] SSH Hosts / App Bookmarks — user-managed connection bookmarks (no root)
-- [ ] `/etc/hosts` editor — root needed, strong warnings, "edit in terminal" fallback
-- [ ] Environment variables — session env file or profile-scoped; diff preview before apply
-- [ ] Theme / appearance — dark/light toggle, accent color picker (CSS variable system already in place)
+SSH bookmarks, `/etc/hosts` editor, env var manager, theme/accent picker.
 
 ---
 
-## Phase 9 — Profiles (product-level) 🔄 PARTIAL (`/profiles` → `stub`)
+## Phase 9 — Profiles 🗂 STUB (`/profiles` → `stub`)
 
-### Verified shipped
-- [x] Profiles load from store (`custom_profiles` key)
-- [x] Add / delete / export (JSON copy) / import
-- [x] `duplicateAt` — duplicate a profile
-- [x] Template list (local, user-defined)
-
-### Verified missing
-- [ ] `setActive` — no active profile concept implemented
-- [ ] On-login actions (start compose stacks, open dashboard layout)
-- [ ] Link Dashboard preset cards to this same store (two sources of truth currently)
-- [ ] Per-profile runtime set
-- [ ] Per-profile environment variable overrides
+- [x] CRUD: add / delete / duplicate / export / import
+- [ ] `setActive`, on-login actions, store unification with dashboard presets (post-Alpha)
 
 ---
 
-## Phase 10 — Extensions 📋 PLANNED
-
-- [ ] Extension model v0: extra widgets + optional IPC namespaces from signed/allowlisted folder
-- [ ] No arbitrary binary download at v0
-- [ ] Versioned API + marketplace — after v0 stable
+## Phase 10 — Extensions 📋 PLANNED (post-Alpha)
 
 ---
 
-## Phase 11 — First-run Wizard 🔄 PARTIAL (mostly shipped)
+## Phase 11 — First-run Wizard 🔄 PARTIAL
 
-### Verified shipped (6 steps, all implemented)
-- [x] Step 0: Welcome
-- [x] Step 1: Environment Check (Flatpak vs native detection, dual-strategy explanation)
-- [x] Step 2: Docker Connectivity check + Retry button
-- [x] Step 3: Git Setup (name / email / sandbox-vs-host target)
-- [x] Step 4: SSH Key Generation (ed25519, shows pubkey for GitHub)
-- [x] Step 5: Finish — "Show again next launch" checkbox, stores `wizard_state`
-- [x] Wizard auto-shows on first launch (`App.tsx` checks `wizard_state`)
-- [x] Each step has Skip option
-
-### Verified missing
-- [ ] "Pick starter profile" step not in wizard (jumps from SSH → Finish)
-- [ ] No Help menu entry to re-open wizard (AppShell has no `showWizard` wiring)
+- [x] 6 steps: Welcome → Environment → Docker check → Git setup → SSH keygen → Finish
+- [x] Auto-shows on first launch, skip on each step, "show again" checkbox
+- [ ] Missing: profile-pick step, Help menu re-entry point
 
 ---
 
-## Phase 12 — Advanced Source Control (GitHub & GitLab) 📋 PLANNED
-
-- [ ] Auth: secure PAT / OAuth storage for GitHub and GitLab
-- [ ] Interactive VC: visual commit / push / pull / sync + branch management
-- [ ] Cloud dashboards: PRs/MRs, Issues, CI/CD pipeline status, Releases & Tags
-- [ ] Repository widgets: local repo summary + cloud notifications (mentions, failed pipelines)
+## Phase 12 — Cloud Git (GitHub / GitLab) 📋 PLANNED (post-Alpha)
 
 ---
 
-## Phase 13 — Theme Surface Rollout 📋 PLANNED
+## Phase 13 — Theme Surface Rollout 📋 PLANNED (post-Alpha)
 
-Generalize Maintenance's visual language. One route per PR, page root class + `*Page.css`.
-
-Priority order (from `docs/THEME_ROLLOUT_PLAN.md`):
-
-| Priority | Route | Rationale |
-|----------|-------|-----------|
-| 1 | `/system` | Same health story as Maintenance; metric pills fit naturally |
-| 2 | `/docker` | High traffic; tables + toolbar + card elevation |
-| 3 | `/git-config` | Feature-rich; hero + section rails reduce visual noise |
-| 4 | `/runtimes` | Tiles + status panels match the new language |
-| 5 | `/dashboard` | Do after patterns stabilize |
-| 6 | AppShell | Optional — only after per-page patterns proven |
-
-Reusable blocks extracted from Maintenance pilot: Hero, Tab rail, elevated `hp-card`, KPI pill chips, accent-bordered grid tiles, toolbar row, dark inset log panel.
+Priority when reached: Monitor → Docker → Git → Runtimes → Dashboard → AppShell. One route per PR.
 
 ---
 
 ## Phase 14 — Flatpak & Release Gate 📋 PLANNED
 
-From [`docs/FLATHUB_CHECKLIST.md`](docs/FLATHUB_CHECKLIST.md):
-
-- [ ] Application ID: `io.github.karimodora.LinuxDevHome`
-- [ ] AppStream metadata: license, summary, screenshots
-- [ ] Desktop entry + original icon (no Microsoft / VS Code trademarks)
-- [ ] Flatpak manifest reproducible with `flatpak-builder`
-- [ ] All `finish-args` documented (Docker socket, host exec bridges)
-- [ ] OARS / content rating in AppStream
-- [ ] Offline variant: regenerate `flatpak/generated-sources.json` after `pnpm-lock.yaml` changes
-- [ ] Smoke-tested on Fedora Silverblue (immutable) + one traditional distro
-- [ ] Flatpak CI job in GitHub Actions (add before Flathub submission)
-- [ ] `pnpm smoke` green on final `main`
-- [ ] Manual B5 test checklist completed (`STABILIZATION_CHECKLIST.md`)
-- [ ] **No `git tag` / GitHub Release** until maintainer explicitly declares product-complete
+See Days 1–2 and Day 10 in sprint above. Full checklist in [`docs/FLATHUB_CHECKLIST.md`](docs/FLATHUB_CHECKLIST.md).
 
 ---
 
-## Known Bugs (verified against actual code)
+## Known Bugs
 
-| # | Page | Bug | Status | Severity |
-|---|------|-----|--------|----------|
-| 1 | GitConfigPage | Mask toggle inverted (PAGE_AUDIT) | ✅ FIXED — new implementation is correct | — |
-| 2 | DockerPage | `installedFeatures` never refreshed post-install | 🔄 PARTIAL — called on mount + tab change, not on install completion | Medium |
-| 3 | RegistryPage | Placeholder `octocat/Hello-World` in prod | ✅ FIXED — string not found in current code | — |
-| 4 | RegistryPage | Docker Hub link broken for official images | ❓ UNVERIFIED — needs manual check | Low |
-| 5 | MonitorPage | `security?.riskyOpenPorts.length` crashes if riskyOpenPorts undefined | ⚠ REAL — should be `security?.riskyOpenPorts?.length` at lines 230, 236, 552 | Medium |
-| 6 | MaintenancePage | `memPct`/`diskPct` from null `m` | ✅ FIXED — variable not found in current code | — |
-| 7 | RuntimesPage | `uninstallPreview` IPC fires on every `removeMode` toggle | ⚠ REAL — confirmed by deps `[showUninstallModal, selectedId, removeMode, ...]` | Low |
-| 8 | SystemPage | `setInterval` not stored → cleanup leak | ✅ FIXED — `const t = setInterval(...)` + `return () => clearInterval(t)` present | — |
-| 9 | DashboardKernelsPage | `colorFor()` uses `==` not `===` | ✅ FIXED — function uses `===` in current code | — |
-
-**Real bugs to fix: #5 (MonitorPage) and #7 (RuntimesPage).**
+| # | Page | Bug | Status |
+|---|------|-----|--------|
+| 1 | GitConfigPage | Mask toggle inverted | ✅ FIXED |
+| 2 | DockerPage | `installedFeatures` not refreshed post-install | ⚠ OPEN — medium, fix Days 6–7 |
+| 3 | RegistryPage | `octocat/Hello-World` placeholder | ✅ FIXED |
+| 4 | RegistryPage | Docker Hub link broken for official images | ❓ Needs manual check |
+| 5 | MonitorPage | `riskyOpenPorts?.length` crash | ✅ FIXED |
+| 6 | MaintenancePage | `memPct`/`diskPct` from null `m` | ✅ FIXED |
+| 7 | RuntimesPage | `uninstallPreview` fires on every mode toggle | ✅ FIXED |
+| 8 | SystemPage | `setInterval` cleanup leak | ✅ FIXED |
+| 9 | DashboardKernelsPage | `colorFor()` uses `==` not `===` | ✅ FIXED |
 
 ---
 
-## Navigation Structure
-
-Current: Dashboard, Monitor, Docker, SSH, Git Config, Terminal, Runtimes, Registry, Profiles, Maintenance
-
-Planned grouping when nav grows:
-
-```
-▸ Develop   → /runtimes, /git-config, /ssh, /registry, /terminal
-▸ Operate   → /docker, /maintenance, /profiles
-▸ System    → /dashboard, /system
-▸ Settings  → /settings, /extensions, /wizard
-```
-
----
-
-## Risks
-
-| Risk | Mitigation |
-|------|------------|
-| Flatpak can't run `sudo` / package managers | Honest UI + "open in host terminal" as last resort. `PRIVILEGE_BOUNDARY_MATRIX.md`. |
-| Security: host exec | Rust allowlists + timeouts + user confirmation for destructive ops. |
-| Scope explosion | Vertical slices; one route per PR for theme rollout. |
-| PHP/Ruby source compile fragility | PHP redirects to system packages. Ruby on Fedora is slow (no prebuilt mise backend). |
-| Flutter startup lock | Reads `$FLUTTER_ROOT/version` file — never spawns `flutter` binary for status. |
-
----
-
-## Execution Order (updated)
+## Execution Order
 
 ```
 ✅  Phase 0  — Foundations
-✅  Phase 2  — Docker (live)
-✅  Phase 3  — SSH (core)
-✅  Phase 4  — Git Environment Manager (live)
-✅  Phase 5  — Monitor (partial)
-✅  Phase 6  — Runtimes — 17 languages (partial)
-✅  Phase 7  — Maintenance / Guardian (partial)
-🔄  Phase 11 — First-run Wizard (5/6 steps done; missing profile-pick step + Help entry)
-🔄  Phase 1  — Dashboard (9 cards done; missing store link + compose stubs)
-🔄  Phase 9  — Profiles (CRUD done; missing setActive, on-login, store unification)
+✅  Phase 2  — Docker
+✅  Phase 3  — SSH
+✅  Phase 4  — Git Environment Manager
+✅  Phase 5  — Monitor
+✅  Phase 6  — Runtimes (17 languages)
+✅  Phase 7  — Maintenance / Guardian
+🎯  SPRINT   — Flatpak + Tests + Audit + Cross-distro + v0.2.0-alpha (NOW)
+🔄  Phase 11 — Wizard (missing: profile-pick step + Help entry)
+🔄  Phase 1  — Dashboard (missing: store link + compose stubs)
+🔄  Phase 9  — Profiles (missing: setActive, on-login, store unification)
 📋  Phase 8  — Settings
-📋  Phase 12 — Cloud Git (GitHub / GitLab)
-📋  Phase 13 — Theme surface rollout (Monitor → Docker → Git → Runtimes → Dashboard)
+📋  Phase 12 — Cloud Git
+📋  Phase 13 — Theme rollout
 📋  Phase 10 — Extensions
-📋  Phase 14 — Flatpak + Release Gate
+📋  Phase 14 — Flatpak full release gate
 ```
