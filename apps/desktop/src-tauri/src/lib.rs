@@ -13,6 +13,42 @@ use tokio::process::Command;
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
+mod host_exec;
+use host_exec::{
+  CMD_TIMEOUT_DEFAULT,
+  CMD_TIMEOUT_INSTALL_STEP,
+  CMD_TIMEOUT_LONG,
+  CMD_TIMEOUT_SHORT,
+  CMD_TIMEOUT_SSH,
+  exec_output,
+  exec_output_limit,
+  exec_result,
+  exec_result_limit,
+  read_proc_text,
+};
+mod runtime_packages;
+use runtime_packages::{
+  pkg_remove_cmd,
+  pkg_upgrade_cmd,
+  runtime_dnf_package_available,
+  runtime_java_major,
+  runtime_java_system_packages_for_version,
+  runtime_pkg_mgr,
+  runtime_system_package_available,
+  runtime_system_package_installed,
+  runtime_system_packages,
+};
+mod runtime_versioning;
+use runtime_versioning::{
+  lumina_dart_channel_release,
+  lumina_dotnet_install_channel,
+  lumina_first_version_token,
+  lumina_probe_meaningful_line,
+  lumina_rust_channel_token,
+  lumina_version_token_matches_probe_line,
+  runtime_dnf_repoquery_versions,
+};
+
 struct TerminalSession {
   master: Arc<StdMutex<Box<dyn MasterPty + Send>>>,
   child: Arc<StdMutex<Box<dyn Child + Send + Sync>>>,
@@ -52,17 +88,6 @@ fn write_json(path: &PathBuf, value: &Value) -> Result<(), String> {
   let content = serde_json::to_string_pretty(value).map_err(|e| format!("[STORE_ENCODE_ERROR] {}", e))?;
   std::fs::write(path, content).map_err(|e| format!("[STORE_WRITE_ERROR] {}", e))
 }
-
-/// Default wall-clock bound for host `exec_output` / `exec_result` (prevents hung IPC).
-const CMD_TIMEOUT_DEFAULT: Duration = Duration::from_secs(180);
-/// Short probe (sudo -n, quick shell checks, `ssh -T` smoke test).
-const CMD_TIMEOUT_SHORT: Duration = Duration::from_secs(30);
-/// Remote SSH ops (list dir, key install) — network-bound.
-const CMD_TIMEOUT_SSH: Duration = Duration::from_secs(120);
-/// `git clone`, `docker pull`, `docker compose` (in-profile dir), and similar long host work.
-const CMD_TIMEOUT_LONG: Duration = Duration::from_secs(900);
-/// Single `sudo bash -c` step during Docker engine install.
-const CMD_TIMEOUT_INSTALL_STEP: Duration = Duration::from_secs(900);
 
 /// Run a bootstrap script without elevation (writes under $HOME only).
 // Streaming user-shell install step — identical progress logic to sudo_bash_install_step
@@ -180,113 +205,6 @@ fn truncate_probe_output(s: &str) -> String {
     }
     let head: String = s.chars().take(MAX_CHARS).collect();
     format!("{head}\n… (output truncated)")
-}
-
-async fn exec_output_limit(cmd: &str, args: &[&str], limit: Duration) -> Result<String, String> {
-  fn running_in_flatpak() -> bool {
-    std::env::var("FLATPAK_ID")
-      .map(|v| !v.trim().is_empty())
-      .unwrap_or(false)
-  }
-
-  fn host_command(cmd: &str, args: &[&str]) -> Command {
-    let mut command = if running_in_flatpak() && cmd != "flatpak-spawn" {
-      let mut wrapped = Command::new("flatpak-spawn");
-      wrapped.arg("--host").arg(cmd);
-      wrapped
-    } else {
-      Command::new(cmd)
-    };
-    command.args(args);
-    command
-  }
-
-  let fut = async {
-    let output = host_command(cmd, args)
-      .output()
-      .await
-      .map_err(|e| format!("[EXEC_ERROR] {}", e))?;
-    if output.status.success() {
-      Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
-    } else {
-      Err(String::from_utf8_lossy(&output.stderr).trim().to_string())
-    }
-  };
-  match tokio::time::timeout(limit, fut).await {
-    Ok(inner) => inner,
-    Err(_) => Err(format!(
-      "[HOST_COMMAND_TIMEOUT] {} {}",
-      cmd,
-      args.join(" ")
-    )),
-  }
-}
-
-async fn exec_output(cmd: &str, args: &[&str]) -> Result<String, String> {
-  exec_output_limit(cmd, args, CMD_TIMEOUT_DEFAULT).await
-}
-
-async fn exec_result_limit(cmd: &str, args: &[&str], limit: Duration) -> Result<(String, String), String> {
-  fn running_in_flatpak() -> bool {
-    std::env::var("FLATPAK_ID")
-      .map(|v| !v.trim().is_empty())
-      .unwrap_or(false)
-  }
-
-  fn host_command(cmd: &str, args: &[&str]) -> Command {
-    let mut command = if running_in_flatpak() && cmd != "flatpak-spawn" {
-      let mut wrapped = Command::new("flatpak-spawn");
-      wrapped.arg("--host").arg(cmd);
-      wrapped
-    } else {
-      Command::new(cmd)
-    };
-    command.args(args);
-    command
-  }
-
-  let fut = async {
-    let output = host_command(cmd, args)
-      .output()
-      .await
-      .map_err(|e| format!("[EXEC_ERROR] {}", e))?;
-    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-    if output.status.success() {
-      Ok((stdout, stderr))
-    } else {
-      Err(if stderr.trim().is_empty() { stdout } else { stderr })
-    }
-  };
-  match tokio::time::timeout(limit, fut).await {
-    Ok(inner) => inner,
-    Err(_) => Err(format!(
-      "[HOST_COMMAND_TIMEOUT] {} {}",
-      cmd,
-      args.join(" ")
-    )),
-  }
-}
-
-async fn exec_result(cmd: &str, args: &[&str]) -> Result<(String, String), String> {
-  exec_result_limit(cmd, args, CMD_TIMEOUT_DEFAULT).await
-}
-
-async fn read_proc_text(path: &str) -> String {
-  if let Ok(text) = std::fs::read_to_string(path) {
-    if !text.trim().is_empty() {
-      return text;
-    }
-  }
-  if std::env::var("FLATPAK_ID")
-    .map(|v| !v.trim().is_empty())
-    .unwrap_or(false)
-  {
-    return exec_output_limit("cat", &[path], CMD_TIMEOUT_SHORT)
-      .await
-      .unwrap_or_default();
-  }
-  String::new()
 }
 
 /// `docker compose` in a fixed directory (avoids `bash -lc "cd … && …"`).
@@ -702,327 +620,6 @@ async fn sudo_passwordless_ok() -> bool {
     .is_ok()
 }
 
-fn runtime_pkg_mgr(distro: &str) -> &'static str {
-  match distro {
-    "ubuntu" | "debian" | "linuxmint" | "pop" | "elementary" | "raspbian" => "apt",
-    "fedora" | "rhel" | "centos" | "rocky" | "alma" | "amzn" => "dnf",
-    "arch" | "manjaro" | "endeavouros" | "garuda" => "pacman",
-    "opensuse" | "opensuse-leap" | "opensuse-tumbleweed" | "sles" => "zypper",
-    _ => "apt",
-  }
-}
-
-fn runtime_system_packages(runtime_id: &str, pkg_mgr: &str) -> Vec<&'static str> {
-  match (runtime_id, pkg_mgr) {
-    // Node
-    ("node", "apt")    => vec!["nodejs", "npm"],
-    ("node", "dnf")    => vec!["nodejs", "npm"],
-    ("node", "pacman") => vec!["nodejs", "npm"],
-    ("node", "zypper") => vec!["nodejs", "npm"],
-    // Python
-    ("python", "apt")    => vec!["python3", "python3-pip"],
-    ("python", "dnf")    => vec!["python3", "python3-pip"],
-    ("python", "pacman") => vec!["python", "python-pip"],
-    ("python", "zypper") => vec!["python3", "python3-pip"],
-    // Go
-    ("go", "apt")    => vec!["golang"],
-    ("go", "dnf")    => vec!["golang"],
-    ("go", "pacman") => vec!["go"],
-    ("go", "zypper") => vec!["go"],
-    // Java
-    ("java", "apt")    => vec!["default-jdk"],
-    ("java", "dnf")    => vec!["java-latest-openjdk-devel"],
-    ("java", "pacman") => vec!["jdk-openjdk"],
-    ("java", "zypper") => vec!["java-21-openjdk-devel"],
-    // PHP
-    ("php", "apt")    => vec!["php", "php-cli", "php-common"],
-    ("php", "dnf")    => vec!["php", "php-cli"],
-    ("php", "pacman") => vec!["php"],
-    ("php", "zypper") => vec!["php8", "php8-cli"],
-    // Ruby
-    ("ruby", "apt")    => vec!["ruby", "ruby-dev"],
-    ("ruby", "dnf")    => vec!["ruby", "ruby-devel"],
-    ("ruby", "pacman") => vec!["ruby"],
-    ("ruby", "zypper") => vec!["ruby"],
-    // .NET — pacman: dotnet-sdk is AUR-only, handled separately in install job
-    ("dotnet", "apt")    => vec!["dotnet-sdk-8.0"],
-    ("dotnet", "dnf")    => vec!["dotnet-sdk-8.0"],
-    ("dotnet", "pacman") => vec![], // AUR — use Microsoft install script instead
-    ("dotnet", "zypper") => vec!["dotnet-sdk-8.0"],
-    // Zig
-    ("zig", "apt")    => vec!["zig"],
-    ("zig", "dnf")    => vec!["zig"],
-    ("zig", "pacman") => vec!["zig"],
-    ("zig", "zypper") => vec!["zig"],
-    // C/C++ toolchain
-    ("c_cpp", "apt")    => vec!["gcc", "g++", "make", "cmake", "gdb"],
-    ("c_cpp", "dnf")    => vec!["gcc", "gcc-c++", "make", "cmake", "gdb"],
-    ("c_cpp", "pacman") => vec!["gcc", "make", "cmake", "gdb"],
-    ("c_cpp", "zypper") => vec!["gcc", "gcc-c++", "make", "cmake", "gdb"],
-    // MATLAB-compatible (Octave)
-    ("matlab", "apt")    => vec!["octave"],
-    ("matlab", "dnf")    => vec!["octave"],
-    ("matlab", "pacman") => vec!["octave"],
-    ("matlab", "zypper") => vec!["octave"],
-    // Julia
-    ("julia", "apt")    => vec!["julia"],
-    ("julia", "dnf")    => vec!["julia"],
-    ("julia", "pacman") => vec!["julia"],
-    ("julia", "zypper") => vec!["julia"],
-    // Lua
-    ("lua", "apt")    => vec!["lua5.4"],
-    ("lua", "dnf")    => vec!["lua"],
-    ("lua", "pacman") => vec!["lua"],
-    ("lua", "zypper") => vec!["lua54"],
-    // Lisp (SBCL)
-    ("lisp", "apt")    => vec!["sbcl"],
-    ("lisp", "dnf")    => vec!["sbcl"],
-    ("lisp", "pacman") => vec!["sbcl"],
-    ("lisp", "zypper") => vec!["sbcl"],
-    // bun & dart & flutter: always via local installer — no reliable system package
-    _ => vec![],
-  }
-}
-
-fn runtime_java_major(requested_version: &str) -> Option<u32> {
-  let token = lumina_first_version_token(requested_version)?;
-  let digits: String = token.chars().take_while(|c| c.is_ascii_digit()).collect();
-  if digits.is_empty() {
-    None
-  } else {
-    digits.parse::<u32>().ok()
-  }
-}
-
-fn runtime_java_system_packages_for_version(pkg_mgr: &str, requested_version: &str) -> Vec<String> {
-  let major = runtime_java_major(requested_version).unwrap_or(21);
-  match pkg_mgr {
-    "dnf" => match major {
-      8 => vec!["java-1.8.0-openjdk-devel".to_string()],
-      11 => vec!["java-11-openjdk-devel".to_string()],
-      17 => vec!["java-17-openjdk-devel".to_string()],
-      21 => vec!["java-21-openjdk-devel".to_string()],
-      _ => vec!["java-latest-openjdk-devel".to_string()],
-    },
-    "apt" => match major {
-      8 => vec!["openjdk-8-jdk".to_string()],
-      11 => vec!["openjdk-11-jdk".to_string()],
-      17 => vec!["openjdk-17-jdk".to_string()],
-      21 => vec!["openjdk-21-jdk".to_string()],
-      _ => vec!["default-jdk".to_string()],
-    },
-    "pacman" => match major {
-      8 => vec!["jdk8-openjdk".to_string()],
-      11 => vec!["jdk11-openjdk".to_string()],
-      17 => vec!["jdk17-openjdk".to_string()],
-      21 => vec!["jdk21-openjdk".to_string()],
-      _ => vec!["jdk-openjdk".to_string()],
-    },
-    "zypper" => match major {
-      8 => vec!["java-1_8_0-openjdk-devel".to_string()],
-      11 => vec!["java-11-openjdk-devel".to_string()],
-      17 => vec!["java-17-openjdk-devel".to_string()],
-      21 => vec!["java-21-openjdk-devel".to_string()],
-      _ => vec!["java-21-openjdk-devel".to_string()],
-    },
-    _ => vec!["default-jdk".to_string()],
-  }
-}
-
-async fn runtime_dnf_package_available(pkg: &str) -> bool {
-  let cmd = format!("dnf -q list --available '{}' >/dev/null 2>&1", pkg);
-  exec_result_limit("bash", &["-lc", &cmd], CMD_TIMEOUT_SHORT).await.is_ok()
-}
-
-async fn runtime_system_package_available(pkg_mgr: &str, pkg: &str) -> bool {
-  let cmd = match pkg_mgr {
-    "dnf" => format!("dnf -q list --available '{}' >/dev/null 2>&1", pkg),
-    "apt" => format!("apt-cache show '{}' >/dev/null 2>&1", pkg),
-    "pacman" => format!("pacman -Si '{}' >/dev/null 2>&1", pkg),
-    "zypper" => format!("zypper -n info '{}' >/dev/null 2>&1", pkg),
-    _ => return false,
-  };
-  exec_result_limit("bash", &["-lc", &cmd], CMD_TIMEOUT_SHORT).await.is_ok()
-}
-
-async fn runtime_system_package_installed(pkg_mgr: &str, pkg: &str) -> bool {
-  let cmd = match pkg_mgr {
-    "dnf" | "zypper" => format!("rpm -q '{}' >/dev/null 2>&1", pkg),
-    "apt" => format!("dpkg -s '{}' >/dev/null 2>&1", pkg),
-    "pacman" => format!("pacman -Qi '{}' >/dev/null 2>&1", pkg),
-    _ => return false,
-  };
-  exec_result_limit("bash", &["-lc", &cmd], CMD_TIMEOUT_SHORT).await.is_ok()
-}
-
-fn pkg_upgrade_cmd(pkg_mgr: &str, packages: &[&str]) -> String {
-  let pkgs = packages.join(" ");
-  match pkg_mgr {
-    "apt" => format!("DEBIAN_FRONTEND=noninteractive apt-get install --only-upgrade -y {}", pkgs),
-    "dnf" => format!("dnf upgrade -y {}", pkgs),
-    "pacman" => format!("pacman -Syu --noconfirm {}", pkgs),
-    "zypper" => format!("zypper update -y {}", pkgs),
-    _ => format!("apt-get install --only-upgrade -y {}", pkgs),
-  }
-}
-
-/// First whitespace-delimited token (e.g. "v22.0.0 (LTS: Foo)" → "v22.0.0").
-fn lumina_first_version_token(raw: &str) -> Option<String> {
-  let t = raw.trim();
-  if t.is_empty() || t.eq_ignore_ascii_case("latest") || t.eq_ignore_ascii_case("stable") || t.starts_with("system ") {
-    return None;
-  }
-  Some(t.split_whitespace().next().unwrap_or(t).trim().trim_start_matches("go").to_string())
-}
-
-/// Channel string for Microsoft `dotnet-install.sh` (`8.0`, `9.0`, …).
-fn lumina_dotnet_install_channel(version: &str) -> String {
-  let raw = version.trim();
-  if raw.is_empty() || raw.starts_with("system") {
-    return "8.0".into();
-  }
-  let tok = lumina_first_version_token(raw).unwrap_or_else(|| raw.to_string());
-  let s: String = tok
-    .chars()
-    .take_while(|c| c.is_ascii_digit() || *c == '.')
-    .collect();
-  let s = s.trim_matches('.').trim();
-  if s.is_empty() {
-    "8.0".into()
-  } else {
-    s.to_string()
-  }
-}
-
-/// Best-effort list of distro package versions (Fedora/RHEL `dnf` only).
-async fn runtime_dnf_repoquery_versions(package: &str, limit: usize) -> Vec<String> {
-  let safe_pkg = package.replace('\'', "'\\''");
-  let cmd = format!(
-    "command -v dnf >/dev/null 2>&1 && dnf -q repoquery '{}' --qf '%{{version}}\\n' 2>/dev/null | sort -Vu | tail -n {}",
-    safe_pkg, limit
-  );
-  exec_output_limit("bash", &["-lc", &cmd], CMD_TIMEOUT_SHORT)
-    .await
-    .unwrap_or_default()
-    .lines()
-    .map(|l| l.trim().to_string())
-    .filter(|l| !l.is_empty())
-    .collect()
-}
-
-/// Compare a UI-selected version token against a one-line tool probe.
-/// Handles common cases where the distro/tool prints extra pre-release metadata
-/// (e.g. requested `0.13.0` vs installed `0.13.0-dev...`) without treating it as a mismatch.
-fn lumina_version_token_matches_probe_line(requested_token: &str, probe_line: &str) -> bool {
-  let token = requested_token.trim();
-  if token.is_empty() {
-    return true;
-  }
-  let hay = probe_line.trim();
-  if hay.contains(token) {
-    return true;
-  }
-  let token_core = token
-    .split(|c| c == '-' || c == '+')
-    .next()
-    .unwrap_or(token)
-    .trim();
-  if token_core.is_empty() {
-    return true;
-  }
-  let probe_core = hay
-    .split(|c: char| c.is_whitespace() || c == '(')
-    .next()
-    .unwrap_or(hay)
-    .trim()
-    .trim_start_matches('v')
-    .split(|c| c == '-' || c == '+')
-    .next()
-    .unwrap_or(hay)
-    .trim();
-  probe_core == token_core || hay.contains(token_core)
-}
-
-/// rustup toolchain channels where `rustc --version` will not contain the word "nightly"/"beta"/"stable".
-fn lumina_rust_channel_token(raw: &str) -> Option<String> {
-  let t = lumina_first_version_token(raw)?.to_lowercase();
-  match t.as_str() {
-    "nightly" | "beta" | "stable" => Some(t),
-    _ => None,
-  }
-}
-
-/// Dart SDK zip/deb: `stable`, `beta/3.5.0`, `dev` → (channel, release segment for archive URL).
-fn lumina_dart_channel_release(version: &str) -> (&'static str, String) {
-  let v = version.trim();
-  if let Some((left, right)) = v.split_once('/') {
-    let ch = match left.trim().to_lowercase().as_str() {
-      "dev" => "dev",
-      "beta" => "beta",
-      "stable" => "stable",
-      _ => "stable",
-    };
-    let rel = lumina_dart_release_segment(right);
-    return (ch, rel);
-  }
-  let tl = v.to_lowercase();
-  let ch = match tl.as_str() {
-    "dev" => "dev",
-    "beta" => "beta",
-    _ => "stable",
-  };
-  (ch, lumina_dart_release_segment(v))
-}
-
-fn lumina_dart_release_segment(raw: &str) -> String {
-  if let Some(tok) = lumina_first_version_token(raw) {
-    let t = tok.trim().trim_start_matches('v');
-    if !t.is_empty() && t.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false) {
-      return t.to_string();
-    }
-  }
-  let s = raw.trim().trim_start_matches('v');
-  if !s.is_empty() && s.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false) {
-    return s.to_string();
-  }
-  "latest".into()
-}
-
-/// Lines from `bash -lc` while sourcing profiles (before the probe) — do not show as runtime version.
-fn lumina_shell_profile_noise_line(line: &str) -> bool {
-  let t = line.trim();
-  if t.is_empty() {
-    return true;
-  }
-  if t.contains(": No such file or directory")
-    || t.contains(": Command not found")
-    || t.contains(": command not found")
-  {
-    return true;
-  }
-  if t.contains(": line ")
-    && (t.contains(".bash_profile")
-      || t.contains(".bashrc")
-      || t.contains(".profile")
-      || t.contains(".zprofile")
-      || t.contains(".zshrc"))
-  {
-    return true;
-  }
-  t.starts_with("bash: ") || t.starts_with("sh: ") || t.starts_with("zsh:")
-}
-
-/// Join stdout and stderr with a newline so missing `\\n` on stdout does not concatenate stderr (e.g. `3.27.4/home/...`).
-/// Prefer the first non-empty line that is not shell startup noise (Java may only print on stderr).
-fn lumina_probe_meaningful_line(stdout: &str, stderr: &str) -> String {
-  let merged = format!("{}\n{}", stdout.trim_end(), stderr.trim_end());
-  merged
-    .lines()
-    .map(str::trim)
-    .find(|l| !l.is_empty() && !lumina_shell_profile_noise_line(l))
-    .unwrap_or("")
-    .to_string()
-}
 
 fn lumina_home_dir() -> Result<PathBuf, String> {
   std::env::var_os("HOME")
@@ -1140,17 +737,6 @@ async fn runtime_append_verify(runtime_id: &str, method: &str, requested_version
       }
     }
     Err(e) => logs.push(format!("VERIFY FAIL: {}", e.trim())),
-  }
-}
-
-fn pkg_remove_cmd(pkg_mgr: &str, packages: &[&str]) -> String {
-  let pkgs = packages.join(" ");
-  match pkg_mgr {
-    "apt" => format!("apt-get remove -y {}", pkgs),
-    "dnf" => format!("dnf remove -y {}", pkgs),
-    "pacman" => format!("pacman -R --noconfirm {}", pkgs),
-    "zypper" => format!("zypper remove -y {}", pkgs),
-    _ => format!("apt-get remove -y {}", pkgs),
   }
 }
 
