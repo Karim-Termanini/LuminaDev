@@ -77,4 +77,29 @@ describe('evaluateGuardian', () => {
     expect(g.layers.find((l) => l.id === 'host_security')?.deduction).toBe(25)
     expect(g.score).toBe(75)
   })
+
+  it('deducts for high memory and disk pressure', () => {
+    const g = evaluateGuardian(
+      baseMetrics({ totalMemMb: 1000, freeMemMb: 20, diskTotalGb: 100, diskFreeGb: 2 }),
+      { firewall: 'active', selinux: '', sshPermitRootLogin: 'no', sshPasswordAuth: 'no', failedAuth24h: 0, riskyOpenPorts: [] },
+      []
+    )
+    expect(g.layers.find((l) => l.id === 'memory_pressure')?.deduction).toBe(22)
+    expect(g.layers.find((l) => l.id === 'storage_pressure')?.deduction).toBe(20)
+    expect(g.score).toBe(58)
+  })
+
+  it('clamps impossible percentages to safe bounds', () => {
+    const g = evaluateGuardian(
+      baseMetrics({ totalMemMb: 1000, freeMemMb: 2000, diskTotalGb: 10, diskFreeGb: 20 }),
+      null,
+      []
+    )
+    const mem = g.layers.find((l) => l.id === 'memory_pressure')
+    const disk = g.layers.find((l) => l.id === 'storage_pressure')
+    expect(mem?.detail).toContain('RAM used ~0%')
+    expect(disk?.detail).toContain('Disk used ~0%')
+    expect(mem?.deduction).toBe(0)
+    expect(disk?.deduction).toBe(0)
+  })
 })

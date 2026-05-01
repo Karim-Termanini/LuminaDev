@@ -134,6 +134,15 @@ export function DockerPage(): ReactElement {
 
   const closeTerminal = useCallback(() => setActiveTermContainer(null), [])
 
+  const refreshInstalledFeatures = useCallback(async () => {
+    try {
+      const res = await window.dh.dockerCheckInstalled()
+      setInstalledFeatures(res)
+    } catch {
+      // keep previous UI state if refresh fails
+    }
+  }, [])
+
   const refreshAll = useCallback(async () => {
     setRefreshing(true)
     try {
@@ -214,10 +223,8 @@ export function DockerPage(): ReactElement {
         setSessionKind(info.kind === 'flatpak' ? 'flatpak' : 'native')
       })
       .catch(() => setSessionKind('unknown'))
-    void window.dh.dockerCheckInstalled()
-      .then((res) => setInstalledFeatures(res))
-      .catch(() => {/* leave defaults */})
-  }, [])
+    void refreshInstalledFeatures()
+  }, [refreshInstalledFeatures])
 
   useEffect(() => {
     if (tab === 'cleanup') {
@@ -299,6 +306,7 @@ export function DockerPage(): ReactElement {
       if (res.ok) {
         setInstallStep(4) // Success (mapped to step 4 now)
         void refreshAll()
+        void refreshInstalledFeatures()
       } else {
         setInstallError(humanizeDockerError(res.error || 'Unknown error during installation'))
       }
@@ -664,12 +672,7 @@ export function DockerPage(): ReactElement {
             setInstallError(null)
             setSudoPassword('')
             setInstallLogs([])
-            void window.dh
-              .dockerCheckInstalled()
-              .then((res) => setInstalledFeatures(res))
-              .catch(() => {
-                /* ignore refresh errors */
-              })
+            void refreshInstalledFeatures()
             setShowInstallModal(true)
           }}
         >

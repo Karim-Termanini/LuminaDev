@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { assertGitOk } from './gitContract'
 import { humanizeGitError } from './gitError'
 import { humanizeDockerError } from './dockerError'
+import { dockerHubRepositoryUrl } from './dockerHub'
 import { assertGitRecentList } from './registryContract'
 
 export function RegistryPage(): ReactElement {
@@ -193,7 +194,7 @@ export function RegistryPage(): ReactElement {
                 <div style={{ marginTop: 8, fontSize: 11, color: 'var(--accent)', display: 'flex', justifyContent: 'space-between' }}>
                   <span>★ {r.star_count}</span>
                   <button type="button" style={{ ...btnLink }} onClick={() => {
-                    void window.dh.openExternal(r.name.includes('/') ? `https://hub.docker.com/r/${r.name}` : `https://hub.docker.com/_/${r.name}`)
+                    void window.dh.openExternal(dockerHubRepositoryUrl(r.name))
                   }}>View Hub ↗</button>
                 </div>
               </div>

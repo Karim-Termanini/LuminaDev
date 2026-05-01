@@ -11,40 +11,72 @@ Cosmetic work (theming, drag-drop polish) is blocked until after Day 10.
 
 ### Days 1–2 — Flatpak Setup + Build
 
-- [ ] `flatpak install flathub org.gnome.Platform//48 org.gnome.Sdk//48`
+- [ ] `flatpak install flathub org.gnome.Platform//49 org.gnome.Sdk//49`
 - [ ] `flatpak install flathub org.freedesktop.Sdk.Extension.rust-stable`
-- [ ] Create `packaging/flatpak/com.luminadev.LuminaDev.yml` manifest (GNOME Platform runtime, cargo module)
-- [ ] Local build: `flatpak-builder --force-clean build-dir com.luminadev.LuminaDev.yml`
-- [ ] Local run: `flatpak-builder --run build-dir com.luminadev.LuminaDev.yml lumina-dev`
+- [x] Manifest exists: `flatpak/io.github.karimodora.LinuxDevHome.tauri.yml` (GNOME Platform runtime + cargo module)
+- [x] Local build: `flatpak-builder --user --install --force-clean flatpak-build-tauri flatpak/io.github.karimodora.LinuxDevHome.tauri.yml --install-deps-from=flathub`
+- [x] Local run: `flatpak run io.github.karimodora.LinuxDevHome`
 - [ ] Record all errors: permissions, missing deps, cargo offline issues
 - [ ] Fix common issues:
   - Docker socket → `--socket=session-bus` + `docker.sock` custom permission
   - Host commands → `flatpak-spawn --host` in Rust or `--allow=devel`
   - Rust deps → run `flatpak-cargo-generator` → `generated-sources.json`
 
+Progress notes (2026-05-01):
+- `corepack enable` failed in Flatpak build (`EROFS`); fixed by switching manifest build commands to `npx pnpm@9.14.2 ...`.
+- `npx` fetch for `pnpm` initially failed with `EAI_AGAIN registry.npmjs.org`; fixed by adding module `build-args: --share=network` in `flatpak/io.github.karimodora.LinuxDevHome.tauri.yml`.
+- Build now passes end-to-end; app installs as `io.github.karimodora.LinuxDevHome` and basic runtime sanity check passes.
+
 ### Days 3–4 — Smoke Tests + Docker Integration Tests
 
 - [ ] Add Rust smoke tests in `src-tauri/tests/`:
-  - `docker info`, `docker ps --all`, `docker version`
-  - Prune dry-run (images, volumes, build cache)
-  - Error case: Docker daemon not running
+  - [x] `docker info`, `docker ps --all`, `docker version`
+  - [x] Prune dry-run (images, volumes, build cache)
+  - [x] Error case: Docker daemon not running
 - [ ] Integration tests:
-  - Job Runner with a long task (e.g. small `docker pull`)
-  - Streaming logs
-  - Cancellation
+  - [x] Job Runner with a long task (Rust-side command loop simulation)
+  - [x] Streaming logs
+  - [x] Cancellation
 - [ ] Add CI workflows (only if better than existing CIs):
-  - `ci.yml` — typecheck + lint + build + tauri build on every PR/push to main
-  - `smoke-tests.yml` — Rust tests + Docker smoke + job runner
-  - `flatpak.yml` — Flatpak build + bundle + basic run test
+  - [x] `ci.yml` — now runs Rust smoke tests (`docker_smoke`) + Job Runner tests before frontend/Tauri build on every PR/push
+  - [x] `smoke-tests.yml` — Rust tests + Docker smoke + job runner
+  - [x] `flatpak.yml` — Flatpak build + bundle + basic run test
+
+Progress notes (2026-05-01):
+- Added `apps/desktop/src-tauri/tests/docker_smoke.rs` with 5 tests covering Docker version/info/ps, prune preview probes, and daemon-down error simulation.
+- Test command: `cd apps/desktop/src-tauri && cargo test --test docker_smoke -- --nocapture` (passing locally).
+- Added Job Runner tests in `apps/desktop/src-tauri/src/lib.rs` (`job_runner_*`): long task completion, streamed output capture, cancel transition on running jobs, and no-op cancel on non-running jobs.
+- Test command: `cd apps/desktop/src-tauri && cargo test job_runner -- --nocapture` (passing locally).
+- Updated `.github/workflows/ci.yml` `native-linux-build` job to execute:
+  - `cargo test --test docker_smoke -- --nocapture`
+  - `cargo test job_runner -- --nocapture`
+- Expanded Rust unit coverage in `apps/desktop/src-tauri/src/lib.rs` for critical helpers:
+  - size/disk parsers, Docker name sanitization, Docker install step shaping
+  - distro package-manager mapping, Java package resolution
+  - version/probe matching utilities and shell-noise filtering
+  - package command builders, output truncation, repository-root discovery
+- Full Rust test suite now passes locally: `cd apps/desktop/src-tauri && cargo test -- --nocapture`.
+- Added a second dedicated test module file: `apps/desktop/src-tauri/src/runtime_prune_contract_tests.rs`
+  - runtime version token edge-cases (`lumina_*` helpers)
+  - Docker prune preview response contract shape/types via `docker_prune_preview_payload(...)`
+- Added `.github/workflows/smoke-tests.yml` for dedicated Rust smoke/job-runner coverage.
+- Added `.github/workflows/flatpak.yml` for GNOME 49 Flatpak build + install + non-GUI runtime smoke.
 
 ### Day 5 — Deep Audit: Critical Paths
 
 Manually review:
-- [ ] All `tauri::command` handlers that use `shell::Command` or exec
-- [ ] Timeouts and error handling in Job Runner
-- [ ] Capabilities in `tauri.conf.json` (every command explicitly allowed)
-- [ ] Docker integration in Rust (socket connection + error messages)
-- [ ] Maintenance Guardian logic (health scoring, aggregate metrics)
+- [x] All `tauri::command` handlers that use `shell::Command` or exec
+- [x] Timeouts and error handling in Job Runner
+- [x] Capabilities in `tauri.conf.json` (every command explicitly allowed)
+- [x] Docker integration in Rust (socket connection + error messages)
+- [x] Maintenance Guardian logic (health scoring, aggregate metrics)
+
+Progress notes (2026-05-01):
+- Audited host command execution paths (`exec_output_limit`, `exec_result_limit`, Docker/SSH/curl command entry points) and timeout bounds (`CMD_TIMEOUT_SHORT/DEFAULT/LONG/INSTALL_STEP`) in `apps/desktop/src-tauri/src/lib.rs`.
+- Fixed Job Runner cancellation race: cancelled jobs could be overwritten to `completed` at finalization. Added cancellation-precedence final-state resolution (`effective_runtime_job_final_state`) and tests.
+- Capability audit: command surface remains constrained to `ipc_invoke` + `ipc_send` handlers; capability file `apps/desktop/src-tauri/capabilities/default.json` grants `core:default`, `dialog:default`, `opener:default` only.
+- Docker integration audit: reviewed all `dh:docker:*` channels in Rust dispatcher for prefixed error contracts (`[DOCKER_*]`) and timeout-bounded command execution.
+- Maintenance Guardian audit/fix: clamped RAM/disk derived percentages to `0..100` in `evaluateGuardian(...)` and expanded tests for high-pressure + impossible-metric edge cases.
 
 ### Days 6–7 — Cross-Distro Testing + Bug Fixing
 
@@ -59,8 +91,8 @@ Focus areas:
 Bug fixes priority (see Known Bugs table below):
 - [x] Bug #5 — `riskyOpenPorts?.length` crash → **FIXED**
 - [x] Bug #7 — `uninstallPreview` fires on every mode toggle → **FIXED**
-- [ ] Bug #2 — `installedFeatures` not refreshed post-install (Docker wizard)
-- [ ] Bug #4 — Docker Hub link broken for official images (needs manual verify)
+- [x] Bug #2 — `installedFeatures` refreshed post-install (Docker wizard)
+- [x] Bug #4 — Docker Hub official-image links normalized (`library/*` + bare names)
 
 ### Days 8–9 — Polish + Documentation
 
@@ -142,7 +174,7 @@ All five stabilization checklist items `done`. `pnpm smoke` green. See [`docs/ST
 - [x] Docker Hub search + tag picker
 - [x] In-container terminal (`dockerTerminal` IPC)
 
-Known issue: `installedFeatures` only refreshed on mount — wizard may show Docker missing on re-open after mid-session install. (Bug #2, medium priority.)
+Known issue addressed: install wizard now refreshes `installedFeatures` on open and after successful install, so mid-session installs are reflected without reload.
 
 ---
 
@@ -257,9 +289,9 @@ See Days 1–2 and Day 10 in sprint above. Full checklist in [`docs/FLATHUB_CHEC
 | # | Page | Bug | Status |
 |---|------|-----|--------|
 | 1 | GitConfigPage | Mask toggle inverted | ✅ FIXED |
-| 2 | DockerPage | `installedFeatures` not refreshed post-install | ⚠ OPEN — medium, fix Days 6–7 |
+| 2 | DockerPage | `installedFeatures` not refreshed post-install | ✅ FIXED |
 | 3 | RegistryPage | `octocat/Hello-World` placeholder | ✅ FIXED |
-| 4 | RegistryPage | Docker Hub link broken for official images | ❓ Needs manual check |
+| 4 | RegistryPage | Docker Hub link broken for official images | ✅ FIXED |
 | 5 | MonitorPage | `riskyOpenPorts?.length` crash | ✅ FIXED |
 | 6 | MaintenancePage | `memPct`/`diskPct` from null `m` | ✅ FIXED |
 | 7 | RuntimesPage | `uninstallPreview` fires on every mode toggle | ✅ FIXED |

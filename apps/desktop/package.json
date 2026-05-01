@@ -20,9 +20,9 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "@tauri-apps/api": "^2.8.0",
-    "@tauri-apps/plugin-dialog": "^2.4.0",
-    "@tauri-apps/plugin-opener": "^2.4.0",
+    "@tauri-apps/api": "2.10.1",
+    "@tauri-apps/plugin-dialog": "2.7.0",
+    "@tauri-apps/plugin-opener": "2.5.3",
     "@linux-dev-home/shared": "workspace:*",
     "@vscode/codicons": "^0.0.36",
     "@xterm/addon-fit": "^0.10.0",
@@ -34,7 +34,7 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2.8.1",
+    "@tauri-apps/cli": "2.10.1",
     "@types/node": "^22.9.0",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",

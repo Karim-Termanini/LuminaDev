@@ -276,6 +276,18 @@ async fn docker_nonempty_line_count(args: &[&str]) -> u64 {
   }
 }
 
+fn docker_prune_preview_payload(containers: u64, images: u64, volumes: u64, networks: u64) -> Value {
+  json!({
+    "ok": true,
+    "preview": {
+      "containers": containers,
+      "images": images,
+      "volumes": volumes,
+      "networks": networks
+    }
+  })
+}
+
 async fn exec_sshpass_ssh(
   password: &str,
   port: &str,
@@ -1664,12 +1676,51 @@ fi"#;
   }
 
   let st = app.state::<AppState>();
+  let current_state = {
+    let jobs = st.jobs.lock().await;
+    jobs
+      .iter()
+      .find(|j| j.get("id").and_then(|v| v.as_str()) == Some(job_id.as_str()))
+      .and_then(|j| j.get("state").and_then(|v| v.as_str()))
+      .unwrap_or("")
+      .to_string()
+  };
+  final_state = effective_runtime_job_final_state(final_state, current_state.as_str());
+  if final_state == "cancelled" && !logs.iter().any(|l| l.contains("Cancelled by user.")) {
+    logs.push("Cancelled by user.".to_string());
+  }
+
+  let st = app.state::<AppState>();
   let mut jobs = st.jobs.lock().await;
   if let Some(j) = jobs.iter_mut().find(|j| j.get("id").and_then(|v| v.as_str()) == Some(job_id.as_str())) {
     j["state"] = json!(final_state);
     j["progress"] = json!(if final_state == "completed" { 100 } else { 0 });
     j["logTail"] = json!(logs.into_iter().rev().take(48).collect::<Vec<String>>().into_iter().rev().collect::<Vec<String>>());
   }
+}
+
+fn effective_runtime_job_final_state(default_state: &str, current_state: &str) -> &'static str {
+  if current_state == "cancelled" {
+    "cancelled"
+  } else if default_state == "failed" {
+    "failed"
+  } else {
+    "completed"
+  }
+}
+
+fn cancel_runtime_job(jobs: &mut [Value], id: &str) -> bool {
+  if let Some(j) = jobs
+    .iter_mut()
+    .find(|j| j.get("id").and_then(|v| v.as_str()) == Some(id))
+  {
+    if j.get("state").and_then(|v| v.as_str()) == Some("running") {
+      j["state"] = json!("cancelled");
+      j["logTail"] = json!(["Cancelled by user."]);
+      return true;
+    }
+  }
+  false
 }
 
 async fn runtime_set_active_invoke(body: &Value) -> Value {
@@ -2481,15 +2532,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       let images = docker_nonempty_line_count(&["images", "-f", "dangling=true", "-q"]).await;
       let volumes = docker_nonempty_line_count(&["volume", "ls", "-qf", "dangling=true"]).await;
       let networks = docker_nonempty_line_count(&["network", "ls", "-qf", "dangling=true"]).await;
-      json!({
-        "ok": true,
-        "preview": {
-          "containers": containers,
-          "images": images,
-          "volumes": volumes,
-          "networks": networks
-        }
-      })
+      docker_prune_preview_payload(containers, images, volumes, networks)
     },
     "dh:docker:cleanup:run" => {
       let mut logs: Vec<String> = Vec::new();
@@ -2824,12 +2867,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
     "dh:job:cancel" => {
       let id = body.get("id").and_then(|v| v.as_str()).unwrap_or_default().to_string();
       let mut jobs = state.jobs.lock().await;
-      if let Some(j) = jobs.iter_mut().find(|j| j.get("id").and_then(|v| v.as_str()) == Some(id.as_str())) {
-        if j.get("state").and_then(|v| v.as_str()) == Some("running") {
-          j["state"] = json!("cancelled");
-          j["logTail"] = json!(["Cancelled by user."]);
-        }
-      }
+      let _ = cancel_runtime_job(&mut jobs, id.as_str());
       json!({ "ok": true })
     }
     "dh:git:recent:list" => match app_file(&app, "git_recent.json") {
@@ -4418,3 +4456,201 @@ pub fn run() {
     .run(tauri::generate_context!())
     .expect("error while running tauri application");
 }
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[tokio::test]
+  async fn job_runner_long_task_completes_and_collects_logs() {
+    let mut logs = Vec::new();
+    let cmd = r#"for i in 1 2 3; do echo "long-step-$i"; sleep 0.05; done"#;
+    let res = runtime_bash_user_step(cmd, &mut logs, None, None, 0, 100).await;
+    assert!(res.is_ok(), "expected long task to complete: {res:?}");
+    assert!(logs.iter().any(|l| l.contains("long-step-1")));
+    assert!(logs.iter().any(|l| l.contains("long-step-3")));
+  }
+
+  #[tokio::test]
+  async fn job_runner_streaming_captures_multiple_lines() {
+    let mut logs = Vec::new();
+    let cmd = r#"for i in 1 2 3 4 5; do echo "stream-$i"; sleep 0.02; done"#;
+    runtime_bash_user_step(cmd, &mut logs, None, None, 0, 100)
+      .await
+      .expect("streaming command should succeed");
+
+    let stream_lines = logs.iter().filter(|l| l.contains("OUT: stream-")).count();
+    assert!(
+      stream_lines >= 5,
+      "expected at least 5 streamed lines, got {stream_lines}"
+    );
+  }
+
+  #[test]
+  fn job_runner_cancel_marks_running_job() {
+    let mut jobs = vec![json!({
+      "id": "job-1",
+      "state": "running",
+      "logTail": ["start"]
+    })];
+    let changed = cancel_runtime_job(&mut jobs, "job-1");
+    assert!(changed, "expected running job to be cancelled");
+    assert_eq!(jobs[0]["state"], json!("cancelled"));
+    assert_eq!(jobs[0]["logTail"], json!(["Cancelled by user."]));
+  }
+
+  #[test]
+  fn job_runner_cancel_does_not_change_non_running_job() {
+    let mut jobs = vec![json!({
+      "id": "job-2",
+      "state": "completed",
+      "logTail": ["done"]
+    })];
+    let changed = cancel_runtime_job(&mut jobs, "job-2");
+    assert!(!changed, "completed job should not be modified");
+    assert_eq!(jobs[0]["state"], json!("completed"));
+    assert_eq!(jobs[0]["logTail"], json!(["done"]));
+  }
+
+  #[test]
+  fn effective_final_state_prefers_cancelled_state() {
+    assert_eq!(effective_runtime_job_final_state("completed", "cancelled"), "cancelled");
+    assert_eq!(effective_runtime_job_final_state("failed", "cancelled"), "cancelled");
+    assert_eq!(effective_runtime_job_final_state("failed", "running"), "failed");
+    assert_eq!(effective_runtime_job_final_state("completed", "running"), "completed");
+  }
+
+  #[test]
+  fn parse_size_mb_parses_common_units() {
+    assert_eq!(parse_size_mb("1gb"), 1024);
+    assert_eq!(parse_size_mb("512 mb"), 512);
+    assert_eq!(parse_size_mb("2048kb"), 2);
+    assert_eq!(parse_size_mb("1048576b"), 1);
+  }
+
+  #[test]
+  fn sanitize_docker_name_normalizes_and_limits() {
+    assert_eq!(sanitize_docker_name("My App/Name"), "My-App-Name");
+    assert_eq!(sanitize_docker_name("---bad"), "bad");
+    assert_eq!(sanitize_docker_name("////"), "remap");
+    let long = "a".repeat(300);
+    assert_eq!(sanitize_docker_name(&long).len(), 220);
+  }
+
+  #[test]
+  fn docker_install_steps_respect_selected_components() {
+    let components = vec![json!("docker"), json!("compose")];
+    let ubuntu = docker_install_build_steps("ubuntu", Some(&components)).expect("ubuntu steps");
+    let joined = ubuntu.join(" || ");
+    assert!(joined.contains("docker-ce"));
+    assert!(joined.contains("docker-compose-plugin"));
+    assert!(!joined.contains("docker-buildx-plugin"));
+
+    let arch = docker_install_build_steps("arch", Some(&components)).expect("arch steps");
+    let arch_joined = arch.join(" || ");
+    assert!(arch_joined.contains("docker-compose"));
+  }
+
+  #[test]
+  fn distro_pkg_manager_mapping_is_stable() {
+    assert_eq!(runtime_pkg_mgr("ubuntu"), "apt");
+    assert_eq!(runtime_pkg_mgr("fedora"), "dnf");
+    assert_eq!(runtime_pkg_mgr("arch"), "pacman");
+    assert_eq!(runtime_pkg_mgr("opensuse"), "zypper");
+    assert_eq!(runtime_pkg_mgr("unknown-distro"), "apt");
+  }
+
+  #[test]
+  fn java_package_selection_honors_major_version() {
+    assert_eq!(
+      runtime_java_system_packages_for_version("dnf", "17"),
+      vec!["java-17-openjdk-devel".to_string()]
+    );
+    assert_eq!(
+      runtime_java_system_packages_for_version("apt", "11.0.22"),
+      vec!["openjdk-11-jdk".to_string()]
+    );
+    assert_eq!(
+      runtime_java_system_packages_for_version("pacman", "stable"),
+      vec!["jdk21-openjdk".to_string()]
+    );
+  }
+
+  #[test]
+  fn version_token_helpers_handle_expected_inputs() {
+    assert_eq!(
+      lumina_first_version_token("v22.1.0 (LTS)"),
+      Some("v22.1.0".to_string())
+    );
+    assert_eq!(lumina_first_version_token("latest"), None);
+    assert_eq!(lumina_dotnet_install_channel("9.0.1"), "9.0.1");
+    assert_eq!(lumina_dotnet_install_channel(""), "8.0");
+  }
+
+  #[test]
+  fn version_matching_allows_prerelease_probe_lines() {
+    assert!(lumina_version_token_matches_probe_line(
+      "0.13.0",
+      "0.13.0-dev.20240201"
+    ));
+    assert!(lumina_version_token_matches_probe_line("v22.2.0", "node v22.2.0"));
+    assert!(!lumina_version_token_matches_probe_line("1.2.3", "1.2.4"));
+  }
+
+  #[test]
+  fn probe_line_filter_ignores_shell_noise() {
+    let stdout = "bash: /home/me/.bashrc: line 1: foo: command not found\n";
+    let stderr = "Python 3.12.2\n";
+    assert_eq!(lumina_probe_meaningful_line(stdout, stderr), "Python 3.12.2");
+  }
+
+  #[test]
+  fn pkg_command_builders_generate_expected_strings() {
+    assert_eq!(
+      pkg_upgrade_cmd("apt", &["nodejs", "npm"]),
+      "DEBIAN_FRONTEND=noninteractive apt-get install --only-upgrade -y nodejs npm"
+    );
+    assert_eq!(
+      pkg_remove_cmd("pacman", &["go"]),
+      "pacman -R --noconfirm go"
+    );
+  }
+
+  #[test]
+  fn truncate_probe_output_caps_large_buffers() {
+    let short = "ok";
+    assert_eq!(truncate_probe_output(short), "ok");
+    let long = "x".repeat(50_100);
+    let out = truncate_probe_output(&long);
+    assert!(out.contains("(output truncated)"));
+    assert!(out.len() < long.len());
+  }
+
+  #[test]
+  fn disk_and_ss_parsers_extract_expected_values() {
+    assert!(is_physical_disk_name("sda"));
+    assert!(is_physical_disk_name("nvme0n1"));
+    assert!(!is_physical_disk_name("nvme0n1p1"));
+    assert_eq!(
+      ss_process_from_line("users:((\"docker-proxy\",pid=123,fd=4))"),
+      "docker-proxy"
+    );
+    assert_eq!(ss_process_from_line("no users payload"), "unknown");
+  }
+
+  #[test]
+  fn find_repo_root_discovers_compose_directory_up_tree() {
+    let base = std::env::temp_dir().join(format!("lumina-test-{}", Uuid::new_v4()));
+    let nested = base.join("a/b/c");
+    std::fs::create_dir_all(base.join("docker/compose")).expect("create compose dir");
+    std::fs::create_dir_all(&nested).expect("create nested dir");
+
+    let root = find_repo_root(&nested);
+    assert_eq!(root, base);
+
+    let _ = std::fs::remove_dir_all(&base);
+  }
+}
+
+#[cfg(test)]
+mod runtime_prune_contract_tests;
