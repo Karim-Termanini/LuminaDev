@@ -175,7 +175,8 @@ export const StoreSetRequestSchema = z.discriminatedUnion('key', [
   }),
   z.object({
     key: z.literal('active_profile'),
-    data: z.string().min(1).max(128),
+    // Stores the ComposeProfile id of the active preset environment.
+    data: ComposeProfileSchema,
   }),
 ])
 export const ComposeUpRequestSchema = z.object({

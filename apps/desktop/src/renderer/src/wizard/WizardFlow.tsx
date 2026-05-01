@@ -1,4 +1,4 @@
-import type { SessionInfo } from '@linux-dev-home/shared'
+import type { ComposeProfile, SessionInfo } from '@linux-dev-home/shared'
 import type { ReactElement } from 'react'
 import { useEffect, useState } from 'react'
 import { assertGitOk } from '../pages/gitContract'
@@ -18,7 +18,7 @@ export function WizardFlow({ onComplete }: { onComplete: () => void }): ReactEle
   const [showAgainNextLaunch, setShowAgainNextLaunch] = useState(false)
 
   const [pubKey, setPubKey] = useState<string | null>(null)
-  const [pickedProfile, setPickedProfile] = useState<string | null>(null)
+  const [pickedProfile, setPickedProfile] = useState<ComposeProfile | null>(null)
 
   useEffect(() => {
     window.dh.sessionInfo().then((s: unknown) => setIsFlatpak((s as SessionInfo).kind === 'flatpak'))
@@ -168,16 +168,16 @@ export function WizardFlow({ onComplete }: { onComplete: () => void }): ReactEle
           </>
         )
       case 5: {
-        const presets = [
-          { id: 'web-dev',    label: 'Web Development',  icon: '🌐' },
+        const presets: Array<{ id: ComposeProfile; label: string; icon: string }> = [
+          { id: 'web-dev',     label: 'Web Development', icon: '🌐' },
           { id: 'data-science', label: 'Data Science',   icon: '📊' },
-          { id: 'ai-ml',      label: 'AI / ML Local',    icon: '🤖' },
-          { id: 'mobile',     label: 'Mobile App Dev',   icon: '📱' },
-          { id: 'game-dev',   label: 'Game Development', icon: '🎮' },
-          { id: 'infra',      label: 'Infra / K8s',      icon: '🏗' },
-          { id: 'desktop-qt', label: 'Desktop Qt/GTK',   icon: '🖥' },
-          { id: 'docs',       label: 'Docs / Writing',   icon: '📝' },
-          { id: 'minimal',    label: 'Empty Minimal',    icon: '⬜' },
+          { id: 'ai-ml',       label: 'AI / ML Local',   icon: '🤖' },
+          { id: 'mobile',      label: 'Mobile App Dev',  icon: '📱' },
+          { id: 'game-dev',    label: 'Game Dev',        icon: '🎮' },
+          { id: 'infra',       label: 'Infra / K8s',     icon: '🏗' },
+          { id: 'desktop-gui', label: 'Desktop Qt/GTK',  icon: '🖥' },
+          { id: 'docs',        label: 'Docs / Writing',  icon: '📝' },
+          { id: 'empty',       label: 'Empty Minimal',   icon: '⬜' },
         ]
         return (
           <>

@@ -39,11 +39,11 @@ export function ProfilesPage(): ReactElement {
     }
   }
 
-  async function setActive(name: string): Promise<void> {
+  async function setActive(p: CustomProfileEntry): Promise<void> {
     try {
-      await window.dh.storeSet({ key: 'active_profile', data: name })
-      setActiveProfile(name)
-      setStatus(`Active profile set to "${name}".`)
+      await window.dh.storeSet({ key: 'active_profile', data: p.baseTemplate })
+      setActiveProfile(p.baseTemplate)
+      setStatus(`Active profile set to "${p.name}" (${p.baseTemplate}).`)
     } catch (e) {
       setStatus(e instanceof Error ? e.message : String(e))
     }
@@ -131,7 +131,7 @@ export function ProfilesPage(): ReactElement {
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(280px,1fr))', gap: 10 }}>
             {profiles.map((p, i) => {
-              const isActive = activeProfile === p.name
+              const isActive = activeProfile === p.baseTemplate
               return (
                 <article
                   key={`${p.name}-${i}`}
@@ -155,7 +155,7 @@ export function ProfilesPage(): ReactElement {
                   </div>
                   <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
                     {!isActive && (
-                      <button type="button" style={{ ...btnSmall, color: 'var(--accent)', borderColor: 'var(--accent)' }} onClick={() => void setActive(p.name)}>
+                      <button type="button" style={{ ...btnSmall, color: 'var(--accent)', borderColor: 'var(--accent)' }} onClick={() => void setActive(p)}>
                         Set Active
                       </button>
                     )}
