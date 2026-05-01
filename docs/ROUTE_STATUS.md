@@ -19,7 +19,7 @@ Status legend:
 | `/ssh` | partial | Core SSH key/test/setup flows work; advanced transfer/remote UX still evolving. |
 | `/git-config` | live | Global git config list/set/validate flow is operational. |
 | `/registry` | partial | Search/tags/path actions work; broader registry/repo workflows remain minimal. |
-| `/profiles` | stub | Profile productization flow is present but still mostly scaffolding/import-first UX. |
+| `/profiles` | partial | CRUD + duplicate + export/import work; `setActive` writes `active_profile` store key; on-login actions and dashboard store unification still planned. |
 | `/terminal` | partial | Embedded terminal works; host/sandbox differences still affect behavior. |
 | `/runtimes` | partial | Status/version/deps/uninstall preview are live; install/update/remove backend is in active hardening. |
 | `/maintenance` | partial | Guardian scoring and diagnostics IPC are real; Integrity includes dismissible/auto-clearing status and **in-app** host probes (Docker df/ps, journalctl, cache `du`) via whitelisted `hostExec`—no clipboard-to-terminal runbook. Compose health, cleanup, bundles, tasks, and job runner work; no arbitrary host shell or full remediation. |
