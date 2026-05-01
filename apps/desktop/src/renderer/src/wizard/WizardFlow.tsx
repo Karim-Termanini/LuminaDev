@@ -1,4 +1,4 @@
-import type { SessionInfo } from '@linux-dev-home/shared'
+import type { ComposeProfile, SessionInfo } from '@linux-dev-home/shared'
 import type { ReactElement } from 'react'
 import { useEffect, useState } from 'react'
 import { assertGitOk } from '../pages/gitContract'
@@ -18,6 +18,7 @@ export function WizardFlow({ onComplete }: { onComplete: () => void }): ReactEle
   const [showAgainNextLaunch, setShowAgainNextLaunch] = useState(false)
 
   const [pubKey, setPubKey] = useState<string | null>(null)
+  const [pickedProfile, setPickedProfile] = useState<ComposeProfile | null>(null)
 
   useEffect(() => {
     window.dh.sessionInfo().then((s: unknown) => setIsFlatpak((s as SessionInfo).kind === 'flatpak'))
@@ -166,11 +167,82 @@ export function WizardFlow({ onComplete }: { onComplete: () => void }): ReactEle
             </div>
           </>
         )
-      case 5:
+      case 5: {
+        const presets: Array<{ id: ComposeProfile; label: string; icon: string }> = [
+          { id: 'web-dev',     label: 'Web Development', icon: '🌐' },
+          { id: 'data-science', label: 'Data Science',   icon: '📊' },
+          { id: 'ai-ml',       label: 'AI / ML Local',   icon: '🤖' },
+          { id: 'mobile',      label: 'Mobile App Dev',  icon: '📱' },
+          { id: 'game-dev',    label: 'Game Dev',        icon: '🎮' },
+          { id: 'infra',       label: 'Infra / K8s',     icon: '🏗' },
+          { id: 'desktop-gui', label: 'Desktop Qt/GTK',  icon: '🖥' },
+          { id: 'docs',        label: 'Docs / Writing',  icon: '📝' },
+          { id: 'empty',       label: 'Empty Minimal',   icon: '⬜' },
+        ]
+        return (
+          <>
+            <h2>Pick a Starter Profile</h2>
+            <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12 }}>
+              Sets your active environment. You can change this any time in Profiles.
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+              {presets.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => setPickedProfile(p.id)}
+                  style={{
+                    border: `1px solid ${pickedProfile === p.id ? 'var(--accent)' : 'var(--border)'}`,
+                    background: pickedProfile === p.id ? 'rgba(124,77,255,0.12)' : 'transparent',
+                    color: 'var(--text)',
+                    borderRadius: 8,
+                    padding: '10px 6px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: 4,
+                    fontSize: 11,
+                    fontWeight: pickedProfile === p.id ? 700 : 400,
+                  }}
+                >
+                  <span style={{ fontSize: 20 }}>{p.icon}</span>
+                  {p.label}
+                </button>
+              ))}
+            </div>
+            <div style={actions}>
+              <button style={btn} onClick={() => setStep(6)}>Skip</button>
+              <button
+                style={btnPrimary}
+                disabled={busy}
+                onClick={async () => {
+                  if (pickedProfile) {
+                    setBusy(true)
+                    try {
+                      await window.dh.storeSet({ key: 'active_profile', data: pickedProfile })
+                    } catch { /* best effort */ }
+                    setBusy(false)
+                  }
+                  setStep(6)
+                }}
+              >
+                {pickedProfile ? 'Set Profile & Next' : 'Next'}
+              </button>
+            </div>
+          </>
+        )
+      }
+      case 6:
         return (
           <>
             <h2>All Set!</h2>
             <p>Your environment is ready. Click finish to head to your new Dashboard.</p>
+            {pickedProfile && (
+              <p style={{ fontSize: 13, color: 'var(--green)', marginTop: 8 }}>
+                Active profile set to <strong>{pickedProfile}</strong>.
+              </p>
+            )}
             <label
               style={{
                 display: 'flex',
@@ -211,7 +283,7 @@ export function WizardFlow({ onComplete }: { onComplete: () => void }): ReactEle
         
         {/* Progress dots */}
         <div style={{ display: 'flex', gap: 6, justifyContent: 'center', marginTop: 40 }}>
-          {[0,1,2,3,4,5].map(i => (
+          {[0,1,2,3,4,5,6].map(i => (
             <div key={i} style={{
               width: 8, height: 8, borderRadius: 4,
               background: i === step ? 'var(--accent)' : 'var(--border)'

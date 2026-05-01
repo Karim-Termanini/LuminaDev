@@ -10,16 +10,16 @@ type RouteStatus = 'live' | 'partial' | 'stub'
 
 /** Keep in sync with `docs/ROUTE_STATUS.md` (nav pill is operator-facing, not marketing). */
 const nav = [
-  { to: '/dashboard', label: 'Dashboard', icon: 'dashboard', status: 'partial' as RouteStatus },
-  { to: '/system', label: 'Monitor', icon: 'pulse', status: 'partial' as RouteStatus },
+  { to: '/dashboard', label: 'Dashboard', icon: 'dashboard', status: 'live' as RouteStatus },
+  { to: '/system', label: 'Monitor', icon: 'pulse', status: 'live' as RouteStatus },
   { to: '/docker', label: 'Docker', icon: 'package', status: 'live' as RouteStatus },
   { to: '/ssh', label: 'SSH', icon: 'key', status: 'partial' as RouteStatus },
   { to: '/git-config', label: 'Git Config', icon: 'git-branch', status: 'live' as RouteStatus },
   { to: '/registry', label: 'Registry', icon: 'package', status: 'partial' as RouteStatus },
-  { to: '/profiles', label: 'Profiles', icon: 'account', status: 'stub' as RouteStatus },
-  { to: '/terminal', label: 'Terminal', icon: 'terminal', status: 'partial' as RouteStatus },
-  { to: '/runtimes', label: 'Runtimes', icon: 'zap', status: 'partial' as RouteStatus },
-  { to: '/maintenance', label: 'Maintenance', icon: 'shield', status: 'partial' as RouteStatus },
+  { to: '/profiles', label: 'Profiles', icon: 'account', status: 'partial' as RouteStatus },
+  { to: '/terminal', label: 'Terminal', icon: 'terminal', status: 'live' as RouteStatus },
+  { to: '/runtimes', label: 'Runtimes', icon: 'zap', status: 'live' as RouteStatus },
+  { to: '/maintenance', label: 'Maintenance', icon: 'shield', status: 'live' as RouteStatus },
 ] as const
 
 const statusStyles: Record<RouteStatus, { label: string; color: string; bg: string; border: string }> = {
@@ -109,16 +109,22 @@ export function AppShell({ children }: { children: ReactNode }): ReactElement {
               e.preventDefault()
               void window.dh.openExternal('https://github.com/')
             }}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              color: 'var(--text-muted)',
-              fontSize: 13,
-            }}
+            style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-muted)', fontSize: 13 }}
           >
             <span className="codicon codicon-book" aria-hidden />
             Docs
+          </a>
+          <a
+            href="#"
+            onClick={(e) => {
+              e.preventDefault()
+              void window.dh.storeSet({ key: 'wizard_state', data: { completed: false, showOnStartup: true } })
+                .then(() => window.location.reload())
+            }}
+            style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-muted)', fontSize: 13 }}
+          >
+            <span className="codicon codicon-wand" aria-hidden />
+            Setup Wizard
           </a>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6 }}>
             <span

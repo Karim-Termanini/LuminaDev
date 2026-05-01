@@ -1,44 +1,54 @@
-import { CustomProfilesStoreSchema, type CustomProfileEntry } from '@linux-dev-home/shared'
+import {
+  CustomProfilesStoreSchema,
+  type ComposeProfile,
+  type CustomProfileEntry,
+  parseStoredActiveProfile,
+} from '@linux-dev-home/shared'
 import type { ReactElement } from 'react'
 import { useEffect, useMemo, useState } from 'react'
 
 export function ProfilesPage(): ReactElement {
   const [profiles, setProfiles] = useState<CustomProfileEntry[]>([])
+  const [activeProfile, setActiveProfile] = useState<ComposeProfile | null>(null)
   const [importText, setImportText] = useState('')
   const [status, setStatus] = useState<string | null>(null)
 
   async function load(): Promise<void> {
     try {
       const res = (await window.dh.storeGet({ key: 'custom_profiles' })) as { ok: boolean; data: unknown; error?: string }
-      if (!res.ok) {
+      if (res.ok && res.data) {
+        const parsed = CustomProfilesStoreSchema.parse(res.data)
+        setProfiles(parsed)
+      } else if (!res.ok) {
         setStatus(res.error || 'Failed to load profiles.')
-        return
       }
-      if (!res.data) {
-        setProfiles([])
-        return
-      }
-      const parsed = CustomProfilesStoreSchema.parse(res.data)
-      setProfiles(parsed)
     } catch (e) {
       setStatus(e instanceof Error ? e.message : String(e))
     }
+    try {
+      const ar = (await window.dh.storeGet({ key: 'active_profile' })) as { ok: boolean; data: unknown }
+      if (ar.ok) setActiveProfile(parseStoredActiveProfile(ar.data))
+    } catch { /* ignore */ }
   }
 
-  useEffect(() => {
-    void load()
-  }, [])
+  useEffect(() => { void load() }, [])
 
   async function save(next: CustomProfileEntry[], msg: string): Promise<void> {
     try {
       const parsed = CustomProfilesStoreSchema.parse(next)
       const res = (await window.dh.storeSet({ key: 'custom_profiles', data: parsed })) as { ok: boolean; error?: string }
-      if (res.ok) {
-        setProfiles(parsed)
-        setStatus(msg)
-      } else {
-        setStatus(res.error || 'Failed to save profiles.')
-      }
+      if (res.ok) { setProfiles(parsed); setStatus(msg) }
+      else setStatus(res.error || 'Failed to save profiles.')
+    } catch (e) {
+      setStatus(e instanceof Error ? e.message : String(e))
+    }
+  }
+
+  async function setActive(p: CustomProfileEntry): Promise<void> {
+    try {
+      await window.dh.storeSet({ key: 'active_profile', data: p.baseTemplate })
+      setActiveProfile(p.baseTemplate)
+      setStatus(`Active profile set to "${p.name}" (${p.baseTemplate}).`)
     } catch (e) {
       setStatus(e instanceof Error ? e.message : String(e))
     }
@@ -83,63 +93,86 @@ export function ProfilesPage(): ReactElement {
     return [...map.entries()]
   }, [profiles])
 
+  const isOk = (s: string) => /copied|saved|removed|duplicated|imported|cleared|set to/i.test(s)
+
   return (
     <div style={{ maxWidth: 1040, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 20 }}>
       <header>
-        <div className="mono" style={{ color: 'var(--accent)', fontSize: 12, marginBottom: 8 }}>
-          PROFILES
-        </div>
+        <div className="mono" style={{ color: 'var(--accent)', fontSize: 12, marginBottom: 8 }}>PROFILES</div>
         <h1 style={{ margin: 0, fontSize: 28, fontWeight: 700 }}>Profile Manager</h1>
         <p style={{ color: 'var(--text-muted)', marginTop: 10, maxWidth: 760, lineHeight: 1.5 }}>
-          Manage saved custom profiles used by Dashboard Main cards. Profiles are stored in your local userData JSON.
+          Manage custom profiles. The active profile is highlighted and shown on the Dashboard.
         </p>
+        {activeProfile && (
+          <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4, background: 'rgba(124,77,255,0.15)', color: 'var(--accent)' }}>
+              ACTIVE
+            </span>
+            <span style={{ fontSize: 13 }}>{activeProfile}</span>
+          </div>
+        )}
       </header>
-      {status ? (
-        <div className={`hp-status-alert ${/copied|saved|removed|duplicated|imported|cleared/i.test(status) ? 'success' : 'warning'}`}>
-          <span style={{ fontSize: 16 }}>{/copied|saved|removed|duplicated|imported|cleared/i.test(status) ? '✔' : '⚠'}</span>
+
+      {status && (
+        <div className={`hp-status-alert ${isOk(status) ? 'success' : 'warning'}`}>
+          <span style={{ fontSize: 16 }}>{isOk(status) ? '✔' : '⚠'}</span>
           <span>{status}</span>
         </div>
-      ) : null}
+      )}
 
       <section style={card}>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-          <button type="button" style={btn} onClick={() => void load()}>
-            Refresh
-          </button>
-          <button type="button" style={btn} onClick={() => void exportJson()}>
-            Export JSON
-          </button>
-          <button type="button" style={btnDanger} onClick={() => void save([], 'All profiles cleared.')}>
-            Clear all
-          </button>
-          <span className="mono" style={{ color: 'var(--text-muted)', fontSize: 12 }}>
-            {profiles.length} profiles
-          </span>
+          <button type="button" style={btn} onClick={() => void load()}>Refresh</button>
+          <button type="button" style={btn} onClick={() => void exportJson()}>Export JSON</button>
+          <button type="button" style={btnDanger} onClick={() => void save([], 'All profiles cleared.')}>Clear all</button>
+          <span className="mono" style={{ color: 'var(--text-muted)', fontSize: 12 }}>{profiles.length} profiles</span>
         </div>
       </section>
 
       <section style={card}>
-        <div style={{ fontWeight: 600, marginBottom: 10 }}>Current profiles</div>
+        <div style={{ fontWeight: 600, marginBottom: 10 }}>Custom profiles</div>
         {profiles.length === 0 ? (
-          <div style={{ color: 'var(--text-muted)' }}>No custom profiles saved yet.</div>
+          <div style={{ color: 'var(--text-muted)' }}>
+            No custom profiles yet. Import JSON below or pick a preset in the Setup Wizard; the dashboard
+            highlights the active compose preset only.
+          </div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(280px,1fr))', gap: 10 }}>
-            {profiles.map((p, i) => (
-              <article key={`${p.name}-${i}`} style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10 }}>
-                <div style={{ fontWeight: 600 }}>{p.name}</div>
-                <div className="mono" style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 3 }}>
-                  base: {p.baseTemplate}
-                </div>
-                <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-                  <button type="button" style={btnSmall} onClick={() => void duplicateAt(i)}>
-                    Duplicate
-                  </button>
-                  <button type="button" style={btnSmallDanger} onClick={() => void removeAt(i)}>
-                    Delete
-                  </button>
-                </div>
-              </article>
-            ))}
+            {profiles.map((p, i) => {
+              const isActive = activeProfile === p.baseTemplate
+              return (
+                <article
+                  key={`${p.name}-${i}`}
+                  style={{
+                    border: `1px solid ${isActive ? 'var(--accent)' : 'var(--border)'}`,
+                    borderRadius: 8,
+                    padding: 12,
+                    background: isActive ? 'rgba(124,77,255,0.06)' : undefined,
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+                    {isActive && (
+                      <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 3, background: 'var(--accent)', color: '#fff' }}>
+                        ACTIVE
+                      </span>
+                    )}
+                    <div style={{ fontWeight: 600 }}>{p.name}</div>
+                  </div>
+                  <div className="mono" style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 3 }}>
+                    base: {p.baseTemplate}
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+                    {!isActive && (
+                      <button type="button" style={{ ...btnSmall, color: 'var(--accent)', borderColor: 'var(--accent)' }} onClick={() => void setActive(p)}>
+                        Set Active
+                      </button>
+                    )}
+                    <button type="button" style={btnSmall} onClick={() => void duplicateAt(i)}>Duplicate</button>
+                    <button type="button" style={btnSmallDanger} onClick={() => void removeAt(i)}>Delete</button>
+                  </div>
+                </article>
+              )
+            })}
           </div>
         )}
       </section>
@@ -151,70 +184,33 @@ export function ProfilesPage(): ReactElement {
           onChange={(e) => setImportText(e.target.value)}
           placeholder='Paste JSON array like [{"name":"My AI","baseTemplate":"ai-ml"}]'
           style={{
-            width: '100%',
-            minHeight: 140,
-            resize: 'vertical',
-            background: '#0a0a0a',
-            color: 'var(--text)',
-            border: '1px solid var(--border)',
-            borderRadius: 8,
-            padding: 10,
-            fontFamily: 'var(--font-mono)',
-            fontSize: 12,
+            width: '100%', minHeight: 140, resize: 'vertical',
+            background: '#0a0a0a', color: 'var(--text)',
+            border: '1px solid var(--border)', borderRadius: 8,
+            padding: 10, fontFamily: 'var(--font-mono)', fontSize: 12,
           }}
         />
         <div style={{ marginTop: 8 }}>
-          <button type="button" style={btn} onClick={() => void importJson()}>
-            Import JSON
-          </button>
+          <button type="button" style={btn} onClick={() => void importJson()}>Import JSON</button>
         </div>
       </section>
 
-      {byTemplate.length > 0 ? (
+      {byTemplate.length > 0 && (
         <section style={card}>
           <div style={{ fontWeight: 600, marginBottom: 8 }}>By base template</div>
           <ul style={{ margin: 0, paddingLeft: 18 }}>
             {byTemplate.map(([k, n]) => (
-              <li key={k} className="mono" style={{ marginBottom: 4 }}>
-                {k}: {n}
-              </li>
+              <li key={k} className="mono" style={{ marginBottom: 4 }}>{k}: {n}</li>
             ))}
           </ul>
         </section>
-      ) : null}
+      )}
     </div>
   )
 }
 
-const card = {
-  background: 'var(--bg-widget)',
-  border: '1px solid var(--border)',
-  borderRadius: 'var(--radius)',
-  padding: 16,
-}
-
-const btn = {
-  border: '1px solid var(--border)',
-  background: 'var(--bg-input)',
-  color: 'var(--text)',
-  borderRadius: 8,
-  padding: '9px 13px',
-  cursor: 'pointer',
-  fontWeight: 600,
-}
-
-const btnDanger = {
-  ...btn,
-  color: 'var(--red)',
-}
-
-const btnSmall = {
-  ...btn,
-  padding: '5px 10px',
-  fontSize: 12,
-}
-
-const btnSmallDanger = {
-  ...btnSmall,
-  color: 'var(--red)',
-}
+const card = { background: 'var(--bg-widget)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: 16 }
+const btn = { border: '1px solid var(--border)', background: 'var(--bg-input)', color: 'var(--text)', borderRadius: 8, padding: '9px 13px', cursor: 'pointer', fontWeight: 600 }
+const btnDanger = { ...btn, color: 'var(--red)' }
+const btnSmall = { ...btn, padding: '5px 10px', fontSize: 12 }
+const btnSmallDanger = { ...btnSmall, color: 'var(--red)' }
