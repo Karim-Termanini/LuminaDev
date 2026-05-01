@@ -39,8 +39,8 @@ Progress notes (2026-05-01):
   - [x] Cancellation
 - [ ] Add CI workflows (only if better than existing CIs):
   - [x] `ci.yml` — now runs Rust smoke tests (`docker_smoke`) + Job Runner tests before frontend/Tauri build on every PR/push
-  - `smoke-tests.yml` — Rust tests + Docker smoke + job runner
-  - `flatpak.yml` — Flatpak build + bundle + basic run test
+  - [x] `smoke-tests.yml` — Rust tests + Docker smoke + job runner
+  - [x] `flatpak.yml` — Flatpak build + bundle + basic run test
 
 Progress notes (2026-05-01):
 - Added `apps/desktop/src-tauri/tests/docker_smoke.rs` with 5 tests covering Docker version/info/ps, prune preview probes, and daemon-down error simulation.
@@ -59,6 +59,8 @@ Progress notes (2026-05-01):
 - Added a second dedicated test module file: `apps/desktop/src-tauri/src/runtime_prune_contract_tests.rs`
   - runtime version token edge-cases (`lumina_*` helpers)
   - Docker prune preview response contract shape/types via `docker_prune_preview_payload(...)`
+- Added `.github/workflows/smoke-tests.yml` for dedicated Rust smoke/job-runner coverage.
+- Added `.github/workflows/flatpak.yml` for GNOME 49 Flatpak build + install + non-GUI runtime smoke.
 
 ### Day 5 — Deep Audit: Critical Paths
 
