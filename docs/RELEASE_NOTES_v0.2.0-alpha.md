@@ -25,7 +25,7 @@ Alpha release focused on Flatpak stability, Docker/runtime reliability, and CI h
 - GitHub/GitLab CI hardening for native build, smoke tests, and Flatpak build.
 - Runtime install reliability improvements (including Fedora Java package mapping behavior).
 - Flatpak-specific guidance improvements for Docker socket and terminal fallback UX.
-- Initial backend modularization: `lib.rs` split into `host_exec`, `runtime_packages`, and `runtime_versioning`.
+- Initial backend modularization: `lib.rs` split into focused modules (including `host_exec`, `runtime_packages`, `runtime_versioning`, `runtime_paths`, `runtime_verify`, and `runtime_jobs`).
 
 ### Known Issues (Alpha)
 
@@ -34,6 +34,8 @@ Alpha release focused on Flatpak stability, Docker/runtime reliability, and CI h
 - Runtime uninstall dependency graph remains best-effort (`removableDeps` limited).
 - Ruby install flow can be slower/less predictable on some Fedora setups.
 - Flatpak host integration still depends on user environment and override correctness (Docker socket access, host tools availability).
+- Packaged app metadata may still report `0.1.0` in some manifests while the git tag is `v0.2.0-alpha` (cosmetic; tracked for the next housekeeping pass).
+- Linux AppImage/deb artifacts are not currently uploaded by CI workflows; Flatpak bundle is the primary downloadable artifact for this alpha.
 
 ### Verification Snapshot
 
@@ -41,9 +43,7 @@ Alpha release focused on Flatpak stability, Docker/runtime reliability, and CI h
 - Rust library tests: `cd apps/desktop/src-tauri && cargo test --lib -- --nocapture`
 - Docker smoke tests: `cd apps/desktop/src-tauri && cargo test --test docker_smoke -- --nocapture`
 
-### Release Checklist (remaining manual steps)
+### Release artifacts
 
-- Create tag: `v0.2.0-alpha`
-- Create GitHub Release draft and attach artifacts:
-  - AppImage (if produced in CI)
-  - Flatpak bundle (if produced in CI)
+- **Flatpak bundle:** `luminadev.flatpak` (built by GitHub Actions `flatpak.yml` on `main`)
+- **AppImage:** not attached for this alpha (no CI artifact upload yet)
