@@ -110,6 +110,13 @@ Example pattern:
 
 This gives fast unit tests without booting full app runtime.
 
+### 2.5 Avoid lib.rs Bloat (The "No-Monolith" Rule)
+
+In Rust shells (Tauri), do not keep domain logic in `src-tauri/src/lib.rs`. 
+- Any logic exceeding 50 lines should move to a dedicated module (e.g., `runtime_jobs.rs`).
+- `lib.rs` should only act as a clean entry point and router for IPC commands.
+- This preserves compile times and mental model clarity.
+
 ---
 
 ## 3) Scope control lessons
@@ -220,6 +227,12 @@ Before merge:
 
 ---
 
+### 6.4 Bundle Your Pushes
+
+Avoid pushing every micro-commit. Bundle commits into logical "Vertical Slices" or functional blocks before pushing to the remote. This respects CI/CD resource limits and keeps the build history meaningful.
+
+---
+
 ## 7) Platform-specific lessons (Desktop + Flatpak + Host tools)
 
 ### 7.1 Be explicit about host limitations
@@ -242,6 +255,13 @@ For delete/prune/remove operations:
 - force confirmation
 - show risk context ("in use by" when possible)
 - handle conflict paths safely
+
+### 7.4 Distro-Specific Packaging (Arch Linux vs Ubuntu/Fedora)
+
+- Distros handle `/run` and `/var/run` differently (symlink vs directory).
+- Flatpak `bwrap` (sandbox manager) will fail if a mount point conflicts with a host symlink.
+- **Rule:** Always test Flatpak bundles on Arch Linux early, as its strictness catches packaging bugs missed by Ubuntu.
+- **Rule:** Prefer mounting specific files (e.g. `/run/docker.sock`) over parent directories if symlink conflicts occur.
 
 ---
 
@@ -666,3 +686,30 @@ This file is a living engineering memory, not static documentation.
 - Verification evidence:
   - `pnpm typecheck` passed (workspace-wide)
   - `pnpm smoke` passed
+
+#### 2026-05-01 — Flatpak `bwrap` launch failure on Arch Linux
+- **Area:** Packaging / Flatpak / Arch Linux
+- **Symptom:** App fails to start with `bwrap: Can't make symlink at /var/run`.
+- **Root cause:** Conflicting filesystem overrides in the Flatpak manifest/user-settings when `/var/run` is a host symlink to `/run`.
+- **Impact:** App unusable on Arch Linux under default Docker-access instructions.
+- **Fix implemented:** Documented in README; plan created for Phase 13 (Environment Hardening) to use multi-distro smoke CI.
+- **Preventive action:** Add Arch Linux container smoke-test to the CI pipeline; Playbook rule 7.4.
+- **Status:** monitoring (workaround documented)
+
+#### 2026-05-01 — Wizard/Dashboard ID mismatch (active_profile)
+- **Area:** State / UI / Shared Schema
+- **Symptom:** Selecting a profile in the wizard didn't highlight the same profile on the dashboard.
+- **Root cause:** Wizard used legacy strings (`desktop-qt`, `minimal`) while Schema/Dashboard used canonical enum values (`desktop-gui`, `empty`).
+- **Impact:** Broken "Active" badge feedback loop; user confusion.
+- **Fix implemented:** Unified IDs in `WizardFlow.tsx` and added `parseStoredActiveProfile` helper to `shared/schemas.ts` to map legacy values.
+- **Preventive action:** Use Shared Enums for all cross-component state keys; add parse helpers with legacy mapping early.
+- **Status:** resolved
+
+#### 2026-05-01 — lib.rs Monolith bloat
+- **Area:** Architecture / Rust
+- **Symptom:** `lib.rs` exceeded 4000 lines, making it hard to navigate and review.
+- **Root cause:** Appending all new IPC handlers to the same file during rapid prototyping.
+- **Impact:** High maintainability risk and slow review cycles.
+- **Fix implemented:** Extracted `runtime_jobs.rs` and `runtime_verify.rs` modules; added `No lib.rs Bloat` rule to `CONTRIBUTING.md`.
+- **Preventive action:** Playbook rule 2.5: Extract logic exceeding 50 lines to dedicated modules immediately.
+- **Status:** resolved

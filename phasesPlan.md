@@ -121,6 +121,22 @@ Progress notes (2026-05-01, docs pass):
 
 ---
 
+## 🛡️ Phase 13 — Advanced CI & Environment Hardening (Prevent Distro-Surprises)
+
+**Goal: Stop discovering environment bugs manually on Arch/Fedora/Ubuntu.**
+
+- [ ] **Multi-distro Smoke CI:**
+  - [ ] Add GitLab CI job to launch the built Flatpak inside an Arch Linux container (using `xvfb-run`).
+  - [ ] Add GitLab CI job to launch on Fedora container.
+- [ ] **Sandbox Permission Probes:**
+  - [ ] Automated test to verify if the app can "see" the Docker socket inside the sandbox.
+  - [ ] Verify PTY (Terminal) allocation succeeds in restricted environments.
+- [ ] **Headless E2E (Packaging):**
+  - [ ] Use Playwright/Webdriver to confirm the UI actually loads (no "Connection Refused") inside the Flatpak bundle.
+
+
+---
+
 ## What is NOT Alpha scope (explicitly deprioritized)
 
 - ❌ Drag-and-drop polish (basic HTML5 reorder already works — good enough)
