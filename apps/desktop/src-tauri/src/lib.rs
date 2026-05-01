@@ -1372,6 +1372,23 @@ async fn runtime_job_execute(
             runtime_bash_user_step(&cmd, &mut logs, Some(app.clone()), Some(job_id.clone()), 30, 65).await.map_err(|e| format!("{}", e))
           }
         } else if (runtime_id == "php" || runtime_id == "ruby" || runtime_id == "lua") && method == "local" {
+          if runtime_id == "php" {
+            // PHP source compilation is too slow and fragile on non-Debian systems.
+            // Always install via system package manager regardless of "local" track selection.
+            logs.push("Installing PHP via system package manager (source compile not supported)…".into());
+            let cmd = r#"
+if command -v dnf >/dev/null 2>&1; then
+  sudo dnf install -y php-cli php-common php-mbstring php-xml php-json php-curl php-zip 2>&1
+elif command -v apt-get >/dev/null 2>&1; then
+  sudo DEBIAN_FRONTEND=noninteractive apt-get install -y php-cli php-common php-mbstring php-xml php-curl php-zip 2>&1
+elif command -v pacman >/dev/null 2>&1; then
+  sudo pacman -S --noconfirm php 2>&1
+else
+  echo "[RUNTIME_INSTALL_FAILED] No supported package manager found" >&2; exit 1
+fi"#;
+            sudo_bash_install_step(cmd, password_opt, &mut logs, Some(app.clone()), Some(job_id.clone()), 10, 85).await
+              .map_err(|e| format!("[RUNTIME_INSTALL_FAILED] {}", e))
+          } else {
           let ver_guess = lumina_first_version_token(&version)
             .unwrap_or_else(|| version.trim().to_string())
             .trim()
@@ -1379,7 +1396,7 @@ async fn runtime_job_execute(
             .to_string();
           if ver_guess.is_empty() {
             Err(
-              "[RUNTIME_INSTALL_FAILED] Pick a concrete version for isolated install (examples: PHP 8.3.14, Ruby 3.3.5, Lua 5.4)."
+              "[RUNTIME_INSTALL_FAILED] Pick a concrete version for isolated install (examples: Ruby 3.3.5, Lua 5.4)."
                 .to_string(),
             )
           } else {
@@ -1393,18 +1410,7 @@ async fn runtime_job_execute(
               "Installing {} via mise (https://mise.jdx.dev) — downloads prebuilt binaries when available…",
               spec
             ));
-            // PHP/Ruby/Lua build-from-source dependencies (silent if not needed or no sudo)
-            let build_deps_cmd = if runtime_id == "php" {
-              // PHP builds from source; needs many devel headers on all distros
-              r#"
-              if command -v dnf >/dev/null 2>&1; then
-                sudo dnf install -y re2c bison autoconf libxml2-devel oniguruma-devel gd-devel libjpeg-devel libpng-devel freetype-devel libcurl-devel sqlite-devel readline-devel openssl-devel 2>/dev/null || true
-              elif command -v apt-get >/dev/null 2>&1; then
-                sudo apt-get install -y re2c bison autoconf libxml2-dev libonig-dev libgd-dev libjpeg-dev libpng-dev libfreetype6-dev libcurl4-openssl-dev libsqlite3-dev libreadline-dev libssl-dev 2>/dev/null || true
-              elif command -v pacman >/dev/null 2>&1; then
-                sudo pacman -S --needed --noconfirm re2c bison autoconf libxml2 oniguruma gd libjpeg libpng freetype2 curl sqlite readline openssl 2>/dev/null || true
-              fi"#
-            } else if runtime_id == "lua" {
+            let build_deps_cmd = if runtime_id == "lua" {
               r#"
               if command -v dnf >/dev/null 2>&1; then
                 sudo dnf install -y readline-devel 2>/dev/null || true
@@ -1435,6 +1441,7 @@ async fn runtime_job_execute(
               spec = safe_spec
             );
             runtime_bash_user_step(&cmd, &mut logs, Some(app.clone()), Some(job_id.clone()), 30, 65).await.map_err(|e| format!("{}", e))
+          }
           }
         } else if runtime_id == "julia" {
           let want = lumina_first_version_token(&version).unwrap_or_default();
@@ -2942,7 +2949,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
         ("c_cpp",   "C/C++",   "gcc --version 2>&1 | head -1"),
         ("matlab",  "Octave",  "octave --version 2>&1 | head -1"),
         ("dart",    "Dart",    "dart --version 2>&1 | head -1 || $HOME/.dart/dart-sdk/bin/dart --version 2>&1 | head -1"),
-        ("flutter", "Flutter", "for d in \"$HOME/.local/share/lumina/flutter/stable\" \"$HOME/.local/share/lumina/flutter/beta\" \"$HOME/.local/share/lumina/flutter/master\" \"$HOME/flutter\" \"$HOME/.flutter-sdk\"; do [ -x \"$d/bin/flutter\" ] && { cat \"$d/version\" 2>/dev/null || echo installed; } && break; done; command -v flutter >/dev/null 2>&1 && { flutter --version 2>/dev/null | awk '/^Flutter/{print $2}'; }"),
+        ("flutter", "Flutter", "FOUND=0; for d in \"$HOME/.local/share/lumina/flutter/stable\" \"$HOME/.local/share/lumina/flutter/beta\" \"$HOME/.local/share/lumina/flutter/master\" \"$HOME/flutter\" \"$HOME/.flutter-sdk\"; do [ -x \"$d/bin/flutter\" ] && { cat \"$d/version\" 2>/dev/null | head -1 || echo installed; } && FOUND=1 && break; done; [ $FOUND -eq 0 ] && command -v snap >/dev/null 2>&1 && snap list flutter 2>/dev/null | awk 'NR>1{print $2}' || true"),
         ("julia",   "Julia",   "export PATH=\"$HOME/.juliaup/bin:$PATH\"; julia --version 2>/dev/null || ~/.juliaup/bin/julia --version 2>/dev/null"),
         ("lua",     "Lua",     "export PATH=\"$HOME/.local/bin:$PATH\"; ([ -x \"$HOME/.local/bin/mise\" ] && eval \"$($HOME/.local/bin/mise activate bash)\" >/dev/null 2>&1 || true); lua -v 2>&1 || lua5.4 -v 2>&1 || lua5.3 -v 2>&1"),
         ("lisp",    "SBCL",    "sbcl --version"),
@@ -3088,11 +3095,36 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
                     all_versions.push(json!({ "version": display_ver, "path": bun_bin }));
                   }
                 }
-                "dart" => {
-                  // Lumina installs Dart under ~/.local/share/lumina/dart/<channel-or-version>/bin/dart
+                "rust" => {
+                  if let Ok(p) = exec_output_limit(
+                    "bash",
+                    &["-lc", "unset RUSTUP_TOOLCHAIN; ([ -x \"$HOME/.cargo/bin/rustup\" ] && \"$HOME/.cargo/bin/rustup\" which rustc 2>/dev/null) || command -v rustc || true"],
+                    CMD_TIMEOUT_SHORT,
+                  ).await {
+                    let p = p.trim();
+                    if !p.is_empty() { detected_path = Some(p.to_string()); }
+                  }
                   if let Ok(raw) = exec_output_limit(
                     "bash",
-                    &["-lc", "LDIR=\"$HOME/.local/share/lumina/dart\"; if [ -d \"$LDIR\" ]; then for d in \"$LDIR\"/*; do [ -d \"$d\" ] || continue; b=$(basename \"$d\"); [ \"$b\" = \"current\" ] && continue; [ -x \"$d/bin/dart\" ] || continue; ver=$(\"$d/bin/dart\" --version 2>&1 | awk '{print $4}'); printf '%s\\t%s\\n' \"${ver:-$b}\" \"$d/bin/dart\"; done; fi"],
+                    &["-lc", "unset RUSTUP_TOOLCHAIN; [ -x \"$HOME/.cargo/bin/rustup\" ] && \"$HOME/.cargo/bin/rustup\" toolchain list 2>/dev/null || true"],
+                    CMD_TIMEOUT_SHORT,
+                  ).await {
+                    let home = std::env::var("HOME").unwrap_or_default();
+                    for line in raw.lines() {
+                      let tc = line.split_whitespace().next().unwrap_or("").trim();
+                      if tc.is_empty() { continue; }
+                      let rustc_bin = format!("{}/.rustup/toolchains/{}/bin/rustc", home, tc);
+                      let path_to_use = if std::path::Path::new(&rustc_bin).exists() { rustc_bin }
+                        else { format!("{}/.cargo/bin/rustc", home) };
+                      all_versions.push(json!({ "version": tc, "path": path_to_use }));
+                    }
+                  }
+                }
+                "dart" => {
+                  // Check lumina dir and ~/.dart/dart-sdk (tarball install)
+                  if let Ok(raw) = exec_output_limit(
+                    "bash",
+                    &["-lc", r#"FOUND=false; LDIR="$HOME/.local/share/lumina/dart"; if [ -d "$LDIR" ]; then for d in "$LDIR"/*; do [ -d "$d" ] || continue; b=$(basename "$d"); [ "$b" = "current" ] && continue; [ -x "$d/bin/dart" ] || continue; ver=$("$d/bin/dart" --version 2>&1 | awk '{print $4}'); printf '%s\t%s\n' "${ver:-$b}" "$d/bin/dart"; FOUND=true; done; fi; if ! $FOUND && [ -x "$HOME/.dart/dart-sdk/bin/dart" ]; then ver=$("$HOME/.dart/dart-sdk/bin/dart" --version 2>&1 | awk '{print $4}'); printf '%s\t%s\n' "${ver:-dart}" "$HOME/.dart/dart-sdk/bin/dart"; fi"#],
                     CMD_TIMEOUT_SHORT,
                   ).await {
                     for line in raw.lines() {
@@ -3106,10 +3138,10 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
                   }
                 }
                 "flutter" => {
-                  // Lumina installs Flutter under ~/.local/share/lumina/flutter/<channel>/bin/flutter
+                  // Read version file (never run flutter binary — it grabs a startup lock)
                   if let Ok(raw) = exec_output_limit(
                     "bash",
-                    &["-lc", "LDIR=\"$HOME/.local/share/lumina/flutter\"; if [ -d \"$LDIR\" ]; then for d in \"$LDIR\"/*; do [ -d \"$d\" ] || continue; b=$(basename \"$d\"); [ \"$b\" = \"current\" ] && continue; [ -x \"$d/bin/flutter\" ] || continue; ver=$(\"$d/bin/flutter\" --version 2>/dev/null | awk '/^Flutter/{print $2}'); printf '%s\\t%s\\n' \"${ver:-$b}\" \"$d/bin/flutter\"; done; fi"],
+                    &["-lc", r#"FOUND=false; LDIR="$HOME/.local/share/lumina/flutter"; if [ -d "$LDIR" ]; then for d in "$LDIR"/*; do [ -d "$d" ] || continue; b=$(basename "$d"); [ "$b" = "current" ] && continue; [ -x "$d/bin/flutter" ] || continue; ver=$(cat "$d/version" 2>/dev/null | head -1); printf '%s\t%s\n' "${ver:-$b}" "$d/bin/flutter"; FOUND=true; done; fi; if ! $FOUND; then for sd in "$HOME/.flutter-sdk" "$HOME/flutter"; do [ -x "$sd/bin/flutter" ] || continue; ver=$(cat "$sd/version" 2>/dev/null | head -1); printf '%s\t%s\n' "${ver:-stable}" "$sd/bin/flutter"; FOUND=true; break; done; fi; if ! $FOUND && command -v snap >/dev/null 2>&1; then snap list flutter 2>/dev/null | awk 'NR>1{print $2"\t/snap/flutter/current/bin/flutter"}'; fi"#],
                     CMD_TIMEOUT_SHORT,
                   ).await {
                     for line in raw.lines() {
@@ -3244,13 +3276,20 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
           if let Ok(raw) = exec_output_limit("curl", &["-fsSL", "https://endoflife.date/api/python.json"], CMD_TIMEOUT_SHORT).await {
             if let Ok(arr) = serde_json::from_str::<Value>(&raw) {
               if let Some(list) = arr.as_array() {
-                for item in list.iter().take(20) {
+                for item in list.iter() {
+                  // Skip EOL versions — they fail to compile on modern GCC/glibc
+                  let is_eol = !matches!(item.get("eol"), Some(Value::Bool(false)));
+                  if is_eol { continue; }
                   if let Some(v) = item.get("latest").and_then(|x| x.as_str()) {
                     versions.push(v.to_string());
                   }
+                  if versions.len() >= 8 { break; }
                 }
               }
             }
+          }
+          if versions.is_empty() {
+            versions.extend(["3.13.3".into(), "3.12.10".into(), "3.11.12".into(), "3.10.17".into()]);
           }
         },
         "go" => {
