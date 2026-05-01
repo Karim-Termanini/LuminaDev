@@ -34,17 +34,31 @@ Progress notes (2026-05-01):
   - [x] Prune dry-run (images, volumes, build cache)
   - [x] Error case: Docker daemon not running
 - [ ] Integration tests:
-  - Job Runner with a long task (e.g. small `docker pull`)
-  - Streaming logs
-  - Cancellation
+  - [x] Job Runner with a long task (Rust-side command loop simulation)
+  - [x] Streaming logs
+  - [x] Cancellation
 - [ ] Add CI workflows (only if better than existing CIs):
-  - `ci.yml` — typecheck + lint + build + tauri build on every PR/push to main
+  - [x] `ci.yml` — now runs Rust smoke tests (`docker_smoke`) + Job Runner tests before frontend/Tauri build on every PR/push
   - `smoke-tests.yml` — Rust tests + Docker smoke + job runner
   - `flatpak.yml` — Flatpak build + bundle + basic run test
 
 Progress notes (2026-05-01):
 - Added `apps/desktop/src-tauri/tests/docker_smoke.rs` with 5 tests covering Docker version/info/ps, prune preview probes, and daemon-down error simulation.
 - Test command: `cd apps/desktop/src-tauri && cargo test --test docker_smoke -- --nocapture` (passing locally).
+- Added Job Runner tests in `apps/desktop/src-tauri/src/lib.rs` (`job_runner_*`): long task completion, streamed output capture, cancel transition on running jobs, and no-op cancel on non-running jobs.
+- Test command: `cd apps/desktop/src-tauri && cargo test job_runner -- --nocapture` (passing locally).
+- Updated `.github/workflows/ci.yml` `native-linux-build` job to execute:
+  - `cargo test --test docker_smoke -- --nocapture`
+  - `cargo test job_runner -- --nocapture`
+- Expanded Rust unit coverage in `apps/desktop/src-tauri/src/lib.rs` for critical helpers:
+  - size/disk parsers, Docker name sanitization, Docker install step shaping
+  - distro package-manager mapping, Java package resolution
+  - version/probe matching utilities and shell-noise filtering
+  - package command builders, output truncation, repository-root discovery
+- Full Rust test suite now passes locally: `cd apps/desktop/src-tauri && cargo test -- --nocapture`.
+- Added a second dedicated test module file: `apps/desktop/src-tauri/src/runtime_prune_contract_tests.rs`
+  - runtime version token edge-cases (`lumina_*` helpers)
+  - Docker prune preview response contract shape/types via `docker_prune_preview_payload(...)`
 
 ### Day 5 — Deep Audit: Critical Paths
 
