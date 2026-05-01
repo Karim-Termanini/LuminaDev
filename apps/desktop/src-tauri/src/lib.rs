@@ -183,9 +183,26 @@ fn truncate_probe_output(s: &str) -> String {
 }
 
 async fn exec_output_limit(cmd: &str, args: &[&str], limit: Duration) -> Result<String, String> {
+  fn running_in_flatpak() -> bool {
+    std::env::var("FLATPAK_ID")
+      .map(|v| !v.trim().is_empty())
+      .unwrap_or(false)
+  }
+
+  fn host_command(cmd: &str, args: &[&str]) -> Command {
+    let mut command = if running_in_flatpak() && cmd != "flatpak-spawn" {
+      let mut wrapped = Command::new("flatpak-spawn");
+      wrapped.arg("--host").arg(cmd);
+      wrapped
+    } else {
+      Command::new(cmd)
+    };
+    command.args(args);
+    command
+  }
+
   let fut = async {
-    let output = Command::new(cmd)
-      .args(args)
+    let output = host_command(cmd, args)
       .output()
       .await
       .map_err(|e| format!("[EXEC_ERROR] {}", e))?;
@@ -210,9 +227,26 @@ async fn exec_output(cmd: &str, args: &[&str]) -> Result<String, String> {
 }
 
 async fn exec_result_limit(cmd: &str, args: &[&str], limit: Duration) -> Result<(String, String), String> {
+  fn running_in_flatpak() -> bool {
+    std::env::var("FLATPAK_ID")
+      .map(|v| !v.trim().is_empty())
+      .unwrap_or(false)
+  }
+
+  fn host_command(cmd: &str, args: &[&str]) -> Command {
+    let mut command = if running_in_flatpak() && cmd != "flatpak-spawn" {
+      let mut wrapped = Command::new("flatpak-spawn");
+      wrapped.arg("--host").arg(cmd);
+      wrapped
+    } else {
+      Command::new(cmd)
+    };
+    command.args(args);
+    command
+  }
+
   let fut = async {
-    let output = Command::new(cmd)
-      .args(args)
+    let output = host_command(cmd, args)
       .output()
       .await
       .map_err(|e| format!("[EXEC_ERROR] {}", e))?;
@@ -236,6 +270,23 @@ async fn exec_result_limit(cmd: &str, args: &[&str], limit: Duration) -> Result<
 
 async fn exec_result(cmd: &str, args: &[&str]) -> Result<(String, String), String> {
   exec_result_limit(cmd, args, CMD_TIMEOUT_DEFAULT).await
+}
+
+async fn read_proc_text(path: &str) -> String {
+  if let Ok(text) = std::fs::read_to_string(path) {
+    if !text.trim().is_empty() {
+      return text;
+    }
+  }
+  if std::env::var("FLATPAK_ID")
+    .map(|v| !v.trim().is_empty())
+    .unwrap_or(false)
+  {
+    return exec_output_limit("cat", &[path], CMD_TIMEOUT_SHORT)
+      .await
+      .unwrap_or_default();
+  }
+  String::new()
 }
 
 /// `docker compose` in a fixed directory (avoids `bash -lc "cd … && …"`).
@@ -2282,12 +2333,11 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
     },
     "dh:perf:snapshot" => {
       let mut rss_mb = 0u64;
-      if let Ok(statm) = std::fs::read_to_string("/proc/self/statm") {
-        if let Some(pages) = statm.split_whitespace().nth(1).and_then(|v| v.parse::<u64>().ok()) {
-          rss_mb = (pages * 4096) / 1024 / 1024; // Assuming 4KB page size
-        }
+      let statm = read_proc_text("/proc/self/statm").await;
+      if let Some(pages) = statm.split_whitespace().nth(1).and_then(|v| v.parse::<u64>().ok()) {
+        rss_mb = (pages * 4096) / 1024 / 1024; // Assuming 4KB page size
       }
-      let uptime_str = std::fs::read_to_string("/proc/uptime").unwrap_or_default();
+      let uptime_str = read_proc_text("/proc/uptime").await;
       let uptime_sec = uptime_str.split_whitespace().next()
         .and_then(|v| v.parse::<f64>().ok()).unwrap_or(0.0) as u64;
       
@@ -3757,7 +3807,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       let kernel = exec_output("uname", &["-r"]).await.unwrap_or_else(|_| "unknown".to_string());
       let arch = exec_output("uname", &["-m"]).await.unwrap_or_else(|_| "unknown".to_string());
       let os_name = exec_output("uname", &["-s"]).await.unwrap_or_else(|_| "Linux".to_string());
-      let uptime_str = std::fs::read_to_string("/proc/uptime").unwrap_or_default();
+      let uptime_str = read_proc_text("/proc/uptime").await;
       let uptime = uptime_str.split_whitespace().next()
         .and_then(|v| v.split('.').next())
         .and_then(|v| v.parse::<u64>().ok())
@@ -3788,7 +3838,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
         "nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1 || lspci 2>/dev/null | grep -i 'vga\\|3d\\|display' | head -1 | sed 's/.*: //' || echo 'unknown'"
       ], CMD_TIMEOUT_SHORT).await.unwrap_or_else(|_| "unknown".to_string());
       // Memory total
-      let meminfo = std::fs::read_to_string("/proc/meminfo").unwrap_or_default();
+      let meminfo = read_proc_text("/proc/meminfo").await;
       let mem_total_kb: u64 = meminfo.lines()
         .find(|l| l.starts_with("MemTotal:"))
         .and_then(|l| l.split_whitespace().nth(1))
@@ -4016,7 +4066,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       json!({ "ok": true, "drilldown": { "failedAuthSamples": failed_auth_samples, "riskyPortOwners": risky_port_owners } })
     },
     "dh:metrics" => {
-      let meminfo = std::fs::read_to_string("/proc/meminfo").unwrap_or_default();
+      let meminfo = read_proc_text("/proc/meminfo").await;
       let parse_kb = |key: &str| -> u64 {
         meminfo.lines()
           .find(|l| l.starts_with(key))
@@ -4028,14 +4078,14 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       let free_kb = parse_kb("MemAvailable:");
       let swap_total_kb = parse_kb("SwapTotal:");
       let swap_free_kb = parse_kb("SwapFree:");
-      let uptime_str = std::fs::read_to_string("/proc/uptime").unwrap_or_default();
+      let uptime_str = read_proc_text("/proc/uptime").await;
       let uptime_sec = uptime_str.split_whitespace().next()
         .and_then(|v| v.parse::<f64>().ok()).unwrap_or(0.0) as u64;
-      let loadavg_str = std::fs::read_to_string("/proc/loadavg").unwrap_or_default();
+      let loadavg_str = read_proc_text("/proc/loadavg").await;
       let load_parts: Vec<f64> = loadavg_str.split_whitespace().take(3)
         .filter_map(|v| v.parse::<f64>().ok()).collect();
       let (cpu_percent, cpu_model) = {
-        let stat_raw = std::fs::read_to_string("/proc/stat").unwrap_or_default();
+        let stat_raw = read_proc_text("/proc/stat").await;
         let first_line = stat_raw.lines().next().unwrap_or("");
         let parts: Vec<u64> = first_line.split_whitespace().skip(1).filter_map(|v| v.parse::<u64>().ok()).collect();
         let total: u64 = parts.iter().sum();
@@ -4057,7 +4107,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
         };
         *prev = Some((total, idle, now_inst));
 
-        let cpuinfo = std::fs::read_to_string("/proc/cpuinfo").unwrap_or_default();
+        let cpuinfo = read_proc_text("/proc/cpuinfo").await;
         let model = cpuinfo.lines()
           .find(|l| l.starts_with("model name"))
           .and_then(|l| l.splitn(2, ':').nth(1))
@@ -4075,7 +4125,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
           Some((total / 1024 / 1024, free / 1024 / 1024))
         }).unwrap_or((0, 0));
       // Net I/O delta from /proc/net/dev
-      let net_raw = std::fs::read_to_string("/proc/net/dev").unwrap_or_default();
+      let net_raw = read_proc_text("/proc/net/dev").await;
       let (net_rx_now, net_tx_now) = net_raw.lines().skip(2).fold((0u64, 0u64), |acc, l| {
         let parts: Vec<&str> = l.split_whitespace().collect();
         if parts.len() < 10 || parts[0].starts_with("lo:") { return acc; }
@@ -4096,7 +4146,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
         mbps
       };
       // Disk I/O delta from /proc/diskstats (sectors = 512 bytes)
-      let disk_raw = std::fs::read_to_string("/proc/diskstats").unwrap_or_default();
+      let disk_raw = read_proc_text("/proc/diskstats").await;
       let (disk_read_now, disk_write_now) = disk_raw.lines().fold((0u64, 0u64), |acc, l| {
         let p: Vec<&str> = l.split_whitespace().collect();
         let name = p.get(2).copied().unwrap_or("");
@@ -4573,6 +4623,18 @@ mod tests {
     assert_eq!(
       runtime_java_system_packages_for_version("pacman", "stable"),
       vec!["jdk21-openjdk".to_string()]
+    );
+    assert_eq!(
+      runtime_java_system_packages_for_version("dnf", "11.0.23"),
+      vec!["java-11-openjdk-devel".to_string()]
+    );
+    assert_eq!(
+      runtime_java_system_packages_for_version("dnf", "8"),
+      vec!["java-1.8.0-openjdk-devel".to_string()]
+    );
+    assert_eq!(
+      runtime_java_system_packages_for_version("dnf", "latest"),
+      vec!["java-21-openjdk-devel".to_string()]
     );
   }
 

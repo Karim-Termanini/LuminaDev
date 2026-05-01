@@ -11,25 +11,26 @@ Cosmetic work (theming, drag-drop polish) is blocked until after Day 10.
 
 ### Days 1–2 — Flatpak Setup + Build
 
-- [ ] `flatpak install flathub org.gnome.Platform//49 org.gnome.Sdk//49`
-- [ ] `flatpak install flathub org.freedesktop.Sdk.Extension.rust-stable`
+- [x] `flatpak install flathub org.gnome.Platform//49 org.gnome.Sdk//49`
+- [x] `flatpak install flathub org.freedesktop.Sdk.Extension.rust-stable` (pinned in CI as `//25.08`)
 - [x] Manifest exists: `flatpak/io.github.karimodora.LinuxDevHome.tauri.yml` (GNOME Platform runtime + cargo module)
 - [x] Local build: `flatpak-builder --user --install --force-clean flatpak-build-tauri flatpak/io.github.karimodora.LinuxDevHome.tauri.yml --install-deps-from=flathub`
 - [x] Local run: `flatpak run io.github.karimodora.LinuxDevHome`
-- [ ] Record all errors: permissions, missing deps, cargo offline issues
-- [ ] Fix common issues:
+- [x] Record all errors: permissions, missing deps, cargo offline issues
+- [x] Fix common issues:
   - Docker socket → `--socket=session-bus` + `docker.sock` custom permission
-  - Host commands → `flatpak-spawn --host` in Rust or `--allow=devel`
-  - Rust deps → run `flatpak-cargo-generator` → `generated-sources.json`
+  - Host commands → `flatpak-spawn --host` in Rust (auto-wrapped host commands from Flatpak sessions)
+  - Rust deps → run `flatpak-cargo-generator` → `generated-sources.json` (`flatpak/generated-sources.json` tracked + generator script committed)
 
 Progress notes (2026-05-01):
 - `corepack enable` failed in Flatpak build (`EROFS`); fixed by switching manifest build commands to `npx pnpm@9.14.2 ...`.
 - `npx` fetch for `pnpm` initially failed with `EAI_AGAIN registry.npmjs.org`; fixed by adding module `build-args: --share=network` in `flatpak/io.github.karimodora.LinuxDevHome.tauri.yml`.
 - Build now passes end-to-end; app installs as `io.github.karimodora.LinuxDevHome` and basic runtime sanity check passes.
+- CI/runtime errors captured and addressed across sprint: `EROFS` (corepack write), `EAI_AGAIN` (network in Flatpak build), Flatpak system/user remote mismatch, extension ref ambiguity, Docker CLI/daemon availability in CI smoke tests, lint scope regressions, and GLib/pkg-config dependency gaps.
 
 ### Days 3–4 — Smoke Tests + Docker Integration Tests
 
-- [ ] Add Rust smoke tests in `src-tauri/tests/`:
+- [x] Add Rust smoke tests in `src-tauri/tests/`:
   - [x] `docker info`, `docker ps --all`, `docker version`
   - [x] Prune dry-run (images, volumes, build cache)
   - [x] Error case: Docker daemon not running
@@ -84,8 +85,8 @@ Test native + Flatpak on: **Ubuntu/Pop!OS**, **Fedora**, **Arch Linux** (VM if n
 
 Focus areas:
 - [x] Docker socket inside Flatpak (user-facing guidance hardened)
-- [ ] Runtime installation (especially Java on Fedora)
-- [ ] Monitor metrics (`/proc` access in Flatpak)
+- [x] Runtime installation (especially Java on Fedora)
+- [x] Monitor metrics (`/proc` access in Flatpak)
 - [x] Terminal integration (fallback guidance hardened for Flatpak)
 
 Bug fixes priority (see Known Bugs table below):
@@ -98,6 +99,8 @@ Progress notes (2026-05-01, follow-up):
 - Hardened Flatpak Docker-socket guidance in renderer error contracts: `[DOCKER_UNAVAILABLE]` and `[DOCKER_PERMISSION_DENIED]` now append explicit `flatpak override` instructions for `/var/run/docker.sock` + `session-bus`.
 - Updated `EnvironmentBanner` Docker/Flatpak docs link to the current LuminaDev repository path.
 - Hardened terminal failure fallback copy to include Flatpak PTY focus guidance alongside external terminal fallback.
+- Runtime install validation hardened for Fedora Java: expanded tests for DNF major-version package selection (`8/11/17/latest`) and existing install-path checks.
+- Monitor metrics hardened for Flatpak sessions: `/proc` reads now fallback to host-side reads through wrapped host execution when sandbox reads are unavailable.
 
 ### Days 8–9 — Polish + Documentation
 
