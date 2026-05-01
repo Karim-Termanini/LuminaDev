@@ -405,10 +405,9 @@ function runDiagnostics(cfg: Map<string, string>, onSetKey: (k: string, v?: stri
   return findings
 }
 
-function GitDoctor({ cfg, onSetKey, onSection }: {
+function GitDoctor({ cfg, onSetKey }: {
   cfg: Map<string, string>
   onSetKey: (k: string, v?: string) => Promise<void>
-  onSection: (s: Section) => void
 }): ReactElement {
   const [scanned, setScanned] = useState(false)
   const [findings, setFindings] = useState<DoctorFinding[]>([])
@@ -555,7 +554,7 @@ function OverviewSection({ cfg, onSection, onSetKey }: {
         </div>
       )}
 
-      <GitDoctor cfg={cfg} onSetKey={onSetKey} onSection={onSection} />
+      <GitDoctor cfg={cfg} onSetKey={onSetKey} />
 
       <div className="hp-card">
         <div className="hp-section-title">Quick Actions</div>

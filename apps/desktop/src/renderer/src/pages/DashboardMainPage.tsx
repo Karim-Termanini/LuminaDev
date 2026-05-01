@@ -255,7 +255,7 @@ export function DashboardMainPage(): ReactElement {
           </span>
           <Link to="/docker" style={{ fontSize: 12, color: 'var(--accent)', marginLeft: 4 }}>Open Docker →</Link>
         </div>
-        {m && (
+        {m ? (
           <>
             <div style={{ fontSize: 13 }}>
               <span style={{ color: 'var(--text-muted)' }}>CPU </span>
@@ -273,6 +273,10 @@ export function DashboardMainPage(): ReactElement {
             </div>
             <Link to="/system" style={{ fontSize: 12, color: 'var(--accent)' }}>Full Monitor →</Link>
           </>
+        ) : metricsError ? (
+          <span style={{ fontSize: 12, color: 'var(--orange)' }}>{metricsError}</span>
+        ) : (
+          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Collecting metrics…</span>
         )}
       </section>
     </div>
