@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { FitAddon } from '@xterm/addon-fit'
 import { Terminal } from '@xterm/xterm'
 import '@xterm/xterm/css/xterm.css'
-import { TERMINAL_OPEN_EXTERNAL_HINT } from './environmentHints'
+import { TERMINAL_OPEN_EXTERNAL_HINT, TERMINAL_PTY_HINT } from './environmentHints'
 import { humanizeTerminalError } from './terminalError'
 
 export function TerminalPage(): ReactElement {
@@ -238,7 +238,7 @@ export function TerminalPage(): ReactElement {
       {err ? (
         <div style={{ color: 'var(--orange)', marginBottom: 8 }}>
           {err}
-          {fallbackHint ? ` ${TERMINAL_OPEN_EXTERNAL_HINT}` : ''}
+          {fallbackHint ? ` ${TERMINAL_PTY_HINT} ${TERMINAL_OPEN_EXTERNAL_HINT}` : ''}
         </div>
       ) : null}
       <div

@@ -17,6 +17,11 @@ log "typecheck (workspace)"
 "${PNPM[@]}" typecheck
 log "test (workspace: shared + desktop)"
 "${PNPM[@]}" test
+
+log "test (rust backend)"
+cd apps/desktop/src-tauri && cargo test -- --nocapture
+cd "$ROOT"
+
 log "lint"
 "${PNPM[@]}" lint
-log "done OK (workspace typecheck already includes apps/desktop)"
+log "done OK"

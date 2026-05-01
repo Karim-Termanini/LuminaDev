@@ -1676,11 +1676,36 @@ fi"#;
   }
 
   let st = app.state::<AppState>();
+  let current_state = {
+    let jobs = st.jobs.lock().await;
+    jobs
+      .iter()
+      .find(|j| j.get("id").and_then(|v| v.as_str()) == Some(job_id.as_str()))
+      .and_then(|j| j.get("state").and_then(|v| v.as_str()))
+      .unwrap_or("")
+      .to_string()
+  };
+  final_state = effective_runtime_job_final_state(final_state, current_state.as_str());
+  if final_state == "cancelled" && !logs.iter().any(|l| l.contains("Cancelled by user.")) {
+    logs.push("Cancelled by user.".to_string());
+  }
+
+  let st = app.state::<AppState>();
   let mut jobs = st.jobs.lock().await;
   if let Some(j) = jobs.iter_mut().find(|j| j.get("id").and_then(|v| v.as_str()) == Some(job_id.as_str())) {
     j["state"] = json!(final_state);
     j["progress"] = json!(if final_state == "completed" { 100 } else { 0 });
     j["logTail"] = json!(logs.into_iter().rev().take(48).collect::<Vec<String>>().into_iter().rev().collect::<Vec<String>>());
+  }
+}
+
+fn effective_runtime_job_final_state(default_state: &str, current_state: &str) -> &'static str {
+  if current_state == "cancelled" {
+    "cancelled"
+  } else if default_state == "failed" {
+    "failed"
+  } else {
+    "completed"
   }
 }
 
@@ -4485,6 +4510,14 @@ mod tests {
     assert!(!changed, "completed job should not be modified");
     assert_eq!(jobs[0]["state"], json!("completed"));
     assert_eq!(jobs[0]["logTail"], json!(["done"]));
+  }
+
+  #[test]
+  fn effective_final_state_prefers_cancelled_state() {
+    assert_eq!(effective_runtime_job_final_state("completed", "cancelled"), "cancelled");
+    assert_eq!(effective_runtime_job_final_state("failed", "cancelled"), "cancelled");
+    assert_eq!(effective_runtime_job_final_state("failed", "running"), "failed");
+    assert_eq!(effective_runtime_job_final_state("completed", "running"), "completed");
   }
 
   #[test]

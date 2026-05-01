@@ -3,7 +3,7 @@ import type { ReactElement } from 'react'
 import { useEffect, useState } from 'react'
 
 const DOCS_DOCKER_FLATPAK =
-  'https://github.com/Karim-Termanini/PersonalProjekte/blob/main/startSH/docs/DOCKER_FLATPAK.md'
+  'https://github.com/Karim-Termanini/LuminaDev/blob/main/docs/DOCKER_FLATPAK.md'
 
 export function EnvironmentBanner(): ReactElement {
   const [info, setInfo] = useState<SessionInfo | null>(null)

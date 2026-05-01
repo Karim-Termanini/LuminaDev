@@ -13,6 +13,7 @@ export default tseslint.config(
       '**/node_modules/**',
       '**/pack-staging/**',
       '**/.flatpak-builder/**',
+      '**/src-tauri/**',
     ],
   },
   eslint.configs.recommended,
