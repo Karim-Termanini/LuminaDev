@@ -43,7 +43,7 @@ declare global {
       hostExec: (payload: unknown) => Promise<{ ok: boolean; result: unknown; error?: string }>
       composeUp: (payload: { profile: ComposeProfile }) => Promise<{ ok: boolean; log: string; error?: string }>
       composeLogs: (payload: { profile: ComposeProfile }) => Promise<{ ok: boolean; log: string; error?: string }>
-      terminalCreate: (payload: { cols: number; rows: number; cmd?: string; args?: string[] }) => Promise<{ ok: boolean; id?: string; error?: string }>
+      terminalCreate: (payload: { cols: number; rows: number; cmd?: string; args?: string[]; env?: Record<string, string> }) => Promise<{ ok: boolean; id?: string; error?: string }>
       terminalWrite: (id: string, data: string) => void
       terminalResize: (id: string, cols: number, rows: number) => void
       terminalClose: (id: string) => void
@@ -53,6 +53,7 @@ declare global {
       gitRecentList: () => Promise<{ ok: boolean; repos: import('@linux-dev-home/shared').GitRepoEntry[]; error?: string }>
       gitRecentAdd: (payload: { path: string }) => Promise<{ ok: boolean; error?: string }>
       gitConfigSet: (payload: { name: string; email: string; defaultBranch?: string; defaultEditor?: string; target: 'sandbox'|'host' }) => Promise<{ ok: boolean; error?: string }>
+      gitConfigSetKey: (payload: { key: string; value?: string }) => Promise<{ ok: boolean; error?: string }>
       gitConfigList: (payload: { target: 'sandbox'|'host' }) => Promise<{ ok: boolean; rows: Array<{ key: string; value: string }>; error?: string }>
       sshGenerate: (payload: { target: 'sandbox'|'host'; email?: string }) => Promise<{ ok: boolean; error?: string }>
       sshGetPub: (payload: { target: 'sandbox'|'host' }) => Promise<{ ok: boolean; pub: string; fingerprint: string; error?: string }>
@@ -102,6 +103,7 @@ declare global {
       runtimeRemoveVersion: (payload: { runtimeId: string; version: string; path: string }) => Promise<{ ok: boolean; error?: string }>
       perfSnapshot: () => Promise<{ ok: boolean; snapshot?: import('@linux-dev-home/shared').PerfSnapshot; error?: string }>
       diagnosticsBundleCreate: (payload: { report: unknown; includeSensitive?: boolean }) => Promise<{ ok: boolean; path?: string; error?: string }>
+      terminalGetAllEnv: () => Promise<{ ok: boolean; env: Record<string, string>; error?: string }>
     }
   }
 }

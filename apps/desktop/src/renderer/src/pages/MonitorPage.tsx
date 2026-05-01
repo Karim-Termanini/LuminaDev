@@ -1,22 +1,100 @@
 import type { ReactElement, ReactNode } from 'react'
 import { useCallback, useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import type { ContainerRow, HostMetricsResponse, HostPortRow, HostSecurityDrilldown, HostSecuritySnapshot, HostSysInfo, TopProcessRow } from '@linux-dev-home/shared'
 import { humanizeDashboardError } from './dashboardError'
+import { assertGitOk } from './gitContract'
+import { humanizeGitError } from './gitError'
 import { assertMonitorOk } from './monitorContract'
 
-type GithubEvent = {
-  type: string
-  created_at: string
-  repo: { name: string }
-  payload: {
-    commits?: Array<{ message: string }>
-  }
+// ─── Git global config score (aligned with Git Config page) ─────────────────
+
+function gitIdentityScore(cfg: Map<string, string>): number {
+  let s = 0
+  if (cfg.get('user.name')?.trim()) s += 40
+  if (cfg.get('user.email')?.trim()) s += 40
+  if (cfg.get('init.defaultbranch')?.trim()) s += 20
+  return s
 }
 
-type GithubCommitResponse = {
-  commit: {
-    message: string
-  }
+function gitSecurityScore(cfg: Map<string, string>): number {
+  let s = 0
+  const helper = cfg.get('credential.helper') ?? ''
+  if (/libsecret|manager|osxkeychain|gnome|wincred|secretservice/.test(helper)) s += 35
+  else if (/cache/.test(helper)) s += 15
+  else if (/store/.test(helper)) s += 5
+  if (cfg.get('commit.gpgsign') === 'true') s += 35
+  if (cfg.get('http.sslverify') !== 'false') s += 30
+  return Math.min(s, 100)
+}
+
+function gitPerformanceScore(cfg: Map<string, string>): number {
+  let s = 40
+  if (cfg.get('core.preloadindex') === 'true') s += 25
+  if (cfg.get('core.fscache') === 'true') s += 20
+  if (cfg.get('pull.rebase') === 'true') s += 15
+  return Math.min(s, 100)
+}
+
+function gitCompatibilityScore(cfg: Map<string, string>): number {
+  let s = 40
+  if (cfg.get('fetch.prune') === 'true') s += 25
+  const autocrlf = cfg.get('core.autocrlf')
+  if (autocrlf === 'input') s += 25
+  else if (autocrlf === 'false') s += 10
+  if (cfg.get('init.defaultbranch') === 'main') s += 10
+  return Math.min(s, 100)
+}
+
+function gitTotalConfigScore(cfg: Map<string, string>): number {
+  return Math.round(
+    (gitIdentityScore(cfg) + gitSecurityScore(cfg) + gitPerformanceScore(cfg) + gitCompatibilityScore(cfg)) / 4
+  )
+}
+
+function gitConfigScoreMessage(total: number): string {
+  if (total >= 80) return 'Your Git environment is well configured.'
+  if (total >= 50) return 'Some improvements recommended.'
+  return 'Several issues need attention.'
+}
+
+function gitScoreColor(total: number): string {
+  if (total >= 80) return '#22c55e'
+  if (total >= 50) return '#f59e0b'
+  return '#ef4444'
+}
+
+/** Same layout as Git Config score tiles: elevated card, bar, title, subtitle. */
+function MonitorGitScoreTile({
+  title,
+  score,
+  subtitle,
+}: {
+  title: string
+  score: number
+  subtitle: string
+}): ReactElement {
+  const color = gitScoreColor(score)
+  const pct = Math.min(100, Math.max(0, score))
+  return (
+    <div
+      className="hp-card"
+      style={{
+        flex: '1 1 200px',
+        minWidth: 168,
+        maxWidth: '100%',
+        textAlign: 'center',
+        padding: '20px 16px',
+      }}
+    >
+      <div style={{ fontSize: 36, fontWeight: 700, color, letterSpacing: -1 }}>{score}</div>
+      <div style={{ height: 6, background: 'var(--border)', borderRadius: 3, margin: '10px 0' }}>
+        <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: 3, transition: 'width 0.4s ease' }} />
+      </div>
+      <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 4 }}>{title}</div>
+      <div className="hp-muted" style={{ fontSize: 11 }}>{subtitle}</div>
+    </div>
+  )
 }
 
 type MonitorTabId = 'overview' | 'processes' | 'docker' | 'disk' | 'network'
@@ -35,8 +113,8 @@ export function MonitorPage(): ReactElement {
   const [sysInfo, setSysInfo] = useState<HostSysInfo | null>(null)
   const [cpuHistory, setCpuHistory] = useState<number[]>(new Array(30).fill(0))
   const [netHistory, setNetHistory] = useState<{ rx: number, tx: number }[]>(new Array(30).fill({ rx: 0, tx: 0 }))
-  const [githubCommits, setGithubCommits] = useState<GithubEvent[]>([])
-  const [githubStatus, setGithubStatus] = useState<string | null>(null)
+  const [gitCfg, setGitCfg] = useState<Map<string, string> | null>(null)
+  const [gitCfgError, setGitCfgError] = useState<string | null>(null)
   const [containers, setContainers] = useState<ContainerRow[]>([])
   const [dockerNetworkCount, setDockerNetworkCount] = useState(0)
   const [topProcesses, setTopProcesses] = useState<TopProcessRow[]>([])
@@ -91,95 +169,39 @@ export function MonitorPage(): ReactElement {
           'Failed to collect security drilldown.'
         )
       )
+
+      try {
+        const g = await window.dh.gitConfigList({ target: 'host' })
+        assertGitOk(g, 'Failed to load Git config.')
+        const rows = g.rows ?? []
+        setGitCfg(new Map(rows.map((r) => [r.key.toLowerCase(), r.value])))
+        setGitCfgError(null)
+      } catch (e) {
+        setGitCfg(null)
+        setGitCfgError(humanizeGitError(e))
+      }
+
       setMonitorError(null)
     } catch (e) {
       setMonitorError(humanizeDashboardError(e))
     }
   }, [])
 
-  const refreshGithub = useCallback(async () => {
-    const CACHE_KEY = 'dh_github_events_cache'
-    const CACHE_TTL = 300_000 // 5 minutes
-    const now = Date.now()
-    
-    try {
-      const cached = localStorage.getItem(CACHE_KEY)
-      if (cached) {
-        const { timestamp, events } = JSON.parse(cached) as { timestamp: number, events: GithubEvent[] }
-        if (now - timestamp < CACHE_TTL && events.length > 0) {
-          setGithubCommits(events)
-          setGithubStatus(null)
-          return
-        }
-      }
-    } catch { /* ignore cache errors */ }
-
-    try {
-      const resp = await fetch('https://api.github.com/users/Karim-Termanini/events/public')
-      if (!resp.ok) {
-        if (resp.status === 403) {
-          setGithubStatus(
-            githubCommits.length > 0
-              ? 'GitHub API rate-limited right now. Showing last cached activity.'
-              : 'GitHub API rate-limited right now. Activity feed will resume automatically.'
-          )
-        } else {
-          setGithubStatus(
-            githubCommits.length > 0
-              ? `GitHub feed unavailable (${resp.status}). Showing last cached activity.`
-              : `GitHub feed unavailable (${resp.status}).`
-          )
-        }
-        return
-      }
-      const data = await resp.json() as GithubEvent[]
-      const pushEvents = data.filter((e) => e.type === 'PushEvent').slice(0, 10)
-      const enriched = await Promise.all(pushEvents.map(async (e) => {
-        if (!e.payload.commits || e.payload.commits.length === 0) {
-          try {
-            const cResp = await fetch(`https://api.github.com/repos/${e.repo.name}/commits?per_page=5`)
-            if (cResp.ok) {
-              const cData = await cResp.json() as GithubCommitResponse[]
-              return { ...e, payload: { ...e.payload, commits: cData.map((c) => ({ message: c.commit.message })) } }
-            }
-          } catch {
-            /* ignore */
-          }
-        }
-        return e
-      }))
-      
-      setGithubCommits(enriched)
-      setGithubStatus(enriched.length === 0 ? 'No recent public push events found.' : null)
-      localStorage.setItem(CACHE_KEY, JSON.stringify({ timestamp: now, events: enriched }))
-    } catch {
-      setGithubStatus(
-        githubCommits.length > 0
-          ? 'GitHub feed request failed (network/transient). Showing last cached activity.'
-          : 'GitHub feed request failed (network/transient).'
-      )
-    }
-  }, [githubCommits])
-
   useEffect(() => {
     void (async () => {
       try {
         await refreshStatic()
         await refreshLive()
-        await refreshGithub()
-
       } catch (e) { console.error(e) }
     })()
 
     const fast = setInterval(() => { void refreshLive() }, 2000)
     const slow = setInterval(() => { void refreshStatic() }, 10000)
-    const gh = setInterval(() => { void refreshGithub() }, 30000)
     return () => {
       clearInterval(fast)
       clearInterval(slow)
-      clearInterval(gh)
     }
-  }, [refreshLive, refreshStatic, refreshGithub])
+  }, [refreshLive, refreshStatic])
 
   const m = metrics?.metrics
   const memUsed = m ? m.totalMemMb - m.freeMemMb : 0
@@ -244,6 +266,8 @@ export function MonitorPage(): ReactElement {
     const node = document.getElementById(entry.anchorId)
     node?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
+
+  const gitTotal = gitCfg ? gitTotalConfigScore(gitCfg) : null
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24, paddingBottom: 40 }}>
@@ -608,37 +632,46 @@ export function MonitorPage(): ReactElement {
           </div>
         </MetricCard>
 
-        <MetricCard title="GITHUB RECENT ACTIVITY" subValue="Live feed with periodic refresh" minHeight={560}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 10, maxHeight: 500, overflow: 'auto' }}>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-              Auto-refresh every 30 seconds.
+        <MetricCard
+          title="Configuration Score"
+          value={gitTotal !== null ? String(gitTotal) : '—'}
+          subValue={
+            gitCfgError && !gitCfg
+              ? gitCfgError
+              : gitTotal !== null
+                ? gitConfigScoreMessage(gitTotal)
+                : 'Loading…'
+          }
+          minHeight={560}
+          titleColor="#a5d6a7"
+          valueColor={gitTotal !== null ? gitScoreColor(gitTotal) : 'var(--text-muted)'}
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 10 }}>
+            <div className="hp-muted" style={{ fontSize: 12, lineHeight: 1.45, padding: '2px 2px 0' }}>
+              Based on your global Git config. Refreshes with the slow monitor poll (about every 10 seconds).
             </div>
-            {githubStatus && githubCommits.length > 0 ? (
-              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{githubStatus}</div>
+            {gitCfg ? (
+              <>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, alignItems: 'stretch' }}>
+                  <MonitorGitScoreTile title="Identity" score={gitIdentityScore(gitCfg)} subtitle="Name, email, branch" />
+                  <MonitorGitScoreTile title="Security" score={gitSecurityScore(gitCfg)} subtitle="Credentials, signing, SSL" />
+                  <MonitorGitScoreTile title="Performance" score={gitPerformanceScore(gitCfg)} subtitle="Cache, index preload" />
+                  <MonitorGitScoreTile title="Compatibility" score={gitCompatibilityScore(gitCfg)} subtitle="Line endings, prune" />
+                </div>
+                <Link
+                  to="/git-config"
+                  className="hp-btn hp-btn-primary"
+                  style={{
+                    fontSize: 13,
+                    fontWeight: 600,
+                    textDecoration: 'none',
+                    alignSelf: 'flex-start',
+                  }}
+                >
+                  Open Git Config
+                </Link>
+              </>
             ) : null}
-            {githubCommits.length > 0 ? githubCommits.map((e, i) => (
-              <div key={i} style={{ padding: '12px', background: 'rgba(255,255,255,0.02)', borderRadius: 8, border: '1px solid var(--border)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                  <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--accent)' }}>{e.repo.name.split('/')[1]}</div>
-                  <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>
-                    {new Date(e.created_at).toLocaleString()}
-                  </div>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {e.payload.commits && e.payload.commits.length > 0 ? e.payload.commits.slice(0, 5).map((c, ci) => (
-                    <div key={ci} style={{ fontSize: 12, display: 'flex', gap: 8 }}>
-                      <span style={{ color: 'var(--accent)', fontWeight: 900 }}>├─</span>
-                      <span style={{ color: 'var(--text-main)', lineHeight: 1.4, fontWeight: 500 }}>{c.message}</span>
-                    </div>
-                  )) : (
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)', display: 'flex', gap: 8 }}>
-                      <span style={{ color: 'var(--text-muted)' }}>└─</span>
-                      <span>No detailed commit info in public feed.</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )) : <div style={{ color: 'var(--text-muted)' }}>{githubStatus ?? 'No recent activity found.'}</div>}
           </div>
         </MetricCard>
       </div>

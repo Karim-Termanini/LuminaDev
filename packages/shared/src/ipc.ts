@@ -176,6 +176,7 @@ export const IPC = {
   gitRecentList: 'dh:git:recent:list',
   gitRecentAdd: 'dh:git:recent:add',
   gitConfigSet: 'dh:git:config:set',
+  gitConfigSetKey: 'dh:git:config:set-key',
   gitConfigList: 'dh:git:config:list',
   sshGenerate: 'dh:ssh:generate',
   sshGetPub: 'dh:ssh:get:pub',
@@ -213,6 +214,7 @@ export const IPC = {
   runtimeRemoveVersion: 'dh:runtime:remove-version',
   perfSnapshot: 'dh:perf:snapshot',
   diagnosticsBundleCreate: 'dh:diagnostics:bundle:create',
+  terminalGetAllEnv: 'dh:terminal:get-all-env',
 } as const
 
 export type DockerActionPayload = { id: string; action: DockerContainerAction }
