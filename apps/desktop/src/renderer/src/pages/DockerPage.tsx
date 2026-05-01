@@ -193,7 +193,7 @@ export function DockerPage(): ReactElement {
     } finally {
       setRefreshing(false)
     }
-  }, [refreshInstalledFeatures])
+  }, [])
 
   useEffect(() => {
     void refreshAll()
@@ -224,7 +224,7 @@ export function DockerPage(): ReactElement {
       })
       .catch(() => setSessionKind('unknown'))
     void refreshInstalledFeatures()
-  }, [])
+  }, [refreshInstalledFeatures])
 
   useEffect(() => {
     if (tab === 'cleanup') {
