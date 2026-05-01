@@ -137,7 +137,7 @@ export function ProfilesPage(): ReactElement {
           {activeProfile && (
             <button type="button" style={btnDanger} onClick={() => void clearActive()}>Clear Active Profile</button>
           )}
-          <button type="button" style={btnDanger} onClick={() => void save([], 'All profiles cleared.')}>Clear All</button>
+          <button type="button" style={btnDanger} onClick={() => void save([], 'All profiles cleared.')}>Clear all</button>
           <span className="mono" style={{ color: 'var(--text-muted)', fontSize: 12 }}>{profiles.length} profiles</span>
         </div>
       </section>

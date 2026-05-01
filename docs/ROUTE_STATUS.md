@@ -10,10 +10,10 @@ Status legend:
 
 | Route | Status | Notes |
 | --- | --- | --- |
-| `/dashboard` | partial | 9 preset environment cards; active profile highlighted; slim container count + metrics strip with links to Docker and Monitor. Sub-pages (widgets/kernels/logs) are static stubs. |
-| `/dashboard/widgets` | stub | Static placeholder; no real widget management. |
-| `/dashboard/kernels` | partial | GPU probe, service states, security audit; auto-refreshes every 30 seconds. |
-| `/dashboard/logs` | partial | Jobs poll every 2 seconds; compose logs auto-load on profile change. |
+| `/dashboard` | partial | Preset grid reads `active_profile` for highlight; slim container count + metrics strip with links to Docker and Monitor; several preset cards are `PLANNED`/disabled. |
+| `/dashboard/widgets` | stub | Static placeholder; not a full widget management surface yet. |
+| `/dashboard/kernels` | partial | GPU probe, service states, security audit; auto-refreshes every ~30s (lightweight snapshot, not a full device manager). |
+| `/dashboard/logs` | partial | Jobs poll ~2s; compose logs load for selected profile; not a full observability platform. |
 | `/system` | partial | Metrics and monitor data are live; some sections still bounded snapshots. |
 | `/docker` | live | Main Docker slice (list/actions/logs/images/volumes/networks/cleanup/remap) is functional with guardrails. |
 | `/ssh` | partial | Core SSH key/test/setup flows work; advanced transfer/remote UX still evolving. |

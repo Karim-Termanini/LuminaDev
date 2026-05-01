@@ -104,17 +104,27 @@ export function DashboardMainPage(): ReactElement {
       {/* phaseHint removed */}
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', justifyContent: 'space-between' }}>
-        <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)', maxWidth: 620 }}>
-          Select a preset environment to initialize its compose stack.
-          {activeProfile && <span> Active: <strong style={{ color: 'var(--accent)' }}>{activeProfile}</strong>.</span>}
+        <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)', maxWidth: 720 }}>
+          Select a preset environment to initialize its compose stack. Active profile is highlighted on matching
+          cards when set.
+          {activeProfile ? (
+            <span>
+              {' '}Current: <strong style={{ color: 'var(--accent)' }}>{activeProfile}</strong>.
+            </span>
+          ) : null}{' '}
+          Change it from the{' '}
+          <Link to="/profiles" style={{ color: 'var(--accent)', fontWeight: 600 }}>
+            Profiles
+          </Link>{' '}
+          page or the Setup Wizard.
         </p>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           {activeProfile && (
             <button
               type="button"
               className="hp-btn"
               style={{ fontSize: 12, color: 'var(--text-muted)' }}
-              onClick={() => void window.dh.storeDelete({ key: 'active_profile' }).then(() => setActiveProfile(null))}
+              onClick={() => void window.dh.storeDelete({ key: 'active_profile' }).then(() => void refresh())}
             >
               Clear Active
             </button>
