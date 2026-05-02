@@ -24,6 +24,7 @@ pub(crate) fn find_repo_root(start: &Path) -> PathBuf {
 /// 1. `LUMINA_DEV_COMPOSE_ROOT/<profile>` when set (absolute or relative path to parent of profile dirs).
 /// 2. `<repo>/docker/compose/<profile>` from [`find_repo_root`] + current working directory.
 /// 3. Tauri bundle `resource_dir()/docker/compose/<profile>` when packaged (see `tauri.conf.json` `bundle.resources`).
+///
 /// When `LUMINA_DEV_COMPOSE_FULL` is `1`/`true`/`yes` and `docker-compose.full.yml` exists in the profile dir,
 /// `docker compose` runs with both `-f docker-compose.yml` and `-f docker-compose.full.yml` (merged stack).
 pub(crate) fn compose_full_overlay_enabled(compose_dir: &Path) -> bool {
