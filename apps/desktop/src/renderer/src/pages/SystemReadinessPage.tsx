@@ -114,6 +114,7 @@ export function SystemReadinessPage(): ReactElement {
               setFixing(null)
             }
           } : undefined}
+          isFixing={fixing === 'docker-start'}
         />
         <CheckRow 
           label="Permissions" 
@@ -130,6 +131,7 @@ export function SystemReadinessPage(): ReactElement {
               setFixing(null)
             }
           } : undefined}
+          isFixing={fixing === 'docker-group'}
         />
       </div>
     )
@@ -254,7 +256,7 @@ function StatCard({ label, value, subValue, status = 'ok' }: { label: string; va
   )
 }
 
-function CheckRow({ label, status, desc, onFix }: { label: string; status: boolean; desc: string; onFix?: () => void }) {
+function CheckRow({ label, status, desc, onFix, isFixing }: { label: string; status: boolean; desc: string; onFix?: () => void; isFixing?: boolean }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: 16, borderRadius: 16, border: '1px solid var(--border)' }}>
       <div style={{ 
@@ -263,15 +265,19 @@ function CheckRow({ label, status, desc, onFix }: { label: string; status: boole
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         color: status ? 'var(--green)' : 'var(--red)'
       }}>
-        <span className={`codicon codicon-${status ? 'check' : 'close'}`} />
+        {isFixing ? (
+          <span className="codicon codicon-loading codicon-modifier-spin" />
+        ) : (
+          <span className={`codicon codicon-${status ? 'check' : 'close'}`} />
+        )}
       </div>
       <div style={{ flex: 1 }}>
         <div style={{ fontWeight: 600 }}>{label}</div>
         <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>{desc}</div>
       </div>
       {onFix && (
-        <button className="hp-btn hp-btn-primary" onClick={onFix} style={{ fontSize: 12, padding: '4px 12px' }}>
-          Fix It
+        <button className="hp-btn hp-btn-primary" onClick={onFix} style={{ fontSize: 12, padding: '4px 12px' }} disabled={isFixing}>
+          {isFixing ? 'Fixing...' : 'Fix It'}
         </button>
       )}
     </div>
