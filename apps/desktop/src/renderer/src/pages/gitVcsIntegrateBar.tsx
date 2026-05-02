@@ -2,11 +2,15 @@ import type { BranchEntry } from '@linux-dev-home/shared'
 import type { ReactElement } from 'react'
 import { useMemo, useState } from 'react'
 
+import type { GitVcsOperation } from './GitVcsStateBanner'
+
 export type GitVcsIntegrateBarProps = {
   repoPath: string
   branches: BranchEntry[]
   currentBranch: string
   busy: boolean
+  /** From `dh:git:vcs:status` — controls which continue/abort actions are enabled. */
+  gitOperation: GitVcsOperation
   onMerge: (branch: string, ffOnly: boolean) => Promise<void>
   onRebase: (onto: string) => Promise<void>
   onStashPop: () => Promise<void>
@@ -27,6 +31,7 @@ export function GitVcsIntegrateBar({
   branches,
   currentBranch,
   busy,
+  gitOperation,
   onMerge,
   onRebase,
   onStashPop,
@@ -37,7 +42,7 @@ export function GitVcsIntegrateBar({
   onRebaseAbort,
 }: GitVcsIntegrateBarProps): ReactElement {
   const [otherRef, setOtherRef] = useState('')
-  const [ffOnly, setFfOnly] = useState(false)
+  const [ffOnly, setFfOnly] = useState(true)
 
   const { locals, remotes } = useMemo(() => {
     const rem = branches.filter((b) => b.remote).sort((a, b) => a.name.localeCompare(b.name))
@@ -52,6 +57,9 @@ export function GitVcsIntegrateBar({
   }, [branches, currentBranch])
 
   const canIntegrate = otherRef.trim().length > 0
+  const idle = gitOperation === 'none'
+  const merging = gitOperation === 'merging'
+  const rebasing = gitOperation === 'rebasing'
 
   return (
     <div
@@ -131,7 +139,7 @@ export function GitVcsIntegrateBar({
         <button
           type="button"
           className="hp-btn"
-          disabled={busy || !canIntegrate}
+          disabled={busy || !canIntegrate || !idle}
           title="git merge — merges the selected ref into the current branch"
           onClick={() => void onMerge(otherRef.trim(), ffOnly)}
         >
@@ -140,7 +148,7 @@ export function GitVcsIntegrateBar({
         <button
           type="button"
           className="hp-btn"
-          disabled={busy || !canIntegrate}
+          disabled={busy || !canIntegrate || !idle}
           title="git rebase — replays current commits on top of the selected ref"
           onClick={() => void onRebase(otherRef.trim())}
         >
@@ -150,7 +158,7 @@ export function GitVcsIntegrateBar({
         <button
           type="button"
           className="hp-btn"
-          disabled={busy}
+          disabled={busy || !merging}
           title="After resolving merge conflicts and staging, completes the merge commit (git merge --continue)"
           onClick={() => void onMergeContinue()}
         >
@@ -159,7 +167,7 @@ export function GitVcsIntegrateBar({
         <button
           type="button"
           className="hp-btn"
-          disabled={busy}
+          disabled={busy || !rebasing}
           title="After resolving conflicts and staging, continues the rebase (git rebase --continue)"
           onClick={() => void onRebaseContinue()}
         >
@@ -168,19 +176,19 @@ export function GitVcsIntegrateBar({
         <button
           type="button"
           className="hp-btn"
-          disabled={busy}
+          disabled={busy || !rebasing}
           title="Skips the current patch during a rebase (git rebase --skip)"
           onClick={() => void onRebaseSkip()}
         >
           Skip rebase commit
         </button>
-        <button type="button" className="hp-btn" disabled={busy} onClick={() => void onStashPop()}>
+        <button type="button" className="hp-btn" disabled={busy || !idle} onClick={() => void onStashPop()}>
           Stash pop
         </button>
-        <button type="button" className="hp-btn" disabled={busy} onClick={() => void onMergeAbort()}>
+        <button type="button" className="hp-btn" disabled={busy || !merging} onClick={() => void onMergeAbort()}>
           Abort merge
         </button>
-        <button type="button" className="hp-btn" disabled={busy} onClick={() => void onRebaseAbort()}>
+        <button type="button" className="hp-btn" disabled={busy || !rebasing} onClick={() => void onRebaseAbort()}>
           Abort rebase
         </button>
       </div>

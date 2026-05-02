@@ -1,5 +1,6 @@
 import type { FileEntry } from '@linux-dev-home/shared'
 import type { ReactElement } from 'react'
+import { useMemo } from 'react'
 
 const STATUS_STYLE: Record<
   FileEntry['status'],
@@ -10,7 +11,7 @@ const STATUS_STYLE: Record<
   D: { label: 'D', color: '#ff5252', bg: 'rgba(255, 82, 82, 0.12)' },
   R: { label: 'R', color: '#7c4dff', bg: 'rgba(124, 77, 255, 0.12)' },
   '?': { label: '?', color: 'var(--text-muted)', bg: 'rgba(255,255,255,0.04)' },
-  C: { label: 'C', color: '#ff9100', bg: 'rgba(255, 145, 0, 0.12)' },
+  C: { label: '⚠', color: '#ff5252', bg: 'rgba(255, 82, 82, 0.18)' },
 }
 
 export type GitVcsFileListProps = {
@@ -33,6 +34,7 @@ function FileRow(props: {
   onUnstageOne: () => void
 }): ReactElement {
   const st = STATUS_STYLE[props.entry.status]
+  const conflict = props.entry.status === 'C'
   const label = props.entry.oldPath
     ? `${props.entry.oldPath} → ${props.entry.path}`
     : props.entry.path
@@ -41,6 +43,7 @@ function FileRow(props: {
     <div
       role="button"
       tabIndex={0}
+      aria-label={conflict ? `Merge conflict: ${label}` : label}
       onClick={props.onSelect}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
@@ -55,13 +58,22 @@ function FileRow(props: {
         padding: '6px 8px',
         borderRadius: 6,
         cursor: 'pointer',
-        background: props.active ? 'rgba(124, 77, 255, 0.12)' : 'transparent',
-        border: props.active ? '1px solid rgba(124, 77, 255, 0.35)' : '1px solid transparent',
+        background: props.active
+          ? 'rgba(124, 77, 255, 0.12)'
+          : conflict
+            ? 'rgba(255, 82, 82, 0.08)'
+            : 'transparent',
+        border: props.active
+          ? '1px solid rgba(124, 77, 255, 0.35)'
+          : conflict
+            ? '1px solid rgba(255, 82, 82, 0.45)'
+            : '1px solid transparent',
+        borderLeft: conflict ? '3px solid #ff5252' : undefined,
       }}
     >
       <span
         className="mono"
-        title="Status"
+        title={conflict ? 'Merge conflict — resolve, then stage' : 'Status'}
         style={{
           fontSize: 11,
           fontWeight: 700,
@@ -125,6 +137,18 @@ export function GitVcsFileList({
   onStage,
   onUnstage,
 }: GitVcsFileListProps): ReactElement {
+  const unstagedSorted = useMemo(
+    () =>
+      [...unstaged].sort((a, b) => {
+        const ac = a.status === 'C' ? 0 : 1
+        const bc = b.status === 'C' ? 0 : 1
+        if (ac !== bc) return ac - bc
+        return a.path.localeCompare(b.path)
+      }),
+    [unstaged],
+  )
+  const hasUnmerged = unstagedSorted.some((f) => f.status === 'C')
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minHeight: 200 }}>
       <section>
@@ -178,13 +202,29 @@ export function GitVcsFileList({
             </button>
           ) : null}
         </div>
+        {hasUnmerged ? (
+          <div
+            className="mono"
+            style={{
+              fontSize: 11,
+              color: '#ff8a80',
+              marginBottom: 6,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+            }}
+          >
+            <span aria-hidden>⚠</span>
+            <span>Unresolved merge conflicts — fix in your editor, then stage (+) each file.</span>
+          </div>
+        ) : null}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           {unstaged.length === 0 ? (
             <div className="mono" style={{ fontSize: 12, color: 'var(--text-muted)' }}>
               Working tree clean
             </div>
           ) : (
-            unstaged.map((f) => (
+            unstagedSorted.map((f) => (
               <FileRow
                 key={`u:${f.path}`}
                 entry={f}

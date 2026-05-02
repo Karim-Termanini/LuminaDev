@@ -341,9 +341,16 @@ Missing: real dep graph (`removableDeps` always empty), Ruby slow on Fedora.
 This phase turns the app into a true daily driver for software engineers managing repositories and cloud source control platforms.
 
 - **Authentication** (shipped): Encrypted store for tokens; device flow + PAT; optional OAuth client IDs via **Cloud Git → Advanced** / env / compile-time; dashboard **Cloud Git** link widget (`link.cloud-git`).
-- **Interactive Version Control**: Visual interface for `Commit`, `Push`, `Pull`, and `Sync` without needing a terminal. Branch management (checkout, create, merge).
+- **Interactive Version Control (Smart Workflow)**: Visual-first implementation following the "Microsoft Philosophy" (Zero Terminal).
+    - **Smart Push/Sync**: Instead of simple commands, the app implements a "Proactive Guardian". It fetches remote status before pushing. If the branch is protected or "Local is behind", it automatically opens the **Integrate Bar**. *(v0: Push runs fetch + blocks when `behind > 0` with guided notice; protected-branch dialog still planned.)*
+  - **Integration & Resolve**:
+    - **Integrate Bar**: Guided UI for Merge, Rebase, and Stash (Fast-forward defaults).
+    - **Conflict Resolution Studio**: A dedicated 3-way merge view (Local vs Incoming vs Result) with "Accept Current", "Accept Incoming", and "Accept Both" buttons. No manual text editing required for conflicts.
+    - **State Management**: Automatic handling of `MERGING` and `REBASING` states with "Continue" or "Abort" actions. *(v0: `dh:git:vcs:status` exposes `gitOperation` + `conflictFileCount`; `/git-vcs` shows a guidance banner.)*
 - **Cloud Dashboards (API Integration)**:
-  - **Pull Requests / Merge Requests**: View open PRs/MRs, requested reviews, and merge status.
+  - **Pull Requests / Merge Requests**:
+    - **Cloud Awareness**: If a Push fails due to a "Protected Branch", the app suggests creating a PR/MR instead of showing a raw error.
+    - **PR/MR Wizard**: Create new PRs/MRs directly from the app. It auto-fills titles from commit history and allows choosing target branches via a visual picker.
   - **Issues Tracking**: List open issues assigned to the user across repositories.
   - **CI/CD Pipelines**: Real-time status of GitHub Actions and GitLab CI/CD pipelines (Success, Failure, In Progress) for the active local repo.
   - **Releases & Tags**: Overview of the latest releases.

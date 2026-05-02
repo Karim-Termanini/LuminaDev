@@ -186,6 +186,10 @@ declare global {
         behind?: number | null
         staged?: import('@linux-dev-home/shared').FileEntry[]
         unstaged?: import('@linux-dev-home/shared').FileEntry[]
+        /** `none` | `merging` | `rebasing` — from MERGE_HEAD / REBASE_HEAD (Smart-Flow backbone). */
+        gitOperation?: 'none' | 'merging' | 'rebasing'
+        /** Count of unmerged (`U`) paths from `git diff --diff-filter=U`. */
+        conflictFileCount?: number
         error?: string
       }>
       gitVcsRemotes: (payload: { repoPath: string }) => Promise<{

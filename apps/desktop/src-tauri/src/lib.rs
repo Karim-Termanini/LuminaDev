@@ -66,6 +66,7 @@ mod compose_profiles;
 mod cloud_auth;
 mod cloud_git_ipc;
 mod git_vcs_ipc;
+mod git_vcs_repo_state;
 mod readiness;
 mod readiness_ipc;
 use cloud_auth::CredentialStore;
@@ -1182,6 +1183,11 @@ async fn ipc_send(channel: String, payload: Value, app: AppHandle, state: State<
 
 // ─── Git VCS helpers ──────────────────────────────────────────────────────────
 
+/// `git status --porcelain=v1` XY pair is an unmerged / conflicted path.
+fn porcelain_xy_unmerged(x: char, y: char) -> bool {
+    x == 'U' || y == 'U' || (x == 'A' && y == 'A') || (x == 'D' && y == 'D')
+}
+
 fn parse_porcelain_v1(output: &str) -> (Vec<Value>, Vec<Value>) {
     let mut staged: Vec<Value> = Vec::new();
     let mut unstaged: Vec<Value> = Vec::new();
@@ -1200,6 +1206,14 @@ fn parse_porcelain_v1(output: &str) -> (Vec<Value>, Vec<Value>) {
         } else {
             (raw_path.to_string(), None)
         };
+        if porcelain_xy_unmerged(x, y) {
+            unstaged.push(if let Some(ref old) = old_path {
+                json!({ "path": path, "status": "C", "oldPath": old })
+            } else {
+                json!({ "path": path, "status": "C" })
+            });
+            continue;
+        }
         // Staged (index) changes
         if x != ' ' && x != '?' && x != 'U' {
             let status = match x {
@@ -1215,10 +1229,9 @@ fn parse_porcelain_v1(output: &str) -> (Vec<Value>, Vec<Value>) {
                 json!({ "path": path, "status": status })
             });
         }
-        // Unstaged (worktree) changes + untracked + conflicts
+        // Unstaged (worktree) changes + untracked
         match (x, y) {
             ('?', '?') => unstaged.push(json!({ "path": path, "status": "?" })),
-            ('U', 'U') => unstaged.push(json!({ "path": path, "status": "C" })),
             (_, 'M') => unstaged.push(json!({ "path": path, "status": "M" })),
             (_, 'D') => unstaged.push(json!({ "path": path, "status": "D" })),
             _ => {}
@@ -2361,6 +2374,8 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
         ).await.unwrap_or_default();
         let (staged, unstaged) = parse_porcelain_v1(&porcelain);
         let (ahead, behind) = git_ahead_behind(repo_path).await;
+        let git_operation = git_vcs_repo_state::git_operation_state(repo_path).await;
+        let conflict_file_count = git_vcs_repo_state::unmerged_path_count(repo_path).await;
         json!({
             "ok": true,
             "branch": branch,
@@ -2368,6 +2383,8 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
             "behind": behind,
             "staged": staged,
             "unstaged": unstaged,
+            "gitOperation": git_operation,
+            "conflictFileCount": conflict_file_count,
         })
     },
 
@@ -4390,6 +4407,25 @@ mod tests {
   #[test]
   fn porcelain_parses_conflict() {
       let input = "UU conflict.rs";
+      let (staged, unstaged) = parse_porcelain_v1(input);
+      assert_eq!(staged.len(), 0);
+      assert_eq!(unstaged.len(), 1);
+      assert_eq!(unstaged[0]["status"], "C");
+  }
+
+  #[test]
+  fn porcelain_parses_both_added_unmerged() {
+      let input = "AA both.rs";
+      let (staged, unstaged) = parse_porcelain_v1(input);
+      assert_eq!(staged.len(), 0);
+      assert_eq!(unstaged.len(), 1);
+      assert_eq!(unstaged[0]["status"], "C");
+      assert_eq!(unstaged[0]["path"], "both.rs");
+  }
+
+  #[test]
+  fn porcelain_parses_ud_unmerged() {
+      let input = "UD deleted-by-us.rs";
       let (staged, unstaged) = parse_porcelain_v1(input);
       assert_eq!(staged.len(), 0);
       assert_eq!(unstaged.len(), 1);

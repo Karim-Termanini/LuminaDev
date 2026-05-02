@@ -70,6 +70,7 @@ export type GitRepoEntry = {
 
 export type FileEntry = {
   path: string
+  /** `C` = unmerged / merge conflict (from `git status --porcelain` XY). */
   status: 'M' | 'A' | 'D' | 'R' | '?' | 'C'
   oldPath?: string
 }

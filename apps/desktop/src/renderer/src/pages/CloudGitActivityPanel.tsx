@@ -266,7 +266,8 @@ export function CloudGitActivityPanel({ provider, label }: { provider: Provider;
         </h2>
         <p className="hp-muted" style={{ margin: '8px 0 0', fontSize: 13, lineHeight: 1.5 }}>
           PRs/MRs, reviews requested of you, assigned issues, CI, and latest releases for{' '}
-          <strong>{label}</strong> (account-scoped). Open in browser for the full provider UI.
+          <strong>{label}</strong> (account-scoped). When a row’s repo basename matches a recent local folder, use{' '}
+          <strong>Open in Lumina VCS</strong> to jump to Git VCS; otherwise open in the browser.
         </p>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -564,6 +565,20 @@ export function CloudGitActivityPanel({ provider, label }: { provider: Provider;
                     <span className="mono" style={{ fontSize: 10, color: 'var(--text-muted)' }}>
                       {it.state}
                     </span>
+                    {localRepoPathFor(it.repo) ? (
+                      <Link
+                        to={`/git-vcs?repoPath=${encodeURIComponent(localRepoPathFor(it.repo) ?? '')}`}
+                        className="mono"
+                        style={{
+                          color: 'var(--cg-accent, var(--accent))',
+                          textDecoration: 'none',
+                          fontSize: 11,
+                          fontWeight: 600,
+                        }}
+                      >
+                        Open in Lumina VCS
+                      </Link>
+                    ) : null}
                   </div>
                 </li>
               ))}
@@ -677,6 +692,20 @@ export function CloudGitActivityPanel({ provider, label }: { provider: Provider;
                     >
                       {p.status}
                     </span>
+                    {localRepoPathFor(p.repo) ? (
+                      <Link
+                        to={`/git-vcs?repoPath=${encodeURIComponent(localRepoPathFor(p.repo) ?? '')}`}
+                        className="mono"
+                        style={{
+                          color: 'var(--cg-accent, var(--accent))',
+                          textDecoration: 'none',
+                          fontSize: 11,
+                          fontWeight: 600,
+                        }}
+                      >
+                        Open in Lumina VCS
+                      </Link>
+                    ) : null}
                   </div>
                 </li>
               ))}
@@ -770,6 +799,20 @@ export function CloudGitActivityPanel({ provider, label }: { provider: Provider;
                       <span className="mono" style={{ color: 'var(--text-muted)', fontSize: 11 }}>
                         {r.title}
                       </span>
+                    ) : null}
+                    {localRepoPathFor(r.repo) ? (
+                      <Link
+                        to={`/git-vcs?repoPath=${encodeURIComponent(localRepoPathFor(r.repo) ?? '')}`}
+                        className="mono"
+                        style={{
+                          color: 'var(--cg-accent, var(--accent))',
+                          textDecoration: 'none',
+                          fontSize: 11,
+                          fontWeight: 600,
+                        }}
+                      >
+                        Open in Lumina VCS
+                      </Link>
                     ) : null}
                   </div>
                 </li>

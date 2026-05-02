@@ -4,6 +4,7 @@ export type GitVcsErrorCode =
   | 'GIT_VCS_COMMIT_FAILED'
   | 'GIT_VCS_EMPTY_MESSAGE'
   | 'GIT_VCS_PUSH_REJECTED'
+  | 'GIT_VCS_INTEGRATION_REQUIRED'
   | 'GIT_VCS_AUTH_FAILED'
   | 'GIT_VCS_DIFF_TOO_LARGE'
   | 'GIT_VCS_NETWORK'
@@ -44,6 +45,8 @@ export function humanizeGitVcsError(err: unknown): string {
   if (code === 'GIT_VCS_EMPTY_MESSAGE') return 'Commit message cannot be empty.'
   if (code === 'GIT_VCS_PUSH_REJECTED')
     return `Remote rejected push. Pull the latest changes first, then push again. ${detail}`.trim()
+  if (code === 'GIT_VCS_INTEGRATION_REQUIRED')
+    return `Integration required — after a quick fetch, your branch is behind the remote. Pull or merge the latest changes, then push again. ${detail}`.trim()
   if (code === 'GIT_VCS_AUTH_FAILED')
     return `Could not authenticate with this remote. Connect GitHub or GitLab in Cloud Git, then retry. ${detail}`.trim()
   if (code === 'GIT_VCS_DIFF_TOO_LARGE')

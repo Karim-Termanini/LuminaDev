@@ -29,6 +29,14 @@ describe('humanizeGitVcsError', () => {
     )
   })
 
+  it('humanizes GIT_VCS_INTEGRATION_REQUIRED', () => {
+    const msg = humanizeGitVcsError(
+      new Error('[GIT_VCS_INTEGRATION_REQUIRED] Remote "origin" has 3 commit(s) not in your branch yet.'),
+    )
+    expect(msg).toContain('Integration required')
+    expect(msg).toContain('behind the remote')
+  })
+
   it('humanizes GIT_VCS_AUTH_FAILED', () => {
     expect(humanizeGitVcsError(new Error('[GIT_VCS_AUTH_FAILED] 403'))).toContain('Cloud Git')
   })
@@ -94,6 +102,12 @@ describe('parseGitVcsErrorCode', () => {
   it('extracts code from bracketed error', () => {
     expect(parseGitVcsErrorCode(new Error('[GIT_VCS_AUTH_FAILED] detail'))).toBe(
       'GIT_VCS_AUTH_FAILED',
+    )
+  })
+
+  it('extracts GIT_VCS_INTEGRATION_REQUIRED', () => {
+    expect(parseGitVcsErrorCode(new Error('[GIT_VCS_INTEGRATION_REQUIRED] behind'))).toBe(
+      'GIT_VCS_INTEGRATION_REQUIRED',
     )
   })
 

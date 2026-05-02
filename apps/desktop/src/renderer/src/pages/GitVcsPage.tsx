@@ -16,6 +16,7 @@ import { parseCheckoutDirtyFileList } from './gitVcsCheckoutDirty'
 import { GitVcsDirtyCheckoutModal } from './GitVcsDirtyCheckoutModal'
 import { GitVcsProviderRail } from './gitVcsProviderRail'
 import { GitVcsRepoPicker } from './gitVcsRepoPicker'
+import { GitVcsStateBanner, type GitVcsOperation } from './GitVcsStateBanner'
 import { assertGitRecentList } from './registryContract'
 import { CLOUD_GIT_PROVIDER_THEME } from './cloudGitTheme'
 import { fetchRemoteOptions } from './gitVcsFetchRemotes'
@@ -49,6 +50,8 @@ export function GitVcsPage(): ReactElement {
   const [fetchRemote, setFetchRemote] = useState('origin')
   const [gitRemotes, setGitRemotes] = useState<GitRemoteEntry[]>([])
   const [cloudAccounts, setCloudAccounts] = useState<ConnectedAccount[]>([])
+  const [gitOperation, setGitOperation] = useState<GitVcsOperation>('none')
+  const [conflictFileCount, setConflictFileCount] = useState(0)
   /** When fetch remote host is unknown and both Cloud accounts exist, user picks which token scopes repo CI. */
   const [ambiguousCiToken, setAmbiguousCiToken] = useState<'github' | 'gitlab'>('github')
 
@@ -136,6 +139,8 @@ export function GitVcsPage(): ReactElement {
       setUnstaged([])
       setBranches([])
       setGitRemotes([])
+      setGitOperation('none')
+      setConflictFileCount(0)
       return { staged: [], unstaged: [] }
     }
     const path = repoPath.trim()
@@ -148,6 +153,12 @@ export function GitVcsPage(): ReactElement {
     setBranch(st.branch ?? '')
     setAhead(st.ahead ?? null)
     setBehind(st.behind ?? null)
+    const opRaw = (st as { gitOperation?: unknown }).gitOperation
+    const op: GitVcsOperation =
+      opRaw === 'merging' || opRaw === 'rebasing' || opRaw === 'none' ? opRaw : 'none'
+    setGitOperation(op)
+    const n = Number((st as { conflictFileCount?: unknown }).conflictFileCount)
+    setConflictFileCount(Number.isFinite(n) && n >= 0 ? Math.floor(n) : 0)
     const stagedArr = Array.isArray(st.staged) ? (st.staged as FileEntry[]) : []
     const unstagedArr = Array.isArray(st.unstaged) ? (st.unstaged as FileEntry[]) : []
     setStaged(stagedArr)
@@ -179,6 +190,8 @@ export function GitVcsPage(): ReactElement {
       setUnstaged([])
       setBranches([])
       setGitRemotes([])
+      setGitOperation('none')
+      setConflictFileCount(0)
       setSelected(null)
       try {
         const lists = await refreshStatus()
@@ -350,10 +363,27 @@ export function GitVcsPage(): ReactElement {
 
   async function runPush(): Promise<void> {
     if (!repoPath.trim()) return
+    const path = repoPath.trim()
     setBusy(true)
     setOpErrorRaw(null)
     try {
-      const r = await window.dh.gitVcsPush({ repoPath: repoPath.trim() })
+      const fetchRes = await window.dh.gitVcsFetch({
+        repoPath: path,
+        remote: activeFetchRemoteName,
+      })
+      assertGitVcsOk(fetchRes)
+      const st = await window.dh.gitVcsStatus({ repoPath: path })
+      assertGitVcsOk(st)
+      const behind = st.behind
+      if (behind != null && behind > 0) {
+        setOpErrorRaw(
+          `[GIT_VCS_INTEGRATION_REQUIRED] Remote "${activeFetchRemoteName}" has ${behind} commit(s) not in your branch yet.`,
+        )
+        const lists = await refreshStatus()
+        setSelected((prev) => reconcileGitVcsSelection(prev, lists.staged, lists.unstaged))
+        return
+      }
+      const r = await window.dh.gitVcsPush({ repoPath: path })
       assertGitVcsOk(r)
       const lists = await refreshStatus()
       setSelected((prev) => reconcileGitVcsSelection(prev, lists.staged, lists.unstaged))
@@ -588,6 +618,7 @@ export function GitVcsPage(): ReactElement {
 
   const errCode = opErrorRaw ? parseGitVcsErrorCode(new Error(opErrorRaw)) : null
   const authBanner = errCode === 'GIT_VCS_AUTH_FAILED'
+  const integrationNotice = errCode === 'GIT_VCS_INTEGRATION_REQUIRED'
   const opErrorDisplay = opErrorRaw ? humanizeGitVcsError(new Error(opErrorRaw)) : null
   const activeFetchRemoteUrl = gitRemotes.find((r) => r.name === activeFetchRemoteName)?.fetchUrl
   const activeFetchProvider = activeFetchRemoteUrl ? classifyGitRemoteUrl(activeFetchRemoteUrl) : 'other'
@@ -703,14 +734,22 @@ export function GitVcsPage(): ReactElement {
         highlightPath={null}
       />
 
+      {repoPath.trim() ? (
+        <GitVcsStateBanner operation={gitOperation} conflictFileCount={conflictFileCount} />
+      ) : null}
+
       {opErrorDisplay ? (
         <div
-          role="alert"
+          role={integrationNotice ? 'status' : 'alert'}
           style={{
             padding: '12px 14px',
             borderRadius: 10,
-            border: '1px solid rgba(255, 82, 82, 0.35)',
-            background: 'rgba(255, 82, 82, 0.08)',
+            border: integrationNotice
+              ? '1px solid rgba(255, 183, 77, 0.45)'
+              : '1px solid rgba(255, 82, 82, 0.35)',
+            background: integrationNotice
+              ? 'linear-gradient(90deg, rgba(255, 183, 77, 0.14) 0%, rgba(255, 138, 128, 0.06) 100%)'
+              : 'rgba(255, 82, 82, 0.08)',
             color: 'var(--text)',
             fontSize: 14,
             display: 'flex',
@@ -720,6 +759,19 @@ export function GitVcsPage(): ReactElement {
           }}
         >
           <span>{opErrorDisplay}</span>
+          {integrationNotice ? (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              <button type="button" className="hp-btn hp-btn-primary" disabled={busy} onClick={() => void runPull()}>
+                Pull latest
+              </button>
+              <button type="button" className="hp-btn" disabled={busy} onClick={() => void runFetch()}>
+                Fetch only
+              </button>
+              <button type="button" className="hp-btn" onClick={() => setOpErrorRaw(null)}>
+                Dismiss
+              </button>
+            </div>
+          ) : null}
           {authBanner ? (
             <Link to="/cloud-git?tab=github" className="hp-btn hp-btn-primary" style={{ textDecoration: 'none' }}>
               Connect in Cloud Git
@@ -793,6 +845,7 @@ export function GitVcsPage(): ReactElement {
             branches={branches}
             currentBranch={branch}
             busy={busy}
+            gitOperation={gitOperation}
             onMerge={async (b, ff) => {
               await runMerge(b, ff)
             }}
