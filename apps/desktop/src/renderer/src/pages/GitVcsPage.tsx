@@ -71,6 +71,47 @@ export function GitVcsPage(): ReactElement {
     ? fetchRemote
     : (fetchRemoteNames[0] ?? 'origin')
 
+  const handleResolveRemoteConflicts = async (targetBase: string) => {
+    setBusy(true)
+    setGitOperation('Resolving remote conflicts...')
+    setOpErrorDisplay(null)
+    try {
+      // 1. Fetch to get latest remote branches
+      await window.dh.gitVcsFetch({ repoPath: repoPath.trim(), remote: activeFetchRemoteName })
+      
+      // 2. Try to merge origin/targetBase into current branch
+      const remoteRef = `${activeFetchRemoteName}/${targetBase}`
+      const res = await window.dh.gitVcsMerge({
+        repoPath: repoPath.trim(),
+        branch: remoteRef,
+        fastForwardOnly: false
+      })
+
+      if (!res.ok) {
+        if (res.error?.includes('[GIT_VCS_CONFLICT]')) {
+          setSoftGitNotice({
+            type: 'warning',
+            message: `Conflicts detected with ${remoteRef}. Use the resolver to fix them.`
+          })
+          // The refreshStatus in the finally block will detect conflicts and show the banner
+        } else {
+          setOpErrorDisplay(res.error ?? 'Merge failed')
+        }
+      } else {
+        setSoftGitNotice({
+          type: 'success',
+          message: `Successfully integrated ${remoteRef}. Conflicts resolved.`
+        })
+      }
+    } catch (e) {
+      setOpErrorDisplay(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+      setGitOperation(null)
+      void refreshStatus()
+    }
+  }
+
   const activateGitProvider = useCallback(
     (provider: 'github' | 'gitlab') => {
       const candidates = gitRemotes.filter((r) => classifyGitRemoteUrl(r.fetchUrl) === provider)
@@ -871,6 +912,7 @@ export function GitVcsPage(): ReactElement {
           remote={activeFetchRemoteName}
           reference={trackingPr.reference}
           prUrl={trackingPr.url}
+          onResolveConflicts={handleResolveRemoteConflicts}
           onClose={() => {
             setTrackingPr(null)
             const key = `vcs_pr_tracking_${repoPath.trim()}_${branch}`

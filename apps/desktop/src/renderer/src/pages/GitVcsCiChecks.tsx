@@ -10,6 +10,7 @@ export type GitVcsCiChecksProps = {
   reference: string // branch name
   prUrl?: string
   onClose?: () => void
+  onResolveConflicts?: (baseBranch: string) => void
 }
 
 export function GitVcsCiChecks({
@@ -19,8 +20,12 @@ export function GitVcsCiChecks({
   reference,
   prUrl,
   onClose,
+  onResolveConflicts,
 }: GitVcsCiChecksProps): ReactElement {
   const [checks, setChecks] = useState<CloudCiCheck[]>([])
+  const [mergeable, setMergeable] = useState<boolean | null>(null)
+  const [mergeState, setMergeState] = useState<string>('unknown')
+  const [baseBranch, setBaseBranch] = useState<string>('main')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date())
@@ -40,8 +45,11 @@ export function GitVcsCiChecks({
         if (!active) return
         if (!res.ok) {
           setError(res.error ?? 'Failed to fetch checks')
-        } else {
-          setChecks(res.checks ?? [])
+        } else if (res.details) {
+          setChecks(res.details.checks ?? [])
+          setMergeable(res.details.mergeable)
+          setMergeState(res.details.mergeable_state)
+          setBaseBranch(res.details.base_branch ?? 'main')
           setError(null)
           setLastUpdated(new Date())
         }
@@ -68,7 +76,8 @@ export function GitVcsCiChecks({
     return { total, successful, failed, inProgress }
   }, [checks])
 
-  const statusColor = stats.failed > 0 ? '#ff5252' : stats.inProgress > 0 ? 'var(--cg-accent, var(--accent))' : '#4caf50'
+  const hasConflicts = mergeable === false
+  const statusColor = (stats.failed > 0 || hasConflicts) ? '#ff5252' : stats.inProgress > 0 ? 'var(--cg-accent, var(--accent))' : '#4caf50'
 
   return (
     <div
@@ -79,7 +88,7 @@ export function GitVcsCiChecks({
         display: 'flex',
         flexDirection: 'column',
         gap: 16,
-        border: `1px solid ${stats.failed > 0 ? 'rgba(255,82,82,0.2)' : 'var(--border)'}`,
+        border: `1px solid ${stats.failed > 0 || hasConflicts ? 'rgba(255,82,82,0.2)' : 'var(--border)'}`,
         animation: 'hp-fade-in 0.3s ease-out',
       }}
     >
@@ -96,7 +105,8 @@ export function GitVcsCiChecks({
               }} 
             />
             <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>
-              {stats.inProgress > 0 ? 'Some checks haven\'t completed yet' : 
+              {hasConflicts ? 'This branch has conflicts' :
+               stats.inProgress > 0 ? 'Some checks haven\'t completed yet' : 
                stats.failed > 0 ? 'Checks failed' : 'All checks passed'}
             </h3>
           </div>
@@ -123,6 +133,40 @@ export function GitVcsCiChecks({
           )}
         </div>
       </div>
+
+      {mergeable === false && (
+        <div
+          style={{
+            padding: '12px 16px',
+            borderRadius: 12,
+            background: 'rgba(255,82,82,0.12)',
+            border: '1px solid rgba(255,82,82,0.3)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            marginBottom: 4,
+          }}
+        >
+          <span className="codicon codicon-warning" style={{ color: '#ff5252', fontSize: 18 }} />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: '#ff8a80' }}>
+              This branch has conflicts that must be resolved
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+              Resolve conflicts before merging this {provider === 'github' ? 'Pull Request' : 'Merge Request'}.
+            </div>
+          </div>
+          {onResolveConflicts && (
+            <button 
+              type="button" 
+              className="hp-btn hp-btn-primary hp-btn-sm" 
+              onClick={() => onResolveConflicts(baseBranch)}
+            >
+              Resolve locally
+            </button>
+          )}
+        </div>
+      )}
 
       {loading && checks.length === 0 ? (
         <div style={{ padding: '20px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: 14 }}>

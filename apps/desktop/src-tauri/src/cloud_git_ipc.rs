@@ -385,7 +385,7 @@ async fn get_pr_checks(app: &AppHandle, body: &Value) -> Value {
     };
 
     match result {
-        Ok(checks) => json!({ "ok": true, "checks": checks }),
+        Ok(details) => json!({ "ok": true, "details": details }),
         Err(e) => json!({ "ok": false, "error": e }),
     }
 }

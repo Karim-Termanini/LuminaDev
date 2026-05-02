@@ -632,6 +632,12 @@ export interface CloudCiCheck {
   details?: string
 }
 
+export interface CloudPrDetails {
+  mergeable: boolean | null
+  mergeable_state: string
+  checks: CloudCiCheck[]
+}
+
 export interface CloudGitGetPrChecksRequest {
   provider: 'github' | 'gitlab'
   repoPath: string

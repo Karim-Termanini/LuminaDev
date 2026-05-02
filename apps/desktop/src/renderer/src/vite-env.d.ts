@@ -268,7 +268,7 @@ declare global {
         repoPath: string
         remote?: string
         reference: string
-      }) => Promise<{ ok: boolean; checks?: import('@linux-dev-home/shared').CloudCiCheck[]; error?: string }>
+      }) => Promise<{ ok: boolean; details?: import('@linux-dev-home/shared').CloudPrDetails; error?: string }>
     }
   }
 }
