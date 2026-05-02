@@ -180,6 +180,26 @@ pub struct CloudPipelineEntry {
     pub updated_at: String,
 }
 
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct CloudIssueEntry {
+    pub id: String,
+    pub title: String,
+    pub url: String,
+    pub repo: String,
+    pub state: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct CloudReleaseEntry {
+    pub id: String,
+    pub tag: String,
+    pub title: String,
+    pub url: String,
+    pub repo: String,
+    pub published_at: String,
+}
+
 // ─── CredentialStore trait ────────────────────────────────────────────────────
 
 pub trait CredentialStore {
@@ -587,6 +607,145 @@ impl GitHubProvider {
         out.truncate(limit);
         Ok(out)
     }
+
+    pub async fn list_assigned_issues(
+        token: &str,
+        limit: usize,
+    ) -> Result<Vec<CloudIssueEntry>, String> {
+        let client = reqwest::Client::new();
+        let resp = client
+            .get("https://api.github.com/search/issues")
+            .header("Authorization", format!("Bearer {}", token))
+            .header("User-Agent", "LuminaDev/0.2.0")
+            .header("Accept", "application/vnd.github+json")
+            .query(&[
+                ("q", "is:issue is:open assignee:@me"),
+                ("sort", "updated"),
+                ("order", "desc"),
+                ("per_page", &limit.to_string()),
+            ])
+            .send()
+            .await
+            .map_err(|e| format!("[CLOUD_GIT_NETWORK] GitHub issues: {}", e))?;
+        if resp.status() == 401 {
+            return Err("[CLOUD_AUTH_INVALID_TOKEN] GitHub token is invalid or expired.".to_string());
+        }
+        if !resp.status().is_success() {
+            return Err(format!(
+                "[CLOUD_GIT_NETWORK] GitHub issues search returned {}",
+                resp.status()
+            ));
+        }
+        let body: serde_json::Value = resp
+            .json()
+            .await
+            .map_err(|e| format!("[CLOUD_GIT_NETWORK] GitHub issues parse: {}", e))?;
+        let items = body["items"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default()
+            .into_iter()
+            .map(|it| {
+                let repo_url = it["repository_url"].as_str().unwrap_or("");
+                let repo = repo_url
+                    .trim_start_matches("https://api.github.com/repos/")
+                    .to_string();
+                CloudIssueEntry {
+                    id: it["id"].as_i64().unwrap_or_default().to_string(),
+                    title: it["title"].as_str().unwrap_or("").to_string(),
+                    url: it["html_url"].as_str().unwrap_or("").to_string(),
+                    repo,
+                    state: it["state"].as_str().unwrap_or("open").to_string(),
+                    updated_at: it["updated_at"].as_str().unwrap_or("").to_string(),
+                }
+            })
+            .filter(|x| !x.id.is_empty() && !x.url.is_empty())
+            .collect();
+        Ok(items)
+    }
+
+    pub async fn list_recent_releases(
+        token: &str,
+        limit: usize,
+    ) -> Result<Vec<CloudReleaseEntry>, String> {
+        let client = reqwest::Client::new();
+        let repos_resp = client
+            .get("https://api.github.com/user/repos")
+            .header("Authorization", format!("Bearer {}", token))
+            .header("User-Agent", "LuminaDev/0.2.0")
+            .header("Accept", "application/vnd.github+json")
+            .query(&[
+                ("sort", "updated"),
+                ("direction", "desc"),
+                ("per_page", "20"),
+            ])
+            .send()
+            .await
+            .map_err(|e| format!("[CLOUD_GIT_NETWORK] GitHub repos (releases): {}", e))?;
+        if repos_resp.status() == 401 {
+            return Err("[CLOUD_AUTH_INVALID_TOKEN] GitHub token is invalid or expired.".to_string());
+        }
+        if !repos_resp.status().is_success() {
+            return Err(format!(
+                "[CLOUD_GIT_NETWORK] GitHub repos (releases) returned {}",
+                repos_resp.status()
+            ));
+        }
+        let repos: Vec<serde_json::Value> = repos_resp
+            .json()
+            .await
+            .map_err(|e| format!("[CLOUD_GIT_NETWORK] GitHub repos parse: {}", e))?;
+
+        let mut out: Vec<CloudReleaseEntry> = Vec::new();
+        for repo in repos.into_iter().take(20) {
+            let full_name = repo["full_name"].as_str().unwrap_or("").to_string();
+            if full_name.is_empty() {
+                continue;
+            }
+            let rel_resp = client
+                .get(format!(
+                    "https://api.github.com/repos/{}/releases/latest",
+                    full_name
+                ))
+                .header("Authorization", format!("Bearer {}", token))
+                .header("User-Agent", "LuminaDev/0.2.0")
+                .header("Accept", "application/vnd.github+json")
+                .send()
+                .await;
+            let Ok(rel_resp) = rel_resp else {
+                continue;
+            };
+            if rel_resp.status() == 404 {
+                continue;
+            }
+            if !rel_resp.status().is_success() {
+                continue;
+            }
+            let body: serde_json::Value = match rel_resp.json().await {
+                Ok(v) => v,
+                Err(_) => continue,
+            };
+            let id = body["id"].as_i64().unwrap_or_default().to_string();
+            let tag = body["tag_name"].as_str().unwrap_or("").to_string();
+            let title = body["name"].as_str().unwrap_or(&tag).to_string();
+            let url = body["html_url"].as_str().unwrap_or("").to_string();
+            let published_at = body["published_at"].as_str().unwrap_or("").to_string();
+            if id.is_empty() || url.is_empty() {
+                continue;
+            }
+            out.push(CloudReleaseEntry {
+                id,
+                tag,
+                title,
+                url,
+                repo: full_name,
+                published_at,
+            });
+        }
+        out.sort_by(|a, b| b.published_at.cmp(&a.published_at));
+        out.truncate(limit);
+        Ok(out)
+    }
 }
 
 // ─── GitLabProvider ───────────────────────────────────────────────────────────
@@ -832,6 +991,154 @@ impl GitLabProvider {
         }
         out.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
         out.retain(|x| !x.id.is_empty() && !x.url.is_empty());
+        out.truncate(limit);
+        Ok(out)
+    }
+
+    pub async fn list_assigned_issues(
+        token: &str,
+        username: &str,
+        limit: usize,
+    ) -> Result<Vec<CloudIssueEntry>, String> {
+        let client = reqwest::Client::new();
+        let resp = client
+            .get("https://gitlab.com/api/v4/issues")
+            .header("Authorization", format!("Bearer {}", token))
+            .header("User-Agent", "LuminaDev/0.2.0")
+            .query(&[
+                ("assignee_username", username),
+                ("state", "opened"),
+                ("scope", "all"),
+                ("order_by", "updated_at"),
+                ("sort", "desc"),
+                ("per_page", &limit.to_string()),
+            ])
+            .send()
+            .await
+            .map_err(|e| format!("[CLOUD_GIT_NETWORK] GitLab issues: {}", e))?;
+        if resp.status() == 401 {
+            return Err("[CLOUD_AUTH_INVALID_TOKEN] GitLab token is invalid or expired.".to_string());
+        }
+        if !resp.status().is_success() {
+            return Err(format!(
+                "[CLOUD_GIT_NETWORK] GitLab issues returned {}",
+                resp.status()
+            ));
+        }
+        let rows: Vec<serde_json::Value> = resp
+            .json()
+            .await
+            .map_err(|e| format!("[CLOUD_GIT_NETWORK] GitLab issues parse: {}", e))?;
+        let items = rows
+            .into_iter()
+            .map(|it| {
+                let references = it["references"]["full"].as_str().unwrap_or("");
+                let repo = references
+                    .split('#')
+                    .next()
+                    .unwrap_or(references)
+                    .to_string();
+                CloudIssueEntry {
+                    id: it["id"].as_i64().unwrap_or_default().to_string(),
+                    title: it["title"].as_str().unwrap_or("").to_string(),
+                    url: it["web_url"].as_str().unwrap_or("").to_string(),
+                    repo,
+                    state: it["state"].as_str().unwrap_or("opened").to_string(),
+                    updated_at: it["updated_at"].as_str().unwrap_or("").to_string(),
+                }
+            })
+            .filter(|x| !x.id.is_empty() && !x.url.is_empty())
+            .collect();
+        Ok(items)
+    }
+
+    pub async fn list_recent_releases(
+        token: &str,
+        limit: usize,
+    ) -> Result<Vec<CloudReleaseEntry>, String> {
+        let client = reqwest::Client::new();
+        let projects_resp = client
+            .get("https://gitlab.com/api/v4/projects")
+            .header("Authorization", format!("Bearer {}", token))
+            .header("User-Agent", "LuminaDev/0.2.0")
+            .query(&[
+                ("membership", "true"),
+                ("simple", "true"),
+                ("order_by", "last_activity_at"),
+                ("sort", "desc"),
+                ("per_page", "20"),
+            ])
+            .send()
+            .await
+            .map_err(|e| format!("[CLOUD_GIT_NETWORK] GitLab projects (releases): {}", e))?;
+        if projects_resp.status() == 401 {
+            return Err("[CLOUD_AUTH_INVALID_TOKEN] GitLab token is invalid or expired.".to_string());
+        }
+        if !projects_resp.status().is_success() {
+            return Err(format!(
+                "[CLOUD_GIT_NETWORK] GitLab projects (releases) returned {}",
+                projects_resp.status()
+            ));
+        }
+        let projects: Vec<serde_json::Value> = projects_resp
+            .json()
+            .await
+            .map_err(|e| format!("[CLOUD_GIT_NETWORK] GitLab projects parse: {}", e))?;
+
+        let mut out: Vec<CloudReleaseEntry> = Vec::new();
+        for project in projects.into_iter().take(20) {
+            let id = project["id"].as_i64().unwrap_or_default();
+            if id <= 0 {
+                continue;
+            }
+            let repo = project["path_with_namespace"]
+                .as_str()
+                .unwrap_or("")
+                .to_string();
+            let rel_resp = client
+                .get(format!(
+                    "https://gitlab.com/api/v4/projects/{}/releases",
+                    id
+                ))
+                .header("Authorization", format!("Bearer {}", token))
+                .header("User-Agent", "LuminaDev/0.2.0")
+                .query(&[("per_page", "1")])
+                .send()
+                .await;
+            let Ok(rel_resp) = rel_resp else {
+                continue;
+            };
+            if !rel_resp.status().is_success() {
+                continue;
+            }
+            let rows: Vec<serde_json::Value> = match rel_resp.json().await {
+                Ok(v) => v,
+                Err(_) => continue,
+            };
+            let Some(rel) = rows.first() else {
+                continue;
+            };
+            let tag = rel["tag_name"].as_str().unwrap_or("").to_string();
+            if tag.is_empty() {
+                continue;
+            }
+            let title = rel["name"].as_str().unwrap_or(&tag).to_string();
+            let published_at = rel["released_at"]
+                .as_str()
+                .or_else(|| rel["created_at"].as_str())
+                .unwrap_or("")
+                .to_string();
+            let web = format!("https://gitlab.com/{}/-/releases/{}", repo, tag);
+            out.push(CloudReleaseEntry {
+                id: format!("{}:{}", id, tag),
+                tag,
+                title,
+                url: web,
+                repo,
+                published_at,
+            });
+        }
+        out.sort_by(|a, b| b.published_at.cmp(&a.published_at));
         out.truncate(limit);
         Ok(out)
     }

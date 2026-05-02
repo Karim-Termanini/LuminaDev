@@ -41,9 +41,16 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
   {
     typeId: 'link.cloud-git',
     title: 'Cloud Git',
-    description: 'Link GitHub or GitLab (device flow or PAT) for upcoming cloud repo features.',
+    description: 'Link GitHub or GitLab (device flow or PAT) for HTTPS remotes, PRs, issues, CI, and releases.',
     minCols: 1,
     ipcHints: ['dh:cloud:auth:status', 'dh:cloud:auth:connect-start'],
+  },
+  {
+    typeId: 'live.git-recents',
+    title: 'Recent Git repos',
+    description: 'Recently opened local repositories with branch and dirty/sync snapshot.',
+    minCols: 2,
+    ipcHints: ['dh:git:recent:list', 'dh:git:vcs:status'],
   },
   {
     typeId: 'custom.placeholder',

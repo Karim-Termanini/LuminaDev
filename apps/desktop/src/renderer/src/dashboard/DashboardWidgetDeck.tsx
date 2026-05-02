@@ -3,6 +3,8 @@ import { getWidgetDefinition } from '@linux-dev-home/shared'
 import type { ReactElement } from 'react'
 import { Link } from 'react-router-dom'
 
+import { RecentReposWidget } from './RecentReposWidget'
+
 export function DashboardWidgetDeck(props: {
   layout: DashboardLayoutFile
   onRemove: (instanceId: string) => void
@@ -88,6 +90,9 @@ function WidgetTile(props: {
           Open Cloud Git →
         </Link>
       )
+      break
+    case 'live.git-recents':
+      body = <RecentReposWidget comfortable={c} />
       break
     case 'static.docker-permission-hint':
       body = (

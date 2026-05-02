@@ -10,7 +10,7 @@ Status legend:
 
 | Route | Status | Notes |
 | --- | --- | --- |
-| `/dashboard` | partial | Preset grid reads `active_profile` for highlight; slim container count + metrics strip with links to Docker and Monitor; several preset cards are `PLANNED`/disabled. |
+| `/dashboard` | partial | Preset grid reads `active_profile` for highlight; slim container count + metrics strip with links to Docker and Monitor; several preset cards are `PLANNED`/disabled. Widget deck includes **`live.git-recents`** (recent repos + branch / dirty / ahead|behind snapshot via `dh:git:recent:list` + `dh:git:vcs:status`). |
 | `/dashboard/widgets` | stub | Static placeholder; not a full widget management surface yet. |
 | `/dashboard/kernels` | partial | GPU probe, service states, security audit; auto-refreshes every ~30s (lightweight snapshot, not a full device manager). |
 | `/dashboard/logs` | partial | Jobs poll ~2s; compose logs load for selected profile; not a full observability platform. |
@@ -25,7 +25,7 @@ Status legend:
 | `/runtimes` | partial | Status/version/deps/uninstall preview are live; install/update/remove backend is in active hardening. |
 | `/maintenance` | partial | Guardian + diagnostics + host probes as above. **Tasks**: user checklist on Overview + full editor on Schedule (inline rename). **Git backups** live on **Git Config → Backups**. No arbitrary host shell or full remediation. |
 | `/settings` | partial | **Nav:** Personalization / SSH & remote / System / **Connected accounts** (rail + detail card). **Accent:** presets + custom color; `appearance` store; `applyAppearanceAccent` / `syncAppearanceFromStore` (incl. wizard complete). **SSH:** read-only bookmark table + “Manage on SSH page” (`ssh_bookmarks`). **Hosts / env:** as before. **Accounts:** summary of linked GitHub/GitLab (`dh:cloud:auth:status`) + link to `/cloud-git`. **Not yet:** hosts file editing, profile-scoped env files + diff-before-apply. |
-| `/cloud-git` | partial | **Auth:** device flow + PAT for GitHub and GitLab via `dh:cloud:auth:*`; encrypted credential file. **UI:** provider **tabs** + scoped accent (GitHub blue / GitLab orange), **two-column layout** (Account & security + Activity), and **identity hero** per tab. **Activity:** open PR/MR list is live via `dh:cloud:git:prs` (provider APIs, account-scoped) with **Open in Lumina VCS** when repo basename matches local recents (`/git-vcs?repoPath=...`). **Pipelines:** recent runs are live via `dh:cloud:git:pipelines` (GitHub Actions + GitLab pipelines, provider-scoped). Cross-repo dashboards/widgets remain Phase 12 follow-on. |
+| `/cloud-git` | partial | **Auth:** device flow + PAT for GitHub and GitLab via `dh:cloud:auth:*`; encrypted credential file. **UI:** provider **tabs** + scoped accent (GitHub blue / GitLab orange), **two-column layout** (Account & security + Activity), and **identity hero** per tab. **Activity (account-scoped):** open PR/MRs via `dh:cloud:git:prs` with **Open in Lumina VCS** when repo basename matches `dh:git:recent:list`; **assigned issues** via `dh:cloud:git:issues` (GitHub search `assignee:@me`, GitLab `assignee_username`); **CI** via `dh:cloud:git:pipelines`; **latest releases** across recent repos/projects via `dh:cloud:git:releases`. **Not yet:** requested-review queue, merge controls, per-local-repo cloud scoping, mentions / notification inbox, dedicated “cloud activity” dashboard beyond `/cloud-git`. |
 
 ## Update Rule
 

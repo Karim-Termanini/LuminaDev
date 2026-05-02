@@ -138,6 +138,8 @@ function createTauriDhApi(): DhApi {
     cloudAuthStatus: () => tauriInvoke(IPC.cloudAuthStatus),
     cloudGitPrs: (payload) => tauriInvoke(IPC.cloudGitPrs, payload),
     cloudGitPipelines: (payload) => tauriInvoke(IPC.cloudGitPipelines, payload),
+    cloudGitIssues: (payload) => tauriInvoke(IPC.cloudGitIssues, payload),
+    cloudGitReleases: (payload) => tauriInvoke(IPC.cloudGitReleases, payload),
     gitVcsStatus: (payload) => tauriInvoke(IPC.gitVcsStatus, payload),
     gitVcsRemotes: (payload) => tauriInvoke(IPC.gitVcsRemotes, payload),
     gitVcsDiff: (payload) => tauriInvoke(IPC.gitVcsDiff, payload),

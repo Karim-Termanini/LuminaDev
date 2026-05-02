@@ -370,6 +370,37 @@ export const CloudPipelineEntrySchema = z.object({
 })
 export type CloudPipelineEntry = z.infer<typeof CloudPipelineEntrySchema>
 
+export const CloudGitIssuesRequestSchema = z.object({
+  provider: CloudAuthProviderSchema,
+  limit: z.number().int().min(1).max(50).optional(),
+})
+
+export const CloudIssueEntrySchema = z.object({
+  id: z.string().min(1),
+  title: z.string(),
+  url: z.string().url(),
+  repo: z.string(),
+  state: z.string(),
+  updatedAt: z.string(),
+})
+export type CloudIssueEntry = z.infer<typeof CloudIssueEntrySchema>
+
+export const CloudGitReleasesRequestSchema = z.object({
+  provider: CloudAuthProviderSchema,
+  limit: z.number().int().min(1).max(50).optional(),
+})
+
+export const CloudReleaseEntrySchema = z.object({
+  id: z.string().min(1),
+  tag: z.string(),
+  title: z.string(),
+  /** Release page URL (may include unencoded tag path segments). */
+  url: z.string().min(1).max(2048),
+  repo: z.string(),
+  publishedAt: z.string(),
+})
+export type CloudReleaseEntry = z.infer<typeof CloudReleaseEntrySchema>
+
 export type DockerContainerAction = z.infer<typeof DockerContainerActionSchema>
 export type DockerImageAction = z.infer<typeof DockerImageActionSchema>
 export type DockerVolumeAction = z.infer<typeof DockerVolumeActionSchema>

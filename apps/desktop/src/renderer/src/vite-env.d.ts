@@ -152,6 +152,22 @@ declare global {
         pipelines?: import('@linux-dev-home/shared').CloudPipelineEntry[]
         error?: string
       }>
+      cloudGitIssues: (payload: {
+        provider: 'github' | 'gitlab'
+        limit?: number
+      }) => Promise<{
+        ok: boolean
+        issues?: import('@linux-dev-home/shared').CloudIssueEntry[]
+        error?: string
+      }>
+      cloudGitReleases: (payload: {
+        provider: 'github' | 'gitlab'
+        limit?: number
+      }) => Promise<{
+        ok: boolean
+        releases?: import('@linux-dev-home/shared').CloudReleaseEntry[]
+        error?: string
+      }>
       gitVcsStatus: (payload: { repoPath: string }) => Promise<{
         ok: boolean
         branch?: string

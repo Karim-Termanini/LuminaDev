@@ -241,6 +241,8 @@ export const IPC = {
   cloudAuthStatus: 'dh:cloud:auth:status',
   cloudGitPrs: 'dh:cloud:git:prs',
   cloudGitPipelines: 'dh:cloud:git:pipelines',
+  cloudGitIssues: 'dh:cloud:git:issues',
+  cloudGitReleases: 'dh:cloud:git:releases',
   gitVcsStatus: 'dh:git:vcs:status',
   gitVcsRemotes: 'dh:git:vcs:remotes',
   gitVcsDiff: 'dh:git:vcs:diff',
