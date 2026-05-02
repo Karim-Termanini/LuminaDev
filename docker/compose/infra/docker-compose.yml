@@ -1,4 +1,7 @@
+name: lumina-infra
+
 services:
   stub:
     image: alpine:latest
     command: ["sleep", "infinity"]
+    restart: unless-stopped

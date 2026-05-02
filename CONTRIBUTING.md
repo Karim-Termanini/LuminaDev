@@ -16,10 +16,11 @@ pnpm install
 - **New Modules First:** Every new feature or IPC handler group must be created in its own `.rs` file (e.g., `runtime_jobs.rs`).
 - **Clean Interface:** `lib.rs` should only serve as the entry point and dispatcher, keeping its size manageable.
 
-### 🚀 CI & Push Policy
+### 🚀 Push & Multi-Remote Policy
 
-- **Bundle Your Pushes:** Do not push every single micro-commit. Instead, bundle related commits locally and perform a single `git push` only after completing a significant milestone or "Vertical Slice".
-- **Respect CI Resources:** This keeps the CI pipeline clean and saves precious build time on GitLab/GitHub.
+- **Bundle Your Pushes:** Do not push every micro-commit. Bundle your work into logical blocks (Vertical Slices) before pushing to save CI resources.
+- **Sync Both Remotes:** When pushing new code, ensure it is pushed to both **GitLab** and **GitHub**.
+- **Dual Review:** After pushing, you must create a **Merge Request (MR)** on GitLab and a **Pull Request (PR)** on GitHub to maintain synchronization and allow for multi-platform review.
 
 ### 🧪 Quality Gate Policy
 
@@ -59,6 +60,7 @@ cargo test -- --nocapture
 
 ## Flatpak and host boundary notes
 
+- **Compose preset stacks:** `dh:compose:up` resolves `docker/compose/<profile>` from the repo checkout, `LUMINA_DEV_COMPOSE_ROOT` (parent of `<profile>` dirs), or bundled `resource_dir()/docker/compose` when packaged. Export this env in Flatpak if the app cwd is not inside the git tree.
 - Flatpak sessions may require explicit overrides for Docker socket and SSH access.
 - See:
   - `docs/DOCKER_FLATPAK.md`

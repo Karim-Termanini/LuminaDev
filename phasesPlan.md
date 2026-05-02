@@ -142,8 +142,9 @@ Progress notes (2026-05-01, docs pass):
 - ❌ Drag-and-drop polish (basic HTML5 reorder already works — good enough)
 - ❌ Theme surface rollout across all routes (Maintenance theme is pilot; others wait)
 - ❌ Phase 8 Settings, Phase 10 Extensions, Phase 12 Cloud Git
-- ❌ Profiles **on-login** automation (setActive shipped)
 - ❌ Git Doctor, Policy Lock, Visual Change Preview
+
+_(Profiles **on-login** automation is **Phase 9** backlog, not “never do.”)_ 
 
 ---
 
@@ -184,9 +185,11 @@ All five stabilization checklist items `done`. `pnpm smoke` green. See [`docs/ST
 - [x] `DashboardWidgetsPage`, `DashboardKernelsPage`, `DashboardLogsPage` present and routed
 
 ### Verified missing (not Alpha scope)
-- [ ] Alpine `sleep infinity` compose stubs per preset (preset cards still `INITIALIZE` only)
-- [ ] On-login actions (auto compose / layout) after profile selection
+- [x] **Minimal compose stub per preset** — each `docker/compose/<profile>/docker-compose.yml` is a small Alpine `sleep infinity` service with a unique Compose `name:`; `dh:compose:up` resolves checkout, `LUMINA_DEV_COMPOSE_ROOT`, or bundled `docker/compose` (see `compose_profiles.rs` + `tauri.conf.json` `bundle.resources`).
+- [ ] **Full stack definitions** — replace stubs with profile-realistic services (nginx, Jupyter, Hugo, …) behind feature flags or separate overlays when ready.
 - [x] Preset ↔ store: `active_profile` is a `ComposeProfile` id; dashboard + wizard + Profiles **Set Active** stay aligned
+
+_On-login automation lives under **Phase 9** (not Phase 1)._
 
 ---
 
@@ -284,7 +287,7 @@ Missing: user-defined task checklist, git config backup/restore.
 
 - [x] **CRUD**: add / delete / duplicate / export / import
 - [x] **setActive**: writes `active_profile` as the entry’s `baseTemplate` (`ComposeProfile`); clear via store delete.
-- [ ] **On-login actions**: optional automated steps (start compose stacks, open specific dashboard layout).
+- [ ] **On-login automation (remaining scope)** — optional post-start hooks: e.g. `composeUp` for `active_profile`, restore `layoutGet` layout, or other user-toggled actions (store + UI; no duplicate of Phase 1 stub creation work).
 - [x] **Preset alignment**: dashboard preset grid reads the same `active_profile` key as wizard / Profiles.
 
 ---
@@ -304,6 +307,7 @@ Missing: user-defined task checklist, git config backup/restore.
 - [x] **Profile-pick step**: nine compose presets; writes `active_profile` when confirmed
 - [x] **Re-entry**: sidebar **Setup Wizard** resets `wizard_state` + reload
 - [x] **Resume logic**: `wizard_state.stepIndex` (0–6) persisted while incomplete; restored on next launch
+- [ ] **(Optional) Rich resume**: persist in-wizard fields (Git name/email, Flatpak `target`, SSH pub key text or “generated” flag) in `wizard_state` so mid-wizard restarts do not wipe form state — **not required** if step-only resume is enough.
 
 ---
 
@@ -380,9 +384,9 @@ Full preparation for Flathub submission and official v1.0 stability.
 ✅  Phase 6  — Runtimes (17 languages)
 ✅  Phase 7  — Maintenance / Guardian
 ✅  SPRINT   — Flatpak + Tests + Audit + Cross-distro + v0.2.0-alpha (shipped)
-🔄  Phase 11 — Wizard (optional: persist in-wizard form fields, richer resume)
-🔄  Phase 1  — Dashboard (Compose stubs per preset, on-login automation)
-🔄  Phase 9  — Profiles (On-login actions only)
+🔄  Phase 1  — Dashboard (**full stack definitions** per preset; minimal Alpine stubs + resolver shipped)
+🔄  Phase 9  — Profiles (**on-login automation** only)
+🔄  Phase 11 — Wizard (**optional**: persist name/email/SSH fields for richer resume, not just `stepIndex`)
 📋  Phase 8  — Settings (SSH Bookmarks, Hosts Editor, Env Vars)
 📋  Phase 12 — Cloud Git (PRs/MRs, CI/CD Status, Interactive Sync)
 📋  Phase 13 — Theme Rollout (System-wide pilot)

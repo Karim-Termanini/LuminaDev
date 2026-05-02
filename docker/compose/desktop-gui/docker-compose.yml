@@ -1,4 +1,7 @@
+name: lumina-desktop-gui
+
 services:
   stub:
     image: alpine:latest
     command: ["sleep", "infinity"]
+    restart: unless-stopped

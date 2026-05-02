@@ -1,8 +1,8 @@
+# Minimal preset stack (reliable everywhere). Replace with Jupyter/DataScience stack when ready.
+name: lumina-data-science
+
 services:
-  notebook:
-    image: jupyter/scipy-notebook:latest
-    ports:
-      - "8888:8888"
-    environment:
-      JUPYTER_ENABLE_LAB: "yes"
+  stub:
+    image: alpine:latest
+    command: ["sleep", "infinity"]
     restart: unless-stopped
