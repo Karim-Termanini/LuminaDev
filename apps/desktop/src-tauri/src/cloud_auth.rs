@@ -181,6 +181,78 @@ pub struct CloudPipelineEntry {
     pub updated_at: String,
 }
 
+/// Result of parsing a `git remote` URL for github.com / gitlab.com hosting only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ParsedRemoteRepo {
+    Github { full_name: String },
+    Gitlab { path_with_namespace: String },
+}
+
+/// Best-effort: `github.com` / `gitlab.com` clone URLs (https, ssh, git@).
+pub fn parse_github_gitlab_remote(url: &str) -> Option<ParsedRemoteRepo> {
+    let t = url.trim();
+    if t.is_empty() {
+        return None;
+    }
+    if let Some(rest) = t.strip_prefix("git@github.com:") {
+        let seg = strip_git_remote_path(rest)?;
+        return Some(ParsedRemoteRepo::Github {
+            full_name: seg.to_string(),
+        });
+    }
+    if let Some(rest) = t.strip_prefix("git@gitlab.com:") {
+        let seg = strip_git_remote_path(rest)?;
+        return Some(ParsedRemoteRepo::Gitlab {
+            path_with_namespace: seg.to_string(),
+        });
+    }
+    if let Some(rest) = t.strip_prefix("ssh://git@github.com/") {
+        let seg = strip_git_remote_path(rest)?;
+        return Some(ParsedRemoteRepo::Github {
+            full_name: seg.to_string(),
+        });
+    }
+    if let Some(rest) = t.strip_prefix("ssh://git@gitlab.com/") {
+        let seg = strip_git_remote_path(rest)?;
+        return Some(ParsedRemoteRepo::Gitlab {
+            path_with_namespace: seg.to_string(),
+        });
+    }
+    if let Some(seg) = path_after_host_marker(t, "github.com/") {
+        return Some(ParsedRemoteRepo::Github {
+            full_name: seg.to_string(),
+        });
+    }
+    if let Some(seg) = path_after_host_marker(t, "gitlab.com/") {
+        return Some(ParsedRemoteRepo::Gitlab {
+            path_with_namespace: seg.to_string(),
+        });
+    }
+    None
+}
+
+fn strip_git_remote_path(s: &str) -> Option<&str> {
+    let s = s.split(['?', '#']).next()?.trim();
+    let s = s.trim_end_matches('/').trim_end_matches(".git").trim();
+    if s.is_empty() {
+        None
+    } else {
+        Some(s)
+    }
+}
+
+fn path_after_host_marker(url: &str, host_marker: &str) -> Option<&str> {
+    let idx = url.find(host_marker)?;
+    let rest = &url[idx + host_marker.len()..];
+    let seg = rest.split(['?', '#']).next()?.trim();
+    let seg = seg.trim_end_matches('/').trim_end_matches(".git").trim();
+    if seg.is_empty() {
+        None
+    } else {
+        Some(seg)
+    }
+}
+
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct CloudIssueEntry {
     pub id: String,
@@ -609,6 +681,70 @@ impl GitHubProvider {
         Ok(out)
     }
 
+    /// Recent Actions workflow runs for a single `owner/repo` repository.
+    pub async fn list_repo_pipelines(
+        token: &str,
+        full_name: &str,
+        limit: usize,
+    ) -> Result<Vec<CloudPipelineEntry>, String> {
+        let client = reqwest::Client::new();
+        let runs_resp = client
+            .get(format!(
+                "https://api.github.com/repos/{}/actions/runs",
+                full_name
+            ))
+            .header("Authorization", format!("Bearer {}", token))
+            .header("User-Agent", "LuminaDev/0.2.0")
+            .header("Accept", "application/vnd.github+json")
+            .query(&[("per_page", &limit.to_string())])
+            .send()
+            .await
+            .map_err(|e| format!("[CLOUD_GIT_NETWORK] GitHub runs: {}", e))?;
+        if runs_resp.status() == 401 {
+            return Err("[CLOUD_AUTH_INVALID_TOKEN] GitHub token is invalid or expired.".to_string());
+        }
+        if !runs_resp.status().is_success() {
+            return Err(format!(
+                "[CLOUD_GIT_NETWORK] GitHub runs for {} returned {}",
+                full_name,
+                runs_resp.status()
+            ));
+        }
+        let body: serde_json::Value = runs_resp
+            .json()
+            .await
+            .map_err(|e| format!("[CLOUD_GIT_NETWORK] GitHub runs parse: {}", e))?;
+        let runs = body["workflow_runs"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default();
+        let mut out: Vec<CloudPipelineEntry> = Vec::new();
+        for run in runs.into_iter().take(limit) {
+            let id = run["id"].as_i64().unwrap_or_default();
+            if id <= 0 {
+                continue;
+            }
+            out.push(CloudPipelineEntry {
+                id: id.to_string(),
+                name: run["name"]
+                    .as_str()
+                    .or_else(|| run["display_title"].as_str())
+                    .unwrap_or("Workflow run")
+                    .to_string(),
+                url: run["html_url"].as_str().unwrap_or("").to_string(),
+                repo: full_name.to_string(),
+                status: run["conclusion"]
+                    .as_str()
+                    .or_else(|| run["status"].as_str())
+                    .unwrap_or("unknown")
+                    .to_string(),
+                updated_at: run["updated_at"].as_str().unwrap_or("").to_string(),
+            });
+        }
+        out.retain(|x| !x.id.is_empty() && !x.url.is_empty());
+        Ok(out)
+    }
+
     pub async fn list_assigned_issues(
         token: &str,
         limit: usize,
@@ -993,6 +1129,71 @@ impl GitLabProvider {
         out.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
         out.retain(|x| !x.id.is_empty() && !x.url.is_empty());
         out.truncate(limit);
+        Ok(out)
+    }
+
+    /// Recent CI pipelines for a single `path_with_namespace` project on gitlab.com.
+    pub async fn list_repo_pipelines(
+        token: &str,
+        path_with_namespace: &str,
+        limit: usize,
+    ) -> Result<Vec<CloudPipelineEntry>, String> {
+        let client = reqwest::Client::new();
+        let enc = path_with_namespace.replace('/', "%2F");
+        let list_resp = client
+            .get(format!(
+                "https://gitlab.com/api/v4/projects/{}/pipelines",
+                enc
+            ))
+            .header("Authorization", format!("Bearer {}", token))
+            .header("User-Agent", "LuminaDev/0.2.0")
+            .query(&[
+                ("order_by", "updated_at"),
+                ("sort", "desc"),
+                ("per_page", &limit.to_string()),
+            ])
+            .send()
+            .await
+            .map_err(|e| format!("[CLOUD_GIT_NETWORK] GitLab repo pipelines: {}", e))?;
+        if list_resp.status() == 401 {
+            return Err("[CLOUD_AUTH_INVALID_TOKEN] GitLab token is invalid or expired.".to_string());
+        }
+        if !list_resp.status().is_success() {
+            return Err(format!(
+                "[CLOUD_GIT_NETWORK] GitLab pipelines for {} returned {}",
+                path_with_namespace,
+                list_resp.status()
+            ));
+        }
+        let rows: Vec<serde_json::Value> = list_resp
+            .json()
+            .await
+            .map_err(|e| format!("[CLOUD_GIT_NETWORK] GitLab repo pipelines parse: {}", e))?;
+        let mut out: Vec<CloudPipelineEntry> = Vec::new();
+        for p in rows.into_iter().take(limit) {
+            let pid = p["id"].as_i64().unwrap_or_default();
+            if pid <= 0 {
+                continue;
+            }
+            let web_url = p["web_url"]
+                .as_str()
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| {
+                    format!(
+                        "https://gitlab.com/{}/-/pipelines/{}",
+                        path_with_namespace, pid
+                    )
+                });
+            out.push(CloudPipelineEntry {
+                id: pid.to_string(),
+                name: p["ref"].as_str().unwrap_or("pipeline").to_string(),
+                url: web_url,
+                repo: path_with_namespace.to_string(),
+                status: p["status"].as_str().unwrap_or("unknown").to_string(),
+                updated_at: p["updated_at"].as_str().unwrap_or("").to_string(),
+            });
+        }
+        out.retain(|x| !x.id.is_empty() && !x.url.is_empty());
         Ok(out)
     }
 

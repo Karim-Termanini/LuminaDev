@@ -358,6 +358,10 @@ export type CloudPullRequestEntry = z.infer<typeof CloudPullRequestEntrySchema>
 export const CloudGitPipelinesRequestSchema = z.object({
   provider: CloudAuthProviderSchema,
   limit: z.number().int().min(1).max(50).optional(),
+  /** When set with `remote`, resolves `git remote get-url` and returns pipelines for that GitHub/GitLab repo only. */
+  repoPath: z.string().min(1).max(4096).optional(),
+  /** Remote name for `repoPath` (default `origin`). */
+  remote: z.string().min(1).max(256).optional(),
 })
 
 export const CloudPipelineEntrySchema = z.object({
@@ -530,3 +534,9 @@ export const GitVcsStashPopRequestSchema = GitVcsRepoPathSchema
 export const GitVcsMergeAbortRequestSchema = GitVcsRepoPathSchema
 
 export const GitVcsRebaseAbortRequestSchema = GitVcsRepoPathSchema
+
+/** Resume after resolving merge conflicts (`git merge --continue`). */
+export const GitVcsMergeContinueRequestSchema = GitVcsRepoPathSchema
+
+/** Resume after resolving rebase conflicts (`git rebase --continue`). */
+export const GitVcsRebaseContinueRequestSchema = GitVcsRepoPathSchema

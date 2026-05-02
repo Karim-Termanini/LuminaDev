@@ -10,6 +10,8 @@ export type GitVcsIntegrateBarProps = {
   onMerge: (branch: string, ffOnly: boolean) => Promise<void>
   onRebase: (onto: string) => Promise<void>
   onStashPop: () => Promise<void>
+  onMergeContinue: () => Promise<void>
+  onRebaseContinue: () => Promise<void>
   onMergeAbort: () => Promise<void>
   onRebaseAbort: () => Promise<void>
 }
@@ -27,6 +29,8 @@ export function GitVcsIntegrateBar({
   onMerge,
   onRebase,
   onStashPop,
+  onMergeContinue,
+  onRebaseContinue,
   onMergeAbort,
   onRebaseAbort,
 }: GitVcsIntegrateBarProps): ReactElement {
@@ -141,6 +145,24 @@ export function GitVcsIntegrateBar({
           Rebase onto
         </button>
         <span style={{ width: 1, height: 22, background: 'var(--border)', margin: '0 4px' }} aria-hidden />
+        <button
+          type="button"
+          className="hp-btn"
+          disabled={busy}
+          title="After resolving merge conflicts and staging, completes the merge commit (git merge --continue)"
+          onClick={() => void onMergeContinue()}
+        >
+          Continue merge
+        </button>
+        <button
+          type="button"
+          className="hp-btn"
+          disabled={busy}
+          title="After resolving conflicts and staging, continues the rebase (git rebase --continue)"
+          onClick={() => void onRebaseContinue()}
+        >
+          Continue rebase
+        </button>
         <button type="button" className="hp-btn" disabled={busy} onClick={() => void onStashPop()}>
           Stash pop
         </button>
@@ -152,8 +174,9 @@ export function GitVcsIntegrateBar({
         </button>
       </div>
       <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.45, maxWidth: 720 }}>
-        Merge and rebase run locally in this repo. If Git stops for conflicts, fix files in your editor, then commit or
-        use abort to return to the pre-merge or pre-rebase state. Stash pop applies the latest stash entry.
+        Merge and rebase run locally in this repo. If Git stops for conflicts, fix files in your editor, stage
+        resolved paths, then use Continue merge or Continue rebase. Use abort to discard the in-progress operation.
+        Stash pop applies the latest stash entry.
       </p>
     </div>
   )

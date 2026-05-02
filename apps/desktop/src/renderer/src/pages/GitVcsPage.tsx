@@ -480,6 +480,38 @@ export function GitVcsPage(): ReactElement {
     }
   }
 
+  async function runMergeContinue(): Promise<void> {
+    if (!repoPath.trim()) return
+    setBusy(true)
+    setOpErrorRaw(null)
+    try {
+      const r = await window.dh.gitVcsMergeContinue({ repoPath: repoPath.trim() })
+      assertGitVcsOk(r)
+      const lists = await refreshStatus()
+      setSelected((prev) => reconcileGitVcsSelection(prev, lists.staged, lists.unstaged))
+    } catch (e) {
+      setOpErrorRaw(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function runRebaseContinue(): Promise<void> {
+    if (!repoPath.trim()) return
+    setBusy(true)
+    setOpErrorRaw(null)
+    try {
+      const r = await window.dh.gitVcsRebaseContinue({ repoPath: repoPath.trim() })
+      assertGitVcsOk(r)
+      const lists = await refreshStatus()
+      setSelected((prev) => reconcileGitVcsSelection(prev, lists.staged, lists.unstaged))
+    } catch (e) {
+      setOpErrorRaw(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function runMergeAbort(): Promise<void> {
     if (!repoPath.trim()) return
     setBusy(true)
@@ -742,6 +774,12 @@ export function GitVcsPage(): ReactElement {
             }}
             onStashPop={async () => {
               await runStashPop()
+            }}
+            onMergeContinue={async () => {
+              await runMergeContinue()
+            }}
+            onRebaseContinue={async () => {
+              await runRebaseContinue()
             }}
             onMergeAbort={async () => {
               await runMergeAbort()

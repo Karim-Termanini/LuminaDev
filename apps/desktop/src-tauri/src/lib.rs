@@ -2687,7 +2687,9 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
     | "dh:git:vcs:rebase"
     | "dh:git:vcs:stash-pop"
     | "dh:git:vcs:merge-abort"
-    | "dh:git:vcs:rebase-abort" => git_vcs_ipc::invoke_extended(channel.as_str(), &body).await,
+    | "dh:git:vcs:rebase-abort"
+    | "dh:git:vcs:merge-continue"
+    | "dh:git:vcs:rebase-continue" => git_vcs_ipc::invoke_extended(channel.as_str(), &body).await,
 
     "dh:ssh:generate" => {
       let email = body.get("email").and_then(|v| v.as_str()).unwrap_or("lumina@local");
@@ -4395,6 +4397,7 @@ mod tests {
       assert_eq!(staged[0]["status"], "R");
       assert_eq!(staged[0]["path"], "new_name.rs");
       assert_eq!(staged[0]["oldPath"], "old_name.rs");
+      assert_eq!(unstaged.len(), 0);
   }
 
   #[test]

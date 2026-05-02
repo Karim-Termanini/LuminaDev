@@ -19,6 +19,8 @@ pub async fn invoke_extended(channel: &str, body: &Value) -> Value {
         "dh:git:vcs:stash-pop" => stash_pop(repo_path).await,
         "dh:git:vcs:merge-abort" => merge_abort(repo_path).await,
         "dh:git:vcs:rebase-abort" => rebase_abort(repo_path).await,
+        "dh:git:vcs:merge-continue" => merge_continue(repo_path).await,
+        "dh:git:vcs:rebase-continue" => rebase_continue(repo_path).await,
         _ => json!({
             "ok": false,
             "error": format!("[UNKNOWN_CHANNEL] {}", channel)
@@ -123,5 +125,47 @@ async fn rebase_abort(repo_path: &str) -> Value {
             let msg = e.trim();
             json!({ "ok": false, "error": format!("[GIT_VCS_REBASE_ABORT] {}", msg) })
         }
+    }
+}
+
+async fn merge_continue(repo_path: &str) -> Value {
+    let args = ["-C", repo_path, "merge", "--continue"];
+    match exec_output_limit("git", &args, CMD_TIMEOUT_LONG).await {
+        Ok(output) => json!({ "ok": true, "output": output }),
+        Err(e) => {
+            let msg = e.trim();
+            let code = merge_continue_error_code(msg);
+            json!({ "ok": false, "error": format!("[{}] {}", code, msg) })
+        }
+    }
+}
+
+fn merge_continue_error_code(msg: &str) -> &'static str {
+    let m = msg.to_lowercase();
+    if m.contains("conflict") || m.contains("unmerged") {
+        "GIT_VCS_MERGE_CONFLICT"
+    } else {
+        "GIT_VCS_MERGE_CONTINUE"
+    }
+}
+
+async fn rebase_continue(repo_path: &str) -> Value {
+    let args = ["-C", repo_path, "rebase", "--continue"];
+    match exec_output_limit("git", &args, CMD_TIMEOUT_LONG).await {
+        Ok(output) => json!({ "ok": true, "output": output }),
+        Err(e) => {
+            let msg = e.trim();
+            let code = rebase_continue_error_code(msg);
+            json!({ "ok": false, "error": format!("[{}] {}", code, msg) })
+        }
+    }
+}
+
+fn rebase_continue_error_code(msg: &str) -> &'static str {
+    let m = msg.to_lowercase();
+    if m.contains("conflict") || m.contains("could not apply") || m.contains("unmerged") {
+        "GIT_VCS_REBASE_CONFLICT"
+    } else {
+        "GIT_VCS_REBASE_CONTINUE"
     }
 }

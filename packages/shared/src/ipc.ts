@@ -260,6 +260,8 @@ export const IPC = {
   gitVcsStashPop: 'dh:git:vcs:stash-pop',
   gitVcsMergeAbort: 'dh:git:vcs:merge-abort',
   gitVcsRebaseAbort: 'dh:git:vcs:rebase-abort',
+  gitVcsMergeContinue: 'dh:git:vcs:merge-continue',
+  gitVcsRebaseContinue: 'dh:git:vcs:rebase-continue',
 } as const
 
 export type DockerActionPayload = { id: string; action: DockerContainerAction }

@@ -219,6 +219,8 @@ declare global {
       gitVcsStashPop: (payload: { repoPath: string }) => Promise<{ ok: boolean; output?: string; error?: string }>
       gitVcsMergeAbort: (payload: { repoPath: string }) => Promise<{ ok: boolean; output?: string; error?: string }>
       gitVcsRebaseAbort: (payload: { repoPath: string }) => Promise<{ ok: boolean; output?: string; error?: string }>
+      gitVcsMergeContinue: (payload: { repoPath: string }) => Promise<{ ok: boolean; output?: string; error?: string }>
+      gitVcsRebaseContinue: (payload: { repoPath: string }) => Promise<{ ok: boolean; output?: string; error?: string }>
     }
   }
 }

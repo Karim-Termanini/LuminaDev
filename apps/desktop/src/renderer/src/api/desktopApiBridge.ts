@@ -157,6 +157,8 @@ function createTauriDhApi(): DhApi {
     gitVcsStashPop: (payload) => tauriInvoke(IPC.gitVcsStashPop, payload),
     gitVcsMergeAbort: (payload) => tauriInvoke(IPC.gitVcsMergeAbort, payload),
     gitVcsRebaseAbort: (payload) => tauriInvoke(IPC.gitVcsRebaseAbort, payload),
+    gitVcsMergeContinue: (payload) => tauriInvoke(IPC.gitVcsMergeContinue, payload),
+    gitVcsRebaseContinue: (payload) => tauriInvoke(IPC.gitVcsRebaseContinue, payload),
   } satisfies DhApi
 }
 

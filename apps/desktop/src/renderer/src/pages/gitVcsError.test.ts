@@ -73,6 +73,14 @@ describe('humanizeGitVcsError', () => {
     expect(humanizeGitVcsError(new Error('[GIT_VCS_STASH_POP_EMPTY] No stash'))).toMatch(/stash entry/i)
   })
 
+  it('humanizes GIT_VCS_MERGE_CONTINUE', () => {
+    expect(humanizeGitVcsError(new Error('[GIT_VCS_MERGE_CONTINUE] no merge'))).toContain('Merge could not continue')
+  })
+
+  it('humanizes GIT_VCS_REBASE_CONTINUE', () => {
+    expect(humanizeGitVcsError(new Error('[GIT_VCS_REBASE_CONTINUE] noop'))).toContain('Rebase could not continue')
+  })
+
   it('returns raw detail for unknown codes', () => {
     expect(humanizeGitVcsError(new Error('Something weird'))).toBe('Something weird')
   })
