@@ -9,6 +9,7 @@ import type { ReactElement } from 'react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { humanizeCloudAuthError } from './cloudAuthError'
+import { cloudGitMergeViewUrl } from './cloudGitMergeViewUrl'
 import { assertGitRecentList } from './registryContract'
 
 type Provider = 'github' | 'gitlab'
@@ -296,39 +297,62 @@ export function CloudGitActivityPanel({ provider, label }: { provider: Provider;
           ) : null}
           {!prLoading && !error && prs.length > 0 ? (
             <ul style={{ margin: '0 0 12px', paddingLeft: 18, fontSize: 12, lineHeight: 1.5 }}>
-              {prs.map((pr) => (
-                <li key={pr.id} style={{ marginBottom: 4 }}>
-                  <a
-                    href={pr.url}
-                    onClick={(e) => {
-                      e.preventDefault()
-                      void window.dh.openExternal(pr.url)
-                    }}
-                    style={{ color: 'var(--text)', textDecoration: 'none' }}
-                    title={pr.title}
-                  >
-                    {pr.title}
-                  </a>
-                  <span className="mono" style={{ color: 'var(--text-muted)', marginLeft: 6 }}>
-                    {pr.repo}
-                  </span>
-                  {localRepoPathFor(pr.repo) ? (
-                    <Link
-                      to={`/git-vcs?repoPath=${encodeURIComponent(localRepoPathFor(pr.repo) ?? '')}`}
-                      className="mono"
-                      style={{
-                        marginLeft: 8,
-                        color: 'var(--cg-accent, var(--accent))',
-                        textDecoration: 'none',
-                        fontSize: 11,
-                        fontWeight: 600,
+              {prs.map((pr) => {
+                const mergeHref = cloudGitMergeViewUrl(provider, pr.url)
+                return (
+                  <li key={pr.id} style={{ marginBottom: 4 }}>
+                    <a
+                      href={pr.url}
+                      onClick={(e) => {
+                        e.preventDefault()
+                        void window.dh.openExternal(pr.url)
                       }}
+                      style={{ color: 'var(--text)', textDecoration: 'none' }}
+                      title={pr.title}
                     >
-                      Open in Lumina VCS
-                    </Link>
-                  ) : null}
-                </li>
-              ))}
+                      {pr.title}
+                    </a>
+                    <span className="mono" style={{ color: 'var(--text-muted)', marginLeft: 6 }}>
+                      {pr.repo}
+                    </span>
+                    {localRepoPathFor(pr.repo) ? (
+                      <Link
+                        to={`/git-vcs?repoPath=${encodeURIComponent(localRepoPathFor(pr.repo) ?? '')}`}
+                        className="mono"
+                        style={{
+                          marginLeft: 8,
+                          color: 'var(--cg-accent, var(--accent))',
+                          textDecoration: 'none',
+                          fontSize: 11,
+                          fontWeight: 600,
+                        }}
+                      >
+                        Open in Lumina VCS
+                      </Link>
+                    ) : null}
+                    {mergeHref ? (
+                      <button
+                        type="button"
+                        className="mono"
+                        style={{
+                          marginLeft: 8,
+                          color: 'var(--text-muted)',
+                          textDecoration: 'underline',
+                          fontSize: 11,
+                          fontWeight: 500,
+                          background: 'none',
+                          border: 'none',
+                          cursor: 'pointer',
+                          padding: 0,
+                        }}
+                        onClick={() => void window.dh.openExternal(mergeHref)}
+                      >
+                        Merge on {label}
+                      </button>
+                    ) : null}
+                  </li>
+                )
+              })}
             </ul>
           ) : null}
           {!prLoading &&
@@ -393,39 +417,62 @@ export function CloudGitActivityPanel({ provider, label }: { provider: Provider;
           ) : null}
           {!reviewLoading && !reviewError && reviewRequests.length > 0 ? (
             <ul style={{ margin: '0 0 12px', paddingLeft: 18, fontSize: 12, lineHeight: 1.5 }}>
-              {reviewRequests.map((pr) => (
-                <li key={pr.id} style={{ marginBottom: 4 }}>
-                  <a
-                    href={pr.url}
-                    onClick={(e) => {
-                      e.preventDefault()
-                      void window.dh.openExternal(pr.url)
-                    }}
-                    style={{ color: 'var(--text)', textDecoration: 'none' }}
-                    title={pr.title}
-                  >
-                    {pr.title}
-                  </a>
-                  <span className="mono" style={{ color: 'var(--text-muted)', marginLeft: 6 }}>
-                    {pr.repo}
-                  </span>
-                  {localRepoPathFor(pr.repo) ? (
-                    <Link
-                      to={`/git-vcs?repoPath=${encodeURIComponent(localRepoPathFor(pr.repo) ?? '')}`}
-                      className="mono"
-                      style={{
-                        marginLeft: 8,
-                        color: 'var(--cg-accent, var(--accent))',
-                        textDecoration: 'none',
-                        fontSize: 11,
-                        fontWeight: 600,
+              {reviewRequests.map((pr) => {
+                const mergeHref = cloudGitMergeViewUrl(provider, pr.url)
+                return (
+                  <li key={pr.id} style={{ marginBottom: 4 }}>
+                    <a
+                      href={pr.url}
+                      onClick={(e) => {
+                        e.preventDefault()
+                        void window.dh.openExternal(pr.url)
                       }}
+                      style={{ color: 'var(--text)', textDecoration: 'none' }}
+                      title={pr.title}
                     >
-                      Open in Lumina VCS
-                    </Link>
-                  ) : null}
-                </li>
-              ))}
+                      {pr.title}
+                    </a>
+                    <span className="mono" style={{ color: 'var(--text-muted)', marginLeft: 6 }}>
+                      {pr.repo}
+                    </span>
+                    {localRepoPathFor(pr.repo) ? (
+                      <Link
+                        to={`/git-vcs?repoPath=${encodeURIComponent(localRepoPathFor(pr.repo) ?? '')}`}
+                        className="mono"
+                        style={{
+                          marginLeft: 8,
+                          color: 'var(--cg-accent, var(--accent))',
+                          textDecoration: 'none',
+                          fontSize: 11,
+                          fontWeight: 600,
+                        }}
+                      >
+                        Open in Lumina VCS
+                      </Link>
+                    ) : null}
+                    {mergeHref ? (
+                      <button
+                        type="button"
+                        className="mono"
+                        style={{
+                          marginLeft: 8,
+                          color: 'var(--text-muted)',
+                          textDecoration: 'underline',
+                          fontSize: 11,
+                          fontWeight: 500,
+                          background: 'none',
+                          border: 'none',
+                          cursor: 'pointer',
+                          padding: 0,
+                        }}
+                        onClick={() => void window.dh.openExternal(mergeHref)}
+                      >
+                        Merge on {label}
+                      </button>
+                    ) : null}
+                  </li>
+                )
+              })}
             </ul>
           ) : null}
           {!reviewLoading &&

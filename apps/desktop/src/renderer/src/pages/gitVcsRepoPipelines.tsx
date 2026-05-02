@@ -21,10 +21,15 @@ export function GitVcsRepoPipelines({
   repoPath,
   remoteName,
   provider,
+  ambiguousHost = false,
+  onAmbiguousTokenChange,
 }: {
   repoPath: string
   remoteName: string
   provider: GitProviderFamily
+  /** Both Cloud accounts linked and remote host did not identify GitHub vs GitLab; user picks API token. */
+  ambiguousHost?: boolean
+  onAmbiguousTokenChange?: (next: 'github' | 'gitlab') => void
 }): ReactElement | null {
   const [pipelines, setPipelines] = useState<CloudPipelineEntry[]>([])
   const [loading, setLoading] = useState(false)
@@ -96,6 +101,31 @@ export function GitVcsRepoPipelines({
         </Link>{' '}
         account.
       </div>
+      {ambiguousHost && onAmbiguousTokenChange ? (
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
+          <span className="hp-muted" style={{ fontSize: 11 }}>
+            Token for CI API
+          </span>
+          <div style={{ display: 'inline-flex', gap: 6 }}>
+            <button
+              type="button"
+              className={provider === 'github' ? 'hp-btn hp-btn-primary' : 'hp-btn'}
+              style={{ fontSize: 11, padding: '4px 10px' }}
+              onClick={() => onAmbiguousTokenChange('github')}
+            >
+              GitHub
+            </button>
+            <button
+              type="button"
+              className={provider === 'gitlab' ? 'hp-btn hp-btn-primary' : 'hp-btn'}
+              style={{ fontSize: 11, padding: '4px 10px' }}
+              onClick={() => onAmbiguousTokenChange('gitlab')}
+            >
+              GitLab
+            </button>
+          </div>
+        </div>
+      ) : null}
       {loading ? (
         <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Loading pipelines…</div>
       ) : errDisplay ? (

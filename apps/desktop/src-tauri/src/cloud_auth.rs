@@ -181,11 +181,19 @@ pub struct CloudPipelineEntry {
     pub updated_at: String,
 }
 
-/// Result of parsing a `git remote` URL for github.com / gitlab.com hosting only.
+/// Result of parsing a `git remote get-url` for repo-scoped CI (SaaS or self-hosted).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParsedRemoteRepo {
-    Github { full_name: String },
-    Gitlab { path_with_namespace: String },
+    Github {
+        /// `github.com` or GitHub Enterprise hostname (may include `:port`).
+        hostname: String,
+        full_name: String,
+    },
+    Gitlab {
+        /// Web origin without trailing slash, e.g. `https://gitlab.com` or `https://code.intra`.
+        web_origin: String,
+        path_with_namespace: String,
+    },
 }
 
 /// Best-effort: `github.com` / `gitlab.com` clone URLs (https, ssh, git@).
@@ -197,38 +205,192 @@ pub fn parse_github_gitlab_remote(url: &str) -> Option<ParsedRemoteRepo> {
     if let Some(rest) = t.strip_prefix("git@github.com:") {
         let seg = strip_git_remote_path(rest)?;
         return Some(ParsedRemoteRepo::Github {
+            hostname: "github.com".to_string(),
             full_name: seg.to_string(),
         });
     }
     if let Some(rest) = t.strip_prefix("git@gitlab.com:") {
         let seg = strip_git_remote_path(rest)?;
         return Some(ParsedRemoteRepo::Gitlab {
+            web_origin: "https://gitlab.com".to_string(),
             path_with_namespace: seg.to_string(),
         });
     }
     if let Some(rest) = t.strip_prefix("ssh://git@github.com/") {
         let seg = strip_git_remote_path(rest)?;
         return Some(ParsedRemoteRepo::Github {
+            hostname: "github.com".to_string(),
             full_name: seg.to_string(),
         });
     }
     if let Some(rest) = t.strip_prefix("ssh://git@gitlab.com/") {
         let seg = strip_git_remote_path(rest)?;
         return Some(ParsedRemoteRepo::Gitlab {
+            web_origin: "https://gitlab.com".to_string(),
             path_with_namespace: seg.to_string(),
         });
     }
     if let Some(seg) = path_after_host_marker(t, "github.com/") {
         return Some(ParsedRemoteRepo::Github {
+            hostname: "github.com".to_string(),
             full_name: seg.to_string(),
         });
     }
     if let Some(seg) = path_after_host_marker(t, "gitlab.com/") {
         return Some(ParsedRemoteRepo::Gitlab {
+            web_origin: "https://gitlab.com".to_string(),
             path_with_namespace: seg.to_string(),
         });
     }
     None
+}
+
+fn parse_git_at_generic(url: &str) -> Option<(String, String)> {
+    let rest = url.strip_prefix("git@")?;
+    let (host, pathrest) = rest.split_once(':')?;
+    let host = host.trim().to_lowercase();
+    if host.is_empty() {
+        return None;
+    }
+    let path = strip_git_remote_path(pathrest)?.to_string();
+    if !path.contains('/') {
+        return None;
+    }
+    Some((host, path))
+}
+
+fn parse_ssh_git_generic(url: &str) -> Option<(String, String)> {
+    let rest = url.strip_prefix("ssh://")?.strip_prefix("git@")?;
+    let slash = rest.find('/')?;
+    if slash == 0 {
+        return None;
+    }
+    let host_part = rest[..slash].trim().to_lowercase();
+    if host_part.is_empty() {
+        return None;
+    }
+    let path = strip_git_remote_path(&rest[slash + 1..])?.to_string();
+    if !path.contains('/') {
+        return None;
+    }
+    Some((host_part, path))
+}
+
+fn parse_http_https_git_generic(url: &str) -> Option<(String, String, String)> {
+    let (scheme, tail) = if let Some(t) = url.strip_prefix("https://") {
+        ("https", t)
+    } else if let Some(t) = url.strip_prefix("http://") {
+        ("http", t)
+    } else {
+        return None;
+    };
+    let slash = tail.find('/')?;
+    if slash == 0 {
+        return None;
+    }
+    let authority = tail[..slash].trim().to_lowercase();
+    if authority.is_empty() {
+        return None;
+    }
+    let path = strip_git_remote_path(&tail[slash + 1..])?.to_string();
+    if !path.contains('/') {
+        return None;
+    }
+    Some((scheme.to_string(), authority, path))
+}
+
+fn parse_self_hosted_github_remote(url: &str) -> Result<ParsedRemoteRepo, String> {
+    let (hostname, full_name) = parse_git_at_generic(url)
+        .or_else(|| parse_ssh_git_generic(url))
+        .or_else(|| {
+            parse_http_https_git_generic(url).map(|(_s, auth, path)| (auth, path))
+        })
+        .ok_or_else(|| {
+            "[CLOUD_GIT_SCOPE] Remote is not a parseable Git URL (https, ssh://git@, or git@).".to_string()
+        })?;
+    if hostname == "gitlab.com" {
+        return Err(
+            "[CLOUD_GIT_SCOPE] This remote points to GitLab.com; switch the Cloud account tab to GitLab."
+                .to_string(),
+        );
+    }
+    Ok(ParsedRemoteRepo::Github {
+        hostname,
+        full_name,
+    })
+}
+
+fn parse_self_hosted_gitlab_remote(url: &str) -> Result<ParsedRemoteRepo, String> {
+    if let Some((scheme, authority, path)) = parse_http_https_git_generic(url) {
+        if authority == "github.com" {
+            return Err(
+                "[CLOUD_GIT_SCOPE] This remote points to GitHub; switch the Cloud account tab to GitHub."
+                    .to_string(),
+            );
+        }
+        let web_origin = format!("{}://{}", scheme, authority);
+        return Ok(ParsedRemoteRepo::Gitlab {
+            web_origin,
+            path_with_namespace: path,
+        });
+    }
+    let (authority, path) = parse_git_at_generic(url)
+        .or_else(|| parse_ssh_git_generic(url))
+        .ok_or_else(|| {
+            "[CLOUD_GIT_SCOPE] Remote is not a parseable Git URL (https, ssh://git@, or git@).".to_string()
+        })?;
+    if authority == "github.com" {
+        return Err(
+            "[CLOUD_GIT_SCOPE] This remote points to GitHub; switch the Cloud account tab to GitHub.".to_string(),
+        );
+    }
+    let web_origin = format!("https://{}", authority);
+    Ok(ParsedRemoteRepo::Gitlab {
+        web_origin,
+        path_with_namespace: path,
+    })
+}
+
+/// Parses `git remote get-url` for `dh:cloud:git:pipelines` when `repoPath` is set (repo-scoped CI).
+pub fn parse_remote_for_repo_scoped_pipelines(remote_url: &str, provider: &str) -> Result<ParsedRemoteRepo, String> {
+    if let Some(pr) = parse_github_gitlab_remote(remote_url) {
+        return match (provider, pr) {
+            ("github", ParsedRemoteRepo::Github { hostname, full_name }) => {
+                Ok(ParsedRemoteRepo::Github { hostname, full_name })
+            }
+            ("gitlab", ParsedRemoteRepo::Gitlab {
+                web_origin,
+                path_with_namespace,
+            }) => Ok(ParsedRemoteRepo::Gitlab {
+                web_origin,
+                path_with_namespace,
+            }),
+            ("github", ParsedRemoteRepo::Gitlab { .. }) => Err(
+                "[CLOUD_GIT_SCOPE] This remote points to GitLab; open Git VCS with a GitHub remote or switch the Cloud account tab to GitLab."
+                    .to_string(),
+            ),
+            ("gitlab", ParsedRemoteRepo::Github { .. }) => Err(
+                "[CLOUD_GIT_SCOPE] This remote points to GitHub; open Git VCS with a GitLab remote or switch the Cloud account tab to GitHub."
+                    .to_string(),
+            ),
+            _ => Err("[CLOUD_GIT_NETWORK] Unknown provider".to_string()),
+        };
+    }
+
+    match provider {
+        "github" => parse_self_hosted_github_remote(remote_url),
+        "gitlab" => parse_self_hosted_gitlab_remote(remote_url),
+        _ => Err("[CLOUD_GIT_NETWORK] Unknown provider".to_string()),
+    }
+}
+
+fn github_actions_runs_list_url(hostname: &str, full_name: &str) -> String {
+    let h = hostname.trim();
+    if h.eq_ignore_ascii_case("github.com") {
+        format!("https://api.github.com/repos/{}/actions/runs", full_name)
+    } else {
+        format!("https://{}/api/v3/repos/{}/actions/runs", h, full_name)
+    }
 }
 
 fn strip_git_remote_path(s: &str) -> Option<&str> {
@@ -241,7 +403,7 @@ fn strip_git_remote_path(s: &str) -> Option<&str> {
     }
 }
 
-fn path_after_host_marker(url: &str, host_marker: &str) -> Option<&str> {
+fn path_after_host_marker<'a>(url: &'a str, host_marker: &str) -> Option<&'a str> {
     let idx = url.find(host_marker)?;
     let rest = &url[idx + host_marker.len()..];
     let seg = rest.split(['?', '#']).next()?.trim();
@@ -592,6 +754,68 @@ impl GitHubProvider {
         Ok(items)
     }
 
+    pub async fn list_review_requested_pull_requests(
+        token: &str,
+        login: &str,
+        limit: usize,
+    ) -> Result<Vec<CloudPullRequestEntry>, String> {
+        let login = login.trim();
+        if login.is_empty() {
+            return Ok(vec![]);
+        }
+        let q = format!("is:pr is:open review-requested:{}", login);
+        let client = reqwest::Client::new();
+        let resp = client
+            .get("https://api.github.com/search/issues")
+            .header("Authorization", format!("Bearer {}", token))
+            .header("User-Agent", "LuminaDev/0.2.0")
+            .header("Accept", "application/vnd.github+json")
+            .query(&[
+                ("q", q.as_str()),
+                ("sort", "updated"),
+                ("order", "desc"),
+                ("per_page", &limit.to_string()),
+            ])
+            .send()
+            .await
+            .map_err(|e| format!("[CLOUD_GIT_NETWORK] GitHub review requests: {}", e))?;
+        if resp.status() == 401 {
+            return Err("[CLOUD_AUTH_INVALID_TOKEN] GitHub token is invalid or expired.".to_string());
+        }
+        if !resp.status().is_success() {
+            return Err(format!(
+                "[CLOUD_GIT_NETWORK] GitHub review requests returned {}",
+                resp.status()
+            ));
+        }
+        let body: serde_json::Value = resp
+            .json()
+            .await
+            .map_err(|e| format!("[CLOUD_GIT_NETWORK] GitHub review requests parse: {}", e))?;
+        let items = body["items"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default()
+            .into_iter()
+            .map(|it| {
+                let repo_url = it["repository_url"].as_str().unwrap_or("");
+                let repo = repo_url
+                    .trim_start_matches("https://api.github.com/repos/")
+                    .to_string();
+                CloudPullRequestEntry {
+                    id: it["id"].as_i64().unwrap_or_default().to_string(),
+                    title: it["title"].as_str().unwrap_or("").to_string(),
+                    url: it["html_url"].as_str().unwrap_or("").to_string(),
+                    repo,
+                    author: it["user"]["login"].as_str().unwrap_or("").to_string(),
+                    updated_at: it["updated_at"].as_str().unwrap_or("").to_string(),
+                }
+            })
+            .filter(|x| !x.id.is_empty() && !x.url.is_empty())
+            .collect();
+        Ok(items)
+    }
+
     pub async fn list_recent_pipelines(
         token: &str,
         limit: usize,
@@ -624,6 +848,8 @@ impl GitHubProvider {
             .await
             .map_err(|e| format!("[CLOUD_GIT_NETWORK] GitHub repos parse: {}", e))?;
 
+        // Fetch several runs per repo so accounts with few repos still fill the UI cap.
+        let per_repo = std::cmp::min(15, std::cmp::max(3, limit));
         let mut out: Vec<CloudPipelineEntry> = Vec::new();
         for repo in repos.into_iter().take(20) {
             let full_name = repo["full_name"].as_str().unwrap_or("").to_string();
@@ -638,7 +864,7 @@ impl GitHubProvider {
                 .header("Authorization", format!("Bearer {}", token))
                 .header("User-Agent", "LuminaDev/0.2.0")
                 .header("Accept", "application/vnd.github+json")
-                .query(&[("per_page", "1")])
+                .query(&[("per_page", &per_repo.to_string())])
                 .send()
                 .await;
             let Ok(runs_resp) = runs_resp else {
@@ -651,29 +877,32 @@ impl GitHubProvider {
                 Ok(v) => v,
                 Err(_) => continue,
             };
-            let run = body["workflow_runs"]
+            let runs = body["workflow_runs"]
                 .as_array()
-                .and_then(|arr| arr.first())
-                .cloned();
-            let Some(run) = run else {
-                continue;
-            };
-            out.push(CloudPipelineEntry {
-                id: run["id"].as_i64().unwrap_or_default().to_string(),
-                name: run["name"]
-                    .as_str()
-                    .or_else(|| run["display_title"].as_str())
-                    .unwrap_or("Workflow run")
-                    .to_string(),
-                url: run["html_url"].as_str().unwrap_or("").to_string(),
-                repo: full_name,
-                status: run["conclusion"]
-                    .as_str()
-                    .or_else(|| run["status"].as_str())
-                    .unwrap_or("unknown")
-                    .to_string(),
-                updated_at: run["updated_at"].as_str().unwrap_or("").to_string(),
-            });
+                .cloned()
+                .unwrap_or_default();
+            for run in runs.into_iter().take(per_repo) {
+                let id = run["id"].as_i64().unwrap_or_default();
+                if id <= 0 {
+                    continue;
+                }
+                out.push(CloudPipelineEntry {
+                    id: id.to_string(),
+                    name: run["name"]
+                        .as_str()
+                        .or_else(|| run["display_title"].as_str())
+                        .unwrap_or("Workflow run")
+                        .to_string(),
+                    url: run["html_url"].as_str().unwrap_or("").to_string(),
+                    repo: full_name.clone(),
+                    status: run["conclusion"]
+                        .as_str()
+                        .or_else(|| run["status"].as_str())
+                        .unwrap_or("unknown")
+                        .to_string(),
+                    updated_at: run["updated_at"].as_str().unwrap_or("").to_string(),
+                });
+            }
         }
         out.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
         out.retain(|x| !x.id.is_empty() && !x.url.is_empty());
@@ -681,18 +910,17 @@ impl GitHubProvider {
         Ok(out)
     }
 
-    /// Recent Actions workflow runs for a single `owner/repo` repository.
+    /// Recent Actions workflow runs for a single `owner/repo` repository (github.com or GitHub Enterprise).
     pub async fn list_repo_pipelines(
         token: &str,
+        hostname: &str,
         full_name: &str,
         limit: usize,
     ) -> Result<Vec<CloudPipelineEntry>, String> {
         let client = reqwest::Client::new();
+        let runs_url = github_actions_runs_list_url(hostname, full_name);
         let runs_resp = client
-            .get(format!(
-                "https://api.github.com/repos/{}/actions/runs",
-                full_name
-            ))
+            .get(runs_url)
             .header("Authorization", format!("Bearer {}", token))
             .header("User-Agent", "LuminaDev/0.2.0")
             .header("Accept", "application/vnd.github+json")
@@ -1043,6 +1271,65 @@ impl GitLabProvider {
         Ok(items)
     }
 
+    pub async fn list_review_requested_merge_requests(
+        token: &str,
+        username: &str,
+        limit: usize,
+    ) -> Result<Vec<CloudPullRequestEntry>, String> {
+        let username = username.trim();
+        if username.is_empty() {
+            return Ok(vec![]);
+        }
+        let client = reqwest::Client::new();
+        let resp = client
+            .get("https://gitlab.com/api/v4/merge_requests")
+            .header("Authorization", format!("Bearer {}", token))
+            .header("User-Agent", "LuminaDev/0.2.0")
+            .query(&[
+                ("reviewer_username", username),
+                ("state", "opened"),
+                ("scope", "all"),
+                ("order_by", "updated_at"),
+                ("sort", "desc"),
+                ("per_page", &limit.to_string()),
+            ])
+            .send()
+            .await
+            .map_err(|e| format!("[CLOUD_GIT_NETWORK] GitLab review MRs: {}", e))?;
+        if resp.status() == 401 {
+            return Err("[CLOUD_AUTH_INVALID_TOKEN] GitLab token is invalid or expired.".to_string());
+        }
+        if !resp.status().is_success() {
+            return Err(format!(
+                "[CLOUD_GIT_NETWORK] GitLab review MR list returned {}",
+                resp.status()
+            ));
+        }
+        let rows: Vec<serde_json::Value> = resp
+            .json()
+            .await
+            .map_err(|e| format!("[CLOUD_GIT_NETWORK] GitLab review MR parse: {}", e))?;
+        let items = rows
+            .into_iter()
+            .map(|it| {
+                let repo = it["references"]["full"]
+                    .as_str()
+                    .map(|s| s.split('!').next().unwrap_or(s).to_string())
+                    .unwrap_or_default();
+                CloudPullRequestEntry {
+                    id: it["id"].as_i64().unwrap_or_default().to_string(),
+                    title: it["title"].as_str().unwrap_or("").to_string(),
+                    url: it["web_url"].as_str().unwrap_or("").to_string(),
+                    repo,
+                    author: it["author"]["username"].as_str().unwrap_or("").to_string(),
+                    updated_at: it["updated_at"].as_str().unwrap_or("").to_string(),
+                }
+            })
+            .filter(|x| !x.id.is_empty() && !x.url.is_empty())
+            .collect();
+        Ok(items)
+    }
+
     pub async fn list_recent_pipelines(
         token: &str,
         limit: usize,
@@ -1076,6 +1363,8 @@ impl GitLabProvider {
             .await
             .map_err(|e| format!("[CLOUD_GIT_NETWORK] GitLab projects parse: {}", e))?;
 
+        // Several pipelines per project so a single active repo can fill the UI cap.
+        let per_repo = std::cmp::min(15, std::cmp::max(3, limit));
         let mut out: Vec<CloudPipelineEntry> = Vec::new();
         for project in projects.into_iter().take(20) {
             let id = project["id"].as_i64().unwrap_or_default();
@@ -1092,7 +1381,7 @@ impl GitLabProvider {
                 .query(&[
                     ("order_by", "updated_at"),
                     ("sort", "desc"),
-                    ("per_page", "1"),
+                    ("per_page", &per_repo.to_string()),
                 ])
                 .send()
                 .await;
@@ -1106,25 +1395,24 @@ impl GitLabProvider {
                 Ok(v) => v,
                 Err(_) => continue,
             };
-            let Some(p) = rows.first() else {
-                continue;
-            };
-            let pid = p["id"].as_i64().unwrap_or_default();
-            if pid <= 0 {
-                continue;
+            for p in rows.into_iter().take(per_repo) {
+                let pid = p["id"].as_i64().unwrap_or_default();
+                if pid <= 0 {
+                    continue;
+                }
+                let web_url = p["web_url"]
+                    .as_str()
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| format!("https://gitlab.com/{}/-/pipelines/{}", repo, pid));
+                out.push(CloudPipelineEntry {
+                    id: pid.to_string(),
+                    name: p["ref"].as_str().unwrap_or("pipeline").to_string(),
+                    url: web_url,
+                    repo: repo.clone(),
+                    status: p["status"].as_str().unwrap_or("unknown").to_string(),
+                    updated_at: p["updated_at"].as_str().unwrap_or("").to_string(),
+                });
             }
-            let web_url = p["web_url"]
-                .as_str()
-                .map(|s| s.to_string())
-                .unwrap_or_else(|| format!("https://gitlab.com/{}/-/pipelines/{}", repo, pid));
-            out.push(CloudPipelineEntry {
-                id: pid.to_string(),
-                name: p["ref"].as_str().unwrap_or("pipeline").to_string(),
-                url: web_url,
-                repo: repo.clone(),
-                status: p["status"].as_str().unwrap_or("unknown").to_string(),
-                updated_at: p["updated_at"].as_str().unwrap_or("").to_string(),
-            });
         }
         out.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
         out.retain(|x| !x.id.is_empty() && !x.url.is_empty());
@@ -1132,18 +1420,20 @@ impl GitLabProvider {
         Ok(out)
     }
 
-    /// Recent CI pipelines for a single `path_with_namespace` project on gitlab.com.
+    /// Recent CI pipelines for a single `path_with_namespace` project (GitLab.com or self-managed).
     pub async fn list_repo_pipelines(
         token: &str,
+        web_origin: &str,
         path_with_namespace: &str,
         limit: usize,
     ) -> Result<Vec<CloudPipelineEntry>, String> {
         let client = reqwest::Client::new();
         let enc = path_with_namespace.replace('/', "%2F");
+        let base = web_origin.trim_end_matches('/');
         let list_resp = client
             .get(format!(
-                "https://gitlab.com/api/v4/projects/{}/pipelines",
-                enc
+                "{}/api/v4/projects/{}/pipelines",
+                base, enc
             ))
             .header("Authorization", format!("Bearer {}", token))
             .header("User-Agent", "LuminaDev/0.2.0")
@@ -1180,7 +1470,8 @@ impl GitLabProvider {
                 .map(|s| s.to_string())
                 .unwrap_or_else(|| {
                     format!(
-                        "https://gitlab.com/{}/-/pipelines/{}",
+                        "{}/{}/-/pipelines/{}",
+                        base,
                         path_with_namespace, pid
                     )
                 });
@@ -1453,6 +1744,88 @@ mod tests {
         assert!(oauth_client_id_unconfigured("REPLACE_WITH_GITLAB_CLIENT_ID"));
         assert!(oauth_client_id_unconfigured("YOUR_CLIENT_ID_HERE"));
         assert!(!oauth_client_id_unconfigured("Iv1.8a61f9b3a7aba766"));
+    }
+
+    #[test]
+    fn parse_github_https_remote() {
+        assert_eq!(
+            parse_github_gitlab_remote("https://github.com/acme/widget.git"),
+            Some(ParsedRemoteRepo::Github {
+                hostname: "github.com".to_string(),
+                full_name: "acme/widget".to_string()
+            })
+        );
+    }
+
+    #[test]
+    fn parse_github_git_ssh_remote() {
+        assert_eq!(
+            parse_github_gitlab_remote("git@github.com:Acme/Widget.git"),
+            Some(ParsedRemoteRepo::Github {
+                hostname: "github.com".to_string(),
+                full_name: "Acme/Widget".to_string()
+            })
+        );
+    }
+
+    #[test]
+    fn parse_gitlab_https_nested() {
+        assert_eq!(
+            parse_github_gitlab_remote("https://gitlab.com/group/sub/repo"),
+            Some(ParsedRemoteRepo::Gitlab {
+                web_origin: "https://gitlab.com".to_string(),
+                path_with_namespace: "group/sub/repo".to_string()
+            })
+        );
+    }
+
+    #[test]
+    fn parse_unknown_host_returns_none() {
+        assert!(parse_github_gitlab_remote("https://codeberg.org/foo/bar").is_none());
+    }
+
+    #[test]
+    fn parse_ghe_https_for_github_provider() {
+        let r = parse_remote_for_repo_scoped_pipelines(
+            "https://git.corp.example/acme/widget.git",
+            "github",
+        )
+        .unwrap();
+        assert_eq!(
+            r,
+            ParsedRemoteRepo::Github {
+                hostname: "git.corp.example".to_string(),
+                full_name: "acme/widget".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn parse_self_hosted_gitlab_https() {
+        let r = parse_remote_for_repo_scoped_pipelines(
+            "https://gitlab.internal/monorepo/backend",
+            "gitlab",
+        )
+        .unwrap();
+        assert_eq!(
+            r,
+            ParsedRemoteRepo::Gitlab {
+                web_origin: "https://gitlab.internal".to_string(),
+                path_with_namespace: "monorepo/backend".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn github_actions_runs_url_ghe() {
+        assert_eq!(
+            super::github_actions_runs_list_url("git.example.com:8443", "o/r"),
+            "https://git.example.com:8443/api/v3/repos/o/r/actions/runs"
+        );
+        assert_eq!(
+            super::github_actions_runs_list_url("github.com", "o/r"),
+            "https://api.github.com/repos/o/r/actions/runs"
+        );
     }
 
 }

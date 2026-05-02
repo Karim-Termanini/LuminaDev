@@ -49,6 +49,8 @@ export function GitVcsPage(): ReactElement {
   const [fetchRemote, setFetchRemote] = useState('origin')
   const [gitRemotes, setGitRemotes] = useState<GitRemoteEntry[]>([])
   const [cloudAccounts, setCloudAccounts] = useState<ConnectedAccount[]>([])
+  /** When fetch remote host is unknown and both Cloud accounts exist, user picks which token scopes repo CI. */
+  const [ambiguousCiToken, setAmbiguousCiToken] = useState<'github' | 'gitlab'>('github')
 
   const fetchRemoteNames = useMemo(() => fetchRemoteOptions(branches), [branches])
   const activeFetchRemoteName = fetchRemoteNames.includes(fetchRemote)
@@ -589,13 +591,20 @@ export function GitVcsPage(): ReactElement {
   const opErrorDisplay = opErrorRaw ? humanizeGitVcsError(new Error(opErrorRaw)) : null
   const activeFetchRemoteUrl = gitRemotes.find((r) => r.name === activeFetchRemoteName)?.fetchUrl
   const activeFetchProvider = activeFetchRemoteUrl ? classifyGitRemoteUrl(activeFetchRemoteUrl) : 'other'
-  const activeFetchPipelineProvider = useMemo(
-    () =>
-      activeFetchRemoteUrl
-        ? resolvePipelineProvider(activeFetchRemoteUrl, cloudAccounts)
-        : ('other' as const),
-    [activeFetchRemoteUrl, cloudAccounts],
-  )
+  const ghLinked = useMemo(() => cloudAccounts.some((a) => a.provider === 'github'), [cloudAccounts])
+  const glLinked = useMemo(() => cloudAccounts.some((a) => a.provider === 'gitlab'), [cloudAccounts])
+  const ambiguousPipelineHost =
+    !!activeFetchRemoteUrl && activeFetchProvider === 'other' && ghLinked && glLinked
+
+  useEffect(() => {
+    setAmbiguousCiToken('github')
+  }, [activeFetchRemoteName, activeFetchRemoteUrl, repoPath])
+
+  const activeFetchPipelineProvider = useMemo(() => {
+    if (!activeFetchRemoteUrl) return 'other' as const
+    if (ambiguousPipelineHost) return ambiguousCiToken
+    return resolvePipelineProvider(activeFetchRemoteUrl, cloudAccounts)
+  }, [activeFetchRemoteUrl, cloudAccounts, ambiguousPipelineHost, ambiguousCiToken])
   const vcsTheme = activeFetchProvider === 'other' ? null : CLOUD_GIT_PROVIDER_THEME[activeFetchProvider]
   const vcsScopedStyle = vcsTheme
     ? ({
@@ -814,6 +823,8 @@ export function GitVcsPage(): ReactElement {
             repoPath={repoPath.trim()}
             remoteName={activeFetchRemoteName}
             provider={activeFetchPipelineProvider}
+            ambiguousHost={ambiguousPipelineHost}
+            onAmbiguousTokenChange={setAmbiguousCiToken}
           />
 
           <div style={{ display: 'grid', gridTemplateColumns: 'minmax(260px, 34%) 1fr', gap: 16, minHeight: 360 }}>
