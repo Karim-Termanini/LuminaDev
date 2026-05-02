@@ -9,6 +9,7 @@ import { DashboardLogsPage } from './pages/DashboardLogsPage'
 import { DashboardMainPage } from './pages/DashboardMainPage'
 import { DashboardWidgetsPage } from './pages/DashboardWidgetsPage'
 import { DockerPage } from './pages/DockerPage'
+import { CloudGitPage } from './pages/CloudGitPage'
 import { GitConfigPage } from './pages/GitConfigPage'
 import { ProfilesPage } from './pages/ProfilesPage'
 import { RegistryPage } from './pages/RegistryPage'
@@ -68,6 +69,7 @@ export default function App(): ReactElement | null {
         <Route path="/docker" element={<DockerPage />} />
         <Route path="/ssh" element={<SshPage />} />
         <Route path="/git-config" element={<GitConfigPage />} />
+        <Route path="/cloud-git" element={<CloudGitPage />} />
         <Route path="/registry" element={<RegistryPage />} />
         <Route path="/profiles" element={<ProfilesPage />} />
         <Route path="/terminal" element={<TerminalPage />} />

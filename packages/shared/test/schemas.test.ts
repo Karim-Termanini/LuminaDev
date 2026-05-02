@@ -136,6 +136,7 @@ describe('schemas', () => {
     })
     expect(v.placements).toHaveLength(1)
     expect(isRegisteredWidgetType('static.docker-permission-hint')).toBe(true)
+    expect(isRegisteredWidgetType('link.cloud-git')).toBe(true)
     expect(isRegisteredWidgetType('unknown.widget')).toBe(false)
   })
 
@@ -275,5 +276,15 @@ describe('schemas', () => {
         data: { accent: 'red' },
       } as never)
     ).toThrow()
+  })
+
+  it('accepts cloud_oauth_clients store set', () => {
+    const v = StoreSetRequestSchema.parse({
+      key: 'cloud_oauth_clients',
+      data: { github_client_id: 'Iv1.test', gitlab_client_id: 'glid' },
+    })
+    if (v.key !== 'cloud_oauth_clients') throw new Error('expected cloud_oauth_clients')
+    expect(v.data.github_client_id).toBe('Iv1.test')
+    expect(v.data.gitlab_client_id).toBe('glid')
   })
 })

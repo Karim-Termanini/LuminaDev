@@ -189,6 +189,11 @@ describe('headless-e2e: page-specific rendering', () => {
     expect(page.SettingsPage).toBeDefined()
   })
 
+  it('should load CloudGitPage without errors', async () => {
+    const page = await import('./CloudGitPage')
+    expect(page.CloudGitPage).toBeDefined()
+  })
+
   it('should verify critical page paths conceptually', () => {
     // Rather than trying to import all pages (which have complex Tauri/shared dependencies),
     // verify the test structure is sound and page names are valid
@@ -199,6 +204,7 @@ describe('headless-e2e: page-specific rendering', () => {
       'DockerPage',
       'MonitorPage',
       'GitConfigPage',
+      'CloudGitPage',
       'RuntimesPage',
       'SshPage',
       'MaintenancePage',

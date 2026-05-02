@@ -82,6 +82,13 @@ function WidgetTile(props: {
         </Link>
       )
       break
+    case 'link.cloud-git':
+      body = (
+        <Link to="/cloud-git" style={{ color: 'var(--accent)', fontWeight: 600, fontSize: fs(13) }}>
+          Open Cloud Git →
+        </Link>
+      )
+      break
     case 'static.docker-permission-hint':
       body = (
         <p style={{ margin: 0, fontSize: fs(13), color: 'var(--text-muted)', lineHeight: c ? 1.55 : 1.45 }}>

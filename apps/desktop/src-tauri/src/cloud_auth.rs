@@ -7,11 +7,119 @@ use std::path::PathBuf;
 
 // ─── OAuth Client IDs ─────────────────────────────────────────────────────────
 // Register a GitHub OAuth App (Device Flow enabled) at github.com/settings/developers
-// and a GitLab OAuth Application at gitlab.com/-/profile/applications.
-// Replace these placeholders with the real Client IDs before use.
+// and a GitLab OAuth Application at gitlab.com/-/profile/applications (enable device flow).
+// Resolution order for device flow (same for GitHub / GitLab):
+//   1) Optional per-install values in `store.json` → `cloud_oauth_clients` (Cloud Git → Advanced)
+//   2) Process environment `LUMINA_*_OAUTH_CLIENT_ID` at app launch
+//   3) Compile-time `option_env!("LUMINA_*_OAUTH_CLIENT_ID")`
+//   4) Defaults below (placeholders until the project ships real app IDs)
 // Client IDs are NOT secrets — security relies on device codes, not on hiding the ID.
 pub const GITHUB_OAUTH_CLIENT_ID: &str = "REPLACE_WITH_GITHUB_CLIENT_ID";
 pub const GITLAB_OAUTH_CLIENT_ID: &str = "REPLACE_WITH_GITLAB_CLIENT_ID";
+
+/// `store_override`: trimmed non-empty value from `cloud_oauth_clients.github_client_id` in store.json, if any.
+pub fn compose_github_client_id(store_override: Option<&str>) -> String {
+    if let Some(s) = store_override {
+        let t = s.trim();
+        if !t.is_empty() {
+            return t.to_string();
+        }
+    }
+    if let Ok(v) = std::env::var("LUMINA_GITHUB_OAUTH_CLIENT_ID") {
+        let t = v.trim();
+        if !t.is_empty() {
+            return t.to_string();
+        }
+    }
+    if let Some(v) = option_env!("LUMINA_GITHUB_OAUTH_CLIENT_ID") {
+        if !v.is_empty() {
+            return v.to_string();
+        }
+    }
+    GITHUB_OAUTH_CLIENT_ID.to_string()
+}
+
+/// `store_override`: trimmed non-empty value from `cloud_oauth_clients.gitlab_client_id` in store.json, if any.
+pub fn compose_gitlab_client_id(store_override: Option<&str>) -> String {
+    if let Some(s) = store_override {
+        let t = s.trim();
+        if !t.is_empty() {
+            return t.to_string();
+        }
+    }
+    if let Ok(v) = std::env::var("LUMINA_GITLAB_OAUTH_CLIENT_ID") {
+        let t = v.trim();
+        if !t.is_empty() {
+            return t.to_string();
+        }
+    }
+    if let Some(v) = option_env!("LUMINA_GITLAB_OAUTH_CLIENT_ID") {
+        if !v.is_empty() {
+            return v.to_string();
+        }
+    }
+    GITLAB_OAUTH_CLIENT_ID.to_string()
+}
+
+fn oauth_client_id_unconfigured(id: &str) -> bool {
+    let t = id.trim();
+    t.is_empty() || t.contains("REPLACE_WITH") || t.eq_ignore_ascii_case("your_client_id_here")
+}
+
+fn device_authorize_error_detail(body: &serde_json::Value) -> String {
+    if let Some(s) = body["error_description"].as_str() {
+        return s.trim().to_string();
+    }
+    if let Some(s) = body["error"].as_str() {
+        return s.trim().to_string();
+    }
+    String::new()
+}
+
+fn parse_device_authorize_body(
+    provider: &str,
+    status: reqwest::StatusCode,
+    body: serde_json::Value,
+    default_expires_in: u64,
+) -> Result<DeviceAuthChallenge, String> {
+    let device_code = body["device_code"].as_str().unwrap_or("");
+    if !status.is_success() {
+        let detail = device_authorize_error_detail(&body);
+        return Err(format!(
+            "[CLOUD_AUTH_DEVICE_START_REJECTED] {} device authorization returned HTTP {}. {}",
+            provider,
+            status.as_u16(),
+            detail
+        ));
+    }
+    if device_code.is_empty() {
+        let detail = device_authorize_error_detail(&body);
+        let suffix = if detail.is_empty() {
+            "missing device_code in response.".to_string()
+        } else {
+            detail
+        };
+        return Err(format!(
+            "[CLOUD_AUTH_DEVICE_START_REJECTED] {} {}",
+            provider, suffix
+        ));
+    }
+    let default_verify = if provider == "GitLab" {
+        "https://gitlab.com/oauth/device"
+    } else {
+        "https://github.com/login/device"
+    };
+    Ok(DeviceAuthChallenge {
+        user_code: body["user_code"].as_str().unwrap_or_default().to_string(),
+        verification_uri: body["verification_uri"]
+            .as_str()
+            .unwrap_or(default_verify)
+            .to_string(),
+        device_code: device_code.to_string(),
+        interval: body["interval"].as_u64().unwrap_or(5),
+        expires_in: body["expires_in"].as_u64().unwrap_or(default_expires_in),
+    })
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -170,30 +278,6 @@ impl CredentialStore for EncryptedFileStore {
     }
 }
 
-// ─── CloudProvider trait ──────────────────────────────────────────────────────
-
-pub trait CloudProvider {
-    fn device_auth_start(
-        &self,
-        scopes: &[&str],
-    ) -> impl std::future::Future<Output = Result<DeviceAuthChallenge, String>> + Send;
-
-    fn device_auth_poll(
-        &self,
-        device_code: &str,
-    ) -> impl std::future::Future<Output = Result<PollResult, String>> + Send;
-
-    fn validate_pat(
-        &self,
-        token: &str,
-    ) -> impl std::future::Future<Output = Result<StoredCredential, String>> + Send;
-
-    fn revoke_token(
-        &self,
-        token: &str,
-    ) -> impl std::future::Future<Output = Result<(), String>> + Send;
-}
-
 // ─── Shared helpers ───────────────────────────────────────────────────────────
 
 pub fn chrono_now() -> String {
@@ -208,14 +292,22 @@ pub fn chrono_now() -> String {
     let mut days = secs / 86400;
     let mut y = 1970u64;
     loop {
-        let days_in_year = if y % 4 == 0 && (y % 100 != 0 || y % 400 == 0) { 366 } else { 365 };
+        let days_in_year = if y.is_multiple_of(4) && (!y.is_multiple_of(100) || y.is_multiple_of(400)) {
+            366
+        } else {
+            365
+        };
         if days < days_in_year { break; }
         days -= days_in_year;
         y += 1;
     }
     let month_days: [u64; 12] = [
         31,
-        if y % 4 == 0 && (y % 100 != 0 || y % 400 == 0) { 29 } else { 28 },
+        if y.is_multiple_of(4) && (!y.is_multiple_of(100) || y.is_multiple_of(400)) {
+            29
+        } else {
+            28
+        },
         31, 30, 31, 30, 31, 31, 30, 31, 30, 31,
     ];
     let mut mo = 1u64;
@@ -233,46 +325,38 @@ pub fn chrono_now() -> String {
 
 pub struct GitHubProvider;
 
-impl CloudProvider for GitHubProvider {
-    async fn device_auth_start(&self, scopes: &[&str]) -> Result<DeviceAuthChallenge, String> {
+impl GitHubProvider {
+    pub async fn device_auth_start(scopes: &[&str], client_id: &str) -> Result<DeviceAuthChallenge, String> {
+        if oauth_client_id_unconfigured(client_id) {
+            return Err(
+                "[CLOUD_AUTH_OAUTH_NOT_CONFIGURED] GitHub device flow needs a registered OAuth app client ID. Add it under Cloud Git → Advanced (saved locally), set environment variable LUMINA_GITHUB_OAUTH_CLIENT_ID, compile with that var, replace GITHUB_OAUTH_CLIENT_ID in cloud_auth.rs, or use a personal access token."
+                    .to_string(),
+            );
+        }
         let client = reqwest::Client::new();
         let scope = scopes.join(" ");
         let resp = client
             .post("https://github.com/login/device/code")
             .header("Accept", "application/json")
-            .form(&[("client_id", GITHUB_OAUTH_CLIENT_ID), ("scope", scope.as_str())])
+            .form(&[("client_id", client_id), ("scope", scope.as_str())])
             .send()
             .await
             .map_err(|e| format!("[CLOUD_AUTH_NETWORK] GitHub device start: {}", e))?;
-        if !resp.status().is_success() {
-            return Err(format!(
-                "[CLOUD_AUTH_NETWORK] GitHub device start returned {}",
-                resp.status()
-            ));
-        }
+        let status = resp.status();
         let body: serde_json::Value = resp
             .json()
             .await
             .map_err(|e| format!("[CLOUD_AUTH_NETWORK] GitHub device start parse: {}", e))?;
-        Ok(DeviceAuthChallenge {
-            user_code: body["user_code"].as_str().unwrap_or_default().to_string(),
-            verification_uri: body["verification_uri"]
-                .as_str()
-                .unwrap_or("https://github.com/login/device")
-                .to_string(),
-            device_code: body["device_code"].as_str().unwrap_or_default().to_string(),
-            interval: body["interval"].as_u64().unwrap_or(5),
-            expires_in: body["expires_in"].as_u64().unwrap_or(900),
-        })
+        parse_device_authorize_body("GitHub", status, body, 900)
     }
 
-    async fn device_auth_poll(&self, device_code: &str) -> Result<PollResult, String> {
+    pub async fn device_auth_poll(device_code: &str, client_id: &str) -> Result<PollResult, String> {
         let client = reqwest::Client::new();
         let resp = client
             .post("https://github.com/login/oauth/access_token")
             .header("Accept", "application/json")
             .form(&[
-                ("client_id", GITHUB_OAUTH_CLIENT_ID),
+                ("client_id", client_id),
                 ("device_code", device_code),
                 ("grant_type", "urn:ietf:params:oauth:grant-type:device_code"),
             ])
@@ -284,7 +368,7 @@ impl CloudProvider for GitHubProvider {
             .await
             .map_err(|e| format!("[CLOUD_AUTH_NETWORK] GitHub poll parse: {}", e))?;
         if let Some(token) = body["access_token"].as_str() {
-            let profile = self.validate_pat(token).await?;
+            let profile = Self::validate_pat(token).await?;
             return Ok(PollResult::Complete {
                 token: token.to_string(),
                 username: profile.username,
@@ -302,7 +386,7 @@ impl CloudProvider for GitHubProvider {
         }
     }
 
-    async fn validate_pat(&self, token: &str) -> Result<StoredCredential, String> {
+    pub async fn validate_pat(token: &str) -> Result<StoredCredential, String> {
         let client = reqwest::Client::new();
         let resp = client
             .get("https://api.github.com/user")
@@ -333,7 +417,7 @@ impl CloudProvider for GitHubProvider {
         })
     }
 
-    async fn revoke_token(&self, _token: &str) -> Result<(), String> {
+    pub async fn revoke_token(_token: &str) -> Result<(), String> {
         // GitHub device flow apps have no client_secret — programmatic revocation
         // is not available. Credential is deleted locally by the disconnect handler.
         Ok(())
@@ -344,46 +428,38 @@ impl CloudProvider for GitHubProvider {
 
 pub struct GitLabProvider;
 
-impl CloudProvider for GitLabProvider {
-    async fn device_auth_start(&self, scopes: &[&str]) -> Result<DeviceAuthChallenge, String> {
+impl GitLabProvider {
+    pub async fn device_auth_start(scopes: &[&str], client_id: &str) -> Result<DeviceAuthChallenge, String> {
+        if oauth_client_id_unconfigured(client_id) {
+            return Err(
+                "[CLOUD_AUTH_OAUTH_NOT_CONFIGURED] GitLab device flow needs a registered OAuth app (device grant enabled). Add the client ID under Cloud Git → Advanced (saved locally), set LUMINA_GITLAB_OAUTH_CLIENT_ID, compile with that var, replace GITLAB_OAUTH_CLIENT_ID in cloud_auth.rs, or use a personal access token."
+                    .to_string(),
+            );
+        }
         let client = reqwest::Client::new();
         let scope = scopes.join(" ");
         let resp = client
             .post("https://gitlab.com/oauth/authorize_device")
             .header("Accept", "application/json")
-            .form(&[("client_id", GITLAB_OAUTH_CLIENT_ID), ("scope", scope.as_str())])
+            .form(&[("client_id", client_id), ("scope", scope.as_str())])
             .send()
             .await
             .map_err(|e| format!("[CLOUD_AUTH_NETWORK] GitLab device start: {}", e))?;
-        if !resp.status().is_success() {
-            return Err(format!(
-                "[CLOUD_AUTH_NETWORK] GitLab device start returned {}",
-                resp.status()
-            ));
-        }
+        let status = resp.status();
         let body: serde_json::Value = resp
             .json()
             .await
             .map_err(|e| format!("[CLOUD_AUTH_NETWORK] GitLab device start parse: {}", e))?;
-        Ok(DeviceAuthChallenge {
-            user_code: body["user_code"].as_str().unwrap_or_default().to_string(),
-            verification_uri: body["verification_uri"]
-                .as_str()
-                .unwrap_or("https://gitlab.com/oauth/device")
-                .to_string(),
-            device_code: body["device_code"].as_str().unwrap_or_default().to_string(),
-            interval: body["interval"].as_u64().unwrap_or(5),
-            expires_in: body["expires_in"].as_u64().unwrap_or(300),
-        })
+        parse_device_authorize_body("GitLab", status, body, 300)
     }
 
-    async fn device_auth_poll(&self, device_code: &str) -> Result<PollResult, String> {
+    pub async fn device_auth_poll(device_code: &str, client_id: &str) -> Result<PollResult, String> {
         let client = reqwest::Client::new();
         let resp = client
             .post("https://gitlab.com/oauth/token")
             .header("Accept", "application/json")
             .form(&[
-                ("client_id", GITLAB_OAUTH_CLIENT_ID),
+                ("client_id", client_id),
                 ("device_code", device_code),
                 ("grant_type", "urn:ietf:params:oauth:grant-type:device_code"),
             ])
@@ -395,7 +471,7 @@ impl CloudProvider for GitLabProvider {
             .await
             .map_err(|e| format!("[CLOUD_AUTH_NETWORK] GitLab poll parse: {}", e))?;
         if let Some(token) = body["access_token"].as_str() {
-            let profile = self.validate_pat(token).await?;
+            let profile = Self::validate_pat(token).await?;
             return Ok(PollResult::Complete {
                 token: token.to_string(),
                 username: profile.username,
@@ -413,7 +489,7 @@ impl CloudProvider for GitLabProvider {
         }
     }
 
-    async fn validate_pat(&self, token: &str) -> Result<StoredCredential, String> {
+    pub async fn validate_pat(token: &str) -> Result<StoredCredential, String> {
         let client = reqwest::Client::new();
         let resp = client
             .get("https://gitlab.com/api/v4/user")
@@ -443,11 +519,11 @@ impl CloudProvider for GitLabProvider {
         })
     }
 
-    async fn revoke_token(&self, token: &str) -> Result<(), String> {
+    pub async fn revoke_token(token: &str, client_id: &str) -> Result<(), String> {
         let client = reqwest::Client::new();
         let _ = client
             .post("https://gitlab.com/oauth/revoke")
-            .form(&[("token", token), ("client_id", GITLAB_OAUTH_CLIENT_ID)])
+            .form(&[("token", token), ("client_id", client_id)])
             .send()
             .await;
         Ok(())
@@ -538,4 +614,19 @@ mod tests {
         assert!(ts.ends_with('Z'));
         assert!(ts.contains('T'));
     }
+
+    #[test]
+    fn compose_github_prefers_store_override() {
+        assert_eq!(super::compose_github_client_id(Some("  myapp  ")), "myapp");
+    }
+
+    #[test]
+    fn oauth_client_id_placeholder_detection() {
+        assert!(oauth_client_id_unconfigured(""));
+        assert!(oauth_client_id_unconfigured("   "));
+        assert!(oauth_client_id_unconfigured("REPLACE_WITH_GITLAB_CLIENT_ID"));
+        assert!(oauth_client_id_unconfigured("YOUR_CLIENT_ID_HERE"));
+        assert!(!oauth_client_id_unconfigured("Iv1.8a61f9b3a7aba766"));
+    }
+
 }

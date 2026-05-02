@@ -185,6 +185,13 @@ export const AppearanceStoreSchema = z.object({
     .optional(),
 })
 
+/** Optional OAuth app client IDs for GitHub/GitLab device flow (public IDs; local store only). */
+export const CloudOauthClientsStoreSchema = z.object({
+  github_client_id: z.string().max(128).optional(),
+  gitlab_client_id: z.string().max(128).optional(),
+})
+export type CloudOauthClientsStore = z.infer<typeof CloudOauthClientsStoreSchema>
+
 /** Keys with typed payloads persisted under userData (`store_<key>.json`). */
 export const StoreKeySchema = z.enum([
   'custom_profiles',
@@ -194,6 +201,7 @@ export const StoreKeySchema = z.enum([
   'active_profile',
   'on_login_automation',
   'appearance',
+  'cloud_oauth_clients',
 ])
 
 export const StoreGetRequestSchema = z.object({
@@ -229,6 +237,10 @@ export const StoreSetRequestSchema = z.discriminatedUnion('key', [
   z.object({
     key: z.literal('appearance'),
     data: AppearanceStoreSchema,
+  }),
+  z.object({
+    key: z.literal('cloud_oauth_clients'),
+    data: CloudOauthClientsStoreSchema,
   }),
 ])
 export const ComposeUpRequestSchema = z.object({
