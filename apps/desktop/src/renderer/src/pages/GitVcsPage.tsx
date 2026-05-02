@@ -827,9 +827,9 @@ export function GitVcsPage(): ReactElement {
         <GitVcsStateBanner operation={gitOperation} conflictFileCount={conflictFileCount} />
       ) : null}
 
-      {trackingPr && activeFetchProvider !== 'other' && (
+      {trackingPr && activeFetchPipelineProvider !== 'other' && (
         <GitVcsCiChecks
-          provider={trackingPr.provider}
+          provider={activeFetchPipelineProvider as 'github' | 'gitlab'}
           repoPath={repoPath.trim()}
           remote={activeFetchRemoteName}
           reference={trackingPr.reference}
