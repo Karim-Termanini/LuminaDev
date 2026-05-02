@@ -1232,6 +1232,38 @@ fn parse_porcelain_v1(output: &str) -> (Vec<Value>, Vec<Value>) {
     (staged, unstaged)
 }
 
+/// Parse `git remote -v` stdout: one row per remote name with its **fetch** URL.
+fn parse_git_remote_fetch_lines(stdout: &str) -> Vec<Value> {
+    use std::collections::BTreeMap;
+    let mut by_name: BTreeMap<String, String> = BTreeMap::new();
+    const FETCH_SUFFIX: &str = " (fetch)";
+    for line in stdout.lines() {
+        let line = line.trim_end();
+        if line.is_empty() {
+            continue;
+        }
+        if !line.ends_with(FETCH_SUFFIX) {
+            continue;
+        }
+        let head = line[..line.len() - FETCH_SUFFIX.len()].trim_end();
+        let (name, url) = if let Some((n, u)) = head.split_once('\t') {
+            (n.trim(), u.trim())
+        } else if let Some(i) = head.find(' ') {
+            (head[..i].trim(), head[i + 1..].trim())
+        } else {
+            continue;
+        };
+        if name.is_empty() || url.is_empty() {
+            continue;
+        }
+        by_name.insert(name.to_string(), url.to_string());
+    }
+    by_name
+        .into_iter()
+        .map(|(name, fetch_url)| json!({ "name": name, "fetchUrl": fetch_url }))
+        .collect()
+}
+
 async fn git_ahead_behind(repo_path: &str) -> (Option<i64>, Option<i64>) {
     let ahead = exec_output_limit(
         "git", &["-C", repo_path, "rev-list", "--count", "@{u}..HEAD"],
@@ -1244,28 +1276,56 @@ async fn git_ahead_behind(repo_path: &str) -> (Option<i64>, Option<i64>) {
     (ahead, behind)
 }
 
-async fn git_push_pull_with_auth(
+enum GitNetworkOp<'a> {
+    Push {
+        remote: Option<&'a str>,
+        branch: Option<&'a str>,
+    },
+    Pull,
+    Fetch {
+        remote: &'a str,
+    },
+}
+
+async fn git_network_with_auth(
     repo_path: &str,
-    push: bool,
-    remote: Option<&str>,
-    branch: Option<&str>,
+    op: GitNetworkOp<'_>,
     store: &cloud_auth::EncryptedFileStore,
     app: &AppHandle,
 ) -> Result<String, String> {
-    // Detect remote URL
-    let remote_name = remote.unwrap_or("origin");
+    let remote_for_url = match &op {
+        GitNetworkOp::Push { remote, .. } => remote.unwrap_or("origin"),
+        GitNetworkOp::Pull => "origin",
+        GitNetworkOp::Fetch { remote } => *remote,
+    };
     let remote_url = exec_output_limit(
-        "git", &["-C", repo_path, "remote", "get-url", remote_name],
+        "git",
+        &["-C", repo_path, "remote", "get-url", remote_for_url],
         CMD_TIMEOUT_SHORT,
-    ).await.unwrap_or_default();
+    )
+    .await
+    .unwrap_or_default();
 
-    // Build git command args
-    let cmd_args: Vec<String> = if push {
-        let mut a = vec!["-C".to_string(), repo_path.to_string(), "push".to_string(), remote_name.to_string()];
-        if let Some(b) = branch { a.push(b.to_string()); }
-        a
-    } else {
-        vec!["-C".to_string(), repo_path.to_string(), "pull".to_string()]
+    let cmd_args: Vec<String> = match op {
+        GitNetworkOp::Push {
+            remote,
+            branch,
+        } => {
+            let r = remote.unwrap_or("origin");
+            let mut a = vec!["-C".to_string(), repo_path.to_string(), "push".to_string(), r.to_string()];
+            if let Some(b) = branch {
+                a.push(b.to_string());
+            }
+            a
+        }
+        GitNetworkOp::Pull => vec!["-C".to_string(), repo_path.to_string(), "pull".to_string()],
+        GitNetworkOp::Fetch { remote } => vec![
+            "-C".to_string(),
+            repo_path.to_string(),
+            "fetch".to_string(),
+            remote.to_string(),
+            "--prune".to_string(),
+        ],
     };
     let args_refs: Vec<&str> = cmd_args.iter().map(|s| s.as_str()).collect();
 
@@ -2307,6 +2367,29 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
         })
     },
 
+    "dh:git:vcs:remotes" => {
+        let repo_path = body.get("repoPath").and_then(|v| v.as_str()).unwrap_or_default();
+        if repo_path.is_empty() {
+            return Ok(json!({ "ok": false, "error": "[GIT_VCS_NOT_A_REPO] Missing repoPath." }));
+        }
+        match exec_output_limit(
+            "git",
+            &["-C", repo_path, "remote", "-v"],
+            CMD_TIMEOUT_SHORT,
+        )
+        .await
+        {
+            Ok(out) => {
+                let remotes = parse_git_remote_fetch_lines(&out);
+                json!({ "ok": true, "remotes": remotes })
+            }
+            Err(e) => json!({
+                "ok": false,
+                "error": format!("[GIT_VCS_NOT_A_REPO] {}", e.trim()),
+            }),
+        }
+    },
+
     "dh:git:vcs:diff" => {
         let repo_path = body.get("repoPath").and_then(|v| v.as_str()).unwrap_or_default();
         let file_path = body.get("filePath").and_then(|v| v.as_str()).unwrap_or_default();
@@ -2410,26 +2493,56 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
             return Ok(json!({ "ok": false, "error": "[GIT_VCS_NOT_A_REPO] Missing repoPath." }));
         }
         match exec_output_limit(
-            "git", &["-C", repo_path, "branch", "-a", "--format=%(HEAD) %(refname:short)"],
+            "git",
+            &[
+                "-C",
+                repo_path,
+                "for-each-ref",
+                "refs/heads",
+                "refs/remotes",
+                "--format=%(HEAD)|%(refname:short)|%(refname)",
+            ],
             CMD_TIMEOUT_SHORT,
-        ).await {
+        )
+        .await
+        {
             Ok(out) => {
                 let mut branches: Vec<Value> = Vec::new();
                 let mut current = String::new();
                 for line in out.lines() {
-                    if line.len() < 2 { continue; }
-                    let is_current = line.starts_with('*');
-                    let name = line[2..].trim().to_string();
-                    if name.is_empty() { continue; }
-                    let remote = name.starts_with("remotes/") || name.starts_with("origin/");
-                    let display_name = name.strip_prefix("remotes/").unwrap_or(&name).to_string();
-                    if is_current { current = display_name.clone(); }
+                    let mut parts = line.splitn(3, '|');
+                    let head = parts.next().unwrap_or("").trim();
+                    let short = parts.next().unwrap_or("").trim();
+                    let full = parts.next().unwrap_or("").trim();
+                    if short.is_empty() || short == "HEAD" {
+                        continue;
+                    }
+                    if full.ends_with("/HEAD") {
+                        continue;
+                    }
+                    let is_current = head == "*";
+                    let remote = full.starts_with("refs/remotes/");
+                    let display_name = short.to_string();
+                    if is_current {
+                        current.clone_from(&display_name);
+                    }
                     branches.push(json!({
                         "name": display_name,
                         "remote": remote,
                         "current": is_current,
                     }));
                 }
+                branches.sort_by(|a, b| {
+                    let ar = a.get("remote").and_then(|v| v.as_bool()).unwrap_or(false);
+                    let br = b.get("remote").and_then(|v| v.as_bool()).unwrap_or(false);
+                    match ar.cmp(&br) {
+                        std::cmp::Ordering::Equal => {}
+                        o => return o,
+                    }
+                    let an = a.get("name").and_then(|v| v.as_str()).unwrap_or("");
+                    let bn = b.get("name").and_then(|v| v.as_str()).unwrap_or("");
+                    an.cmp(bn)
+                });
                 json!({ "ok": true, "branches": branches, "current": current })
             }
             Err(e) => json!({ "ok": false, "error": format!("[GIT_VCS_NOT_A_REPO] {}", e.trim()) }),
@@ -2450,7 +2563,56 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
         };
         match exec_output_limit("git", &args, CMD_TIMEOUT_SHORT).await {
             Ok(_) => json!({ "ok": true }),
-            Err(e) => json!({ "ok": false, "error": format!("[GIT_VCS_NOT_A_REPO] {}", e.trim()) }),
+            Err(e) => {
+                let msg = e.trim();
+                let code = if msg.contains("would be overwritten by checkout")
+                    || msg.contains("stash them before you switch")
+                    || msg.contains("Please commit your changes or stash them")
+                {
+                    "GIT_VCS_CHECKOUT_DIRTY"
+                } else {
+                    "GIT_VCS_CHECKOUT"
+                };
+                json!({ "ok": false, "error": format!("[{}] {}", code, msg) })
+            }
+        }
+    },
+
+    "dh:git:vcs:stash" => {
+        let repo_path = body.get("repoPath").and_then(|v| v.as_str()).unwrap_or_default();
+        if repo_path.is_empty() {
+            return Ok(json!({ "ok": false, "error": "[GIT_VCS_NOT_A_REPO] Missing repoPath." }));
+        }
+        let message = body
+            .get("message")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .unwrap_or("LuminaDev: stash before branch switch");
+        let include_untracked = body.get("includeUntracked").and_then(|v| v.as_bool()).unwrap_or(true);
+        let mut argv: Vec<String> = vec![
+            "-C".to_string(),
+            repo_path.to_string(),
+            "stash".to_string(),
+            "push".to_string(),
+        ];
+        if include_untracked {
+            argv.push("-u".to_string());
+        }
+        argv.push("-m".to_string());
+        argv.push(message.to_string());
+        let args: Vec<&str> = argv.iter().map(|s| s.as_str()).collect();
+        match exec_output_limit("git", &args, CMD_TIMEOUT_SHORT).await {
+            Ok(out) => json!({ "ok": true, "message": out }),
+            Err(e) => {
+                let msg = e.trim();
+                let code = if msg.contains("No local changes to save") {
+                    "GIT_VCS_STASH_EMPTY"
+                } else {
+                    "GIT_VCS_STASH"
+                };
+                json!({ "ok": false, "error": format!("[{}] {}", code, msg) })
+            }
         }
     },
 
@@ -2462,7 +2624,14 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
             return Ok(json!({ "ok": false, "error": "[GIT_VCS_NOT_A_REPO] Missing repoPath." }));
         }
         let store = cloud_store(&app);
-        match git_push_pull_with_auth(repo_path, true, remote, branch, &store, &app).await {
+        match git_network_with_auth(
+            repo_path,
+            GitNetworkOp::Push { remote, branch },
+            &store,
+            &app,
+        )
+        .await
+        {
             Ok(output) => json!({ "ok": true, "output": output }),
             Err(e) => json!({ "ok": false, "error": e }),
         }
@@ -2474,7 +2643,32 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
             return Ok(json!({ "ok": false, "error": "[GIT_VCS_NOT_A_REPO] Missing repoPath." }));
         }
         let store = cloud_store(&app);
-        match git_push_pull_with_auth(repo_path, false, None, None, &store, &app).await {
+        match git_network_with_auth(repo_path, GitNetworkOp::Pull, &store, &app).await {
+            Ok(output) => json!({ "ok": true, "output": output }),
+            Err(e) => json!({ "ok": false, "error": e }),
+        }
+    },
+
+    "dh:git:vcs:fetch" => {
+        let repo_path = body.get("repoPath").and_then(|v| v.as_str()).unwrap_or_default();
+        if repo_path.is_empty() {
+            return Ok(json!({ "ok": false, "error": "[GIT_VCS_NOT_A_REPO] Missing repoPath." }));
+        }
+        let remote = body
+            .get("remote")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .unwrap_or("origin");
+        let store = cloud_store(&app);
+        match git_network_with_auth(
+            repo_path,
+            GitNetworkOp::Fetch { remote },
+            &store,
+            &app,
+        )
+        .await
+        {
             Ok(output) => json!({ "ok": true, "output": output }),
             Err(e) => json!({ "ok": false, "error": e }),
         }

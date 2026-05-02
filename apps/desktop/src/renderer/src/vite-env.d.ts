@@ -145,6 +145,11 @@ declare global {
         unstaged?: import('@linux-dev-home/shared').FileEntry[]
         error?: string
       }>
+      gitVcsRemotes: (payload: { repoPath: string }) => Promise<{
+        ok: boolean
+        remotes?: import('@linux-dev-home/shared').GitRemoteEntry[]
+        error?: string
+      }>
       gitVcsDiff: (payload: { repoPath: string; filePath: string; staged: boolean }) => Promise<{
         ok: boolean
         diff?: string | null
@@ -156,6 +161,7 @@ declare global {
       gitVcsCommit: (payload: { repoPath: string; message: string }) => Promise<{ ok: boolean; sha?: string; error?: string }>
       gitVcsPush: (payload: { repoPath: string; remote?: string; branch?: string }) => Promise<{ ok: boolean; output?: string; error?: string }>
       gitVcsPull: (payload: { repoPath: string }) => Promise<{ ok: boolean; output?: string; error?: string }>
+      gitVcsFetch: (payload: { repoPath: string; remote?: string }) => Promise<{ ok: boolean; output?: string; error?: string }>
       gitVcsBranches: (payload: { repoPath: string }) => Promise<{
         ok: boolean
         branches?: import('@linux-dev-home/shared').BranchEntry[]
@@ -163,6 +169,11 @@ declare global {
         error?: string
       }>
       gitVcsCheckout: (payload: { repoPath: string; branch: string; create?: boolean }) => Promise<{ ok: boolean; error?: string }>
+      gitVcsStash: (payload: {
+        repoPath: string
+        message?: string
+        includeUntracked?: boolean
+      }) => Promise<{ ok: boolean; message?: string; error?: string }>
     }
   }
 }

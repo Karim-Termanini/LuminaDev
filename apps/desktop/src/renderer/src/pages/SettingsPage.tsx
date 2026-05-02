@@ -226,12 +226,39 @@ function AccountsSummarySection(): ReactElement {
           {accounts.map((a) => (
             <li key={`${a.provider}:${a.username}`}>
               <span className="mono">{a.provider}</span> — {a.username}
+              <Link
+                to={`/cloud-git?tab=${a.provider}`}
+                className="mono"
+                style={{ marginLeft: 8, color: 'var(--accent)', textDecoration: 'none', fontSize: 12 }}
+              >
+                open
+              </Link>
             </li>
           ))}
         </ul>
       )}
       <div>
-        <Link to="/cloud-git" className="hp-btn hp-btn-primary" style={{ fontSize: 13, textDecoration: 'none' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          <Link
+            to="/cloud-git?tab=github"
+            className="hp-btn hp-btn-primary"
+            style={{ fontSize: 13, textDecoration: 'none' }}
+          >
+            <span className="codicon codicon-github" aria-hidden />
+            GitHub tab
+          </Link>
+          <Link
+            to="/cloud-git?tab=gitlab"
+            className="hp-btn"
+            style={{ fontSize: 13, textDecoration: 'none' }}
+          >
+            <span className="codicon codicon-source-control" aria-hidden />
+            GitLab tab
+          </Link>
+        </div>
+      </div>
+      <div>
+        <Link to="/cloud-git?tab=github" className="hp-btn" style={{ fontSize: 13, textDecoration: 'none' }}>
           <span className="codicon codicon-arrow-right" aria-hidden />
           Manage on Cloud Git page
         </Link>

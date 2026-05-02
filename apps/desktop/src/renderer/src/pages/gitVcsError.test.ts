@@ -15,9 +15,7 @@ describe('humanizeGitVcsError', () => {
   })
 
   it('humanizes GIT_VCS_AUTH_FAILED', () => {
-    expect(humanizeGitVcsError(new Error('[GIT_VCS_AUTH_FAILED] 403'))).toContain(
-      'No credentials',
-    )
+    expect(humanizeGitVcsError(new Error('[GIT_VCS_AUTH_FAILED] 403'))).toContain('Cloud Git')
   })
 
   it('humanizes GIT_VCS_DIFF_TOO_LARGE', () => {
@@ -28,6 +26,28 @@ describe('humanizeGitVcsError', () => {
     expect(humanizeGitVcsError(new Error('[GIT_VCS_NETWORK] timeout'))).toContain(
       'Network error',
     )
+  })
+
+  it('humanizes GIT_VCS_CHECKOUT_DIRTY without implying not-a-repo', () => {
+    const msg = humanizeGitVcsError(
+      new Error(
+        '[GIT_VCS_CHECKOUT_DIRTY] error: Your local changes to the following files would be overwritten by checkout:',
+      ),
+    )
+    expect(msg).toContain('dialog')
+    expect(msg).not.toMatch(/not a Git repository/i)
+  })
+
+  it('humanizes GIT_VCS_CHECKOUT', () => {
+    expect(humanizeGitVcsError(new Error('[GIT_VCS_CHECKOUT] fatal: invalid reference'))).toContain('Checkout failed')
+  })
+
+  it('humanizes GIT_VCS_STASH_EMPTY', () => {
+    expect(humanizeGitVcsError(new Error('[GIT_VCS_STASH_EMPTY] No local changes to save'))).toContain('Nothing to stash')
+  })
+
+  it('humanizes GIT_VCS_STASH', () => {
+    expect(humanizeGitVcsError(new Error('[GIT_VCS_STASH] cannot save'))).toContain('Stash failed')
   })
 
   it('returns raw detail for unknown codes', () => {

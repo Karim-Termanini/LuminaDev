@@ -6,6 +6,10 @@ export type GitVcsErrorCode =
   | 'GIT_VCS_AUTH_FAILED'
   | 'GIT_VCS_DIFF_TOO_LARGE'
   | 'GIT_VCS_NETWORK'
+  | 'GIT_VCS_CHECKOUT'
+  | 'GIT_VCS_CHECKOUT_DIRTY'
+  | 'GIT_VCS_STASH'
+  | 'GIT_VCS_STASH_EMPTY'
 
 export function parseGitVcsErrorCode(err: unknown): GitVcsErrorCode | null {
   const raw = err instanceof Error ? err.message : String(err)
@@ -24,10 +28,16 @@ export function humanizeGitVcsError(err: unknown): string {
   if (code === 'GIT_VCS_PUSH_REJECTED')
     return `Remote rejected push. Pull the latest changes first, then push again. ${detail}`.trim()
   if (code === 'GIT_VCS_AUTH_FAILED')
-    return `No credentials for this remote. ${detail}`.trim()
+    return `Could not authenticate with this remote. Connect GitHub or GitLab in Cloud Git, then retry. ${detail}`.trim()
   if (code === 'GIT_VCS_DIFF_TOO_LARGE')
     return 'This file is too large to preview here — open it in your code editor.'
   if (code === 'GIT_VCS_NETWORK')
     return `Network error during push/pull. Check your connection and try again. ${detail}`.trim()
+  if (code === 'GIT_VCS_CHECKOUT_DIRTY')
+    return 'Uncommitted changes would be overwritten by this branch switch. Commit or stash first, or confirm in the dialog when switching branches in Git VCS.'
+  if (code === 'GIT_VCS_STASH_EMPTY') return 'Nothing to stash — there were no local changes to save.'
+  if (code === 'GIT_VCS_STASH') return `Stash failed. ${detail}`.trim()
+  if (code === 'GIT_VCS_CHECKOUT')
+    return `Checkout failed. ${detail}`.trim()
   return detail || 'Git VCS operation failed.'
 }

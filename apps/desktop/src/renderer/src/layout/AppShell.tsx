@@ -16,6 +16,7 @@ const nav = [
   { to: '/docker', label: 'Docker', icon: 'package', status: 'live' as RouteStatus },
   { to: '/ssh', label: 'SSH', icon: 'key', status: 'partial' as RouteStatus },
   { to: '/git-config', label: 'Git Config', icon: 'git-branch', status: 'live' as RouteStatus },
+  { to: '/git-vcs', label: 'Git VCS', icon: 'source-control', status: 'partial' as RouteStatus },
   { to: '/cloud-git', label: 'Cloud Git', icon: 'github', status: 'partial' as RouteStatus },
   { to: '/registry', label: 'Registry', icon: 'package', status: 'partial' as RouteStatus },
   { to: '/profiles', label: 'Profiles', icon: 'account', status: 'partial' as RouteStatus },

@@ -397,6 +397,13 @@ export const GitVcsRepoPathSchema = z.object({
   repoPath: z.string().min(1).max(4096),
 })
 
+export const GitVcsRemotesRequestSchema = GitVcsRepoPathSchema
+
+export const GitRemoteEntrySchema = z.object({
+  name: z.string().min(1).max(256),
+  fetchUrl: z.string().min(1).max(4096),
+})
+
 export const GitVcsDiffRequestSchema = z.object({
   repoPath: z.string().min(1).max(4096),
   filePath: z.string().min(1).max(4096),
@@ -423,10 +430,22 @@ export const GitVcsPushRequestSchema = z.object({
 
 export const GitVcsPullRequestSchema = GitVcsRepoPathSchema
 
+export const GitVcsFetchRequestSchema = z.object({
+  repoPath: z.string().min(1).max(4096),
+  remote: z.string().min(1).max(256).optional(),
+})
+
 export const GitVcsBranchesRequestSchema = GitVcsRepoPathSchema
 
 export const GitVcsCheckoutRequestSchema = z.object({
   repoPath: z.string().min(1).max(4096),
   branch: z.string().min(1).max(256),
   create: z.boolean().optional(),
+})
+
+export const GitVcsStashRequestSchema = z.object({
+  repoPath: z.string().min(1).max(4096),
+  message: z.string().min(1).max(256).optional(),
+  /** When true (default), include untracked files (`git stash push -u`). */
+  includeUntracked: z.boolean().optional(),
 })

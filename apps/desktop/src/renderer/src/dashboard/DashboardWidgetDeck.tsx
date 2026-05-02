@@ -84,7 +84,7 @@ function WidgetTile(props: {
       break
     case 'link.cloud-git':
       body = (
-        <Link to="/cloud-git" style={{ color: 'var(--accent)', fontWeight: 600, fontSize: fs(13) }}>
+        <Link to="/cloud-git?tab=github" style={{ color: 'var(--accent)', fontWeight: 600, fontSize: fs(13) }}>
           Open Cloud Git →
         </Link>
       )

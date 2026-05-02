@@ -14,8 +14,8 @@ use std::path::PathBuf;
 //   3) Compile-time `option_env!("LUMINA_*_OAUTH_CLIENT_ID")`
 //   4) Defaults below (placeholders until the project ships real app IDs)
 // Client IDs are NOT secrets — security relies on device codes, not on hiding the ID.
-pub const GITHUB_OAUTH_CLIENT_ID: &str = "REPLACE_WITH_GITHUB_CLIENT_ID";
-pub const GITLAB_OAUTH_CLIENT_ID: &str = "REPLACE_WITH_GITLAB_CLIENT_ID";
+pub const GITHUB_OAUTH_CLIENT_ID: &str = "Ov23li9XiY0G9OL1QvcI";
+pub const GITLAB_OAUTH_CLIENT_ID: &str = "b300cf76c66e8a7a888e10c648c5243422f089cce232c18415f28399e2dbe4a9";
 
 /// `store_override`: trimmed non-empty value from `cloud_oauth_clients.github_client_id` in store.json, if any.
 pub fn compose_github_client_id(store_override: Option<&str>) -> String {

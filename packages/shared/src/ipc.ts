@@ -80,6 +80,12 @@ export type BranchEntry = {
   current: boolean
 }
 
+/** Named Git remote with fetch URL from `git remote -v` (fetch line). */
+export type GitRemoteEntry = {
+  name: string
+  fetchUrl: string
+}
+
 export type HostPortRow = {
   protocol: 'tcp' | 'udp'
   port: number
@@ -234,14 +240,17 @@ export const IPC = {
   cloudAuthDisconnect: 'dh:cloud:auth:disconnect',
   cloudAuthStatus: 'dh:cloud:auth:status',
   gitVcsStatus: 'dh:git:vcs:status',
+  gitVcsRemotes: 'dh:git:vcs:remotes',
   gitVcsDiff: 'dh:git:vcs:diff',
   gitVcsStage: 'dh:git:vcs:stage',
   gitVcsUnstage: 'dh:git:vcs:unstage',
   gitVcsCommit: 'dh:git:vcs:commit',
   gitVcsPush: 'dh:git:vcs:push',
   gitVcsPull: 'dh:git:vcs:pull',
+  gitVcsFetch: 'dh:git:vcs:fetch',
   gitVcsBranches: 'dh:git:vcs:branches',
   gitVcsCheckout: 'dh:git:vcs:checkout',
+  gitVcsStash: 'dh:git:vcs:stash',
 } as const
 
 export type DockerActionPayload = { id: string; action: DockerContainerAction }
