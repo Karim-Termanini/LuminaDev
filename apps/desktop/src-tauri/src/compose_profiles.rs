@@ -24,6 +24,21 @@ pub(crate) fn find_repo_root(start: &Path) -> PathBuf {
 /// 1. `LUMINA_DEV_COMPOSE_ROOT/<profile>` when set (absolute or relative path to parent of profile dirs).
 /// 2. `<repo>/docker/compose/<profile>` from [`find_repo_root`] + current working directory.
 /// 3. Tauri bundle `resource_dir()/docker/compose/<profile>` when packaged (see `tauri.conf.json` `bundle.resources`).
+///
+/// When `LUMINA_DEV_COMPOSE_FULL` is `1`/`true`/`yes` and `docker-compose.full.yml` exists in the profile dir,
+/// `docker compose` runs with both `-f docker-compose.yml` and `-f docker-compose.full.yml` (merged stack).
+pub(crate) fn compose_full_overlay_enabled(compose_dir: &Path) -> bool {
+  if !compose_dir.join("docker-compose.full.yml").is_file() {
+    return false;
+  }
+  std::env::var("LUMINA_DEV_COMPOSE_FULL")
+    .map(|s| {
+      let t = s.trim();
+      t == "1" || t.eq_ignore_ascii_case("true") || t.eq_ignore_ascii_case("yes")
+    })
+    .unwrap_or(false)
+}
+
 pub(crate) fn compose_profile_workdir(app: &AppHandle, profile: &str) -> PathBuf {
   let profile = profile.trim();
   if let Ok(root) = std::env::var("LUMINA_DEV_COMPOSE_ROOT") {
@@ -62,6 +77,16 @@ mod tests {
     let root = find_repo_root(&nested);
     assert_eq!(root, base);
 
+    let _ = std::fs::remove_dir_all(&base);
+  }
+
+  #[test]
+  fn compose_full_overlay_requires_file() {
+    let base = std::env::temp_dir().join(format!("lumina-compose-overlay-{}", Uuid::new_v4()));
+    std::fs::create_dir_all(&base).expect("dir");
+    assert!(!super::compose_full_overlay_enabled(&base));
+    std::fs::write(base.join("docker-compose.full.yml"), "services: {}\n").expect("write");
+    assert!(!super::compose_full_overlay_enabled(&base));
     let _ = std::fs::remove_dir_all(&base);
   }
 

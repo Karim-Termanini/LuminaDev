@@ -9,6 +9,7 @@ Update it whenever a new problem appears (see "Continuous Incident Log" section)
 ## 0) Purpose of this playbook
 
 Build real software with:
+
 - truthful scope
 - stable architecture boundaries
 - deterministic error handling
@@ -16,6 +17,7 @@ Build real software with:
 - release discipline
 
 Avoid:
+
 - overpromising docs
 - feature creep before a stable vertical slice
 - commit churn
@@ -30,23 +32,27 @@ Avoid:
 Pick one narrow flow that proves user value end-to-end.
 
 Example template:
+
 - Input: user action from UI
 - Core operation: one real system capability
 - Error surface: expected failure classes
 - Output: user-visible success/failure with deterministic message
 
 Rule:
+
 - Do not build phase-wide feature breadth first.
 - Build one slice deeply (UI + logic + contracts + tests + docs).
 
 ### 1.2 Declare trust boundaries early
 
 For desktop/system apps, define environments explicitly:
+
 - sandboxed context
 - host context
 - privileged operations
 
 For each operation, document:
+
 - where it runs
 - required permissions
 - fallback behavior
@@ -55,6 +61,7 @@ For each operation, document:
 ### 1.3 Create a quality gate before roadmap expansion
 
 Before adding more features, require:
+
 - green smoke gate (typecheck + tests + lint)
 - deterministic error contracts
 - truthful status docs
@@ -67,6 +74,7 @@ Before adding more features, require:
 ### 2.1 Contracts first, implementation second
 
 Define typed request/response contracts at boundaries:
+
 - IPC
 - API
 - worker/background jobs
@@ -78,10 +86,12 @@ Never trust raw payloads across process boundaries.
 
 For high-risk flows, avoid ambiguous throws as the only channel.
 Use stable operation result shape:
+
 - success: `{ ok: true, ...data }`
 - failure: `{ ok: false, error: "stable error string/code", ...safe fallback fields }`
 
 Benefits:
+
 - renderer logic remains deterministic
 - no silent failures
 - easier to test invalid/malformed responses
@@ -89,6 +99,7 @@ Benefits:
 ### 2.3 Error normalization strategy
 
 Convert low-level runtime errors into stable codes:
+
 - permission denied
 - unavailable daemon/socket
 - not found
@@ -104,6 +115,7 @@ Do not leak opaque stack/system text directly as UX.
 
 If logic matters, move it to dedicated modules, not giant files.
 Example pattern:
+
 - parser/mapping helper module
 - contract assert helper module
 - tests directly against helper modules
@@ -112,10 +124,28 @@ This gives fast unit tests without booting full app runtime.
 
 ### 2.5 Avoid lib.rs Bloat (The "No-Monolith" Rule)
 
-In Rust shells (Tauri), do not keep domain logic in `src-tauri/src/lib.rs`. 
+In Rust shells (Tauri), do not keep domain logic in `src-tauri/src/lib.rs`.
+
 - Any logic exceeding 50 lines should move to a dedicated module (e.g., `runtime_jobs.rs`).
 - `lib.rs` should only act as a clean entry point and router for IPC commands.
 - This preserves compile times and mental model clarity.
+
+### 2.6 Contract-Driven Development (Level 4 Probes)
+
+For every new IPC domain, a dedicated `*_contract_tests.rs` (Rust) and `*.contract.test.ts` (TS) must exist.
+
+- Rust side: Assert that the internal struct serializes to exactly what the TS Zod schema expects.
+- TS side: Assert that the IPC response matches the Zod schema before it touches the UI.
+- This prevents "Silent Failures" where the UI shows stale data because of a minor JSON key change.
+
+### 2.7 Credential Storage Pattern (The "Machine-ID Shield")
+
+Sensitive tokens (GitHub/GitLab) must never be stored in plain text.
+
+- **Pattern:** Use a `CredentialStore` trait.
+- **Implementation:** Encrypt tokens in the JSON store using a key derived from the host's `machine-id`.
+- **Why:** Protects against casual filesystem access/leaks without the UX friction of OS-keyring popups in early alpha stages.
+- **Transition:** Design for an easy migration path to system keychains (Option A) later.
 
 ---
 
@@ -125,6 +155,7 @@ In Rust shells (Tauri), do not keep domain logic in `src-tauri/src/lib.rs`.
 
 When quality concerns appear, freeze net-new features.
 Only allow:
+
 - bug fixes
 - contract hardening
 - tests
@@ -134,6 +165,7 @@ Only allow:
 
 Public docs must reflect real maturity.
 Use only factual labels:
+
 - Implemented (verified)
 - Partial / evolving
 - Planned
@@ -143,6 +175,7 @@ Never market future capabilities as done.
 ### 3.3 Split "historical walkthrough" from "release sign-off"
 
 Any internal audit notes must explicitly say:
+
 - historical implementation notes
 - not a release approval by itself
 
@@ -155,6 +188,7 @@ Canonical status should live in one public source (e.g. README).
 ### 4.1 Test ladder
 
 Minimum ladder per slice:
+
 1. schema/contract tests
 2. mapper/error helper tests
 3. critical flow tests in renderer/controller logic
@@ -163,6 +197,7 @@ Minimum ladder per slice:
 ### 4.2 Test what usually breaks
 
 Prioritize tests for:
+
 - deterministic error code mapping
 - malformed payload handling
 - missing/invalid response contract fields
@@ -171,6 +206,7 @@ Prioritize tests for:
 ### 4.3 Fail fast on invalid response payloads
 
 Contract assertion helpers should throw if:
+
 - payload is not object
 - required contract fields missing (e.g. `ok`)
 
@@ -185,6 +221,7 @@ This prevents false-positive success behavior.
 Treat inaccurate docs as a bug.
 
 Update docs whenever:
+
 - behavior changes
 - quality gate changes
 - scope freeze starts/ends
@@ -193,6 +230,7 @@ Update docs whenever:
 ### 5.2 Keep a stabilization checklist
 
 Maintain one checklist with:
+
 - status per closure item
 - acceptance criteria
 - evidence links
@@ -212,6 +250,7 @@ Avoid micro-churn standalone commits unless urgently required.
 ### 6.2 Commit message quality
 
 A good message states:
+
 - what changed
 - why
 - scope
@@ -221,6 +260,7 @@ Avoid generic messages that hide meaningful risk.
 ### 6.3 PR hygiene
 
 Before merge:
+
 - smoke gate green
 - scope aligned to active checklist/gate
 - no unrelated refactors in the same PR
@@ -238,6 +278,7 @@ Avoid pushing every micro-commit. Bundle commits into logical "Vertical Slices" 
 ### 7.1 Be explicit about host limitations
 
 For sandboxed applications:
+
 - some operations cannot run directly
 - require host overrides / helper flow
 - must be documented and reflected in UI copy
@@ -245,6 +286,7 @@ For sandboxed applications:
 ### 7.2 Native modules need operational notes
 
 If using native modules (e.g. terminal/pty):
+
 - document rebuild requirements
 - include environment prerequisites
 - include known runtime tuning limits
@@ -252,6 +294,7 @@ If using native modules (e.g. terminal/pty):
 ### 7.3 Safety over convenience for destructive actions
 
 For delete/prune/remove operations:
+
 - force confirmation
 - show risk context ("in use by" when possible)
 - handle conflict paths safely
@@ -262,6 +305,22 @@ For delete/prune/remove operations:
 - Flatpak `bwrap` (sandbox manager) will fail if a mount point conflicts with a host symlink.
 - **Rule:** Always test Flatpak bundles on Arch Linux early, as its strictness catches packaging bugs missed by Ubuntu.
 - **Rule:** Prefer mounting specific files (e.g. `/run/docker.sock`) over parent directories if symlink conflicts occur.
+
+### 7.5 Multi-Distro CI Requirement
+
+A "Hardened" app must pass a Multi-distro Smoke CI before any production release.
+
+- **Minimum distros:** Arch Linux (for strict bwrap/symlink checks) and Fedora (for headless Xvfb/DRM checks).
+- **Automation:** Use GitLab CI jobs with native containers for each distro.
+- **Sandbox Probes:** Run automated tests *inside* the built bundle to verify Docker/D-Bus/FS access.
+
+### 7.6 Secure Token Injection (GIT_ASKPASS)
+
+When spawning child processes that need auth (like `git push`):
+
+- Never pass tokens as command-line arguments (visible in `ps`).
+- **Pattern:** Use `GIT_ASKPASS` environment variable pointing to a temporary executable script.
+- **Security:** The script must have `chmod 700` and be deleted immediately after the command completes.
 
 ---
 
@@ -358,6 +417,7 @@ Use this template for every new issue discovered during development:
 ### Incident Log
 
 #### 2026-04 — Overpromising documentation risk
+
 - **Area:** Docs / Product communication
 - **Symptom:** Public description sounded more mature than validated implementation.
 - **Root cause:** Roadmap language mixed with implemented status language.
@@ -368,6 +428,7 @@ Use this template for every new issue discovered during development:
 - **Status:** resolved
 
 #### 2026-04 — Docker IPC inconsistency risk
+
 - **Area:** IPC contracts / error handling
 - **Symptom:** Inconsistent mix of thrown errors and operation results.
 - **Root cause:** Endpoint evolution without unified response contract.
@@ -378,6 +439,7 @@ Use this template for every new issue discovered during development:
 - **Status:** resolved
 
 #### 2026-04 — Contract drift after IPC typing hardening
+
 - **Area:** UI contracts / Maintenance / Dashboard slices
 - **Symptom:** Multiple pages assumed legacy payload shapes after IPC return types were tightened.
 - **Root cause:** UI casts were not upgraded in the same pass as preload/renderer type definitions.
@@ -388,6 +450,7 @@ Use this template for every new issue discovered during development:
 - **Status:** resolved
 
 #### 2026-04-29 — isTauriRuntime guard not called (desktopApiBridge)
+
 - **Area:** Renderer / IPC bridge / Tauri migration
 - **Symptom:** `ensureDesktopApi()` skipped its "are we in Tauri?" check, causing Tauri IPC to be injected in non-Tauri contexts (web-only dev build).
 - **Root cause:** Guard was `if (!isTauriRuntime)` (function ref check) instead of `if (!isTauriRuntime())` (call).
@@ -398,6 +461,7 @@ Use this template for every new issue discovered during development:
 - **Status:** resolved
 
 #### 2026-04-29 — Missing DashboardLayoutFile import in vite-env.d.ts
+
 - **Area:** TypeScript types / renderer declarations
 - **Symptom:** `DashboardLayoutFile` used in `Window.dh` interface definition without import.
 - **Root cause:** Type added to `layoutGet` signature without adding the corresponding import from `@linux-dev-home/shared`.
@@ -408,6 +472,7 @@ Use this template for every new issue discovered during development:
 - **Status:** resolved
 
 #### 2026-04-29 — CI native-linux-build missing Rust toolchain
+
 - **Area:** CI / Tauri build
 - **Symptom:** `native-linux-build` job ran `pnpm --filter desktop build:tauri` without installing Rust, causing `cargo` not found error.
 - **Root cause:** Rust toolchain setup was not added when the Tauri build job was created.
@@ -422,6 +487,7 @@ Use this template for every new issue discovered during development:
 ## 10) Maintenance rule for this file
 
 Whenever a new issue appears:
+
 1. Add a new Incident Log entry.
 2. Add or update preventive rule/checklist item.
 3. Link evidence of verification.
@@ -473,6 +539,13 @@ This file is a living engineering memory, not static documentation.
   - images missing `alt`
   - focusable elements count
   - semantic landmarks presence
+
+### Phase 13 — Environment Hardening (implemented)
+
+- **Multi-distro Smoke CI:** Integrated Arch Linux and Fedora test jobs in `.gitlab-ci.yml`.
+- **Sandbox Permission Probes:** Added automated Rust tests to verify Docker/D-Bus/PTY/FS access in restricted environments.
+- **Static Analysis Gate:** Enabled `clippy -D warnings` and `cargo-audit` in the `smoke` script.
+- **IPC Contract Parity:** Implemented Level 4 contract probes (`ipc_contract_tests.rs`) for runtime parity verification.
 
 ### Documentation discipline reinforcement
 
@@ -588,6 +661,7 @@ This file is a living engineering memory, not static documentation.
 ## 12) Continuous Incident Log (Batch 2)
 
 #### 2026-04-30 — Terminal Input "Staircase" and "No Echo"
+
 - **Area:** IPC / Terminal / PTY
 - **Symptom:** User typed but saw nothing (no echo), or output was shifted horizontally (missing CRLF).
 - **Root cause:** Use of standard pipes instead of a real PTY. Shells (bash/sh) disable interactive features when not connected to a TTY.
@@ -597,6 +671,7 @@ This file is a living engineering memory, not static documentation.
 - **Status:** resolved
 
 #### 2026-04-30 — Rust Memory Corruption (segfault) in Terminal
+
 - **Area:** Backend / Rust / Threads
 - **Symptom:** App crashed with `free(): corrupted unsorted chunks` when opening a terminal.
 - **Root cause:** Race condition between the PTY reader thread and the IPC handler thread accessing the same PTY Master without safe synchronization (Arc/Mutex).
@@ -606,6 +681,7 @@ This file is a living engineering memory, not static documentation.
 - **Status:** resolved
 
 #### 2026-04-30 — Duplicate characters ("llss") in Terminal
+
 - **Area:** Terminal / IO
 - **Symptom:** Typing one character resulted in two being displayed.
 - **Root cause:** Over-engineering the shell startup with `script` command to fake a TTY. `script` echos input back to stdout while the shell also echos, leading to double characters.
@@ -614,6 +690,7 @@ This file is a living engineering memory, not static documentation.
 - **Status:** resolved
 
 #### 2026-04-30 — UI Card Overflow in Docker Dashboard
+
 - **Area:** CSS / Responsive UI
 - **Symptom:** Container cards were too small for their content, causing text overlap and layout breaking.
 - **Root cause:** `grid-template-columns` used a `minmax(300px, 1fr)` which was too narrow for the container metadata.
@@ -622,6 +699,7 @@ This file is a living engineering memory, not static documentation.
 - **Status:** resolved
 
 #### 2026-04-30 — GitHub API Rate Limiting in Monitor
+
 - **Area:** Frontend / External API
 - **Symptom:** Monitor dashboard failed to show GitHub news after several app restarts.
 - **Root cause:** Excessive polling of the public GitHub API without authentication or caching.
@@ -631,6 +709,7 @@ This file is a living engineering memory, not static documentation.
 - **Status:** resolved
 
 #### 2026-04-30 — Inaccurate CPU usage in Dashboard
+
 - **Area:** Backend / Metrics
 - **Symptom:** CPU usage showed 0% or static "Load Average" which didn't reflect real-time spikes.
 - **Root cause:** Relying on `loadavg` (which is a 1/5/15 minute average) instead of calculating the delta of CPU ticks.
@@ -688,6 +767,7 @@ This file is a living engineering memory, not static documentation.
   - `pnpm smoke` passed
 
 #### 2026-05-01 — Flatpak `bwrap` launch failure on Arch Linux
+
 - **Area:** Packaging / Flatpak / Arch Linux
 - **Symptom:** App fails to start with `bwrap: Can't make symlink at /var/run`.
 - **Root cause:** Conflicting filesystem overrides in the Flatpak manifest/user-settings when `/var/run` is a host symlink to `/run`.
@@ -697,6 +777,7 @@ This file is a living engineering memory, not static documentation.
 - **Status:** monitoring (workaround documented)
 
 #### 2026-05-01 — Wizard/Dashboard ID mismatch (active_profile)
+
 - **Area:** State / UI / Shared Schema
 - **Symptom:** Selecting a profile in the wizard didn't highlight the same profile on the dashboard.
 - **Root cause:** Wizard used legacy strings (`desktop-qt`, `minimal`) while Schema/Dashboard used canonical enum values (`desktop-gui`, `empty`).
@@ -706,10 +787,30 @@ This file is a living engineering memory, not static documentation.
 - **Status:** resolved
 
 #### 2026-05-01 — lib.rs Monolith bloat
+
 - **Area:** Architecture / Rust
 - **Symptom:** `lib.rs` exceeded 4000 lines, making it hard to navigate and review.
 - **Root cause:** Appending all new IPC handlers to the same file during rapid prototyping.
 - **Impact:** High maintainability risk and slow review cycles.
 - **Fix implemented:** Extracted `runtime_jobs.rs` and `runtime_verify.rs` modules; added `No lib.rs Bloat` rule to `CONTRIBUTING.md`.
 - **Preventive action:** Playbook rule 2.5: Extract logic exceeding 50 lines to dedicated modules immediately.
+- **Status:** resolved
+
+#### 2026-05-02 — Clippy "Technical Debt" Overload
+
+- **Area:** Static Analysis / Maintenance
+- **Symptom:** Enforcing `clippy -D warnings` revealed 30+ non-compliant patterns in `lib.rs` and `compose_profiles.rs`.
+- **Root cause:** Rapid prototyping without active linting during Phases 1-12.
+- **Impact:** Failed CI build; delayed stabilization pass.
+- **Fix implemented:** Applied `cargo clippy --fix` followed by manual remediation of `manual_clamp`, `manual_split_once`, and `if_same_then_else` patterns.
+- **Preventive action:** Run `npx pnpm smoke` (which includes clippy) locally before every major commit.
+- **Status:** resolved
+
+#### 2026-05-02 — Flatpak `bwrap` symlink conflict (Arch Linux)
+
+- **Area:** Packaging / Sandbox
+- **Symptom:** App failed on Arch because `/var/run` is a symlink, and bwrap cannot mount over symlinks.
+- **Root cause:** Legacy `/var/run/docker.sock` mount in the manifest.
+- **Impact:** App crash on start for Arch users.
+- **Fix implemented:** Changed mount point to `/run/docker.sock` and verified with a dedicated Arch Linux CI job.
 - **Status:** resolved

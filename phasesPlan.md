@@ -23,6 +23,7 @@ Cosmetic work (theming, drag-drop polish) is blocked until after Day 10.
   - Rust deps → run `flatpak-cargo-generator` → `generated-sources.json` (`flatpak/generated-sources.json` tracked + generator script committed)
 
 Progress notes (2026-05-01):
+
 - `corepack enable` failed in Flatpak build (`EROFS`); fixed by switching manifest build commands to `npx pnpm@9.14.2 ...`.
 - `npx` fetch for `pnpm` initially failed with `EAI_AGAIN registry.npmjs.org`; fixed by adding module `build-args: --share=network` in `flatpak/io.github.karimodora.LinuxDevHome.tauri.yml`.
 - Build now passes end-to-end; app installs as `io.github.karimodora.LinuxDevHome` and basic runtime sanity check passes.
@@ -44,6 +45,7 @@ Progress notes (2026-05-01):
   - [x] `flatpak.yml` — Flatpak build + bundle + basic run test
 
 Progress notes (2026-05-01):
+
 - Added `apps/desktop/src-tauri/tests/docker_smoke.rs` with 5 tests covering Docker version/info/ps, prune preview probes, and daemon-down error simulation.
 - Test command: `cd apps/desktop/src-tauri && cargo test --test docker_smoke -- --nocapture` (passing locally).
 - Added Job Runner tests in `apps/desktop/src-tauri/src/lib.rs` (`job_runner_*`): long task completion, streamed output capture, cancel transition on running jobs, and no-op cancel on non-running jobs.
@@ -66,6 +68,7 @@ Progress notes (2026-05-01):
 ### Day 5 — Deep Audit: Critical Paths
 
 Manually review:
+
 - [x] All `tauri::command` handlers that use `shell::Command` or exec
 - [x] Timeouts and error handling in Job Runner
 - [x] Capabilities in `tauri.conf.json` (every command explicitly allowed)
@@ -73,6 +76,7 @@ Manually review:
 - [x] Maintenance Guardian logic (health scoring, aggregate metrics)
 
 Progress notes (2026-05-01):
+
 - Audited host command execution paths (`exec_output_limit`, `exec_result_limit`, Docker/SSH/curl command entry points) and timeout bounds (`CMD_TIMEOUT_SHORT/DEFAULT/LONG/INSTALL_STEP`) in `apps/desktop/src-tauri/src/lib.rs`.
 - Fixed Job Runner cancellation race: cancelled jobs could be overwritten to `completed` at finalization. Added cancellation-precedence final-state resolution (`effective_runtime_job_final_state`) and tests.
 - Capability audit: command surface remains constrained to `ipc_invoke` + `ipc_send` handlers; capability file `apps/desktop/src-tauri/capabilities/default.json` grants `core:default`, `dialog:default`, `opener:default` only.
@@ -84,12 +88,14 @@ Progress notes (2026-05-01):
 Test native + Flatpak on: **Ubuntu/Pop!OS**, **Fedora**, **Arch Linux** (VM if needed).
 
 Focus areas:
+
 - [x] Docker socket inside Flatpak (user-facing guidance hardened)
 - [x] Runtime installation (especially Java on Fedora)
 - [x] Monitor metrics (`/proc` access in Flatpak)
 - [x] Terminal integration (fallback guidance hardened for Flatpak)
 
 Bug fixes priority (see Known Bugs table below):
+
 - [x] Bug #5 — `riskyOpenPorts?.length` crash → **FIXED**
 - [x] Bug #7 — `uninstallPreview` fires on every mode toggle → **FIXED**
 - [x] Bug #2 — `installedFeatures` refreshed post-install (Docker wizard)
@@ -109,6 +115,7 @@ Progress notes (2026-05-01, follow-up):
 - [x] Update this file to reflect reality
 
 Progress notes (2026-05-01, docs pass):
+
 - README now uses explicit `Current Status` and `Known Limitations` headings and documents the `lib.rs` monolith as a maintenance follow-up.
 - Added root `CONTRIBUTING.md` with setup, quality-gate commands, commit/PR rules, and Flatpak boundary references.
 - Cross-distro/UI bug loop includes fixed Docker wizard refresh, Docker Hub official-link normalization, and Flatpak-specific fallback guidance hardening.
@@ -121,19 +128,26 @@ Progress notes (2026-05-01, docs pass):
 
 ---
 
-## 🛡️ Phase 13 — Advanced CI & Environment Hardening (Prevent Distro-Surprises)
+## 🛡️ Phase 13 — Advanced CI & Environment Hardening ✅ DONE
 
 **Goal: Stop discovering environment bugs manually on Arch/Fedora/Ubuntu.**
 
-- [ ] **Multi-distro Smoke CI:**
-  - [ ] Add GitLab CI job to launch the built Flatpak inside an Arch Linux container (using `xvfb-run`).
-  - [ ] Add GitLab CI job to launch on Fedora container.
-- [ ] **Sandbox Permission Probes:**
-  - [ ] Automated test to verify if the app can "see" the Docker socket inside the sandbox.
-  - [ ] Verify PTY (Terminal) allocation succeeds in restricted environments.
-- [ ] **Headless E2E (Packaging):**
-  - [ ] Use Playwright/Webdriver to confirm the UI actually loads (no "Connection Refused") inside the Flatpak bundle.
+- [x] **Multi-distro Smoke CI:**
 
+  - [x] Added GitLab CI jobs for Arch Linux and Fedora containers.
+  - [x] Integrated `xvfb-run` for headless UI testing.
+
+- [x] **Sandbox Permission Probes:**
+
+  - [x] Automated tests for Docker socket, PTY allocation, and FS access in `sandbox_permission_probes.rs`.
+
+- [x] **Headless E2E (Packaging):**
+
+  - [x] Verified UI load and IPC parity in headless environments via `headlessE2e.test.ts`.
+
+- [x] **Static Analysis Quality Gate:**
+
+  - [x] Enforced `clippy -D warnings` and `cargo-audit` in the `smoke` script.
 
 ---
 
@@ -141,10 +155,11 @@ Progress notes (2026-05-01, docs pass):
 
 - ❌ Drag-and-drop polish (basic HTML5 reorder already works — good enough)
 - ❌ Theme surface rollout across all routes (Maintenance theme is pilot; others wait)
-- ❌ Phase 8 Settings, Phase 10 Extensions, Phase 12 Cloud Git
+- ❌ Full-scope **Phase 10 Extensions** and **Phase 12 Cloud Git** (as originally scoped)
+- Phase **8 Settings**: first **hub** shipped on `/settings` (accent, SSH overview, read-only hosts/env); **hosts editor** and **profile env files** remain future work
 - ❌ Git Doctor, Policy Lock, Visual Change Preview
 
-_(Profiles **on-login** automation is **Phase 9** backlog, not “never do.”)_ 
+_(Profiles **on-login** automation is **Phase 9** backlog, not “never do.”)_
 
 ---
 
@@ -178,6 +193,7 @@ All five stabilization checklist items `done`. `pnpm smoke` green. See [`docs/ST
 ## Phase 1 — Dashboard: Profiles + Custom Layout 🔄 PARTIAL
 
 ### Verified shipped
+
 - [x] 9 preset profile cards on grid: Web Dev, Mobile, Game Dev, Infra/K8s, + 5 more (PROFILE_01–09)
 - [x] `CustomProfileWizardModal` — name → template → stacks → widgets → save to `custom_profiles` store
 - [x] Widget drag-and-drop reorder (HTML5, wired end-to-end in `DashboardWidgetDeck` + `DashboardWidgetsPage`)
@@ -185,8 +201,9 @@ All five stabilization checklist items `done`. `pnpm smoke` green. See [`docs/ST
 - [x] `DashboardWidgetsPage`, `DashboardKernelsPage`, `DashboardLogsPage` present and routed
 
 ### Verified missing (not Alpha scope)
+
 - [x] **Minimal compose stub per preset** — each `docker/compose/<profile>/docker-compose.yml` is a small Alpine `sleep infinity` service with a unique Compose `name:`; `dh:compose:up` resolves checkout, `LUMINA_DEV_COMPOSE_ROOT`, or bundled `docker/compose` (see `compose_profiles.rs` + `tauri.conf.json` `bundle.resources`).
-- [ ] **Full stack definitions** — replace stubs with profile-realistic services (nginx, Jupyter, Hugo, …) behind feature flags or separate overlays when ready.
+- [🔄] **Full stack definitions** — pilot: **`LUMINA_DEV_COMPOSE_FULL=1`** merges optional `docker-compose.full.yml` per preset (`web-dev` adds **nginx:alpine** on host port **18080**); remaining presets still stub-only until expanded the same way.
 - [x] Preset ↔ store: `active_profile` is a `ComposeProfile` id; dashboard + wizard + Profiles **Set Active** stay aligned
 
 _On-login automation lives under **Phase 9** (not Phase 1)._
@@ -269,17 +286,25 @@ Missing: real dep graph (`removableDeps` always empty), Ruby slow on Fedora.
 - [x] Diagnostics bundle export
 - [x] Docker cleanup + compose health
 - [x] Integrity: in-app host probes via whitelisted `hostExec`
-
-Missing: user-defined task checklist, git config backup/restore.
+- [x] **User-defined task checklist** — persisted `maintenance_state.tasks`; **Overview** shows open items + jump to Schedule; **Schedule** tab supports inline title rename (click title).
+- [x] **Git config backup/restore** — **Git Config → Backups**: JSON export (clipboard) + import restores keys via existing preset/set-key flow.
 
 ---
 
-## Phase 8 — Settings 📋 PLANNED (post-Alpha)
+## Phase 8 — Settings 🔄 PARTIAL (post-Alpha hub shipped)
 
-- **SSH Bookmarks** — manage frequently used remote connections in a dedicated UI.
-- **Hosts Editor** — `/etc/hosts` editor with root-access handling and strong safety warnings to avoid accidental destructive edits.
-- **Environment Variables** — user session env file management vs **profile-scoped env** (safer); include diff preview before application.
-- **Theme/Accent Picker** — pilot rollout of the design system across all routes with customizable accent colors.
+**Delivered on `/settings` (see [`docs/ROUTE_STATUS.md`](./ROUTE_STATUS.md)):**
+
+- [x] **Personalization** — accent presets + custom picker; persisted `appearance` store; applied app-wide (CSS variables; sync after wizard).
+- [x] **SSH bookmarks (read-only)** — same store as `/ssh`; summary table + link to manage/connect on SSH page.
+- [x] **Hosts (read-only)** — whitelisted `settings_read_hosts` via `dh:host:exec` (`cat /etc/hosts`, bounded output); UI parses lines into address / host names + filter.
+- [x] **Environment (read-only)** — whitelisted `settings_process_env` (fixed `std::env` key allowlist, no shell); table + search; PATH split into segments; long values collapsible.
+
+**Still planned:**
+
+- [ ] **Hosts editor** — `/etc/hosts` edits with root / privilege story, undo, and strong safety UX.
+- [ ] **Profile-scoped env** — user-facing env file workflow with **diff preview before apply** (safer than mutating login shells blindly).
+- [ ] **Broader theme rollout** — align with Phase 13; Settings already uses shared `hp-*` utilities + category nav.
 
 ---
 
@@ -307,18 +332,25 @@ Missing: user-defined task checklist, git config backup/restore.
 - [x] **Profile-pick step**: nine compose presets; writes `active_profile` when confirmed
 - [x] **Re-entry**: sidebar **Setup Wizard** resets `wizard_state` + reload
 - [x] **Resume logic**: `wizard_state.stepIndex` (0–6) persisted while incomplete; restored on next launch
-- [x] **Rich resume**: `wizard_state` persists Git name/email draft, Flatpak `gitTarget`, `sshPubKey` / `sshKeyGenerated` (refetch via `sshGetPub` when needed), and `pickedStarterProfile`; `WizardFlow` hydrates and re-saves on change.
+- [x] **Rich resume**: `wizard_state` persists Git name/email draft, Flatpak `gitTarget`, `sshPubKey` / `sshKeyGenerated` (refetch via `sshGetPub` when needed), and `pickedStarterProfile`; `WizardFlow` hydrates and re-saves on step or field change.
 
 ---
 
-## Phase 12 — Cloud Git (GitHub / GitLab) 📋 PLANNED (post-Alpha)
+## Phase 12 — Cloud Git (GitHub / GitLab) 🔄 IN PROGRESS (auth layer shipped)
 
 This phase turns the app into a true daily driver for software engineers managing repositories and cloud source control platforms.
 
-- **Authentication**: Secure storage of Personal Access Tokens (PAT) or OAuth for both **GitHub** and **GitLab**.
-- **Interactive Version Control**: Visual interface for `Commit`, `Push`, `Pull`, and `Sync` without needing a terminal. Branch management (checkout, create, merge).
-- **Cloud Dashboards (API Integration)**: 
-  - **Pull Requests / Merge Requests**: View open PRs/MRs, requested reviews, and merge status.
+- **Authentication** (shipped): Encrypted store for tokens; device flow + PAT; optional OAuth client IDs via **Cloud Git → Advanced** / env / compile-time; dashboard **Cloud Git** link widget (`link.cloud-git`).
+- **Interactive Version Control (Smart Workflow)**: Visual-first implementation following the "Microsoft Philosophy" (Zero Terminal).
+    - **Smart Push/Sync**: Instead of simple commands, the app implements a "Proactive Guardian". It fetches remote status before pushing. If the branch is protected or "Local is behind", it guides the user before side effects. *(v0: fetch-before-push, `behind > 0` blocks push with notice; protected-branch host messages → `[GIT_VCS_PROTECTED_BRANCH]` + Cloud Git link; **Copy raw error** on the panel. **Still:** branch rename + PR/MR wizard.)*
+  - **Integration & Resolve**:
+    - **Integrate Bar**: Guided UI for Merge, Rebase, and Stash (Fast-forward defaults).
+    - **Conflict Resolution Studio**: A dedicated 3-way merge view (Local vs Incoming vs Result) with "Accept Current", "Accept Incoming", and "Accept Both" buttons. No manual text editing required for conflicts.
+    - **State Management**: Automatic handling of `MERGING` and `REBASING` states with "Continue" or "Abort" actions. *(v0: `dh:git:vcs:status` exposes `gitOperation` + `conflictFileCount`; `/git-vcs` shows a guidance banner.)*
+- **Cloud Dashboards (API Integration)**:
+  - **Pull Requests / Merge Requests**:
+    - **Cloud Awareness**: Protected-branch push failures use a humanized code + guidance + Cloud Git entry point (see `docs/SMART_FLOW_VCS.md`). **Still to do:** PR/MR creation wizard + suggested new branch name after rename/checkout.
+    - **PR/MR Wizard**: Create new PRs/MRs directly from the app. It auto-fills titles from commit history and allows choosing target branches via a visual picker. *(Not shipped.)*
   - **Issues Tracking**: List open issues assigned to the user across repositories.
   - **CI/CD Pipelines**: Real-time status of GitHub Actions and GitLab CI/CD pipelines (Success, Failure, In Progress) for the active local repo.
   - **Releases & Tags**: Overview of the latest releases.
@@ -331,7 +363,7 @@ This phase turns the app into a true daily driver for software engineers managin
 Generalize the "Maintenance Page" aesthetic (ambient gradients, hero typography, hover-lift tiles) across the app without a big-bang rewrite.
 
 - **Principles**: Scope by page root classes, reuse CSS variables/tokens, and enhance hierarchy/spacing/motion.
-- **Rollout Priority**: 
+- **Rollout Priority**:
   1. **Monitor** — metrics + pills + health story.
   2. **Docker** — toolbar + card elevation + container tables.
   3. **Git Config** — hero + section rails to reduce noise.
@@ -354,6 +386,34 @@ Full preparation for Flathub submission and official v1.0 stability.
   - [ ] **Cross-Distro Smoke**: verified on Fedora Silverblue (immutable) and traditional distros.
 - **Maintenance**: regenerate Node sources after lockfile changes using `./flatpak/generate-node-sources.sh`.
 - See Days 1–2 and Day 10 in sprint above for Alpha release gate criteria.
+
+---
+
+## 🏗️ Phase 16 — System Readiness & Pre-Requisites Wizard 📋 PLANNED
+
+**Goal: Ensure the host environment is 100% ready with a premium, automated "Pre-flight" experience.**
+
+- [ ] **Modern Setup UI (The "Installer" Look):**
+
+  - [ ] **Sidebar Navigation**: Left sidebar showing wizard steps (Welcome, Readiness, Auth, Finish).
+  - [ ] **Hardware Snapshot**: Detailed display of CPU model/cores, RAM (Total/Free), and Disk.
+  - [ ] **Micro-animations**: Smooth status transitions when a requirement changes from `✘` to `✓`.
+
+- [ ] **Deep Readiness Probes:**
+
+  - [ ] **Hardware**: Detect total/free RAM and **Available Disk Space** (Min 10GB recommended).
+  - [ ] **Architecture**: Verify system is `x86_64` (Required for several pre-built runtimes).
+  - [ ] **Virtualization**: Detect BIOS VT-x / AMD-V / KVM status (Critical for containers).
+  - [ ] **Docker Audit**: Check for Daemon status, Version, and `docker` group membership.
+  - [ ] **Network Health**: Ping latency check for GitHub, Docker Hub, and GitLab.
+  - [ ] **System Tools**: Verify presence of `curl`, `tar`, and `unzip` in PATH.
+  - [ ] **Flatpak Sanity**: Verify sandbox overrides (if applicable) for host-bridge access.
+
+- [ ] **Actionable Resolution (The "Magic Fix"):**
+
+  - [ ] **"Fix It" button**: Integrated logic to attempt automated repairs (e.g., starting service, adding user to group).
+  - [ ] **"How?" Links**: Context-aware documentation for manual resolution steps.
+  - [ ] **Next-button Safety**: Enforce critical requirements while allowing "Skip" with warning for non-essentials.
 
 ---
 
@@ -384,12 +444,14 @@ Full preparation for Flathub submission and official v1.0 stability.
 ✅  Phase 6  — Runtimes (17 languages)
 ✅  Phase 7  — Maintenance / Guardian
 ✅  SPRINT   — Flatpak + Tests + Audit + Cross-distro + v0.2.0-alpha (shipped)
-🔄  Phase 1  — Dashboard (**full stack definitions** per preset; minimal Alpine stubs + resolver shipped)
+🔄  Phase 1  — Dashboard (stub + resolver shipped; **optional \`docker-compose.full.yml\`** pilot for richer stacks)
 ✅  Phase 9  — Profiles (incl. on-login automation)
 ✅  Phase 11 — Wizard (step + rich field resume in `wizard_state`)
-📋  Phase 8  — Settings (SSH Bookmarks, Hosts Editor, Env Vars)
-📋  Phase 12 — Cloud Git (PRs/MRs, CI/CD Status, Interactive Sync)
-📋  Phase 13 — Theme Rollout (System-wide pilot)
+🔄  Phase 8  — Settings (hub: accent + SSH overview + read-only hosts/env; editors / profile env TBD)
+✅  Phase 13 — Advanced CI & Environment Hardening
+🔄  Phase 12 — Cloud Git (Auth specs + VCS UI design in progress)
+📋  Phase 16 — System Readiness Wizard (Pre-Requisites screen)
+📋  Phase 15 — Theme Rollout (System-wide pilot)
 📋  Phase 10 — Extensions (Plugin model v0, Dev API)
 📋  Phase 14 — Flatpak Release Gate
 ```

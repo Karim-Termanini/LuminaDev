@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 pnpm install                        # Install all deps
 pnpm dev                            # Tauri dev (needs Rust + WebKit deps locally)
-pnpm test                           # Unit tests (shared + desktop)
+pnpm test                           # Unit tests (`@linux-dev-home/shared` build, then shared + desktop Vitest)
 pnpm typecheck                      # TypeScript across workspace
 pnpm lint                           # ESLint
 pnpm build                          # Renderer production bundle + copy compose profiles
@@ -37,6 +37,7 @@ Renderer → `desktopApiBridge.ts` → `invoke` / `ipc_send` → Rust `ipc_invok
 
 ### Rust backend (`apps/desktop/src-tauri/`)
 
+`compose_profiles.rs` resolves `docker/compose/<profile>` for `dh:compose:up` / `dh:compose:logs` (repo walk, `LUMINA_DEV_COMPOSE_ROOT`, or bundled resources from `tauri.conf.json`). Optional **`LUMINA_DEV_COMPOSE_FULL`** merges `docker-compose.full.yml` when present. Other domains live in focused modules (`runtime_jobs.rs`, `git_vcs_network.rs`, `git_vcs_file_diff.rs`, etc.); avoid growing new logic only in `lib.rs`.
 `compose_profiles.rs` resolves `docker/compose/<profile>` for `dh:compose:up` / `dh:compose:logs` (repo walk, `LUMINA_DEV_COMPOSE_ROOT`, or bundled resources from `tauri.conf.json`). Other domains live in focused modules (`runtime_jobs.rs`, etc.); avoid growing new logic only in `lib.rs`.
 
 Single dispatcher in `lib.rs` with two Tauri commands:
@@ -60,6 +61,8 @@ All IPC responses use `{ ok: boolean; error?: string }` shape. Error strings are
 
 - `apps/desktop/src/renderer/src/App.tsx` — route definitions
 - `pages/` — one file per route + contract/error helpers + tests
+- **`docs/SMART_FLOW_VCS.md`** — “Zero Terminal” / Smart-Flow VCS roadmap (Smart Push, conflict studio, PR wizard, banners); handoff doc for future `/git-vcs` work
+- **`SettingsPage.tsx`** — `/settings`: category rail + `hp-*` cards; `storeGet`/`storeSet` for `ssh_bookmarks` / `appearance`; `hostExec` commands `settings_read_hosts`, `settings_process_env` (see `HostExecRequestSchema` in shared + `dh:host:exec` match arms in `lib.rs`); accent applied via `applyAppearanceAccent` / `syncAppearanceFromStore`
 - `components/` — shared UI components
 - `layout/AppShell.tsx` — nav shell
 - `wizard/` — onboarding wizard on first launch

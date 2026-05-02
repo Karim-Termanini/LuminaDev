@@ -104,7 +104,163 @@ declare global {
       runtimeRemoveVersion: (payload: { runtimeId: string; version: string; path: string }) => Promise<{ ok: boolean; error?: string }>
       perfSnapshot: () => Promise<{ ok: boolean; snapshot?: import('@linux-dev-home/shared').PerfSnapshot; error?: string }>
       diagnosticsBundleCreate: (payload: { report: unknown; includeSensitive?: boolean }) => Promise<{ ok: boolean; path?: string; error?: string }>
+      systemReadinessCheck: () => Promise<{ ok: boolean; report: unknown; error?: string }>
+      systemReadinessFix: (payload: { id: string }) => Promise<{ ok: boolean; error?: string }>
       terminalGetAllEnv: () => Promise<{ ok: boolean; env: Record<string, string>; error?: string }>
+      cloudAuthConnectStart: (provider: 'github' | 'gitlab') => Promise<{
+        ok: boolean
+        user_code?: string
+        verification_uri?: string
+        device_code?: string
+        interval?: number
+        expires_in?: number
+        error?: string
+      }>
+      cloudAuthConnectPoll: (payload: {
+        provider: 'github' | 'gitlab'
+        device_code: string
+      }) => Promise<{
+        ok: boolean
+        status?: 'pending' | 'complete' | 'expired' | 'denied'
+        username?: string
+        avatar_url?: string
+        error?: string
+      }>
+      cloudAuthConnectPat: (payload: {
+        provider: 'github' | 'gitlab'
+        token: string
+      }) => Promise<{ ok: boolean; username?: string; avatar_url?: string; error?: string }>
+      cloudAuthDisconnect: (payload: {
+        provider: 'github' | 'gitlab'
+      }) => Promise<{ ok: boolean; error?: string }>
+      cloudAuthStatus: () => Promise<{
+        ok: boolean
+        accounts: import('@linux-dev-home/shared').ConnectedAccount[]
+        error?: string
+      }>
+      cloudGitPrs: (payload: {
+        provider: 'github' | 'gitlab'
+        limit?: number
+      }) => Promise<{
+        ok: boolean
+        prs?: import('@linux-dev-home/shared').CloudPullRequestEntry[]
+        error?: string
+      }>
+      cloudGitReviewRequests: (payload: {
+        provider: 'github' | 'gitlab'
+        limit?: number
+      }) => Promise<{
+        ok: boolean
+        reviewRequests?: import('@linux-dev-home/shared').CloudPullRequestEntry[]
+        error?: string
+      }>
+      cloudGitPipelines: (payload: {
+        provider: 'github' | 'gitlab'
+        limit?: number
+        repoPath?: string
+        remote?: string
+      }) => Promise<{
+        ok: boolean
+        pipelines?: import('@linux-dev-home/shared').CloudPipelineEntry[]
+        repoScoped?: boolean
+        error?: string
+      }>
+      cloudGitIssues: (payload: {
+        provider: 'github' | 'gitlab'
+        limit?: number
+      }) => Promise<{
+        ok: boolean
+        issues?: import('@linux-dev-home/shared').CloudIssueEntry[]
+        error?: string
+      }>
+      cloudGitReleases: (payload: {
+        provider: 'github' | 'gitlab'
+        limit?: number
+      }) => Promise<{
+        ok: boolean
+        releases?: import('@linux-dev-home/shared').CloudReleaseEntry[]
+        error?: string
+      }>
+      gitVcsStatus: (payload: { repoPath: string }) => Promise<{
+        ok: boolean
+        branch?: string
+        ahead?: number | null
+        behind?: number | null
+        staged?: import('@linux-dev-home/shared').FileEntry[]
+        unstaged?: import('@linux-dev-home/shared').FileEntry[]
+        /** `none` | `merging` | `rebasing` — from MERGE_HEAD / REBASE_HEAD (Smart-Flow backbone). */
+        gitOperation?: 'none' | 'merging' | 'rebasing'
+        /** Count of unmerged (`U`) paths from `git diff --diff-filter=U`. */
+        conflictFileCount?: number
+        error?: string
+      }>
+      gitVcsRemotes: (payload: { repoPath: string }) => Promise<{
+        ok: boolean
+        remotes?: import('@linux-dev-home/shared').GitRemoteEntry[]
+        error?: string
+      }>
+      gitVcsDiff: (payload: { repoPath: string; filePath: string; staged: boolean }) => Promise<{
+        ok: boolean
+        diff?: string | null
+        binary?: boolean
+        error?: string
+      }>
+      gitVcsStage: (payload: { repoPath: string; filePaths: string[] }) => Promise<{ ok: boolean; error?: string }>
+      gitVcsUnstage: (payload: { repoPath: string; filePaths: string[] }) => Promise<{ ok: boolean; error?: string }>
+      gitVcsCommit: (payload: { repoPath: string; message: string }) => Promise<{ ok: boolean; sha?: string; error?: string }>
+      gitVcsPush: (payload: { repoPath: string; remote?: string; branch?: string; forceWithLease?: boolean }) => Promise<{ ok: boolean; output?: string; error?: string }>
+      gitVcsPull: (payload: { repoPath: string }) => Promise<{ ok: boolean; output?: string; error?: string }>
+      gitVcsFetch: (payload: { repoPath: string; remote?: string }) => Promise<{ ok: boolean; output?: string; error?: string }>
+      gitVcsBranches: (payload: { repoPath: string }) => Promise<{
+        ok: boolean
+        branches?: import('@linux-dev-home/shared').BranchEntry[]
+        current?: string
+        error?: string
+      }>
+      gitVcsCheckout: (payload: { repoPath: string; branch: string; create?: boolean }) => Promise<{ ok: boolean; error?: string }>
+      gitVcsStash: (payload: {
+        repoPath: string
+        message?: string
+        includeUntracked?: boolean
+      }) => Promise<{ ok: boolean; message?: string; error?: string }>
+      gitVcsMerge: (payload: {
+        repoPath: string
+        branch: string
+        ffOnly?: boolean
+      }) => Promise<{ ok: boolean; output?: string; error?: string }>
+      gitVcsRebase: (payload: { repoPath: string; onto: string }) => Promise<{
+        ok: boolean
+        output?: string
+        error?: string
+      }>
+      gitVcsStashPop: (payload: { repoPath: string }) => Promise<{ ok: boolean; output?: string; error?: string }>
+      gitVcsMergeAbort: (payload: { repoPath: string }) => Promise<{ ok: boolean; output?: string; error?: string }>
+      gitVcsRebaseAbort: (payload: { repoPath: string }) => Promise<{ ok: boolean; output?: string; error?: string }>
+      gitVcsMergeContinue: (payload: { repoPath: string }) => Promise<{ ok: boolean; output?: string; error?: string }>
+      gitVcsRebaseContinue: (payload: { repoPath: string }) => Promise<{ ok: boolean; output?: string; error?: string }>
+      gitVcsRebaseSkip: (payload: { repoPath: string }) => Promise<{ ok: boolean; output?: string; error?: string }>
+      gitVcsRenameBranch: (payload: { repoPath: string; oldName: string; newName: string }) => Promise<{ ok: boolean; error?: string }>
+      gitVcsConflictDiff: (payload: { repoPath: string; filePath: string }) => Promise<{
+        ok: boolean
+        base?: string
+        ours?: string
+        theirs?: string
+        error?: string
+      }>
+      gitVcsResolveConflict: (payload: {
+        repoPath: string
+        filePath: string
+        resolution: 'ours' | 'theirs'
+      }) => Promise<{ ok: boolean; error?: string }>
+      cloudGitCreatePr: (payload: {
+        provider: 'github' | 'gitlab'
+        repoPath: string
+        remote?: string
+        title: string
+        body?: string
+        head: string
+        base: string
+      }) => Promise<{ ok: boolean; url?: string; error?: string }>
     }
   }
 }

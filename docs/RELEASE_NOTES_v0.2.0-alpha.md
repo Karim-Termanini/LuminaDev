@@ -29,7 +29,7 @@ Alpha release focused on Flatpak stability, Docker/runtime reliability, and CI h
 
 ### Known Issues (Alpha)
 
-- Some routes remain intentionally partial/post-alpha scope (`Settings`, `Extensions`, `Cloud Git`).
+- Some routes remain intentionally partial/post-alpha scope (`Extensions`, `Cloud Git`). **`/settings`** now ships a real **hub** (accent persistence, SSH bookmark overview, read-only hosts + env diagnostics); **hosts editing** and **profile env file** workflows are still out of scope for this alpha tag.
 - Dashboard/Profile store still has split sources of truth for preset linkage.
 - Runtime uninstall dependency graph remains best-effort (`removableDeps` limited).
 - Ruby install flow can be slower/less predictable on some Fedora setups.

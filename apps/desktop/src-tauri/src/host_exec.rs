@@ -80,6 +80,51 @@ pub(crate) async fn exec_result(cmd: &str, args: &[&str]) -> Result<(String, Str
   exec_result_limit(cmd, args, CMD_TIMEOUT_DEFAULT).await
 }
 
+/// Like `exec_output_limit` but injects additional environment variables.
+/// In Flatpak sessions, env vars are passed via `flatpak-spawn --env=K=V` args.
+pub(crate) async fn exec_output_with_env(
+    cmd: &str,
+    args: &[&str],
+    env: &[(&str, &str)],
+    limit: Duration,
+) -> Result<String, String> {
+    let env_owned: Vec<(String, String)> =
+        env.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect();
+    let args_owned: Vec<String> = args.iter().map(|s| s.to_string()).collect();
+    let cmd_owned = cmd.to_string();
+    let fut = async move {
+        let mut command = if running_in_flatpak() && cmd_owned != "flatpak-spawn" {
+            let mut wrapped = Command::new("flatpak-spawn");
+            wrapped.arg("--host");
+            for (k, v) in &env_owned {
+                wrapped.arg(format!("--env={}={}", k, v));
+            }
+            wrapped.arg(&cmd_owned);
+            wrapped
+        } else {
+            let mut c = Command::new(&cmd_owned);
+            for (k, v) in &env_owned {
+                c.env(k, v);
+            }
+            c
+        };
+        command.args(&args_owned);
+        let output = command
+            .output()
+            .await
+            .map_err(|e| format!("[EXEC_ERROR] {}", e))?;
+        if output.status.success() {
+            Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+        } else {
+            Err(String::from_utf8_lossy(&output.stderr).trim().to_string())
+        }
+    };
+    match tokio::time::timeout(limit, fut).await {
+        Ok(inner) => inner,
+        Err(_) => Err(format!("[HOST_COMMAND_TIMEOUT] {} {}", cmd, args.join(" "))),
+    }
+}
+
 pub(crate) async fn read_proc_text(path: &str) -> String {
   if let Ok(text) = std::fs::read_to_string(path) {
     if !text.trim().is_empty() {

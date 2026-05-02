@@ -19,9 +19,26 @@ log "test (workspace: shared + desktop)"
 "${PNPM[@]}" test
 
 log "test (rust backend)"
-cd apps/desktop/src-tauri && cargo test -- --nocapture
+cd apps/desktop/src-tauri
+cargo test -- --nocapture
+
+log "static analysis (rust clippy)"
+# Use `cargo clippy` (rustup component); do not gate on a `cargo-clippy` shim — it may be absent even when Clippy works.
+if cargo clippy --version >/dev/null 2>&1; then
+  cargo clippy --all-targets -- -D warnings
+else
+  log "clippy not available (rustup component add clippy); skipping"
+fi
+
+log "security audit (rust audit)"
+if command -v cargo-audit >/dev/null 2>&1; then
+  cargo audit
+else
+  log "cargo-audit not on PATH (cargo install cargo-audit); skipping advisory scan"
+fi
+
 cd "$ROOT"
 
-log "lint"
+log "lint (frontend)"
 "${PNPM[@]}" lint
 log "done OK"

@@ -1,5 +1,6 @@
 use super::*;
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn runtime_job_execute(
   app: AppHandle,
   job_id: String,
@@ -51,7 +52,7 @@ pub(crate) async fn runtime_job_execute(
                fi"#,
             safe_tc = safe_tc
           );
-          runtime_bash_user_step(&cmd, &mut logs, Some(app.clone()), Some(job_id.clone()), 5, 90).await.map_err(|e| format!("{}", e))
+          runtime_bash_user_step(&cmd, &mut logs, Some(app.clone()), Some(job_id.clone()), 5, 90).await.map_err(|e| e.to_string())
         } else if runtime_id == "node" && method == "local" {
           let v = lumina_first_version_token(&version).unwrap_or_else(|| "lts/*".into());
           // nvm refuses to operate when ~/.npmrc pins npm prefix/globalconfig; strip those keys (with backup).
@@ -73,7 +74,7 @@ pub(crate) async fn runtime_job_execute(
                nvm use --delete-prefix {v}"#,
             v = v
           );
-          runtime_bash_user_step(&cmd, &mut logs, Some(app.clone()), Some(job_id.clone()), 5, 90).await.map_err(|e| format!("{}", e))
+          runtime_bash_user_step(&cmd, &mut logs, Some(app.clone()), Some(job_id.clone()), 5, 90).await.map_err(|e| e.to_string())
         } else if runtime_id == "go" && method == "local" {
           let v = lumina_first_version_token(&version).unwrap_or_else(|| "1.22.2".into());
           let cmd = format!(
@@ -93,7 +94,7 @@ pub(crate) async fn runtime_job_execute(
              || echo 'export PATH=\"$HOME/.local/share/lumina/go/current/bin:$PATH\"  # lumina-go' >> \"$HOME/.bashrc\"",
             v = v
           );
-          runtime_bash_user_step(&cmd, &mut logs, Some(app.clone()), Some(job_id.clone()), 5, 90).await.map_err(|e| format!("{}", e))
+          runtime_bash_user_step(&cmd, &mut logs, Some(app.clone()), Some(job_id.clone()), 5, 90).await.map_err(|e| e.to_string())
         } else if runtime_id == "zig" && method == "local" {
           let mut v = lumina_first_version_token(&version).unwrap_or_else(|| "0.13.0".into());
           v = v.trim().trim_start_matches('v').trim().to_string();
@@ -120,7 +121,7 @@ pub(crate) async fn runtime_job_execute(
              || echo 'export PATH=\"$HOME/.local/share/lumina/zig/current:$PATH\"  # lumina-zig' >> \"$HOME/.bashrc\"",
             v = v
           );
-          runtime_bash_user_step(&cmd, &mut logs, Some(app.clone()), Some(job_id.clone()), 5, 90).await.map_err(|e| format!("{}", e))
+          runtime_bash_user_step(&cmd, &mut logs, Some(app.clone()), Some(job_id.clone()), 5, 90).await.map_err(|e| e.to_string())
         } else if runtime_id == "python" && method == "local" {
           if pkg_mgr == "dnf" {
             if let Some(pw) = password_opt.filter(|p| !p.is_empty()) {
@@ -145,7 +146,7 @@ pub(crate) async fn runtime_job_execute(
              && pyenv global {v}",
             v = v
           );
-          runtime_bash_user_step(&cmd, &mut logs, Some(app.clone()), Some(job_id.clone()), 5, 90).await.map_err(|e| format!("{}", e))
+          runtime_bash_user_step(&cmd, &mut logs, Some(app.clone()), Some(job_id.clone()), 5, 90).await.map_err(|e| e.to_string())
         } else if runtime_id == "java" {
           if method.trim() == "local" {
             let major = runtime_java_major(&version).unwrap_or(21);
@@ -176,7 +177,7 @@ pub(crate) async fn runtime_job_execute(
                  "$LUMINA_JAVA_DIR/current/bin/java" -version 2>&1 | head -1"#,
               major = major
             );
-            runtime_bash_user_step(&cmd, &mut logs, Some(app.clone()), Some(job_id.clone()), 5, 90).await.map_err(|e| format!("{}", e))
+            runtime_bash_user_step(&cmd, &mut logs, Some(app.clone()), Some(job_id.clone()), 5, 90).await.map_err(|e| e.to_string())
           } else {
             if pkg_mgr == "dnf" && runtime_java_major(&version) == Some(8) {
               Err("[RUNTIME_INSTALL_FAILED] Fedora repositories on this host do not provide java-1.8.0-openjdk-devel. Use Isolated Script (Local) for Java 8.".to_string())
@@ -239,7 +240,7 @@ pub(crate) async fn runtime_job_execute(
              || echo 'export PATH=\"$HOME/.dotnet:$HOME/.dotnet/tools:$PATH\"  # Microsoft .NET (lumina)' >> \"$HOME/.bashrc\"",
             ch = ch
           );
-          runtime_bash_user_step(&cmd, &mut logs, Some(app.clone()), Some(job_id.clone()), 5, 90).await.map_err(|e| format!("{}", e))
+          runtime_bash_user_step(&cmd, &mut logs, Some(app.clone()), Some(job_id.clone()), 5, 90).await.map_err(|e| e.to_string())
         } else if runtime_id == "bun" {
           let ver = lumina_first_version_token(&version).unwrap_or_default();
           let ver = ver.trim().trim_start_matches('v').to_string();
@@ -247,14 +248,14 @@ pub(crate) async fn runtime_job_execute(
             logs.push("Installing Bun via official installer (latest)…".into());
             runtime_bash_user_step("curl -fsSL https://bun.sh/install | bash", &mut logs, Some(app.clone()), Some(job_id.clone()), 5, 90)
               .await
-              .map_err(|e| format!("{}", e))
+              .map_err(|e| e.to_string())
           } else {
             logs.push(format!("Installing Bun {} via official installer…", ver));
             let cmd = format!(
               "curl -fsSL https://bun.sh/install | bash -s \"bun-v{}\"",
-              ver.replace('"', "").replace('\'', "")
+              ver.replace(['"', '\''], "")
             );
-            runtime_bash_user_step(&cmd, &mut logs, Some(app.clone()), Some(job_id.clone()), 5, 90).await.map_err(|e| format!("{}", e))
+            runtime_bash_user_step(&cmd, &mut logs, Some(app.clone()), Some(job_id.clone()), 5, 90).await.map_err(|e| e.to_string())
           }
         } else if runtime_id == "dart" {
           let (channel, release) = lumina_dart_channel_release(&version);
@@ -288,7 +289,7 @@ pub(crate) async fn runtime_job_execute(
               channel = channel,
               rel = rel_safe
             );
-            runtime_bash_user_step(&cmd, &mut logs, Some(app.clone()), Some(job_id.clone()), 5, 90).await.map_err(|e| format!("{}", e))
+            runtime_bash_user_step(&cmd, &mut logs, Some(app.clone()), Some(job_id.clone()), 5, 90).await.map_err(|e| e.to_string())
           }
         } else if runtime_id == "flutter" {
           let has_snap = exec_output_limit("which", &["snap"], CMD_TIMEOUT_SHORT).await.is_ok();
@@ -321,7 +322,7 @@ pub(crate) async fn runtime_job_execute(
             "#,
               ch = flutter_ch
             );
-            runtime_bash_user_step(&cmd, &mut logs, Some(app.clone()), Some(job_id.clone()), 5, 90).await.map_err(|e| format!("{}", e))
+            runtime_bash_user_step(&cmd, &mut logs, Some(app.clone()), Some(job_id.clone()), 5, 90).await.map_err(|e| e.to_string())
           }
         } else if (runtime_id == "php" || runtime_id == "ruby" || runtime_id == "lua") && method == "local" {
           if runtime_id == "php" {
@@ -392,7 +393,7 @@ fi"#;
                  fi"#,
               spec = safe_spec
             );
-            runtime_bash_user_step(&cmd, &mut logs, Some(app.clone()), Some(job_id.clone()), 5, 90).await.map_err(|e| format!("{}", e))
+            runtime_bash_user_step(&cmd, &mut logs, Some(app.clone()), Some(job_id.clone()), 5, 90).await.map_err(|e| e.to_string())
           }
           }
         } else if runtime_id == "julia" {
@@ -440,7 +441,7 @@ fi"#;
               want = safe
             )
           };
-          runtime_bash_user_step(&cmd, &mut logs, Some(app.clone()), Some(job_id.clone()), 5, 90).await.map_err(|e| format!("{}", e))
+          runtime_bash_user_step(&cmd, &mut logs, Some(app.clone()), Some(job_id.clone()), 5, 90).await.map_err(|e| e.to_string())
         } else {
           let pkgs = runtime_system_packages(&runtime_id, pkg_mgr);
           if method.trim() == "local"

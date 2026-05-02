@@ -68,6 +68,25 @@ export type GitRepoEntry = {
   lastOpened: number
 }
 
+export type FileEntry = {
+  path: string
+  /** `C` = unmerged / merge conflict (from `git status --porcelain` XY). */
+  status: 'M' | 'A' | 'D' | 'R' | '?' | 'C'
+  oldPath?: string
+}
+
+export type BranchEntry = {
+  name: string
+  remote: boolean
+  current: boolean
+}
+
+/** Named Git remote with fetch URL from `git remote -v` (fetch line). */
+export type GitRemoteEntry = {
+  name: string
+  fetchUrl: string
+}
+
 export type HostPortRow = {
   protocol: 'tcp' | 'udp'
   port: number
@@ -215,7 +234,43 @@ export const IPC = {
   runtimeRemoveVersion: 'dh:runtime:remove-version',
   perfSnapshot: 'dh:perf:snapshot',
   diagnosticsBundleCreate: 'dh:diagnostics:bundle:create',
+  systemReadinessCheck: 'dh:system:readiness:check',
+  systemReadinessFix: 'dh:system:readiness:fix',
   terminalGetAllEnv: 'dh:terminal:get-all-env',
+  cloudAuthConnectStart: 'dh:cloud:auth:connect-start',
+  cloudAuthConnectPoll: 'dh:cloud:auth:connect-poll',
+  cloudAuthConnectPat: 'dh:cloud:auth:connect-pat',
+  cloudAuthDisconnect: 'dh:cloud:auth:disconnect',
+  cloudAuthStatus: 'dh:cloud:auth:status',
+  cloudGitPrs: 'dh:cloud:git:prs',
+  cloudGitReviewRequests: 'dh:cloud:git:review-requests',
+  cloudGitPipelines: 'dh:cloud:git:pipelines',
+  cloudGitIssues: 'dh:cloud:git:issues',
+  cloudGitReleases: 'dh:cloud:git:releases',
+  gitVcsStatus: 'dh:git:vcs:status',
+  gitVcsRemotes: 'dh:git:vcs:remotes',
+  gitVcsDiff: 'dh:git:vcs:diff',
+  gitVcsStage: 'dh:git:vcs:stage',
+  gitVcsUnstage: 'dh:git:vcs:unstage',
+  gitVcsCommit: 'dh:git:vcs:commit',
+  gitVcsPush: 'dh:git:vcs:push',
+  gitVcsPull: 'dh:git:vcs:pull',
+  gitVcsFetch: 'dh:git:vcs:fetch',
+  gitVcsBranches: 'dh:git:vcs:branches',
+  gitVcsCheckout: 'dh:git:vcs:checkout',
+  gitVcsStash: 'dh:git:vcs:stash',
+  gitVcsMerge: 'dh:git:vcs:merge',
+  gitVcsRebase: 'dh:git:vcs:rebase',
+  gitVcsStashPop: 'dh:git:vcs:stash-pop',
+  gitVcsMergeAbort: 'dh:git:vcs:merge-abort',
+  gitVcsRebaseAbort: 'dh:git:vcs:rebase-abort',
+  gitVcsMergeContinue: 'dh:git:vcs:merge-continue',
+  gitVcsRebaseContinue: 'dh:git:vcs:rebase-continue',
+  gitVcsRebaseSkip: 'dh:git:vcs:rebase-skip',
+  gitVcsRenameBranch: 'dh:git:vcs:rename-branch',
+  gitVcsConflictDiff: 'dh:git:vcs:conflict-diff',
+  gitVcsResolveConflict: 'dh:git:vcs:resolve-conflict',
+  cloudGitCreatePr: 'dh:cloud:git:create-pr',
 } as const
 
 export type DockerActionPayload = { id: string; action: DockerContainerAction }
