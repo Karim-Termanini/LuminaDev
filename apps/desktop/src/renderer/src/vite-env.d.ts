@@ -136,6 +136,33 @@ declare global {
         accounts: import('@linux-dev-home/shared').ConnectedAccount[]
         error?: string
       }>
+      gitVcsStatus: (payload: { repoPath: string }) => Promise<{
+        ok: boolean
+        branch?: string
+        ahead?: number | null
+        behind?: number | null
+        staged?: import('@linux-dev-home/shared').FileEntry[]
+        unstaged?: import('@linux-dev-home/shared').FileEntry[]
+        error?: string
+      }>
+      gitVcsDiff: (payload: { repoPath: string; filePath: string; staged: boolean }) => Promise<{
+        ok: boolean
+        diff?: string | null
+        binary?: boolean
+        error?: string
+      }>
+      gitVcsStage: (payload: { repoPath: string; filePaths: string[] }) => Promise<{ ok: boolean; error?: string }>
+      gitVcsUnstage: (payload: { repoPath: string; filePaths: string[] }) => Promise<{ ok: boolean; error?: string }>
+      gitVcsCommit: (payload: { repoPath: string; message: string }) => Promise<{ ok: boolean; sha?: string; error?: string }>
+      gitVcsPush: (payload: { repoPath: string; remote?: string; branch?: string }) => Promise<{ ok: boolean; output?: string; error?: string }>
+      gitVcsPull: (payload: { repoPath: string }) => Promise<{ ok: boolean; output?: string; error?: string }>
+      gitVcsBranches: (payload: { repoPath: string }) => Promise<{
+        ok: boolean
+        branches?: import('@linux-dev-home/shared').BranchEntry[]
+        current?: string
+        error?: string
+      }>
+      gitVcsCheckout: (payload: { repoPath: string; branch: string; create?: boolean }) => Promise<{ ok: boolean; error?: string }>
     }
   }
 }
