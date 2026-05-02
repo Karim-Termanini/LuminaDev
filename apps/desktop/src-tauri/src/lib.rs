@@ -2252,7 +2252,8 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
     | "dh:cloud:git:pipelines"
     | "dh:cloud:git:issues"
     | "dh:cloud:git:releases"
-    | "dh:cloud:git:create-pr" => cloud_git_ipc::invoke(&app, channel.as_str(), &body).await,
+    | "dh:cloud:git:create-pr"
+    | "dh:cloud:git:get-pr-checks" => cloud_git_ipc::invoke(&app, channel.as_str(), &body).await,
 
     "dh:git:vcs:status" => {
         let repo_path = body.get("repoPath").and_then(|v| v.as_str()).unwrap_or_default();
