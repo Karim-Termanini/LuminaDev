@@ -106,6 +106,16 @@ export const WizardStateStoreSchema = z.object({
   showOnStartup: z.boolean().optional().default(false),
   /** When `completed` is false, last wizard step (0–6) for resume-after-restart. */
   stepIndex: z.number().int().min(0).max(6).optional(),
+  /** Git step draft; applied only when the user clicks Apply on the Git step. */
+  gitName: z.string().max(128).optional(),
+  gitEmail: z.string().max(256).optional(),
+  gitTarget: z.enum(['sandbox', 'host']).optional(),
+  /** SSH public key after Generate (public material only). */
+  sshPubKey: z.string().max(8192).optional(),
+  /** True after successful keygen; used to refetch via `sshGetPub` on resume if `sshPubKey` is absent. */
+  sshKeyGenerated: z.boolean().optional(),
+  /** Starter compose preset chosen on step 5. */
+  pickedStarterProfile: ComposeProfileSchema.optional(),
 })
 
 /** Optional actions after app shell loads (wizard dismissed). */
