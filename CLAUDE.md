@@ -60,6 +60,7 @@ All IPC responses use `{ ok: boolean; error?: string }` shape. Error strings are
 
 - `apps/desktop/src/renderer/src/App.tsx` — route definitions
 - `pages/` — one file per route + contract/error helpers + tests
+- **`SettingsPage.tsx`** — `/settings`: category rail + `hp-*` cards; `storeGet`/`storeSet` for `ssh_bookmarks` / `appearance`; `hostExec` commands `settings_read_hosts`, `settings_process_env` (see `HostExecRequestSchema` in shared + `dh:host:exec` match arms in `lib.rs`); accent applied via `applyAppearanceAccent` / `syncAppearanceFromStore`
 - `components/` — shared UI components
 - `layout/AppShell.tsx` — nav shell
 - `wizard/` — onboarding wizard on first launch

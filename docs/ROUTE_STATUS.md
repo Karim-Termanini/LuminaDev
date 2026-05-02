@@ -23,7 +23,7 @@ Status legend:
 | `/terminal` | partial | Embedded terminal works; host/sandbox differences still affect behavior. |
 | `/runtimes` | partial | Status/version/deps/uninstall preview are live; install/update/remove backend is in active hardening. |
 | `/maintenance` | partial | Guardian + diagnostics + host probes as above. **Tasks**: user checklist on Overview + full editor on Schedule (inline rename). **Git backups** live on **Git Config → Backups**. No arbitrary host shell or full remediation. |
-| `/settings` | partial | **SSH bookmarks:** read-only list + link to `/ssh` (`ssh_bookmarks`). **Accent:** persisted `appearance` store, applied app-wide via CSS variables. **Hosts:** read-only `/etc/hosts` preview (`settings_read_hosts`). **Env:** allowlisted process env preview (`settings_process_env`). Profile-scoped env files still planned. |
+| `/settings` | partial | **Nav:** Personalization / SSH & remote / System (Windows-style rail + detail card). **Accent:** presets + custom color; `appearance` store; `applyAppearanceAccent` / `syncAppearanceFromStore` (incl. wizard complete). **SSH:** read-only bookmark table + “Manage on SSH page” (`ssh_bookmarks`). **Hosts:** `settings_read_hosts` → parsed table (address / names), search, refresh. **Env:** `settings_process_env` → key/value table, PATH as directory list + expand, search, long-value expand. **Not yet:** hosts file editing, profile-scoped env files + diff-before-apply. |
 
 ## Update Rule
 

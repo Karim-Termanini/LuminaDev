@@ -16,6 +16,7 @@ This project is in active development. Features below are split by maturity:
 - **Partial / evolving**:
   - Tauri migration: core port done; packaging (Flatpak) intentionally last — heavy CI.
   - `dh:docker:install` / `dh:docker:remap-port`: Tauri — **native session:** install wizard (distro + sudo) and Ports-tab remap form call the Rust handlers; **Flatpak:** blocked with explicit docs; remap clones then **stops and removes** the source container when stop succeeds (`sourceRemoved` in response).
+  - **Settings** (`/settings`): personalization (accent), read-only SSH bookmark overview, structured **hosts** and **process env** diagnostics (`settings_read_hosts` / `settings_process_env` over `dh:host:exec`). Host file editing and profile-scoped env files are not implemented yet ([`docs/ROUTE_STATUS.md`](docs/ROUTE_STATUS.md)).
   - Flatpak packaging and cross-distro consistency.
   - Runtime install/update matrix hardening.
   - Diagnostics and support bundle depth.
