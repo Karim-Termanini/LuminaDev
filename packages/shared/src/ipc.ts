@@ -192,6 +192,7 @@ export const IPC = {
   layoutSet: 'dh:layout:set',
   storeGet: 'dh:store:get',
   storeSet: 'dh:store:set',
+  storeDelete: 'dh:store:delete',
   jobStart: 'dh:job:start',
   jobsList: 'dh:job:list',
   jobCancel: 'dh:job:cancel',

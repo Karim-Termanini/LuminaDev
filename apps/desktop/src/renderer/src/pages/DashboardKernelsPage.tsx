@@ -1,138 +1,122 @@
 import type { ReactElement } from 'react'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import type { HostSecuritySnapshot } from '@linux-dev-home/shared'
 
 const UNITS = ['docker', 'ssh', 'nginx'] as const
+const REFRESH_MS = 30_000
 
 export function DashboardKernelsPage(): ReactElement {
-  const [gpu, setGpu] = useState('Detecting GPU…')
+  const [gpu, setGpu] = useState<string | null>(null)
   const [units, setUnits] = useState<Record<string, string>>({})
+  const [security, setSecurity] = useState<HostSecuritySnapshot | null>(null)
+  const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null)
   const [busy, setBusy] = useState(false)
 
-  async function refresh(): Promise<void> {
+  const refresh = useCallback(async () => {
     setBusy(true)
     try {
-      const g = await window.dh.hostExec({ command: 'nvidia_smi_short' })
-      setGpu(g.ok && typeof g.result === 'string' ? g.result : 'GPU: unavailable')
-    } catch {
-      setGpu('GPU: unavailable')
-    }
-
-    const nextUnits: Record<string, string> = {}
-    for (const unit of UNITS) {
-      try {
-        const s = await window.dh.hostExec({ command: 'systemctl_is_active', unit })
-        nextUnits[unit] = s.ok ? String(s.result ?? 'unknown') : 'unknown'
-      } catch {
-        nextUnits[unit] = 'unknown'
+      const [gpuRes, secRes] = await Promise.allSettled([
+        window.dh.hostExec({ command: 'nvidia_smi_short' }),
+        window.dh.monitorSecurity(),
+      ])
+      if (gpuRes.status === 'fulfilled') {
+        const g = gpuRes.value
+        setGpu(g.ok && typeof g.result === 'string' ? g.result : 'GPU: unavailable')
       }
+      if (secRes.status === 'fulfilled' && secRes.value.ok) {
+        setSecurity(secRes.value.snapshot)
+      }
+
+      const nextUnits: Record<string, string> = {}
+      await Promise.all(
+        UNITS.map(async (unit) => {
+          try {
+            const s = await window.dh.hostExec({ command: 'systemctl_is_active', unit })
+            nextUnits[unit] = s.ok ? String(s.result ?? 'unknown') : 'unknown'
+          } catch {
+            nextUnits[unit] = 'unknown'
+          }
+        })
+      )
+      setUnits(nextUnits)
+      setLastRefreshed(new Date())
+    } finally {
+      setBusy(false)
     }
-    setUnits(nextUnits)
-    setBusy(false)
-  }
+  }, [])
 
   useEffect(() => {
     void refresh()
-  }, [])
+    const id = setInterval(() => void refresh(), REFRESH_MS)
+    return () => clearInterval(id)
+  }, [refresh])
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 980, margin: '0 auto', paddingInline: 12 }}>
-      <header>
-        <div className="mono" style={{ color: 'var(--accent)', fontSize: 12, marginBottom: 8 }}>
-          DASHBOARD.KERNELS
+      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 12 }}>
+        <div>
+          <div className="mono" style={{ color: 'var(--accent)', fontSize: 12, marginBottom: 8 }}>DASHBOARD.KERNELS</div>
+          <h1 style={{ margin: 0, fontSize: 28, fontWeight: 700 }}>Kernels & Toolchains</h1>
+          <p style={{ color: 'var(--text-muted)', fontSize: 14, marginTop: 8 }}>
+            GPU probe, service states, and security audit. Refreshes every 30 seconds.
+          </p>
         </div>
-        <h1 style={{ margin: 0, fontSize: 28, fontWeight: 700 }}>Kernels &amp; toolchains</h1>
-        <p style={{ color: 'var(--text-muted)', fontSize: 15, lineHeight: 1.55, marginTop: 10 }}>
-          Quick host checks for kernel-adjacent tooling. This page is now functional: GPU probe + service status
-          snapshots.
-        </p>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {lastRefreshed && (
+            <span className="mono" style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+              Updated {lastRefreshed.toLocaleTimeString()}
+            </span>
+          )}
+          <button type="button" onClick={() => void refresh()} className="hp-btn" disabled={busy}>
+            {busy ? 'Refreshing…' : 'Refresh now'}
+          </button>
+        </div>
       </header>
 
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', rowGap: 8 }}>
-        <button type="button" onClick={() => void refresh()} className="hp-btn" disabled={busy}>
-          {busy ? 'Refreshing…' : 'Refresh checks'}
-        </button>
-        <button type="button" className="hp-btn" onClick={() => void window.dh.openExternal('https://kernel.org/')}>
-          Kernel docs
-        </button>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
+        <div style={tile}>
+          <div className="mono" style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>GPU</div>
+          <div style={{ fontSize: 13, fontWeight: 600 }}>{gpu ?? '…'}</div>
+        </div>
+        {UNITS.map((u) => (
+          <div key={u} style={tile}>
+            <div className="mono" style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>{u}</div>
+            <div style={{ fontWeight: 700, color: colorFor(units[u]) }}>{units[u] ?? '…'}</div>
+          </div>
+        ))}
       </div>
 
-      <section style={card}>
-        <div className="hp-card-header">
-          <div className="hp-card-title">GPU snapshot</div>
-          <div className="hp-card-subtitle">Runtime detection from host tooling.</div>
-        </div>
-        <pre className="mono" style={{ ...pre, overflowX: 'auto' }}>{gpu}</pre>
-      </section>
-
-      <section style={card}>
-        <div className="hp-card-header">
-          <div className="hp-card-title">Service states</div>
-          <div className="hp-card-subtitle">Quick status for critical local services.</div>
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 10 }}>
-          {UNITS.map((u) => (
-            <div key={u} style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10, background: '#141414' }}>
-              <div className="mono" style={{ fontSize: 12 }}>{u}</div>
-              <div style={{ marginTop: 6, color: colorFor(units[u]), fontWeight: 600 }}>{units[u] ?? '…'}</div>
+      {security && (
+        <section style={card}>
+          <div style={{ fontWeight: 600, marginBottom: 12 }}>Security Audit</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 10 }}>
+            <SecurityItem label="Firewall" value={security.firewall} ok={security.firewall === 'active'} />
+            <SecurityItem label="SELinux / AppArmor" value={security.selinux} ok={security.selinux === 'enabled' || security.selinux === 'enforcing'} />
+            <SecurityItem label="SSH Root Login" value={security.sshPermitRootLogin} ok={security.sshPermitRootLogin === 'no'} />
+            <SecurityItem label="SSH Password Auth" value={security.sshPasswordAuth} ok={security.sshPasswordAuth === 'no'} />
+            <SecurityItem
+              label="Failed Auth (24h)"
+              value={String(security.failedAuth24h)}
+              ok={security.failedAuth24h === 0}
+            />
+          </div>
+          {(security.riskyOpenPorts?.length ?? 0) > 0 && (
+            <div style={{ marginTop: 14, padding: '10px 12px', background: 'rgba(239,68,68,0.08)', borderRadius: 8, border: '1px solid rgba(239,68,68,0.2)' }}>
+              <span style={{ fontSize: 13, color: 'var(--red)', fontWeight: 700 }}>⚠ Risky open ports: </span>
+              <span className="mono" style={{ fontSize: 12 }}>{security.riskyOpenPorts.join(', ')}</span>
             </div>
-          ))}
-        </div>
-      </section>
-
-      <SecuritySection />
-    </div>
-  )
-}
-
-function SecuritySection(): ReactElement {
-  const [data, setData] = useState<HostSecuritySnapshot | null>(null)
-  const [loading, setLoading] = useState(true)
-
-  async function fetch() {
-    setLoading(true)
-    try {
-      const res = await window.dh.monitorSecurity()
-      if (res.ok) setData(res.snapshot)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    void fetch()
-  }, [])
-
-  if (loading) return <div style={{ color: 'var(--text-muted)', fontSize: 14 }}>Scanning security…</div>
-  if (!data) return <div style={{ color: 'var(--orange)', fontSize: 14 }}>Security probe failed.</div>
-
-  return (
-    <section style={card}>
-      <div className="hp-card-header">
-        <div className="hp-card-title">Security hardening</div>
-        <div className="hp-card-subtitle">Host-level configuration audit.</div>
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12, marginTop: 12 }}>
-        <SecurityItem label="Firewall" value={data.firewall} ok={data.firewall === 'active'} />
-        <SecurityItem label="SELinux" value={data.selinux} ok={data.selinux === 'enabled'} />
-        <SecurityItem label="SSH Root Login" value={data.sshPermitRootLogin} ok={data.sshPermitRootLogin === 'no'} />
-        <SecurityItem label="SSH Password Auth" value={data.sshPasswordAuth} ok={data.sshPasswordAuth === 'no'} />
-      </div>
-      {data.riskyOpenPorts.length > 0 && (
-        <div style={{ marginTop: 16, padding: 10, background: 'rgba(255, 68, 68, 0.1)', borderRadius: 8, border: '1px solid rgba(255, 68, 68, 0.2)' }}>
-          <div style={{ fontSize: 13, color: 'var(--red)', fontWeight: 600 }}>⚠️ Risky open ports detected</div>
-          <div className="mono" style={{ fontSize: 12, marginTop: 4 }}>{data.riskyOpenPorts.join(', ')}</div>
-        </div>
+          )}
+        </section>
       )}
-    </section>
+    </div>
   )
 }
 
 function SecurityItem({ label, value, ok }: { label: string; value: string; ok: boolean }): ReactElement {
   return (
-    <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10, background: '#141414' }}>
-      <div className="mono" style={{ fontSize: 11, color: 'var(--text-muted)' }}>{label}</div>
-      <div style={{ marginTop: 4, color: ok ? 'var(--green)' : 'var(--orange)', fontWeight: 600, fontSize: 14 }}>
+    <div style={tile}>
+      <div className="mono" style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>{label}</div>
+      <div style={{ fontWeight: 700, fontSize: 13, color: ok ? 'var(--green)' : 'var(--orange)' }}>
         {value.toUpperCase()}
       </div>
     </div>
@@ -146,19 +130,5 @@ function colorFor(s?: string): string {
   return 'var(--text-muted)'
 }
 
-const card = {
-  background: 'var(--bg-widget)',
-  border: '1px solid var(--border)',
-  borderRadius: 'var(--radius)',
-  padding: 16,
-}
-
-const pre = {
-  margin: '10px 0 0 0',
-  padding: 10,
-  background: '#0a0a0a',
-  border: '1px solid var(--border)',
-  borderRadius: 8,
-  whiteSpace: 'pre-wrap' as const,
-  fontSize: 12,
-}
+const card = { background: 'var(--bg-widget)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: 16 }
+const tile = { ...card, padding: 12 }

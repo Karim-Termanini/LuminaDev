@@ -54,6 +54,16 @@ export function ProfilesPage(): ReactElement {
     }
   }
 
+  async function clearActive(): Promise<void> {
+    try {
+      await window.dh.storeDelete({ key: 'active_profile' })
+      setActiveProfile(null)
+      setStatus('Active profile cleared.')
+    } catch (e) {
+      setStatus(e instanceof Error ? e.message : String(e))
+    }
+  }
+
   async function removeAt(idx: number): Promise<void> {
     const next = profiles.filter((_, i) => i !== idx)
     await save(next, 'Profile removed.')
@@ -124,6 +134,9 @@ export function ProfilesPage(): ReactElement {
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
           <button type="button" style={btn} onClick={() => void load()}>Refresh</button>
           <button type="button" style={btn} onClick={() => void exportJson()}>Export JSON</button>
+          {activeProfile && (
+            <button type="button" style={btnDanger} onClick={() => void clearActive()}>Clear Active Profile</button>
+          )}
           <button type="button" style={btnDanger} onClick={() => void save([], 'All profiles cleared.')}>Clear all</button>
           <span className="mono" style={{ color: 'var(--text-muted)', fontSize: 12 }}>{profiles.length} profiles</span>
         </div>
