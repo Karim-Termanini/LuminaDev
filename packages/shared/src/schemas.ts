@@ -163,6 +163,16 @@ export const MaintenanceStateStoreSchema = z.object({
   reminderDays: z.number().int().min(1).max(60).optional(),
 })
 
+export const SshBookmarkSchema = z.object({
+  id: z.string().min(1).max(128),
+  name: z.string().min(1).max(200),
+  user: z.string().max(200),
+  host: z.string().min(1).max(512),
+  port: z.number().int().min(1).max(65535).default(22),
+})
+
+export const SshBookmarksStoreSchema = z.array(SshBookmarkSchema).max(100)
+
 /** Keys with typed payloads persisted under userData (`store_<key>.json`). */
 export const StoreKeySchema = z.enum([
   'custom_profiles',
@@ -188,13 +198,7 @@ export const StoreSetRequestSchema = z.discriminatedUnion('key', [
   }),
   z.object({
     key: z.literal('ssh_bookmarks'),
-    data: z.array(z.object({
-      id: z.string(),
-      name: z.string(),
-      user: z.string(),
-      host: z.string(),
-      port: z.number().default(22),
-    })),
+    data: SshBookmarksStoreSchema,
   }),
   z.object({
     key: z.literal('maintenance_state'),
@@ -286,7 +290,7 @@ export type StoreGetRequest = z.infer<typeof StoreGetRequestSchema>
 export type StoreSetRequest = z.infer<typeof StoreSetRequestSchema>
 export type WizardStateStore = z.infer<typeof WizardStateStoreSchema>
 export type OnLoginAutomationStore = z.infer<typeof OnLoginAutomationStoreSchema>
-export type SshBookmark = { id: string; name: string; user: string; host: string; port: number }
+export type SshBookmark = z.infer<typeof SshBookmarkSchema>
 
 const defaultOnLoginAutomation: OnLoginAutomationStore = {
   composeUpForActiveProfile: false,
@@ -297,6 +301,12 @@ const defaultOnLoginAutomation: OnLoginAutomationStore = {
 export function parseOnLoginAutomation(data: unknown): OnLoginAutomationStore {
   const r = OnLoginAutomationStoreSchema.safeParse(data)
   return r.success ? r.data : defaultOnLoginAutomation
+}
+
+/** Coerce persisted `ssh_bookmarks` (or missing/invalid) to a safe array. */
+export function parseSshBookmarks(data: unknown): SshBookmark[] {
+  const r = SshBookmarksStoreSchema.safeParse(data)
+  return r.success ? r.data : []
 }
 
 /** Normalize a persisted `active_profile` value: canonical enum or legacy aliases → ComposeProfile | null. */

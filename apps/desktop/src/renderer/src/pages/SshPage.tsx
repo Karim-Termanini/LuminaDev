@@ -1,6 +1,7 @@
 import type { ReactElement } from 'react'
 import { useEffect, useRef, useState } from 'react'
 import type { SshBookmark } from '@linux-dev-home/shared'
+import { parseSshBookmarks } from '@linux-dev-home/shared'
 import { FitAddon } from '@xterm/addon-fit'
 import { Terminal } from '@xterm/xterm'
 import '@xterm/xterm/css/xterm.css'
@@ -86,7 +87,7 @@ export function SshPage(): ReactElement {
   async function loadBookmarks(): Promise<void> {
     try {
       const res = await window.dh.storeGet({ key: 'ssh_bookmarks' })
-      if (res.ok && Array.isArray(res.data)) setBookmarks(res.data as SshBookmark[])
+      if (res.ok) setBookmarks(parseSshBookmarks(res.data))
     } catch (e) {
       console.error('Failed to load ssh bookmarks', e)
     }

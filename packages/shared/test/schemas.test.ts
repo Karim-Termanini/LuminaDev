@@ -9,6 +9,7 @@ import {
   GitConfigSetSchema,
   HostExecRequestSchema,
   parseOnLoginAutomation,
+  parseSshBookmarks,
   parseStoredActiveProfile,
   RuntimeCheckDepsRequestSchema,
   WizardStateStoreSchema,
@@ -207,5 +208,30 @@ describe('schemas', () => {
       key: 'on_login_automation',
       data: { composeUpForActiveProfile: true, reloadDashboardLayout: true },
     })
+  })
+
+  it('parseSshBookmarks returns [] on invalid data', () => {
+    expect(parseSshBookmarks(null)).toEqual([])
+    expect(parseSshBookmarks({})).toEqual([])
+    expect(parseSshBookmarks([{ id: '', name: 'x', user: 'u', host: 'h', port: 22 }])).toEqual([])
+  })
+
+  it('parseSshBookmarks accepts valid bookmarks and store set', () => {
+    const rows = [
+      { id: 'a1', name: 'Prod', user: 'ubuntu', host: '10.0.0.1', port: 22 },
+      { id: 'b2', name: 'Edge', user: 'root', host: 'edge.example', port: 2222 },
+    ]
+    expect(parseSshBookmarks(rows)).toEqual(rows)
+    const v = StoreSetRequestSchema.parse({ key: 'ssh_bookmarks', data: rows })
+    expect(v.key).toBe('ssh_bookmarks')
+    expect(v.data).toHaveLength(2)
+  })
+
+  it('parses ssh_bookmarks with default port when omitted', () => {
+    const v = StoreSetRequestSchema.parse({
+      key: 'ssh_bookmarks',
+      data: [{ id: 'x', name: 'Home', user: 'me', host: 'home.local' }],
+    })
+    expect(v.data[0].port).toBe(22)
   })
 })
