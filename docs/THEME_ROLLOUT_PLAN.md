@@ -9,7 +9,7 @@ This document is the agreed roadmap to **generalize that look** across the app w
 1. **Scope by page** — Each route (or feature area) gets a root class (e.g. `.docker-page`, `.git-page`) and optional `FeaturePage.css`. Avoid bloating `global.css` with route-specific rules.
 2. **Reuse tokens** — Continue using `var(--accent)`, `var(--bg-widget)`, `var(--border)`, codicons, and existing `hp-btn` / `hp-card` / `hp-input`. Overrides target **children of the page root** (same pattern as `.maint-page .hp-card`).
 3. **Progressive enhancement** — Ship one route at a time; keep layouts and IPC behavior unchanged; only elevate **hierarchy, spacing, motion, and readability**.
-4. **Truth in chrome** — Nav / badges (`AppShell`) stay aligned with **`docs/ROUTE_STATUS.md`**; “wow” UI must not imply `live` where the matrix says `partial` or `stub`.
+4. **Truth in chrome** — Nav / badges (`AppShell`) stay aligned with **`docs/ROUTE_STATUS.md`**; “wow” UI must not imply `live` where the matrix says `partial` or `stub`. **`/settings`** already uses the shared **`hp-card` / `hp-btn`** stack and a category rail; keep new chrome consistent with that page when touching globals.
 
 ## Extractable building blocks (from Maintenance)
 

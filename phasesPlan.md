@@ -141,7 +141,8 @@ Progress notes (2026-05-01, docs pass):
 
 - ❌ Drag-and-drop polish (basic HTML5 reorder already works — good enough)
 - ❌ Theme surface rollout across all routes (Maintenance theme is pilot; others wait)
-- ❌ Phase 8 Settings, Phase 10 Extensions, Phase 12 Cloud Git
+- ❌ Full-scope **Phase 10 Extensions** and **Phase 12 Cloud Git** (as originally scoped)
+- Phase **8 Settings**: first **hub** shipped on `/settings` (accent, SSH overview, read-only hosts/env); **hosts editor** and **profile env files** remain future work
 - ❌ Git Doctor, Policy Lock, Visual Change Preview
 
 _(Profiles **on-login** automation is **Phase 9** backlog, not “never do.”)_ 
@@ -274,12 +275,20 @@ Missing: real dep graph (`removableDeps` always empty), Ruby slow on Fedora.
 
 ---
 
-## Phase 8 — Settings 📋 PLANNED (post-Alpha)
+## Phase 8 — Settings 🔄 PARTIAL (post-Alpha hub shipped)
 
-- **SSH Bookmarks** — manage frequently used remote connections in a dedicated UI.
-- **Hosts Editor** — `/etc/hosts` editor with root-access handling and strong safety warnings to avoid accidental destructive edits.
-- **Environment Variables** — user session env file management vs **profile-scoped env** (safer); include diff preview before application.
-- **Theme/Accent Picker** — pilot rollout of the design system across all routes with customizable accent colors.
+**Delivered on `/settings` (see [`docs/ROUTE_STATUS.md`](./ROUTE_STATUS.md)):**
+
+- [x] **Personalization** — accent presets + custom picker; persisted `appearance` store; applied app-wide (CSS variables; sync after wizard).
+- [x] **SSH bookmarks (read-only)** — same store as `/ssh`; summary table + link to manage/connect on SSH page.
+- [x] **Hosts (read-only)** — whitelisted `settings_read_hosts` via `dh:host:exec` (`cat /etc/hosts`, bounded output); UI parses lines into address / host names + filter.
+- [x] **Environment (read-only)** — whitelisted `settings_process_env` (fixed `std::env` key allowlist, no shell); table + search; PATH split into segments; long values collapsible.
+
+**Still planned:**
+
+- [ ] **Hosts editor** — `/etc/hosts` edits with root / privilege story, undo, and strong safety UX.
+- [ ] **Profile-scoped env** — user-facing env file workflow with **diff preview before apply** (safer than mutating login shells blindly).
+- [ ] **Broader theme rollout** — align with Phase 13; Settings already uses shared `hp-*` utilities + category nav.
 
 ---
 
@@ -387,7 +396,7 @@ Full preparation for Flathub submission and official v1.0 stability.
 🔄  Phase 1  — Dashboard (stub + resolver shipped; **optional \`docker-compose.full.yml\`** pilot for richer stacks)
 ✅  Phase 9  — Profiles (incl. on-login automation)
 ✅  Phase 11 — Wizard (step + rich field resume in `wizard_state`)
-📋  Phase 8  — Settings (SSH Bookmarks, Hosts Editor, Env Vars)
+🔄  Phase 8  — Settings (hub: accent + SSH overview + read-only hosts/env; editors / profile env TBD)
 📋  Phase 12 — Cloud Git (PRs/MRs, CI/CD Status, Interactive Sync)
 📋  Phase 13 — Theme Rollout (System-wide pilot)
 📋  Phase 10 — Extensions (Plugin model v0, Dev API)

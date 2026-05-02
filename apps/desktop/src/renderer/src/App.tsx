@@ -20,6 +20,7 @@ import { MaintenancePage } from './pages/MaintenancePage'
 import { SettingsPage } from './pages/SettingsPage'
 import { WizardFlow } from './wizard/WizardFlow'
 import { WizardStateStoreSchema } from '@linux-dev-home/shared'
+import { syncAppearanceFromStore } from './theme/applyAccent'
 
 export default function App(): ReactElement | null {
   const [ready, setReady] = useState(false)
@@ -36,8 +37,22 @@ export default function App(): ReactElement | null {
     })
   }, [])
 
+  useEffect(() => {
+    if (!ready || showWizard) return
+    void syncAppearanceFromStore()
+  }, [ready, showWizard])
+
   if (!ready) return null
-  if (showWizard) return <WizardFlow onComplete={() => setShowWizard(false)} />
+  if (showWizard) {
+    return (
+      <WizardFlow
+        onComplete={() => {
+          setShowWizard(false)
+          void syncAppearanceFromStore()
+        }}
+      />
+    )
+  }
 
   return (
     <AppShell>

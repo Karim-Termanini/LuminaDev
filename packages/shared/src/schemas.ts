@@ -74,6 +74,10 @@ export const HostExecRequestSchema = z.object({
     'maintenance_docker_ps_table',
     'maintenance_journalctl_docker',
     'maintenance_du_cache_tail',
+    /** Read-only `cat /etc/hosts` for Settings preview (bounded output server-side). */
+    'settings_read_hosts',
+    /** Allowlisted `std::env` keys from the app process (not a login shell); bounded text. */
+    'settings_process_env',
   ] as const),
   unit: z.string().max(128).optional(),
   distro: z.enum(['ubuntu', 'fedora', 'arch']).optional(),
@@ -163,6 +167,24 @@ export const MaintenanceStateStoreSchema = z.object({
   reminderDays: z.number().int().min(1).max(60).optional(),
 })
 
+export const SshBookmarkSchema = z.object({
+  id: z.string().min(1).max(128),
+  name: z.string().min(1).max(200),
+  user: z.string().max(200),
+  host: z.string().min(1).max(512),
+  port: z.number().int().min(1).max(65535).default(22),
+})
+
+export const SshBookmarksStoreSchema = z.array(SshBookmarkSchema).max(100)
+
+/** UI theme tokens persisted in `store.json` (`appearance` key). */
+export const AppearanceStoreSchema = z.object({
+  accent: z
+    .string()
+    .regex(/^#[0-9A-Fa-f]{6}$/, 'Expected #RRGGBB')
+    .optional(),
+})
+
 /** Keys with typed payloads persisted under userData (`store_<key>.json`). */
 export const StoreKeySchema = z.enum([
   'custom_profiles',
@@ -171,6 +193,7 @@ export const StoreKeySchema = z.enum([
   'maintenance_state',
   'active_profile',
   'on_login_automation',
+  'appearance',
 ])
 
 export const StoreGetRequestSchema = z.object({
@@ -188,13 +211,7 @@ export const StoreSetRequestSchema = z.discriminatedUnion('key', [
   }),
   z.object({
     key: z.literal('ssh_bookmarks'),
-    data: z.array(z.object({
-      id: z.string(),
-      name: z.string(),
-      user: z.string(),
-      host: z.string(),
-      port: z.number().default(22),
-    })),
+    data: SshBookmarksStoreSchema,
   }),
   z.object({
     key: z.literal('maintenance_state'),
@@ -208,6 +225,10 @@ export const StoreSetRequestSchema = z.discriminatedUnion('key', [
   z.object({
     key: z.literal('on_login_automation'),
     data: OnLoginAutomationStoreSchema,
+  }),
+  z.object({
+    key: z.literal('appearance'),
+    data: AppearanceStoreSchema,
   }),
 ])
 export const ComposeUpRequestSchema = z.object({
@@ -286,7 +307,8 @@ export type StoreGetRequest = z.infer<typeof StoreGetRequestSchema>
 export type StoreSetRequest = z.infer<typeof StoreSetRequestSchema>
 export type WizardStateStore = z.infer<typeof WizardStateStoreSchema>
 export type OnLoginAutomationStore = z.infer<typeof OnLoginAutomationStoreSchema>
-export type SshBookmark = { id: string; name: string; user: string; host: string; port: number }
+export type SshBookmark = z.infer<typeof SshBookmarkSchema>
+export type AppearanceStore = z.infer<typeof AppearanceStoreSchema>
 
 const defaultOnLoginAutomation: OnLoginAutomationStore = {
   composeUpForActiveProfile: false,
@@ -297,6 +319,18 @@ const defaultOnLoginAutomation: OnLoginAutomationStore = {
 export function parseOnLoginAutomation(data: unknown): OnLoginAutomationStore {
   const r = OnLoginAutomationStoreSchema.safeParse(data)
   return r.success ? r.data : defaultOnLoginAutomation
+}
+
+/** Coerce persisted `ssh_bookmarks` (or missing/invalid) to a safe array. */
+export function parseSshBookmarks(data: unknown): SshBookmark[] {
+  const r = SshBookmarksStoreSchema.safeParse(data)
+  return r.success ? r.data : []
+}
+
+/** Coerce persisted `appearance` (or missing/invalid) to a safe object. */
+export function parseAppearance(data: unknown): AppearanceStore {
+  const r = AppearanceStoreSchema.safeParse(data)
+  return r.success ? r.data : {}
 }
 
 /** Normalize a persisted `active_profile` value: canonical enum or legacy aliases → ComposeProfile | null. */
