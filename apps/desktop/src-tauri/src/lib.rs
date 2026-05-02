@@ -2262,6 +2262,122 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
         json!({ "ok": true, "diff": raw, "binary": false })
     },
 
+    "dh:git:vcs:stage" => {
+        let repo_path = body.get("repoPath").and_then(|v| v.as_str()).unwrap_or_default();
+        let file_paths: Vec<&str> = body.get("filePaths")
+            .and_then(|v| v.as_array())
+            .map(|arr| arr.iter().filter_map(|x| x.as_str()).collect())
+            .unwrap_or_default();
+        if repo_path.is_empty() || file_paths.is_empty() {
+            return Ok(json!({ "ok": false, "error": "[GIT_VCS_NOT_A_REPO] Missing repoPath or filePaths." }));
+        }
+        let mut args = vec!["-C", repo_path, "add", "--"];
+        args.extend_from_slice(&file_paths);
+        match exec_output_limit("git", &args, CMD_TIMEOUT_SHORT).await {
+            Ok(_) => json!({ "ok": true }),
+            Err(e) => json!({ "ok": false, "error": format!("[GIT_VCS_NOT_A_REPO] {}", e.trim()) }),
+        }
+    },
+
+    "dh:git:vcs:unstage" => {
+        let repo_path = body.get("repoPath").and_then(|v| v.as_str()).unwrap_or_default();
+        let file_paths: Vec<&str> = body.get("filePaths")
+            .and_then(|v| v.as_array())
+            .map(|arr| arr.iter().filter_map(|x| x.as_str()).collect())
+            .unwrap_or_default();
+        if repo_path.is_empty() || file_paths.is_empty() {
+            return Ok(json!({ "ok": false, "error": "[GIT_VCS_NOT_A_REPO] Missing repoPath or filePaths." }));
+        }
+        let mut args = vec!["-C", repo_path, "restore", "--staged", "--"];
+        args.extend_from_slice(&file_paths);
+        match exec_output_limit("git", &args, CMD_TIMEOUT_SHORT).await {
+            Ok(_) => json!({ "ok": true }),
+            Err(e) => json!({ "ok": false, "error": format!("[GIT_VCS_NOT_A_REPO] {}", e.trim()) }),
+        }
+    },
+
+    "dh:git:vcs:commit" => {
+        let repo_path = body.get("repoPath").and_then(|v| v.as_str()).unwrap_or_default();
+        let message = body.get("message").and_then(|v| v.as_str()).unwrap_or_default();
+        if repo_path.is_empty() {
+            return Ok(json!({ "ok": false, "error": "[GIT_VCS_NOT_A_REPO] Missing repoPath." }));
+        }
+        if message.trim().is_empty() {
+            return Ok(json!({ "ok": false, "error": "[GIT_VCS_EMPTY_MESSAGE] Commit message cannot be empty." }));
+        }
+        match exec_output_limit("git", &["-C", repo_path, "commit", "-m", message], CMD_TIMEOUT_SHORT).await {
+            Ok(out) => {
+                // Parse SHA from "[branch abc1234] message" line
+                let sha = out.lines()
+                    .find(|l| l.contains('[') && l.contains(']'))
+                    .and_then(|l| {
+                        let after_bracket = l.split(']').next()?;
+                        after_bracket.split_whitespace().last().map(|s| s.to_string())
+                    })
+                    .unwrap_or_default();
+                json!({ "ok": true, "sha": sha })
+            }
+            Err(e) => {
+                let msg = if e.contains("nothing to commit") || e.contains("no changes") {
+                    format!("[GIT_VCS_NO_STAGED] {}", e.trim())
+                } else {
+                    format!("[GIT_VCS_NOT_A_REPO] {}", e.trim())
+                };
+                json!({ "ok": false, "error": msg })
+            }
+        }
+    },
+
+    "dh:git:vcs:branches" => {
+        let repo_path = body.get("repoPath").and_then(|v| v.as_str()).unwrap_or_default();
+        if repo_path.is_empty() {
+            return Ok(json!({ "ok": false, "error": "[GIT_VCS_NOT_A_REPO] Missing repoPath." }));
+        }
+        match exec_output_limit(
+            "git", &["-C", repo_path, "branch", "-a", "--format=%(HEAD) %(refname:short)"],
+            CMD_TIMEOUT_SHORT,
+        ).await {
+            Ok(out) => {
+                let mut branches: Vec<Value> = Vec::new();
+                let mut current = String::new();
+                for line in out.lines() {
+                    if line.len() < 2 { continue; }
+                    let is_current = line.starts_with('*');
+                    let name = line[2..].trim().to_string();
+                    if name.is_empty() { continue; }
+                    let remote = name.starts_with("remotes/") || name.starts_with("origin/");
+                    let display_name = name.strip_prefix("remotes/").unwrap_or(&name).to_string();
+                    if is_current { current = display_name.clone(); }
+                    branches.push(json!({
+                        "name": display_name,
+                        "remote": remote,
+                        "current": is_current,
+                    }));
+                }
+                json!({ "ok": true, "branches": branches, "current": current })
+            }
+            Err(e) => json!({ "ok": false, "error": format!("[GIT_VCS_NOT_A_REPO] {}", e.trim()) }),
+        }
+    },
+
+    "dh:git:vcs:checkout" => {
+        let repo_path = body.get("repoPath").and_then(|v| v.as_str()).unwrap_or_default();
+        let branch = body.get("branch").and_then(|v| v.as_str()).unwrap_or_default();
+        let create = body.get("create").and_then(|v| v.as_bool()).unwrap_or(false);
+        if repo_path.is_empty() || branch.is_empty() {
+            return Ok(json!({ "ok": false, "error": "[GIT_VCS_NOT_A_REPO] Missing repoPath or branch." }));
+        }
+        let args: Vec<&str> = if create {
+            vec!["-C", repo_path, "checkout", "-b", branch]
+        } else {
+            vec!["-C", repo_path, "checkout", branch]
+        };
+        match exec_output_limit("git", &args, CMD_TIMEOUT_SHORT).await {
+            Ok(_) => json!({ "ok": true }),
+            Err(e) => json!({ "ok": false, "error": format!("[GIT_VCS_NOT_A_REPO] {}", e.trim()) }),
+        }
+    },
+
     "dh:ssh:generate" => {
       let email = body.get("email").and_then(|v| v.as_str()).unwrap_or("lumina@local");
       let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
