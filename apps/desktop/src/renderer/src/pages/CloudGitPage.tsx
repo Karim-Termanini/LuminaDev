@@ -5,6 +5,7 @@ import type { ConnectedAccount } from '@linux-dev-home/shared'
 import { CloudOauthClientsStoreSchema } from '@linux-dev-home/shared'
 
 import { assertCloudAuthOk } from './cloudAuthContract'
+import { CloudGitActivityPanel } from './CloudGitActivityPanel'
 import { CLOUD_GIT_PROVIDER_THEME, type CloudGitProviderId } from './cloudGitTheme'
 import { humanizeCloudAuthError, isCloudAuthOauthNotConfigured } from './cloudAuthError'
 
@@ -277,7 +278,7 @@ export function CloudGitPage(): ReactElement {
       style={{
         minHeight: '100%',
         padding: '28px 32px 48px',
-        maxWidth: 720,
+        maxWidth: 1040,
         margin: '0 auto',
         boxSizing: 'border-box',
       }}
@@ -474,15 +475,34 @@ export function CloudGitPage(): ReactElement {
               </button>
             </div>
           </div>
-        ) : null}
-
-        {!deviceFlow || deviceFlow.provider !== activeTab ? (
-          <section
+        ) : (
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+              gap: 20,
+              alignItems: 'start',
+            }}
+          >
+            <div>
+              <div
+                className="mono"
+                style={{
+                  fontSize: 11,
+                  color: 'var(--text-muted)',
+                  letterSpacing: '0.06em',
+                  marginBottom: 8,
+                  textTransform: 'uppercase',
+                }}
+              >
+                Account & security
+              </div>
+              <section
             aria-labelledby={`cloud-git-hero-${activeTab}`}
             style={{
               borderRadius: 18,
               padding: '28px 26px',
-              marginBottom: 24,
+              marginBottom: 0,
               border: `1px solid var(--cg-accent-muted)`,
               background: `linear-gradient(145deg, var(--cg-surface) 0%, var(--bg-widget) 50%, var(--cg-surface-deep) 100%)`,
               boxShadow: '0 18px 48px rgba(0,0,0,0.22)',
@@ -659,11 +679,14 @@ export function CloudGitPage(): ReactElement {
               </div>
             )}
           </section>
-        ) : null}
+            </div>
+            <CloudGitActivityPanel provider={activeTab} label={meta.label} />
+          </div>
+        )}
       </div>
 
       <section style={{ marginTop: 8 }}>
-        <details style={{ maxWidth: 640 }}>
+        <details style={{ maxWidth: '100%' }}>
           <summary className="hp-muted" style={{ cursor: 'pointer', fontSize: 13, userSelect: 'none' }}>
             Advanced: OAuth client IDs (device flow)
           </summary>
