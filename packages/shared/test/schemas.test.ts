@@ -41,6 +41,12 @@ describe('schemas', () => {
     })
   })
 
+  it('accepts settings_process_env host exec', () => {
+    expect(HostExecRequestSchema.parse({ command: 'settings_process_env' })).toEqual({
+      command: 'settings_process_env',
+    })
+  })
+
   it('accepts docker logs with bounds', () => {
     expect(DockerLogsRequestSchema.parse({ id: 'abc', tail: 100 })).toEqual({
       id: 'abc',

@@ -27,6 +27,15 @@ const ACCENT_PRESETS: ReadonlyArray<{ label: string; hex: string }> = [
   { label: 'Teal', hex: '#00897b' },
 ]
 
+function hostExecStringResult(
+  res: unknown,
+  fallbackError: string,
+): { ok: true; text: string } | { ok: false; error: string } {
+  const h = res as { ok: boolean; result?: unknown; error?: string }
+  if (h.ok && typeof h.result === 'string') return { ok: true, text: h.result }
+  return { ok: false, error: h.error ?? fallbackError }
+}
+
 /** Phase 8: cross-cutting preferences; SSH bookmarks share store with `/ssh`; accent persists in `appearance`. */
 export function SettingsPage(): ReactElement {
   const [bookmarks, setBookmarks] = useState<SshBookmark[]>([])
@@ -40,17 +49,24 @@ export function SettingsPage(): ReactElement {
   const [hostsErr, setHostsErr] = useState<string | null>(null)
   const [hostsBusy, setHostsBusy] = useState(false)
 
+  const [envPreview, setEnvPreview] = useState<string | null>(null)
+  const [envErr, setEnvErr] = useState<string | null>(null)
+  const [envBusy, setEnvBusy] = useState(false)
+
   useEffect(() => {
     void (async () => {
       setLoadError(null)
       setAccentMsg(null)
       setHostsErr(null)
+      setEnvErr(null)
       setHostsBusy(true)
+      setEnvBusy(true)
       try {
-        const [bm, ap, hr] = await Promise.all([
+        const [bm, ap, hr, er] = await Promise.all([
           window.dh.storeGet({ key: 'ssh_bookmarks' }),
           window.dh.storeGet({ key: 'appearance' }),
           window.dh.hostExec({ command: 'settings_read_hosts' }),
+          window.dh.hostExec({ command: 'settings_process_env' }),
         ])
         if (bm.ok) {
           setBookmarks(parseSshBookmarks(bm.data))
@@ -64,13 +80,21 @@ export function SettingsPage(): ReactElement {
         } else {
           setAccentDraft(DEFAULT_ACCENT_HEX)
         }
-        const h = hr as { ok: boolean; result?: unknown; error?: string }
-        if (h.ok && typeof h.result === 'string') {
-          setHostsPreview(h.result)
+        const hostsParsed = hostExecStringResult(hr, 'Could not read /etc/hosts.')
+        if (hostsParsed.ok) {
+          setHostsPreview(hostsParsed.text)
           setHostsErr(null)
         } else {
           setHostsPreview(null)
-          setHostsErr(h.error ?? 'Could not read /etc/hosts.')
+          setHostsErr(hostsParsed.error)
+        }
+        const envParsed = hostExecStringResult(er, 'Could not load environment preview.')
+        if (envParsed.ok) {
+          setEnvPreview(envParsed.text)
+          setEnvErr(null)
+        } else {
+          setEnvPreview(null)
+          setEnvErr(envParsed.error)
         }
       } catch (e) {
         setBookmarks([])
@@ -78,8 +102,11 @@ export function SettingsPage(): ReactElement {
         setAccentDraft(DEFAULT_ACCENT_HEX)
         setHostsPreview(null)
         setHostsErr(e instanceof Error ? e.message : 'Could not read /etc/hosts.')
+        setEnvPreview(null)
+        setEnvErr(e instanceof Error ? e.message : 'Could not load environment preview.')
       } finally {
         setHostsBusy(false)
+        setEnvBusy(false)
       }
     })()
   }, [])
@@ -89,19 +116,40 @@ export function SettingsPage(): ReactElement {
     setHostsErr(null)
     try {
       const hr = await window.dh.hostExec({ command: 'settings_read_hosts' })
-      const h = hr as { ok: boolean; result?: unknown; error?: string }
-      if (h.ok && typeof h.result === 'string') {
-        setHostsPreview(h.result)
+      const parsed = hostExecStringResult(hr, 'Could not read /etc/hosts.')
+      if (parsed.ok) {
+        setHostsPreview(parsed.text)
         setHostsErr(null)
       } else {
         setHostsPreview(null)
-        setHostsErr(h.error ?? 'Could not read /etc/hosts.')
+        setHostsErr(parsed.error)
       }
     } catch (e) {
       setHostsPreview(null)
       setHostsErr(e instanceof Error ? e.message : 'Could not read /etc/hosts.')
     } finally {
       setHostsBusy(false)
+    }
+  }
+
+  async function refreshEnv(): Promise<void> {
+    setEnvBusy(true)
+    setEnvErr(null)
+    try {
+      const er = await window.dh.hostExec({ command: 'settings_process_env' })
+      const parsed = hostExecStringResult(er, 'Could not load environment preview.')
+      if (parsed.ok) {
+        setEnvPreview(parsed.text)
+        setEnvErr(null)
+      } else {
+        setEnvPreview(null)
+        setEnvErr(parsed.error)
+      }
+    } catch (e) {
+      setEnvPreview(null)
+      setEnvErr(e instanceof Error ? e.message : 'Could not load environment preview.')
+    } finally {
+      setEnvBusy(false)
     }
   }
 
@@ -153,8 +201,8 @@ export function SettingsPage(): ReactElement {
         </div>
         <h1 style={{ margin: 0, fontSize: 28, fontWeight: 700 }}>Settings</h1>
         <p style={{ ...muted, marginTop: 10, maxWidth: 720 }}>
-          Phase 8 hub: SSH bookmarks share storage with the SSH page. Accent color is persisted app-wide. Hosts preview is
-          read-only; environment tools are still planned.
+          Phase 8 hub: SSH bookmarks share storage with the SSH page. Accent color is persisted app-wide. Hosts and
+          environment previews are read-only; profile file editing is not offered yet.
         </p>
       </header>
 
@@ -328,9 +376,58 @@ export function SettingsPage(): ReactElement {
         ) : null}
       </section>
 
-      <section style={{ ...panel, opacity: 0.85 }}>
-        <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>Environment</h2>
-        <p style={{ ...muted, marginTop: 8, marginBottom: 0 }}>Planned: profile-scoped env files with diff before apply.</p>
+      <section style={panel}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>Environment</h2>
+          <button
+            type="button"
+            disabled={envBusy}
+            onClick={() => void refreshEnv()}
+            style={{
+              padding: '8px 16px',
+              borderRadius: 8,
+              border: '1px solid var(--border)',
+              background: 'var(--bg-input)',
+              color: 'var(--text)',
+              fontWeight: 600,
+              fontSize: 13,
+              cursor: envBusy ? 'wait' : 'pointer',
+            }}
+          >
+            Refresh preview
+          </button>
+        </div>
+        <p style={{ ...muted, marginTop: 8, marginBottom: 0 }}>
+          Allowlisted variables from this app process (not an interactive login shell). PATH and display-related entries
+          help confirm Flatpak vs native context. Profile-scoped env files with diff-before-apply remain planned.
+        </p>
+        {envErr ? (
+          <p style={{ color: 'var(--red)', marginTop: 12, marginBottom: 0, fontSize: 14 }}>{envErr}</p>
+        ) : null}
+        {envBusy && envPreview === null && !envErr ? (
+          <p style={{ ...muted, marginTop: 12, marginBottom: 0 }}>Loading environment preview…</p>
+        ) : null}
+        {envPreview !== null ? (
+          <pre
+            className="mono"
+            style={{
+              marginTop: 12,
+              marginBottom: 0,
+              padding: 12,
+              maxHeight: 280,
+              overflow: 'auto',
+              fontSize: 12,
+              lineHeight: 1.45,
+              background: 'var(--bg-input)',
+              border: '1px solid var(--border)',
+              borderRadius: 8,
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word',
+            }}
+          >
+            {envPreview}
+          </pre>
+        ) : null}
       </section>
     </div>
   )

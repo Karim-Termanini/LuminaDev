@@ -76,6 +76,8 @@ export const HostExecRequestSchema = z.object({
     'maintenance_du_cache_tail',
     /** Read-only `cat /etc/hosts` for Settings preview (bounded output server-side). */
     'settings_read_hosts',
+    /** Allowlisted `std::env` keys from the app process (not a login shell); bounded text. */
+    'settings_process_env',
   ] as const),
   unit: z.string().max(128).optional(),
   distro: z.enum(['ubuntu', 'fedora', 'arch']).optional(),

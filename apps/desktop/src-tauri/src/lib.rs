@@ -3203,6 +3203,43 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
           Ok(out) => json!({ "ok": true, "result": truncate_probe_output(&out) }),
           Err(e) => json!({ "ok": false, "result": Value::Null, "error": format!("[HOST_EXEC_FAILED] {}", e) }),
         },
+        "settings_process_env" => {
+          const KEYS: &[&str] = &[
+            "HOME",
+            "USER",
+            "LOGNAME",
+            "SHELL",
+            "LANG",
+            "LC_ALL",
+            "PATH",
+            "DISPLAY",
+            "WAYLAND_DISPLAY",
+            "XDG_SESSION_TYPE",
+            "XDG_CURRENT_DESKTOP",
+            "XDG_RUNTIME_DIR",
+            "TERM",
+            "COLORTERM",
+            "FLATPAK_ID",
+            "PWD",
+            "SSH_AUTH_SOCK",
+          ];
+          let mut lines: Vec<String> = Vec::new();
+          for k in KEYS {
+            if let Ok(v) = std::env::var(k) {
+              if v.contains('\n') || v.contains('\r') {
+                lines.push(format!("{k}=(value contains line breaks; omitted)"));
+              } else {
+                lines.push(format!("{k}={v}"));
+              }
+            }
+          }
+          let out = if lines.is_empty() {
+            "(no matching variables in this process)".to_string()
+          } else {
+            lines.join("\n")
+          };
+          json!({ "ok": true, "result": truncate_probe_output(&out) })
+        },
         _ => json!({ "ok": false, "result": Value::Null, "error": "[HOST_EXEC_NOT_ALLOWED] command not allowed" }),
       }
     },
