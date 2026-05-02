@@ -27,6 +27,7 @@ export function GitVcsCiChecks({
   const [mergeState, setMergeState] = useState<string>('unknown')
   const [baseBranch, setBaseBranch] = useState<string>('main')
   const [loading, setLoading] = useState(true)
+  const [resolving, setResolving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date())
 
@@ -160,9 +161,22 @@ export function GitVcsCiChecks({
             <button 
               type="button" 
               className="hp-btn hp-btn-primary hp-btn-sm" 
-              onClick={() => onResolveConflicts(baseBranch)}
+              onClick={async () => {
+                setResolving(true)
+                try {
+                  await onResolveConflicts(baseBranch)
+                } finally {
+                  setResolving(false)
+                }
+              }}
+              disabled={resolving}
             >
-              Resolve locally
+              {resolving ? (
+                <>
+                  <span className="codicon codicon-loading spin" style={{ marginRight: 6 }} />
+                  Resolving...
+                </>
+              ) : 'Resolve locally'}
             </button>
           )}
         </div>

@@ -72,42 +72,49 @@ export function GitVcsPage(): ReactElement {
     : (fetchRemoteNames[0] ?? 'origin')
 
   const handleResolveRemoteConflicts = async (targetBase: string) => {
+    console.log('[GitVcs] ResolveRemoteConflicts triggered for base:', targetBase)
     setBusy(true)
-    setGitOperation('Resolving remote conflicts...')
+    setGitOperation(`Integrating ${targetBase}...`)
     setOpErrorDisplay(null)
     try {
       // 1. Fetch to get latest remote branches
+      console.log('[GitVcs] Fetching remote...')
       await window.dh.gitVcsFetch({ repoPath: repoPath.trim(), remote: activeFetchRemoteName })
       
       // 2. Try to merge origin/targetBase into current branch
       const remoteRef = `${activeFetchRemoteName}/${targetBase}`
+      console.log('[GitVcs] Merging:', remoteRef)
       const res = await window.dh.gitVcsMerge({
         repoPath: repoPath.trim(),
         branch: remoteRef,
         fastForwardOnly: false
       })
 
+      console.log('[GitVcs] Merge result:', res)
+
       if (!res.ok) {
-        if (res.error?.includes('[GIT_VCS_CONFLICT]')) {
+        // Check for conflicts
+        if (res.error?.includes('[GIT_VCS_CONFLICT]') || res.error?.includes('CONFLICT')) {
           setSoftGitNotice({
             type: 'warning',
-            message: `Conflicts detected with ${remoteRef}. Use the resolver to fix them.`
+            message: `Conflicts detected with ${remoteRef}. Open the resolution wizard to fix them.`
           })
-          // The refreshStatus in the finally block will detect conflicts and show the banner
         } else {
           setOpErrorDisplay(res.error ?? 'Merge failed')
         }
       } else {
         setSoftGitNotice({
           type: 'success',
-          message: `Successfully integrated ${remoteRef}. Conflicts resolved.`
+          message: `Successfully integrated ${remoteRef}. All conflicts resolved.`
         })
       }
     } catch (e) {
+      console.error('[GitVcs] handleResolveRemoteConflicts exception:', e)
       setOpErrorDisplay(e instanceof Error ? e.message : String(e))
     } finally {
       setBusy(false)
       setGitOperation(null)
+      console.log('[GitVcs] Refreshing status...')
       void refreshStatus()
     }
   }
