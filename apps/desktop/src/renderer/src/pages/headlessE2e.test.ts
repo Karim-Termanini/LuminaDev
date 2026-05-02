@@ -178,7 +178,7 @@ describe('headless-e2e: page-specific rendering', () => {
     try {
       const page = await import('./DockerPage')
       expect(page).toBeDefined()
-    } catch (e) {
+    } catch {
       // DockerPage loads successfully; other pages with shared dependencies may fail in test
       console.info('Note: Some pages may require shared module resolution in actual app context')
     }
