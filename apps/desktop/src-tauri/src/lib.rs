@@ -2552,10 +2552,13 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
         if message.trim().is_empty() {
             return Ok(json!({ "ok": false, "error": "[GIT_VCS_EMPTY_MESSAGE] Commit message cannot be empty." }));
         }
-        match exec_output_limit("git", &["-C", repo_path, "commit", "-m", message], CMD_TIMEOUT_SHORT).await {
-            Ok(out) => {
-                // Parse SHA from "[branch abc1234] message" line
-                let sha = out.lines()
+        // Use exec_result_limit: failed `git commit` often writes the full diagnostic to stdout,
+        // while exec_output_limit only surfaces stderr (empty → useless IPC errors).
+        match exec_result_limit("git", &["-C", repo_path, "commit", "-m", message], CMD_TIMEOUT_SHORT).await {
+            Ok((stdout, stderr)) => {
+                let combined = format!("{}\n{}", stdout.trim(), stderr.trim()).trim().to_string();
+                let sha = combined
+                    .lines()
                     .find(|l| l.contains('[') && l.contains(']'))
                     .and_then(|l| {
                         let after_bracket = l.split(']').next()?;
@@ -2565,10 +2568,18 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
                 json!({ "ok": true, "sha": sha })
             }
             Err(e) => {
-                let msg = if e.contains("nothing to commit") || e.contains("no changes") {
-                    format!("[GIT_VCS_NO_STAGED] {}", e.trim())
+                let trimmed = e.trim();
+                let body = if trimmed.is_empty() {
+                    "Git exited with an error but printed no message (check hooks and signing)."
                 } else {
-                    format!("[GIT_VCS_NOT_A_REPO] {}", e.trim())
+                    trimmed
+                };
+                let msg = if body.contains("nothing to commit") || body.contains("no changes") {
+                    format!("[GIT_VCS_NO_STAGED] {}", body)
+                } else if body.contains("not a git repository") {
+                    format!("[GIT_VCS_NOT_A_REPO] {}", body)
+                } else {
+                    format!("[GIT_VCS_COMMIT_FAILED] {}", body)
                 };
                 json!({ "ok": false, "error": msg })
             }

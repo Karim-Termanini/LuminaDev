@@ -30,6 +30,8 @@ export type GitVcsProviderRailProps = {
   /** Resolved remote name used for Fetch (matches toolbar). */
   activeFetchRemote: string
   hasRepo: boolean
+  /** Card click: prefer switching Fetch to this host's remote; otherwise parent may navigate to Cloud Git. */
+  onActivateProvider: (provider: 'github' | 'gitlab') => void
 }
 
 export function GitVcsProviderRail({
@@ -37,6 +39,7 @@ export function GitVcsProviderRail({
   remotes,
   activeFetchRemote,
   hasRepo,
+  onActivateProvider,
 }: GitVcsProviderRailProps): ReactElement {
   const gh = accountFor(accounts, 'github')
   const gl = accountFor(accounts, 'gitlab')
@@ -63,6 +66,7 @@ export function GitVcsProviderRail({
         hasRepo={hasRepo}
         activeFetchRemote={activeFetchRemote}
         activeHere={activeFamily === 'github'}
+        onActivate={() => onActivateProvider('github')}
       />
       <ProviderCard
         provider="gitlab"
@@ -74,6 +78,7 @@ export function GitVcsProviderRail({
         hasRepo={hasRepo}
         activeFetchRemote={activeFetchRemote}
         activeHere={activeFamily === 'gitlab'}
+        onActivate={() => onActivateProvider('gitlab')}
       />
     </div>
   )
@@ -89,12 +94,29 @@ function ProviderCard(props: {
   hasRepo: boolean
   activeFetchRemote: string
   activeHere: boolean
+  onActivate: () => void
 }): ReactElement {
-  const { provider, title, iconClass, accent, account, remotes, hasRepo, activeFetchRemote, activeHere } = props
+  const { provider, title, iconClass, accent, account, remotes, hasRepo, activeFetchRemote, activeHere, onActivate } =
+    props
   return (
     <div
+      role="button"
+      tabIndex={0}
+      onClick={() => onActivate()}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onActivate()
+        }
+      }}
+      aria-label={`${title}: use this host for fetch or open Cloud Git`}
       style={{
         ...CARD,
+        cursor: 'pointer',
+        width: '100%',
+        textAlign: 'left',
+        font: 'inherit',
+        color: 'inherit',
         boxShadow: accent ? '0 0 0 2px var(--cg-accent, var(--accent))' : undefined,
         borderColor: accent ? 'var(--cg-accent, var(--accent))' : undefined,
         background: accent ? 'var(--cg-surface-deep, var(--bg-panel))' : CARD.background,
@@ -108,6 +130,7 @@ function ProviderCard(props: {
         <Link
           to={`/cloud-git?tab=${provider}`}
           className="mono"
+          onClick={(e) => e.stopPropagation()}
           style={{ fontSize: 11, color: 'var(--cg-accent, var(--accent))', textDecoration: 'none', flexShrink: 0 }}
         >
           Cloud Git

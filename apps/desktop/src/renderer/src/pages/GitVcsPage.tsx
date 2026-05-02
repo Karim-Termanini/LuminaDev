@@ -1,7 +1,7 @@
 import type { BranchEntry, ConnectedAccount, FileEntry, GitRemoteEntry, GitRepoEntry } from '@linux-dev-home/shared'
 import type { CSSProperties, ReactElement } from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 
 import { assertGitOk } from './gitContract'
 import { assertGitVcsOk } from './gitVcsContract'
@@ -30,6 +30,7 @@ const GLASS = {
 type DirtyCheckoutPrompt = { branch: string; create: boolean; files: string[] }
 
 export function GitVcsPage(): ReactElement {
+  const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const [recents, setRecents] = useState<GitRepoEntry[]>([])
   const [repoPath, setRepoPath] = useState('')
@@ -57,6 +58,19 @@ export function GitVcsPage(): ReactElement {
   const activeFetchRemoteName = fetchRemoteNames.includes(fetchRemote)
     ? fetchRemote
     : (fetchRemoteNames[0] ?? 'origin')
+
+  const activateGitProvider = useCallback(
+    (provider: 'github' | 'gitlab') => {
+      const candidates = gitRemotes.filter((r) => classifyGitRemoteUrl(r.fetchUrl) === provider)
+      if (candidates.length === 0) {
+        void navigate(`/cloud-git?tab=${provider}`)
+        return
+      }
+      const pick = candidates.find((r) => r.name === 'origin') ?? candidates[0]
+      setFetchRemote(pick.name)
+    },
+    [gitRemotes, navigate, setFetchRemote],
+  )
 
   const closeDirtyCheckoutModal = useCallback(() => setDirtyCheckout(null), [])
 
@@ -476,6 +490,7 @@ export function GitVcsPage(): ReactElement {
           remotes={gitRemotes}
           activeFetchRemote={activeFetchRemoteName}
           hasRepo={false}
+          onActivateProvider={activateGitProvider}
         />
         <div
           style={{
@@ -533,6 +548,7 @@ export function GitVcsPage(): ReactElement {
         remotes={gitRemotes}
         activeFetchRemote={activeFetchRemoteName}
         hasRepo={!!repoPath.trim()}
+        onActivateProvider={activateGitProvider}
       />
 
       <GitVcsRepoPicker
