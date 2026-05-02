@@ -340,6 +340,76 @@ export const CloudAuthStatusResponseSchema = z.object({
   accounts: z.array(ConnectedAccountSchema),
 })
 
+export const CloudGitPrsRequestSchema = z.object({
+  provider: CloudAuthProviderSchema,
+  limit: z.number().int().min(1).max(50).optional(),
+})
+
+export const CloudGitReviewRequestsRequestSchema = z.object({
+  provider: CloudAuthProviderSchema,
+  limit: z.number().int().min(1).max(50).optional(),
+})
+
+export const CloudPullRequestEntrySchema = z.object({
+  id: z.string().min(1),
+  title: z.string(),
+  url: z.string().url(),
+  repo: z.string(),
+  author: z.string(),
+  updatedAt: z.string(),
+})
+export type CloudPullRequestEntry = z.infer<typeof CloudPullRequestEntrySchema>
+
+export const CloudGitPipelinesRequestSchema = z.object({
+  provider: CloudAuthProviderSchema,
+  limit: z.number().int().min(1).max(50).optional(),
+  /** When set with `remote`, resolves `git remote get-url` and returns pipelines for that GitHub/GitLab repo only. */
+  repoPath: z.string().min(1).max(4096).optional(),
+  /** Remote name for `repoPath` (default `origin`). */
+  remote: z.string().min(1).max(256).optional(),
+})
+
+export const CloudPipelineEntrySchema = z.object({
+  id: z.string().min(1),
+  name: z.string(),
+  url: z.string().url(),
+  repo: z.string(),
+  status: z.string(),
+  updatedAt: z.string(),
+})
+export type CloudPipelineEntry = z.infer<typeof CloudPipelineEntrySchema>
+
+export const CloudGitIssuesRequestSchema = z.object({
+  provider: CloudAuthProviderSchema,
+  limit: z.number().int().min(1).max(50).optional(),
+})
+
+export const CloudIssueEntrySchema = z.object({
+  id: z.string().min(1),
+  title: z.string(),
+  url: z.string().url(),
+  repo: z.string(),
+  state: z.string(),
+  updatedAt: z.string(),
+})
+export type CloudIssueEntry = z.infer<typeof CloudIssueEntrySchema>
+
+export const CloudGitReleasesRequestSchema = z.object({
+  provider: CloudAuthProviderSchema,
+  limit: z.number().int().min(1).max(50).optional(),
+})
+
+export const CloudReleaseEntrySchema = z.object({
+  id: z.string().min(1),
+  tag: z.string(),
+  title: z.string(),
+  /** Release page URL (may include unencoded tag path segments). */
+  url: z.string().min(1).max(2048),
+  repo: z.string(),
+  publishedAt: z.string(),
+})
+export type CloudReleaseEntry = z.infer<typeof CloudReleaseEntrySchema>
+
 export type DockerContainerAction = z.infer<typeof DockerContainerActionSchema>
 export type DockerImageAction = z.infer<typeof DockerImageActionSchema>
 export type DockerVolumeAction = z.infer<typeof DockerVolumeActionSchema>
@@ -390,3 +460,91 @@ export function parseStoredActiveProfile(data: unknown): ComposeProfile | null {
   const parsed = ComposeProfileSchema.safeParse(val)
   return parsed.success ? parsed.data : null
 }
+
+// --- Git VCS ---
+
+export const GitVcsRepoPathSchema = z.object({
+  repoPath: z.string().min(1).max(4096),
+})
+
+export const GitVcsRemotesRequestSchema = GitVcsRepoPathSchema
+
+export const GitRemoteEntrySchema = z.object({
+  name: z.string().min(1).max(256),
+  fetchUrl: z.string().min(1).max(4096),
+})
+
+export const GitVcsDiffRequestSchema = z.object({
+  repoPath: z.string().min(1).max(4096),
+  filePath: z.string().min(1).max(4096),
+  staged: z.boolean(),
+})
+
+export const GitVcsStageRequestSchema = z.object({
+  repoPath: z.string().min(1).max(4096),
+  filePaths: z.array(z.string().min(1).max(4096)).min(1),
+})
+
+export const GitVcsUnstageRequestSchema = GitVcsStageRequestSchema
+
+export const GitVcsCommitRequestSchema = z.object({
+  repoPath: z.string().min(1).max(4096),
+  message: z.string().min(1).max(4096),
+})
+
+export const GitVcsPushRequestSchema = z.object({
+  repoPath: z.string().min(1).max(4096),
+  remote: z.string().optional(),
+  branch: z.string().optional(),
+})
+
+export const GitVcsPullRequestSchema = GitVcsRepoPathSchema
+
+export const GitVcsFetchRequestSchema = z.object({
+  repoPath: z.string().min(1).max(4096),
+  remote: z.string().min(1).max(256).optional(),
+})
+
+export const GitVcsBranchesRequestSchema = GitVcsRepoPathSchema
+
+export const GitVcsCheckoutRequestSchema = z.object({
+  repoPath: z.string().min(1).max(4096),
+  branch: z.string().min(1).max(256),
+  create: z.boolean().optional(),
+})
+
+export const GitVcsStashRequestSchema = z.object({
+  repoPath: z.string().min(1).max(4096),
+  message: z.string().min(1).max(256).optional(),
+  /** When true (default), include untracked files (`git stash push -u`). */
+  includeUntracked: z.boolean().optional(),
+})
+
+export const GitVcsMergeRequestSchema = z.object({
+  repoPath: z.string().min(1).max(4096),
+  /** Branch or ref to merge into the current HEAD (e.g. `main`, `origin/main`). */
+  branch: z.string().min(1).max(512),
+  /** When true, passes `--ff-only` to `git merge`. */
+  ffOnly: z.boolean().optional(),
+})
+
+export const GitVcsRebaseRequestSchema = z.object({
+  repoPath: z.string().min(1).max(4096),
+  /** Upstream branch or ref to rebase the current branch onto. */
+  onto: z.string().min(1).max(512),
+})
+
+export const GitVcsStashPopRequestSchema = GitVcsRepoPathSchema
+
+export const GitVcsMergeAbortRequestSchema = GitVcsRepoPathSchema
+
+export const GitVcsRebaseAbortRequestSchema = GitVcsRepoPathSchema
+
+/** Resume after resolving merge conflicts (`git merge --continue`). */
+export const GitVcsMergeContinueRequestSchema = GitVcsRepoPathSchema
+
+/** Resume after resolving rebase conflicts (`git rebase --continue`). */
+export const GitVcsRebaseContinueRequestSchema = GitVcsRepoPathSchema
+
+/** Skip the current commit during an interactive rebase (`git rebase --skip`). */
+export const GitVcsRebaseSkipRequestSchema = GitVcsRepoPathSchema

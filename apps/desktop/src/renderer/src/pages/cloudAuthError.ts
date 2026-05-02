@@ -10,7 +10,12 @@ export function humanizeCloudAuthError(err: unknown): string {
   const code = match?.[1] ?? ''
   const detail = (match?.[2] ?? raw).trim()
   if (code === 'CLOUD_AUTH_INVALID_TOKEN') {
-    return `Token is invalid or expired. Double-check the token and try again. ${detail}`.trim()
+    const head = (detail || 'Token is invalid or expired').trim().replace(/\s*\.\s*$/, '')
+    const sentence = head.endsWith('.') ? head : `${head}.`
+    return `${sentence} Reconnect in Cloud Git under Account & security with a new token.`.trim()
+  }
+  if (code === 'CLOUD_AUTH_NOT_CONNECTED') {
+    return (detail || 'Connect this provider in Cloud Git first.').trim()
   }
   if (code === 'CLOUD_AUTH_OAUTH_NOT_CONFIGURED') {
     return `${detail || 'Device sign-in is not configured for this build.'}`.trim()
@@ -23,6 +28,9 @@ export function humanizeCloudAuthError(err: unknown): string {
   }
   if (code.startsWith('CLOUD_AUTH_STORE')) {
     return `Could not read or save cloud account credentials on this machine. ${detail}`.trim()
+  }
+  if (code === 'CLOUD_GIT_SCOPE') {
+    return `${detail || 'Could not scope CI to this repository.'}`.trim()
   }
   return detail || 'Cloud auth operation failed.'
 }

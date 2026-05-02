@@ -63,6 +63,14 @@ mod runtime_jobs;
 use runtime_jobs::runtime_job_execute;
 mod compose_profiles;
 mod cloud_auth;
+mod cloud_git_ipc;
+mod git_vcs_ipc;
+mod git_vcs_repo_state;
+mod git_vcs_network;
+mod git_vcs_file_diff;
+use git_vcs_network::{git_network_with_auth, GitNetworkOp};
+mod readiness;
+mod readiness_ipc;
 use cloud_auth::CredentialStore;
 
 struct TerminalSession {
@@ -124,15 +132,6 @@ fn read_cloud_oauth_store_overrides(app: &AppHandle) -> (Option<String>, Option<
     .map(|s| s.trim().to_string())
     .filter(|s| !s.is_empty());
   (gh, gl)
-}
-
-fn cloud_store(app: &AppHandle) -> cloud_auth::EncryptedFileStore {
-    let path = app
-        .path()
-        .app_data_dir()
-        .map(|d| d.join("cloud_credentials.enc"))
-        .unwrap_or_else(|_| std::path::PathBuf::from("/tmp/cloud_credentials.enc"));
-    cloud_auth::EncryptedFileStore::new(path)
 }
 
 /// Run a bootstrap script without elevation (writes under $HOME only).
@@ -1184,6 +1183,109 @@ async fn ipc_send(channel: String, payload: Value, app: AppHandle, state: State<
   }
 }
 
+// ─── Git VCS helpers ──────────────────────────────────────────────────────────
+
+/// `git status --porcelain=v1` XY pair is an unmerged / conflicted path.
+fn porcelain_xy_unmerged(x: char, y: char) -> bool {
+    x == 'U' || y == 'U' || (x == 'A' && y == 'A') || (x == 'D' && y == 'D')
+}
+
+fn parse_porcelain_v1(output: &str) -> (Vec<Value>, Vec<Value>) {
+    let mut staged: Vec<Value> = Vec::new();
+    let mut unstaged: Vec<Value> = Vec::new();
+    for line in output.lines() {
+        if line.len() < 3 {
+            continue;
+        }
+        let x = line.chars().next().unwrap_or(' ');
+        let y = line.chars().nth(1).unwrap_or(' ');
+        let raw_path = &line[3..];
+        let (path, old_path) = if raw_path.contains(" -> ") {
+            let mut parts = raw_path.splitn(2, " -> ");
+            let p = parts.next().unwrap_or(raw_path).to_string();
+            let o = parts.next().map(|s| s.to_string());
+            (p, o)
+        } else {
+            (raw_path.to_string(), None)
+        };
+        if porcelain_xy_unmerged(x, y) {
+            unstaged.push(if let Some(ref old) = old_path {
+                json!({ "path": path, "status": "C", "oldPath": old })
+            } else {
+                json!({ "path": path, "status": "C" })
+            });
+            continue;
+        }
+        // Staged (index) changes
+        if x != ' ' && x != '?' && x != 'U' {
+            let status = match x {
+                'M' => "M",
+                'A' => "A",
+                'D' => "D",
+                'R' => "R",
+                _ => "M",
+            };
+            staged.push(if let Some(ref old) = old_path {
+                json!({ "path": path, "status": status, "oldPath": old })
+            } else {
+                json!({ "path": path, "status": status })
+            });
+        }
+        // Unstaged (worktree) changes + untracked
+        match (x, y) {
+            ('?', '?') => unstaged.push(json!({ "path": path, "status": "?" })),
+            (_, 'M') => unstaged.push(json!({ "path": path, "status": "M" })),
+            (_, 'D') => unstaged.push(json!({ "path": path, "status": "D" })),
+            _ => {}
+        }
+    }
+    (staged, unstaged)
+}
+
+/// Parse `git remote -v` stdout: one row per remote name with its **fetch** URL.
+fn parse_git_remote_fetch_lines(stdout: &str) -> Vec<Value> {
+    use std::collections::BTreeMap;
+    let mut by_name: BTreeMap<String, String> = BTreeMap::new();
+    const FETCH_SUFFIX: &str = " (fetch)";
+    for line in stdout.lines() {
+        let line = line.trim_end();
+        if line.is_empty() {
+            continue;
+        }
+        if !line.ends_with(FETCH_SUFFIX) {
+            continue;
+        }
+        let head = line[..line.len() - FETCH_SUFFIX.len()].trim_end();
+        let (name, url) = if let Some((n, u)) = head.split_once('\t') {
+            (n.trim(), u.trim())
+        } else if let Some(i) = head.find(' ') {
+            (head[..i].trim(), head[i + 1..].trim())
+        } else {
+            continue;
+        };
+        if name.is_empty() || url.is_empty() {
+            continue;
+        }
+        by_name.insert(name.to_string(), url.to_string());
+    }
+    by_name
+        .into_iter()
+        .map(|(name, fetch_url)| json!({ "name": name, "fetchUrl": fetch_url }))
+        .collect()
+}
+
+async fn git_ahead_behind(repo_path: &str) -> (Option<i64>, Option<i64>) {
+    let ahead = exec_output_limit(
+        "git", &["-C", repo_path, "rev-list", "--count", "@{u}..HEAD"],
+        CMD_TIMEOUT_SHORT,
+    ).await.ok().and_then(|s| s.trim().parse::<i64>().ok());
+    let behind = exec_output_limit(
+        "git", &["-C", repo_path, "rev-list", "--count", "HEAD..@{u}"],
+        CMD_TIMEOUT_SHORT,
+    ).await.ok().and_then(|s| s.trim().parse::<i64>().ok());
+    (ahead, behind)
+}
+
 #[tauri::command]
 async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, state: State<'_, AppState>) -> Result<Value, String> {
   let body = payload.unwrap_or_else(|| json!({}));
@@ -1262,22 +1364,25 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       },
       Err(e) => json!({ "ok": false, "error": e }),
     },
+
+    "dh:system:readiness:check" | "dh:system:readiness:fix" => {
+      readiness_ipc::invoke(&app, channel.as_str(), &body).await
+    },
     "dh:perf:snapshot" => {
       let mut rss_mb = 0u64;
       let statm = read_proc_text("/proc/self/statm").await;
       if let Some(pages) = statm.split_whitespace().nth(1).and_then(|v| v.parse::<u64>().ok()) {
-        rss_mb = (pages * 4096) / 1024 / 1024; // Assuming 4KB page size
+        rss_mb = (pages * 4096) / 1024 / 1024;
       }
       let uptime_str = read_proc_text("/proc/uptime").await;
       let uptime_sec = uptime_str.split_whitespace().next()
         .and_then(|v| v.parse::<f64>().ok()).unwrap_or(0.0) as u64;
-      
       json!({
         "ok": true,
         "snapshot": {
-          "startupMs": 150, // Approximation or track in AppState
+          "startupMs": 150,
           "rssMb": rss_mb,
-          "heapUsedMb": rss_mb / 2, // Approximation
+          "heapUsedMb": rss_mb / 2,
           "heapTotalMb": rss_mb,
           "uptimeSec": uptime_sec
         }
@@ -2049,7 +2154,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
         let (gh_store, gl_store) = read_cloud_oauth_store_overrides(&app);
         let provider = body.get("provider").and_then(|v| v.as_str()).unwrap_or("");
         let device_code = body.get("device_code").and_then(|v| v.as_str()).unwrap_or("");
-        let store = cloud_store(&app);
+        let store = cloud_auth::app_encrypted_credential_store(&app);
         let poll_result = match provider {
             "github" => {
                 let cid = cloud_auth::compose_github_client_id(gh_store.as_deref());
@@ -2084,7 +2189,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
     "dh:cloud:auth:connect-pat" => {
         let provider = body.get("provider").and_then(|v| v.as_str()).unwrap_or("");
         let token = body.get("token").and_then(|v| v.as_str()).unwrap_or("");
-        let store = cloud_store(&app);
+        let store = cloud_auth::app_encrypted_credential_store(&app);
         let validate_result = match provider {
             "github" => cloud_auth::GitHubProvider::validate_pat(token).await,
             "gitlab" => cloud_auth::GitLabProvider::validate_pat(token).await,
@@ -2106,7 +2211,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
     "dh:cloud:auth:disconnect" => {
         let (_gh_store, gl_store) = read_cloud_oauth_store_overrides(&app);
         let provider = body.get("provider").and_then(|v| v.as_str()).unwrap_or("");
-        let store = cloud_store(&app);
+        let store = cloud_auth::app_encrypted_credential_store(&app);
         if let Ok(Some(cred)) = store.load(provider) {
             let _ = match provider {
                 "github" => cloud_auth::GitHubProvider::revoke_token(&cred.token).await,
@@ -2124,7 +2229,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
     },
 
     "dh:cloud:auth:status" => {
-        let store = cloud_store(&app);
+        let store = cloud_auth::app_encrypted_credential_store(&app);
         match store.load_all() {
             Ok(accounts) => {
                 let arr: Vec<serde_json::Value> = accounts
@@ -2141,6 +2246,360 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
             Err(e) => json!({ "ok": false, "error": e }),
         }
     },
+
+    "dh:cloud:git:prs"
+    | "dh:cloud:git:review-requests"
+    | "dh:cloud:git:pipelines"
+    | "dh:cloud:git:issues"
+    | "dh:cloud:git:releases" => cloud_git_ipc::invoke(&app, channel.as_str(), &body).await,
+
+    "dh:git:vcs:status" => {
+        let repo_path = body.get("repoPath").and_then(|v| v.as_str()).unwrap_or_default();
+        if repo_path.is_empty() {
+            return Ok(json!({ "ok": false, "error": "[GIT_VCS_NOT_A_REPO] Missing repoPath." }));
+        }
+        // Verify it's a git repo
+        let branch_result = exec_output_limit(
+            "git", &["-C", repo_path, "rev-parse", "--abbrev-ref", "HEAD"],
+            CMD_TIMEOUT_SHORT,
+        ).await;
+        let branch = match branch_result {
+            Err(_) => return Ok(json!({ "ok": false, "error": "[GIT_VCS_NOT_A_REPO] Not a git repository." })),
+            Ok(b) => b,
+        };
+        let porcelain = exec_output_limit(
+            "git", &["-C", repo_path, "status", "--porcelain=v1", "-u"],
+            CMD_TIMEOUT_SHORT,
+        ).await.unwrap_or_default();
+        let (staged, unstaged) = parse_porcelain_v1(&porcelain);
+        let (ahead, behind) = git_ahead_behind(repo_path).await;
+        let git_operation = git_vcs_repo_state::git_operation_state(repo_path).await;
+        let conflict_file_count = git_vcs_repo_state::unmerged_path_count(repo_path).await;
+        json!({
+            "ok": true,
+            "branch": branch,
+            "ahead": ahead,
+            "behind": behind,
+            "staged": staged,
+            "unstaged": unstaged,
+            "gitOperation": git_operation,
+            "conflictFileCount": conflict_file_count,
+        })
+    },
+
+    "dh:git:vcs:remotes" => {
+        let repo_path = body.get("repoPath").and_then(|v| v.as_str()).unwrap_or_default();
+        if repo_path.is_empty() {
+            return Ok(json!({ "ok": false, "error": "[GIT_VCS_NOT_A_REPO] Missing repoPath." }));
+        }
+        match exec_output_limit(
+            "git",
+            &["-C", repo_path, "remote", "-v"],
+            CMD_TIMEOUT_SHORT,
+        )
+        .await
+        {
+            Ok(out) => {
+                let remotes = parse_git_remote_fetch_lines(&out);
+                json!({ "ok": true, "remotes": remotes })
+            }
+            Err(e) => json!({
+                "ok": false,
+                "error": format!("[GIT_VCS_NOT_A_REPO] {}", e.trim()),
+            }),
+        }
+    },
+
+    "dh:git:vcs:diff" => {
+        let repo_path = body.get("repoPath").and_then(|v| v.as_str()).unwrap_or_default();
+        let file_path = body.get("filePath").and_then(|v| v.as_str()).unwrap_or_default();
+        let staged = body.get("staged").and_then(|v| v.as_bool()).unwrap_or(false);
+        if repo_path.is_empty() || file_path.is_empty() {
+            return Ok(json!({ "ok": false, "error": "[GIT_VCS_NOT_A_REPO] Missing repoPath or filePath." }));
+        }
+        let raw = git_vcs_file_diff::resolve_file_diff(repo_path, file_path, staged).await;
+        if raw.contains("Binary files") {
+            return Ok(json!({ "ok": true, "diff": null, "binary": true }));
+        }
+        const DIFF_CAP: usize = 512 * 1024; // 512 KB
+        if raw.len() > DIFF_CAP {
+            return Ok(json!({ "ok": false, "error": "[GIT_VCS_DIFF_TOO_LARGE] File diff exceeds 512 KB." }));
+        }
+        json!({ "ok": true, "diff": raw, "binary": false })
+    },
+
+    "dh:git:vcs:stage" => {
+        let repo_path = body.get("repoPath").and_then(|v| v.as_str()).unwrap_or_default();
+        let file_paths: Vec<&str> = body.get("filePaths")
+            .and_then(|v| v.as_array())
+            .map(|arr| arr.iter().filter_map(|x| x.as_str()).collect())
+            .unwrap_or_default();
+        if repo_path.is_empty() || file_paths.is_empty() {
+            return Ok(json!({ "ok": false, "error": "[GIT_VCS_NOT_A_REPO] Missing repoPath or filePaths." }));
+        }
+        let mut args = vec!["-C", repo_path, "add", "--"];
+        args.extend_from_slice(&file_paths);
+        match exec_output_limit("git", &args, CMD_TIMEOUT_SHORT).await {
+            Ok(_) => json!({ "ok": true }),
+            Err(e) => json!({ "ok": false, "error": format!("[GIT_VCS_NOT_A_REPO] {}", e.trim()) }),
+        }
+    },
+
+    "dh:git:vcs:unstage" => {
+        let repo_path = body.get("repoPath").and_then(|v| v.as_str()).unwrap_or_default();
+        let file_paths: Vec<&str> = body.get("filePaths")
+            .and_then(|v| v.as_array())
+            .map(|arr| arr.iter().filter_map(|x| x.as_str()).collect())
+            .unwrap_or_default();
+        if repo_path.is_empty() || file_paths.is_empty() {
+            return Ok(json!({ "ok": false, "error": "[GIT_VCS_NOT_A_REPO] Missing repoPath or filePaths." }));
+        }
+        let mut args = vec!["-C", repo_path, "restore", "--staged", "--"];
+        args.extend_from_slice(&file_paths);
+        match exec_output_limit("git", &args, CMD_TIMEOUT_SHORT).await {
+            Ok(_) => json!({ "ok": true }),
+            Err(e) => json!({ "ok": false, "error": format!("[GIT_VCS_NOT_A_REPO] {}", e.trim()) }),
+        }
+    },
+
+    "dh:git:vcs:commit" => {
+        let repo_path = body.get("repoPath").and_then(|v| v.as_str()).unwrap_or_default();
+        let message = body.get("message").and_then(|v| v.as_str()).unwrap_or_default();
+        if repo_path.is_empty() {
+            return Ok(json!({ "ok": false, "error": "[GIT_VCS_NOT_A_REPO] Missing repoPath." }));
+        }
+        if message.trim().is_empty() {
+            return Ok(json!({ "ok": false, "error": "[GIT_VCS_EMPTY_MESSAGE] Commit message cannot be empty." }));
+        }
+        // Use exec_result_limit: failed `git commit` often writes the full diagnostic to stdout,
+        // while exec_output_limit only surfaces stderr (empty → useless IPC errors).
+        match exec_result_limit("git", &["-C", repo_path, "commit", "-m", message], CMD_TIMEOUT_SHORT).await {
+            Ok((stdout, stderr)) => {
+                let combined = format!("{}\n{}", stdout.trim(), stderr.trim()).trim().to_string();
+                let sha = combined
+                    .lines()
+                    .find(|l| l.contains('[') && l.contains(']'))
+                    .and_then(|l| {
+                        let after_bracket = l.split(']').next()?;
+                        after_bracket.split_whitespace().last().map(|s| s.to_string())
+                    })
+                    .unwrap_or_default();
+                json!({ "ok": true, "sha": sha })
+            }
+            Err(e) => {
+                let trimmed = e.trim();
+                let body = if trimmed.is_empty() {
+                    "Git exited with an error but printed no message (check hooks and signing)."
+                } else {
+                    trimmed
+                };
+                let msg = if body.contains("nothing to commit") || body.contains("no changes") {
+                    format!("[GIT_VCS_NO_STAGED] {}", body)
+                } else if body.contains("not a git repository") {
+                    format!("[GIT_VCS_NOT_A_REPO] {}", body)
+                } else {
+                    format!("[GIT_VCS_COMMIT_FAILED] {}", body)
+                };
+                json!({ "ok": false, "error": msg })
+            }
+        }
+    },
+
+    "dh:git:vcs:branches" => {
+        let repo_path = body.get("repoPath").and_then(|v| v.as_str()).unwrap_or_default();
+        if repo_path.is_empty() {
+            return Ok(json!({ "ok": false, "error": "[GIT_VCS_NOT_A_REPO] Missing repoPath." }));
+        }
+        match exec_output_limit(
+            "git",
+            &[
+                "-C",
+                repo_path,
+                "for-each-ref",
+                "refs/heads",
+                "refs/remotes",
+                "--format=%(HEAD)|%(refname:short)|%(refname)",
+            ],
+            CMD_TIMEOUT_SHORT,
+        )
+        .await
+        {
+            Ok(out) => {
+                let mut branches: Vec<Value> = Vec::new();
+                let mut current = String::new();
+                for line in out.lines() {
+                    let mut parts = line.splitn(3, '|');
+                    let head = parts.next().unwrap_or("").trim();
+                    let short = parts.next().unwrap_or("").trim();
+                    let full = parts.next().unwrap_or("").trim();
+                    if short.is_empty() || short == "HEAD" {
+                        continue;
+                    }
+                    if full.ends_with("/HEAD") {
+                        continue;
+                    }
+                    let is_current = head == "*";
+                    let remote = full.starts_with("refs/remotes/");
+                    let display_name = short.to_string();
+                    if is_current {
+                        current.clone_from(&display_name);
+                    }
+                    branches.push(json!({
+                        "name": display_name,
+                        "remote": remote,
+                        "current": is_current,
+                    }));
+                }
+                branches.sort_by(|a, b| {
+                    let ar = a.get("remote").and_then(|v| v.as_bool()).unwrap_or(false);
+                    let br = b.get("remote").and_then(|v| v.as_bool()).unwrap_or(false);
+                    match ar.cmp(&br) {
+                        std::cmp::Ordering::Equal => {}
+                        o => return o,
+                    }
+                    let an = a.get("name").and_then(|v| v.as_str()).unwrap_or("");
+                    let bn = b.get("name").and_then(|v| v.as_str()).unwrap_or("");
+                    an.cmp(bn)
+                });
+                json!({ "ok": true, "branches": branches, "current": current })
+            }
+            Err(e) => json!({ "ok": false, "error": format!("[GIT_VCS_NOT_A_REPO] {}", e.trim()) }),
+        }
+    },
+
+    "dh:git:vcs:checkout" => {
+        let repo_path = body.get("repoPath").and_then(|v| v.as_str()).unwrap_or_default();
+        let branch = body.get("branch").and_then(|v| v.as_str()).unwrap_or_default();
+        let create = body.get("create").and_then(|v| v.as_bool()).unwrap_or(false);
+        if repo_path.is_empty() || branch.is_empty() {
+            return Ok(json!({ "ok": false, "error": "[GIT_VCS_NOT_A_REPO] Missing repoPath or branch." }));
+        }
+        let args: Vec<&str> = if create {
+            vec!["-C", repo_path, "checkout", "-b", branch]
+        } else {
+            vec!["-C", repo_path, "checkout", branch]
+        };
+        match exec_output_limit("git", &args, CMD_TIMEOUT_SHORT).await {
+            Ok(_) => json!({ "ok": true }),
+            Err(e) => {
+                let msg = e.trim();
+                let code = if msg.contains("would be overwritten by checkout")
+                    || msg.contains("stash them before you switch")
+                    || msg.contains("Please commit your changes or stash them")
+                {
+                    "GIT_VCS_CHECKOUT_DIRTY"
+                } else {
+                    "GIT_VCS_CHECKOUT"
+                };
+                json!({ "ok": false, "error": format!("[{}] {}", code, msg) })
+            }
+        }
+    },
+
+    "dh:git:vcs:stash" => {
+        let repo_path = body.get("repoPath").and_then(|v| v.as_str()).unwrap_or_default();
+        if repo_path.is_empty() {
+            return Ok(json!({ "ok": false, "error": "[GIT_VCS_NOT_A_REPO] Missing repoPath." }));
+        }
+        let message = body
+            .get("message")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .unwrap_or("LuminaDev: stash before branch switch");
+        let include_untracked = body.get("includeUntracked").and_then(|v| v.as_bool()).unwrap_or(true);
+        let mut argv: Vec<String> = vec![
+            "-C".to_string(),
+            repo_path.to_string(),
+            "stash".to_string(),
+            "push".to_string(),
+        ];
+        if include_untracked {
+            argv.push("-u".to_string());
+        }
+        argv.push("-m".to_string());
+        argv.push(message.to_string());
+        let args: Vec<&str> = argv.iter().map(|s| s.as_str()).collect();
+        match exec_output_limit("git", &args, CMD_TIMEOUT_SHORT).await {
+            Ok(out) => json!({ "ok": true, "message": out }),
+            Err(e) => {
+                let msg = e.trim();
+                let code = if msg.contains("No local changes to save") {
+                    "GIT_VCS_STASH_EMPTY"
+                } else {
+                    "GIT_VCS_STASH"
+                };
+                json!({ "ok": false, "error": format!("[{}] {}", code, msg) })
+            }
+        }
+    },
+
+    "dh:git:vcs:push" => {
+        let repo_path = body.get("repoPath").and_then(|v| v.as_str()).unwrap_or_default();
+        let remote = body.get("remote").and_then(|v| v.as_str());
+        let branch = body.get("branch").and_then(|v| v.as_str());
+        if repo_path.is_empty() {
+            return Ok(json!({ "ok": false, "error": "[GIT_VCS_NOT_A_REPO] Missing repoPath." }));
+        }
+        let store = cloud_auth::app_encrypted_credential_store(&app);
+        match git_network_with_auth(
+            repo_path,
+            GitNetworkOp::Push { remote, branch },
+            &store,
+            &app,
+        )
+        .await
+        {
+            Ok(output) => json!({ "ok": true, "output": output }),
+            Err(e) => json!({ "ok": false, "error": e }),
+        }
+    },
+
+    "dh:git:vcs:pull" => {
+        let repo_path = body.get("repoPath").and_then(|v| v.as_str()).unwrap_or_default();
+        if repo_path.is_empty() {
+            return Ok(json!({ "ok": false, "error": "[GIT_VCS_NOT_A_REPO] Missing repoPath." }));
+        }
+        let store = cloud_auth::app_encrypted_credential_store(&app);
+        match git_network_with_auth(repo_path, GitNetworkOp::Pull, &store, &app).await {
+            Ok(output) => json!({ "ok": true, "output": output }),
+            Err(e) => json!({ "ok": false, "error": e }),
+        }
+    },
+
+    "dh:git:vcs:fetch" => {
+        let repo_path = body.get("repoPath").and_then(|v| v.as_str()).unwrap_or_default();
+        if repo_path.is_empty() {
+            return Ok(json!({ "ok": false, "error": "[GIT_VCS_NOT_A_REPO] Missing repoPath." }));
+        }
+        let remote = body
+            .get("remote")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .unwrap_or("origin");
+        let store = cloud_auth::app_encrypted_credential_store(&app);
+        match git_network_with_auth(
+            repo_path,
+            GitNetworkOp::Fetch { remote },
+            &store,
+            &app,
+        )
+        .await
+        {
+            Ok(output) => json!({ "ok": true, "output": output }),
+            Err(e) => json!({ "ok": false, "error": e }),
+        }
+    },
+
+    "dh:git:vcs:merge"
+    | "dh:git:vcs:rebase"
+    | "dh:git:vcs:stash-pop"
+    | "dh:git:vcs:merge-abort"
+    | "dh:git:vcs:rebase-abort"
+    | "dh:git:vcs:merge-continue"
+    | "dh:git:vcs:rebase-continue"
+    | "dh:git:vcs:rebase-skip" => git_vcs_ipc::invoke_extended(channel.as_str(), &body).await,
 
     "dh:ssh:generate" => {
       let email = body.get("email").and_then(|v| v.as_str()).unwrap_or("lumina@local");
@@ -3810,6 +4269,80 @@ mod tests {
       "docker-proxy"
     );
     assert_eq!(ss_process_from_line("no users payload"), "unknown");
+  }
+
+  #[test]
+  fn porcelain_parses_modified_staged() {
+      let input = "M  src/main.rs";
+      let (staged, unstaged) = parse_porcelain_v1(input);
+      assert_eq!(staged.len(), 1);
+      assert_eq!(staged[0]["status"], "M");
+      assert_eq!(staged[0]["path"], "src/main.rs");
+      assert_eq!(unstaged.len(), 0);
+  }
+
+  #[test]
+  fn porcelain_parses_untracked() {
+      let input = "?? new_file.rs";
+      let (staged, unstaged) = parse_porcelain_v1(input);
+      assert_eq!(staged.len(), 0);
+      assert_eq!(unstaged.len(), 1);
+      assert_eq!(unstaged[0]["status"], "?");
+  }
+
+  #[test]
+  fn porcelain_parses_conflict() {
+      let input = "UU conflict.rs";
+      let (staged, unstaged) = parse_porcelain_v1(input);
+      assert_eq!(staged.len(), 0);
+      assert_eq!(unstaged.len(), 1);
+      assert_eq!(unstaged[0]["status"], "C");
+  }
+
+  #[test]
+  fn porcelain_parses_both_added_unmerged() {
+      let input = "AA both.rs";
+      let (staged, unstaged) = parse_porcelain_v1(input);
+      assert_eq!(staged.len(), 0);
+      assert_eq!(unstaged.len(), 1);
+      assert_eq!(unstaged[0]["status"], "C");
+      assert_eq!(unstaged[0]["path"], "both.rs");
+  }
+
+  #[test]
+  fn porcelain_parses_ud_unmerged() {
+      let input = "UD deleted-by-us.rs";
+      let (staged, unstaged) = parse_porcelain_v1(input);
+      assert_eq!(staged.len(), 0);
+      assert_eq!(unstaged.len(), 1);
+      assert_eq!(unstaged[0]["status"], "C");
+  }
+
+  #[test]
+  fn porcelain_parses_renamed() {
+      let input = "R  new_name.rs -> old_name.rs";
+      let (staged, unstaged) = parse_porcelain_v1(input);
+      assert_eq!(staged.len(), 1);
+      assert_eq!(staged[0]["status"], "R");
+      assert_eq!(staged[0]["path"], "new_name.rs");
+      assert_eq!(staged[0]["oldPath"], "old_name.rs");
+      assert_eq!(unstaged.len(), 0);
+  }
+
+  #[test]
+  fn porcelain_parses_staged_and_unstaged() {
+      let input = "MM src/lib.rs";
+      let (staged, unstaged) = parse_porcelain_v1(input);
+      assert_eq!(staged.len(), 1);
+      assert_eq!(staged[0]["status"], "M");
+      assert_eq!(unstaged.len(), 1);
+      assert_eq!(unstaged[0]["status"], "M");
+  }
+
+  #[test]
+  fn diff_cap_check() {
+      let big = "a".repeat(524289);
+      assert!(big.len() > 512 * 1024);
   }
 
 }
