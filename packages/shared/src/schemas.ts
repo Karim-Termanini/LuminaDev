@@ -74,6 +74,8 @@ export const HostExecRequestSchema = z.object({
     'maintenance_docker_ps_table',
     'maintenance_journalctl_docker',
     'maintenance_du_cache_tail',
+    /** Read-only `cat /etc/hosts` for Settings preview (bounded output server-side). */
+    'settings_read_hosts',
   ] as const),
   unit: z.string().max(128).optional(),
   distro: z.enum(['ubuntu', 'fedora', 'arch']).optional(),

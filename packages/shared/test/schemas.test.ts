@@ -35,6 +35,12 @@ describe('schemas', () => {
     })
   })
 
+  it('accepts settings_read_hosts host exec', () => {
+    expect(HostExecRequestSchema.parse({ command: 'settings_read_hosts' })).toEqual({
+      command: 'settings_read_hosts',
+    })
+  })
+
   it('accepts docker logs with bounds', () => {
     expect(DockerLogsRequestSchema.parse({ id: 'abc', tail: 100 })).toEqual({
       id: 'abc',

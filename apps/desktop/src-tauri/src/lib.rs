@@ -3199,6 +3199,10 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
           }
           _ => json!({ "ok": false, "result": Value::Null, "error": "[HOST_EXEC_INVALID] HOME unset." }),
         },
+        "settings_read_hosts" => match exec_output_limit("cat", &["/etc/hosts"], CMD_TIMEOUT_SHORT).await {
+          Ok(out) => json!({ "ok": true, "result": truncate_probe_output(&out) }),
+          Err(e) => json!({ "ok": false, "result": Value::Null, "error": format!("[HOST_EXEC_FAILED] {}", e) }),
+        },
         _ => json!({ "ok": false, "result": Value::Null, "error": "[HOST_EXEC_NOT_ALLOWED] command not allowed" }),
       }
     },

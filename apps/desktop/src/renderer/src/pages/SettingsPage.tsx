@@ -36,14 +36,21 @@ export function SettingsPage(): ReactElement {
   const [accentBusy, setAccentBusy] = useState(false)
   const [accentMsg, setAccentMsg] = useState<string | null>(null)
 
+  const [hostsPreview, setHostsPreview] = useState<string | null>(null)
+  const [hostsErr, setHostsErr] = useState<string | null>(null)
+  const [hostsBusy, setHostsBusy] = useState(false)
+
   useEffect(() => {
     void (async () => {
       setLoadError(null)
       setAccentMsg(null)
+      setHostsErr(null)
+      setHostsBusy(true)
       try {
-        const [bm, ap] = await Promise.all([
+        const [bm, ap, hr] = await Promise.all([
           window.dh.storeGet({ key: 'ssh_bookmarks' }),
           window.dh.storeGet({ key: 'appearance' }),
+          window.dh.hostExec({ command: 'settings_read_hosts' }),
         ])
         if (bm.ok) {
           setBookmarks(parseSshBookmarks(bm.data))
@@ -57,13 +64,46 @@ export function SettingsPage(): ReactElement {
         } else {
           setAccentDraft(DEFAULT_ACCENT_HEX)
         }
+        const h = hr as { ok: boolean; result?: unknown; error?: string }
+        if (h.ok && typeof h.result === 'string') {
+          setHostsPreview(h.result)
+          setHostsErr(null)
+        } else {
+          setHostsPreview(null)
+          setHostsErr(h.error ?? 'Could not read /etc/hosts.')
+        }
       } catch (e) {
         setBookmarks([])
         setLoadError(e instanceof Error ? e.message : 'Failed to load settings.')
         setAccentDraft(DEFAULT_ACCENT_HEX)
+        setHostsPreview(null)
+        setHostsErr(e instanceof Error ? e.message : 'Could not read /etc/hosts.')
+      } finally {
+        setHostsBusy(false)
       }
     })()
   }, [])
+
+  async function refreshHosts(): Promise<void> {
+    setHostsBusy(true)
+    setHostsErr(null)
+    try {
+      const hr = await window.dh.hostExec({ command: 'settings_read_hosts' })
+      const h = hr as { ok: boolean; result?: unknown; error?: string }
+      if (h.ok && typeof h.result === 'string') {
+        setHostsPreview(h.result)
+        setHostsErr(null)
+      } else {
+        setHostsPreview(null)
+        setHostsErr(h.error ?? 'Could not read /etc/hosts.')
+      }
+    } catch (e) {
+      setHostsPreview(null)
+      setHostsErr(e instanceof Error ? e.message : 'Could not read /etc/hosts.')
+    } finally {
+      setHostsBusy(false)
+    }
+  }
 
   async function saveAccent(): Promise<void> {
     setAccentBusy(true)
@@ -113,8 +153,8 @@ export function SettingsPage(): ReactElement {
         </div>
         <h1 style={{ margin: 0, fontSize: 28, fontWeight: 700 }}>Settings</h1>
         <p style={{ ...muted, marginTop: 10, maxWidth: 720 }}>
-          Phase 8 hub: SSH bookmarks share storage with the SSH page. Accent color is persisted app-wide. Hosts and
-          environment tools are still planned.
+          Phase 8 hub: SSH bookmarks share storage with the SSH page. Accent color is persisted app-wide. Hosts preview is
+          read-only; environment tools are still planned.
         </p>
       </header>
 
@@ -234,9 +274,58 @@ export function SettingsPage(): ReactElement {
         ) : null}
       </section>
 
-      <section style={{ ...panel, opacity: 0.85 }}>
-        <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>Hosts file</h2>
-        <p style={{ ...muted, marginTop: 8, marginBottom: 0 }}>Planned: safe `/etc/hosts` editing with previews and warnings.</p>
+      <section style={panel}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>Hosts file</h2>
+          <button
+            type="button"
+            disabled={hostsBusy}
+            onClick={() => void refreshHosts()}
+            style={{
+              padding: '8px 16px',
+              borderRadius: 8,
+              border: '1px solid var(--border)',
+              background: 'var(--bg-input)',
+              color: 'var(--text)',
+              fontWeight: 600,
+              fontSize: 13,
+              cursor: hostsBusy ? 'wait' : 'pointer',
+            }}
+          >
+            Refresh preview
+          </button>
+        </div>
+        <p style={{ ...muted, marginTop: 8, marginBottom: 0 }}>
+          Read-only snapshot of <span className="mono">/etc/hosts</span> (bounded size). Flatpak or sandboxed installs may
+          not see the host file; editing is not offered yet.
+        </p>
+        {hostsErr ? (
+          <p style={{ color: 'var(--red)', marginTop: 12, marginBottom: 0, fontSize: 14 }}>{hostsErr}</p>
+        ) : null}
+        {hostsBusy && hostsPreview === null && !hostsErr ? (
+          <p style={{ ...muted, marginTop: 12, marginBottom: 0 }}>Loading hosts preview…</p>
+        ) : null}
+        {hostsPreview !== null ? (
+          <pre
+            className="mono"
+            style={{
+              marginTop: 12,
+              marginBottom: 0,
+              padding: 12,
+              maxHeight: 280,
+              overflow: 'auto',
+              fontSize: 12,
+              lineHeight: 1.45,
+              background: 'var(--bg-input)',
+              border: '1px solid var(--border)',
+              borderRadius: 8,
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word',
+            }}
+          >
+            {hostsPreview}
+          </pre>
+        ) : null}
       </section>
 
       <section style={{ ...panel, opacity: 0.85 }}>
