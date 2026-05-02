@@ -158,6 +158,16 @@ export function GitVcsPage(): ReactElement {
       if (!repoPath.trim()) return
       setOpErrorRaw(null)
       setBusy(true)
+      // Drop last repo snapshot immediately so a failed refresh never shows stale branch/files
+      // alongside e.g. `[GIT_VCS_NOT_A_REPO]` (would make Commit look broken).
+      setBranch('')
+      setAhead(null)
+      setBehind(null)
+      setStaged([])
+      setUnstaged([])
+      setBranches([])
+      setGitRemotes([])
+      setSelected(null)
       try {
         const lists = await refreshStatus()
         setSelected((prev) => reconcileGitVcsSelection(prev, lists.staged, lists.unstaged))
@@ -258,6 +268,21 @@ export function GitVcsPage(): ReactElement {
     setBusy(true)
     setOpErrorRaw(null)
     try {
+      // Like VS Code "Git: Smart Commit" — if nothing is staged but there are local changes, stage all then commit.
+      if (staged.length === 0 && unstaged.length > 0) {
+        const rStage = await window.dh.gitVcsStage({
+          repoPath: repoPath.trim(),
+          filePaths: unstaged.map((f) => f.path),
+        })
+        assertGitVcsOk(rStage)
+        const lists = await refreshStatus()
+        setSelected((prev) => reconcileGitVcsSelection(prev, lists.staged, lists.unstaged))
+        if (lists.staged.length === 0) {
+          throw new Error('[GIT_VCS_NO_STAGED] ')
+        }
+      } else if (staged.length === 0) {
+        throw new Error('[GIT_VCS_NO_STAGED] ')
+      }
       const r = await window.dh.gitVcsCommit({ repoPath: repoPath.trim(), message: commitMessage.trim() })
       assertGitVcsOk(r)
       setCommitMessage('')
@@ -265,6 +290,12 @@ export function GitVcsPage(): ReactElement {
       setSelected(null)
     } catch (e) {
       setOpErrorRaw(e instanceof Error ? e.message : String(e))
+      try {
+        const lists = await refreshStatus()
+        setSelected((prev) => reconcileGitVcsSelection(prev, lists.staged, lists.unstaged))
+      } catch {
+        /* ignore secondary refresh errors */
+      }
     } finally {
       setBusy(false)
     }
@@ -629,7 +660,7 @@ export function GitVcsPage(): ReactElement {
             onMessageChange={setCommitMessage}
             onCommit={() => void runCommit()}
             busy={busy}
-            disabled={staged.length === 0}
+            disabled={staged.length === 0 && unstaged.length === 0}
           />
         </>
       )}

@@ -18,7 +18,15 @@ describe('isCloudAuthOauthNotConfigured', () => {
 describe('humanizeCloudAuthError', () => {
   it('humanizes CLOUD_AUTH_INVALID_TOKEN', () => {
     const msg = humanizeCloudAuthError(new Error('[CLOUD_AUTH_INVALID_TOKEN] token rejected'))
-    expect(msg).toContain('invalid or expired')
+    expect(msg).toContain('token rejected')
+    expect(msg).toContain('Account & security')
+  })
+
+  it('humanizes CLOUD_AUTH_NOT_CONNECTED', () => {
+    const msg = humanizeCloudAuthError(
+      new Error('[CLOUD_AUTH_NOT_CONNECTED] Connect this provider in Cloud Git first.'),
+    )
+    expect(msg).toContain('Connect this provider')
   })
 
   it('humanizes CLOUD_AUTH_NETWORK', () => {

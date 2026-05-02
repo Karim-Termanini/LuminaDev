@@ -8,6 +8,21 @@ describe('humanizeGitVcsError', () => {
     )
   })
 
+  it('humanizes GIT_VCS_NO_STAGED when detail contains newlines (full git status)', () => {
+    const raw = `[GIT_VCS_NO_STAGED] On branch main\n\nnothing to commit\n`
+    const msg = humanizeGitVcsError(new Error(raw))
+    expect(msg).toBe('Stage at least one file before committing.')
+    expect(msg).not.toContain('[GIT_VCS_NO_STAGED]')
+  })
+
+  it('humanizes GIT_VCS_COMMIT_FAILED without implying not-a-repo', () => {
+    const msg = humanizeGitVcsError(
+      new Error('[GIT_VCS_COMMIT_FAILED] error: gpg failed to sign the data'),
+    )
+    expect(msg).toContain('Commit did not complete')
+    expect(msg).not.toMatch(/not a Git repository/i)
+  })
+
   it('humanizes GIT_VCS_PUSH_REJECTED', () => {
     expect(humanizeGitVcsError(new Error('[GIT_VCS_PUSH_REJECTED] non-fast-forward'))).toContain(
       'Pull the latest changes',

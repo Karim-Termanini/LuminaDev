@@ -78,7 +78,11 @@ function FileRow(props: {
       >
         {st.label}
       </span>
-      <span className="mono" style={{ fontSize: 12, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+      <span
+        className="mono"
+        title={label}
+        style={{ fontSize: 12, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+      >
         {label}
       </span>
       {props.staged ? (

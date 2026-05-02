@@ -2,6 +2,7 @@ import type { CloudPipelineEntry, CloudPullRequestEntry, GitRepoEntry } from '@l
 import type { ReactElement } from 'react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { humanizeCloudAuthError } from './cloudAuthError'
 import { assertGitRecentList } from './registryContract'
 
 type Provider = 'github' | 'gitlab'
@@ -19,7 +20,10 @@ const WEB: Record<Provider, { prs: string; ci: string }> = {
 
 export function CloudGitActivityPanel({ provider, label }: { provider: Provider; label: string }): ReactElement {
   const urls = WEB[provider]
-  const [loading, setLoading] = useState(true)
+  const [prLimit, setPrLimit] = useState(12)
+  const [pipelineLimit, setPipelineLimit] = useState(8)
+  const [prLoading, setPrLoading] = useState(true)
+  const [ciLoading, setCiLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [prs, setPrs] = useState<CloudPullRequestEntry[]>([])
   const [pipelines, setPipelines] = useState<CloudPipelineEntry[]>([])
@@ -36,12 +40,16 @@ export function CloudGitActivityPanel({ provider, label }: { provider: Provider;
   }, [])
 
   useEffect(() => {
+    setPrLimit(12)
+    setPipelineLimit(8)
+  }, [provider])
+
+  useEffect(() => {
     let cancelled = false
-    setLoading(true)
+    setPrLoading(true)
     setError(null)
-    setPipelineError(null)
     void window.dh
-      .cloudGitPrs({ provider, limit: 12 })
+      .cloudGitPrs({ provider, limit: prLimit })
       .then((res) => {
         if (cancelled) return
         if (res.ok && Array.isArray(res.prs)) {
@@ -58,10 +66,19 @@ export function CloudGitActivityPanel({ provider, label }: { provider: Provider;
         }
       })
       .finally(() => {
-        if (!cancelled) setLoading(false)
+        if (!cancelled) setPrLoading(false)
       })
+    return () => {
+      cancelled = true
+    }
+  }, [provider, prLimit])
+
+  useEffect(() => {
+    let cancelled = false
+    setCiLoading(true)
+    setPipelineError(null)
     void window.dh
-      .cloudGitPipelines({ provider, limit: 8 })
+      .cloudGitPipelines({ provider, limit: pipelineLimit })
       .then((res) => {
         if (cancelled) return
         if (res.ok && Array.isArray(res.pipelines)) {
@@ -77,10 +94,22 @@ export function CloudGitActivityPanel({ provider, label }: { provider: Provider;
           setPipelineError(e instanceof Error ? e.message : String(e))
         }
       })
+      .finally(() => {
+        if (!cancelled) setCiLoading(false)
+      })
     return () => {
       cancelled = true
     }
-  }, [provider])
+  }, [provider, pipelineLimit])
+
+  const needsReconnect = (raw: string | null): boolean =>
+    !!raw &&
+    (raw.includes('[CLOUD_AUTH_INVALID_TOKEN]') ||
+      raw.includes('[CLOUD_AUTH_NOT_CONNECTED]'))
+
+  const scrollToReconnect = (): void => {
+    document.getElementById(`cloud-git-hero-${provider}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
 
   const localPathByRepo = useMemo(() => {
     const map = new Map<string, string>()
@@ -118,25 +147,39 @@ export function CloudGitActivityPanel({ provider, label }: { provider: Provider;
           Activity
         </h2>
         <p className="hp-muted" style={{ margin: '8px 0 0', fontSize: 13, lineHeight: 1.5 }}>
-          Open PRs and CI runs for <strong>{label}</strong> will list here once the Phase 12 feed is wired. Until then,
-          jump to the provider in your browser.
+          Open PRs/MRs and recent CI runs for <strong>{label}</strong> (account-scoped). Use browser shortcuts for the
+          full provider UI.
         </p>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <div className="hp-card" style={{ padding: '14px 16px' }}>
           <div style={{ fontWeight: 650, fontSize: 14, marginBottom: 6 }}>Pull requests</div>
-          {loading ? <p className="hp-muted" style={{ margin: '0 0 12px', fontSize: 12 }}>Loading…</p> : null}
-          {!loading && error ? (
-            <p style={{ margin: '0 0 12px', fontSize: 12, color: '#ff8a80', lineHeight: 1.45 }}>{error}</p>
+          {prLoading ? <p className="hp-muted" style={{ margin: '0 0 12px', fontSize: 12 }}>Loading…</p> : null}
+          {!prLoading && error ? (
+            <div style={{ margin: '0 0 12px' }}>
+              <p style={{ margin: 0, fontSize: 12, color: '#ff8a80', lineHeight: 1.45 }}>
+                {humanizeCloudAuthError(new Error(error))}
+              </p>
+              {needsReconnect(error) ? (
+                <button type="button" className="hp-btn hp-btn-primary" style={{ marginTop: 10, fontSize: 12 }} onClick={scrollToReconnect}>
+                  Reconnect {label}
+                </button>
+              ) : null}
+            </div>
           ) : null}
-          {!loading && !error && prs.length === 0 ? (
+          {!prLoading && !error && prs.length === 0 ? (
             <p className="hp-muted" style={{ margin: '0 0 12px', fontSize: 12, lineHeight: 1.45 }}>
               No open PRs/MRs found for your account.
             </p>
           ) : null}
-          {!loading && !error && prs.length > 0 ? (
+          {!prLoading && !error && prs.length > 0 ? (
+            <div className="mono" style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
+              Showing {prs.length} · request limit {prLimit}
+            </div>
+          ) : null}
+          {!prLoading && !error && prs.length > 0 ? (
             <ul style={{ margin: '0 0 12px', paddingLeft: 18, fontSize: 12, lineHeight: 1.5 }}>
-              {prs.slice(0, 6).map((pr) => (
+              {prs.map((pr) => (
                 <li key={pr.id} style={{ marginBottom: 4 }}>
                   <a
                     href={pr.url}
@@ -171,6 +214,32 @@ export function CloudGitActivityPanel({ provider, label }: { provider: Provider;
               ))}
             </ul>
           ) : null}
+          {!prLoading &&
+          !error &&
+          (prLimit > 12 || (prs.length >= prLimit && prLimit < 50)) ? (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+              {prs.length >= prLimit && prLimit < 50 ? (
+                <button
+                  type="button"
+                  className="hp-btn"
+                  style={{ fontSize: 12, borderColor: 'var(--cg-accent-muted)' }}
+                  onClick={() => setPrLimit((n) => Math.min(50, n + 12))}
+                >
+                  Show more
+                </button>
+              ) : null}
+              {prLimit > 12 ? (
+                <button
+                  type="button"
+                  className="hp-btn"
+                  style={{ fontSize: 12, borderColor: 'var(--cg-accent-muted)' }}
+                  onClick={() => setPrLimit(12)}
+                >
+                  Reset
+                </button>
+              ) : null}
+            </div>
+          ) : null}
           <button
             type="button"
             className="hp-btn"
@@ -182,18 +251,32 @@ export function CloudGitActivityPanel({ provider, label }: { provider: Provider;
         </div>
         <div className="hp-card" style={{ padding: '14px 16px' }}>
           <div style={{ fontWeight: 650, fontSize: 14, marginBottom: 6 }}>CI / pipelines</div>
-          {loading ? <p className="hp-muted" style={{ margin: '0 0 12px', fontSize: 12 }}>Loading…</p> : null}
-          {!loading && pipelineError ? (
-            <p style={{ margin: '0 0 12px', fontSize: 12, color: '#ff8a80', lineHeight: 1.45 }}>{pipelineError}</p>
+          {ciLoading ? <p className="hp-muted" style={{ margin: '0 0 12px', fontSize: 12 }}>Loading…</p> : null}
+          {!ciLoading && pipelineError ? (
+            <div style={{ margin: '0 0 12px' }}>
+              <p style={{ margin: 0, fontSize: 12, color: '#ff8a80', lineHeight: 1.45 }}>
+                {humanizeCloudAuthError(new Error(pipelineError))}
+              </p>
+              {needsReconnect(pipelineError) ? (
+                <button type="button" className="hp-btn hp-btn-primary" style={{ marginTop: 10, fontSize: 12 }} onClick={scrollToReconnect}>
+                  Reconnect {label}
+                </button>
+              ) : null}
+            </div>
           ) : null}
-          {!loading && !pipelineError && pipelines.length === 0 ? (
+          {!ciLoading && !pipelineError && pipelines.length === 0 ? (
             <p className="hp-muted" style={{ margin: '0 0 12px', fontSize: 12, lineHeight: 1.45 }}>
               No recent pipelines found for your account.
             </p>
           ) : null}
-          {!loading && !pipelineError && pipelines.length > 0 ? (
+          {!ciLoading && !pipelineError && pipelines.length > 0 ? (
+            <div className="mono" style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
+              Showing {pipelines.length} · request limit {pipelineLimit}
+            </div>
+          ) : null}
+          {!ciLoading && !pipelineError && pipelines.length > 0 ? (
             <ul style={{ margin: '0 0 12px', paddingLeft: 18, fontSize: 12, lineHeight: 1.5 }}>
-              {pipelines.slice(0, 5).map((p) => (
+              {pipelines.map((p) => (
                 <li key={p.id} style={{ marginBottom: 4 }}>
                   <a
                     href={p.url}
@@ -222,6 +305,32 @@ export function CloudGitActivityPanel({ provider, label }: { provider: Provider;
                 </li>
               ))}
             </ul>
+          ) : null}
+          {!ciLoading &&
+          !pipelineError &&
+          (pipelineLimit > 8 || (pipelines.length >= pipelineLimit && pipelineLimit < 50)) ? (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+              {pipelines.length >= pipelineLimit && pipelineLimit < 50 ? (
+                <button
+                  type="button"
+                  className="hp-btn"
+                  style={{ fontSize: 12, borderColor: 'var(--cg-accent-muted)' }}
+                  onClick={() => setPipelineLimit((n) => Math.min(50, n + 8))}
+                >
+                  Show more
+                </button>
+              ) : null}
+              {pipelineLimit > 8 ? (
+                <button
+                  type="button"
+                  className="hp-btn"
+                  style={{ fontSize: 12, borderColor: 'var(--cg-accent-muted)' }}
+                  onClick={() => setPipelineLimit(8)}
+                >
+                  Reset
+                </button>
+              ) : null}
+            </div>
           ) : null}
           <button
             type="button"
