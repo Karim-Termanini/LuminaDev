@@ -1870,6 +1870,9 @@ impl GitHubProvider {
         if resp.status() == 401 {
             return Err("[CLOUD_AUTH_INVALID_TOKEN] GitHub token is invalid or expired.".to_string());
         }
+        if resp.status() == 403 {
+            return Err("[CLOUD_GIT_INSUFFICIENT_SCOPE] Your GitHub token lacks the 'repo' scope needed to create pull requests. Reconnect in Cloud Git with a token that has the 'repo' scope enabled.".to_string());
+        }
         if resp.status() == 422 {
             return Err("[CLOUD_GIT_PR_EXISTS] A pull request for this branch already exists.".to_string());
         }
@@ -1919,6 +1922,9 @@ impl GitLabProvider {
             .map_err(|e| format!("[CLOUD_GIT_NETWORK] GitLab create MR: {}", e))?;
         if resp.status() == 401 {
             return Err("[CLOUD_AUTH_INVALID_TOKEN] GitLab token is invalid or expired.".to_string());
+        }
+        if resp.status() == 403 {
+            return Err("[CLOUD_GIT_INSUFFICIENT_SCOPE] Your GitLab token lacks the 'api' scope needed to create merge requests. Reconnect in Cloud Git with a token that has the 'api' scope enabled.".to_string());
         }
         if resp.status() == 409 {
             return Err("[CLOUD_GIT_PR_EXISTS] A merge request for this branch already exists.".to_string());
