@@ -118,7 +118,10 @@ export function AppShell({ children }: { children: ReactNode }): ReactElement {
             href="#"
             onClick={(e) => {
               e.preventDefault()
-              void window.dh.storeSet({ key: 'wizard_state', data: { completed: false, showOnStartup: true } })
+              void window.dh.storeSet({
+                key: 'wizard_state',
+                data: { completed: false, showOnStartup: true, stepIndex: 0 },
+              })
                 .then(() => window.location.reload())
             }}
             style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-muted)', fontSize: 13 }}

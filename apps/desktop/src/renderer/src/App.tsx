@@ -18,15 +18,16 @@ import { TerminalPage } from './pages/TerminalPage'
 import { RuntimesPage } from './pages/RuntimesPage'
 import { MaintenancePage } from './pages/MaintenancePage'
 import { WizardFlow } from './wizard/WizardFlow'
-import type { WizardStateStore } from '@linux-dev-home/shared'
+import { WizardStateStoreSchema } from '@linux-dev-home/shared'
 
 export default function App(): ReactElement | null {
   const [ready, setReady] = useState(false)
   const [showWizard, setShowWizard] = useState(false)
 
   useEffect(() => {
-    window.dh.storeGet({ key: 'wizard_state' }).then((state: unknown) => {
-      const w = state as WizardStateStore | null
+    void window.dh.storeGet({ key: 'wizard_state' }).then((res: unknown) => {
+      const bag = res as { ok?: boolean; data?: unknown }
+      const w = bag.ok ? WizardStateStoreSchema.safeParse(bag.data).data : undefined
       if (!w?.completed || !!w?.showOnStartup) {
         setShowWizard(true)
       }

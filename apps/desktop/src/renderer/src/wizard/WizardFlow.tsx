@@ -1,6 +1,6 @@
-import type { ComposeProfile, SessionInfo } from '@linux-dev-home/shared'
+import { WizardStateStoreSchema, type ComposeProfile, type SessionInfo } from '@linux-dev-home/shared'
 import type { ReactElement } from 'react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { assertGitOk } from '../pages/gitContract'
 import { humanizeGitError } from '../pages/gitError'
 import { assertSshOk } from '../pages/sshContract'
@@ -8,6 +8,8 @@ import { humanizeSshError } from '../pages/sshError'
 
 export function WizardFlow({ onComplete }: { onComplete: () => void }): ReactElement {
   const [step, setStep] = useState(0)
+  const [hydrated, setHydrated] = useState(false)
+  const exitingRef = useRef(false)
   const [isFlatpak, setIsFlatpak] = useState(false)
   const [dockerOk, setDockerOk] = useState<boolean | null>(null)
   
@@ -25,7 +27,44 @@ export function WizardFlow({ onComplete }: { onComplete: () => void }): ReactEle
     window.dh.dockerList().then((res: unknown) => setDockerOk((res as {ok: boolean}).ok))
   }, [])
 
+  useEffect(() => {
+    void (async () => {
+      try {
+        const raw = await window.dh.storeGet({ key: 'wizard_state' })
+        const bag = raw as { ok?: boolean; data?: unknown }
+        if (bag.ok) {
+          const w = WizardStateStoreSchema.safeParse(bag.data)
+          if (w.success && !w.data.completed && typeof w.data.stepIndex === 'number') {
+            setStep(w.data.stepIndex)
+          }
+        }
+      } finally {
+        setHydrated(true)
+      }
+    })()
+  }, [])
+
+  useEffect(() => {
+    if (!hydrated || exitingRef.current) return
+    void (async () => {
+      try {
+        const raw = await window.dh.storeGet({ key: 'wizard_state' })
+        const bag = raw as { ok?: boolean; data?: unknown }
+        const prev = bag.ok ? WizardStateStoreSchema.safeParse(bag.data) : null
+        const prevShow = prev?.success ? (prev.data.showOnStartup ?? false) : false
+        const showOnStartup = step >= 6 ? showAgainNextLaunch : prevShow
+        await window.dh.storeSet({
+          key: 'wizard_state',
+          data: { completed: false, showOnStartup, stepIndex: step },
+        })
+      } catch {
+        /* best effort */
+      }
+    })()
+  }, [step, showAgainNextLaunch, hydrated])
+
   const handleComplete = async () => {
+    exitingRef.current = true
     await window.dh.storeSet({
       key: 'wizard_state',
       data: { completed: true, showOnStartup: showAgainNextLaunch },
