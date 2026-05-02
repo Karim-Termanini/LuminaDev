@@ -8,6 +8,7 @@ export type GitVcsBranchPickerProps = {
   busy: boolean
   onCheckout: (name: string) => void
   onCreateBranch: (name: string) => void
+  onRenameBranch?: (oldName: string, newName: string) => void
 }
 
 function sortLocals(a: BranchEntry, b: BranchEntry): number {
@@ -21,10 +22,14 @@ export function GitVcsBranchPicker({
   busy,
   onCheckout,
   onCreateBranch,
+  onRenameBranch,
 }: GitVcsBranchPickerProps): ReactElement {
   const [creating, setCreating] = useState(false)
+  const [renaming, setRenaming] = useState(false)
   const [newName, setNewName] = useState('')
+  const [renameName, setRenameName] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
+  const renameRef = useRef<HTMLInputElement>(null)
 
   const { localOptions, remotes } = useMemo(() => {
     const rem = branches.filter((b) => b.remote).sort((a, b) => a.name.localeCompare(b.name))
@@ -62,6 +67,34 @@ export function GitVcsBranchPicker({
   function handleInputKey(e: KeyboardEvent<HTMLInputElement>): void {
     if (e.key === 'Enter') commitCreate()
     if (e.key === 'Escape') cancelCreate()
+  }
+
+  function openRename(): void {
+    setCreating(false)
+    setRenaming(true)
+    setRenameName(currentBranch)
+    setTimeout(() => {
+      renameRef.current?.focus()
+      renameRef.current?.select()
+    }, 0)
+  }
+
+  function cancelRename(): void {
+    setRenaming(false)
+    setRenameName('')
+  }
+
+  function commitRename(): void {
+    const n = renameName.trim()
+    if (!n || n === currentBranch) { cancelRename(); return }
+    onRenameBranch?.(currentBranch, n)
+    setRenaming(false)
+    setRenameName('')
+  }
+
+  function handleRenameKey(e: KeyboardEvent<HTMLInputElement>): void {
+    if (e.key === 'Enter') commitRename()
+    if (e.key === 'Escape') cancelRename()
   }
 
   return (
@@ -108,7 +141,41 @@ export function GitVcsBranchPicker({
         )}
       </select>
 
-      {creating ? (
+      {renaming ? (
+        <>
+          <input
+            ref={renameRef}
+            type="text"
+            className="mono"
+            aria-label="New branch name"
+            value={renameName}
+            onChange={(e) => setRenameName(e.target.value)}
+            onKeyDown={handleRenameKey}
+            disabled={busy}
+            style={{
+              width: 170,
+              padding: '6px 8px',
+              borderRadius: 8,
+              border: '1px solid var(--cg-accent, var(--accent))',
+              background: 'var(--bg-panel)',
+              color: 'var(--text)',
+              fontSize: 13,
+            }}
+          />
+          <button
+            type="button"
+            className="hp-btn hp-btn-primary"
+            disabled={busy || !renameName.trim() || renameName.trim() === currentBranch}
+            onClick={commitRename}
+            style={{ whiteSpace: 'nowrap' }}
+          >
+            Rename
+          </button>
+          <button type="button" className="hp-btn" disabled={busy} onClick={cancelRename}>
+            ✕
+          </button>
+        </>
+      ) : creating ? (
         <>
           <input
             ref={inputRef}
@@ -143,16 +210,30 @@ export function GitVcsBranchPicker({
           </button>
         </>
       ) : (
-        <button
-          type="button"
-          className="hp-btn"
-          disabled={busy}
-          title="Create and checkout a new branch"
-          onClick={openCreate}
-          style={{ padding: '4px 8px', fontSize: 16, lineHeight: 1 }}
-        >
-          +
-        </button>
+        <>
+          <button
+            type="button"
+            className="hp-btn"
+            disabled={busy}
+            title="Create and checkout a new branch"
+            onClick={openCreate}
+            style={{ padding: '4px 8px', fontSize: 16, lineHeight: 1 }}
+          >
+            +
+          </button>
+          {onRenameBranch && currentBranch ? (
+            <button
+              type="button"
+              className="hp-btn"
+              disabled={busy}
+              title="Rename current branch"
+              onClick={openRename}
+              style={{ padding: '4px 7px' }}
+            >
+              <span className="codicon codicon-edit" style={{ fontSize: 13 }} aria-hidden />
+            </button>
+          ) : null}
+        </>
       )}
     </div>
   )

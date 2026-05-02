@@ -12,6 +12,7 @@ pub enum GitNetworkOp<'a> {
     Push {
         remote: Option<&'a str>,
         branch: Option<&'a str>,
+        force_with_lease: bool,
     },
     Pull,
     Fetch { remote: &'a str },
@@ -65,11 +66,14 @@ pub async fn git_network_with_auth(
     .unwrap_or_default();
 
     let cmd_args: Vec<String> = match op {
-        GitNetworkOp::Push { remote, branch } => {
+        GitNetworkOp::Push { remote, branch, force_with_lease } => {
             let r = remote.unwrap_or("origin");
             let mut a = vec!["-C".to_string(), repo_path.to_string(), "push".to_string(), r.to_string()];
             if let Some(b) = branch {
                 a.push(b.to_string());
+            }
+            if force_with_lease {
+                a.push("--force-with-lease".to_string());
             }
             a
         }
@@ -145,6 +149,7 @@ mod tests {
         let op = GitNetworkOp::Push {
             remote: None,
             branch: None,
+            force_with_lease: false,
         };
         let prot = git_network_classify_error(&op, "remote: protected branch", true);
         assert!(prot.starts_with("[GIT_VCS_PROTECTED_BRANCH]"));

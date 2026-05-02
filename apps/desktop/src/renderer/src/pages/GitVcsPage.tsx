@@ -12,6 +12,8 @@ import { GitVcsIntegrateBar } from './gitVcsIntegrateBar'
 import { GitVcsRepoPipelines } from './gitVcsRepoPipelines'
 import { GitVcsDiffPanel } from './gitVcsDiffPanel'
 import { GitVcsFileList } from './gitVcsFileList'
+import { GitVcsPrWizard } from './gitVcsPrWizard'
+import { GitVcsConflictPanel } from './GitVcsConflictPanel'
 import { parseCheckoutDirtyFileList } from './gitVcsCheckoutDirty'
 import { GitVcsDirtyCheckoutModal } from './GitVcsDirtyCheckoutModal'
 import { GitVcsProviderRail } from './gitVcsProviderRail'
@@ -54,6 +56,8 @@ export function GitVcsPage(): ReactElement {
   const [cloudAccounts, setCloudAccounts] = useState<ConnectedAccount[]>([])
   const [gitOperation, setGitOperation] = useState<GitVcsOperation>('none')
   const [conflictFileCount, setConflictFileCount] = useState(0)
+  const [prWizardOpen, setPrWizardOpen] = useState(false)
+  const [lastCreatedPrUrl, setLastCreatedPrUrl] = useState<string | null>(null)
   /** When fetch remote host is unknown and both Cloud accounts exist, user picks which token scopes repo CI. */
   const [ambiguousCiToken, setAmbiguousCiToken] = useState<'github' | 'gitlab'>('github')
 
@@ -413,6 +417,22 @@ export function GitVcsPage(): ReactElement {
     }
   }
 
+  async function runForcePush(): Promise<void> {
+    if (!repoPath.trim()) return
+    setBusy(true)
+    setOpErrorRaw(null)
+    try {
+      const r = await window.dh.gitVcsPush({ repoPath: repoPath.trim(), forceWithLease: true })
+      assertGitVcsOk(r)
+      const lists = await refreshStatus()
+      setSelected((prev) => reconcileGitVcsSelection(prev, lists.staged, lists.unstaged))
+    } catch (e) {
+      setOpErrorRaw(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function runCheckout(name: string): Promise<void> {
     if (!repoPath.trim() || !name) return
     setBusy(true)
@@ -469,6 +489,21 @@ export function GitVcsPage(): ReactElement {
       } else {
         setOpErrorRaw(raw)
       }
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function runRenameBranch(oldName: string, newName: string): Promise<void> {
+    if (!repoPath.trim() || !oldName || !newName) return
+    setBusy(true)
+    setOpErrorRaw(null)
+    try {
+      const r = await window.dh.gitVcsRenameBranch({ repoPath: repoPath.trim(), oldName, newName })
+      assertGitVcsOk(r)
+      await refreshStatus()
+    } catch (e) {
+      setOpErrorRaw(e instanceof Error ? e.message : String(e))
     } finally {
       setBusy(false)
     }
@@ -639,7 +674,8 @@ export function GitVcsPage(): ReactElement {
   const authBanner = errCode === 'GIT_VCS_AUTH_FAILED'
   const integrationNotice = errCode === 'GIT_VCS_INTEGRATION_REQUIRED'
   const protectedBranchNotice = errCode === 'GIT_VCS_PROTECTED_BRANCH'
-  const softGitNotice = integrationNotice || protectedBranchNotice
+  const pushRejectedNotice = errCode === 'GIT_VCS_PUSH_REJECTED'
+  const softGitNotice = integrationNotice || protectedBranchNotice || pushRejectedNotice
   const opErrorDisplay = opErrorRaw ? humanizeGitVcsError(new Error(opErrorRaw)) : null
   const activeFetchRemoteUrl = gitRemotes.find((r) => r.name === activeFetchRemoteName)?.fetchUrl
   const activeFetchProvider = activeFetchRemoteUrl ? classifyGitRemoteUrl(activeFetchRemoteUrl) : 'other'
@@ -794,6 +830,24 @@ export function GitVcsPage(): ReactElement {
               </button>
             </div>
           ) : null}
+          {pushRejectedNotice ? (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+              <button
+                type="button"
+                className="hp-btn hp-btn-primary"
+                disabled={busy}
+                onClick={() => void runForcePush()}
+              >
+                Force push (--force-with-lease)
+              </button>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                Safe after rebase — fails if someone else pushed since your last fetch.
+              </span>
+              <button type="button" className="hp-btn" onClick={() => setOpErrorRaw(null)}>
+                Dismiss
+              </button>
+            </div>
+          ) : null}
           {protectedBranchNotice ? (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
               <Link
@@ -871,6 +925,7 @@ export function GitVcsPage(): ReactElement {
               busy={busy}
               onCheckout={(n) => void runCheckout(n)}
               onCreateBranch={(n) => void runCreateBranch(n)}
+              onRenameBranch={(old, next) => void runRenameBranch(old, next)}
             />
             <div style={{ flex: 1, minWidth: 8 }} />
             {/* ahead/behind pill */}
@@ -928,7 +983,31 @@ export function GitVcsPage(): ReactElement {
             <button type="button" className="hp-btn hp-btn-primary" disabled={busy} onClick={() => void runPush()}>
               Push
             </button>
+            {activeFetchProvider !== 'other' && cloudAccounts.some((a) => a.provider === activeFetchProvider) ? (
+              <button
+                type="button"
+                className="hp-btn"
+                disabled={busy}
+                title={`Create ${activeFetchProvider === 'gitlab' ? 'Merge Request' : 'Pull Request'}`}
+                onClick={() => { setLastCreatedPrUrl(null); setPrWizardOpen(true) }}
+              >
+                <span className="codicon codicon-git-pull-request" style={{ fontSize: 13, marginRight: 4 }} aria-hidden />
+                {activeFetchProvider === 'gitlab' ? 'New MR' : 'New PR'}
+              </button>
+            ) : null}
           </div>
+
+          {lastCreatedPrUrl ? (
+            <div style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span className="codicon codicon-check" style={{ color: '#69f0ae' }} aria-hidden />
+              <a href={lastCreatedPrUrl} target="_blank" rel="noreferrer" style={{ color: 'var(--cg-accent, var(--accent))' }}>
+                {activeFetchProvider === 'gitlab' ? 'Merge request' : 'Pull request'} created →
+              </a>
+              <button type="button" className="hp-btn" style={{ fontSize: 11, padding: '1px 6px' }} onClick={() => setLastCreatedPrUrl(null)}>
+                ✕
+              </button>
+            </div>
+          ) : null}
 
           <GitVcsIntegrateBar
             repoPath={repoPath.trim()}
@@ -990,11 +1069,24 @@ export function GitVcsPage(): ReactElement {
                 onUnstage={(paths) => void runUnstage(paths)}
               />
             </div>
-            <GitVcsDiffPanel
-              fileLabel={selected ? `${selected.path}${selected.staged ? ' (staged)' : ''}` : null}
-              diff={diffText}
-              binary={diffBinary}
-            />
+            {selected && gitOperation === 'merging' &&
+              [...staged, ...unstaged].find((f) => f.path === selected.path)?.status === 'C' ? (
+              <div style={{ border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden', background: 'var(--bg-panel)' }}>
+                <GitVcsConflictPanel
+                  repoPath={repoPath.trim()}
+                  filePath={selected.path}
+                  busy={busy}
+                  onResolved={() => void refreshStatus().then((lists) => setSelected((prev) => reconcileGitVcsSelection(prev, lists.staged, lists.unstaged)))}
+                  onError={(msg) => setOpErrorRaw(msg)}
+                />
+              </div>
+            ) : (
+              <GitVcsDiffPanel
+                fileLabel={selected ? `${selected.path}${selected.staged ? ' (staged)' : ''}` : null}
+                diff={diffText}
+                binary={diffBinary}
+              />
+            )}
           </div>
 
           <GitVcsCommitBar
@@ -1017,6 +1109,17 @@ export function GitVcsPage(): ReactElement {
         busy={busy}
         onCancel={closeDirtyCheckoutModal}
         onStashAndSwitch={() => void runStashAndRetryBranch()}
+      />
+
+      <GitVcsPrWizard
+        open={prWizardOpen}
+        provider={activeFetchProvider === 'other' ? 'other' : activeFetchProvider}
+        repoPath={repoPath.trim()}
+        remoteName={activeFetchRemoteName}
+        currentBranch={branch}
+        branches={branches}
+        onClose={() => setPrWizardOpen(false)}
+        onCreated={(url) => { setLastCreatedPrUrl(url); setPrWizardOpen(false) }}
       />
     </div>
   )

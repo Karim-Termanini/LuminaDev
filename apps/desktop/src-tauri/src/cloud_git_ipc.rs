@@ -11,6 +11,7 @@ pub async fn invoke(app: &AppHandle, channel: &str, body: &Value) -> Value {
         "dh:cloud:git:pipelines" => pipelines(app, body).await,
         "dh:cloud:git:issues" => issues(app, body).await,
         "dh:cloud:git:releases" => releases(app, body).await,
+        "dh:cloud:git:create-pr" => create_pr(app, body).await,
         _ => json!({
             "ok": false,
             "error": format!("[UNKNOWN_CHANNEL] {}", channel)
@@ -279,6 +280,63 @@ async fn issues(app: &AppHandle, body: &Value) -> Value {
                 .collect();
             json!({ "ok": true, "issues": issues })
         }
+        Err(e) => json!({ "ok": false, "error": e }),
+    }
+}
+
+async fn create_pr(app: &AppHandle, body: &Value) -> Value {
+    let provider = body.get("provider").and_then(|v| v.as_str()).unwrap_or("");
+    let title = body.get("title").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
+    let description = body.get("body").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let head = body.get("head").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
+    let base = body.get("base").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
+    let repo_path = body.get("repoPath").and_then(|v| v.as_str()).map(str::trim).filter(|s| !s.is_empty());
+    let remote_name = body.get("remote").and_then(|v| v.as_str()).map(str::trim).filter(|s| !s.is_empty()).unwrap_or("origin");
+
+    if title.is_empty() {
+        return json!({ "ok": false, "error": "[CLOUD_GIT_CREATE_PR] title is required." });
+    }
+    if head.is_empty() || base.is_empty() {
+        return json!({ "ok": false, "error": "[CLOUD_GIT_CREATE_PR] head and base branches are required." });
+    }
+
+    let store = cloud_auth::app_encrypted_credential_store(app);
+    let cred = match store.load(provider) {
+        Ok(Some(c)) => c,
+        Ok(None) => return json!({ "ok": false, "error": "[CLOUD_AUTH_NOT_CONNECTED] Connect this provider in Cloud Git first." }),
+        Err(e) => return json!({ "ok": false, "error": e }),
+    };
+
+    // Resolve owner/repo from the git remote URL.
+    let rp = match repo_path {
+        Some(p) => p,
+        None => return json!({ "ok": false, "error": "[CLOUD_GIT_CREATE_PR] repoPath is required." }),
+    };
+    let remote_url = match exec_output_limit("git", &["-C", rp, "remote", "get-url", remote_name], CMD_TIMEOUT_SHORT).await {
+        Ok(u) => u,
+        Err(e) => return json!({ "ok": false, "error": format!("[CLOUD_GIT_SCOPE] Could not read remote: {}", e.trim()) }),
+    };
+    let parsed = match cloud_auth::parse_remote_for_repo_scoped_pipelines(remote_url.trim(), provider) {
+        Ok(p) => p,
+        Err(e) => return json!({ "ok": false, "error": e }),
+    };
+
+    let result = match (provider, &parsed) {
+        ("github", cloud_auth::ParsedRemoteRepo::Github { hostname: _, full_name }) => {
+            let parts: Vec<&str> = full_name.splitn(2, '/').collect();
+            if parts.len() != 2 {
+                return json!({ "ok": false, "error": "[CLOUD_GIT_CREATE_PR] Could not parse owner/repo from remote URL." });
+            }
+            cloud_auth::GitHubProvider::create_pull_request(&cred.token, parts[0], parts[1], &title, &description, &head, &base).await
+        }
+        ("gitlab", cloud_auth::ParsedRemoteRepo::Gitlab { web_origin, path_with_namespace }) => {
+            cloud_auth::GitLabProvider::create_merge_request(&cred.token, web_origin, path_with_namespace, &title, &description, &head, &base).await
+        }
+        _ => Err("[CLOUD_GIT_SCOPE] Provider/remote mismatch. Make sure the correct tab is active.".to_string()),
+    };
+
+    match result {
+        Ok(url) => json!({ "ok": true, "url": url }),
         Err(e) => json!({ "ok": false, "error": e }),
     }
 }

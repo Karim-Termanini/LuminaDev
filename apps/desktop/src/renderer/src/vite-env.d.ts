@@ -208,7 +208,7 @@ declare global {
       gitVcsStage: (payload: { repoPath: string; filePaths: string[] }) => Promise<{ ok: boolean; error?: string }>
       gitVcsUnstage: (payload: { repoPath: string; filePaths: string[] }) => Promise<{ ok: boolean; error?: string }>
       gitVcsCommit: (payload: { repoPath: string; message: string }) => Promise<{ ok: boolean; sha?: string; error?: string }>
-      gitVcsPush: (payload: { repoPath: string; remote?: string; branch?: string }) => Promise<{ ok: boolean; output?: string; error?: string }>
+      gitVcsPush: (payload: { repoPath: string; remote?: string; branch?: string; forceWithLease?: boolean }) => Promise<{ ok: boolean; output?: string; error?: string }>
       gitVcsPull: (payload: { repoPath: string }) => Promise<{ ok: boolean; output?: string; error?: string }>
       gitVcsFetch: (payload: { repoPath: string; remote?: string }) => Promise<{ ok: boolean; output?: string; error?: string }>
       gitVcsBranches: (payload: { repoPath: string }) => Promise<{
@@ -239,6 +239,28 @@ declare global {
       gitVcsMergeContinue: (payload: { repoPath: string }) => Promise<{ ok: boolean; output?: string; error?: string }>
       gitVcsRebaseContinue: (payload: { repoPath: string }) => Promise<{ ok: boolean; output?: string; error?: string }>
       gitVcsRebaseSkip: (payload: { repoPath: string }) => Promise<{ ok: boolean; output?: string; error?: string }>
+      gitVcsRenameBranch: (payload: { repoPath: string; oldName: string; newName: string }) => Promise<{ ok: boolean; error?: string }>
+      gitVcsConflictDiff: (payload: { repoPath: string; filePath: string }) => Promise<{
+        ok: boolean
+        base?: string
+        ours?: string
+        theirs?: string
+        error?: string
+      }>
+      gitVcsResolveConflict: (payload: {
+        repoPath: string
+        filePath: string
+        resolution: 'ours' | 'theirs'
+      }) => Promise<{ ok: boolean; error?: string }>
+      cloudGitCreatePr: (payload: {
+        provider: 'github' | 'gitlab'
+        repoPath: string
+        remote?: string
+        title: string
+        body?: string
+        head: string
+        base: string
+      }) => Promise<{ ok: boolean; url?: string; error?: string }>
     }
   }
 }

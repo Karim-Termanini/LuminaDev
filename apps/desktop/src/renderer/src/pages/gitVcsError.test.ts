@@ -24,9 +24,9 @@ describe('humanizeGitVcsError', () => {
   })
 
   it('humanizes GIT_VCS_PUSH_REJECTED', () => {
-    expect(humanizeGitVcsError(new Error('[GIT_VCS_PUSH_REJECTED] non-fast-forward'))).toContain(
-      'Pull the latest changes',
-    )
+    const msg = humanizeGitVcsError(new Error('[GIT_VCS_PUSH_REJECTED] non-fast-forward'))
+    expect(msg).toContain('non-fast-forward')
+    expect(msg).toContain('Force push')
   })
 
   it('humanizes GIT_VCS_PROTECTED_BRANCH', () => {

@@ -22,6 +22,9 @@ pub async fn invoke_extended(channel: &str, body: &Value) -> Value {
         "dh:git:vcs:merge-continue" => merge_continue(repo_path).await,
         "dh:git:vcs:rebase-continue" => rebase_continue(repo_path).await,
         "dh:git:vcs:rebase-skip" => rebase_skip(repo_path).await,
+        "dh:git:vcs:rename-branch" => rename_branch(repo_path, body).await,
+        "dh:git:vcs:conflict-diff" => conflict_diff(repo_path, body).await,
+        "dh:git:vcs:resolve-conflict" => resolve_conflict(repo_path, body).await,
         _ => json!({
             "ok": false,
             "error": format!("[UNKNOWN_CHANNEL] {}", channel)
@@ -179,5 +182,62 @@ async fn rebase_skip(repo_path: &str) -> Value {
             let msg = e.trim();
             json!({ "ok": false, "error": format!("[GIT_VCS_REBASE_SKIP] {}", msg) })
         }
+    }
+}
+
+async fn rename_branch(repo_path: &str, body: &Value) -> Value {
+    let old_name = body.get("oldName").and_then(|v| v.as_str()).unwrap_or_default().trim().to_string();
+    let new_name = body.get("newName").and_then(|v| v.as_str()).unwrap_or_default().trim().to_string();
+    if old_name.is_empty() || new_name.is_empty() {
+        return json!({ "ok": false, "error": "[GIT_VCS_RENAME_BRANCH] oldName and newName are required." });
+    }
+    let args = ["-C", repo_path, "branch", "-m", &old_name, &new_name];
+    match exec_output_limit("git", &args, CMD_TIMEOUT_SHORT).await {
+        Ok(_) => json!({ "ok": true }),
+        Err(e) => {
+            let msg = e.trim();
+            let code = if msg.to_lowercase().contains("already exists") {
+                "GIT_VCS_RENAME_BRANCH_EXISTS"
+            } else {
+                "GIT_VCS_RENAME_BRANCH"
+            };
+            json!({ "ok": false, "error": format!("[{}] {}", code, msg) })
+        }
+    }
+}
+
+/// Returns the three versions of a conflicted file: base (stage 1), ours (stage 2), theirs (stage 3).
+/// All three are raw text. Binary or missing stages return empty string for that side.
+async fn conflict_diff(repo_path: &str, body: &Value) -> Value {
+    let file_path = body.get("filePath").and_then(|v| v.as_str()).unwrap_or_default().trim().to_string();
+    if file_path.is_empty() {
+        return json!({ "ok": false, "error": "[GIT_VCS_CONFLICT_DIFF] filePath is required." });
+    }
+    let base_ref = format!(":1:{}", file_path);
+    let ours_ref = format!(":2:{}", file_path);
+    let theirs_ref = format!(":3:{}", file_path);
+    let base = exec_output_limit("git", &["-C", repo_path, "show", &base_ref], CMD_TIMEOUT_SHORT)
+        .await.unwrap_or_default();
+    let ours = exec_output_limit("git", &["-C", repo_path, "show", &ours_ref], CMD_TIMEOUT_SHORT)
+        .await.unwrap_or_default();
+    let theirs = exec_output_limit("git", &["-C", repo_path, "show", &theirs_ref], CMD_TIMEOUT_SHORT)
+        .await.unwrap_or_default();
+    json!({ "ok": true, "base": base, "ours": ours, "theirs": theirs })
+}
+
+/// Resolves a conflict by accepting ours or theirs, then stages the file.
+async fn resolve_conflict(repo_path: &str, body: &Value) -> Value {
+    let file_path = body.get("filePath").and_then(|v| v.as_str()).unwrap_or_default().trim().to_string();
+    let resolution = body.get("resolution").and_then(|v| v.as_str()).unwrap_or("ours");
+    if file_path.is_empty() {
+        return json!({ "ok": false, "error": "[GIT_VCS_RESOLVE_CONFLICT] filePath is required." });
+    }
+    let checkout_side = if resolution == "theirs" { "--theirs" } else { "--ours" };
+    if let Err(e) = exec_output_limit("git", &["-C", repo_path, "checkout", checkout_side, "--", &file_path], CMD_TIMEOUT_SHORT).await {
+        return json!({ "ok": false, "error": format!("[GIT_VCS_RESOLVE_CONFLICT] {}", e.trim()) });
+    }
+    match exec_output_limit("git", &["-C", repo_path, "add", "--", &file_path], CMD_TIMEOUT_SHORT).await {
+        Ok(_) => json!({ "ok": true }),
+        Err(e) => json!({ "ok": false, "error": format!("[GIT_VCS_RESOLVE_CONFLICT] {}", e.trim()) }),
     }
 }
