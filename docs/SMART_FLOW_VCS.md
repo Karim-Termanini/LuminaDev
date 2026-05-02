@@ -39,9 +39,8 @@ This document is the **operational blueprint** for evolving Git VCS from “raw 
    - Proceed with **Push** as today.
 
 4. **If push fails for policy reasons (protected branch)**  
-   - Do **not** surface raw Git output as the only UX.  
-   - Open a **guided dialog**: *“This branch is protected. Create a new branch and open a Pull Request / Merge Request with your commits?”*  
-   - Actions: **Create branch** (suggest name), **Open Cloud Git**, **Copy error details** (advanced), **Dismiss**.
+   - **v0 shipped:** Tauri classifies common host messages into **`[GIT_VCS_PROTECTED_BRANCH]`**; the error panel uses the same amber “soft notice” treatment as integration-required, with **Open Cloud Git** (tab follows the active fetch remote when GitHub/GitLab) and **Dismiss**.  
+   - **Still to do:** branch-suggest + “create PR/MR” wizard and copy-details affordance.
 
 **Implementation notes:**
 
@@ -132,20 +131,22 @@ Work in **vertical slices** (each shippable behind a small flag if needed). Sugg
 - **Renderer:** `GitVcsStateBanner.tsx` on `/git-vcs` (`GitVcsPage.tsx`) shows an amber **status banner** with next-step copy when merging/rebasing or when unmerged paths remain.  
 - **Next:** cherry-pick / bisect states, tighter integration with file list highlighting (Phase 3), and automated tests around the status payload.
 
-### 2) Smart Push + protected branch dialog (behavioral win) — **prefetch gate shipped**
+### 2) Smart Push + protected branch dialog (behavioral win) — **prefetch gate + protected notice shipped**
 
 - **`GitVcsPage.runPush`:** silent `gitVcsFetch` for the active fetch remote, then `gitVcsStatus`; if `behind > 0`, push is **skipped** and a **`[GIT_VCS_INTEGRATION_REQUIRED]`** notice appears (amber panel with **Pull latest**, **Fetch only**, **Dismiss**).  
-- **Still to do:** protected-branch push failure → PR/MR wizard dialog; optional “checking remote…” subtext on slow fetch.
+- **Protected branch:** `git_vcs_network.rs` (`git_network_with_auth`) maps host stderr to **`[GIT_VCS_PROTECTED_BRANCH]`** when messages match (e.g. “protected branch”, GH006, rulesets, pre-receive hook declined); **`GitVcsPage`** shows **Open Cloud Git** + **Dismiss**.  
+- **Still to do:** PR/MR wizard dialog; optional “checking remote…” subtext on slow fetch.
 
 ### 3) Conflict Mode file list + staging loop (no 3-way UI yet)
 
 - Highlight conflicted paths; guide user to existing diff panel + stage.  
+- **`dh:git:vcs:diff` (unstaged):** `git_vcs_file_diff.rs` — if `git diff -- path` is empty and `git ls-files -u` lists the path, fall back to **`git diff --cc`** then **`git diff :2 -- path`** so the diff panel often shows merge context.  
 - Validate “Continue” enabled only when safe.
 
 ### 4) Visual Conflict Resolver (3-way) — largest UI piece
 
 - New component suite under `apps/desktop/src/renderer/src/pages/gitVcsConflict/` (name flexible).  
-- Likely needs new IPC: `gitVcsConflictHunks` or extend `gitVcsDiff` with conflict markers / `:1/:2/:3` blobs—**spike first** in a branch.
+- **Partial:** combined / ours-vs-worktree diffs are surfaced via existing `gitVcsDiff` + `GitVcsDiffPanel` (raw `@@@` hunks fall back to `<pre>`). Full side-by-side hunk UI still needs dedicated IPC if we want `:1/:2/:3` blobs without relying on porcelain/combined diff.
 
 ### 5) Cloud PR Bridge (API)
 

@@ -22,7 +22,6 @@ use host_exec::{
   CMD_TIMEOUT_SSH,
   exec_output,
   exec_output_limit,
-  exec_output_with_env,
   exec_result,
   exec_result_limit,
   read_proc_text,
@@ -67,6 +66,9 @@ mod cloud_auth;
 mod cloud_git_ipc;
 mod git_vcs_ipc;
 mod git_vcs_repo_state;
+mod git_vcs_network;
+mod git_vcs_file_diff;
+use git_vcs_network::{git_network_with_auth, GitNetworkOp};
 mod readiness;
 mod readiness_ipc;
 use cloud_auth::CredentialStore;
@@ -1284,109 +1286,6 @@ async fn git_ahead_behind(repo_path: &str) -> (Option<i64>, Option<i64>) {
     (ahead, behind)
 }
 
-enum GitNetworkOp<'a> {
-    Push {
-        remote: Option<&'a str>,
-        branch: Option<&'a str>,
-    },
-    Pull,
-    Fetch {
-        remote: &'a str,
-    },
-}
-
-async fn git_network_with_auth(
-    repo_path: &str,
-    op: GitNetworkOp<'_>,
-    store: &cloud_auth::EncryptedFileStore,
-    app: &AppHandle,
-) -> Result<String, String> {
-    let remote_for_url = match &op {
-        GitNetworkOp::Push { remote, .. } => remote.unwrap_or("origin"),
-        GitNetworkOp::Pull => "origin",
-        GitNetworkOp::Fetch { remote } => *remote,
-    };
-    let remote_url = exec_output_limit(
-        "git",
-        &["-C", repo_path, "remote", "get-url", remote_for_url],
-        CMD_TIMEOUT_SHORT,
-    )
-    .await
-    .unwrap_or_default();
-
-    let cmd_args: Vec<String> = match op {
-        GitNetworkOp::Push {
-            remote,
-            branch,
-        } => {
-            let r = remote.unwrap_or("origin");
-            let mut a = vec!["-C".to_string(), repo_path.to_string(), "push".to_string(), r.to_string()];
-            if let Some(b) = branch {
-                a.push(b.to_string());
-            }
-            a
-        }
-        GitNetworkOp::Pull => vec!["-C".to_string(), repo_path.to_string(), "pull".to_string()],
-        GitNetworkOp::Fetch { remote } => vec![
-            "-C".to_string(),
-            repo_path.to_string(),
-            "fetch".to_string(),
-            remote.to_string(),
-            "--prune".to_string(),
-        ],
-    };
-    let args_refs: Vec<&str> = cmd_args.iter().map(|s| s.as_str()).collect();
-
-    // HTTPS: inject GIT_ASKPASS
-    if remote_url.starts_with("https://") {
-        let host = remote_url
-            .trim_start_matches("https://")
-            .split('/')
-            .next()
-            .unwrap_or("");
-        let token = if host.contains("gitlab") {
-            store.load("gitlab").ok().flatten().map(|c| c.token)
-        } else {
-            store.load("github").ok().flatten().map(|c| c.token)
-        };
-        let token = token.ok_or_else(|| "[GIT_VCS_AUTH_FAILED] No stored token for this remote. Connect your account in Cloud Git.".to_string())?;
-
-        // Write askpass script with chmod 700
-        let script_name = format!("git-askpass-{}.sh", uuid::Uuid::new_v4());
-        let script_path = app.path().app_data_dir()
-            .map_err(|e| format!("[GIT_VCS_AUTH_FAILED] {}", e))?
-            .join(&script_name);
-        let script_content = format!("#!/bin/sh\necho '{}'\n", token.replace('\'', "'\\''"));
-        std::fs::write(&script_path, &script_content)
-            .map_err(|e| format!("[GIT_VCS_AUTH_FAILED] Could not write askpass: {}", e))?;
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(&script_path, std::fs::Permissions::from_mode(0o700))
-                .map_err(|e| format!("[GIT_VCS_AUTH_FAILED] chmod 700: {}", e))?;
-        }
-        let script_str = script_path.to_string_lossy().to_string();
-        let env = [("GIT_ASKPASS", script_str.as_str()), ("GIT_TERMINAL_PROMPT", "0")];
-        let result = exec_output_with_env("git", &args_refs, &env, CMD_TIMEOUT_LONG).await;
-        let _ = std::fs::remove_file(&script_path);
-        result.map_err(|e| {
-            if e.contains("rejected") || e.contains("non-fast-forward") {
-                format!("[GIT_VCS_PUSH_REJECTED] {}", e.trim())
-            } else if e.contains("Authentication") || e.contains("auth") || e.contains("403") {
-                format!("[GIT_VCS_AUTH_FAILED] {}", e.trim())
-            } else {
-                format!("[GIT_VCS_NETWORK] {}", e.trim())
-            }
-        })
-    } else {
-        // SSH or other — run as-is
-        exec_output_limit("git", &args_refs, CMD_TIMEOUT_LONG).await.map_err(|e| {
-            if e.contains("rejected") { format!("[GIT_VCS_PUSH_REJECTED] {}", e.trim()) }
-            else { format!("[GIT_VCS_NETWORK] {}", e.trim()) }
-        })
-    }
-}
-
 #[tauri::command]
 async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, state: State<'_, AppState>) -> Result<Value, String> {
   let body = payload.unwrap_or_else(|| json!({}));
@@ -2418,20 +2317,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
         if repo_path.is_empty() || file_path.is_empty() {
             return Ok(json!({ "ok": false, "error": "[GIT_VCS_NOT_A_REPO] Missing repoPath or filePath." }));
         }
-        let diff_args: Vec<&str> = if staged {
-            vec!["-C", repo_path, "diff", "--cached", "--", file_path]
-        } else {
-            vec!["-C", repo_path, "diff", "--", file_path]
-        };
-        let raw = match exec_output_limit("git", &diff_args, CMD_TIMEOUT_SHORT).await {
-            Err(_) => {
-                // Try untracked file diff
-                let untracked_args = vec!["-C", repo_path, "diff", "--no-index", "/dev/null", file_path];
-                exec_output_limit("git", &untracked_args, CMD_TIMEOUT_SHORT).await
-                    .unwrap_or_default()
-            }
-            Ok(r) => r,
-        };
+        let raw = git_vcs_file_diff::resolve_file_diff(repo_path, file_path, staged).await;
         if raw.contains("Binary files") {
             return Ok(json!({ "ok": true, "diff": null, "binary": true }));
         }

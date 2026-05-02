@@ -619,9 +619,12 @@ export function GitVcsPage(): ReactElement {
   const errCode = opErrorRaw ? parseGitVcsErrorCode(new Error(opErrorRaw)) : null
   const authBanner = errCode === 'GIT_VCS_AUTH_FAILED'
   const integrationNotice = errCode === 'GIT_VCS_INTEGRATION_REQUIRED'
+  const protectedBranchNotice = errCode === 'GIT_VCS_PROTECTED_BRANCH'
+  const softGitNotice = integrationNotice || protectedBranchNotice
   const opErrorDisplay = opErrorRaw ? humanizeGitVcsError(new Error(opErrorRaw)) : null
   const activeFetchRemoteUrl = gitRemotes.find((r) => r.name === activeFetchRemoteName)?.fetchUrl
   const activeFetchProvider = activeFetchRemoteUrl ? classifyGitRemoteUrl(activeFetchRemoteUrl) : 'other'
+  const cloudGitTabForRemote = activeFetchProvider === 'gitlab' ? 'gitlab' : 'github'
   const ghLinked = useMemo(() => cloudAccounts.some((a) => a.provider === 'github'), [cloudAccounts])
   const glLinked = useMemo(() => cloudAccounts.some((a) => a.provider === 'gitlab'), [cloudAccounts])
   const ambiguousPipelineHost =
@@ -740,14 +743,14 @@ export function GitVcsPage(): ReactElement {
 
       {opErrorDisplay ? (
         <div
-          role={integrationNotice ? 'status' : 'alert'}
+          role={softGitNotice ? 'status' : 'alert'}
           style={{
             padding: '12px 14px',
             borderRadius: 10,
-            border: integrationNotice
+            border: softGitNotice
               ? '1px solid rgba(255, 183, 77, 0.45)'
               : '1px solid rgba(255, 82, 82, 0.35)',
-            background: integrationNotice
+            background: softGitNotice
               ? 'linear-gradient(90deg, rgba(255, 183, 77, 0.14) 0%, rgba(255, 138, 128, 0.06) 100%)'
               : 'rgba(255, 82, 82, 0.08)',
             color: 'var(--text)',
@@ -767,6 +770,25 @@ export function GitVcsPage(): ReactElement {
               <button type="button" className="hp-btn" disabled={busy} onClick={() => void runFetch()}>
                 Fetch only
               </button>
+              <button type="button" className="hp-btn" onClick={() => setOpErrorRaw(null)}>
+                Dismiss
+              </button>
+            </div>
+          ) : null}
+          {protectedBranchNotice ? (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+              <Link
+                to={`/cloud-git?tab=${cloudGitTabForRemote}`}
+                className="hp-btn hp-btn-primary"
+                style={{ textDecoration: 'none' }}
+              >
+                Open Cloud Git
+              </Link>
+              {activeFetchProvider === 'other' ? (
+                <span className="mono" style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                  Pick GitHub or GitLab tab if the default host is wrong for this remote.
+                </span>
+              ) : null}
               <button type="button" className="hp-btn" onClick={() => setOpErrorRaw(null)}>
                 Dismiss
               </button>

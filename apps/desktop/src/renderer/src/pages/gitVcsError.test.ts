@@ -29,6 +29,12 @@ describe('humanizeGitVcsError', () => {
     )
   })
 
+  it('humanizes GIT_VCS_PROTECTED_BRANCH', () => {
+    const msg = humanizeGitVcsError(new Error('[GIT_VCS_PROTECTED_BRANCH] remote: GH006'))
+    expect(msg).toContain('protected')
+    expect(msg).toContain('merge')
+  })
+
   it('humanizes GIT_VCS_INTEGRATION_REQUIRED', () => {
     const msg = humanizeGitVcsError(
       new Error('[GIT_VCS_INTEGRATION_REQUIRED] Remote "origin" has 3 commit(s) not in your branch yet.'),
@@ -108,6 +114,12 @@ describe('parseGitVcsErrorCode', () => {
   it('extracts GIT_VCS_INTEGRATION_REQUIRED', () => {
     expect(parseGitVcsErrorCode(new Error('[GIT_VCS_INTEGRATION_REQUIRED] behind'))).toBe(
       'GIT_VCS_INTEGRATION_REQUIRED',
+    )
+  })
+
+  it('extracts GIT_VCS_PROTECTED_BRANCH', () => {
+    expect(parseGitVcsErrorCode(new Error('[GIT_VCS_PROTECTED_BRANCH] remote'))).toBe(
+      'GIT_VCS_PROTECTED_BRANCH',
     )
   })
 

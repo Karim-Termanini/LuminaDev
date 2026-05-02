@@ -4,6 +4,7 @@ export type GitVcsErrorCode =
   | 'GIT_VCS_COMMIT_FAILED'
   | 'GIT_VCS_EMPTY_MESSAGE'
   | 'GIT_VCS_PUSH_REJECTED'
+  | 'GIT_VCS_PROTECTED_BRANCH'
   | 'GIT_VCS_INTEGRATION_REQUIRED'
   | 'GIT_VCS_AUTH_FAILED'
   | 'GIT_VCS_DIFF_TOO_LARGE'
@@ -45,6 +46,8 @@ export function humanizeGitVcsError(err: unknown): string {
   if (code === 'GIT_VCS_EMPTY_MESSAGE') return 'Commit message cannot be empty.'
   if (code === 'GIT_VCS_PUSH_REJECTED')
     return `Remote rejected push. Pull the latest changes first, then push again. ${detail}`.trim()
+  if (code === 'GIT_VCS_PROTECTED_BRANCH')
+    return `This branch is protected on the remote — you usually cannot push directly. Push your work to a new branch and open a merge or pull request from the host, or ask a maintainer to merge. ${detail}`.trim()
   if (code === 'GIT_VCS_INTEGRATION_REQUIRED')
     return `Integration required — after a quick fetch, your branch is behind the remote. Pull or merge the latest changes, then push again. ${detail}`.trim()
   if (code === 'GIT_VCS_AUTH_FAILED')
