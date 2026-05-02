@@ -314,7 +314,7 @@ async fn conflict_hunks(repo_path: &str, body: &Value) -> Value {
 async fn resolve_hunk(repo_path: &str, body: &Value) -> Value {
     let file_path = body.get("filePath").and_then(|v| v.as_str()).unwrap_or_default().trim().to_string();
     let hunk_id = body.get("hunkId").and_then(|v| v.as_str()).unwrap_or_default();
-    let resolution = body.get("resolution").and_then(|v| v.as_str()).unwrap_or("ours");
+    let _resolution = body.get("resolution").and_then(|v| v.as_str()).unwrap_or("ours");
     let merged_content = body.get("mergedContent").and_then(|v| v.as_str()).unwrap_or("");
 
     if file_path.is_empty() || hunk_id.is_empty() {
@@ -332,7 +332,7 @@ async fn resolve_hunk(repo_path: &str, body: &Value) -> Value {
     // For this hardened MVP, we'll parse and replace the first unresolved marker block.
     // The UI should ideally pass the exact text to replace to be 100% safe.
     
-    let mut lines: Vec<String> = content.lines().map(|s| s.to_string()).collect();
+    let lines: Vec<String> = content.lines().map(|s| s.to_string()).collect();
     let mut new_lines = Vec::new();
     let mut in_marker = false;
     let mut resolved_one = false;
