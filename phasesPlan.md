@@ -307,7 +307,7 @@ Missing: real dep graph (`removableDeps` always empty), Ruby slow on Fedora.
 - [x] **Profile-pick step**: nine compose presets; writes `active_profile` when confirmed
 - [x] **Re-entry**: sidebar **Setup Wizard** resets `wizard_state` + reload
 - [x] **Resume logic**: `wizard_state.stepIndex` (0–6) persisted while incomplete; restored on next launch
-- [x] **Rich resume**: `wizard_state` persists Git name/email draft, Flatpak `gitTarget`, `sshPubKey` / `sshKeyGenerated` (refetch via `sshGetPub` when needed), and `pickedStarterProfile`; `WizardFlow` hydrates and re-saves on change.
+- [x] **Rich resume**: `wizard_state` persists Git name/email draft, Flatpak `gitTarget`, `sshPubKey` / `sshKeyGenerated` (refetch via `sshGetPub` when needed), and `pickedStarterProfile`; `WizardFlow` hydrates and re-saves on step or field change.
 
 ---
 
