@@ -852,7 +852,19 @@ export function GitVcsPage(): ReactElement {
         <div style={{ color: 'var(--text-muted)', fontSize: 14 }}>Choose a repository above.</div>
       ) : (
         <>
-          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12 }}>
+          {/* Single action bar: branch | status | remote | Fetch Pull Push */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              padding: '10px 14px',
+              borderRadius: 12,
+              border: '1px solid var(--border)',
+              background: 'rgba(20, 20, 24, 0.35)',
+              flexWrap: 'wrap',
+            }}
+          >
             <GitVcsBranchPicker
               branches={branches}
               currentBranch={branch}
@@ -860,29 +872,39 @@ export function GitVcsPage(): ReactElement {
               onCheckout={(n) => void runCheckout(n)}
               onCreateBranch={(n) => void runCreateBranch(n)}
             />
-            <div style={{ flex: 1 }} />
-            <div className="mono" style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-              {ahead != null && ahead > 0 ? `↑${ahead} ` : null}
-              {behind != null && behind > 0 ? `↓${behind}` : null}
-              {ahead != null &&
-              behind != null &&
-              ahead === 0 &&
-              behind === 0
-                ? 'up to date with upstream'
-                : null}
-              {ahead == null && behind == null ? 'no upstream tracking' : null}
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <div style={{ flex: 1, minWidth: 8 }} />
+            {/* ahead/behind pill */}
+            {ahead != null || behind != null ? (
+              <span
+                className="mono"
+                style={{
+                  fontSize: 12,
+                  color: 'var(--text-muted)',
+                  background: 'rgba(255,255,255,0.05)',
+                  borderRadius: 20,
+                  padding: '3px 10px',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {ahead != null && ahead > 0 ? `↑${ahead} ` : ''}
+                {behind != null && behind > 0 ? `↓${behind}` : ''}
+                {ahead === 0 && behind === 0 ? 'up to date' : ''}
+              </span>
+            ) : (
+              <span className="mono" style={{ fontSize: 12, color: 'var(--text-muted)', opacity: 0.6 }}>
+                no upstream
+              </span>
+            )}
+            {/* remote selector — only show if multiple remotes */}
+            {fetchRemoteNames.length > 1 ? (
               <select
                 className="mono"
-                aria-label="Remote to fetch"
+                aria-label="Remote"
                 value={activeFetchRemoteName}
                 disabled={busy}
                 onChange={(e) => setFetchRemote(e.target.value)}
                 style={{
-                  minWidth: 100,
-                  maxWidth: 160,
-                  padding: '6px 8px',
+                  padding: '5px 8px',
                   borderRadius: 8,
                   border: '1px solid var(--border)',
                   background: 'var(--bg-panel)',
@@ -896,10 +918,10 @@ export function GitVcsPage(): ReactElement {
                   </option>
                 ))}
               </select>
-              <button type="button" className="hp-btn" disabled={busy} onClick={() => void runFetch()}>
-                Fetch
-              </button>
-            </div>
+            ) : null}
+            <button type="button" className="hp-btn" disabled={busy} onClick={() => void runFetch()}>
+              Fetch
+            </button>
             <button type="button" className="hp-btn" disabled={busy} onClick={() => void runPull()}>
               Pull
             </button>

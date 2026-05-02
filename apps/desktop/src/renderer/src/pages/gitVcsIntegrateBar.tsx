@@ -1,6 +1,6 @@
 import type { BranchEntry } from '@linux-dev-home/shared'
 import type { ReactElement } from 'react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import type { GitVcsOperation } from './GitVcsStateBanner'
 
@@ -41,8 +41,20 @@ export function GitVcsIntegrateBar({
   onMergeAbort,
   onRebaseAbort,
 }: GitVcsIntegrateBarProps): ReactElement {
+  const [expanded, setExpanded] = useState(false)
   const [otherRef, setOtherRef] = useState('')
   const [ffOnly, setFfOnly] = useState(true)
+
+  const idle = gitOperation === 'none'
+  const merging = gitOperation === 'merging'
+  const rebasing = gitOperation === 'rebasing'
+  const inOperation = !idle
+
+  // Auto-expand when mid-operation; collapse when operation ends
+  useEffect(() => {
+    if (inOperation) setExpanded(true)
+    else setExpanded(false)
+  }, [inOperation])
 
   const { locals, remotes } = useMemo(() => {
     const rem = branches.filter((b) => b.remote).sort((a, b) => a.name.localeCompare(b.name))
@@ -57,9 +69,29 @@ export function GitVcsIntegrateBar({
   }, [branches, currentBranch])
 
   const canIntegrate = otherRef.trim().length > 0
-  const idle = gitOperation === 'none'
-  const merging = gitOperation === 'merging'
-  const rebasing = gitOperation === 'rebasing'
+
+  if (!expanded) {
+    return (
+      <button
+        type="button"
+        style={{
+          all: 'unset',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 6,
+          fontSize: 12,
+          color: 'var(--text-muted)',
+          cursor: 'pointer',
+          padding: '4px 0',
+        }}
+        onClick={() => setExpanded(true)}
+        disabled={busy}
+      >
+        <span className="codicon codicon-git-merge" style={{ fontSize: 13 }} aria-hidden />
+        Integrate (merge / rebase / stash pop)…
+      </button>
+    )
+  }
 
   return (
     <div
@@ -73,131 +105,122 @@ export function GitVcsIntegrateBar({
         background: 'rgba(20, 20, 24, 0.35)',
       }}
     >
-      <div className="mono" style={{ fontSize: 11, color: 'var(--text-muted)', letterSpacing: 0.04 }}>
-        MERGE / REBASE
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span className="mono" style={{ fontSize: 11, color: 'var(--text-muted)', letterSpacing: 0.04 }}>
+          {merging ? 'MERGE IN PROGRESS' : rebasing ? 'REBASE IN PROGRESS' : 'INTEGRATE'}
+        </span>
+        {idle ? (
+          <button
+            type="button"
+            className="hp-btn"
+            style={{ fontSize: 12, padding: '2px 8px' }}
+            onClick={() => setExpanded(false)}
+          >
+            ✕
+          </button>
+        ) : null}
       </div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10 }}>
-        <label className="mono" style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-          Other ref
-        </label>
-        <select
-          className="mono"
-          aria-label="Branch or remote ref to merge or rebase with"
-          value={otherRef}
-          disabled={busy || !repoPath.trim()}
-          onChange={(e) => setOtherRef(e.target.value)}
-          style={{
-            minWidth: 220,
-            maxWidth: 400,
-            padding: '8px 10px',
-            borderRadius: 8,
-            border: '1px solid var(--border)',
-            background: 'var(--bg-panel)',
-            color: 'var(--text)',
-            fontSize: 12,
-          }}
-        >
-          <option value="">Select branch or remote ref…</option>
-          <optgroup label="Local branches">
-            {locals.map((b) => (
-              <option key={`l:${b.name}`} value={b.name}>
-                {b.name}
-                {b.name === currentBranch ? ' (current)' : ''}
-              </option>
-            ))}
-          </optgroup>
-          {remotes.length > 0 ? (
-            <optgroup label="Remote-tracking">
-              {remotes.map((b) => (
-                <option key={`r:${b.name}`} value={b.name}>
-                  {b.name}
-                </option>
-              ))}
-            </optgroup>
-          ) : null}
-        </select>
-        <label
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 6,
-            fontSize: 12,
-            color: 'var(--text-muted)',
-            cursor: busy ? 'default' : 'pointer',
-          }}
-        >
-          <input
-            type="checkbox"
-            checked={ffOnly}
-            disabled={busy}
-            onChange={(e) => setFfOnly(e.target.checked)}
-          />
-          Fast-forward only (merge)
-        </label>
-      </div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
-        <button
-          type="button"
-          className="hp-btn"
-          disabled={busy || !canIntegrate || !idle}
-          title="git merge — merges the selected ref into the current branch"
-          onClick={() => void onMerge(otherRef.trim(), ffOnly)}
-        >
-          Merge into current
-        </button>
-        <button
-          type="button"
-          className="hp-btn"
-          disabled={busy || !canIntegrate || !idle}
-          title="git rebase — replays current commits on top of the selected ref"
-          onClick={() => void onRebase(otherRef.trim())}
-        >
-          Rebase onto
-        </button>
-        <span style={{ width: 1, height: 22, background: 'var(--border)', margin: '0 4px' }} aria-hidden />
-        <button
-          type="button"
-          className="hp-btn"
-          disabled={busy || !merging}
-          title="After resolving merge conflicts and staging, completes the merge commit (git merge --continue)"
-          onClick={() => void onMergeContinue()}
-        >
-          Continue merge
-        </button>
-        <button
-          type="button"
-          className="hp-btn"
-          disabled={busy || !rebasing}
-          title="After resolving conflicts and staging, continues the rebase (git rebase --continue)"
-          onClick={() => void onRebaseContinue()}
-        >
-          Continue rebase
-        </button>
-        <button
-          type="button"
-          className="hp-btn"
-          disabled={busy || !rebasing}
-          title="Skips the current patch during a rebase (git rebase --skip)"
-          onClick={() => void onRebaseSkip()}
-        >
-          Skip rebase commit
-        </button>
-        <button type="button" className="hp-btn" disabled={busy || !idle} onClick={() => void onStashPop()}>
-          Stash pop
-        </button>
-        <button type="button" className="hp-btn" disabled={busy || !merging} onClick={() => void onMergeAbort()}>
-          Abort merge
-        </button>
-        <button type="button" className="hp-btn" disabled={busy || !rebasing} onClick={() => void onRebaseAbort()}>
-          Abort rebase
-        </button>
-      </div>
-      <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.45, maxWidth: 720 }}>
-        Merge and rebase run locally in this repo. If Git stops for conflicts, fix files in your editor, stage
-        resolved paths, then use Continue merge or Continue rebase. Skip rebase commit drops the current replayed
-        commit when appropriate. Use abort to discard the in-progress operation. Stash pop applies the latest stash
-        entry.
-      </p>
+
+      {/* Mid-operation: show only relevant continue/abort actions */}
+      {merging ? (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          <button type="button" className="hp-btn hp-btn-primary" disabled={busy} onClick={() => void onMergeContinue()}>
+            Continue merge
+          </button>
+          <button type="button" className="hp-btn" disabled={busy} onClick={() => void onMergeAbort()}>
+            Abort merge
+          </button>
+        </div>
+      ) : rebasing ? (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          <button type="button" className="hp-btn hp-btn-primary" disabled={busy} onClick={() => void onRebaseContinue()}>
+            Continue rebase
+          </button>
+          <button type="button" className="hp-btn" disabled={busy} onClick={() => void onRebaseSkip()}>
+            Skip commit
+          </button>
+          <button type="button" className="hp-btn" disabled={busy} onClick={() => void onRebaseAbort()}>
+            Abort rebase
+          </button>
+        </div>
+      ) : (
+        /* Idle: full form */
+        <>
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10 }}>
+            <select
+              className="mono"
+              aria-label="Branch or remote ref to merge or rebase with"
+              value={otherRef}
+              disabled={busy || !repoPath.trim()}
+              onChange={(e) => setOtherRef(e.target.value)}
+              style={{
+                minWidth: 220,
+                maxWidth: 400,
+                padding: '7px 10px',
+                borderRadius: 8,
+                border: '1px solid var(--border)',
+                background: 'var(--bg-panel)',
+                color: 'var(--text)',
+                fontSize: 13,
+              }}
+            >
+              <option value="">Select branch or remote ref…</option>
+              <optgroup label="Local branches">
+                {locals.map((b) => (
+                  <option key={`l:${b.name}`} value={b.name}>
+                    {b.name}
+                    {b.name === currentBranch ? ' (current)' : ''}
+                  </option>
+                ))}
+              </optgroup>
+              {remotes.length > 0 ? (
+                <optgroup label="Remote-tracking">
+                  {remotes.map((b) => (
+                    <option key={`r:${b.name}`} value={b.name}>
+                      {b.name}
+                    </option>
+                  ))}
+                </optgroup>
+              ) : null}
+            </select>
+            <label
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                fontSize: 12,
+                color: 'var(--text-muted)',
+                cursor: busy ? 'default' : 'pointer',
+              }}
+            >
+              <input type="checkbox" checked={ffOnly} disabled={busy} onChange={(e) => setFfOnly(e.target.checked)} />
+              Fast-forward only
+            </label>
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+            <button
+              type="button"
+              className="hp-btn"
+              disabled={busy || !canIntegrate}
+              onClick={() => void onMerge(otherRef.trim(), ffOnly)}
+            >
+              Merge into current
+            </button>
+            <button
+              type="button"
+              className="hp-btn"
+              disabled={busy || !canIntegrate}
+              onClick={() => void onRebase(otherRef.trim())}
+            >
+              Rebase onto
+            </button>
+            <span style={{ width: 1, height: 20, background: 'var(--border)', margin: '0 2px' }} aria-hidden />
+            <button type="button" className="hp-btn" disabled={busy} onClick={() => void onStashPop()}>
+              Stash pop
+            </button>
+          </div>
+        </>
+      )}
     </div>
   )
 }
