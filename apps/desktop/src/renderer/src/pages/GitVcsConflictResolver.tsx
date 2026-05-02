@@ -58,18 +58,30 @@ export function GitVcsConflictResolver({
   const totalHunks = conflictData?.hunks?.length ?? 0
   const allResolved = hunkResolutions.size === totalHunks && totalHunks > 0
 
+  useEffect(() => {
+    if (currentHunk) {
+      setEditingMerged(currentHunk.ours) // Default to ours for editing
+    }
+  }, [currentHunk])
+
   const resolveHunk = useCallback(
-    async (resolution: ResolutionState, mergedContent?: string) => {
+    async (resolution: ResolutionState, manualContent?: string) => {
       if (!currentHunk) return
 
-      const hunkRes: HunkResolution = { hunkId: currentHunk.id, resolution, mergedContent }
+      let finalContent = ''
+      if (resolution === 'ours') finalContent = currentHunk.ours
+      else if (resolution === 'theirs') finalContent = currentHunk.theirs
+      else if (resolution === 'both') finalContent = `${currentHunk.ours}\n${currentHunk.theirs}`
+      else if (resolution === 'manual') finalContent = manualContent ?? ''
+
+      const hunkRes: HunkResolution = { hunkId: currentHunk.id, resolution, mergedContent: finalContent }
       setHunkResolutions((prev) => new Map(prev).set(currentHunk.id, hunkRes))
 
       // Move to next unresolved hunk or finish
       if (currentHunkIdx < totalHunks - 1) {
         setCurrentHunkIdx(currentHunkIdx + 1)
-      } else {
-        // All hunks resolved; ready to finalize
+        // Reset manual editing area for next hunk
+        setEditingMerged('') 
       }
     },
     [currentHunk, currentHunkIdx, totalHunks],
@@ -130,10 +142,31 @@ export function GitVcsConflictResolver({
     )
   }
 
-  if (!conflictData || totalHunks === 0) {
+  if (!conflictData || (totalHunks === 0 && !conflictData.ours && !conflictData.theirs)) {
     return (
       <div style={{ padding: 24, color: 'var(--text-muted)', fontSize: 14 }}>
-        No conflicts found in this file.
+        No conflict data found for this file.
+      </div>
+    )
+  }
+
+  if (totalHunks === 0) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 24, padding: 32, alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+         <div style={{ fontSize: 18, fontWeight: 600 }}>Whole File Conflict</div>
+         <div style={{ color: 'var(--text-muted)', textAlign: 'center', maxWidth: 400 }}>
+           This file has a conflict but no markers were found (likely a binary file or structural conflict).
+           Pick which version to keep.
+         </div>
+         <div style={{ display: 'flex', gap: 12 }}>
+            <button className="hp-btn hp-btn-primary" onClick={() => void window.dh.gitVcsResolveConflict({ repoPath, filePath, resolution: 'ours' }).then(onResolved)}>
+               Keep Mine (ours)
+            </button>
+            <button className="hp-btn hp-btn-primary" onClick={() => void window.dh.gitVcsResolveConflict({ repoPath, filePath, resolution: 'theirs' }).then(onResolved)}>
+               Take Theirs
+            </button>
+         </div>
+         <button className="hp-btn" onClick={onCancel} style={{ marginTop: 20 }}>Cancel</button>
       </div>
     )
   }

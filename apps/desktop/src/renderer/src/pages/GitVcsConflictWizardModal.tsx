@@ -61,7 +61,7 @@ export function GitVcsConflictWizardModal({
           left: 0,
           right: 0,
           bottom: 0,
-          background: 'rgba(0, 0, 0, 0.4)',
+          background: 'rgba(0, 0, 0, 0.85)', // Much darker overlay
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -70,15 +70,16 @@ export function GitVcsConflictWizardModal({
       >
         <div
           style={{
-            background: 'var(--bg)',
-            borderRadius: 8,
-            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)',
+            background: '#121212', // Solid dark background to prevent bleed-through
+            borderRadius: 12,
+            boxShadow: '0 20px 50px rgba(0, 0, 0, 0.5)',
             maxWidth: 600,
             width: '90%',
             maxHeight: '80vh',
             display: 'flex',
             flexDirection: 'column',
             overflow: 'hidden',
+            border: '1px solid var(--border)',
           }}
         >
           {step === 'overview' && (
@@ -272,7 +273,7 @@ export function GitVcsConflictWizardModal({
         left: 0,
         right: 0,
         bottom: 0,
-        background: 'rgba(0, 0, 0, 0.4)',
+        background: 'rgba(0, 0, 0, 0.85)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',

@@ -621,3 +621,29 @@ export type GitVcsResolveHunkRequest = z.infer<typeof GitVcsResolveHunkRequestSc
 export type GitVcsResolveConflictRequest = z.infer<typeof GitVcsResolveConflictRequestSchema>
 export type GitVcsConflictDiffRequest = z.infer<typeof GitVcsConflictDiffRequestSchema>
 export type GitVcsRenameBranchRequest = z.infer<typeof GitVcsRenameBranchRequestSchema>
+
+/** CI/CD check entry from GitHub/GitLab. */
+export interface CloudCiCheck {
+  id: string
+  name: string
+  status: string // 'queued' | 'in_progress' | 'completed' | 'success' | 'failure' | etc
+  conclusion?: string
+  url?: string
+  details?: string
+}
+
+export interface CloudPrDetails {
+  mergeable: boolean | null
+  mergeable_state: string
+  base_branch?: string
+  checks: CloudCiCheck[]
+}
+
+export interface CloudGitGetPrChecksRequest {
+  provider: 'github' | 'gitlab'
+  repoPath: string
+  remote?: string
+  reference: string // branch name or SHA
+}
+
+/** Check if the current workspace is a Git repository. */

@@ -425,6 +425,24 @@ pub struct CloudIssueEntry {
     pub updated_at: String,
 }
 
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct CloudCiCheckEntry {
+    pub id: String,
+    pub name: String,
+    pub status: String,
+    pub conclusion: Option<String>,
+    pub url: Option<String>,
+    pub details: Option<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct CloudPrDetails {
+    pub base_branch: String,
+    pub mergeable: Option<bool>,
+    pub mergeable_state: String, // 'clean', 'dirty', 'unstable', etc.
+    pub checks: Vec<CloudCiCheckEntry>,
+}
+
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct CloudReleaseEntry {
     pub id: String,
@@ -910,7 +928,98 @@ impl GitHubProvider {
         Ok(out)
     }
 
-    /// Recent Actions workflow runs for a single `owner/repo` repository (github.com or GitHub Enterprise).
+    /// Fetches detailed CI check runs (status, conclusion, name, etc.) and mergeable status.
+    pub async fn list_pr_checks(
+        token: &str,
+        hostname: &str,
+        full_name: &str,
+        reference: &str,
+    ) -> Result<CloudPrDetails, String> {
+        let client = reqwest::Client::new();
+        let base_url = if hostname == "github.com" {
+            "https://api.github.com".to_string()
+        } else {
+            format!("https://{}/api/v3", hostname)
+        };
+
+        // 1. Try to find the PR for this branch to get mergeable status
+        // head format: owner:branch
+        let owner = full_name.split('/').next().unwrap_or("");
+        let pr_search_url = format!("{}/repos/{}/pulls", base_url, full_name);
+        let mut mergeable = None;
+        let mut mergeable_state = "unknown".to_string();
+        let mut base_branch = "main".to_string(); // fallback
+
+        let prs_resp = client
+            .get(&pr_search_url)
+            .header("Authorization", format!("Bearer {}", token))
+            .header("User-Agent", "LuminaDev/0.2.0")
+            .header("Accept", "application/vnd.github+json")
+            .query(&[("head", format!("{}:{}", owner, reference)), ("state", "open".to_string())])
+            .send()
+            .await;
+
+        if let Ok(resp) = prs_resp {
+            if resp.status().is_success() {
+                if let Ok(body) = resp.json::<serde_json::Value>().await {
+                    if let Some(pr) = body.as_array().and_then(|a| a.first()) {
+                        base_branch = pr["base"]["ref"].as_str().unwrap_or("main").to_string();
+                        // We found the PR. Now get its detailed info (for mergeable status)
+                        let pr_url = pr["url"].as_str().unwrap_or("");
+                        if !pr_url.is_empty() {
+                            if let Ok(detail_resp) = client.get(pr_url)
+                                .header("Authorization", format!("Bearer {}", token))
+                                .header("User-Agent", "LuminaDev/0.2.0")
+                                .send().await {
+                                if let Ok(detail) = detail_resp.json::<serde_json::Value>().await {
+                                    mergeable = detail["mergeable"].as_bool();
+                                    mergeable_state = detail["mergeable_state"].as_str().unwrap_or("unknown").to_string();
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. Fetch Checks
+        let url = format!("{}/repos/{}/commits/{}/check-runs", base_url, full_name, reference);
+        let resp = client
+            .get(url)
+            .header("Authorization", format!("Bearer {}", token))
+            .header("User-Agent", "LuminaDev/0.2.0")
+            .header("Accept", "application/vnd.github+json")
+            .send()
+            .await
+            .map_err(|e| format!("[CLOUD_GIT_NETWORK] GitHub checks: {}", e))?;
+
+        if !resp.status().is_success() {
+            return Err(format!("[CLOUD_GIT_NETWORK] GitHub checks returned {}", resp.status()));
+        }
+
+        let body: serde_json::Value = resp.json().await
+            .map_err(|e| format!("[CLOUD_GIT_NETWORK] GitHub checks parse: {}", e))?;
+
+        let checks = body["check_runs"].as_array().cloned().unwrap_or_default();
+        let check_entries = checks.into_iter().map(|it| {
+            CloudCiCheckEntry {
+                id: it["id"].as_i64().unwrap_or_default().to_string(),
+                name: it["name"].as_str().unwrap_or("Unknown check").to_string(),
+                status: it["status"].as_str().unwrap_or("queued").to_string(),
+                conclusion: it["conclusion"].as_str().map(String::from),
+                url: it["html_url"].as_str().map(String::from),
+                details: it["output"]["summary"].as_str().map(String::from),
+            }
+        }).collect();
+
+        Ok(CloudPrDetails {
+            base_branch,
+            mergeable,
+            mergeable_state,
+            checks: check_entries,
+        })
+    }
+
     pub async fn list_repo_pipelines(
         token: &str,
         hostname: &str,
@@ -1196,6 +1305,16 @@ impl GitLabProvider {
                 resp.status()
             ));
         }
+
+        // Check for 'api' scope in the X-Gitlab-Token-Scopes header
+        if let Some(scopes_header) = resp.headers().get("X-Gitlab-Token-Scopes") {
+            if let Ok(scopes_str) = scopes_header.to_str() {
+                let scopes: Vec<&str> = scopes_str.split(',').map(|s| s.trim()).collect();
+                if !scopes.contains(&"api") {
+                    return Err("[CLOUD_GIT_INSUFFICIENT_SCOPE] Your GitLab token lacks the 'api' scope needed for full integration (e.g., creating merge requests). Please reconnect with a token that has the 'api' scope enabled.".to_string());
+                }
+            }
+        }
         let body: serde_json::Value = resp
             .json()
             .await
@@ -1418,6 +1537,104 @@ impl GitLabProvider {
         out.retain(|x| !x.id.is_empty() && !x.url.is_empty());
         out.truncate(limit);
         Ok(out)
+    }
+
+    /// Fetches detailed CI status (latest pipeline jobs) and mergeability for a specific reference (branch).
+    pub async fn list_pr_checks(
+        token: &str,
+        web_origin: &str,
+        path_with_namespace: &str,
+        reference: &str,
+    ) -> Result<CloudPrDetails, String> {
+        let client = reqwest::Client::new();
+        let project_id_encoded = urlencoding::encode(path_with_namespace);
+        
+        let mrs_url = format!("{}/api/v4/projects/{}/merge_requests", web_origin, project_id_encoded);
+        let mut mergeable = None;
+        let mut mergeable_state = "unknown".to_string();
+        let mut base_branch = "main".to_string();
+
+        let mrs_resp = client
+            .get(mrs_url)
+            .header("Authorization", format!("Bearer {}", token))
+            .query(&[("source_branch", reference.to_string()), ("state", "opened".to_string())])
+            .send()
+            .await;
+
+        if let Ok(resp) = mrs_resp {
+            if resp.status().is_success() {
+                if let Ok(body) = resp.json::<serde_json::Value>().await {
+                    if let Some(mr) = body.as_array().and_then(|a| a.first()) {
+                        base_branch = mr["target_branch"].as_str().unwrap_or("main").to_string();
+                        let status = mr["merge_status"].as_str().unwrap_or("unknown");
+                        mergeable = Some(status == "can_be_merged");
+                        mergeable_state = status.to_string();
+                    }
+                }
+            }
+        }
+
+        // 2. Get Pipeline Jobs
+        let pipelines_url = format!("{}/api/v4/projects/{}/pipelines", web_origin, project_id_encoded);
+        let pipelines_resp = client
+            .get(pipelines_url)
+            .header("Authorization", format!("Bearer {}", token))
+            .query(&[("ref", reference), ("per_page", "1")])
+            .send()
+            .await
+            .map_err(|e| format!("[CLOUD_GIT_NETWORK] GitLab pipelines: {}", e))?;
+
+        if !pipelines_resp.status().is_success() {
+            return Err(format!("[CLOUD_GIT_NETWORK] GitLab pipelines returned {}", pipelines_resp.status()));
+        }
+
+        let pipelines: Vec<serde_json::Value> = pipelines_resp.json().await
+            .map_err(|e| format!("[CLOUD_GIT_NETWORK] GitLab pipelines parse: {}", e))?;
+
+        let pipeline_id = match pipelines.first().and_then(|p| p["id"].as_i64()) {
+            Some(id) => id,
+            None => {
+                return Ok(CloudPrDetails {
+                    base_branch,
+                    mergeable,
+                    mergeable_state,
+                    checks: vec![],
+                });
+            }
+        };
+
+        let jobs_url = format!("{}/api/v4/projects/{}/pipelines/{}/jobs", web_origin, project_id_encoded, pipeline_id);
+        let jobs_resp = client
+            .get(jobs_url)
+            .header("Authorization", format!("Bearer {}", token))
+            .send()
+            .await
+            .map_err(|e| format!("[CLOUD_GIT_NETWORK] GitLab jobs: {}", e))?;
+
+        if !jobs_resp.status().is_success() {
+            return Err(format!("[CLOUD_GIT_NETWORK] GitLab jobs returned {}", jobs_resp.status()));
+        }
+
+        let jobs: Vec<serde_json::Value> = jobs_resp.json().await
+            .map_err(|e| format!("[CLOUD_GIT_NETWORK] GitLab jobs parse: {}", e))?;
+
+        let check_entries = jobs.into_iter().map(|it| {
+            CloudCiCheckEntry {
+                id: it["id"].as_i64().unwrap_or_default().to_string(),
+                name: it["name"].as_str().unwrap_or("Unknown job").to_string(),
+                status: it["status"].as_str().unwrap_or("created").to_string(),
+                conclusion: Some(it["status"].as_str().unwrap_or("unknown").to_string()),
+                url: it["web_url"].as_str().map(String::from),
+                details: None,
+            }
+        }).collect();
+
+        Ok(CloudPrDetails {
+            base_branch,
+            mergeable,
+            mergeable_state,
+            checks: check_entries,
+        })
     }
 
     /// Recent CI pipelines for a single `path_with_namespace` project (GitLab.com or self-managed).
@@ -1663,6 +1880,9 @@ impl GitHubProvider {
         if resp.status() == 401 {
             return Err("[CLOUD_AUTH_INVALID_TOKEN] GitHub token is invalid or expired.".to_string());
         }
+        if resp.status() == 403 {
+            return Err("[CLOUD_GIT_INSUFFICIENT_SCOPE] Your GitHub token lacks the 'repo' scope needed to create pull requests. Reconnect in Cloud Git with a token that has the 'repo' scope enabled.".to_string());
+        }
         if resp.status() == 422 {
             return Err("[CLOUD_GIT_PR_EXISTS] A pull request for this branch already exists.".to_string());
         }
@@ -1712,6 +1932,9 @@ impl GitLabProvider {
             .map_err(|e| format!("[CLOUD_GIT_NETWORK] GitLab create MR: {}", e))?;
         if resp.status() == 401 {
             return Err("[CLOUD_AUTH_INVALID_TOKEN] GitLab token is invalid or expired.".to_string());
+        }
+        if resp.status() == 403 {
+            return Err("[CLOUD_GIT_INSUFFICIENT_SCOPE] Your GitLab token lacks the 'api' scope needed to create merge requests. Reconnect in Cloud Git with a token that has the 'api' scope enabled.".to_string());
         }
         if resp.status() == 409 {
             return Err("[CLOUD_GIT_PR_EXISTS] A merge request for this branch already exists.".to_string());

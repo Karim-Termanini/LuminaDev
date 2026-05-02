@@ -32,5 +32,8 @@ export function humanizeCloudAuthError(err: unknown): string {
   if (code === 'CLOUD_GIT_SCOPE') {
     return `${detail || 'Could not scope CI to this repository.'}`.trim()
   }
+  if (code === 'CLOUD_GIT_INSUFFICIENT_SCOPE') {
+    return (detail || 'Your token lacks the required scope for this operation. Reconnect with a token that has the necessary permissions.').trim()
+  }
   return detail || 'Cloud auth operation failed.'
 }
