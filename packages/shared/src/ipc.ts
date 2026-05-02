@@ -216,6 +216,11 @@ export const IPC = {
   perfSnapshot: 'dh:perf:snapshot',
   diagnosticsBundleCreate: 'dh:diagnostics:bundle:create',
   terminalGetAllEnv: 'dh:terminal:get-all-env',
+  cloudAuthConnectStart: 'dh:cloud:auth:connect-start',
+  cloudAuthConnectPoll: 'dh:cloud:auth:connect-poll',
+  cloudAuthConnectPat: 'dh:cloud:auth:connect-pat',
+  cloudAuthDisconnect: 'dh:cloud:auth:disconnect',
+  cloudAuthStatus: 'dh:cloud:auth:status',
 } as const
 
 export type DockerActionPayload = { id: string; action: DockerContainerAction }

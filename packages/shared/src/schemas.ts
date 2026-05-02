@@ -292,6 +292,42 @@ export const RuntimeUninstallPreviewRequestSchema = z.object({
   removeMode: z.enum(['runtime_only', 'runtime_and_deps']).default('runtime_only'),
 })
 
+// --- Cloud Auth ---
+
+export const CloudAuthProviderSchema = z.enum(['github', 'gitlab'])
+export type CloudAuthProvider = z.infer<typeof CloudAuthProviderSchema>
+
+export const CloudAuthConnectStartRequestSchema = z.object({
+  provider: CloudAuthProviderSchema,
+})
+
+export const CloudAuthConnectPollRequestSchema = z.object({
+  provider: CloudAuthProviderSchema,
+  device_code: z.string().min(1),
+})
+
+export const CloudAuthConnectPatRequestSchema = z.object({
+  provider: CloudAuthProviderSchema,
+  token: z.string().min(1).max(512),
+})
+
+export const CloudAuthDisconnectRequestSchema = z.object({
+  provider: CloudAuthProviderSchema,
+})
+
+export const ConnectedAccountSchema = z.object({
+  provider: CloudAuthProviderSchema,
+  username: z.string(),
+  avatar_url: z.string(),
+  connected_at: z.string(),
+})
+export type ConnectedAccount = z.infer<typeof ConnectedAccountSchema>
+
+export const CloudAuthStatusResponseSchema = z.object({
+  ok: z.literal(true),
+  accounts: z.array(ConnectedAccountSchema),
+})
+
 export type DockerContainerAction = z.infer<typeof DockerContainerActionSchema>
 export type DockerImageAction = z.infer<typeof DockerImageActionSchema>
 export type DockerVolumeAction = z.infer<typeof DockerVolumeActionSchema>
