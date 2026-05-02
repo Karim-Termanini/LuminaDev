@@ -65,6 +65,7 @@ use runtime_jobs::runtime_job_execute;
 mod compose_profiles;
 mod cloud_auth;
 mod cloud_git_ipc;
+mod git_vcs_ipc;
 use cloud_auth::CredentialStore;
 
 struct TerminalSession {
@@ -2681,6 +2682,12 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
             Err(e) => json!({ "ok": false, "error": e }),
         }
     },
+
+    "dh:git:vcs:merge"
+    | "dh:git:vcs:rebase"
+    | "dh:git:vcs:stash-pop"
+    | "dh:git:vcs:merge-abort"
+    | "dh:git:vcs:rebase-abort" => git_vcs_ipc::invoke_extended(channel.as_str(), &body).await,
 
     "dh:ssh:generate" => {
       let email = body.get("email").and_then(|v| v.as_str()).unwrap_or("lumina@local");

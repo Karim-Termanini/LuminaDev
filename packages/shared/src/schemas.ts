@@ -510,3 +510,23 @@ export const GitVcsStashRequestSchema = z.object({
   /** When true (default), include untracked files (`git stash push -u`). */
   includeUntracked: z.boolean().optional(),
 })
+
+export const GitVcsMergeRequestSchema = z.object({
+  repoPath: z.string().min(1).max(4096),
+  /** Branch or ref to merge into the current HEAD (e.g. `main`, `origin/main`). */
+  branch: z.string().min(1).max(512),
+  /** When true, passes `--ff-only` to `git merge`. */
+  ffOnly: z.boolean().optional(),
+})
+
+export const GitVcsRebaseRequestSchema = z.object({
+  repoPath: z.string().min(1).max(4096),
+  /** Upstream branch or ref to rebase the current branch onto. */
+  onto: z.string().min(1).max(512),
+})
+
+export const GitVcsStashPopRequestSchema = GitVcsRepoPathSchema
+
+export const GitVcsMergeAbortRequestSchema = GitVcsRepoPathSchema
+
+export const GitVcsRebaseAbortRequestSchema = GitVcsRepoPathSchema

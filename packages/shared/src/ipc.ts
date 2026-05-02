@@ -255,6 +255,11 @@ export const IPC = {
   gitVcsBranches: 'dh:git:vcs:branches',
   gitVcsCheckout: 'dh:git:vcs:checkout',
   gitVcsStash: 'dh:git:vcs:stash',
+  gitVcsMerge: 'dh:git:vcs:merge',
+  gitVcsRebase: 'dh:git:vcs:rebase',
+  gitVcsStashPop: 'dh:git:vcs:stash-pop',
+  gitVcsMergeAbort: 'dh:git:vcs:merge-abort',
+  gitVcsRebaseAbort: 'dh:git:vcs:rebase-abort',
 } as const
 
 export type DockerActionPayload = { id: string; action: DockerContainerAction }

@@ -152,6 +152,11 @@ function createTauriDhApi(): DhApi {
     gitVcsBranches: (payload) => tauriInvoke(IPC.gitVcsBranches, payload),
     gitVcsCheckout: (payload) => tauriInvoke(IPC.gitVcsCheckout, payload),
     gitVcsStash: (payload) => tauriInvoke(IPC.gitVcsStash, payload),
+    gitVcsMerge: (payload) => tauriInvoke(IPC.gitVcsMerge, payload),
+    gitVcsRebase: (payload) => tauriInvoke(IPC.gitVcsRebase, payload),
+    gitVcsStashPop: (payload) => tauriInvoke(IPC.gitVcsStashPop, payload),
+    gitVcsMergeAbort: (payload) => tauriInvoke(IPC.gitVcsMergeAbort, payload),
+    gitVcsRebaseAbort: (payload) => tauriInvoke(IPC.gitVcsRebaseAbort, payload),
   } satisfies DhApi
 }
 

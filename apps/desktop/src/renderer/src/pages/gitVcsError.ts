@@ -11,6 +11,16 @@ export type GitVcsErrorCode =
   | 'GIT_VCS_CHECKOUT_DIRTY'
   | 'GIT_VCS_STASH'
   | 'GIT_VCS_STASH_EMPTY'
+  | 'GIT_VCS_MERGE'
+  | 'GIT_VCS_MERGE_CONFLICT'
+  | 'GIT_VCS_MERGE_FF'
+  | 'GIT_VCS_MERGE_ABORT'
+  | 'GIT_VCS_REBASE'
+  | 'GIT_VCS_REBASE_CONFLICT'
+  | 'GIT_VCS_REBASE_ABORT'
+  | 'GIT_VCS_STASH_POP'
+  | 'GIT_VCS_STASH_POP_CONFLICT'
+  | 'GIT_VCS_STASH_POP_EMPTY'
 
 export function parseGitVcsErrorCode(err: unknown): GitVcsErrorCode | null {
   const raw = err instanceof Error ? err.message : String(err)
@@ -41,6 +51,22 @@ export function humanizeGitVcsError(err: unknown): string {
     return 'Uncommitted changes would be overwritten by this branch switch. Commit or stash first, or confirm in the dialog when switching branches in Git VCS.'
   if (code === 'GIT_VCS_STASH_EMPTY') return 'Nothing to stash — there were no local changes to save.'
   if (code === 'GIT_VCS_STASH') return `Stash failed. ${detail}`.trim()
+  if (code === 'GIT_VCS_MERGE_CONFLICT')
+    return `Merge stopped with conflicts. Resolve files, commit the merge, or use Abort merge. ${detail}`.trim()
+  if (code === 'GIT_VCS_MERGE_FF')
+    return `Fast-forward merge was not possible with --ff-only. Turn off “Fast-forward only” or merge manually. ${detail}`.trim()
+  if (code === 'GIT_VCS_MERGE') return `Merge did not complete. ${detail}`.trim()
+  if (code === 'GIT_VCS_MERGE_ABORT')
+    return `Could not abort merge (no merge in progress, or Git could not clean up). ${detail}`.trim()
+  if (code === 'GIT_VCS_REBASE_CONFLICT')
+    return `Rebase stopped with conflicts. Fix commits or files, run git rebase --continue in a terminal, or use Abort rebase. ${detail}`.trim()
+  if (code === 'GIT_VCS_REBASE') return `Rebase did not complete. ${detail}`.trim()
+  if (code === 'GIT_VCS_REBASE_ABORT')
+    return `Could not abort rebase (no rebase in progress). ${detail}`.trim()
+  if (code === 'GIT_VCS_STASH_POP_CONFLICT')
+    return `Stash pop stopped with conflicts. Resolve files, then commit; your stash entry may still be on the stack. ${detail}`.trim()
+  if (code === 'GIT_VCS_STASH_POP_EMPTY') return 'There is no stash entry to apply.'
+  if (code === 'GIT_VCS_STASH_POP') return `Stash pop failed. ${detail}`.trim()
   if (code === 'GIT_VCS_CHECKOUT')
     return `Checkout failed. ${detail}`.trim()
   return detail || 'Git VCS operation failed.'

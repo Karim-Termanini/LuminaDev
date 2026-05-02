@@ -8,6 +8,7 @@ import { assertGitVcsOk } from './gitVcsContract'
 import { humanizeGitVcsError, parseGitVcsErrorCode } from './gitVcsError'
 import { GitVcsBranchPicker } from './gitVcsBranchPicker'
 import { GitVcsCommitBar } from './gitVcsCommitBar'
+import { GitVcsIntegrateBar } from './gitVcsIntegrateBar'
 import { GitVcsDiffPanel } from './gitVcsDiffPanel'
 import { GitVcsFileList } from './gitVcsFileList'
 import { parseCheckoutDirtyFileList } from './gitVcsCheckoutDirty'
@@ -427,6 +428,90 @@ export function GitVcsPage(): ReactElement {
     }
   }
 
+  async function runMerge(intoFrom: string, ffOnly: boolean): Promise<void> {
+    if (!repoPath.trim() || !intoFrom) return
+    setBusy(true)
+    setOpErrorRaw(null)
+    try {
+      const r = await window.dh.gitVcsMerge({
+        repoPath: repoPath.trim(),
+        branch: intoFrom,
+        ffOnly,
+      })
+      assertGitVcsOk(r)
+      const lists = await refreshStatus()
+      setSelected((prev) => reconcileGitVcsSelection(prev, lists.staged, lists.unstaged))
+    } catch (e) {
+      setOpErrorRaw(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function runRebase(onto: string): Promise<void> {
+    if (!repoPath.trim() || !onto) return
+    setBusy(true)
+    setOpErrorRaw(null)
+    try {
+      const r = await window.dh.gitVcsRebase({ repoPath: repoPath.trim(), onto })
+      assertGitVcsOk(r)
+      const lists = await refreshStatus()
+      setSelected((prev) => reconcileGitVcsSelection(prev, lists.staged, lists.unstaged))
+    } catch (e) {
+      setOpErrorRaw(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function runStashPop(): Promise<void> {
+    if (!repoPath.trim()) return
+    setBusy(true)
+    setOpErrorRaw(null)
+    try {
+      const r = await window.dh.gitVcsStashPop({ repoPath: repoPath.trim() })
+      assertGitVcsOk(r)
+      const lists = await refreshStatus()
+      setSelected((prev) => reconcileGitVcsSelection(prev, lists.staged, lists.unstaged))
+    } catch (e) {
+      setOpErrorRaw(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function runMergeAbort(): Promise<void> {
+    if (!repoPath.trim()) return
+    setBusy(true)
+    setOpErrorRaw(null)
+    try {
+      const r = await window.dh.gitVcsMergeAbort({ repoPath: repoPath.trim() })
+      assertGitVcsOk(r)
+      const lists = await refreshStatus()
+      setSelected((prev) => reconcileGitVcsSelection(prev, lists.staged, lists.unstaged))
+    } catch (e) {
+      setOpErrorRaw(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function runRebaseAbort(): Promise<void> {
+    if (!repoPath.trim()) return
+    setBusy(true)
+    setOpErrorRaw(null)
+    try {
+      const r = await window.dh.gitVcsRebaseAbort({ repoPath: repoPath.trim() })
+      assertGitVcsOk(r)
+      const lists = await refreshStatus()
+      setSelected((prev) => reconcileGitVcsSelection(prev, lists.staged, lists.unstaged))
+    } catch (e) {
+      setOpErrorRaw(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function runStashAndRetryBranch(): Promise<void> {
     const target = dirtyCheckout
     if (!repoPath.trim() || !target) return
@@ -535,7 +620,7 @@ export function GitVcsPage(): ReactElement {
         </div>
         <h1 style={{ margin: 0, fontSize: 24, fontWeight: 700 }}>Git VCS</h1>
         <p style={{ color: 'var(--text-muted)', marginTop: 6, maxWidth: 720, lineHeight: 1.5 }}>
-          Status, diffs, stage, commit, fetch, pull, and push. HTTPS remotes use credentials from{' '}
+          Status, diffs, stage, commit, fetch, pull, push, merge, rebase, and stash pop. HTTPS remotes use credentials from{' '}
           <Link to="/cloud-git?tab=github" style={{ color: 'var(--cg-accent, var(--accent))' }}>
             Cloud Git
           </Link>
@@ -643,6 +728,28 @@ export function GitVcsPage(): ReactElement {
               Push
             </button>
           </div>
+
+          <GitVcsIntegrateBar
+            repoPath={repoPath.trim()}
+            branches={branches}
+            currentBranch={branch}
+            busy={busy}
+            onMerge={async (b, ff) => {
+              await runMerge(b, ff)
+            }}
+            onRebase={async (onto) => {
+              await runRebase(onto)
+            }}
+            onStashPop={async () => {
+              await runStashPop()
+            }}
+            onMergeAbort={async () => {
+              await runMergeAbort()
+            }}
+            onRebaseAbort={async () => {
+              await runRebaseAbort()
+            }}
+          />
 
           <div style={{ display: 'grid', gridTemplateColumns: 'minmax(260px, 34%) 1fr', gap: 16, minHeight: 360 }}>
             <div

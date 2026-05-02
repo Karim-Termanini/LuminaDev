@@ -206,6 +206,19 @@ declare global {
         message?: string
         includeUntracked?: boolean
       }) => Promise<{ ok: boolean; message?: string; error?: string }>
+      gitVcsMerge: (payload: {
+        repoPath: string
+        branch: string
+        ffOnly?: boolean
+      }) => Promise<{ ok: boolean; output?: string; error?: string }>
+      gitVcsRebase: (payload: { repoPath: string; onto: string }) => Promise<{
+        ok: boolean
+        output?: string
+        error?: string
+      }>
+      gitVcsStashPop: (payload: { repoPath: string }) => Promise<{ ok: boolean; output?: string; error?: string }>
+      gitVcsMergeAbort: (payload: { repoPath: string }) => Promise<{ ok: boolean; output?: string; error?: string }>
+      gitVcsRebaseAbort: (payload: { repoPath: string }) => Promise<{ ok: boolean; output?: string; error?: string }>
     }
   }
 }

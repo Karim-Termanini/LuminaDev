@@ -65,6 +65,14 @@ describe('humanizeGitVcsError', () => {
     expect(humanizeGitVcsError(new Error('[GIT_VCS_STASH] cannot save'))).toContain('Stash failed')
   })
 
+  it('humanizes GIT_VCS_MERGE_CONFLICT', () => {
+    expect(humanizeGitVcsError(new Error('[GIT_VCS_MERGE_CONFLICT] CONFLICT'))).toContain('Abort merge')
+  })
+
+  it('humanizes GIT_VCS_STASH_POP_EMPTY', () => {
+    expect(humanizeGitVcsError(new Error('[GIT_VCS_STASH_POP_EMPTY] No stash'))).toMatch(/stash entry/i)
+  })
+
   it('returns raw detail for unknown codes', () => {
     expect(humanizeGitVcsError(new Error('Something weird'))).toBe('Something weird')
   })
