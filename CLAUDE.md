@@ -35,9 +35,11 @@ Renderer → `desktopApiBridge.ts` → `invoke` / `ipc_send` → Rust `ipc_invok
 - `apps/desktop/src/renderer/src/api/desktopApiBridge.ts` — Tauri transport layer
 - Dialogs (`selectFolder`, `filePickOpen`, `filePickSave`) use `@tauri-apps/plugin-dialog` directly in the bridge — they do not go through `ipc_invoke`
 
-### Rust backend (`apps/desktop/src-tauri/src/lib.rs`)
+### Rust backend (`apps/desktop/src-tauri/`)
 
-Single dispatcher with two Tauri commands:
+`compose_profiles.rs` resolves `docker/compose/<profile>` for `dh:compose:up` / `dh:compose:logs` (repo walk, `LUMINA_DEV_COMPOSE_ROOT`, or bundled resources from `tauri.conf.json`). Other domains live in focused modules (`runtime_jobs.rs`, etc.); avoid growing new logic only in `lib.rs`.
+
+Single dispatcher in `lib.rs` with two Tauri commands:
 
 - `ipc_invoke` — request/response handlers for all channels
 - `ipc_send` — fire-and-forget (terminal write/resize)

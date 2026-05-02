@@ -1,6 +1,8 @@
+# Minimal preset stack (reliable everywhere). Replace with a real web stack when ready.
+name: lumina-web-dev
+
 services:
-  web:
-    image: nginx:alpine
-    ports:
-      - "8080:80"
+  stub:
+    image: alpine:latest
+    command: ["sleep", "infinity"]
     restart: unless-stopped

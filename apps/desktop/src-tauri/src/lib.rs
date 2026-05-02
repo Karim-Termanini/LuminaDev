@@ -61,6 +61,7 @@ mod runtime_verify;
 use runtime_verify::runtime_append_verify;
 mod runtime_jobs;
 use runtime_jobs::runtime_job_execute;
+mod compose_profiles;
 
 struct TerminalSession {
   master: Arc<StdMutex<Box<dyn MasterPty + Send>>>,
@@ -350,19 +351,6 @@ fn ss_process_from_line(line: &str) -> String {
     }
   }
   "unknown".to_string()
-}
-
-fn find_repo_root(start: &Path) -> PathBuf {
-  let mut cur = start.to_path_buf();
-  for _ in 0..8 {
-    if cur.join("docker/compose").exists() {
-      return cur;
-    }
-    if !cur.pop() {
-      break;
-    }
-  }
-  start.to_path_buf()
 }
 
 fn sanitize_docker_name(s: &str) -> String {
@@ -1569,12 +1557,9 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
     },
     "dh:compose:up" => {
       let profile = body.get("profile").and_then(|v| v.as_str()).unwrap_or("web-dev");
-      let dir = find_repo_root(&std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")))
-        .join("docker")
-        .join("compose")
-        .join(profile);
+      let dir = compose_profiles::compose_profile_workdir(&app, profile);
       if !dir.is_dir() {
-        json!({ "ok": false, "log": "", "error": format!("[DOCKER_COMPOSE_FAILED] missing compose directory: {}", dir.display()) })
+        json!({ "ok": false, "log": "", "error": format!("[DOCKER_COMPOSE_FAILED] missing compose directory: {} (set LUMINA_DEV_COMPOSE_ROOT or run from a checkout with docker/compose)", dir.display()) })
       } else {
         match exec_docker_compose_in_dir(&dir, &["up", "-d"], CMD_TIMEOUT_LONG).await {
           Ok((stdout, stderr)) => json!({ "ok": true, "log": format!("{}{}", stdout, stderr) }),
@@ -1584,12 +1569,9 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
     },
     "dh:compose:logs" => {
       let profile = body.get("profile").and_then(|v| v.as_str()).unwrap_or("web-dev");
-      let dir = find_repo_root(&std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")))
-        .join("docker")
-        .join("compose")
-        .join(profile);
+      let dir = compose_profiles::compose_profile_workdir(&app, profile);
       if !dir.is_dir() {
-        json!({ "ok": false, "log": "", "error": format!("[DOCKER_COMPOSE_FAILED] missing compose directory: {}", dir.display()) })
+        json!({ "ok": false, "log": "", "error": format!("[DOCKER_COMPOSE_FAILED] missing compose directory: {} (set LUMINA_DEV_COMPOSE_ROOT or run from a checkout with docker/compose)", dir.display()) })
       } else {
         match exec_docker_compose_in_dir(&dir, &["logs", "--tail", "200"], CMD_TIMEOUT_DEFAULT).await {
           Ok((stdout, stderr)) => json!({ "ok": true, "log": format!("{}{}", stdout, stderr) }),
@@ -3602,18 +3584,6 @@ mod tests {
     assert_eq!(ss_process_from_line("no users payload"), "unknown");
   }
 
-  #[test]
-  fn find_repo_root_discovers_compose_directory_up_tree() {
-    let base = std::env::temp_dir().join(format!("lumina-test-{}", Uuid::new_v4()));
-    let nested = base.join("a/b/c");
-    std::fs::create_dir_all(base.join("docker/compose")).expect("create compose dir");
-    std::fs::create_dir_all(&nested).expect("create nested dir");
-
-    let root = find_repo_root(&nested);
-    assert_eq!(root, base);
-
-    let _ = std::fs::remove_dir_all(&base);
-  }
 }
 
 #[cfg(test)]
