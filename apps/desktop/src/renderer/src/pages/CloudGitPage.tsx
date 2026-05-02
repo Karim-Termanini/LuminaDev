@@ -9,6 +9,7 @@ import { CLOUD_GIT_PROVIDER_THEME, type CloudGitProviderId } from './cloudGitThe
 import { humanizeCloudAuthError, isCloudAuthOauthNotConfigured } from './cloudAuthError'
 
 type Provider = CloudGitProviderId
+const LAST_TAB_KEY = 'cloud_git_last_tab'
 
 type DeviceFlowState = {
   provider: Provider
@@ -103,6 +104,14 @@ export function CloudGitPage(): ReactElement {
     next.set('tab', activeTab)
     setSearchParams(next, { replace: true })
   }, [activeTab, searchParams, setSearchParams])
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(LAST_TAB_KEY, activeTab)
+    } catch {
+      // Non-fatal: keep URL as source of truth.
+    }
+  }, [activeTab])
 
   useEffect(() => {
     if (patProvider && patProvider !== activeTab) {

@@ -32,7 +32,18 @@ const statusStyles: Record<RouteStatus, { label: string; color: string; bg: stri
   stub: { label: 'STUB', color: '#ff8a80', bg: 'rgba(255, 82, 82, 0.1)', border: 'rgba(255, 82, 82, 0.25)' },
 }
 
+function resolveCloudGitNavTarget(): string {
+  try {
+    const raw = window.localStorage.getItem('cloud_git_last_tab')
+    const tab = raw === 'gitlab' ? 'gitlab' : 'github'
+    return `/cloud-git?tab=${tab}`
+  } catch {
+    return '/cloud-git?tab=github'
+  }
+}
+
 export function AppShell({ children }: { children: ReactNode }): ReactElement {
+  const cloudGitTarget = resolveCloudGitNavTarget()
   return (
     <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
       <aside
@@ -63,7 +74,7 @@ export function AppShell({ children }: { children: ReactNode }): ReactElement {
           {nav.map((item) => (
             <NavLink
               key={item.to}
-              to={item.to}
+              to={item.to === '/cloud-git' ? cloudGitTarget : item.to}
               style={({ isActive }) => ({
                 display: 'flex',
                 alignItems: 'center',
