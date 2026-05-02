@@ -629,13 +629,19 @@ impl GitLabProvider {
             .map_err(|e| format!("[CLOUD_GIT_NETWORK] GitLab MR parse: {}", e))?;
         let items = rows
             .into_iter()
-            .map(|it| CloudPullRequestEntry {
-                id: it["id"].as_i64().unwrap_or_default().to_string(),
-                title: it["title"].as_str().unwrap_or("").to_string(),
-                url: it["web_url"].as_str().unwrap_or("").to_string(),
-                repo: it["references"]["full"].as_str().unwrap_or("").to_string(),
-                author: it["author"]["username"].as_str().unwrap_or("").to_string(),
-                updated_at: it["updated_at"].as_str().unwrap_or("").to_string(),
+            .map(|it| {
+                let repo = it["references"]["full"]
+                    .as_str()
+                    .map(|s| s.split('!').next().unwrap_or(s).to_string())
+                    .unwrap_or_default();
+                CloudPullRequestEntry {
+                    id: it["id"].as_i64().unwrap_or_default().to_string(),
+                    title: it["title"].as_str().unwrap_or("").to_string(),
+                    url: it["web_url"].as_str().unwrap_or("").to_string(),
+                    repo,
+                    author: it["author"]["username"].as_str().unwrap_or("").to_string(),
+                    updated_at: it["updated_at"].as_str().unwrap_or("").to_string(),
+                }
             })
             .filter(|x| !x.id.is_empty() && !x.url.is_empty())
             .collect();

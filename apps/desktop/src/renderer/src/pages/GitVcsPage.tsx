@@ -1,7 +1,7 @@
 import type { BranchEntry, ConnectedAccount, FileEntry, GitRemoteEntry, GitRepoEntry } from '@linux-dev-home/shared'
 import type { CSSProperties, ReactElement } from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 
 import { assertGitOk } from './gitContract'
 import { assertGitVcsOk } from './gitVcsContract'
@@ -30,6 +30,7 @@ const GLASS = {
 type DirtyCheckoutPrompt = { branch: string; create: boolean; files: string[] }
 
 export function GitVcsPage(): ReactElement {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [recents, setRecents] = useState<GitRepoEntry[]>([])
   const [repoPath, setRepoPath] = useState('')
   const [branch, setBranch] = useState('')
@@ -75,6 +76,24 @@ export function GitVcsPage(): ReactElement {
     }
   }, [])
 
+  const persistRepoChoice = useCallback(
+    async (next: string): Promise<void> => {
+      setRepoPath(next)
+      setSelected(null)
+      setOpErrorRaw(null)
+      closeDirtyCheckoutModal()
+      if (!next.trim()) return
+      try {
+        const add = await window.dh.gitRecentAdd({ path: next.trim() })
+        assertGitOk(add, 'Could not add repo to recents.')
+        await loadRecents()
+      } catch {
+        /* recents best-effort */
+      }
+    },
+    [closeDirtyCheckoutModal, loadRecents],
+  )
+
   useEffect(() => {
     void loadRecents()
   }, [loadRecents])
@@ -85,6 +104,16 @@ export function GitVcsPage(): ReactElement {
     const top = [...recents].sort((a, b) => b.lastOpened - a.lastOpened)[0]
     if (top?.path) setRepoPath(top.path)
   }, [recents, repoPath])
+
+  useEffect(() => {
+    const qRepo = searchParams.get('repoPath')?.trim()
+    if (!qRepo) return
+    if (qRepo === repoPath.trim()) return
+    void persistRepoChoice(qRepo)
+    const next = new URLSearchParams(searchParams)
+    next.delete('repoPath')
+    setSearchParams(next, { replace: true })
+  }, [searchParams, setSearchParams, repoPath, persistRepoChoice])
 
   const refreshStatus = useCallback(async (): Promise<{ staged: FileEntry[]; unstaged: FileEntry[] }> => {
     if (!repoPath.trim()) {
@@ -185,21 +214,6 @@ export function GitVcsPage(): ReactElement {
     }
     void loadDiff(selected.path, selected.staged)
   }, [selected, loadDiff])
-
-  async function persistRepoChoice(next: string): Promise<void> {
-    setRepoPath(next)
-    setSelected(null)
-    setOpErrorRaw(null)
-    closeDirtyCheckoutModal()
-    if (!next.trim()) return
-    try {
-      const add = await window.dh.gitRecentAdd({ path: next.trim() })
-      assertGitOk(add, 'Could not add repo to recents.')
-      await loadRecents()
-    } catch {
-      /* recents best-effort */
-    }
-  }
 
   async function openFolder(): Promise<void> {
     const dir = await window.dh.selectFolder()

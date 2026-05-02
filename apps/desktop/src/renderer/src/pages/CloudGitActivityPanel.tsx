@@ -1,6 +1,8 @@
-import type { CloudPullRequestEntry } from '@linux-dev-home/shared'
+import type { CloudPullRequestEntry, GitRepoEntry } from '@linux-dev-home/shared'
 import type { ReactElement } from 'react'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { assertGitRecentList } from './registryContract'
 
 type Provider = 'github' | 'gitlab'
 
@@ -20,6 +22,16 @@ export function CloudGitActivityPanel({ provider, label }: { provider: Provider;
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [prs, setPrs] = useState<CloudPullRequestEntry[]>([])
+  const [recents, setRecents] = useState<GitRepoEntry[]>([])
+
+  useEffect(() => {
+    void window.dh
+      .gitRecentList()
+      .then((res) => {
+        setRecents(assertGitRecentList(res))
+      })
+      .catch(() => setRecents([]))
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -49,6 +61,24 @@ export function CloudGitActivityPanel({ provider, label }: { provider: Provider;
       cancelled = true
     }
   }, [provider])
+
+  const localPathByRepo = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const r of recents) {
+      const p = r.path.replace(/\\/g, '/')
+      const parts = p.split('/').filter(Boolean)
+      const base = parts[parts.length - 1]?.toLowerCase() ?? ''
+      if (base && !map.has(base)) map.set(base, r.path)
+    }
+    return map
+  }, [recents])
+
+  const localRepoPathFor = (repoSlug: string): string | null => {
+    const parts = repoSlug.split('/').filter(Boolean)
+    const base = parts[parts.length - 1]?.toLowerCase() ?? ''
+    return (base && localPathByRepo.get(base)) || null
+  }
+
   return (
     <section
       aria-labelledby="cloud-git-activity-heading"
@@ -102,6 +132,21 @@ export function CloudGitActivityPanel({ provider, label }: { provider: Provider;
                   <span className="mono" style={{ color: 'var(--text-muted)', marginLeft: 6 }}>
                     {pr.repo}
                   </span>
+                  {localRepoPathFor(pr.repo) ? (
+                    <Link
+                      to={`/git-vcs?repoPath=${encodeURIComponent(localRepoPathFor(pr.repo) ?? '')}`}
+                      className="mono"
+                      style={{
+                        marginLeft: 8,
+                        color: 'var(--cg-accent, var(--accent))',
+                        textDecoration: 'none',
+                        fontSize: 11,
+                        fontWeight: 600,
+                      }}
+                    >
+                      Open in Lumina VCS
+                    </Link>
+                  ) : null}
                 </li>
               ))}
             </ul>
