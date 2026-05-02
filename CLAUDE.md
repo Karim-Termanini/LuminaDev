@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 pnpm install                        # Install all deps
 pnpm dev                            # Tauri dev (needs Rust + WebKit deps locally)
-pnpm test                           # Unit tests (shared + desktop)
+pnpm test                           # Unit tests (`@linux-dev-home/shared` build, then shared + desktop Vitest)
 pnpm typecheck                      # TypeScript across workspace
 pnpm lint                           # ESLint
 pnpm build                          # Renderer production bundle + copy compose profiles
