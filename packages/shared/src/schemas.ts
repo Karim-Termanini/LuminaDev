@@ -635,6 +635,7 @@ export interface CloudCiCheck {
 export interface CloudPrDetails {
   mergeable: boolean | null
   mergeable_state: string
+  base_branch?: string
   checks: CloudCiCheck[]
 }
 
