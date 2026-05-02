@@ -252,6 +252,8 @@ declare global {
         filePath: string
         resolution: 'ours' | 'theirs'
       }) => Promise<{ ok: boolean; error?: string }>
+      gitVcsConflictHunks: (payload: { repoPath: string; filePath: string }) => Promise<{ ok: boolean; error?: string } & import('@linux-dev-home/shared').GitVcsConflictFile>
+      gitVcsResolveHunk: (payload: { repoPath: string; filePath: string; hunkId: string; resolution: 'ours' | 'theirs' | 'both' | 'manual'; mergedContent?: string }) => Promise<{ ok: boolean; error?: string }>
       cloudGitCreatePr: (payload: {
         provider: 'github' | 'gitlab'
         repoPath: string

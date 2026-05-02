@@ -269,7 +269,9 @@ export const IPC = {
   gitVcsRebaseSkip: 'dh:git:vcs:rebase-skip',
   gitVcsRenameBranch: 'dh:git:vcs:rename-branch',
   gitVcsConflictDiff: 'dh:git:vcs:conflict-diff',
+  gitVcsConflictHunks: 'dh:git:vcs:conflict-hunks',
   gitVcsResolveConflict: 'dh:git:vcs:resolve-conflict',
+  gitVcsResolveHunk: 'dh:git:vcs:resolve-hunk',
   cloudGitCreatePr: 'dh:cloud:git:create-pr',
 } as const
 

@@ -14,6 +14,7 @@ import { GitVcsDiffPanel } from './gitVcsDiffPanel'
 import { GitVcsFileList } from './gitVcsFileList'
 import { GitVcsPrWizard } from './gitVcsPrWizard'
 import { GitVcsConflictPanel } from './GitVcsConflictPanel'
+import { GitVcsConflictWizardModal } from './GitVcsConflictWizardModal'
 import { parseCheckoutDirtyFileList } from './gitVcsCheckoutDirty'
 import { GitVcsDirtyCheckoutModal } from './GitVcsDirtyCheckoutModal'
 import { GitVcsProviderRail } from './gitVcsProviderRail'
@@ -56,6 +57,8 @@ export function GitVcsPage(): ReactElement {
   const [cloudAccounts, setCloudAccounts] = useState<ConnectedAccount[]>([])
   const [gitOperation, setGitOperation] = useState<GitVcsOperation>('none')
   const [conflictFileCount, setConflictFileCount] = useState(0)
+  const [conflictWizardOpen, setConflictWizardOpen] = useState(false)
+  const [conflictedFiles, setConflictedFiles] = useState<string[]>([])
   const [prWizardOpen, setPrWizardOpen] = useState(false)
   const [lastCreatedPrUrl, setLastCreatedPrUrl] = useState<string | null>(null)
   /** When fetch remote host is unknown and both Cloud accounts exist, user picks which token scopes repo CI. */
@@ -215,9 +218,25 @@ export function GitVcsPage(): ReactElement {
       setGitRemotes([])
       setGitOperation('none')
       setConflictFileCount(0)
+      setConflictedFiles([])
       setSelected(null)
       try {
         const lists = await refreshStatus()
+        
+        // Extract conflicted files (status === 'C')
+        const conflicts = [
+          ...lists.staged.filter(f => f.status === 'C').map(f => f.path),
+          ...lists.unstaged.filter(f => f.status === 'C').map(f => f.path),
+        ]
+        
+        if (conflicts.length > 0) {
+          setConflictedFiles(conflicts)
+          // Auto-open conflict wizard if there are unresolved conflicts
+          if (gitOperation === 'merging' || gitOperation === 'rebasing') {
+            setConflictWizardOpen(true)
+          }
+        }
+        
         setSelected((prev) => reconcileGitVcsSelection(prev, lists.staged, lists.unstaged))
       } catch (e) {
         setOpErrorRaw(e instanceof Error ? e.message : String(e))
@@ -225,7 +244,7 @@ export function GitVcsPage(): ReactElement {
         setBusy(false)
       }
     })()
-  }, [repoPath, refreshStatus])
+  }, [repoPath, refreshStatus, gitOperation])
 
   useEffect(() => {
     setFetchRemote((cur) => (fetchRemoteNames.includes(cur) ? cur : fetchRemoteNames[0] ?? 'origin'))
@@ -411,7 +430,41 @@ export function GitVcsPage(): ReactElement {
       const lists = await refreshStatus()
       setSelected((prev) => reconcileGitVcsSelection(prev, lists.staged, lists.unstaged))
     } catch (e) {
-      setOpErrorRaw(e instanceof Error ? e.message : String(e))
+      const code = parseGitVcsErrorCode(e)
+      if (code === 'GIT_VCS_PROTECTED_BRANCH') {
+        // Smart Flow: Suggest creating a new branch if current is main/master
+        if (branch === 'main' || branch === 'master') {
+          const suggestedName = `feature/work-${Math.floor(Math.random() * 1000)}`
+          if (confirm(`This branch is protected. Would you like to move your local commits to a new branch "${suggestedName}" and open a Pull Request?`)) {
+            void (async () => {
+              setBusy(true)
+              try {
+                // 1. Create and switch to new branch (keeping local commits)
+                const res = await window.dh.gitVcsCheckout({ repoPath: path, branch: suggestedName, create: true })
+                assertGitVcsOk(res)
+                
+                // 2. Push the new branch
+                const pushRes = await window.dh.gitVcsPush({ repoPath: path })
+                assertGitVcsOk(pushRes)
+                
+                // 3. Open PR Wizard
+                setPrWizardOpen(true)
+                setOpErrorRaw(null)
+              } catch (inner) {
+                setOpErrorRaw(inner instanceof Error ? inner.message : String(inner))
+              } finally {
+                setBusy(false)
+                await refreshStatus()
+              }
+            })()
+          }
+        } else {
+          setPrWizardOpen(true)
+          setOpErrorRaw(null)
+        }
+      } else {
+        setOpErrorRaw(e instanceof Error ? e.message : String(e))
+      }
     } finally {
       setBusy(false)
     }
@@ -1120,6 +1173,20 @@ export function GitVcsPage(): ReactElement {
         branches={branches}
         onClose={() => setPrWizardOpen(false)}
         onCreated={(url) => { setLastCreatedPrUrl(url); setPrWizardOpen(false) }}
+      />
+
+      <GitVcsConflictWizardModal
+        isOpen={conflictWizardOpen}
+        repoPath={repoPath.trim()}
+        conflictFiles={conflictedFiles}
+        onClose={() => setConflictWizardOpen(false)}
+        onSuccess={() => {
+          setConflictWizardOpen(false)
+          void (async () => {
+            const lists = await refreshStatus()
+            setSelected((prev) => reconcileGitVcsSelection(prev, lists.staged, lists.unstaged))
+          })()
+        }}
       />
     </div>
   )

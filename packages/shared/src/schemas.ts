@@ -548,3 +548,76 @@ export const GitVcsRebaseContinueRequestSchema = GitVcsRepoPathSchema
 
 /** Skip the current commit during an interactive rebase (`git rebase --skip`). */
 export const GitVcsRebaseSkipRequestSchema = GitVcsRepoPathSchema
+
+// --- Git VCS Conflict Resolution (3-way merge) ---
+
+/** Rename branch within repo (`git branch -m old new`). */
+export const GitVcsRenameBranchRequestSchema = z.object({
+  repoPath: z.string().min(1).max(4096),
+  oldName: z.string().min(1).max(256),
+  newName: z.string().min(1).max(256),
+})
+
+/** Fetch 3-way conflict diff for a single file. */
+export const GitVcsConflictDiffRequestSchema = z.object({
+  repoPath: z.string().min(1).max(4096),
+  filePath: z.string().min(1).max(4096),
+})
+
+/** Single conflict hunk representation (parsed from conflict markers). */
+export const GitVcsConflictHunkSchema = z.object({
+  id: z.string(), // UUID or line-range-based identifier
+  /** Line number in the file where hunk starts. */
+  startLine: z.number().int().min(0),
+  /** Line number in the file where hunk ends. */
+  endLine: z.number().int().min(0),
+  /** Content from 'ours' side (between `<<<<<<<` and `=======`). */
+  ours: z.string(),
+  /** Content from 'theirs' side (between `=======` and `>>>>>>>`). */
+  theirs: z.string(),
+  /** Resolution state: 'unresolved' | 'ours' | 'theirs' | 'both' | 'manual'. */
+  state: z.enum(['unresolved', 'ours', 'theirs', 'both', 'manual']),
+})
+export type GitVcsConflictHunk = z.infer<typeof GitVcsConflictHunkSchema>
+
+/** Full 3-way conflict state for a file. */
+export const GitVcsConflictFileSchema = z.object({
+  filePath: z.string().min(1).max(4096),
+  /** Base version (stage 1). */
+  base: z.string(),
+  /** Our version (stage 2). */
+  ours: z.string(),
+  /** Their version (stage 3). */
+  theirs: z.string(),
+  /** Parsed conflict hunks. */
+  hunks: z.array(GitVcsConflictHunkSchema),
+  /** Merged result (may be empty for unstarted resolution). */
+  merged: z.string().optional(),
+})
+export type GitVcsConflictFile = z.infer<typeof GitVcsConflictFileSchema>
+
+/** Resolve a single conflict hunk (per-hunk approach for wizard). */
+export const GitVcsResolveHunkRequestSchema = z.object({
+  repoPath: z.string().min(1).max(4096),
+  filePath: z.string().min(1).max(4096),
+  /** Hunk ID to resolve. */
+  hunkId: z.string(),
+  /** What to accept: 'ours' | 'theirs' | 'both' | 'manual' with merged content. */
+  resolution: z.enum(['ours', 'theirs', 'both', 'manual']),
+  /** When resolution is 'manual', merged content for this hunk. */
+  mergedContent: z.string().optional(),
+})
+
+/** Resolve entire conflict file at once (accepts all hunks with same resolution). */
+export const GitVcsResolveConflictRequestSchema = z.object({
+  repoPath: z.string().min(1).max(4096),
+  filePath: z.string().min(1).max(4096),
+  /** Whole-file resolution: 'ours' | 'theirs'. */
+  resolution: z.enum(['ours', 'theirs']),
+})
+
+
+export type GitVcsResolveHunkRequest = z.infer<typeof GitVcsResolveHunkRequestSchema>
+export type GitVcsResolveConflictRequest = z.infer<typeof GitVcsResolveConflictRequestSchema>
+export type GitVcsConflictDiffRequest = z.infer<typeof GitVcsConflictDiffRequestSchema>
+export type GitVcsRenameBranchRequest = z.infer<typeof GitVcsRenameBranchRequestSchema>
