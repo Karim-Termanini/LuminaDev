@@ -68,6 +68,18 @@ export type GitRepoEntry = {
   lastOpened: number
 }
 
+export type FileEntry = {
+  path: string
+  status: 'M' | 'A' | 'D' | 'R' | '?' | 'C'
+  oldPath?: string
+}
+
+export type BranchEntry = {
+  name: string
+  remote: boolean
+  current: boolean
+}
+
 export type HostPortRow = {
   protocol: 'tcp' | 'udp'
   port: number
@@ -221,6 +233,15 @@ export const IPC = {
   cloudAuthConnectPat: 'dh:cloud:auth:connect-pat',
   cloudAuthDisconnect: 'dh:cloud:auth:disconnect',
   cloudAuthStatus: 'dh:cloud:auth:status',
+  gitVcsStatus: 'dh:git:vcs:status',
+  gitVcsDiff: 'dh:git:vcs:diff',
+  gitVcsStage: 'dh:git:vcs:stage',
+  gitVcsUnstage: 'dh:git:vcs:unstage',
+  gitVcsCommit: 'dh:git:vcs:commit',
+  gitVcsPush: 'dh:git:vcs:push',
+  gitVcsPull: 'dh:git:vcs:pull',
+  gitVcsBranches: 'dh:git:vcs:branches',
+  gitVcsCheckout: 'dh:git:vcs:checkout',
 } as const
 
 export type DockerActionPayload = { id: string; action: DockerContainerAction }
