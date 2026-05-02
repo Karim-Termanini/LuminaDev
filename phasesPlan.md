@@ -320,11 +320,11 @@ Missing: real dep graph (`removableDeps` always empty), Ruby slow on Fedora.
 
 ---
 
-## Phase 12 — Cloud Git (GitHub / GitLab) 📋 PLANNED (post-Alpha)
+## Phase 12 — Cloud Git (GitHub / GitLab) 🔄 IN PROGRESS (auth layer shipped)
 
 This phase turns the app into a true daily driver for software engineers managing repositories and cloud source control platforms.
 
-- **Authentication**: Secure storage of Personal Access Tokens (PAT) or OAuth for both **GitHub** and **GitLab**.
+- **Authentication** (shipped): Encrypted store for tokens; device flow + PAT; optional OAuth client IDs via **Cloud Git → Advanced** / env / compile-time; dashboard **Cloud Git** link widget (`link.cloud-git`).
 - **Interactive Version Control**: Visual interface for `Commit`, `Push`, `Pull`, and `Sync` without needing a terminal. Branch management (checkout, create, merge).
 - **Cloud Dashboards (API Integration)**: 
   - **Pull Requests / Merge Requests**: View open PRs/MRs, requested reviews, and merge status.

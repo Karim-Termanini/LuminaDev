@@ -185,6 +185,13 @@ export const AppearanceStoreSchema = z.object({
     .optional(),
 })
 
+/** Optional OAuth app client IDs for GitHub/GitLab device flow (public IDs; local store only). */
+export const CloudOauthClientsStoreSchema = z.object({
+  github_client_id: z.string().max(128).optional(),
+  gitlab_client_id: z.string().max(128).optional(),
+})
+export type CloudOauthClientsStore = z.infer<typeof CloudOauthClientsStoreSchema>
+
 /** Keys with typed payloads persisted under userData (`store_<key>.json`). */
 export const StoreKeySchema = z.enum([
   'custom_profiles',
@@ -194,6 +201,7 @@ export const StoreKeySchema = z.enum([
   'active_profile',
   'on_login_automation',
   'appearance',
+  'cloud_oauth_clients',
 ])
 
 export const StoreGetRequestSchema = z.object({
@@ -229,6 +237,10 @@ export const StoreSetRequestSchema = z.discriminatedUnion('key', [
   z.object({
     key: z.literal('appearance'),
     data: AppearanceStoreSchema,
+  }),
+  z.object({
+    key: z.literal('cloud_oauth_clients'),
+    data: CloudOauthClientsStoreSchema,
   }),
 ])
 export const ComposeUpRequestSchema = z.object({
@@ -290,6 +302,42 @@ export const RuntimeCheckDepsRequestSchema = z.object({
 export const RuntimeUninstallPreviewRequestSchema = z.object({
   runtimeId: z.string().min(1).max(64),
   removeMode: z.enum(['runtime_only', 'runtime_and_deps']).default('runtime_only'),
+})
+
+// --- Cloud Auth ---
+
+export const CloudAuthProviderSchema = z.enum(['github', 'gitlab'])
+export type CloudAuthProvider = z.infer<typeof CloudAuthProviderSchema>
+
+export const CloudAuthConnectStartRequestSchema = z.object({
+  provider: CloudAuthProviderSchema,
+})
+
+export const CloudAuthConnectPollRequestSchema = z.object({
+  provider: CloudAuthProviderSchema,
+  device_code: z.string().min(1),
+})
+
+export const CloudAuthConnectPatRequestSchema = z.object({
+  provider: CloudAuthProviderSchema,
+  token: z.string().min(1).max(512),
+})
+
+export const CloudAuthDisconnectRequestSchema = z.object({
+  provider: CloudAuthProviderSchema,
+})
+
+export const ConnectedAccountSchema = z.object({
+  provider: CloudAuthProviderSchema,
+  username: z.string(),
+  avatar_url: z.string(),
+  connected_at: z.string(),
+})
+export type ConnectedAccount = z.infer<typeof ConnectedAccountSchema>
+
+export const CloudAuthStatusResponseSchema = z.object({
+  ok: z.literal(true),
+  accounts: z.array(ConnectedAccountSchema),
 })
 
 export type DockerContainerAction = z.infer<typeof DockerContainerActionSchema>

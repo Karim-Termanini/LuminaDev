@@ -105,6 +105,37 @@ declare global {
       perfSnapshot: () => Promise<{ ok: boolean; snapshot?: import('@linux-dev-home/shared').PerfSnapshot; error?: string }>
       diagnosticsBundleCreate: (payload: { report: unknown; includeSensitive?: boolean }) => Promise<{ ok: boolean; path?: string; error?: string }>
       terminalGetAllEnv: () => Promise<{ ok: boolean; env: Record<string, string>; error?: string }>
+      cloudAuthConnectStart: (provider: 'github' | 'gitlab') => Promise<{
+        ok: boolean
+        user_code?: string
+        verification_uri?: string
+        device_code?: string
+        interval?: number
+        expires_in?: number
+        error?: string
+      }>
+      cloudAuthConnectPoll: (payload: {
+        provider: 'github' | 'gitlab'
+        device_code: string
+      }) => Promise<{
+        ok: boolean
+        status?: 'pending' | 'complete' | 'expired' | 'denied'
+        username?: string
+        avatar_url?: string
+        error?: string
+      }>
+      cloudAuthConnectPat: (payload: {
+        provider: 'github' | 'gitlab'
+        token: string
+      }) => Promise<{ ok: boolean; username?: string; avatar_url?: string; error?: string }>
+      cloudAuthDisconnect: (payload: {
+        provider: 'github' | 'gitlab'
+      }) => Promise<{ ok: boolean; error?: string }>
+      cloudAuthStatus: () => Promise<{
+        ok: boolean
+        accounts: import('@linux-dev-home/shared').ConnectedAccount[]
+        error?: string
+      }>
     }
   }
 }

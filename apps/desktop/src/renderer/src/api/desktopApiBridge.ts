@@ -131,6 +131,11 @@ function createTauriDhApi(): DhApi {
     perfSnapshot: () => tauriInvoke(IPC.perfSnapshot),
     diagnosticsBundleCreate: (payload) => tauriInvoke(IPC.diagnosticsBundleCreate, payload),
     terminalGetAllEnv: () => tauriInvoke(IPC.terminalGetAllEnv),
+    cloudAuthConnectStart: (provider) => tauriInvoke(IPC.cloudAuthConnectStart, { provider }),
+    cloudAuthConnectPoll: (payload) => tauriInvoke(IPC.cloudAuthConnectPoll, payload),
+    cloudAuthConnectPat: (payload) => tauriInvoke(IPC.cloudAuthConnectPat, payload),
+    cloudAuthDisconnect: (payload) => tauriInvoke(IPC.cloudAuthDisconnect, payload),
+    cloudAuthStatus: () => tauriInvoke(IPC.cloudAuthStatus),
   } satisfies DhApi
 }
 

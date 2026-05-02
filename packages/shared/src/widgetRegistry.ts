@@ -39,6 +39,13 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
     ipcHints: ['dh:metrics', 'dh:host:exec'],
   },
   {
+    typeId: 'link.cloud-git',
+    title: 'Cloud Git',
+    description: 'Link GitHub or GitLab (device flow or PAT) for upcoming cloud repo features.',
+    minCols: 1,
+    ipcHints: ['dh:cloud:auth:status', 'dh:cloud:auth:connect-start'],
+  },
+  {
     typeId: 'custom.placeholder',
     title: 'Custom slot',
     description: 'Reserved for Phase 1 custom profile / user widgets.',

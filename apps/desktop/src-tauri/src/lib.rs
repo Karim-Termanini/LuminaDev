@@ -62,6 +62,8 @@ use runtime_verify::runtime_append_verify;
 mod runtime_jobs;
 use runtime_jobs::runtime_job_execute;
 mod compose_profiles;
+mod cloud_auth;
+use cloud_auth::CredentialStore;
 
 struct TerminalSession {
   master: Arc<StdMutex<Box<dyn MasterPty + Send>>>,
@@ -101,6 +103,36 @@ fn read_json(path: &PathBuf) -> Value {
 fn write_json(path: &PathBuf, value: &Value) -> Result<(), String> {
   let content = serde_json::to_string_pretty(value).map_err(|e| format!("[STORE_ENCODE_ERROR] {}", e))?;
   std::fs::write(path, content).map_err(|e| format!("[STORE_WRITE_ERROR] {}", e))
+}
+
+fn read_cloud_oauth_store_overrides(app: &AppHandle) -> (Option<String>, Option<String>) {
+  let Ok(path) = app_file(app, "store.json") else {
+    return (None, None);
+  };
+  let root = read_json(&path);
+  let Some(bag) = root.get("cloud_oauth_clients") else {
+    return (None, None);
+  };
+  let gh = bag
+    .get("github_client_id")
+    .and_then(|v| v.as_str())
+    .map(|s| s.trim().to_string())
+    .filter(|s| !s.is_empty());
+  let gl = bag
+    .get("gitlab_client_id")
+    .and_then(|v| v.as_str())
+    .map(|s| s.trim().to_string())
+    .filter(|s| !s.is_empty());
+  (gh, gl)
+}
+
+fn cloud_store(app: &AppHandle) -> cloud_auth::EncryptedFileStore {
+    let path = app
+        .path()
+        .app_data_dir()
+        .map(|d| d.join("cloud_credentials.enc"))
+        .unwrap_or_else(|_| std::path::PathBuf::from("/tmp/cloud_credentials.enc"));
+    cloud_auth::EncryptedFileStore::new(path)
 }
 
 /// Run a bootstrap script without elevation (writes under $HOME only).
@@ -1966,6 +1998,150 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
         }
       }
     },
+
+    "dh:cloud:auth:connect-start" => {
+        let (gh_store, gl_store) = read_cloud_oauth_store_overrides(&app);
+        let provider = body.get("provider").and_then(|v| v.as_str()).unwrap_or("");
+        match provider {
+            "github" => {
+                let cid = cloud_auth::compose_github_client_id(gh_store.as_deref());
+                match cloud_auth::GitHubProvider::device_auth_start(
+                    &["repo", "read:org", "read:user", "notifications"],
+                    cid.as_str(),
+                )
+                .await
+                {
+                    Ok(c) => json!({
+                        "ok": true,
+                        "user_code": c.user_code,
+                        "verification_uri": c.verification_uri,
+                        "device_code": c.device_code,
+                        "interval": c.interval,
+                        "expires_in": c.expires_in,
+                    }),
+                    Err(e) => json!({ "ok": false, "error": e }),
+                }
+            }
+            "gitlab" => {
+                let cid = cloud_auth::compose_gitlab_client_id(gl_store.as_deref());
+                match cloud_auth::GitLabProvider::device_auth_start(
+                    &["read_api", "read_user", "read_repository", "write_repository"],
+                    cid.as_str(),
+                )
+                .await
+                {
+                    Ok(c) => json!({
+                        "ok": true,
+                        "user_code": c.user_code,
+                        "verification_uri": c.verification_uri,
+                        "device_code": c.device_code,
+                        "interval": c.interval,
+                        "expires_in": c.expires_in,
+                    }),
+                    Err(e) => json!({ "ok": false, "error": e }),
+                }
+            }
+            _ => json!({ "ok": false, "error": "[CLOUD_AUTH_NETWORK] Unknown provider" }),
+        }
+    },
+
+    "dh:cloud:auth:connect-poll" => {
+        let (gh_store, gl_store) = read_cloud_oauth_store_overrides(&app);
+        let provider = body.get("provider").and_then(|v| v.as_str()).unwrap_or("");
+        let device_code = body.get("device_code").and_then(|v| v.as_str()).unwrap_or("");
+        let store = cloud_store(&app);
+        let poll_result = match provider {
+            "github" => {
+                let cid = cloud_auth::compose_github_client_id(gh_store.as_deref());
+                cloud_auth::GitHubProvider::device_auth_poll(device_code, cid.as_str()).await
+            }
+            "gitlab" => {
+                let cid = cloud_auth::compose_gitlab_client_id(gl_store.as_deref());
+                cloud_auth::GitLabProvider::device_auth_poll(device_code, cid.as_str()).await
+            }
+            _ => Err("[CLOUD_AUTH_NETWORK] Unknown provider".to_string()),
+        };
+        match poll_result {
+            Ok(cloud_auth::PollResult::Pending) => json!({ "ok": true, "status": "pending" }),
+            Ok(cloud_auth::PollResult::Expired) => json!({ "ok": true, "status": "expired" }),
+            Ok(cloud_auth::PollResult::Denied) => json!({ "ok": true, "status": "denied" }),
+            Ok(cloud_auth::PollResult::Complete { token, username, avatar_url }) => {
+                let cred = cloud_auth::StoredCredential {
+                    token,
+                    username: username.clone(),
+                    avatar_url: avatar_url.clone(),
+                    connected_at: cloud_auth::chrono_now(),
+                };
+                match store.save(provider, &cred) {
+                    Ok(_) => json!({ "ok": true, "status": "complete", "username": username, "avatar_url": avatar_url }),
+                    Err(e) => json!({ "ok": false, "error": e }),
+                }
+            }
+            Err(e) => json!({ "ok": false, "error": e }),
+        }
+    },
+
+    "dh:cloud:auth:connect-pat" => {
+        let provider = body.get("provider").and_then(|v| v.as_str()).unwrap_or("");
+        let token = body.get("token").and_then(|v| v.as_str()).unwrap_or("");
+        let store = cloud_store(&app);
+        let validate_result = match provider {
+            "github" => cloud_auth::GitHubProvider::validate_pat(token).await,
+            "gitlab" => cloud_auth::GitLabProvider::validate_pat(token).await,
+            _ => Err("[CLOUD_AUTH_NETWORK] Unknown provider".to_string()),
+        };
+        match validate_result {
+            Ok(cred) => {
+                let username = cred.username.clone();
+                let avatar_url = cred.avatar_url.clone();
+                match store.save(provider, &cred) {
+                    Ok(_) => json!({ "ok": true, "username": username, "avatar_url": avatar_url }),
+                    Err(e) => json!({ "ok": false, "error": e }),
+                }
+            }
+            Err(e) => json!({ "ok": false, "error": e }),
+        }
+    },
+
+    "dh:cloud:auth:disconnect" => {
+        let (_gh_store, gl_store) = read_cloud_oauth_store_overrides(&app);
+        let provider = body.get("provider").and_then(|v| v.as_str()).unwrap_or("");
+        let store = cloud_store(&app);
+        if let Ok(Some(cred)) = store.load(provider) {
+            let _ = match provider {
+                "github" => cloud_auth::GitHubProvider::revoke_token(&cred.token).await,
+                "gitlab" => {
+                    let cid = cloud_auth::compose_gitlab_client_id(gl_store.as_deref());
+                    cloud_auth::GitLabProvider::revoke_token(&cred.token, cid.as_str()).await
+                }
+                _ => Ok(()),
+            };
+        }
+        match store.delete(provider) {
+            Ok(_) => json!({ "ok": true }),
+            Err(e) => json!({ "ok": false, "error": e }),
+        }
+    },
+
+    "dh:cloud:auth:status" => {
+        let store = cloud_store(&app);
+        match store.load_all() {
+            Ok(accounts) => {
+                let arr: Vec<serde_json::Value> = accounts
+                    .into_iter()
+                    .map(|a| json!({
+                        "provider": a.provider,
+                        "username": a.username,
+                        "avatar_url": a.avatar_url,
+                        "connected_at": a.connected_at,
+                    }))
+                    .collect();
+                json!({ "ok": true, "accounts": arr })
+            }
+            Err(e) => json!({ "ok": false, "error": e }),
+        }
+    },
+
     "dh:ssh:generate" => {
       let email = body.get("email").and_then(|v| v.as_str()).unwrap_or("lumina@local");
       let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());

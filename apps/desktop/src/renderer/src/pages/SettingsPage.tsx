@@ -1,7 +1,7 @@
 import type { ReactElement } from 'react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import type { SshBookmark } from '@linux-dev-home/shared'
+import type { ConnectedAccount, SshBookmark } from '@linux-dev-home/shared'
 import { parseAppearance, parseSshBookmarks } from '@linux-dev-home/shared'
 
 import { applyAppearanceAccent, DEFAULT_ACCENT_HEX } from '../theme/applyAccent'
@@ -14,7 +14,7 @@ const ACCENT_PRESETS: ReadonlyArray<{ label: string; hex: string }> = [
   { label: 'Teal', hex: '#00897b' },
 ]
 
-type SettingsNavId = 'personalization' | 'remote' | 'system'
+type SettingsNavId = 'personalization' | 'remote' | 'system' | 'accounts'
 
 const NAV: ReadonlyArray<{
   id: SettingsNavId
@@ -40,6 +40,12 @@ const NAV: ReadonlyArray<{
     label: 'System',
     hint: 'Hosts & environment',
     icon: 'inspect',
+  },
+  {
+    id: 'accounts',
+    label: 'Connected accounts',
+    hint: 'GitHub & GitLab',
+    icon: 'github',
   },
 ]
 
@@ -162,6 +168,74 @@ function EnvValueDisplay({ envKey, value }: { envKey: string; value: string }): 
       >
         {open ? 'Show less' : 'Show full value'}
       </button>
+    </div>
+  )
+}
+
+function AccountsSummarySection(): ReactElement {
+  const [accounts, setAccounts] = useState<ConnectedAccount[]>([])
+  const [loading, setLoading] = useState(true)
+  const [err, setErr] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    setErr(null)
+    void window.dh
+      .cloudAuthStatus()
+      .then((res) => {
+        if (cancelled) return
+        if (!res.ok || !res.accounts) {
+          setAccounts([])
+          if (!res.ok && res.error) setErr(res.error)
+          return
+        }
+        setAccounts(res.accounts)
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) setErr(e instanceof Error ? e.message : String(e))
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <p className="hp-muted" style={{ margin: 0, fontSize: 13, lineHeight: 1.5 }}>
+        Link GitHub or GitLab for device-flow or PAT-based auth. Sign in, revoke tokens, and disconnect on the Cloud Git
+        page.
+      </p>
+      {loading ? (
+        <p className="hp-muted" style={{ margin: 0, fontSize: 13 }}>
+          Loading…
+        </p>
+      ) : err ? (
+        <div className="hp-status-alert error" style={{ fontSize: 13 }}>
+          {err}
+        </div>
+      ) : accounts.length === 0 ? (
+        <p className="hp-muted" style={{ margin: 0, fontSize: 13 }}>
+          No accounts linked yet.
+        </p>
+      ) : (
+        <ul style={{ margin: 0, paddingLeft: 20, fontSize: 13, lineHeight: 1.65, color: 'var(--text)' }}>
+          {accounts.map((a) => (
+            <li key={`${a.provider}:${a.username}`}>
+              <span className="mono">{a.provider}</span> — {a.username}
+            </li>
+          ))}
+        </ul>
+      )}
+      <div>
+        <Link to="/cloud-git" className="hp-btn hp-btn-primary" style={{ fontSize: 13, textDecoration: 'none' }}>
+          <span className="codicon codicon-arrow-right" aria-hidden />
+          Manage on Cloud Git page
+        </Link>
+      </div>
     </div>
   )
 }
@@ -367,8 +441,8 @@ export function SettingsPage(): ReactElement {
           Settings
         </h1>
         <p className="hp-muted" style={{ marginTop: 10, maxWidth: 560, fontSize: 14 }}>
-          Personalize Linux Dev Home, review saved SSH targets, and inspect read-only system context when something
-          behaves differently in Flatpak or native installs.
+          Personalize Linux Dev Home, review saved SSH targets, see linked cloud Git providers, and inspect read-only
+          system context when something behaves differently in Flatpak or native installs.
         </p>
       </header>
 
@@ -449,6 +523,8 @@ export function SettingsPage(): ReactElement {
                   'These entries are the same as on the SSH page. Open there to add, edit, or connect.'}
                 {activeNav.id === 'system' &&
                   'Read-only diagnostics: hosts file and a small set of process environment variables (no profile editing yet).'}
+                {activeNav.id === 'accounts' &&
+                  'Overview of accounts stored for GitHub and GitLab. Manage tokens and device flow on the Cloud Git page.'}
               </p>
             </div>
 
@@ -887,11 +963,15 @@ export function SettingsPage(): ReactElement {
                 </section>
               </div>
             ) : null}
+
+            {navId === 'accounts' ? <AccountsSummarySection /> : null}
           </div>
 
-          <p className="hp-muted" style={{ marginTop: 18, fontSize: 12, textAlign: 'right' }}>
-            Profile-scoped env files and hosts editing are not available yet.
-          </p>
+          {navId === 'system' ? (
+            <p className="hp-muted" style={{ marginTop: 18, fontSize: 12, textAlign: 'right' }}>
+              Profile-scoped env files and hosts editing are not available yet.
+            </p>
+          ) : null}
         </main>
       </div>
     </div>
