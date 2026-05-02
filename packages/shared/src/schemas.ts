@@ -104,6 +104,8 @@ export const WizardStateStoreSchema = z.object({
   completed: z.boolean(),
   /** If true, wizard is shown again on next launch. */
   showOnStartup: z.boolean().optional().default(false),
+  /** When `completed` is false, last wizard step (0–6) for resume-after-restart. */
+  stepIndex: z.number().int().min(0).max(6).optional(),
 })
 
 export const MaintenanceTaskSchema = z.object({

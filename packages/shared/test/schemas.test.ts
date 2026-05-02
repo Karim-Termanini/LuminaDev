@@ -10,6 +10,7 @@ import {
   HostExecRequestSchema,
   parseStoredActiveProfile,
   RuntimeCheckDepsRequestSchema,
+  WizardStateStoreSchema,
   RuntimeGetVersionsRequestSchema,
   RuntimeSetActiveRequestSchema,
   RuntimeUninstallPreviewRequestSchema,
@@ -151,6 +152,15 @@ describe('schemas', () => {
     const v = StoreSetRequestSchema.parse({ key: 'active_profile', data: 'web-dev' })
     expect(v).toEqual({ key: 'active_profile', data: 'web-dev' })
     expect(() => StoreSetRequestSchema.parse({ key: 'active_profile', data: 'not-a-profile' as never })).toThrow()
+  })
+
+  it('parses wizard_state with optional stepIndex', () => {
+    expect(WizardStateStoreSchema.parse({ completed: false, stepIndex: 3 })).toMatchObject({
+      completed: false,
+      stepIndex: 3,
+      showOnStartup: false,
+    })
+    expect(() => WizardStateStoreSchema.parse({ completed: false, stepIndex: 99 })).toThrow()
   })
 
   it('parseStoredActiveProfile accepts canonical and legacy ids', () => {

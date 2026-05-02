@@ -34,10 +34,11 @@ Until Docker vertical slice hardening is complete:
 
 ## Known Limitations
 
-- Flatpak sessions require explicit host overrides for some operations (Docker socket, SSH paths).
-- Some cleanup operations are manual-assisted due to host privilege boundaries.
-- Flatpak builds may need host overrides for Docker socket, SSH, and terminal PTY access.
-- `apps/desktop/src-tauri/src/lib.rs` is still monolithic; behavior is stable, but maintainability would improve by splitting IPC domains into focused Rust modules.
+- **Flatpak on Arch Linux:** Launching with Docker socket overrides may fail with `bwrap: Can't make symlink at /var/run`. This is due to a conflict between Arch's filesystem structure and Flatpak's sandbox management.
+- **Flatpak sessions:** Require explicit host overrides for some operations (Docker socket, SSH paths).
+- **Security boundaries:** Some cleanup operations are manual-assisted due to host privilege boundaries.
+- **PTY access:** Flatpak builds may need host overrides for Docker socket, SSH, and terminal PTY access.
+- **Modularization:** `apps/desktop/src-tauri/src/lib.rs` was partially modularized in Alpha 0.2.0; remaining IPC domains will be split in future iterations.
 
 ## 🛠️ Prerequisites
 

@@ -1201,6 +1201,24 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
         Err(e) => json!({ "ok": false, "error": e }),
       }
     },
+    "dh:store:delete" => {
+      let key = body.get("key").and_then(|v| v.as_str()).unwrap_or_default();
+      const ALLOWED: &[&str] = &["active_profile"];
+      if !ALLOWED.contains(&key) {
+        return Ok(json!({ "ok": false, "error": "[STORE_KEY_DENIED] Key not deletable." }));
+      }
+      match app_file(&app, "store.json") {
+        Ok(path) => {
+          let mut store = read_json(&path);
+          if let Some(map) = store.as_object_mut() { map.remove(key); }
+          match write_json(&path, &store) {
+            Ok(_) => json!({ "ok": true }),
+            Err(e) => json!({ "ok": false, "error": e }),
+          }
+        }
+        Err(e) => json!({ "ok": false, "error": e }),
+      }
+    },
     "dh:layout:get" => match app_file(&app, "layout.json") {
       Ok(path) => {
         let layout = read_json(&path);
