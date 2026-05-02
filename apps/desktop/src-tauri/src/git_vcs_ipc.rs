@@ -58,7 +58,7 @@ async fn merge(repo_path: &str, body: &Value) -> Value {
 
 fn merge_error_code(msg: &str) -> &'static str {
     let m = msg.to_lowercase();
-    if m.contains("conflict") || m.contains("fix conflicts") {
+    if m.contains("conflict") || m.contains("fix conflicts") || m.contains("unmerged files") {
         "GIT_VCS_MERGE_CONFLICT"
     } else if m.contains("not something we can merge") || m.contains("invalid reference") {
         "GIT_VCS_MERGE"
@@ -88,7 +88,7 @@ async fn rebase(repo_path: &str, body: &Value) -> Value {
 
 fn rebase_error_code(msg: &str) -> &'static str {
     let m = msg.to_lowercase();
-    if m.contains("conflict") || m.contains("could not apply") {
+    if m.contains("conflict") || m.contains("could not apply") || m.contains("unmerged files") {
         "GIT_VCS_REBASE_CONFLICT"
     } else {
         "GIT_VCS_REBASE"

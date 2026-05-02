@@ -14,7 +14,6 @@ import { GitVcsRepoPipelines } from './gitVcsRepoPipelines'
 import { GitVcsDiffPanel } from './gitVcsDiffPanel'
 import { GitVcsFileList } from './gitVcsFileList'
 import { GitVcsPrWizard } from './gitVcsPrWizard'
-import { GitVcsConflictPanel } from './GitVcsConflictPanel'
 import { GitVcsConflictWizardModal } from './GitVcsConflictWizardModal'
 import { parseCheckoutDirtyFileList } from './gitVcsCheckoutDirty'
 import { GitVcsDirtyCheckoutModal } from './GitVcsDirtyCheckoutModal'
@@ -250,14 +249,7 @@ export function GitVcsPage(): ReactElement {
           ...lists.unstaged.filter(f => f.status === 'C').map(f => f.path),
         ]
         
-        if (conflicts.length > 0) {
-          setConflictedFiles(conflicts)
-          // Auto-open conflict wizard if there are unresolved conflicts
-          if (gitOperation === 'merging' || gitOperation === 'rebasing') {
-            setConflictWizardOpen(true)
-          }
-        }
-        
+        setConflictedFiles(conflicts)
         setSelected((prev) => reconcileGitVcsSelection(prev, lists.staged, lists.unstaged))
       } catch (e) {
         setOpErrorRaw(e instanceof Error ? e.message : String(e))
@@ -265,7 +257,7 @@ export function GitVcsPage(): ReactElement {
         setBusy(false)
       }
     })()
-  }, [repoPath, refreshStatus, gitOperation])
+  }, [repoPath, refreshStatus])
 
   // Persistence: Load tracking PR from store
   useEffect(() => {
@@ -1143,24 +1135,11 @@ export function GitVcsPage(): ReactElement {
                 onUnstage={(paths) => void runUnstage(paths)}
               />
             </div>
-            {selected && gitOperation === 'merging' &&
-              [...staged, ...unstaged].find((f) => f.path === selected.path)?.status === 'C' ? (
-              <div style={{ border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden', background: 'var(--bg-panel)' }}>
-                <GitVcsConflictPanel
-                  repoPath={repoPath.trim()}
-                  filePath={selected.path}
-                  busy={busy}
-                  onResolved={() => void refreshStatus().then((lists) => setSelected((prev) => reconcileGitVcsSelection(prev, lists.staged, lists.unstaged)))}
-                  onError={(msg) => setOpErrorRaw(msg)}
-                />
-              </div>
-            ) : (
-              <GitVcsDiffPanel
+            <GitVcsDiffPanel
                 fileLabel={selected ? `${selected.path}${selected.staged ? ' (staged)' : ''}` : null}
                 diff={diffText}
                 binary={diffBinary}
               />
-            )}
           </div>
 
           <GitVcsCommitBar
@@ -1225,10 +1204,11 @@ export function GitVcsPage(): ReactElement {
               : await window.dh.gitVcsRebase({ repoPath: repoPath.trim(), onto: targetRef })
             
             if (!res.ok) {
-              if (res.error?.includes('CONFLICT')) {
-                // If conflict, close integrate wizard and the effect in GitVcsPage 
-                // will pick up the 'merging' state and open the conflict wizard after refreshStatus
+              const isConflict = res.error?.includes('CONFLICT') || 
+                                res.error?.includes('unmerged files')
+              if (isConflict) {
                 setIntegrateWizardOpen(false)
+                setConflictWizardOpen(true)
               } else {
                 setOpErrorRaw(res.error ?? 'Integration failed')
               }
