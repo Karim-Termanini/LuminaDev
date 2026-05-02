@@ -1,8 +1,10 @@
 import type { ReactElement } from 'react'
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import type { SshBookmark } from '@linux-dev-home/shared'
-import { parseSshBookmarks } from '@linux-dev-home/shared'
+import { parseAppearance, parseSshBookmarks } from '@linux-dev-home/shared'
+
+import { applyAppearanceAccent, DEFAULT_ACCENT_HEX } from '../theme/applyAccent'
 
 const panel: React.CSSProperties = {
   border: '1px solid var(--border)',
@@ -17,30 +19,91 @@ const muted: React.CSSProperties = {
   lineHeight: 1.55,
 }
 
-/** Phase 8: central place for cross-cutting preferences; SSH bookmarks read the same store as `/ssh`. */
+const ACCENT_PRESETS: ReadonlyArray<{ label: string; hex: string }> = [
+  { label: 'Violet', hex: '#7c4dff' },
+  { label: 'Blue', hex: '#1976d2' },
+  { label: 'Green', hex: '#43a047' },
+  { label: 'Coral', hex: '#ff7043' },
+  { label: 'Teal', hex: '#00897b' },
+]
+
+/** Phase 8: cross-cutting preferences; SSH bookmarks share store with `/ssh`; accent persists in `appearance`. */
 export function SettingsPage(): ReactElement {
   const [bookmarks, setBookmarks] = useState<SshBookmark[]>([])
   const [loadError, setLoadError] = useState<string | null>(null)
 
-  const loadBookmarks = useCallback(async () => {
-    setLoadError(null)
-    try {
-      const res = await window.dh.storeGet({ key: 'ssh_bookmarks' })
-      if (res.ok) {
-        setBookmarks(parseSshBookmarks(res.data))
-      } else {
-        setBookmarks([])
-        setLoadError(res.error ?? 'Could not read ssh_bookmarks.')
-      }
-    } catch (e) {
-      setBookmarks([])
-      setLoadError(e instanceof Error ? e.message : 'Failed to load bookmarks.')
-    }
-  }, [])
+  const [accentDraft, setAccentDraft] = useState(DEFAULT_ACCENT_HEX)
+  const [accentBusy, setAccentBusy] = useState(false)
+  const [accentMsg, setAccentMsg] = useState<string | null>(null)
 
   useEffect(() => {
-    void loadBookmarks()
-  }, [loadBookmarks])
+    void (async () => {
+      setLoadError(null)
+      setAccentMsg(null)
+      try {
+        const [bm, ap] = await Promise.all([
+          window.dh.storeGet({ key: 'ssh_bookmarks' }),
+          window.dh.storeGet({ key: 'appearance' }),
+        ])
+        if (bm.ok) {
+          setBookmarks(parseSshBookmarks(bm.data))
+        } else {
+          setBookmarks([])
+          setLoadError(bm.error ?? 'Could not read ssh_bookmarks.')
+        }
+        if (ap.ok) {
+          const hex = parseAppearance(ap.data).accent
+          setAccentDraft(hex ?? DEFAULT_ACCENT_HEX)
+        } else {
+          setAccentDraft(DEFAULT_ACCENT_HEX)
+        }
+      } catch (e) {
+        setBookmarks([])
+        setLoadError(e instanceof Error ? e.message : 'Failed to load settings.')
+        setAccentDraft(DEFAULT_ACCENT_HEX)
+      }
+    })()
+  }, [])
+
+  async function saveAccent(): Promise<void> {
+    setAccentBusy(true)
+    setAccentMsg(null)
+    try {
+      const res = await window.dh.storeSet({
+        key: 'appearance',
+        data: { accent: accentDraft },
+      })
+      if (!res.ok) {
+        setAccentMsg(res.error ?? 'Could not save appearance.')
+        return
+      }
+      applyAppearanceAccent(accentDraft)
+      setAccentMsg('Accent saved.')
+    } catch (e) {
+      setAccentMsg(e instanceof Error ? e.message : 'Save failed.')
+    } finally {
+      setAccentBusy(false)
+    }
+  }
+
+  async function resetAccent(): Promise<void> {
+    setAccentBusy(true)
+    setAccentMsg(null)
+    try {
+      const res = await window.dh.storeSet({ key: 'appearance', data: {} })
+      if (!res.ok) {
+        setAccentMsg(res.error ?? 'Could not reset appearance.')
+        return
+      }
+      setAccentDraft(DEFAULT_ACCENT_HEX)
+      applyAppearanceAccent(undefined)
+      setAccentMsg('Restored default accent.')
+    } catch (e) {
+      setAccentMsg(e instanceof Error ? e.message : 'Reset failed.')
+    } finally {
+      setAccentBusy(false)
+    }
+  }
 
   return (
     <div style={{ padding: 24, maxWidth: 920, display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -50,8 +113,8 @@ export function SettingsPage(): ReactElement {
         </div>
         <h1 style={{ margin: 0, fontSize: 28, fontWeight: 700 }}>Settings</h1>
         <p style={{ ...muted, marginTop: 10, maxWidth: 720 }}>
-          Phase 8 hub: SSH bookmarks share storage with the SSH page. Hosts editor, environment variables, and theme
-          controls will land here next.
+          Phase 8 hub: SSH bookmarks share storage with the SSH page. Accent color is persisted app-wide. Hosts and
+          environment tools are still planned.
         </p>
       </header>
 
@@ -85,7 +148,7 @@ export function SettingsPage(): ReactElement {
                 {bookmarks.map((b) => (
                   <tr key={b.id}>
                     <td style={{ padding: '10px', borderBottom: '1px solid var(--border)', fontWeight: 500 }}>{b.name}</td>
-                    <td style={{ padding: '10px', borderBottom: '1px solid var(--border)', fontFamily: 'var(--font-mono, ui-monospace, monospace)' }}>
+                    <td style={{ padding: '10px', borderBottom: '1px solid var(--border)', fontFamily: 'var(--font-mono)' }}>
                       {b.user}@{b.host}
                     </td>
                     <td style={{ padding: '10px', borderBottom: '1px solid var(--border)' }}>{b.port}</td>
@@ -97,6 +160,80 @@ export function SettingsPage(): ReactElement {
         ) : null}
       </section>
 
+      <section style={panel}>
+        <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>Accent color</h2>
+        <p style={{ ...muted, marginTop: 8, marginBottom: 12 }}>
+          Updates the global <span className="mono">--accent</span> token (links, nav active state, highlights). Save to
+          persist; reset removes the override.
+        </p>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
+          {ACCENT_PRESETS.map((p) => (
+            <button
+              key={p.hex}
+              type="button"
+              title={p.label}
+              onClick={() => setAccentDraft(p.hex)}
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 8,
+                border: accentDraft.toLowerCase() === p.hex ? '2px solid var(--text)' : '1px solid var(--border)',
+                background: p.hex,
+                cursor: 'pointer',
+              }}
+            />
+          ))}
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}>
+            <span className="mono" style={{ color: 'var(--text-muted)' }}>
+              Custom
+            </span>
+            <input
+              type="color"
+              value={accentDraft}
+              onChange={(ev) => setAccentDraft(ev.target.value)}
+              style={{ width: 48, height: 36, padding: 0, border: '1px solid var(--border)', borderRadius: 8, cursor: 'pointer' }}
+            />
+          </label>
+        </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 16 }}>
+          <button
+            type="button"
+            disabled={accentBusy}
+            onClick={() => void saveAccent()}
+            style={{
+              padding: '8px 16px',
+              borderRadius: 8,
+              border: '1px solid var(--accent)',
+              background: 'color-mix(in srgb, var(--accent) 18%, transparent)',
+              color: 'var(--accent)',
+              fontWeight: 600,
+              cursor: accentBusy ? 'wait' : 'pointer',
+            }}
+          >
+            Save accent
+          </button>
+          <button
+            type="button"
+            disabled={accentBusy}
+            onClick={() => void resetAccent()}
+            style={{
+              padding: '8px 16px',
+              borderRadius: 8,
+              border: '1px solid var(--border)',
+              background: 'var(--bg-input)',
+              color: 'var(--text)',
+              fontWeight: 500,
+              cursor: accentBusy ? 'wait' : 'pointer',
+            }}
+          >
+            Reset to default
+          </button>
+        </div>
+        {accentMsg ? (
+          <p style={{ marginTop: 12, marginBottom: 0, fontSize: 13, color: 'var(--text-muted)' }}>{accentMsg}</p>
+        ) : null}
+      </section>
+
       <section style={{ ...panel, opacity: 0.85 }}>
         <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>Hosts file</h2>
         <p style={{ ...muted, marginTop: 8, marginBottom: 0 }}>Planned: safe `/etc/hosts` editing with previews and warnings.</p>
@@ -105,11 +242,6 @@ export function SettingsPage(): ReactElement {
       <section style={{ ...panel, opacity: 0.85 }}>
         <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>Environment</h2>
         <p style={{ ...muted, marginTop: 8, marginBottom: 0 }}>Planned: profile-scoped env files with diff before apply.</p>
-      </section>
-
-      <section style={{ ...panel, opacity: 0.85 }}>
-        <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>Theme</h2>
-        <p style={{ ...muted, marginTop: 8, marginBottom: 0 }}>Planned: accent and design-token pilot across routes.</p>
       </section>
     </div>
   )

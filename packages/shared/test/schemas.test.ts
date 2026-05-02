@@ -8,6 +8,7 @@ import {
   GitCloneRequestSchema,
   GitConfigSetSchema,
   HostExecRequestSchema,
+  parseAppearance,
   parseOnLoginAutomation,
   parseSshBookmarks,
   parseStoredActiveProfile,
@@ -235,5 +236,32 @@ describe('schemas', () => {
     })
     if (v.key !== 'ssh_bookmarks') throw new Error('expected ssh_bookmarks branch')
     expect(v.data[0].port).toBe(22)
+  })
+
+  it('parseAppearance returns {} on invalid data', () => {
+    expect(parseAppearance(null)).toEqual({})
+    expect(parseAppearance({ accent: 'not-a-color' })).toEqual({})
+  })
+
+  it('parseAppearance keeps valid hex', () => {
+    expect(parseAppearance({ accent: '#aabbcc' })).toEqual({ accent: '#aabbcc' })
+  })
+
+  it('parses appearance store set', () => {
+    const v = StoreSetRequestSchema.parse({
+      key: 'appearance',
+      data: { accent: '#ff7043' },
+    })
+    if (v.key !== 'appearance') throw new Error('expected appearance branch')
+    expect(v.data.accent).toBe('#ff7043')
+  })
+
+  it('rejects appearance store set with invalid hex', () => {
+    expect(() =>
+      StoreSetRequestSchema.parse({
+        key: 'appearance',
+        data: { accent: 'red' },
+      } as never)
+    ).toThrow()
   })
 })

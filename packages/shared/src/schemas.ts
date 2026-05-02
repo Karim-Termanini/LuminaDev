@@ -173,6 +173,14 @@ export const SshBookmarkSchema = z.object({
 
 export const SshBookmarksStoreSchema = z.array(SshBookmarkSchema).max(100)
 
+/** UI theme tokens persisted in `store.json` (`appearance` key). */
+export const AppearanceStoreSchema = z.object({
+  accent: z
+    .string()
+    .regex(/^#[0-9A-Fa-f]{6}$/, 'Expected #RRGGBB')
+    .optional(),
+})
+
 /** Keys with typed payloads persisted under userData (`store_<key>.json`). */
 export const StoreKeySchema = z.enum([
   'custom_profiles',
@@ -181,6 +189,7 @@ export const StoreKeySchema = z.enum([
   'maintenance_state',
   'active_profile',
   'on_login_automation',
+  'appearance',
 ])
 
 export const StoreGetRequestSchema = z.object({
@@ -212,6 +221,10 @@ export const StoreSetRequestSchema = z.discriminatedUnion('key', [
   z.object({
     key: z.literal('on_login_automation'),
     data: OnLoginAutomationStoreSchema,
+  }),
+  z.object({
+    key: z.literal('appearance'),
+    data: AppearanceStoreSchema,
   }),
 ])
 export const ComposeUpRequestSchema = z.object({
@@ -291,6 +304,7 @@ export type StoreSetRequest = z.infer<typeof StoreSetRequestSchema>
 export type WizardStateStore = z.infer<typeof WizardStateStoreSchema>
 export type OnLoginAutomationStore = z.infer<typeof OnLoginAutomationStoreSchema>
 export type SshBookmark = z.infer<typeof SshBookmarkSchema>
+export type AppearanceStore = z.infer<typeof AppearanceStoreSchema>
 
 const defaultOnLoginAutomation: OnLoginAutomationStore = {
   composeUpForActiveProfile: false,
@@ -307,6 +321,12 @@ export function parseOnLoginAutomation(data: unknown): OnLoginAutomationStore {
 export function parseSshBookmarks(data: unknown): SshBookmark[] {
   const r = SshBookmarksStoreSchema.safeParse(data)
   return r.success ? r.data : []
+}
+
+/** Coerce persisted `appearance` (or missing/invalid) to a safe object. */
+export function parseAppearance(data: unknown): AppearanceStore {
+  const r = AppearanceStoreSchema.safeParse(data)
+  return r.success ? r.data : {}
 }
 
 /** Normalize a persisted `active_profile` value: canonical enum or legacy aliases → ComposeProfile | null. */
