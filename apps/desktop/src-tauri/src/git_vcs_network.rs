@@ -122,11 +122,38 @@ pub async fn git_network_with_auth(
         let env = [("GIT_ASKPASS", script_str.as_str()), ("GIT_TERMINAL_PROMPT", "0")];
         let result = exec_output_with_env("git", &args_refs, &env, CMD_TIMEOUT_LONG).await;
         let _ = std::fs::remove_file(&script_path);
-        result.map_err(|e| git_network_classify_error(&op, &e, true))
+        match result {
+            Ok(output) => Ok(output),
+            Err(e) if e.contains("no upstream branch") && matches!(op, GitNetworkOp::Push { .. }) => {
+                // Smart Retry: If push fails for no upstream, try to set it automatically
+                let current_branch = exec_output_limit("git", &["-C", repo_path, "rev-parse", "--abbrev-ref", "HEAD"], CMD_TIMEOUT_SHORT).await.unwrap_or_default().trim().to_string();
+                if !current_branch.is_empty() && current_branch != "HEAD" {
+                    let remote = match &op { GitNetworkOp::Push { remote, .. } => remote.unwrap_or("origin"), _ => "origin" };
+                    let retry_args = ["-C", repo_path, "push", "--set-upstream", remote, &current_branch];
+                    exec_output_with_env("git", &retry_args, &env, CMD_TIMEOUT_LONG).await
+                        .map_err(|e2| git_network_classify_error(&op, &e2, true))
+                } else {
+                    Err(git_network_classify_error(&op, &e, true))
+                }
+            }
+            Err(e) => Err(git_network_classify_error(&op, &e, true))
+        }
     } else {
-        exec_output_limit("git", &args_refs, CMD_TIMEOUT_LONG)
-            .await
-            .map_err(|e| git_network_classify_error(&op, &e, false))
+        match exec_output_limit("git", &args_refs, CMD_TIMEOUT_LONG).await {
+            Ok(output) => Ok(output),
+            Err(e) if e.contains("no upstream branch") && matches!(op, GitNetworkOp::Push { .. }) => {
+                let current_branch = exec_output_limit("git", &["-C", repo_path, "rev-parse", "--abbrev-ref", "HEAD"], CMD_TIMEOUT_SHORT).await.unwrap_or_default().trim().to_string();
+                if !current_branch.is_empty() && current_branch != "HEAD" {
+                    let remote = match &op { GitNetworkOp::Push { remote, .. } => remote.unwrap_or("origin"), _ => "origin" };
+                    let retry_args = ["-C", repo_path, "push", "--set-upstream", remote, &current_branch];
+                    exec_output_limit("git", &retry_args, CMD_TIMEOUT_LONG).await
+                        .map_err(|e2| git_network_classify_error(&op, &e2, false))
+                } else {
+                    Err(git_network_classify_error(&op, &e, false))
+                }
+            }
+            Err(e) => Err(git_network_classify_error(&op, &e, false))
+        }
     }
 }
 
