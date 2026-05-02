@@ -8,7 +8,9 @@ import {
   GitCloneRequestSchema,
   GitConfigSetSchema,
   HostExecRequestSchema,
+  parseAppearance,
   parseOnLoginAutomation,
+  parseSshBookmarks,
   parseStoredActiveProfile,
   RuntimeCheckDepsRequestSchema,
   WizardStateStoreSchema,
@@ -30,6 +32,18 @@ describe('schemas', () => {
   it('accepts maintenance host probes', () => {
     expect(HostExecRequestSchema.parse({ command: 'maintenance_docker_system_df' })).toEqual({
       command: 'maintenance_docker_system_df',
+    })
+  })
+
+  it('accepts settings_read_hosts host exec', () => {
+    expect(HostExecRequestSchema.parse({ command: 'settings_read_hosts' })).toEqual({
+      command: 'settings_read_hosts',
+    })
+  })
+
+  it('accepts settings_process_env host exec', () => {
+    expect(HostExecRequestSchema.parse({ command: 'settings_process_env' })).toEqual({
+      command: 'settings_process_env',
     })
   })
 
@@ -122,6 +136,7 @@ describe('schemas', () => {
     })
     expect(v.placements).toHaveLength(1)
     expect(isRegisteredWidgetType('static.docker-permission-hint')).toBe(true)
+    expect(isRegisteredWidgetType('link.cloud-git')).toBe(true)
     expect(isRegisteredWidgetType('unknown.widget')).toBe(false)
   })
 
@@ -207,5 +222,69 @@ describe('schemas', () => {
       key: 'on_login_automation',
       data: { composeUpForActiveProfile: true, reloadDashboardLayout: true },
     })
+  })
+
+  it('parseSshBookmarks returns [] on invalid data', () => {
+    expect(parseSshBookmarks(null)).toEqual([])
+    expect(parseSshBookmarks({})).toEqual([])
+    expect(parseSshBookmarks([{ id: '', name: 'x', user: 'u', host: 'h', port: 22 }])).toEqual([])
+  })
+
+  it('parseSshBookmarks accepts valid bookmarks and store set', () => {
+    const rows = [
+      { id: 'a1', name: 'Prod', user: 'ubuntu', host: '10.0.0.1', port: 22 },
+      { id: 'b2', name: 'Edge', user: 'root', host: 'edge.example', port: 2222 },
+    ]
+    expect(parseSshBookmarks(rows)).toEqual(rows)
+    const v = StoreSetRequestSchema.parse({ key: 'ssh_bookmarks', data: rows })
+    expect(v.key).toBe('ssh_bookmarks')
+    if (v.key !== 'ssh_bookmarks') throw new Error('expected ssh_bookmarks branch')
+    expect(v.data).toHaveLength(2)
+  })
+
+  it('parses ssh_bookmarks with default port when omitted', () => {
+    const v = StoreSetRequestSchema.parse({
+      key: 'ssh_bookmarks',
+      data: [{ id: 'x', name: 'Home', user: 'me', host: 'home.local' }],
+    })
+    if (v.key !== 'ssh_bookmarks') throw new Error('expected ssh_bookmarks branch')
+    expect(v.data[0].port).toBe(22)
+  })
+
+  it('parseAppearance returns {} on invalid data', () => {
+    expect(parseAppearance(null)).toEqual({})
+    expect(parseAppearance({ accent: 'not-a-color' })).toEqual({})
+  })
+
+  it('parseAppearance keeps valid hex', () => {
+    expect(parseAppearance({ accent: '#aabbcc' })).toEqual({ accent: '#aabbcc' })
+  })
+
+  it('parses appearance store set', () => {
+    const v = StoreSetRequestSchema.parse({
+      key: 'appearance',
+      data: { accent: '#ff7043' },
+    })
+    if (v.key !== 'appearance') throw new Error('expected appearance branch')
+    expect(v.data.accent).toBe('#ff7043')
+  })
+
+  it('rejects appearance store set with invalid hex', () => {
+    expect(() =>
+      StoreSetRequestSchema.parse({
+        key: 'appearance',
+        data: { accent: 'red' },
+      } as never)
+    ).toThrow()
+  })
+
+  it('accepts cloud_oauth_clients store set', () => {
+    const v = StoreSetRequestSchema.parse({
+      key: 'cloud_oauth_clients',
+      data: { github_client_id: 'Iv1.test', gitlab_client_id: 'glid' },
+    })
+    if (v.key !== 'cloud_oauth_clients') throw new Error('expected cloud_oauth_clients')
+    expect(v.data.github_client_id).toBe('Iv1.test')
+    expect(v.data.gitlab_client_id).toBe('glid')
   })
 })

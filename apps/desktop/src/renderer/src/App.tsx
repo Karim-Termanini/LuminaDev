@@ -9,7 +9,9 @@ import { DashboardLogsPage } from './pages/DashboardLogsPage'
 import { DashboardMainPage } from './pages/DashboardMainPage'
 import { DashboardWidgetsPage } from './pages/DashboardWidgetsPage'
 import { DockerPage } from './pages/DockerPage'
+import { CloudGitPage } from './pages/CloudGitPage'
 import { GitConfigPage } from './pages/GitConfigPage'
+import { GitVcsPage } from './pages/GitVcsPage'
 import { ProfilesPage } from './pages/ProfilesPage'
 import { RegistryPage } from './pages/RegistryPage'
 import { MonitorPage } from './pages/MonitorPage'
@@ -17,8 +19,11 @@ import { SshPage } from './pages/SshPage'
 import { TerminalPage } from './pages/TerminalPage'
 import { RuntimesPage } from './pages/RuntimesPage'
 import { MaintenancePage } from './pages/MaintenancePage'
+import { SettingsPage } from './pages/SettingsPage'
+import { SystemReadinessPage } from './pages/SystemReadinessPage'
 import { WizardFlow } from './wizard/WizardFlow'
 import { WizardStateStoreSchema } from '@linux-dev-home/shared'
+import { syncAppearanceFromStore } from './theme/applyAccent'
 
 export default function App(): ReactElement | null {
   const [ready, setReady] = useState(false)
@@ -35,8 +40,22 @@ export default function App(): ReactElement | null {
     })
   }, [])
 
+  useEffect(() => {
+    if (!ready || showWizard) return
+    void syncAppearanceFromStore()
+  }, [ready, showWizard])
+
   if (!ready) return null
-  if (showWizard) return <WizardFlow onComplete={() => setShowWizard(false)} />
+  if (showWizard) {
+    return (
+      <WizardFlow
+        onComplete={() => {
+          setShowWizard(false)
+          void syncAppearanceFromStore()
+        }}
+      />
+    )
+  }
 
   return (
     <AppShell>
@@ -52,11 +71,15 @@ export default function App(): ReactElement | null {
         <Route path="/docker" element={<DockerPage />} />
         <Route path="/ssh" element={<SshPage />} />
         <Route path="/git-config" element={<GitConfigPage />} />
+        <Route path="/git-vcs" element={<GitVcsPage />} />
+        <Route path="/cloud-git" element={<CloudGitPage />} />
         <Route path="/registry" element={<RegistryPage />} />
         <Route path="/profiles" element={<ProfilesPage />} />
         <Route path="/terminal" element={<TerminalPage />} />
         <Route path="/runtimes" element={<RuntimesPage />} />
         <Route path="/maintenance" element={<MaintenancePage />} />
+        <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/system-readiness" element={<SystemReadinessPage />} />
       </Routes>
     </AppShell>
   )
