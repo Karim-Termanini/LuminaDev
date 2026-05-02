@@ -163,13 +163,15 @@ async fn runtime_bash_user_step(
                   let end   = after.find(|c: char| !c.is_ascii_digit()).unwrap_or(after.len());
                   let cur   = line[start..idx].trim().parse::<u32>().unwrap_or(0);
                   let total = line[idx+1..idx+1+end].trim().parse::<u32>().unwrap_or(1);
-                  if total > 0 {
-                    let explicit = (cur * step_weight) / total;
+                  if let Some(explicit) = (cur * step_weight).checked_div(total) {
                     if explicit > bonus { bonus = explicit; last_explicit_bonus = explicit; }
                   }
                 }
               } else {
-                let heuristic = ((line_count * step_weight) / 60).min(step_weight.saturating_sub(2));
+                let heuristic = (line_count * step_weight)
+                  .checked_div(60)
+                  .unwrap_or(0)
+                  .min(step_weight.saturating_sub(2));
                 if heuristic > bonus { bonus = heuristic; }
               }
               let prog = (base_progress + bonus).min(base_progress + step_weight.saturating_sub(1));
@@ -185,11 +187,8 @@ async fn runtime_bash_user_step(
         }
       }
       res = err_reader.next_line() => {
-        match res {
-          Ok(Some(line)) => {
-            if !line.trim().is_empty() { logs.push(format!("ERR: {}", line)); }
-          }
-          _ => {}
+        if let Ok(Some(line)) = res {
+          if !line.trim().is_empty() { logs.push(format!("ERR: {}", line)); }
         }
       }
       _ = tokio::time::sleep_until(deadline) => {
@@ -577,14 +576,16 @@ async fn sudo_bash_install_step(cmd: &str, password: Option<&str>, logs: &mut Ve
                   let end = end_search.find(|c: char| !c.is_ascii_digit()).unwrap_or(end_search.len());
                   let cur = line[start..caps].trim().parse::<u32>().unwrap_or(0);
                   let total = line[caps+1..caps+1+end].trim().parse::<u32>().unwrap_or(1);
-                  if total > 0 {
-                    let explicit = (cur * step_weight) / total;
+                  if let Some(explicit) = (cur * step_weight).checked_div(total) {
                     if explicit > bonus { bonus = explicit; last_explicit_bonus = explicit; }
                   }
                 }
               } else {
                 // Line-count heuristic: each line nudges progress forward (capped below explicit)
-                let heuristic = ((line_count * step_weight) / 60).min(step_weight.saturating_sub(2));
+                let heuristic = (line_count * step_weight)
+                  .checked_div(60)
+                  .unwrap_or(0)
+                  .min(step_weight.saturating_sub(2));
                 if heuristic > bonus { bonus = heuristic; }
               }
               let prog = (base_progress + bonus).min(base_progress + step_weight.saturating_sub(1));
@@ -2708,7 +2709,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       let os_release = std::fs::read_to_string("/etc/os-release").unwrap_or_default();
       let distro = os_release.lines()
         .find(|l| l.starts_with("PRETTY_NAME="))
-        .and_then(|l| l.splitn(2, '=').nth(1))
+        .and_then(|l| l.split_once('=').map(|x| x.1))
         .map(|v| v.trim_matches('"').to_string())
         .unwrap_or_else(|| os_name.trim().to_string());
       // IP address (first non-loopback)
@@ -2783,7 +2784,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
             if let Some((left, right)) = p.split_once("->") {
               let host_port = left
                 .split(':')
-                .last()
+                .next_back()
                 .and_then(|v| v.parse::<u16>().ok());
               let proto = if right.trim().ends_with("/udp") { "udp" } else { "tcp" };
               if let Some(port) = host_port {
@@ -2807,7 +2808,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
               let state = parts[1].to_string();
               let port = parts[4]
                 .split(':')
-                .last()
+                .next_back()
                 .and_then(|p| p.parse::<u16>().ok())
                 .unwrap_or(0);
               if port == 0 {
@@ -2859,13 +2860,15 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       }
     },
     "dh:monitor:security" => {
-      let firewall = if exec_output_limit("ufw", &["status"], CMD_TIMEOUT_SHORT).await.map(|o| o.contains("active")).unwrap_or(false) {
-        "active"
-      } else if exec_output_limit("firewall-cmd", &["--state"], CMD_TIMEOUT_SHORT).await.map(|o| o.contains("running")).unwrap_or(false) {
-        "active"
-      } else {
-        "inactive"
-      };
+      let ufw_active = exec_output_limit("ufw", &["status"], CMD_TIMEOUT_SHORT)
+        .await
+        .map(|o| o.contains("active"))
+        .unwrap_or(false);
+      let firewalld_running = exec_output_limit("firewall-cmd", &["--state"], CMD_TIMEOUT_SHORT)
+        .await
+        .map(|o| o.contains("running"))
+        .unwrap_or(false);
+      let firewall = if ufw_active || firewalld_running { "active" } else { "inactive" };
       let selinux = exec_output_limit("sestatus", &[], CMD_TIMEOUT_SHORT).await
         .map(|o| if o.contains("enabled") { "enabled" } else { "disabled" })
         .unwrap_or_else(|_| "unknown");
@@ -2932,7 +2935,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       for line in ss_out.lines() {
         let parts: Vec<&str> = line.split_whitespace().collect();
         if let Some(local) = parts.get(4) {
-          if let Some(port_str) = local.split(':').last() {
+          if let Some(port_str) = local.split(':').next_back() {
             if let Ok(port) = port_str.parse::<u16>() {
               if risky_set.contains(&port) {
                 let mut process = "unknown".to_string();
@@ -2990,7 +2993,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
           let delta_idle = idle.saturating_sub(pidle);
           if delta_total > 0 {
             let usage = 1.0 - (delta_idle as f64 / delta_total as f64);
-            (usage * 100.0).max(0.0).min(100.0)
+            (usage * 100.0).clamp(0.0, 100.0)
           } else {
             0.0
           }
@@ -3002,7 +3005,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
         let cpuinfo = read_proc_text("/proc/cpuinfo").await;
         let model = cpuinfo.lines()
           .find(|l| l.starts_with("model name"))
-          .and_then(|l| l.splitn(2, ':').nth(1))
+          .and_then(|l| l.split_once(':').map(|x| x.1))
           .map(|s| s.trim().to_string())
           .unwrap_or_else(|| "Unknown CPU".to_string());
         
@@ -3596,3 +3599,5 @@ mod tests {
 
 #[cfg(test)]
 mod runtime_prune_contract_tests;
+#[cfg(test)]
+mod ipc_contract_tests;

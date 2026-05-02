@@ -23,6 +23,7 @@ Status legend:
 | `/terminal` | partial | Embedded terminal works; host/sandbox differences still affect behavior. |
 | `/runtimes` | partial | Status/version/deps/uninstall preview are live; install/update/remove backend is in active hardening. |
 | `/maintenance` | partial | Guardian + diagnostics + host probes as above. **Tasks**: user checklist on Overview + full editor on Schedule (inline rename). **Git backups** live on **Git Config → Backups**. No arbitrary host shell or full remediation. |
+| `/settings` | stub | Phase 8 shell only (copy placeholder). SSH bookmarks, hosts editor, env management, and theme picker are not implemented yet. |
 
 ## Update Rule
 

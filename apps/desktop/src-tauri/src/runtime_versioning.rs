@@ -66,7 +66,7 @@ pub(crate) fn lumina_version_token_matches_probe_line(requested_token: &str, pro
     return true;
   }
   let token_core = token
-    .split(|c| c == '-' || c == '+')
+    .split(['-', '+'])
     .next()
     .unwrap_or(token)
     .trim();
@@ -79,7 +79,7 @@ pub(crate) fn lumina_version_token_matches_probe_line(requested_token: &str, pro
     .unwrap_or(hay)
     .trim()
     .trim_start_matches('v')
-    .split(|c| c == '-' || c == '+')
+    .split(['-', '+'])
     .next()
     .unwrap_or(hay)
     .trim();
