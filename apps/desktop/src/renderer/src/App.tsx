@@ -19,8 +19,8 @@ import { RuntimesPage } from './pages/RuntimesPage'
 import { MaintenancePage } from './pages/MaintenancePage'
 import { SettingsPage } from './pages/SettingsPage'
 import { WizardFlow } from './wizard/WizardFlow'
-import { parseAppearance, WizardStateStoreSchema } from '@linux-dev-home/shared'
-import { applyAppearanceAccent } from './theme/applyAccent'
+import { WizardStateStoreSchema } from '@linux-dev-home/shared'
+import { syncAppearanceFromStore } from './theme/applyAccent'
 
 export default function App(): ReactElement | null {
   const [ready, setReady] = useState(false)
@@ -39,15 +39,20 @@ export default function App(): ReactElement | null {
 
   useEffect(() => {
     if (!ready || showWizard) return
-    void window.dh.storeGet({ key: 'appearance' }).then((res: unknown) => {
-      const bag = res as { ok?: boolean; data?: unknown }
-      if (!bag.ok) return
-      applyAppearanceAccent(parseAppearance(bag.data).accent)
-    })
+    void syncAppearanceFromStore()
   }, [ready, showWizard])
 
   if (!ready) return null
-  if (showWizard) return <WizardFlow onComplete={() => setShowWizard(false)} />
+  if (showWizard) {
+    return (
+      <WizardFlow
+        onComplete={() => {
+          setShowWizard(false)
+          void syncAppearanceFromStore()
+        }}
+      />
+    )
+  }
 
   return (
     <AppShell>
