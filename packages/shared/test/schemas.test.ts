@@ -224,6 +224,7 @@ describe('schemas', () => {
     expect(parseSshBookmarks(rows)).toEqual(rows)
     const v = StoreSetRequestSchema.parse({ key: 'ssh_bookmarks', data: rows })
     expect(v.key).toBe('ssh_bookmarks')
+    if (v.key !== 'ssh_bookmarks') throw new Error('expected ssh_bookmarks branch')
     expect(v.data).toHaveLength(2)
   })
 
@@ -232,6 +233,7 @@ describe('schemas', () => {
       key: 'ssh_bookmarks',
       data: [{ id: 'x', name: 'Home', user: 'me', host: 'home.local' }],
     })
+    if (v.key !== 'ssh_bookmarks') throw new Error('expected ssh_bookmarks branch')
     expect(v.data[0].port).toBe(22)
   })
 })
