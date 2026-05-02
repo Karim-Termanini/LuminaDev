@@ -1,9 +1,8 @@
+# Minimal preset stack (reliable everywhere). Replace with Hugo/Docusaurus when ready.
+name: lumina-docs
+
 services:
-  hugo:
-    image: klakegg/hugo:latest
-    ports:
-      - "1313:1313"
-    volumes:
-      - ./site:/src
-    command: server --bind 0.0.0.0
+  stub:
+    image: alpine:latest
+    command: ["sleep", "infinity"]
     restart: unless-stopped

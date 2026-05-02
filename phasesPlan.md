@@ -142,8 +142,9 @@ Progress notes (2026-05-01, docs pass):
 - ❌ Drag-and-drop polish (basic HTML5 reorder already works — good enough)
 - ❌ Theme surface rollout across all routes (Maintenance theme is pilot; others wait)
 - ❌ Phase 8 Settings, Phase 10 Extensions, Phase 12 Cloud Git
-- ❌ Profiles `setActive` / on-login actions
 - ❌ Git Doctor, Policy Lock, Visual Change Preview
+
+_(Profiles **on-login** automation is **Phase 9** backlog, not “never do.”)_ 
 
 ---
 
@@ -184,9 +185,11 @@ All five stabilization checklist items `done`. `pnpm smoke` green. See [`docs/ST
 - [x] `DashboardWidgetsPage`, `DashboardKernelsPage`, `DashboardLogsPage` present and routed
 
 ### Verified missing (not Alpha scope)
-- [ ] Preset cards not linked to profile store — two sources of truth
-- [ ] Alpine `sleep infinity` compose stubs per preset
-- [ ] No `setActive` / on-login actions
+- [x] **Minimal compose stub per preset** — each `docker/compose/<profile>/docker-compose.yml` is a small Alpine `sleep infinity` service with a unique Compose `name:`; `dh:compose:up` resolves checkout, `LUMINA_DEV_COMPOSE_ROOT`, or bundled `docker/compose` (see `compose_profiles.rs` + `tauri.conf.json` `bundle.resources`).
+- [ ] **Full stack definitions** — replace stubs with profile-realistic services (nginx, Jupyter, Hugo, …) behind feature flags or separate overlays when ready.
+- [x] Preset ↔ store: `active_profile` is a `ComposeProfile` id; dashboard + wizard + Profiles **Set Active** stay aligned
+
+_On-login automation lives under **Phase 9** (not Phase 1)._
 
 ---
 
@@ -273,42 +276,84 @@ Missing: user-defined task checklist, git config backup/restore.
 
 ## Phase 8 — Settings 📋 PLANNED (post-Alpha)
 
-SSH bookmarks, `/etc/hosts` editor, env var manager, theme/accent picker.
+- **SSH Bookmarks** — manage frequently used remote connections in a dedicated UI.
+- **Hosts Editor** — `/etc/hosts` editor with root-access handling and strong safety warnings to avoid accidental destructive edits.
+- **Environment Variables** — user session env file management vs **profile-scoped env** (safer); include diff preview before application.
+- **Theme/Accent Picker** — pilot rollout of the design system across all routes with customizable accent colors.
 
 ---
 
-## Phase 9 — Profiles 🗂 STUB (`/profiles` → `stub`)
+## Phase 9 — Profiles 🔄 PARTIAL (`/profiles` → `partial`)
 
-- [x] CRUD: add / delete / duplicate / export / import
-- [ ] `setActive`, on-login actions, store unification with dashboard presets (post-Alpha)
+- [x] **CRUD**: add / delete / duplicate / export / import
+- [x] **setActive**: writes `active_profile` as the entry’s `baseTemplate` (`ComposeProfile`); clear via store delete.
+- [ ] **On-login automation (remaining scope)** — optional post-start hooks: e.g. `composeUp` for `active_profile`, restore `layoutGet` layout, or other user-toggled actions (store + UI; no duplicate of Phase 1 stub creation work).
+- [x] **Preset alignment**: dashboard preset grid reads the same `active_profile` key as wizard / Profiles.
 
 ---
 
 ## Phase 10 — Extensions 📋 PLANNED (post-Alpha)
 
+- **Extension model v0**: “plugins” = **extra widgets + optional IPC namespaces** loaded from a **signed/allowlisted** folder; no arbitrary binary download at first.
+- **Developer API**: versioned API and lifecycle hooks for third-party widget development.
+- **Marketplace**: browsable directory for community-contributed extensions (post-v0 stability).
+
 ---
 
 ## Phase 11 — First-run Wizard 🔄 PARTIAL
 
-- [x] 6 steps: Welcome → Environment → Docker check → Git setup → SSH keygen → Finish
-- [x] Auto-shows on first launch, skip on each step, "show again" checkbox
-- [ ] Missing: profile-pick step, Help menu re-entry point
+- [x] **7 steps**: Welcome → Environment → Docker check → Git setup → SSH keygen → **Pick starter profile** → All set
+- [x] **Auto-shows** on first launch, skip on each step, "show again" checkbox
+- [x] **Profile-pick step**: nine compose presets; writes `active_profile` when confirmed
+- [x] **Re-entry**: sidebar **Setup Wizard** resets `wizard_state` + reload
+- [x] **Resume logic**: `wizard_state.stepIndex` (0–6) persisted while incomplete; restored on next launch
+- [ ] **(Optional) Rich resume**: persist in-wizard fields (Git name/email, Flatpak `target`, SSH pub key text or “generated” flag) in `wizard_state` so mid-wizard restarts do not wipe form state — **not required** if step-only resume is enough.
 
 ---
 
 ## Phase 12 — Cloud Git (GitHub / GitLab) 📋 PLANNED (post-Alpha)
 
+This phase turns the app into a true daily driver for software engineers managing repositories and cloud source control platforms.
+
+- **Authentication**: Secure storage of Personal Access Tokens (PAT) or OAuth for both **GitHub** and **GitLab**.
+- **Interactive Version Control**: Visual interface for `Commit`, `Push`, `Pull`, and `Sync` without needing a terminal. Branch management (checkout, create, merge).
+- **Cloud Dashboards (API Integration)**: 
+  - **Pull Requests / Merge Requests**: View open PRs/MRs, requested reviews, and merge status.
+  - **Issues Tracking**: List open issues assigned to the user across repositories.
+  - **CI/CD Pipelines**: Real-time status of GitHub Actions and GitLab CI/CD pipelines (Success, Failure, In Progress) for the active local repo.
+  - **Releases & Tags**: Overview of the latest releases.
+- **Repository Widgets**: A dedicated dashboard widget displaying a summary of all active local repositories (status, uncommitted changes, behind/ahead commits) and another widget for cloud notifications (Mentions, Failed Pipelines).
+
 ---
 
 ## Phase 13 — Theme Surface Rollout 📋 PLANNED (post-Alpha)
 
-Priority when reached: Monitor → Docker → Git → Runtimes → Dashboard → AppShell. One route per PR.
+Generalize the "Maintenance Page" aesthetic (ambient gradients, hero typography, hover-lift tiles) across the app without a big-bang rewrite.
+
+- **Principles**: Scope by page root classes, reuse CSS variables/tokens, and enhance hierarchy/spacing/motion.
+- **Rollout Priority**: 
+  1. **Monitor** — metrics + pills + health story.
+  2. **Docker** — toolbar + card elevation + container tables.
+  3. **Git Config** — hero + section rails to reduce noise.
+  4. **Runtimes** — tiles + status panels + wizard steps.
+  5. **Dashboard** — widget-wide consistency.
+  6. **AppShell** — subtle chrome / nav alignment.
+- **Checklist**: root class per page, Codicon verification, and focus-ring preservation.
 
 ---
 
 ## Phase 14 — Flatpak & Release Gate 📋 PLANNED
 
-See Days 1–2 and Day 10 in sprint above. Full checklist in [`docs/FLATHUB_CHECKLIST.md`](docs/FLATHUB_CHECKLIST.md).
+Full preparation for Flathub submission and official v1.0 stability.
+
+- **Checklist**:
+  - [ ] **AppStream Metadata**: `metainfo.xml` with license, summary, and screenshots.
+  - [ ] **Desktop Entry**: original icon assets and trademark-clean metadata.
+  - [ ] **Reproducible Build**: manifest builds successfully with `flatpak-builder` offline.
+  - [ ] **Sandbox Hardening**: justify and document `finish-args` (Docker socket, host exec bridges).
+  - [ ] **Cross-Distro Smoke**: verified on Fedora Silverblue (immutable) and traditional distros.
+- **Maintenance**: regenerate Node sources after lockfile changes using `./flatpak/generate-node-sources.sh`.
+- See Days 1–2 and Day 10 in sprint above for Alpha release gate criteria.
 
 ---
 
@@ -338,13 +383,13 @@ See Days 1–2 and Day 10 in sprint above. Full checklist in [`docs/FLATHUB_CHEC
 ✅  Phase 5  — Monitor
 ✅  Phase 6  — Runtimes (17 languages)
 ✅  Phase 7  — Maintenance / Guardian
-🎯  SPRINT   — Flatpak + Tests + Audit + Cross-distro + v0.2.0-alpha (NOW)
-🔄  Phase 11 — Wizard (missing: profile-pick step + Help entry)
-🔄  Phase 1  — Dashboard (missing: store link + compose stubs)
-🔄  Phase 9  — Profiles (missing: setActive, on-login, store unification)
-📋  Phase 8  — Settings
-📋  Phase 12 — Cloud Git
-📋  Phase 13 — Theme rollout
-📋  Phase 10 — Extensions
-📋  Phase 14 — Flatpak full release gate
+✅  SPRINT   — Flatpak + Tests + Audit + Cross-distro + v0.2.0-alpha (shipped)
+🔄  Phase 1  — Dashboard (**full stack definitions** per preset; minimal Alpine stubs + resolver shipped)
+🔄  Phase 9  — Profiles (**on-login automation** only)
+🔄  Phase 11 — Wizard (**optional**: persist name/email/SSH fields for richer resume, not just `stepIndex`)
+📋  Phase 8  — Settings (SSH Bookmarks, Hosts Editor, Env Vars)
+📋  Phase 12 — Cloud Git (PRs/MRs, CI/CD Status, Interactive Sync)
+📋  Phase 13 — Theme Rollout (System-wide pilot)
+📋  Phase 10 — Extensions (Plugin model v0, Dev API)
+📋  Phase 14 — Flatpak Release Gate
 ```

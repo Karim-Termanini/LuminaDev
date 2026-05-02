@@ -1,4 +1,8 @@
+# Minimal “empty” preset — same pattern as other profiles for consistent `composeUp`.
+name: lumina-empty
+
 services:
   stub:
     image: alpine:latest
     command: ["sleep", "infinity"]
+    restart: unless-stopped
