@@ -2604,7 +2604,9 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
     | "dh:git:vcs:rebase-skip"
     | "dh:git:vcs:rename-branch"
     | "dh:git:vcs:conflict-diff"
-    | "dh:git:vcs:resolve-conflict" => git_vcs_ipc::invoke_extended(channel.as_str(), &body).await,
+    | "dh:git:vcs:conflict-hunks"
+    | "dh:git:vcs:resolve-conflict"
+    | "dh:git:vcs:resolve-hunk" => git_vcs_ipc::invoke_extended(channel.as_str(), &body).await,
 
     "dh:ssh:generate" => {
       let email = body.get("email").and_then(|v| v.as_str()).unwrap_or("lumina@local");
