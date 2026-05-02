@@ -4,6 +4,7 @@ use aes_gcm::{
 };
 use sha2::{Digest, Sha256};
 use std::path::PathBuf;
+use tauri::{AppHandle, Manager};
 
 // ─── OAuth Client IDs ─────────────────────────────────────────────────────────
 // Register a GitHub OAuth App (Device Flow enabled) at github.com/settings/developers
@@ -1142,6 +1143,16 @@ impl GitLabProvider {
         out.truncate(limit);
         Ok(out)
     }
+}
+
+/// Encrypted credential file next to app data (`cloud_credentials.enc`).
+pub fn app_encrypted_credential_store(app: &AppHandle) -> EncryptedFileStore {
+    let path = app
+        .path()
+        .app_data_dir()
+        .map(|d| d.join("cloud_credentials.enc"))
+        .unwrap_or_else(|_| PathBuf::from("/tmp/cloud_credentials.enc"));
+    EncryptedFileStore::new(path)
 }
 
 // ─── Unit tests ───────────────────────────────────────────────────────────────
