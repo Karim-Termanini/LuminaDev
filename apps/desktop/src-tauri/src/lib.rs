@@ -62,6 +62,7 @@ use runtime_verify::runtime_append_verify;
 mod runtime_jobs;
 use runtime_jobs::runtime_job_execute;
 mod compose_profiles;
+mod cloud_auth;
 
 struct TerminalSession {
   master: Arc<StdMutex<Box<dyn MasterPty + Send>>>,
