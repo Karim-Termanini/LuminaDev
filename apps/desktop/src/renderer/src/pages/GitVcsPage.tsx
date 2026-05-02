@@ -97,8 +97,23 @@ export function GitVcsPage(): ReactElement {
         if (res.error?.includes('[GIT_VCS_CONFLICT]') || res.error?.includes('CONFLICT')) {
           setSoftGitNotice({
             type: 'warning',
-            message: `Conflicts detected with ${remoteRef}. Open the resolution wizard to fix them.`
+            message: `Conflicts detected with ${remoteRef}. Opening resolution wizard...`
           })
+          
+          // Force a status refresh to get the conflict list
+          const lists = await refreshStatus()
+          const conflicts = [
+            ...lists.staged.filter(f => f.status === 'C').map(f => f.path),
+            ...lists.unstaged.filter(f => f.status === 'C').map(f => f.path),
+          ]
+          
+          if (conflicts.length > 0) {
+            setConflictedFiles(conflicts)
+            setConflictWizardOpen(true)
+          } else {
+            // If git status didn't show 'C', try a fallback check for merge files
+            setConflictWizardOpen(true) // Open it anyway, it will show the state
+          }
         } else {
           setOpErrorDisplay(res.error ?? 'Merge failed')
         }
