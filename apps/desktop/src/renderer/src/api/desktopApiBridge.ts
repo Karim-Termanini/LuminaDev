@@ -163,6 +163,10 @@ function createTauriDhApi(): DhApi {
     gitVcsMergeContinue: (payload) => tauriInvoke(IPC.gitVcsMergeContinue, payload),
     gitVcsRebaseContinue: (payload) => tauriInvoke(IPC.gitVcsRebaseContinue, payload),
     gitVcsRebaseSkip: (payload) => tauriInvoke(IPC.gitVcsRebaseSkip, payload),
+    gitVcsRenameBranch: (payload) => tauriInvoke(IPC.gitVcsRenameBranch, payload),
+    gitVcsConflictDiff: (payload) => tauriInvoke(IPC.gitVcsConflictDiff, payload),
+    gitVcsResolveConflict: (payload) => tauriInvoke(IPC.gitVcsResolveConflict, payload),
+    cloudGitCreatePr: (payload) => tauriInvoke(IPC.cloudGitCreatePr, payload),
   } satisfies DhApi
 }
 

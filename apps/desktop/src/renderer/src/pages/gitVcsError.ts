@@ -45,7 +45,7 @@ export function humanizeGitVcsError(err: unknown): string {
     return `Commit did not complete. ${detail || 'Check your Git identity, hooks, and signing setup.'}`.trim()
   if (code === 'GIT_VCS_EMPTY_MESSAGE') return 'Commit message cannot be empty.'
   if (code === 'GIT_VCS_PUSH_REJECTED')
-    return `Remote rejected push. Pull the latest changes first, then push again. ${detail}`.trim()
+    return `Remote rejected the push (non-fast-forward). If you rebased, use Force push below. Otherwise pull first and push again. ${detail}`.trim()
   if (code === 'GIT_VCS_PROTECTED_BRANCH')
     return `This branch is protected on the remote — you usually cannot push directly. Push your work to a new branch and open a merge or pull request from the host, or ask a maintainer to merge. ${detail}`.trim()
   if (code === 'GIT_VCS_INTEGRATION_REQUIRED')

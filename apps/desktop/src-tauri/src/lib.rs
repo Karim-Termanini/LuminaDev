@@ -2251,7 +2251,8 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
     | "dh:cloud:git:review-requests"
     | "dh:cloud:git:pipelines"
     | "dh:cloud:git:issues"
-    | "dh:cloud:git:releases" => cloud_git_ipc::invoke(&app, channel.as_str(), &body).await,
+    | "dh:cloud:git:releases"
+    | "dh:cloud:git:create-pr" => cloud_git_ipc::invoke(&app, channel.as_str(), &body).await,
 
     "dh:git:vcs:status" => {
         let repo_path = body.get("repoPath").and_then(|v| v.as_str()).unwrap_or_default();
@@ -2538,13 +2539,14 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
         let repo_path = body.get("repoPath").and_then(|v| v.as_str()).unwrap_or_default();
         let remote = body.get("remote").and_then(|v| v.as_str());
         let branch = body.get("branch").and_then(|v| v.as_str());
+        let force_with_lease = body.get("forceWithLease").and_then(|v| v.as_bool()).unwrap_or(false);
         if repo_path.is_empty() {
             return Ok(json!({ "ok": false, "error": "[GIT_VCS_NOT_A_REPO] Missing repoPath." }));
         }
         let store = cloud_auth::app_encrypted_credential_store(&app);
         match git_network_with_auth(
             repo_path,
-            GitNetworkOp::Push { remote, branch },
+            GitNetworkOp::Push { remote, branch, force_with_lease },
             &store,
             &app,
         )
@@ -2599,7 +2601,10 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
     | "dh:git:vcs:rebase-abort"
     | "dh:git:vcs:merge-continue"
     | "dh:git:vcs:rebase-continue"
-    | "dh:git:vcs:rebase-skip" => git_vcs_ipc::invoke_extended(channel.as_str(), &body).await,
+    | "dh:git:vcs:rebase-skip"
+    | "dh:git:vcs:rename-branch"
+    | "dh:git:vcs:conflict-diff"
+    | "dh:git:vcs:resolve-conflict" => git_vcs_ipc::invoke_extended(channel.as_str(), &body).await,
 
     "dh:ssh:generate" => {
       let email = body.get("email").and_then(|v| v.as_str()).unwrap_or("lumina@local");

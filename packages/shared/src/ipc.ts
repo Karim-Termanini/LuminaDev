@@ -267,6 +267,10 @@ export const IPC = {
   gitVcsMergeContinue: 'dh:git:vcs:merge-continue',
   gitVcsRebaseContinue: 'dh:git:vcs:rebase-continue',
   gitVcsRebaseSkip: 'dh:git:vcs:rebase-skip',
+  gitVcsRenameBranch: 'dh:git:vcs:rename-branch',
+  gitVcsConflictDiff: 'dh:git:vcs:conflict-diff',
+  gitVcsResolveConflict: 'dh:git:vcs:resolve-conflict',
+  cloudGitCreatePr: 'dh:cloud:git:create-pr',
 } as const
 
 export type DockerActionPayload = { id: string; action: DockerContainerAction }

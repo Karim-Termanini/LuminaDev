@@ -1637,6 +1637,97 @@ impl GitLabProvider {
     }
 }
 
+impl GitHubProvider {
+    /// Creates a pull request on GitHub. Returns the PR HTML URL.
+    pub async fn create_pull_request(
+        token: &str,
+        owner: &str,
+        repo: &str,
+        title: &str,
+        body: &str,
+        head: &str,
+        base: &str,
+    ) -> Result<String, String> {
+        let client = reqwest::Client::new();
+        let url = format!("https://api.github.com/repos/{}/{}/pulls", owner, repo);
+        let payload = serde_json::json!({ "title": title, "body": body, "head": head, "base": base });
+        let resp = client
+            .post(&url)
+            .header("Authorization", format!("Bearer {}", token))
+            .header("User-Agent", "LuminaDev/0.2.0")
+            .header("Accept", "application/vnd.github+json")
+            .json(&payload)
+            .send()
+            .await
+            .map_err(|e| format!("[CLOUD_GIT_NETWORK] GitHub create PR: {}", e))?;
+        if resp.status() == 401 {
+            return Err("[CLOUD_AUTH_INVALID_TOKEN] GitHub token is invalid or expired.".to_string());
+        }
+        if resp.status() == 422 {
+            return Err("[CLOUD_GIT_PR_EXISTS] A pull request for this branch already exists.".to_string());
+        }
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let text = resp.text().await.unwrap_or_default();
+            return Err(format!("[CLOUD_GIT_NETWORK] GitHub create PR returned {}: {}", status, text.chars().take(200).collect::<String>()));
+        }
+        let data: serde_json::Value = resp.json().await
+            .map_err(|e| format!("[CLOUD_GIT_NETWORK] GitHub create PR parse: {}", e))?;
+        data["html_url"].as_str().map(|s| s.to_string())
+            .ok_or_else(|| "[CLOUD_GIT_NETWORK] GitHub create PR: missing html_url in response".to_string())
+    }
+}
+
+impl GitLabProvider {
+    /// Creates a merge request on GitLab. Returns the MR web URL.
+    pub async fn create_merge_request(
+        token: &str,
+        web_origin: &str,
+        path_with_namespace: &str,
+        title: &str,
+        description: &str,
+        source_branch: &str,
+        target_branch: &str,
+    ) -> Result<String, String> {
+        let client = reqwest::Client::new();
+        // Percent-encode the project path for the URL segment (/ → %2F).
+        let project_id: String = path_with_namespace
+            .chars()
+            .flat_map(|c| if c == '/' { vec!['%', '2', 'F'] } else { vec![c] })
+            .collect();
+        let url = format!("{}/api/v4/projects/{}/merge_requests", web_origin, project_id);
+        let payload = serde_json::json!({
+            "title": title,
+            "description": description,
+            "source_branch": source_branch,
+            "target_branch": target_branch,
+        });
+        let resp = client
+            .post(&url)
+            .header("Authorization", format!("Bearer {}", token))
+            .header("User-Agent", "LuminaDev/0.2.0")
+            .json(&payload)
+            .send()
+            .await
+            .map_err(|e| format!("[CLOUD_GIT_NETWORK] GitLab create MR: {}", e))?;
+        if resp.status() == 401 {
+            return Err("[CLOUD_AUTH_INVALID_TOKEN] GitLab token is invalid or expired.".to_string());
+        }
+        if resp.status() == 409 {
+            return Err("[CLOUD_GIT_PR_EXISTS] A merge request for this branch already exists.".to_string());
+        }
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let text = resp.text().await.unwrap_or_default();
+            return Err(format!("[CLOUD_GIT_NETWORK] GitLab create MR returned {}: {}", status, text.chars().take(200).collect::<String>()));
+        }
+        let data: serde_json::Value = resp.json().await
+            .map_err(|e| format!("[CLOUD_GIT_NETWORK] GitLab create MR parse: {}", e))?;
+        data["web_url"].as_str().map(|s| s.to_string())
+            .ok_or_else(|| "[CLOUD_GIT_NETWORK] GitLab create MR: missing web_url in response".to_string())
+    }
+}
+
 /// Encrypted credential file next to app data (`cloud_credentials.enc`).
 pub fn app_encrypted_credential_store(app: &AppHandle) -> EncryptedFileStore {
     let path = app
