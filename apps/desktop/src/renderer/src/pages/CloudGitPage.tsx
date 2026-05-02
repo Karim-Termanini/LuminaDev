@@ -10,6 +10,7 @@ import { humanizeCloudAuthError, isCloudAuthOauthNotConfigured } from './cloudAu
 
 type Provider = CloudGitProviderId
 const LAST_TAB_KEY = 'cloud_git_last_tab'
+const TAB_EVENT = 'cloud-git:tab-changed'
 
 type DeviceFlowState = {
   provider: Provider
@@ -108,6 +109,11 @@ export function CloudGitPage(): ReactElement {
   useEffect(() => {
     try {
       window.localStorage.setItem(LAST_TAB_KEY, activeTab)
+      window.dispatchEvent(
+        new CustomEvent(TAB_EVENT, {
+          detail: { tab: activeTab },
+        }),
+      )
     } catch {
       // Non-fatal: keep URL as source of truth.
     }

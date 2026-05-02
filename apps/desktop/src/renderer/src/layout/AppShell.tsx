@@ -1,4 +1,5 @@
 import type { ReactElement, ReactNode } from 'react'
+import { useEffect, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 
 import { ActiveJobsStrip } from './ActiveJobsStrip'
@@ -31,16 +32,7 @@ const statusStyles: Record<RouteStatus, { label: string; color: string; bg: stri
   partial: { label: 'PARTIAL', color: 'var(--yellow)', bg: 'rgba(255, 193, 7, 0.1)', border: 'rgba(255, 193, 7, 0.25)' },
   stub: { label: 'STUB', color: '#ff8a80', bg: 'rgba(255, 82, 82, 0.1)', border: 'rgba(255, 82, 82, 0.25)' },
 }
-
-function resolveCloudGitNavTarget(): string {
-  try {
-    const raw = window.localStorage.getItem('cloud_git_last_tab')
-    const tab = raw === 'gitlab' ? 'gitlab' : 'github'
-    return `/cloud-git?tab=${tab}`
-  } catch {
-    return '/cloud-git?tab=github'
-  }
-}
+const CLOUD_GIT_TAB_EVENT = 'cloud-git:tab-changed'
 
 function resolveCloudGitTab(): 'github' | 'gitlab' {
   try {
@@ -52,8 +44,26 @@ function resolveCloudGitTab(): 'github' | 'gitlab' {
 }
 
 export function AppShell({ children }: { children: ReactNode }): ReactElement {
-  const cloudGitTab = resolveCloudGitTab()
-  const cloudGitTarget = resolveCloudGitNavTarget()
+  const [cloudGitTab, setCloudGitTab] = useState<'github' | 'gitlab'>(() => resolveCloudGitTab())
+  const cloudGitTarget = `/cloud-git?tab=${cloudGitTab}`
+  const cloudGitProviderLabel = cloudGitTab === 'gitlab' ? 'GitLab' : 'GitHub'
+
+  useEffect(() => {
+    const onTabChanged = (e: Event): void => {
+      const maybe = e as CustomEvent<{ tab?: string }>
+      setCloudGitTab(maybe.detail?.tab === 'gitlab' ? 'gitlab' : 'github')
+    }
+    const onStorage = (e: StorageEvent): void => {
+      if (e.key !== 'cloud_git_last_tab') return
+      setCloudGitTab(e.newValue === 'gitlab' ? 'gitlab' : 'github')
+    }
+    window.addEventListener(CLOUD_GIT_TAB_EVENT, onTabChanged as EventListener)
+    window.addEventListener('storage', onStorage)
+    return () => {
+      window.removeEventListener(CLOUD_GIT_TAB_EVENT, onTabChanged as EventListener)
+      window.removeEventListener('storage', onStorage)
+    }
+  }, [])
   return (
     <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
       <aside
@@ -85,6 +95,11 @@ export function AppShell({ children }: { children: ReactNode }): ReactElement {
             <NavLink
               key={item.to}
               to={item.to === '/cloud-git' ? cloudGitTarget : item.to}
+              title={
+                item.to === '/cloud-git'
+                  ? `Opens Cloud Git (${cloudGitProviderLabel} context). Last tab: ${cloudGitTab}.`
+                  : undefined
+              }
               style={({ isActive }) => ({
                 display: 'flex',
                 alignItems: 'center',
@@ -103,7 +118,7 @@ export function AppShell({ children }: { children: ReactNode }): ReactElement {
               {item.to === '/cloud-git' ? (
                 <span
                   className="mono"
-                  title={`Last selected provider: ${cloudGitTab}`}
+                  title={`Last Cloud Git tab: ${cloudGitProviderLabel} (${cloudGitTab})`}
                   style={{
                     fontSize: 9,
                     fontWeight: 700,
