@@ -1,4 +1,4 @@
-import type { CloudPullRequestEntry, GitRepoEntry } from '@linux-dev-home/shared'
+import type { CloudPipelineEntry, CloudPullRequestEntry, GitRepoEntry } from '@linux-dev-home/shared'
 import type { ReactElement } from 'react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
@@ -22,6 +22,8 @@ export function CloudGitActivityPanel({ provider, label }: { provider: Provider;
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [prs, setPrs] = useState<CloudPullRequestEntry[]>([])
+  const [pipelines, setPipelines] = useState<CloudPipelineEntry[]>([])
+  const [pipelineError, setPipelineError] = useState<string | null>(null)
   const [recents, setRecents] = useState<GitRepoEntry[]>([])
 
   useEffect(() => {
@@ -37,6 +39,7 @@ export function CloudGitActivityPanel({ provider, label }: { provider: Provider;
     let cancelled = false
     setLoading(true)
     setError(null)
+    setPipelineError(null)
     void window.dh
       .cloudGitPrs({ provider, limit: 12 })
       .then((res) => {
@@ -56,6 +59,23 @@ export function CloudGitActivityPanel({ provider, label }: { provider: Provider;
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
+      })
+    void window.dh
+      .cloudGitPipelines({ provider, limit: 8 })
+      .then((res) => {
+        if (cancelled) return
+        if (res.ok && Array.isArray(res.pipelines)) {
+          setPipelines(res.pipelines)
+          return
+        }
+        setPipelines([])
+        if (!res.ok && res.error) setPipelineError(res.error)
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) {
+          setPipelines([])
+          setPipelineError(e instanceof Error ? e.message : String(e))
+        }
       })
     return () => {
       cancelled = true
@@ -162,9 +182,47 @@ export function CloudGitActivityPanel({ provider, label }: { provider: Provider;
         </div>
         <div className="hp-card" style={{ padding: '14px 16px' }}>
           <div style={{ fontWeight: 650, fontSize: 14, marginBottom: 6 }}>CI / pipelines</div>
-          <p className="hp-muted" style={{ margin: '0 0 12px', fontSize: 12, lineHeight: 1.45 }}>
-            Placeholder — pipeline status cards will mirror your {label} projects here.
-          </p>
+          {loading ? <p className="hp-muted" style={{ margin: '0 0 12px', fontSize: 12 }}>Loading…</p> : null}
+          {!loading && pipelineError ? (
+            <p style={{ margin: '0 0 12px', fontSize: 12, color: '#ff8a80', lineHeight: 1.45 }}>{pipelineError}</p>
+          ) : null}
+          {!loading && !pipelineError && pipelines.length === 0 ? (
+            <p className="hp-muted" style={{ margin: '0 0 12px', fontSize: 12, lineHeight: 1.45 }}>
+              No recent pipelines found for your account.
+            </p>
+          ) : null}
+          {!loading && !pipelineError && pipelines.length > 0 ? (
+            <ul style={{ margin: '0 0 12px', paddingLeft: 18, fontSize: 12, lineHeight: 1.5 }}>
+              {pipelines.slice(0, 5).map((p) => (
+                <li key={p.id} style={{ marginBottom: 4 }}>
+                  <a
+                    href={p.url}
+                    onClick={(e) => {
+                      e.preventDefault()
+                      void window.dh.openExternal(p.url)
+                    }}
+                    style={{ color: 'var(--text)', textDecoration: 'none' }}
+                    title={`${p.name} (${p.status})`}
+                  >
+                    {p.name}
+                  </a>
+                  <span className="mono" style={{ color: 'var(--text-muted)', marginLeft: 6 }}>
+                    {p.repo}
+                  </span>
+                  <span
+                    className="mono"
+                    style={{
+                      marginLeft: 6,
+                      fontSize: 10,
+                      color: p.status === 'success' ? '#4caf50' : p.status === 'failed' ? '#ff8a80' : 'var(--text-muted)',
+                    }}
+                  >
+                    {p.status}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
           <button
             type="button"
             className="hp-btn"

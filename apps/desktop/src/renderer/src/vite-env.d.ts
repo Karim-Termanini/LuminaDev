@@ -144,6 +144,14 @@ declare global {
         prs?: import('@linux-dev-home/shared').CloudPullRequestEntry[]
         error?: string
       }>
+      cloudGitPipelines: (payload: {
+        provider: 'github' | 'gitlab'
+        limit?: number
+      }) => Promise<{
+        ok: boolean
+        pipelines?: import('@linux-dev-home/shared').CloudPipelineEntry[]
+        error?: string
+      }>
       gitVcsStatus: (payload: { repoPath: string }) => Promise<{
         ok: boolean
         branch?: string

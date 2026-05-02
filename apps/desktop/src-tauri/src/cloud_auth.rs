@@ -170,6 +170,16 @@ pub struct CloudPullRequestEntry {
     pub updated_at: String,
 }
 
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct CloudPipelineEntry {
+    pub id: String,
+    pub name: String,
+    pub url: String,
+    pub repo: String,
+    pub status: String,
+    pub updated_at: String,
+}
+
 // ─── CredentialStore trait ────────────────────────────────────────────────────
 
 pub trait CredentialStore {
@@ -488,6 +498,95 @@ impl GitHubProvider {
             .collect();
         Ok(items)
     }
+
+    pub async fn list_recent_pipelines(
+        token: &str,
+        limit: usize,
+    ) -> Result<Vec<CloudPipelineEntry>, String> {
+        let client = reqwest::Client::new();
+        let repos_resp = client
+            .get("https://api.github.com/user/repos")
+            .header("Authorization", format!("Bearer {}", token))
+            .header("User-Agent", "LuminaDev/0.2.0")
+            .header("Accept", "application/vnd.github+json")
+            .query(&[
+                ("sort", "updated"),
+                ("direction", "desc"),
+                ("per_page", "20"),
+            ])
+            .send()
+            .await
+            .map_err(|e| format!("[CLOUD_GIT_NETWORK] GitHub repos: {}", e))?;
+        if repos_resp.status() == 401 {
+            return Err("[CLOUD_AUTH_INVALID_TOKEN] GitHub token is invalid or expired.".to_string());
+        }
+        if !repos_resp.status().is_success() {
+            return Err(format!(
+                "[CLOUD_GIT_NETWORK] GitHub repos returned {}",
+                repos_resp.status()
+            ));
+        }
+        let repos: Vec<serde_json::Value> = repos_resp
+            .json()
+            .await
+            .map_err(|e| format!("[CLOUD_GIT_NETWORK] GitHub repos parse: {}", e))?;
+
+        let mut out: Vec<CloudPipelineEntry> = Vec::new();
+        for repo in repos.into_iter().take(20) {
+            let full_name = repo["full_name"].as_str().unwrap_or("").to_string();
+            if full_name.is_empty() {
+                continue;
+            }
+            let runs_resp = client
+                .get(format!(
+                    "https://api.github.com/repos/{}/actions/runs",
+                    full_name
+                ))
+                .header("Authorization", format!("Bearer {}", token))
+                .header("User-Agent", "LuminaDev/0.2.0")
+                .header("Accept", "application/vnd.github+json")
+                .query(&[("per_page", "1")])
+                .send()
+                .await;
+            let Ok(runs_resp) = runs_resp else {
+                continue;
+            };
+            if !runs_resp.status().is_success() {
+                continue;
+            }
+            let body: serde_json::Value = match runs_resp.json().await {
+                Ok(v) => v,
+                Err(_) => continue,
+            };
+            let run = body["workflow_runs"]
+                .as_array()
+                .and_then(|arr| arr.first())
+                .cloned();
+            let Some(run) = run else {
+                continue;
+            };
+            out.push(CloudPipelineEntry {
+                id: run["id"].as_i64().unwrap_or_default().to_string(),
+                name: run["name"]
+                    .as_str()
+                    .or_else(|| run["display_title"].as_str())
+                    .unwrap_or("Workflow run")
+                    .to_string(),
+                url: run["html_url"].as_str().unwrap_or("").to_string(),
+                repo: full_name,
+                status: run["conclusion"]
+                    .as_str()
+                    .or_else(|| run["status"].as_str())
+                    .unwrap_or("unknown")
+                    .to_string(),
+                updated_at: run["updated_at"].as_str().unwrap_or("").to_string(),
+            });
+        }
+        out.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+        out.retain(|x| !x.id.is_empty() && !x.url.is_empty());
+        out.truncate(limit);
+        Ok(out)
+    }
 }
 
 // ─── GitLabProvider ───────────────────────────────────────────────────────────
@@ -646,6 +745,95 @@ impl GitLabProvider {
             .filter(|x| !x.id.is_empty() && !x.url.is_empty())
             .collect();
         Ok(items)
+    }
+
+    pub async fn list_recent_pipelines(
+        token: &str,
+        limit: usize,
+    ) -> Result<Vec<CloudPipelineEntry>, String> {
+        let client = reqwest::Client::new();
+        let projects_resp = client
+            .get("https://gitlab.com/api/v4/projects")
+            .header("Authorization", format!("Bearer {}", token))
+            .header("User-Agent", "LuminaDev/0.2.0")
+            .query(&[
+                ("membership", "true"),
+                ("simple", "true"),
+                ("order_by", "last_activity_at"),
+                ("sort", "desc"),
+                ("per_page", "20"),
+            ])
+            .send()
+            .await
+            .map_err(|e| format!("[CLOUD_GIT_NETWORK] GitLab projects: {}", e))?;
+        if projects_resp.status() == 401 {
+            return Err("[CLOUD_AUTH_INVALID_TOKEN] GitLab token is invalid or expired.".to_string());
+        }
+        if !projects_resp.status().is_success() {
+            return Err(format!(
+                "[CLOUD_GIT_NETWORK] GitLab projects returned {}",
+                projects_resp.status()
+            ));
+        }
+        let projects: Vec<serde_json::Value> = projects_resp
+            .json()
+            .await
+            .map_err(|e| format!("[CLOUD_GIT_NETWORK] GitLab projects parse: {}", e))?;
+
+        let mut out: Vec<CloudPipelineEntry> = Vec::new();
+        for project in projects.into_iter().take(20) {
+            let id = project["id"].as_i64().unwrap_or_default();
+            if id <= 0 {
+                continue;
+            }
+            let repo = project["path_with_namespace"]
+                .as_str()
+                .unwrap_or("")
+                .to_string();
+            let list_resp = client
+                .get(format!("https://gitlab.com/api/v4/projects/{}/pipelines", id))
+                .header("Authorization", format!("Bearer {}", token))
+                .query(&[
+                    ("order_by", "updated_at"),
+                    ("sort", "desc"),
+                    ("per_page", "1"),
+                ])
+                .send()
+                .await;
+            let Ok(list_resp) = list_resp else {
+                continue;
+            };
+            if !list_resp.status().is_success() {
+                continue;
+            }
+            let rows: Vec<serde_json::Value> = match list_resp.json().await {
+                Ok(v) => v,
+                Err(_) => continue,
+            };
+            let Some(p) = rows.first() else {
+                continue;
+            };
+            let pid = p["id"].as_i64().unwrap_or_default();
+            if pid <= 0 {
+                continue;
+            }
+            let web_url = p["web_url"]
+                .as_str()
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| format!("https://gitlab.com/{}/-/pipelines/{}", repo, pid));
+            out.push(CloudPipelineEntry {
+                id: pid.to_string(),
+                name: p["ref"].as_str().unwrap_or("pipeline").to_string(),
+                url: web_url,
+                repo: repo.clone(),
+                status: p["status"].as_str().unwrap_or("unknown").to_string(),
+                updated_at: p["updated_at"].as_str().unwrap_or("").to_string(),
+            });
+        }
+        out.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+        out.retain(|x| !x.id.is_empty() && !x.url.is_empty());
+        out.truncate(limit);
+        Ok(out)
     }
 }
 
