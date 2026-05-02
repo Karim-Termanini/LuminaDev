@@ -66,6 +66,8 @@ mod compose_profiles;
 mod cloud_auth;
 mod cloud_git_ipc;
 mod git_vcs_ipc;
+mod readiness;
+mod readiness_ipc;
 use cloud_auth::CredentialStore;
 
 struct TerminalSession {
@@ -1450,22 +1452,25 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       },
       Err(e) => json!({ "ok": false, "error": e }),
     },
+
+    "dh:system:readiness:check" | "dh:system:readiness:fix" => {
+      readiness_ipc::invoke(&app, channel.as_str(), &body).await
+    },
     "dh:perf:snapshot" => {
       let mut rss_mb = 0u64;
       let statm = read_proc_text("/proc/self/statm").await;
       if let Some(pages) = statm.split_whitespace().nth(1).and_then(|v| v.parse::<u64>().ok()) {
-        rss_mb = (pages * 4096) / 1024 / 1024; // Assuming 4KB page size
+        rss_mb = (pages * 4096) / 1024 / 1024;
       }
       let uptime_str = read_proc_text("/proc/uptime").await;
       let uptime_sec = uptime_str.split_whitespace().next()
         .and_then(|v| v.parse::<f64>().ok()).unwrap_or(0.0) as u64;
-      
       json!({
         "ok": true,
         "snapshot": {
-          "startupMs": 150, // Approximation or track in AppState
+          "startupMs": 150,
           "rssMb": rss_mb,
-          "heapUsedMb": rss_mb / 2, // Approximation
+          "heapUsedMb": rss_mb / 2,
           "heapTotalMb": rss_mb,
           "uptimeSec": uptime_sec
         }
@@ -2331,6 +2336,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
     },
 
     "dh:cloud:git:prs"
+    | "dh:cloud:git:review-requests"
     | "dh:cloud:git:pipelines"
     | "dh:cloud:git:issues"
     | "dh:cloud:git:releases" => cloud_git_ipc::invoke(&app, channel.as_str(), &body).await,
@@ -2689,7 +2695,8 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
     | "dh:git:vcs:merge-abort"
     | "dh:git:vcs:rebase-abort"
     | "dh:git:vcs:merge-continue"
-    | "dh:git:vcs:rebase-continue" => git_vcs_ipc::invoke_extended(channel.as_str(), &body).await,
+    | "dh:git:vcs:rebase-continue"
+    | "dh:git:vcs:rebase-skip" => git_vcs_ipc::invoke_extended(channel.as_str(), &body).await,
 
     "dh:ssh:generate" => {
       let email = body.get("email").and_then(|v| v.as_str()).unwrap_or("lumina@local");

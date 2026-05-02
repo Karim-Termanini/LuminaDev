@@ -345,6 +345,11 @@ export const CloudGitPrsRequestSchema = z.object({
   limit: z.number().int().min(1).max(50).optional(),
 })
 
+export const CloudGitReviewRequestsRequestSchema = z.object({
+  provider: CloudAuthProviderSchema,
+  limit: z.number().int().min(1).max(50).optional(),
+})
+
 export const CloudPullRequestEntrySchema = z.object({
   id: z.string().min(1),
   title: z.string(),
@@ -540,3 +545,6 @@ export const GitVcsMergeContinueRequestSchema = GitVcsRepoPathSchema
 
 /** Resume after resolving rebase conflicts (`git rebase --continue`). */
 export const GitVcsRebaseContinueRequestSchema = GitVcsRepoPathSchema
+
+/** Skip the current commit during an interactive rebase (`git rebase --skip`). */
+export const GitVcsRebaseSkipRequestSchema = GitVcsRepoPathSchema

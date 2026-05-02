@@ -20,6 +20,7 @@ import { TerminalPage } from './pages/TerminalPage'
 import { RuntimesPage } from './pages/RuntimesPage'
 import { MaintenancePage } from './pages/MaintenancePage'
 import { SettingsPage } from './pages/SettingsPage'
+import { SystemReadinessPage } from './pages/SystemReadinessPage'
 import { WizardFlow } from './wizard/WizardFlow'
 import { WizardStateStoreSchema } from '@linux-dev-home/shared'
 import { syncAppearanceFromStore } from './theme/applyAccent'
@@ -78,6 +79,7 @@ export default function App(): ReactElement | null {
         <Route path="/runtimes" element={<RuntimesPage />} />
         <Route path="/maintenance" element={<MaintenancePage />} />
         <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/system-readiness" element={<SystemReadinessPage />} />
       </Routes>
     </AppShell>
   )

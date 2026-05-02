@@ -81,6 +81,10 @@ describe('humanizeGitVcsError', () => {
     expect(humanizeGitVcsError(new Error('[GIT_VCS_REBASE_CONTINUE] noop'))).toContain('Rebase could not continue')
   })
 
+  it('humanizes GIT_VCS_REBASE_SKIP', () => {
+    expect(humanizeGitVcsError(new Error('[GIT_VCS_REBASE_SKIP] no'))).toContain('Rebase skip')
+  })
+
   it('returns raw detail for unknown codes', () => {
     expect(humanizeGitVcsError(new Error('Something weird'))).toBe('Something weird')
   })

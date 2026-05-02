@@ -144,12 +144,23 @@ declare global {
         prs?: import('@linux-dev-home/shared').CloudPullRequestEntry[]
         error?: string
       }>
-      cloudGitPipelines: (payload: {
+      cloudGitReviewRequests: (payload: {
         provider: 'github' | 'gitlab'
         limit?: number
       }) => Promise<{
         ok: boolean
+        reviewRequests?: import('@linux-dev-home/shared').CloudPullRequestEntry[]
+        error?: string
+      }>
+      cloudGitPipelines: (payload: {
+        provider: 'github' | 'gitlab'
+        limit?: number
+        repoPath?: string
+        remote?: string
+      }) => Promise<{
+        ok: boolean
         pipelines?: import('@linux-dev-home/shared').CloudPipelineEntry[]
+        repoScoped?: boolean
         error?: string
       }>
       cloudGitIssues: (payload: {
@@ -221,6 +232,7 @@ declare global {
       gitVcsRebaseAbort: (payload: { repoPath: string }) => Promise<{ ok: boolean; output?: string; error?: string }>
       gitVcsMergeContinue: (payload: { repoPath: string }) => Promise<{ ok: boolean; output?: string; error?: string }>
       gitVcsRebaseContinue: (payload: { repoPath: string }) => Promise<{ ok: boolean; output?: string; error?: string }>
+      gitVcsRebaseSkip: (payload: { repoPath: string }) => Promise<{ ok: boolean; output?: string; error?: string }>
     }
   }
 }

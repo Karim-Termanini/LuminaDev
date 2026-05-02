@@ -9,6 +9,7 @@ import { humanizeGitVcsError, parseGitVcsErrorCode } from './gitVcsError'
 import { GitVcsBranchPicker } from './gitVcsBranchPicker'
 import { GitVcsCommitBar } from './gitVcsCommitBar'
 import { GitVcsIntegrateBar } from './gitVcsIntegrateBar'
+import { GitVcsRepoPipelines } from './gitVcsRepoPipelines'
 import { GitVcsDiffPanel } from './gitVcsDiffPanel'
 import { GitVcsFileList } from './gitVcsFileList'
 import { parseCheckoutDirtyFileList } from './gitVcsCheckoutDirty'
@@ -18,15 +19,9 @@ import { GitVcsRepoPicker } from './gitVcsRepoPicker'
 import { assertGitRecentList } from './registryContract'
 import { CLOUD_GIT_PROVIDER_THEME } from './cloudGitTheme'
 import { fetchRemoteOptions } from './gitVcsFetchRemotes'
-import { classifyGitRemoteUrl } from './gitVcsProviderHost'
+import { classifyGitRemoteUrl, resolvePipelineProvider } from './gitVcsProviderHost'
 import { reconcileGitVcsSelection } from './gitVcsSelection'
-
-const GLASS = {
-  background: 'rgba(30, 30, 30, 0.45)',
-  backdropFilter: 'blur(14px)',
-  border: '1px solid rgba(255, 255, 255, 0.06)',
-  boxShadow: '0 12px 40px rgba(0,0,0,0.25)',
-} as const
+import { GLASS } from '../layout/GLASS'
 
 type DirtyCheckoutPrompt = { branch: string; create: boolean; files: string[] }
 
@@ -512,6 +507,22 @@ export function GitVcsPage(): ReactElement {
     }
   }
 
+  async function runRebaseSkip(): Promise<void> {
+    if (!repoPath.trim()) return
+    setBusy(true)
+    setOpErrorRaw(null)
+    try {
+      const r = await window.dh.gitVcsRebaseSkip({ repoPath: repoPath.trim() })
+      assertGitVcsOk(r)
+      const lists = await refreshStatus()
+      setSelected((prev) => reconcileGitVcsSelection(prev, lists.staged, lists.unstaged))
+    } catch (e) {
+      setOpErrorRaw(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function runMergeAbort(): Promise<void> {
     if (!repoPath.trim()) return
     setBusy(true)
@@ -578,6 +589,13 @@ export function GitVcsPage(): ReactElement {
   const opErrorDisplay = opErrorRaw ? humanizeGitVcsError(new Error(opErrorRaw)) : null
   const activeFetchRemoteUrl = gitRemotes.find((r) => r.name === activeFetchRemoteName)?.fetchUrl
   const activeFetchProvider = activeFetchRemoteUrl ? classifyGitRemoteUrl(activeFetchRemoteUrl) : 'other'
+  const activeFetchPipelineProvider = useMemo(
+    () =>
+      activeFetchRemoteUrl
+        ? resolvePipelineProvider(activeFetchRemoteUrl, cloudAccounts)
+        : ('other' as const),
+    [activeFetchRemoteUrl, cloudAccounts],
+  )
   const vcsTheme = activeFetchProvider === 'other' ? null : CLOUD_GIT_PROVIDER_THEME[activeFetchProvider]
   const vcsScopedStyle = vcsTheme
     ? ({
@@ -781,12 +799,21 @@ export function GitVcsPage(): ReactElement {
             onRebaseContinue={async () => {
               await runRebaseContinue()
             }}
+            onRebaseSkip={async () => {
+              await runRebaseSkip()
+            }}
             onMergeAbort={async () => {
               await runMergeAbort()
             }}
             onRebaseAbort={async () => {
               await runRebaseAbort()
             }}
+          />
+
+          <GitVcsRepoPipelines
+            repoPath={repoPath.trim()}
+            remoteName={activeFetchRemoteName}
+            provider={activeFetchPipelineProvider}
           />
 
           <div style={{ display: 'grid', gridTemplateColumns: 'minmax(260px, 34%) 1fr', gap: 16, minHeight: 360 }}>

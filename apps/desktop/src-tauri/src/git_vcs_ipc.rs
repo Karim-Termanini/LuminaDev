@@ -21,6 +21,7 @@ pub async fn invoke_extended(channel: &str, body: &Value) -> Value {
         "dh:git:vcs:rebase-abort" => rebase_abort(repo_path).await,
         "dh:git:vcs:merge-continue" => merge_continue(repo_path).await,
         "dh:git:vcs:rebase-continue" => rebase_continue(repo_path).await,
+        "dh:git:vcs:rebase-skip" => rebase_skip(repo_path).await,
         _ => json!({
             "ok": false,
             "error": format!("[UNKNOWN_CHANNEL] {}", channel)
@@ -167,5 +168,16 @@ fn rebase_continue_error_code(msg: &str) -> &'static str {
         "GIT_VCS_REBASE_CONFLICT"
     } else {
         "GIT_VCS_REBASE_CONTINUE"
+    }
+}
+
+async fn rebase_skip(repo_path: &str) -> Value {
+    let args = ["-C", repo_path, "rebase", "--skip"];
+    match exec_output_limit("git", &args, CMD_TIMEOUT_LONG).await {
+        Ok(output) => json!({ "ok": true, "output": output }),
+        Err(e) => {
+            let msg = e.trim();
+            json!({ "ok": false, "error": format!("[GIT_VCS_REBASE_SKIP] {}", msg) })
+        }
     }
 }

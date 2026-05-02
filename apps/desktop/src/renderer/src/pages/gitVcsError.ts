@@ -18,6 +18,7 @@ export type GitVcsErrorCode =
   | 'GIT_VCS_REBASE'
   | 'GIT_VCS_REBASE_CONFLICT'
   | 'GIT_VCS_REBASE_ABORT'
+  | 'GIT_VCS_REBASE_SKIP'
   | 'GIT_VCS_STASH_POP'
   | 'GIT_VCS_STASH_POP_CONFLICT'
   | 'GIT_VCS_STASH_POP_EMPTY'
@@ -65,6 +66,8 @@ export function humanizeGitVcsError(err: unknown): string {
   if (code === 'GIT_VCS_REBASE') return `Rebase did not complete. ${detail}`.trim()
   if (code === 'GIT_VCS_REBASE_ABORT')
     return `Could not abort rebase (no rebase in progress). ${detail}`.trim()
+  if (code === 'GIT_VCS_REBASE_SKIP')
+    return `Rebase skip did not complete (no rebase in progress, dirty index, or merge conflict). ${detail}`.trim()
   if (code === 'GIT_VCS_STASH_POP_CONFLICT')
     return `Stash pop stopped with conflicts. Resolve files, then commit; your stash entry may still be on the stack. ${detail}`.trim()
   if (code === 'GIT_VCS_STASH_POP_EMPTY') return 'There is no stash entry to apply.'

@@ -29,5 +29,8 @@ export function humanizeCloudAuthError(err: unknown): string {
   if (code.startsWith('CLOUD_AUTH_STORE')) {
     return `Could not read or save cloud account credentials on this machine. ${detail}`.trim()
   }
+  if (code === 'CLOUD_GIT_SCOPE') {
+    return `${detail || 'Could not scope CI to this repository.'}`.trim()
+  }
   return detail || 'Cloud auth operation failed.'
 }

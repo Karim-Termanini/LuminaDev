@@ -240,6 +240,7 @@ export const IPC = {
   cloudAuthDisconnect: 'dh:cloud:auth:disconnect',
   cloudAuthStatus: 'dh:cloud:auth:status',
   cloudGitPrs: 'dh:cloud:git:prs',
+  cloudGitReviewRequests: 'dh:cloud:git:review-requests',
   cloudGitPipelines: 'dh:cloud:git:pipelines',
   cloudGitIssues: 'dh:cloud:git:issues',
   cloudGitReleases: 'dh:cloud:git:releases',
@@ -262,6 +263,7 @@ export const IPC = {
   gitVcsRebaseAbort: 'dh:git:vcs:rebase-abort',
   gitVcsMergeContinue: 'dh:git:vcs:merge-continue',
   gitVcsRebaseContinue: 'dh:git:vcs:rebase-continue',
+  gitVcsRebaseSkip: 'dh:git:vcs:rebase-skip',
 } as const
 
 export type DockerActionPayload = { id: string; action: DockerContainerAction }

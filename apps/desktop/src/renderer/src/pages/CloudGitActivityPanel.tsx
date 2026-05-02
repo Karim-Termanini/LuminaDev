@@ -13,15 +13,20 @@ import { assertGitRecentList } from './registryContract'
 
 type Provider = 'github' | 'gitlab'
 
-const WEB: Record<Provider, { prs: string; ci: string; issues: string; releases: string }> = {
+const WEB: Record<
+  Provider,
+  { prs: string; reviews: string; ci: string; issues: string; releases: string }
+> = {
   github: {
     prs: 'https://github.com/pulls',
+    reviews: 'https://github.com/pulls?q=is%3Aopen+is%3Apr+review-requested%3A%40me',
     ci: 'https://github.com/marketplace?type=actions',
     issues: 'https://github.com/issues',
     releases: 'https://github.com/explore',
   },
   gitlab: {
     prs: 'https://gitlab.com/dashboard/merge_requests',
+    reviews: 'https://gitlab.com/dashboard/merge_requests?scope=all&state=opened',
     ci: 'https://gitlab.com/dashboard/pipelines',
     issues: 'https://gitlab.com/dashboard/issues',
     releases: 'https://gitlab.com/explore/projects/topics',
@@ -31,15 +36,19 @@ const WEB: Record<Provider, { prs: string; ci: string; issues: string; releases:
 export function CloudGitActivityPanel({ provider, label }: { provider: Provider; label: string }): ReactElement {
   const urls = WEB[provider]
   const [prLimit, setPrLimit] = useState(12)
+  const [reviewLimit, setReviewLimit] = useState(12)
   const [pipelineLimit, setPipelineLimit] = useState(8)
   const [issueLimit, setIssueLimit] = useState(10)
   const [releaseLimit, setReleaseLimit] = useState(8)
   const [prLoading, setPrLoading] = useState(true)
+  const [reviewLoading, setReviewLoading] = useState(true)
   const [ciLoading, setCiLoading] = useState(true)
   const [issueLoading, setIssueLoading] = useState(true)
   const [releaseLoading, setReleaseLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [prs, setPrs] = useState<CloudPullRequestEntry[]>([])
+  const [reviewRequests, setReviewRequests] = useState<CloudPullRequestEntry[]>([])
+  const [reviewError, setReviewError] = useState<string | null>(null)
   const [pipelines, setPipelines] = useState<CloudPipelineEntry[]>([])
   const [pipelineError, setPipelineError] = useState<string | null>(null)
   const [issues, setIssues] = useState<CloudIssueEntry[]>([])
@@ -59,6 +68,7 @@ export function CloudGitActivityPanel({ provider, label }: { provider: Provider;
 
   useEffect(() => {
     setPrLimit(12)
+    setReviewLimit(12)
     setPipelineLimit(8)
     setIssueLimit(10)
     setReleaseLimit(8)
@@ -92,6 +102,35 @@ export function CloudGitActivityPanel({ provider, label }: { provider: Provider;
       cancelled = true
     }
   }, [provider, prLimit])
+
+  useEffect(() => {
+    let cancelled = false
+    setReviewLoading(true)
+    setReviewError(null)
+    void window.dh
+      .cloudGitReviewRequests({ provider, limit: reviewLimit })
+      .then((res) => {
+        if (cancelled) return
+        if (res.ok && Array.isArray(res.reviewRequests)) {
+          setReviewRequests(res.reviewRequests)
+          return
+        }
+        setReviewRequests([])
+        if (!res.ok && res.error) setReviewError(res.error)
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) {
+          setReviewRequests([])
+          setReviewError(e instanceof Error ? e.message : String(e))
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setReviewLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [provider, reviewLimit])
 
   useEffect(() => {
     let cancelled = false
@@ -225,8 +264,8 @@ export function CloudGitActivityPanel({ provider, label }: { provider: Provider;
           Activity
         </h2>
         <p className="hp-muted" style={{ margin: '8px 0 0', fontSize: 13, lineHeight: 1.5 }}>
-          PRs/MRs, assigned issues, CI, and latest releases for <strong>{label}</strong> (account-scoped). Open in
-          browser for the full provider UI.
+          PRs/MRs, reviews requested of you, assigned issues, CI, and latest releases for{' '}
+          <strong>{label}</strong> (account-scoped). Open in browser for the full provider UI.
         </p>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -252,7 +291,7 @@ export function CloudGitActivityPanel({ provider, label }: { provider: Provider;
           ) : null}
           {!prLoading && !error && prs.length > 0 ? (
             <div className="mono" style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
-              Showing {prs.length} · request limit {prLimit}
+              Showing {prs.length} of up to {prLimit}
             </div>
           ) : null}
           {!prLoading && !error && prs.length > 0 ? (
@@ -328,6 +367,103 @@ export function CloudGitActivityPanel({ provider, label }: { provider: Provider;
           </button>
         </div>
         <div className="hp-card" style={{ padding: '14px 16px' }}>
+          <div style={{ fontWeight: 650, fontSize: 14, marginBottom: 6 }}>Reviews requested of you</div>
+          {reviewLoading ? <p className="hp-muted" style={{ margin: '0 0 12px', fontSize: 12 }}>Loading…</p> : null}
+          {!reviewLoading && reviewError ? (
+            <div style={{ margin: '0 0 12px' }}>
+              <p style={{ margin: 0, fontSize: 12, color: '#ff8a80', lineHeight: 1.45 }}>
+                {humanizeCloudAuthError(new Error(reviewError))}
+              </p>
+              {needsReconnect(reviewError) ? (
+                <button type="button" className="hp-btn hp-btn-primary" style={{ marginTop: 10, fontSize: 12 }} onClick={scrollToReconnect}>
+                  Reconnect {label}
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+          {!reviewLoading && !reviewError && reviewRequests.length === 0 ? (
+            <p className="hp-muted" style={{ margin: '0 0 12px', fontSize: 12, lineHeight: 1.45 }}>
+              No open PRs/MRs with a pending review request for your account.
+            </p>
+          ) : null}
+          {!reviewLoading && !reviewError && reviewRequests.length > 0 ? (
+            <div className="mono" style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
+              Showing {reviewRequests.length} of up to {reviewLimit}
+            </div>
+          ) : null}
+          {!reviewLoading && !reviewError && reviewRequests.length > 0 ? (
+            <ul style={{ margin: '0 0 12px', paddingLeft: 18, fontSize: 12, lineHeight: 1.5 }}>
+              {reviewRequests.map((pr) => (
+                <li key={pr.id} style={{ marginBottom: 4 }}>
+                  <a
+                    href={pr.url}
+                    onClick={(e) => {
+                      e.preventDefault()
+                      void window.dh.openExternal(pr.url)
+                    }}
+                    style={{ color: 'var(--text)', textDecoration: 'none' }}
+                    title={pr.title}
+                  >
+                    {pr.title}
+                  </a>
+                  <span className="mono" style={{ color: 'var(--text-muted)', marginLeft: 6 }}>
+                    {pr.repo}
+                  </span>
+                  {localRepoPathFor(pr.repo) ? (
+                    <Link
+                      to={`/git-vcs?repoPath=${encodeURIComponent(localRepoPathFor(pr.repo) ?? '')}`}
+                      className="mono"
+                      style={{
+                        marginLeft: 8,
+                        color: 'var(--cg-accent, var(--accent))',
+                        textDecoration: 'none',
+                        fontSize: 11,
+                        fontWeight: 600,
+                      }}
+                    >
+                      Open in Lumina VCS
+                    </Link>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {!reviewLoading &&
+          !reviewError &&
+          (reviewLimit > 12 || (reviewRequests.length >= reviewLimit && reviewLimit < 50)) ? (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+              {reviewRequests.length >= reviewLimit && reviewLimit < 50 ? (
+                <button
+                  type="button"
+                  className="hp-btn"
+                  style={{ fontSize: 12, borderColor: 'var(--cg-accent-muted)' }}
+                  onClick={() => setReviewLimit((n) => Math.min(50, n + 12))}
+                >
+                  Show more
+                </button>
+              ) : null}
+              {reviewLimit > 12 ? (
+                <button
+                  type="button"
+                  className="hp-btn"
+                  style={{ fontSize: 12, borderColor: 'var(--cg-accent-muted)' }}
+                  onClick={() => setReviewLimit(12)}
+                >
+                  Reset
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+          <button
+            type="button"
+            className="hp-btn"
+            style={{ borderColor: 'var(--cg-accent-muted)', fontSize: 12 }}
+            onClick={() => void window.dh.openExternal(urls.reviews)}
+          >
+            <span className="codicon codicon-link-external" aria-hidden /> View on {label}
+          </button>
+        </div>
+        <div className="hp-card" style={{ padding: '14px 16px' }}>
           <div style={{ fontWeight: 650, fontSize: 14, marginBottom: 6 }}>Issues assigned to you</div>
           {issueLoading ? <p className="hp-muted" style={{ margin: '0 0 12px', fontSize: 12 }}>Loading…</p> : null}
           {!issueLoading && issueError ? (
@@ -349,7 +485,7 @@ export function CloudGitActivityPanel({ provider, label }: { provider: Provider;
           ) : null}
           {!issueLoading && !issueError && issues.length > 0 ? (
             <div className="mono" style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
-              Showing {issues.length} · request limit {issueLimit}
+              Showing {issues.length} of up to {issueLimit}
             </div>
           ) : null}
           {!issueLoading && !issueError && issues.length > 0 ? (
@@ -443,7 +579,7 @@ export function CloudGitActivityPanel({ provider, label }: { provider: Provider;
           ) : null}
           {!ciLoading && !pipelineError && pipelines.length > 0 ? (
             <div className="mono" style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
-              Showing {pipelines.length} · request limit {pipelineLimit}
+              Showing {pipelines.length} of up to {pipelineLimit} runs
             </div>
           ) : null}
           {!ciLoading && !pipelineError && pipelines.length > 0 ? (
@@ -556,7 +692,7 @@ export function CloudGitActivityPanel({ provider, label }: { provider: Provider;
           ) : null}
           {!releaseLoading && !releaseError && releases.length > 0 ? (
             <div className="mono" style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
-              Showing {releases.length} · request limit {releaseLimit}
+              Showing {releases.length} of up to {releaseLimit}
             </div>
           ) : null}
           {!releaseLoading && !releaseError && releases.length > 0 ? (

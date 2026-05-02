@@ -12,6 +12,7 @@ export type GitVcsIntegrateBarProps = {
   onStashPop: () => Promise<void>
   onMergeContinue: () => Promise<void>
   onRebaseContinue: () => Promise<void>
+  onRebaseSkip: () => Promise<void>
   onMergeAbort: () => Promise<void>
   onRebaseAbort: () => Promise<void>
 }
@@ -31,6 +32,7 @@ export function GitVcsIntegrateBar({
   onStashPop,
   onMergeContinue,
   onRebaseContinue,
+  onRebaseSkip,
   onMergeAbort,
   onRebaseAbort,
 }: GitVcsIntegrateBarProps): ReactElement {
@@ -163,6 +165,15 @@ export function GitVcsIntegrateBar({
         >
           Continue rebase
         </button>
+        <button
+          type="button"
+          className="hp-btn"
+          disabled={busy}
+          title="Skips the current patch during a rebase (git rebase --skip)"
+          onClick={() => void onRebaseSkip()}
+        >
+          Skip rebase commit
+        </button>
         <button type="button" className="hp-btn" disabled={busy} onClick={() => void onStashPop()}>
           Stash pop
         </button>
@@ -175,8 +186,9 @@ export function GitVcsIntegrateBar({
       </div>
       <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.45, maxWidth: 720 }}>
         Merge and rebase run locally in this repo. If Git stops for conflicts, fix files in your editor, stage
-        resolved paths, then use Continue merge or Continue rebase. Use abort to discard the in-progress operation.
-        Stash pop applies the latest stash entry.
+        resolved paths, then use Continue merge or Continue rebase. Skip rebase commit drops the current replayed
+        commit when appropriate. Use abort to discard the in-progress operation. Stash pop applies the latest stash
+        entry.
       </p>
     </div>
   )

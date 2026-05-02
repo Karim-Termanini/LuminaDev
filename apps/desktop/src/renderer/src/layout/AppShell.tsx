@@ -24,6 +24,7 @@ const nav = [
   { to: '/terminal', label: 'Terminal', icon: 'terminal', status: 'live' as RouteStatus },
   { to: '/runtimes', label: 'Runtimes', icon: 'zap', status: 'live' as RouteStatus },
   { to: '/maintenance', label: 'Maintenance', icon: 'shield', status: 'live' as RouteStatus },
+  { to: '/system-readiness', label: 'Readiness', icon: 'checklist', status: 'live' as RouteStatus },
   { to: '/settings', label: 'Settings', icon: 'settings', status: 'partial' as RouteStatus },
 ] as const
 

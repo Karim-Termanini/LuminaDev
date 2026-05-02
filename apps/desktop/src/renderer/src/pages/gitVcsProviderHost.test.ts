@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { classifyGitRemoteUrl, truncateMiddleUrl } from './gitVcsProviderHost'
+import { classifyGitRemoteUrl, resolvePipelineProvider, truncateMiddleUrl } from './gitVcsProviderHost'
 
 describe('classifyGitRemoteUrl', () => {
   it('detects GitHub HTTPS and SSH', () => {
@@ -15,6 +15,39 @@ describe('classifyGitRemoteUrl', () => {
 
   it('returns other for unknown hosts', () => {
     expect(classifyGitRemoteUrl('https://codeberg.org/a/b.git')).toBe('other')
+  })
+})
+
+describe('resolvePipelineProvider', () => {
+  it('keeps SaaS classification', () => {
+    expect(
+      resolvePipelineProvider('https://github.com/o/r.git', [{ provider: 'gitlab' }]),
+    ).toBe('github')
+  })
+
+  it('infers GitHub when only GitHub is linked', () => {
+    expect(
+      resolvePipelineProvider('https://git.corp.example/o/r.git', [{ provider: 'github' }]),
+    ).toBe('github')
+  })
+
+  it('infers GitLab when only GitLab is linked', () => {
+    expect(
+      resolvePipelineProvider('https://git.corp.example/o/r.git', [{ provider: 'gitlab' }]),
+    ).toBe('gitlab')
+  })
+
+  it('defaults to GitHub when both are linked and host is unknown', () => {
+    expect(
+      resolvePipelineProvider('https://git.corp.example/o/r.git', [
+        { provider: 'github' },
+        { provider: 'gitlab' },
+      ]),
+    ).toBe('github')
+  })
+
+  it('returns other when host is unknown and no accounts', () => {
+    expect(resolvePipelineProvider('https://git.corp.example/o/r.git', [])).toBe('other')
   })
 })
 

@@ -137,6 +137,7 @@ function createTauriDhApi(): DhApi {
     cloudAuthDisconnect: (payload) => tauriInvoke(IPC.cloudAuthDisconnect, payload),
     cloudAuthStatus: () => tauriInvoke(IPC.cloudAuthStatus),
     cloudGitPrs: (payload) => tauriInvoke(IPC.cloudGitPrs, payload),
+    cloudGitReviewRequests: (payload) => tauriInvoke(IPC.cloudGitReviewRequests, payload),
     cloudGitPipelines: (payload) => tauriInvoke(IPC.cloudGitPipelines, payload),
     cloudGitIssues: (payload) => tauriInvoke(IPC.cloudGitIssues, payload),
     cloudGitReleases: (payload) => tauriInvoke(IPC.cloudGitReleases, payload),
@@ -159,6 +160,7 @@ function createTauriDhApi(): DhApi {
     gitVcsRebaseAbort: (payload) => tauriInvoke(IPC.gitVcsRebaseAbort, payload),
     gitVcsMergeContinue: (payload) => tauriInvoke(IPC.gitVcsMergeContinue, payload),
     gitVcsRebaseContinue: (payload) => tauriInvoke(IPC.gitVcsRebaseContinue, payload),
+    gitVcsRebaseSkip: (payload) => tauriInvoke(IPC.gitVcsRebaseSkip, payload),
   } satisfies DhApi
 }
 
