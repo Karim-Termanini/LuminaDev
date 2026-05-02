@@ -40,7 +40,7 @@ This document is the **operational blueprint** for evolving Git VCS from “raw 
 
 4. **If push fails for policy reasons (protected branch)**  
    - **v0 shipped:** Tauri classifies common host messages into **`[GIT_VCS_PROTECTED_BRANCH]`**; the error panel uses the same amber “soft notice” treatment as integration-required, with **Open Cloud Git** (tab follows the active fetch remote when GitHub/GitLab) and **Dismiss**.  
-   - **Still to do:** branch-suggest + “create PR/MR” wizard and copy-details affordance.
+   - **Still to do:** branch rename / suggest + **create PR/MR wizard** (push to new branch + host API). **Shipped:** **Copy raw error** on `/git-vcs` (full bracketed IPC string).
 
 **Implementation notes:**
 
@@ -135,7 +135,7 @@ Work in **vertical slices** (each shippable behind a small flag if needed). Sugg
 
 - **`GitVcsPage.runPush`:** silent `gitVcsFetch` for the active fetch remote, then `gitVcsStatus`; if `behind > 0`, push is **skipped** and a **`[GIT_VCS_INTEGRATION_REQUIRED]`** notice appears (amber panel with **Pull latest**, **Fetch only**, **Dismiss**).  
 - **Protected branch:** `git_vcs_network.rs` (`git_network_with_auth`) maps host stderr to **`[GIT_VCS_PROTECTED_BRANCH]`** when messages match (e.g. “protected branch”, GH006, rulesets, pre-receive hook declined); **`GitVcsPage`** shows **Open Cloud Git** + **Dismiss**.  
-- **Still to do:** PR/MR wizard dialog; optional “checking remote…” subtext on slow fetch.
+- **Still to do:** PR/MR wizard dialog + branch rename/suggest after protected push; optional “checking remote…” subtext on slow fetch. **Copy raw error** on the Git op error panel is **shipped**.
 
 ### 3) Conflict Mode file list + staging loop (no 3-way UI yet)
 
@@ -157,6 +157,19 @@ Work in **vertical slices** (each shippable behind a small flag if needed). Sugg
 ### 6) Integration bar polish
 
 - **FF-only default on:** shipped. **Still to do:** keyboard focus + a11y review on the ref picker and action row.
+
+---
+
+## Open backlog (not shipped yet)
+
+These are the **largest remaining Smart-Flow / Git VCS** items called out in product planning; everything else in this doc is either shipped as v0 or tracked in smaller bullets above.
+
+| Backlog item | What “done” looks like |
+| --- | --- |
+| **Branch rename + create PR/MR wizard** | When direct push is impossible (e.g. protected default branch): suggest a safe branch name, `git checkout -b` / push there, then a wizard calling Cloud Git APIs to open a PR/MR with prefilled title/body and target branch (`Phase Four`). |
+| **True 3-way conflict UI** | Dedicated resolver (ours / theirs / result + per-hunk actions), optional new IPC for stage blobs; today: conflict rows + merge-aware diff + editor (`Phase Three`). |
+
+**Also shipped from the same planning thread:** **Copy raw error** on `/git-vcs` copies the full `opErrorRaw` string (including `[GIT_VCS_*]` prefix) for logs, issues, and support.
 
 ---
 

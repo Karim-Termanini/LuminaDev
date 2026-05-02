@@ -342,15 +342,15 @@ This phase turns the app into a true daily driver for software engineers managin
 
 - **Authentication** (shipped): Encrypted store for tokens; device flow + PAT; optional OAuth client IDs via **Cloud Git → Advanced** / env / compile-time; dashboard **Cloud Git** link widget (`link.cloud-git`).
 - **Interactive Version Control (Smart Workflow)**: Visual-first implementation following the "Microsoft Philosophy" (Zero Terminal).
-    - **Smart Push/Sync**: Instead of simple commands, the app implements a "Proactive Guardian". It fetches remote status before pushing. If the branch is protected or "Local is behind", it automatically opens the **Integrate Bar**. *(v0: Push runs fetch + blocks when `behind > 0` with guided notice; protected-branch dialog still planned.)*
+    - **Smart Push/Sync**: Instead of simple commands, the app implements a "Proactive Guardian". It fetches remote status before pushing. If the branch is protected or "Local is behind", it guides the user before side effects. *(v0: fetch-before-push, `behind > 0` blocks push with notice; protected-branch host messages → `[GIT_VCS_PROTECTED_BRANCH]` + Cloud Git link; **Copy raw error** on the panel. **Still:** branch rename + PR/MR wizard.)*
   - **Integration & Resolve**:
     - **Integrate Bar**: Guided UI for Merge, Rebase, and Stash (Fast-forward defaults).
     - **Conflict Resolution Studio**: A dedicated 3-way merge view (Local vs Incoming vs Result) with "Accept Current", "Accept Incoming", and "Accept Both" buttons. No manual text editing required for conflicts.
     - **State Management**: Automatic handling of `MERGING` and `REBASING` states with "Continue" or "Abort" actions. *(v0: `dh:git:vcs:status` exposes `gitOperation` + `conflictFileCount`; `/git-vcs` shows a guidance banner.)*
 - **Cloud Dashboards (API Integration)**:
   - **Pull Requests / Merge Requests**:
-    - **Cloud Awareness**: If a Push fails due to a "Protected Branch", the app suggests creating a PR/MR instead of showing a raw error.
-    - **PR/MR Wizard**: Create new PRs/MRs directly from the app. It auto-fills titles from commit history and allows choosing target branches via a visual picker.
+    - **Cloud Awareness**: Protected-branch push failures use a humanized code + guidance + Cloud Git entry point (see `docs/SMART_FLOW_VCS.md`). **Still to do:** PR/MR creation wizard + suggested new branch name after rename/checkout.
+    - **PR/MR Wizard**: Create new PRs/MRs directly from the app. It auto-fills titles from commit history and allows choosing target branches via a visual picker. *(Not shipped.)*
   - **Issues Tracking**: List open issues assigned to the user across repositories.
   - **CI/CD Pipelines**: Real-time status of GitHub Actions and GitLab CI/CD pipelines (Success, Failure, In Progress) for the active local repo.
   - **Releases & Tags**: Overview of the latest releases.

@@ -44,6 +44,8 @@ export function GitVcsPage(): ReactElement {
   const [busy, setBusy] = useState(false)
   /** Raw IPC error string (may include `[GIT_VCS_*]` prefix) for humanizer + code detection. */
   const [opErrorRaw, setOpErrorRaw] = useState<string | null>(null)
+  /** Transient feedback after "Copy raw error" on the Git op error panel. */
+  const [rawErrorCopyHint, setRawErrorCopyHint] = useState<'idle' | 'copied' | 'failed'>('idle')
   /** Modal: checkout blocked by dirty worktree (target branch + parsed paths). */
   const [dirtyCheckout, setDirtyCheckout] = useState<DirtyCheckoutPrompt | null>(null)
   const [stashIncludeUntracked, setStashIncludeUntracked] = useState(true)
@@ -74,6 +76,23 @@ export function GitVcsPage(): ReactElement {
   )
 
   const closeDirtyCheckoutModal = useCallback(() => setDirtyCheckout(null), [])
+
+  useEffect(() => {
+    setRawErrorCopyHint('idle')
+  }, [opErrorRaw])
+
+  const copyRawGitError = useCallback(async () => {
+    if (!opErrorRaw?.trim()) return
+    try {
+      await navigator.clipboard.writeText(opErrorRaw)
+      setRawErrorCopyHint('copied')
+    } catch {
+      setRawErrorCopyHint('failed')
+    }
+    window.setTimeout(() => {
+      setRawErrorCopyHint('idle')
+    }, 2500)
+  }, [opErrorRaw])
 
   useEffect(() => {
     void window.dh.cloudAuthStatus().then((res) => {
@@ -798,6 +817,33 @@ export function GitVcsPage(): ReactElement {
             <Link to="/cloud-git?tab=github" className="hp-btn hp-btn-primary" style={{ textDecoration: 'none' }}>
               Connect in Cloud Git
             </Link>
+          ) : null}
+          {opErrorRaw?.trim() ? (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+              <button
+                type="button"
+                className="hp-btn"
+                aria-label="Copy full error text, including Git error code prefix"
+                onClick={() => void copyRawGitError()}
+              >
+                Copy raw error
+              </button>
+              {rawErrorCopyHint === 'copied' ? (
+                <span className="mono" style={{ fontSize: 12, color: 'var(--text-muted)' }} aria-live="polite">
+                  Copied
+                </span>
+              ) : null}
+              {rawErrorCopyHint === 'failed' ? (
+                <span className="mono" style={{ fontSize: 12, color: '#ff8a80' }} aria-live="polite">
+                  Clipboard unavailable
+                </span>
+              ) : null}
+              {!integrationNotice && !protectedBranchNotice ? (
+                <button type="button" className="hp-btn" onClick={() => setOpErrorRaw(null)}>
+                  Dismiss
+                </button>
+              ) : null}
+            </div>
           ) : null}
         </div>
       ) : null}
