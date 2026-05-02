@@ -37,7 +37,7 @@ Renderer → `desktopApiBridge.ts` → `invoke` / `ipc_send` → Rust `ipc_invok
 
 ### Rust backend (`apps/desktop/src-tauri/`)
 
-`compose_profiles.rs` resolves `docker/compose/<profile>` for `dh:compose:up` / `dh:compose:logs` (repo walk, `LUMINA_DEV_COMPOSE_ROOT`, or bundled resources from `tauri.conf.json`). Other domains live in focused modules (`runtime_jobs.rs`, etc.); avoid growing new logic only in `lib.rs`.
+`compose_profiles.rs` resolves `docker/compose/<profile>` for `dh:compose:up` / `dh:compose:logs` (repo walk, `LUMINA_DEV_COMPOSE_ROOT`, or bundled resources from `tauri.conf.json`). Optional **`LUMINA_DEV_COMPOSE_FULL`** merges `docker-compose.full.yml` when present. Other domains live in focused modules (`runtime_jobs.rs`, etc.); avoid growing new logic only in `lib.rs`.
 
 Single dispatcher in `lib.rs` with two Tauri commands:
 

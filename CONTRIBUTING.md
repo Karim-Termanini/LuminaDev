@@ -61,6 +61,7 @@ cargo test -- --nocapture
 ## Flatpak and host boundary notes
 
 - **Compose preset stacks:** `dh:compose:up` resolves `docker/compose/<profile>` from the repo checkout, `LUMINA_DEV_COMPOSE_ROOT` (parent of `<profile>` dirs), or bundled `resource_dir()/docker/compose` when packaged. Export this env in Flatpak if the app cwd is not inside the git tree.
+- **Full stack pilot:** If a profile directory contains `docker-compose.full.yml` and the app is launched with **`LUMINA_DEV_COMPOSE_FULL=1`** (or `true` / `yes`), `docker compose` uses **both** `-f docker-compose.yml` and `-f docker-compose.full.yml` (see `web-dev` for an example nginx sidecar). Without the env var, behavior is unchanged (stub only).
 - Flatpak sessions may require explicit overrides for Docker socket and SSH access.
 - See:
   - `docs/DOCKER_FLATPAK.md`

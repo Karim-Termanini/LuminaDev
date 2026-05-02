@@ -186,7 +186,7 @@ All five stabilization checklist items `done`. `pnpm smoke` green. See [`docs/ST
 
 ### Verified missing (not Alpha scope)
 - [x] **Minimal compose stub per preset** — each `docker/compose/<profile>/docker-compose.yml` is a small Alpine `sleep infinity` service with a unique Compose `name:`; `dh:compose:up` resolves checkout, `LUMINA_DEV_COMPOSE_ROOT`, or bundled `docker/compose` (see `compose_profiles.rs` + `tauri.conf.json` `bundle.resources`).
-- [ ] **Full stack definitions** — replace stubs with profile-realistic services (nginx, Jupyter, Hugo, …) behind feature flags or separate overlays when ready.
+- [🔄] **Full stack definitions** — pilot: **`LUMINA_DEV_COMPOSE_FULL=1`** merges optional `docker-compose.full.yml` per preset (`web-dev` adds **nginx:alpine** on host port **18080**); remaining presets still stub-only until expanded the same way.
 - [x] Preset ↔ store: `active_profile` is a `ComposeProfile` id; dashboard + wizard + Profiles **Set Active** stay aligned
 
 _On-login automation lives under **Phase 9** (not Phase 1)._
@@ -384,7 +384,7 @@ Full preparation for Flathub submission and official v1.0 stability.
 ✅  Phase 6  — Runtimes (17 languages)
 ✅  Phase 7  — Maintenance / Guardian
 ✅  SPRINT   — Flatpak + Tests + Audit + Cross-distro + v0.2.0-alpha (shipped)
-🔄  Phase 1  — Dashboard (**full stack definitions** per preset; minimal Alpine stubs + resolver shipped)
+🔄  Phase 1  — Dashboard (stub + resolver shipped; **optional \`docker-compose.full.yml\`** pilot for richer stacks)
 ✅  Phase 9  — Profiles (incl. on-login automation)
 ✅  Phase 11 — Wizard (step + rich field resume in `wizard_state`)
 📋  Phase 8  — Settings (SSH Bookmarks, Hosts Editor, Env Vars)
