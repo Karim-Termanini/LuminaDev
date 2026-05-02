@@ -31,7 +31,7 @@ const PROVIDER_META: Record<Provider, { label: string; icon: string; scopes: str
   gitlab: {
     label: 'GitLab',
     icon: 'source-control',
-    scopes: ['read_api', 'read_user', 'read_repository', 'write_repository'],
+    scopes: ['api', 'read_api', 'read_user', 'read_repository', 'write_repository'],
     tabEmoji: '🦊',
   },
 }
@@ -609,6 +609,12 @@ export function CloudGitPage(): ReactElement {
                     >
                       Connect {meta.label}
                     </button>
+                    {activeTab === 'gitlab' && (
+                      <p className="hp-muted" style={{ fontSize: 11, marginTop: 10, maxWidth: 320 }}>
+                        <span className="codicon codicon-info" style={{ fontSize: 12, marginRight: 4, color: 'var(--cg-accent)' }} />
+                        GitLab requires the <strong style={{ color: 'var(--cg-accent)' }}>'api'</strong> scope for Merge Request management.
+                      </p>
+                    )}
                     <button
                       type="button"
                       style={{
@@ -638,8 +644,30 @@ export function CloudGitPage(): ReactElement {
                       value={patToken}
                       onChange={(e) => setPatToken(e.target.value)}
                       className="hp-input"
-                      style={{ width: '100%', marginBottom: 10, boxSizing: 'border-box' }}
+                      style={{ width: '100%', marginBottom: 4, boxSizing: 'border-box' }}
                     />
+                    <p className="hp-muted" style={{ fontSize: 11, margin: '0 0 10px' }}>
+                      Required scopes: {PROVIDER_META[activeTab].scopes.join(', ')}
+                    </p>
+                    {activeTab === 'gitlab' && (
+                      <div
+                        style={{
+                          fontSize: 11,
+                          padding: '6px 10px',
+                          background: 'rgba(255,160,0,0.1)',
+                          border: '1px solid rgba(255,160,0,0.2)',
+                          borderRadius: 6,
+                          color: '#ffb74d',
+                          marginBottom: 10,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 6,
+                        }}
+                      >
+                        <span className="codicon codicon-info" style={{ fontSize: 13 }} />
+                        <span>Ensure the 'api' scope is enabled to create and manage Merge Requests.</span>
+                      </div>
+                    )}
                     {patError ? <p style={{ color: '#ff8a80', fontSize: 12, margin: '0 0 10px' }}>{patError}</p> : null}
                     <div style={{ display: 'flex', gap: 10 }}>
                       <button

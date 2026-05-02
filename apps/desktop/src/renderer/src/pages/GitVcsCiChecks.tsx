@@ -24,7 +24,6 @@ export function GitVcsCiChecks({
 }: GitVcsCiChecksProps): ReactElement {
   const [checks, setChecks] = useState<CloudCiCheck[]>([])
   const [mergeable, setMergeable] = useState<boolean | null>(null)
-  const [mergeState, setMergeState] = useState<string>('unknown')
   const [baseBranch, setBaseBranch] = useState<string>('main')
   const [loading, setLoading] = useState(true)
   const [resolving, setResolving] = useState(false)
@@ -32,7 +31,7 @@ export function GitVcsCiChecks({
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date())
 
   const fetchChecks = useMemo(() => {
-    let active = true
+    const active = true
     const run = async (): Promise<void> => {
       if (!reference) return
       setLoading(true)
@@ -49,7 +48,6 @@ export function GitVcsCiChecks({
         } else if (res.details) {
           setChecks(res.details.checks ?? [])
           setMergeable(res.details.mergeable)
-          setMergeState(res.details.mergeable_state)
           setBaseBranch(res.details.base_branch ?? 'main')
           setError(null)
           setLastUpdated(new Date())

@@ -1305,6 +1305,16 @@ impl GitLabProvider {
                 resp.status()
             ));
         }
+
+        // Check for 'api' scope in the X-Gitlab-Token-Scopes header
+        if let Some(scopes_header) = resp.headers().get("X-Gitlab-Token-Scopes") {
+            if let Ok(scopes_str) = scopes_header.to_str() {
+                let scopes: Vec<&str> = scopes_str.split(',').map(|s| s.trim()).collect();
+                if !scopes.contains(&"api") {
+                    return Err("[CLOUD_GIT_INSUFFICIENT_SCOPE] Your GitLab token lacks the 'api' scope needed for full integration (e.g., creating merge requests). Please reconnect with a token that has the 'api' scope enabled.".to_string());
+                }
+            }
+        }
         let body: serde_json::Value = resp
             .json()
             .await
