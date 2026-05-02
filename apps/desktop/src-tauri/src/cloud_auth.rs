@@ -849,7 +849,7 @@ impl GitHubProvider {
             .map_err(|e| format!("[CLOUD_GIT_NETWORK] GitHub repos parse: {}", e))?;
 
         // Fetch several runs per repo so accounts with few repos still fill the UI cap.
-        let per_repo = std::cmp::min(15, std::cmp::max(3, limit));
+        let per_repo = limit.clamp(3, 15);
         let mut out: Vec<CloudPipelineEntry> = Vec::new();
         for repo in repos.into_iter().take(20) {
             let full_name = repo["full_name"].as_str().unwrap_or("").to_string();
@@ -1364,7 +1364,7 @@ impl GitLabProvider {
             .map_err(|e| format!("[CLOUD_GIT_NETWORK] GitLab projects parse: {}", e))?;
 
         // Several pipelines per project so a single active repo can fill the UI cap.
-        let per_repo = std::cmp::min(15, std::cmp::max(3, limit));
+        let per_repo = limit.clamp(3, 15);
         let mut out: Vec<CloudPipelineEntry> = Vec::new();
         for project in projects.into_iter().take(20) {
             let id = project["id"].as_i64().unwrap_or_default();
