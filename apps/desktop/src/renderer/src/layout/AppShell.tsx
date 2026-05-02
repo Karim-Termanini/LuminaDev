@@ -21,6 +21,7 @@ const nav = [
   { to: '/terminal', label: 'Terminal', icon: 'terminal', status: 'live' as RouteStatus },
   { to: '/runtimes', label: 'Runtimes', icon: 'zap', status: 'live' as RouteStatus },
   { to: '/maintenance', label: 'Maintenance', icon: 'shield', status: 'live' as RouteStatus },
+  { to: '/settings', label: 'Settings', icon: 'settings', status: 'stub' as RouteStatus },
 ] as const
 
 const statusStyles: Record<RouteStatus, { label: string; color: string; bg: string; border: string }> = {

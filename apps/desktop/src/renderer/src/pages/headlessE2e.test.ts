@@ -184,6 +184,11 @@ describe('headless-e2e: page-specific rendering', () => {
     }
   })
 
+  it('should load SettingsPage without errors', async () => {
+    const page = await import('./SettingsPage')
+    expect(page.SettingsPage).toBeDefined()
+  })
+
   it('should verify critical page paths conceptually', () => {
     // Rather than trying to import all pages (which have complex Tauri/shared dependencies),
     // verify the test structure is sound and page names are valid
@@ -197,6 +202,7 @@ describe('headless-e2e: page-specific rendering', () => {
       'RuntimesPage',
       'SshPage',
       'MaintenancePage',
+      'SettingsPage',
     ]
 
     // All critical pages should have valid names
