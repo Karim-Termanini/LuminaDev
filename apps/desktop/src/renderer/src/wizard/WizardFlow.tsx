@@ -1,4 +1,9 @@
-import { WizardStateStoreSchema, type ComposeProfile, type SessionInfo } from '@linux-dev-home/shared'
+import {
+  WizardStateStoreSchema,
+  type ComposeProfile,
+  type SessionInfo,
+  type WizardStateStore,
+} from '@linux-dev-home/shared'
 import type { ReactElement } from 'react'
 import { useEffect, useRef, useState } from 'react'
 import { assertGitOk } from '../pages/gitContract'
@@ -34,8 +39,25 @@ export function WizardFlow({ onComplete }: { onComplete: () => void }): ReactEle
         const bag = raw as { ok?: boolean; data?: unknown }
         if (bag.ok) {
           const w = WizardStateStoreSchema.safeParse(bag.data)
-          if (w.success && !w.data.completed && typeof w.data.stepIndex === 'number') {
-            setStep(w.data.stepIndex)
+          if (w.success && !w.data.completed) {
+            if (typeof w.data.stepIndex === 'number') {
+              setStep(w.data.stepIndex)
+            }
+            setGitName(w.data.gitName ?? '')
+            setGitEmail(w.data.gitEmail ?? '')
+            if (w.data.gitTarget) setTarget(w.data.gitTarget)
+            if (w.data.pickedStarterProfile) setPickedProfile(w.data.pickedStarterProfile)
+            if (w.data.sshPubKey) {
+              setPubKey(w.data.sshPubKey)
+            } else if (w.data.sshKeyGenerated) {
+              const tgt = w.data.gitTarget ?? 'sandbox'
+              try {
+                const pub = await window.dh.sshGetPub({ target: tgt })
+                if (pub.ok && pub.pub) setPubKey(pub.pub)
+              } catch {
+                /* ignore */
+              }
+            }
           }
         }
       } finally {
@@ -53,15 +75,36 @@ export function WizardFlow({ onComplete }: { onComplete: () => void }): ReactEle
         const prev = bag.ok ? WizardStateStoreSchema.safeParse(bag.data) : null
         const prevShow = prev?.success ? (prev.data.showOnStartup ?? false) : false
         const showOnStartup = step >= 6 ? showAgainNextLaunch : prevShow
+
+        const draft: WizardStateStore = {
+          completed: false,
+          showOnStartup,
+          stepIndex: step,
+          gitTarget: target,
+        }
+        const gn = gitName.trim()
+        const ge = gitEmail.trim()
+        if (gn) draft.gitName = gn
+        if (ge) draft.gitEmail = ge
+        if (pubKey) {
+          draft.sshPubKey = pubKey
+          draft.sshKeyGenerated = true
+        } else if (prev?.success) {
+          if (prev.data.sshPubKey) draft.sshPubKey = prev.data.sshPubKey
+          if (prev.data.sshKeyGenerated) draft.sshKeyGenerated = prev.data.sshKeyGenerated
+        }
+        const starter = pickedProfile ?? (prev?.success ? prev.data.pickedStarterProfile : undefined)
+        if (starter) draft.pickedStarterProfile = starter
+
         await window.dh.storeSet({
           key: 'wizard_state',
-          data: { completed: false, showOnStartup, stepIndex: step },
+          data: WizardStateStoreSchema.parse(draft),
         })
       } catch {
         /* best effort */
       }
     })()
-  }, [step, showAgainNextLaunch, hydrated])
+  }, [step, showAgainNextLaunch, hydrated, gitName, gitEmail, target, pubKey, pickedProfile])
 
   const handleComplete = async () => {
     exitingRef.current = true
