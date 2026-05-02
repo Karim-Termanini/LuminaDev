@@ -222,16 +222,24 @@ fn truncate_probe_output(s: &str) -> String {
 }
 
 /// `docker compose` in a fixed directory (avoids `bash -lc "cd … && …"`).
+/// When [`compose_profiles::compose_full_overlay_enabled`] is true, prepends `-f docker-compose.yml -f docker-compose.full.yml`.
 async fn exec_docker_compose_in_dir(
   compose_dir: &Path,
   compose_subargs: &[&str],
   limit: Duration,
 ) -> Result<(String, String), String> {
+  let mut compose_args: Vec<String> = vec!["compose".into(), "-f".into(), "docker-compose.yml".into()];
+  if compose_profiles::compose_full_overlay_enabled(compose_dir) {
+    compose_args.push("-f".into());
+    compose_args.push("docker-compose.full.yml".into());
+  }
+  for a in compose_subargs {
+    compose_args.push((*a).to_string());
+  }
   let fut = async {
     let output = Command::new("docker")
       .current_dir(compose_dir)
-      .arg("compose")
-      .args(compose_subargs)
+      .args(&compose_args)
       .output()
       .await
       .map_err(|e| format!("[EXEC_ERROR] {}", e))?;
@@ -246,8 +254,8 @@ async fn exec_docker_compose_in_dir(
   match tokio::time::timeout(limit, fut).await {
     Ok(inner) => inner,
     Err(_) => Err(format!(
-      "[HOST_COMMAND_TIMEOUT] docker compose {}",
-      compose_subargs.join(" ")
+      "[HOST_COMMAND_TIMEOUT] docker {}",
+      compose_args.join(" ")
     )),
   }
 }

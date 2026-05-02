@@ -186,7 +186,7 @@ All five stabilization checklist items `done`. `pnpm smoke` green. See [`docs/ST
 
 ### Verified missing (not Alpha scope)
 - [x] **Minimal compose stub per preset** — each `docker/compose/<profile>/docker-compose.yml` is a small Alpine `sleep infinity` service with a unique Compose `name:`; `dh:compose:up` resolves checkout, `LUMINA_DEV_COMPOSE_ROOT`, or bundled `docker/compose` (see `compose_profiles.rs` + `tauri.conf.json` `bundle.resources`).
-- [ ] **Full stack definitions** — replace stubs with profile-realistic services (nginx, Jupyter, Hugo, …) behind feature flags or separate overlays when ready.
+- [🔄] **Full stack definitions** — pilot: **`LUMINA_DEV_COMPOSE_FULL=1`** merges optional `docker-compose.full.yml` per preset (`web-dev` adds **nginx:alpine** on host port **18080**); remaining presets still stub-only until expanded the same way.
 - [x] Preset ↔ store: `active_profile` is a `ComposeProfile` id; dashboard + wizard + Profiles **Set Active** stay aligned
 
 _On-login automation lives under **Phase 9** (not Phase 1)._
@@ -269,8 +269,8 @@ Missing: real dep graph (`removableDeps` always empty), Ruby slow on Fedora.
 - [x] Diagnostics bundle export
 - [x] Docker cleanup + compose health
 - [x] Integrity: in-app host probes via whitelisted `hostExec`
-
-Missing: user-defined task checklist, git config backup/restore.
+- [x] **User-defined task checklist** — persisted `maintenance_state.tasks`; **Overview** shows open items + jump to Schedule; **Schedule** tab supports inline title rename (click title).
+- [x] **Git config backup/restore** — **Git Config → Backups**: JSON export (clipboard) + import restores keys via existing preset/set-key flow.
 
 ---
 
@@ -307,7 +307,7 @@ Missing: user-defined task checklist, git config backup/restore.
 - [x] **Profile-pick step**: nine compose presets; writes `active_profile` when confirmed
 - [x] **Re-entry**: sidebar **Setup Wizard** resets `wizard_state` + reload
 - [x] **Resume logic**: `wizard_state.stepIndex` (0–6) persisted while incomplete; restored on next launch
-- [x] **Rich resume**: `wizard_state` stores Git name/email draft, `gitTarget`, `sshPubKey` / `sshKeyGenerated` (refetch via `sshGetPub` when needed), and `pickedStarterProfile`; `WizardFlow` hydrates and persists with step.
+- [x] **Rich resume**: `wizard_state` persists Git name/email draft, Flatpak `gitTarget`, `sshPubKey` / `sshKeyGenerated` (refetch via `sshGetPub` when needed), and `pickedStarterProfile`; `WizardFlow` hydrates and re-saves on step or field change.
 
 ---
 
@@ -384,7 +384,7 @@ Full preparation for Flathub submission and official v1.0 stability.
 ✅  Phase 6  — Runtimes (17 languages)
 ✅  Phase 7  — Maintenance / Guardian
 ✅  SPRINT   — Flatpak + Tests + Audit + Cross-distro + v0.2.0-alpha (shipped)
-🔄  Phase 1  — Dashboard (**full stack definitions** per preset; minimal Alpine stubs + resolver shipped)
+🔄  Phase 1  — Dashboard (stub + resolver shipped; **optional \`docker-compose.full.yml\`** pilot for richer stacks)
 ✅  Phase 9  — Profiles (incl. on-login automation)
 ✅  Phase 11 — Wizard (step + rich field resume in `wizard_state`)
 📋  Phase 8  — Settings (SSH Bookmarks, Hosts Editor, Env Vars)
