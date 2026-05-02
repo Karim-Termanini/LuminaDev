@@ -12,6 +12,7 @@ pub async fn invoke(app: &AppHandle, channel: &str, body: &Value) -> Value {
         "dh:cloud:git:issues" => issues(app, body).await,
         "dh:cloud:git:releases" => releases(app, body).await,
         "dh:cloud:git:create-pr" => create_pr(app, body).await,
+        "dh:cloud:git:get-pr-checks" => get_pr_checks(app, body).await,
         _ => json!({
             "ok": false,
             "error": format!("[UNKNOWN_CHANNEL] {}", channel)
@@ -337,6 +338,54 @@ async fn create_pr(app: &AppHandle, body: &Value) -> Value {
 
     match result {
         Ok(url) => json!({ "ok": true, "url": url }),
+        Err(e) => json!({ "ok": false, "error": e }),
+    }
+}
+
+async fn get_pr_checks(app: &AppHandle, body: &Value) -> Value {
+    let provider = body.get("provider").and_then(|v| v.as_str()).unwrap_or("");
+    let repo_path = body.get("repoPath").and_then(|v| v.as_str()).map(str::trim).filter(|s| !s.is_empty());
+    let remote_name = body.get("remote").and_then(|v| v.as_str()).map(str::trim).filter(|s| !s.is_empty()).unwrap_or("origin");
+    let reference = body.get("reference").and_then(|v| v.as_str()).unwrap_or("").trim();
+
+    if reference.is_empty() {
+        return json!({ "ok": false, "error": "[CLOUD_GIT_GET_PR_CHECKS] reference is required." });
+    }
+
+    let store = cloud_auth::app_encrypted_credential_store(app);
+    let cred = match store.load(provider) {
+        Ok(Some(c)) => c,
+        Ok(None) => return json!({ "ok": false, "error": "[CLOUD_AUTH_NOT_CONNECTED] Connect this provider first." }),
+        Err(e) => return json!({ "ok": false, "error": e }),
+    };
+
+    let rp = match repo_path {
+        Some(p) => p,
+        None => return json!({ "ok": false, "error": "[CLOUD_GIT_GET_PR_CHECKS] repoPath is required." }),
+    };
+
+    let remote_url = match exec_output_limit("git", &["-C", rp, "remote", "get-url", remote_name], CMD_TIMEOUT_SHORT).await {
+        Ok(u) => u,
+        Err(e) => return json!({ "ok": false, "error": format!("[CLOUD_GIT_SCOPE] Could not read remote: {}", e.trim()) }),
+    };
+
+    let parsed = match cloud_auth::parse_remote_for_repo_scoped_pipelines(remote_url.trim(), provider) {
+        Ok(p) => p,
+        Err(e) => return json!({ "ok": false, "error": e }),
+    };
+
+    let result = match (provider, &parsed) {
+        ("github", cloud_auth::ParsedRemoteRepo::Github { hostname, full_name }) => {
+            cloud_auth::GitHubProvider::list_pr_checks(&cred.token, hostname, full_name, reference).await
+        }
+        ("gitlab", cloud_auth::ParsedRemoteRepo::Gitlab { web_origin, path_with_namespace }) => {
+            cloud_auth::GitLabProvider::list_pr_checks(&cred.token, web_origin, path_with_namespace, reference).await
+        }
+        _ => Err("[CLOUD_GIT_SCOPE] Provider/remote mismatch.".to_string()),
+    };
+
+    match result {
+        Ok(checks) => json!({ "ok": true, "checks": checks }),
         Err(e) => json!({ "ok": false, "error": e }),
     }
 }

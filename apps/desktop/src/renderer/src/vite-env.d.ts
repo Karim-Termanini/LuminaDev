@@ -263,6 +263,12 @@ declare global {
         head: string
         base: string
       }) => Promise<{ ok: boolean; url?: string; error?: string }>
+      cloudGitGetPrChecks: (payload: {
+        provider: 'github' | 'gitlab'
+        repoPath: string
+        remote?: string
+        reference: string
+      }) => Promise<{ ok: boolean; checks?: import('@linux-dev-home/shared').CloudCiCheck[]; error?: string }>
     }
   }
 }

@@ -425,6 +425,16 @@ pub struct CloudIssueEntry {
     pub updated_at: String,
 }
 
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct CloudCiCheckEntry {
+    pub id: String,
+    pub name: String,
+    pub status: String,
+    pub conclusion: Option<String>,
+    pub url: Option<String>,
+    pub details: Option<String>,
+}
+
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct CloudReleaseEntry {
     pub id: String,
@@ -910,7 +920,51 @@ impl GitHubProvider {
         Ok(out)
     }
 
-    /// Recent Actions workflow runs for a single `owner/repo` repository (github.com or GitHub Enterprise).
+    /// Fetches detailed CI check runs (status, conclusion, name, etc.) for a specific reference.
+    pub async fn list_pr_checks(
+        token: &str,
+        hostname: &str,
+        full_name: &str,
+        reference: &str,
+    ) -> Result<Vec<CloudCiCheckEntry>, String> {
+        let client = reqwest::Client::new();
+        let base_url = if hostname == "github.com" {
+            "https://api.github.com".to_string()
+        } else {
+            format!("https://{}/api/v3", hostname)
+        };
+        let url = format!("{}/repos/{}/commits/{}/check-runs", base_url, full_name, reference);
+        
+        let resp = client
+            .get(url)
+            .header("Authorization", format!("Bearer {}", token))
+            .header("User-Agent", "LuminaDev/0.2.0")
+            .header("Accept", "application/vnd.github+json")
+            .send()
+            .await
+            .map_err(|e| format!("[CLOUD_GIT_NETWORK] GitHub checks: {}", e))?;
+
+        if !resp.status().is_success() {
+            return Err(format!("[CLOUD_GIT_NETWORK] GitHub checks returned {}", resp.status()));
+        }
+
+        let body: serde_json::Value = resp.json().await
+            .map_err(|e| format!("[CLOUD_GIT_NETWORK] GitHub checks parse: {}", e))?;
+
+        let checks = body["check_runs"].as_array().cloned().unwrap_or_default();
+        let items = checks.into_iter().map(|it| {
+            CloudCiCheckEntry {
+                id: it["id"].as_i64().unwrap_or_default().to_string(),
+                name: it["name"].as_str().unwrap_or("Unknown check").to_string(),
+                status: it["status"].as_str().unwrap_or("queued").to_string(),
+                conclusion: it["conclusion"].as_str().map(String::from),
+                url: it["html_url"].as_str().map(String::from),
+                details: it["output"]["summary"].as_str().map(String::from),
+            }
+        }).collect();
+        Ok(items)
+    }
+
     pub async fn list_repo_pipelines(
         token: &str,
         hostname: &str,
@@ -1418,6 +1472,65 @@ impl GitLabProvider {
         out.retain(|x| !x.id.is_empty() && !x.url.is_empty());
         out.truncate(limit);
         Ok(out)
+    }
+
+    /// Fetches detailed CI status (latest pipeline jobs) for a specific reference (branch).
+    pub async fn list_pr_checks(
+        token: &str,
+        web_origin: &str,
+        path_with_namespace: &str,
+        reference: &str,
+    ) -> Result<Vec<CloudCiCheckEntry>, String> {
+        let client = reqwest::Client::new();
+        let project_id_encoded = urlencoding::encode(path_with_namespace);
+        let pipelines_url = format!("{}/api/v4/projects/{}/pipelines", web_origin, project_id_encoded);
+        
+        let pipelines_resp = client
+            .get(pipelines_url)
+            .header("Authorization", format!("Bearer {}", token))
+            .query(&[("ref", reference), ("per_page", "1")])
+            .send()
+            .await
+            .map_err(|e| format!("[CLOUD_GIT_NETWORK] GitLab pipelines: {}", e))?;
+
+        if !pipelines_resp.status().is_success() {
+            return Err(format!("[CLOUD_GIT_NETWORK] GitLab pipelines returned {}", pipelines_resp.status()));
+        }
+
+        let pipelines: Vec<serde_json::Value> = pipelines_resp.json().await
+            .map_err(|e| format!("[CLOUD_GIT_NETWORK] GitLab pipelines parse: {}", e))?;
+
+        let pipeline_id = match pipelines.first().and_then(|p| p["id"].as_i64()) {
+            Some(id) => id,
+            None => return Ok(vec![]), // No pipelines for this branch
+        };
+
+        let jobs_url = format!("{}/api/v4/projects/{}/pipelines/{}/jobs", web_origin, project_id_encoded, pipeline_id);
+        let jobs_resp = client
+            .get(jobs_url)
+            .header("Authorization", format!("Bearer {}", token))
+            .send()
+            .await
+            .map_err(|e| format!("[CLOUD_GIT_NETWORK] GitLab jobs: {}", e))?;
+
+        if !jobs_resp.status().is_success() {
+            return Err(format!("[CLOUD_GIT_NETWORK] GitLab jobs returned {}", jobs_resp.status()));
+        }
+
+        let jobs: Vec<serde_json::Value> = jobs_resp.json().await
+            .map_err(|e| format!("[CLOUD_GIT_NETWORK] GitLab jobs parse: {}", e))?;
+
+        let items = jobs.into_iter().map(|it| {
+            CloudCiCheckEntry {
+                id: it["id"].as_i64().unwrap_or_default().to_string(),
+                name: it["name"].as_str().unwrap_or("Unknown job").to_string(),
+                status: it["status"].as_str().unwrap_or("created").to_string(),
+                conclusion: Some(it["status"].as_str().unwrap_or("unknown").to_string()),
+                url: it["web_url"].as_str().map(String::from),
+                details: None,
+            }
+        }).collect();
+        Ok(items)
     }
 
     /// Recent CI pipelines for a single `path_with_namespace` project (GitLab.com or self-managed).

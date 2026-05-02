@@ -1,4 +1,4 @@
-import type { BranchEntry, ConnectedAccount, FileEntry, GitRemoteEntry, GitRepoEntry } from '@linux-dev-home/shared'
+import type { BranchEntry, CloudCiCheck, ConnectedAccount, FileEntry, GitRemoteEntry, GitRepoEntry } from '@linux-dev-home/shared'
 import type { CSSProperties, ReactElement } from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
@@ -7,6 +7,7 @@ import { assertGitOk } from './gitContract'
 import { assertGitVcsOk } from './gitVcsContract'
 import { humanizeGitVcsError, parseGitVcsErrorCode } from './gitVcsError'
 import { GitVcsBranchPicker } from './gitVcsBranchPicker'
+import { GitVcsCiChecks } from './GitVcsCiChecks'
 import { GitVcsCommitBar } from './gitVcsCommitBar'
 import { GitVcsIntegrateBar } from './gitVcsIntegrateBar'
 import { GitVcsRepoPipelines } from './gitVcsRepoPipelines'
@@ -60,6 +61,7 @@ export function GitVcsPage(): ReactElement {
   const [conflictWizardOpen, setConflictWizardOpen] = useState(false)
   const [conflictedFiles, setConflictedFiles] = useState<string[]>([])
   const [prWizardOpen, setPrWizardOpen] = useState(false)
+  const [trackingPr, setTrackingPr] = useState<{ url: string; reference: string; provider: 'github' | 'gitlab' } | null>(null)
   const [lastCreatedPrUrl, setLastCreatedPrUrl] = useState<string | null>(null)
   /** When fetch remote host is unknown and both Cloud accounts exist, user picks which token scopes repo CI. */
   const [ambiguousCiToken, setAmbiguousCiToken] = useState<'github' | 'gitlab'>('github')
@@ -245,6 +247,19 @@ export function GitVcsPage(): ReactElement {
       }
     })()
   }, [repoPath, refreshStatus, gitOperation])
+
+  // Persistence: Load tracking PR from store
+  useEffect(() => {
+    if (!repoPath.trim() || !branch) return
+    const key = `vcs_pr_tracking_${repoPath.trim()}_${branch}`
+    window.dh.storeGet({ key }).then((res) => {
+      if (res.ok && res.data) {
+        setTrackingPr(res.data as any)
+      } else {
+        setTrackingPr(null)
+      }
+    })
+  }, [repoPath, branch])
 
   useEffect(() => {
     setFetchRemote((cur) => (fetchRemoteNames.includes(cur) ? cur : fetchRemoteNames[0] ?? 'origin'))
@@ -849,6 +864,21 @@ export function GitVcsPage(): ReactElement {
         <GitVcsStateBanner operation={gitOperation} conflictFileCount={conflictFileCount} />
       ) : null}
 
+      {trackingPr && activeFetchProvider !== 'other' && (
+        <GitVcsCiChecks
+          provider={trackingPr.provider}
+          repoPath={repoPath.trim()}
+          remote={activeFetchRemoteName}
+          reference={trackingPr.reference}
+          prUrl={trackingPr.url}
+          onClose={() => {
+            setTrackingPr(null)
+            const key = `vcs_pr_tracking_${repoPath.trim()}_${branch}`
+            void window.dh.storeDelete({ key })
+          }}
+        />
+      )}
+
       {opErrorDisplay ? (
         <div
           role={softGitNotice ? 'status' : 'alert'}
@@ -1172,7 +1202,16 @@ export function GitVcsPage(): ReactElement {
         currentBranch={branch}
         branches={branches}
         onClose={() => setPrWizardOpen(false)}
-        onCreated={(url) => { setLastCreatedPrUrl(url); setPrWizardOpen(false) }}
+        onCreated={(url) => {
+          setLastCreatedPrUrl(url)
+          setPrWizardOpen(false)
+          if (activeFetchProvider !== 'other') {
+            const info = { url, reference: branch, provider: activeFetchProvider }
+            setTrackingPr(info)
+            const key = `vcs_pr_tracking_${repoPath.trim()}_${branch}`
+            void window.dh.storeSet({ key, data: info })
+          }
+        }}
       />
 
       <GitVcsConflictWizardModal
