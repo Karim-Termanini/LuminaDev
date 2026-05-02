@@ -1,4 +1,4 @@
-import type { BranchEntry, CloudCiCheck, ConnectedAccount, FileEntry, GitRemoteEntry, GitRepoEntry } from '@linux-dev-home/shared'
+import type { BranchEntry, ConnectedAccount, FileEntry, GitRemoteEntry, GitRepoEntry } from '@linux-dev-home/shared'
 import type { CSSProperties, ReactElement } from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
@@ -9,7 +9,7 @@ import { humanizeGitVcsError, parseGitVcsErrorCode } from './gitVcsError'
 import { GitVcsBranchPicker } from './gitVcsBranchPicker'
 import { GitVcsCiChecks } from './GitVcsCiChecks'
 import { GitVcsCommitBar } from './gitVcsCommitBar'
-import { GitVcsIntegrateBar } from './gitVcsIntegrateBar'
+import { GitVcsIntegrateWizardModal } from './GitVcsIntegrateWizardModal'
 import { GitVcsRepoPipelines } from './gitVcsRepoPipelines'
 import { GitVcsDiffPanel } from './gitVcsDiffPanel'
 import { GitVcsFileList } from './gitVcsFileList'
@@ -59,12 +59,15 @@ export function GitVcsPage(): ReactElement {
   const [gitOperation, setGitOperation] = useState<GitVcsOperation>('none')
   const [conflictFileCount, setConflictFileCount] = useState(0)
   const [conflictWizardOpen, setConflictWizardOpen] = useState(false)
+  const [integrateWizardOpen, setIntegrateWizardOpen] = useState(false)
+  const [suggestedIntegrateTarget, setSuggestedIntegrateTarget] = useState('')
   const [conflictedFiles, setConflictedFiles] = useState<string[]>([])
   const [prWizardOpen, setPrWizardOpen] = useState(false)
   const [trackingPr, setTrackingPr] = useState<{ url: string; reference: string; provider: 'github' | 'gitlab' } | null>(null)
   const [lastCreatedPrUrl, setLastCreatedPrUrl] = useState<string | null>(null)
   /** When fetch remote host is unknown and both Cloud accounts exist, user picks which token scopes repo CI. */
   const [ambiguousCiToken, setAmbiguousCiToken] = useState<'github' | 'gitlab'>('github')
+  const [softSuccessNotice, setSoftSuccessNotice] = useState<string | null>(null)
 
   const fetchRemoteNames = useMemo(() => fetchRemoteOptions(branches), [branches])
   const activeFetchRemoteName = fetchRemoteNames.includes(fetchRemote)
@@ -74,63 +77,16 @@ export function GitVcsPage(): ReactElement {
   const handleResolveRemoteConflicts = async (targetBase: string) => {
     console.log('[GitVcs] ResolveRemoteConflicts triggered for base:', targetBase)
     setBusy(true)
-    setGitOperation(`Integrating ${targetBase}...`)
-    setOpErrorDisplay(null)
     try {
-      // 1. Fetch to get latest remote branches
-      console.log('[GitVcs] Fetching remote...')
+      // Ensure we have the latest remote info before showing the wizard
       await window.dh.gitVcsFetch({ repoPath: repoPath.trim(), remote: activeFetchRemoteName })
-      
-      // 2. Try to merge origin/targetBase into current branch
       const remoteRef = `${activeFetchRemoteName}/${targetBase}`
-      console.log('[GitVcs] Merging:', remoteRef)
-      const res = await window.dh.gitVcsMerge({
-        repoPath: repoPath.trim(),
-        branch: remoteRef,
-        fastForwardOnly: false
-      })
-
-      console.log('[GitVcs] Merge result:', res)
-
-      if (!res.ok) {
-        // Check for conflicts
-        if (res.error?.includes('[GIT_VCS_CONFLICT]') || res.error?.includes('CONFLICT')) {
-          setSoftGitNotice({
-            type: 'warning',
-            message: `Conflicts detected with ${remoteRef}. Opening resolution wizard...`
-          })
-          
-          // Force a status refresh to get the conflict list
-          const lists = await refreshStatus()
-          const conflicts = [
-            ...lists.staged.filter(f => f.status === 'C').map(f => f.path),
-            ...lists.unstaged.filter(f => f.status === 'C').map(f => f.path),
-          ]
-          
-          if (conflicts.length > 0) {
-            setConflictedFiles(conflicts)
-            setConflictWizardOpen(true)
-          } else {
-            // If git status didn't show 'C', try a fallback check for merge files
-            setConflictWizardOpen(true) // Open it anyway, it will show the state
-          }
-        } else {
-          setOpErrorDisplay(res.error ?? 'Merge failed')
-        }
-      } else {
-        setSoftGitNotice({
-          type: 'success',
-          message: `Successfully integrated ${remoteRef}. All conflicts resolved.`
-        })
-      }
+      setSuggestedIntegrateTarget(remoteRef)
+      setIntegrateWizardOpen(true)
     } catch (e) {
-      console.error('[GitVcs] handleResolveRemoteConflicts exception:', e)
-      setOpErrorDisplay(e instanceof Error ? e.message : String(e))
+      setOpErrorRaw(String(e))
     } finally {
       setBusy(false)
-      setGitOperation(null)
-      console.log('[GitVcs] Refreshing status...')
-      void refreshStatus()
     }
   }
 
@@ -315,8 +271,10 @@ export function GitVcsPage(): ReactElement {
   useEffect(() => {
     if (!repoPath.trim() || !branch) return
     const key = `vcs_pr_tracking_${repoPath.trim()}_${branch}`
-    window.dh.storeGet({ key }).then((res) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    window.dh.storeGet({ key: key as any }).then((res) => {
       if (res.ok && res.data) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         setTrackingPr(res.data as any)
       } else {
         setTrackingPr(null)
@@ -640,42 +598,6 @@ export function GitVcsPage(): ReactElement {
     }
   }
 
-  async function runMerge(intoFrom: string, ffOnly: boolean): Promise<void> {
-    if (!repoPath.trim() || !intoFrom) return
-    setBusy(true)
-    setOpErrorRaw(null)
-    try {
-      const r = await window.dh.gitVcsMerge({
-        repoPath: repoPath.trim(),
-        branch: intoFrom,
-        ffOnly,
-      })
-      assertGitVcsOk(r)
-      const lists = await refreshStatus()
-      setSelected((prev) => reconcileGitVcsSelection(prev, lists.staged, lists.unstaged))
-    } catch (e) {
-      setOpErrorRaw(e instanceof Error ? e.message : String(e))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  async function runRebase(onto: string): Promise<void> {
-    if (!repoPath.trim() || !onto) return
-    setBusy(true)
-    setOpErrorRaw(null)
-    try {
-      const r = await window.dh.gitVcsRebase({ repoPath: repoPath.trim(), onto })
-      assertGitVcsOk(r)
-      const lists = await refreshStatus()
-      setSelected((prev) => reconcileGitVcsSelection(prev, lists.staged, lists.unstaged))
-    } catch (e) {
-      setOpErrorRaw(e instanceof Error ? e.message : String(e))
-    } finally {
-      setBusy(false)
-    }
-  }
-
   async function runStashPop(): Promise<void> {
     if (!repoPath.trim()) return
     setBusy(true)
@@ -724,21 +646,7 @@ export function GitVcsPage(): ReactElement {
     }
   }
 
-  async function runRebaseSkip(): Promise<void> {
-    if (!repoPath.trim()) return
-    setBusy(true)
-    setOpErrorRaw(null)
-    try {
-      const r = await window.dh.gitVcsRebaseSkip({ repoPath: repoPath.trim() })
-      assertGitVcsOk(r)
-      const lists = await refreshStatus()
-      setSelected((prev) => reconcileGitVcsSelection(prev, lists.staged, lists.unstaged))
-    } catch (e) {
-      setOpErrorRaw(e instanceof Error ? e.message : String(e))
-    } finally {
-      setBusy(false)
-    }
-  }
+  // Truly unused functions removed
 
   async function runMergeAbort(): Promise<void> {
     if (!repoPath.trim()) return
@@ -938,7 +846,8 @@ export function GitVcsPage(): ReactElement {
           onClose={() => {
             setTrackingPr(null)
             const key = `vcs_pr_tracking_${repoPath.trim()}_${branch}`
-            void window.dh.storeDelete({ key })
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            void window.dh.storeDelete({ key: key as any })
           }}
         />
       )}
@@ -1156,37 +1065,55 @@ export function GitVcsPage(): ReactElement {
             </div>
           ) : null}
 
-          <GitVcsIntegrateBar
-            repoPath={repoPath.trim()}
-            branches={branches}
-            currentBranch={branch}
-            busy={busy}
-            gitOperation={gitOperation}
-            onMerge={async (b, ff) => {
-              await runMerge(b, ff)
-            }}
-            onRebase={async (onto) => {
-              await runRebase(onto)
-            }}
-            onStashPop={async () => {
-              await runStashPop()
-            }}
-            onMergeContinue={async () => {
-              await runMergeContinue()
-            }}
-            onRebaseContinue={async () => {
-              await runRebaseContinue()
-            }}
-            onRebaseSkip={async () => {
-              await runRebaseSkip()
-            }}
-            onMergeAbort={async () => {
-              await runMergeAbort()
-            }}
-            onRebaseAbort={async () => {
-              await runRebaseAbort()
-            }}
-          />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 12 }}>
+            {softSuccessNotice && (
+              <div style={{ padding: '8px 12px', background: 'rgba(105, 240, 174, 0.1)', borderLeft: '3px solid #69f0ae', borderRadius: 4, fontSize: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>{softSuccessNotice}</span>
+                <button type="button" className="hp-btn hp-btn-ghost hp-btn-xs" onClick={() => setSoftSuccessNotice(null)}>✕</button>
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 12 }}>
+              <button 
+                type="button" 
+                className="hp-btn hp-btn-primary" 
+                onClick={() => setIntegrateWizardOpen(true)}
+                disabled={busy}
+                style={{ flex: 1 }}
+              >
+                <span className="codicon codicon-git-merge" style={{ marginRight: 8 }} />
+                Integrate / Sync...
+              </button>
+              {gitOperation !== 'none' && (
+                 <>
+                   <button 
+                     type="button" 
+                     className="hp-btn hp-btn-primary" 
+                     onClick={() => gitOperation === 'merging' ? runMergeContinue() : runRebaseContinue()}
+                     disabled={busy || conflictFileCount > 0}
+                   >
+                     Continue
+                   </button>
+                   <button 
+                     type="button" 
+                     className="hp-btn hp-btn-danger" 
+                     onClick={() => gitOperation === 'merging' ? runMergeAbort() : runRebaseAbort()}
+                     disabled={busy}
+                   >
+                     Abort
+                   </button>
+                 </>
+              )}
+              <button 
+                type="button" 
+                className="hp-btn" 
+                onClick={() => runStashPop()}
+                disabled={busy}
+                title="Pop last stash"
+              >
+                <span className="codicon codicon-archive" />
+              </button>
+            </div>
+          </div>
 
           <GitVcsRepoPipelines
             repoPath={repoPath.trim()}
@@ -1273,7 +1200,45 @@ export function GitVcsPage(): ReactElement {
             const info = { url, reference: branch, provider: activeFetchProvider }
             setTrackingPr(info)
             const key = `vcs_pr_tracking_${repoPath.trim()}_${branch}`
-            void window.dh.storeSet({ key, data: info })
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            void window.dh.storeSet({ key: key as any, data: info as any })
+          }
+        }}
+      />
+
+      <GitVcsIntegrateWizardModal
+        isOpen={integrateWizardOpen}
+        repoPath={repoPath.trim()}
+        currentBranch={branch}
+        suggestedTarget={suggestedIntegrateTarget}
+        onClose={() => {
+          setIntegrateWizardOpen(false)
+          setSuggestedIntegrateTarget('')
+        }}
+        busy={busy}
+        onAction={async (method, targetRef) => {
+          setBusy(true)
+          setGitOperation(method === 'merge' ? 'merging' : 'rebasing')
+          try {
+            const res = method === 'merge' 
+              ? await window.dh.gitVcsMerge({ repoPath: repoPath.trim(), branch: targetRef, ffOnly: false })
+              : await window.dh.gitVcsRebase({ repoPath: repoPath.trim(), onto: targetRef })
+            
+            if (!res.ok) {
+              if (res.error?.includes('CONFLICT')) {
+                // If conflict, close integrate wizard and the effect in GitVcsPage 
+                // will pick up the 'merging' state and open the conflict wizard after refreshStatus
+                setIntegrateWizardOpen(false)
+              } else {
+                setOpErrorRaw(res.error ?? 'Integration failed')
+              }
+            } else {
+              setIntegrateWizardOpen(false)
+              setSoftSuccessNotice(`Successfully ${method}d ${targetRef}`)
+            }
+          } finally {
+            setBusy(false)
+            void refreshStatus()
           }
         }}
       />
