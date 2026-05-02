@@ -108,6 +108,14 @@ export const WizardStateStoreSchema = z.object({
   stepIndex: z.number().int().min(0).max(6).optional(),
 })
 
+/** Optional actions after app shell loads (wizard dismissed). */
+export const OnLoginAutomationStoreSchema = z.object({
+  /** Run `composeUp` for persisted `active_profile` once per launch. */
+  composeUpForActiveProfile: z.boolean().optional().default(false),
+  /** Re-read `layout.json` and `layoutSet` it (same pattern as Maintenance “refresh widgets”). */
+  reloadDashboardLayout: z.boolean().optional().default(false),
+})
+
 export const MaintenanceTaskSchema = z.object({
   id: z.string().uuid(),
   title: z.string().trim().min(1).max(160),
@@ -146,7 +154,14 @@ export const MaintenanceStateStoreSchema = z.object({
 })
 
 /** Keys with typed payloads persisted under userData (`store_<key>.json`). */
-export const StoreKeySchema = z.enum(['custom_profiles', 'wizard_state', 'ssh_bookmarks', 'maintenance_state', 'active_profile'])
+export const StoreKeySchema = z.enum([
+  'custom_profiles',
+  'wizard_state',
+  'ssh_bookmarks',
+  'maintenance_state',
+  'active_profile',
+  'on_login_automation',
+])
 
 export const StoreGetRequestSchema = z.object({
   key: StoreKeySchema,
@@ -179,6 +194,10 @@ export const StoreSetRequestSchema = z.discriminatedUnion('key', [
     key: z.literal('active_profile'),
     // Stores the ComposeProfile id of the active preset environment.
     data: ComposeProfileSchema,
+  }),
+  z.object({
+    key: z.literal('on_login_automation'),
+    data: OnLoginAutomationStoreSchema,
   }),
 ])
 export const ComposeUpRequestSchema = z.object({
@@ -256,7 +275,19 @@ export type StoreKey = z.infer<typeof StoreKeySchema>
 export type StoreGetRequest = z.infer<typeof StoreGetRequestSchema>
 export type StoreSetRequest = z.infer<typeof StoreSetRequestSchema>
 export type WizardStateStore = z.infer<typeof WizardStateStoreSchema>
+export type OnLoginAutomationStore = z.infer<typeof OnLoginAutomationStoreSchema>
 export type SshBookmark = { id: string; name: string; user: string; host: string; port: number }
+
+const defaultOnLoginAutomation: OnLoginAutomationStore = {
+  composeUpForActiveProfile: false,
+  reloadDashboardLayout: false,
+}
+
+/** Coerce persisted `on_login_automation` (or missing/invalid) to a safe object. */
+export function parseOnLoginAutomation(data: unknown): OnLoginAutomationStore {
+  const r = OnLoginAutomationStoreSchema.safeParse(data)
+  return r.success ? r.data : defaultOnLoginAutomation
+}
 
 /** Normalize a persisted `active_profile` value: canonical enum or legacy aliases → ComposeProfile | null. */
 export function parseStoredActiveProfile(data: unknown): ComposeProfile | null {
