@@ -237,28 +237,20 @@ function AccountsSummarySection(): ReactElement {
           ))}
         </ul>
       )}
-      <div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          <Link
-            to="/cloud-git?tab=github"
-            className="hp-btn hp-btn-primary"
-            style={{ fontSize: 13, textDecoration: 'none' }}
-          >
-            <span className="codicon codicon-github" aria-hidden />
-            GitHub tab
-          </Link>
-          <Link
-            to="/cloud-git?tab=gitlab"
-            className="hp-btn"
-            style={{ fontSize: 13, textDecoration: 'none' }}
-          >
-            <span className="codicon codicon-source-control" aria-hidden />
-            GitLab tab
-          </Link>
-        </div>
-      </div>
-      <div>
-        <Link to="/cloud-git?tab=github" className="hp-btn" style={{ fontSize: 13, textDecoration: 'none' }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+        <Link
+          to="/cloud-git?tab=github"
+          className="hp-btn hp-btn-primary"
+          style={{ fontSize: 13, textDecoration: 'none' }}
+        >
+          <span className="codicon codicon-github" aria-hidden />
+          GitHub tab
+        </Link>
+        <Link to="/cloud-git?tab=gitlab" className="hp-btn" style={{ fontSize: 13, textDecoration: 'none' }}>
+          <span className="codicon codicon-source-control" aria-hidden />
+          GitLab tab
+        </Link>
+        <Link to="/cloud-git" className="hp-btn" style={{ fontSize: 13, textDecoration: 'none' }}>
           <span className="codicon codicon-arrow-right" aria-hidden />
           Manage on Cloud Git page
         </Link>
