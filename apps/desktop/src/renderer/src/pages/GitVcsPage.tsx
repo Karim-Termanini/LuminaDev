@@ -430,7 +430,41 @@ export function GitVcsPage(): ReactElement {
       const lists = await refreshStatus()
       setSelected((prev) => reconcileGitVcsSelection(prev, lists.staged, lists.unstaged))
     } catch (e) {
-      setOpErrorRaw(e instanceof Error ? e.message : String(e))
+      const code = parseGitVcsErrorCode(e)
+      if (code === 'GIT_VCS_PROTECTED_BRANCH') {
+        // Smart Flow: Suggest creating a new branch if current is main/master
+        if (branch === 'main' || branch === 'master') {
+          const suggestedName = `feature/work-${Math.floor(Math.random() * 1000)}`
+          if (confirm(`This branch is protected. Would you like to move your local commits to a new branch "${suggestedName}" and open a Pull Request?`)) {
+            void (async () => {
+              setBusy(true)
+              try {
+                // 1. Create and switch to new branch (keeping local commits)
+                const res = await window.dh.gitVcsCheckout({ repoPath: path, branch: suggestedName, create: true })
+                assertGitVcsOk(res)
+                
+                // 2. Push the new branch
+                const pushRes = await window.dh.gitVcsPush({ repoPath: path })
+                assertGitVcsOk(pushRes)
+                
+                // 3. Open PR Wizard
+                setPrWizardOpen(true)
+                setOpErrorRaw(null)
+              } catch (inner) {
+                setOpErrorRaw(inner instanceof Error ? inner.message : String(inner))
+              } finally {
+                setBusy(false)
+                await refreshStatus()
+              }
+            })()
+          }
+        } else {
+          setPrWizardOpen(true)
+          setOpErrorRaw(null)
+        }
+      } else {
+        setOpErrorRaw(e instanceof Error ? e.message : String(e))
+      }
     } finally {
       setBusy(false)
     }
