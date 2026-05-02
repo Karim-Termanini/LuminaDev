@@ -239,6 +239,7 @@ export const IPC = {
   cloudAuthConnectPat: 'dh:cloud:auth:connect-pat',
   cloudAuthDisconnect: 'dh:cloud:auth:disconnect',
   cloudAuthStatus: 'dh:cloud:auth:status',
+  cloudGitPrs: 'dh:cloud:git:prs',
   gitVcsStatus: 'dh:git:vcs:status',
   gitVcsRemotes: 'dh:git:vcs:remotes',
   gitVcsDiff: 'dh:git:vcs:diff',

@@ -1,4 +1,6 @@
+import type { CloudPullRequestEntry } from '@linux-dev-home/shared'
 import type { ReactElement } from 'react'
+import { useEffect, useState } from 'react'
 
 type Provider = 'github' | 'gitlab'
 
@@ -15,6 +17,38 @@ const WEB: Record<Provider, { prs: string; ci: string }> = {
 
 export function CloudGitActivityPanel({ provider, label }: { provider: Provider; label: string }): ReactElement {
   const urls = WEB[provider]
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [prs, setPrs] = useState<CloudPullRequestEntry[]>([])
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    setError(null)
+    void window.dh
+      .cloudGitPrs({ provider, limit: 12 })
+      .then((res) => {
+        if (cancelled) return
+        if (res.ok && Array.isArray(res.prs)) {
+          setPrs(res.prs)
+          return
+        }
+        setPrs([])
+        if (!res.ok && res.error) setError(res.error)
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) {
+          setPrs([])
+          setError(e instanceof Error ? e.message : String(e))
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [provider])
   return (
     <section
       aria-labelledby="cloud-git-activity-heading"
@@ -41,9 +75,37 @@ export function CloudGitActivityPanel({ provider, label }: { provider: Provider;
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <div className="hp-card" style={{ padding: '14px 16px' }}>
           <div style={{ fontWeight: 650, fontSize: 14, marginBottom: 6 }}>Pull requests</div>
-          <p className="hp-muted" style={{ margin: '0 0 12px', fontSize: 12, lineHeight: 1.45 }}>
-            Placeholder — in-app MR/PR list coming next.
-          </p>
+          {loading ? <p className="hp-muted" style={{ margin: '0 0 12px', fontSize: 12 }}>Loading…</p> : null}
+          {!loading && error ? (
+            <p style={{ margin: '0 0 12px', fontSize: 12, color: '#ff8a80', lineHeight: 1.45 }}>{error}</p>
+          ) : null}
+          {!loading && !error && prs.length === 0 ? (
+            <p className="hp-muted" style={{ margin: '0 0 12px', fontSize: 12, lineHeight: 1.45 }}>
+              No open PRs/MRs found for your account.
+            </p>
+          ) : null}
+          {!loading && !error && prs.length > 0 ? (
+            <ul style={{ margin: '0 0 12px', paddingLeft: 18, fontSize: 12, lineHeight: 1.5 }}>
+              {prs.slice(0, 6).map((pr) => (
+                <li key={pr.id} style={{ marginBottom: 4 }}>
+                  <a
+                    href={pr.url}
+                    onClick={(e) => {
+                      e.preventDefault()
+                      void window.dh.openExternal(pr.url)
+                    }}
+                    style={{ color: 'var(--text)', textDecoration: 'none' }}
+                    title={pr.title}
+                  >
+                    {pr.title}
+                  </a>
+                  <span className="mono" style={{ color: 'var(--text-muted)', marginLeft: 6 }}>
+                    {pr.repo}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
           <button
             type="button"
             className="hp-btn"

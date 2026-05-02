@@ -340,6 +340,21 @@ export const CloudAuthStatusResponseSchema = z.object({
   accounts: z.array(ConnectedAccountSchema),
 })
 
+export const CloudGitPrsRequestSchema = z.object({
+  provider: CloudAuthProviderSchema,
+  limit: z.number().int().min(1).max(50).optional(),
+})
+
+export const CloudPullRequestEntrySchema = z.object({
+  id: z.string().min(1),
+  title: z.string(),
+  url: z.string().url(),
+  repo: z.string(),
+  author: z.string(),
+  updatedAt: z.string(),
+})
+export type CloudPullRequestEntry = z.infer<typeof CloudPullRequestEntrySchema>
+
 export type DockerContainerAction = z.infer<typeof DockerContainerActionSchema>
 export type DockerImageAction = z.infer<typeof DockerImageActionSchema>
 export type DockerVolumeAction = z.infer<typeof DockerVolumeActionSchema>

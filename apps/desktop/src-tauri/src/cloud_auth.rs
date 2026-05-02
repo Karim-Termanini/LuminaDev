@@ -160,6 +160,16 @@ pub struct ConnectedAccount {
     pub connected_at: String,
 }
 
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct CloudPullRequestEntry {
+    pub id: String,
+    pub title: String,
+    pub url: String,
+    pub repo: String,
+    pub author: String,
+    pub updated_at: String,
+}
+
 // ─── CredentialStore trait ────────────────────────────────────────────────────
 
 pub trait CredentialStore {
@@ -422,6 +432,62 @@ impl GitHubProvider {
         // is not available. Credential is deleted locally by the disconnect handler.
         Ok(())
     }
+
+    pub async fn list_open_pull_requests(
+        token: &str,
+        limit: usize,
+    ) -> Result<Vec<CloudPullRequestEntry>, String> {
+        let client = reqwest::Client::new();
+        let resp = client
+            .get("https://api.github.com/search/issues")
+            .header("Authorization", format!("Bearer {}", token))
+            .header("User-Agent", "LuminaDev/0.2.0")
+            .header("Accept", "application/vnd.github+json")
+            .query(&[
+                ("q", "is:pr is:open author:@me"),
+                ("sort", "updated"),
+                ("order", "desc"),
+                ("per_page", &limit.to_string()),
+            ])
+            .send()
+            .await
+            .map_err(|e| format!("[CLOUD_GIT_NETWORK] GitHub PRs: {}", e))?;
+        if resp.status() == 401 {
+            return Err("[CLOUD_AUTH_INVALID_TOKEN] GitHub token is invalid or expired.".to_string());
+        }
+        if !resp.status().is_success() {
+            return Err(format!(
+                "[CLOUD_GIT_NETWORK] GitHub PR list returned {}",
+                resp.status()
+            ));
+        }
+        let body: serde_json::Value = resp
+            .json()
+            .await
+            .map_err(|e| format!("[CLOUD_GIT_NETWORK] GitHub PR parse: {}", e))?;
+        let items = body["items"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default()
+            .into_iter()
+            .map(|it| {
+                let repo_url = it["repository_url"].as_str().unwrap_or("");
+                let repo = repo_url
+                    .trim_start_matches("https://api.github.com/repos/")
+                    .to_string();
+                CloudPullRequestEntry {
+                    id: it["id"].as_i64().unwrap_or_default().to_string(),
+                    title: it["title"].as_str().unwrap_or("").to_string(),
+                    url: it["html_url"].as_str().unwrap_or("").to_string(),
+                    repo,
+                    author: it["user"]["login"].as_str().unwrap_or("").to_string(),
+                    updated_at: it["updated_at"].as_str().unwrap_or("").to_string(),
+                }
+            })
+            .filter(|x| !x.id.is_empty() && !x.url.is_empty())
+            .collect();
+        Ok(items)
+    }
 }
 
 // ─── GitLabProvider ───────────────────────────────────────────────────────────
@@ -527,6 +593,53 @@ impl GitLabProvider {
             .send()
             .await;
         Ok(())
+    }
+
+    pub async fn list_open_pull_requests(
+        token: &str,
+        limit: usize,
+    ) -> Result<Vec<CloudPullRequestEntry>, String> {
+        let client = reqwest::Client::new();
+        let resp = client
+            .get("https://gitlab.com/api/v4/merge_requests")
+            .header("Authorization", format!("Bearer {}", token))
+            .header("User-Agent", "LuminaDev/0.2.0")
+            .query(&[
+                ("scope", "created_by_me"),
+                ("state", "opened"),
+                ("order_by", "updated_at"),
+                ("sort", "desc"),
+                ("per_page", &limit.to_string()),
+            ])
+            .send()
+            .await
+            .map_err(|e| format!("[CLOUD_GIT_NETWORK] GitLab MRs: {}", e))?;
+        if resp.status() == 401 {
+            return Err("[CLOUD_AUTH_INVALID_TOKEN] GitLab token is invalid or expired.".to_string());
+        }
+        if !resp.status().is_success() {
+            return Err(format!(
+                "[CLOUD_GIT_NETWORK] GitLab MR list returned {}",
+                resp.status()
+            ));
+        }
+        let rows: Vec<serde_json::Value> = resp
+            .json()
+            .await
+            .map_err(|e| format!("[CLOUD_GIT_NETWORK] GitLab MR parse: {}", e))?;
+        let items = rows
+            .into_iter()
+            .map(|it| CloudPullRequestEntry {
+                id: it["id"].as_i64().unwrap_or_default().to_string(),
+                title: it["title"].as_str().unwrap_or("").to_string(),
+                url: it["web_url"].as_str().unwrap_or("").to_string(),
+                repo: it["references"]["full"].as_str().unwrap_or("").to_string(),
+                author: it["author"]["username"].as_str().unwrap_or("").to_string(),
+                updated_at: it["updated_at"].as_str().unwrap_or("").to_string(),
+            })
+            .filter(|x| !x.id.is_empty() && !x.url.is_empty())
+            .collect();
+        Ok(items)
     }
 }
 

@@ -2337,6 +2337,50 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
         }
     },
 
+    "dh:cloud:git:prs" => {
+        let provider = body.get("provider").and_then(|v| v.as_str()).unwrap_or("");
+        let limit = body
+            .get("limit")
+            .and_then(|v| v.as_u64())
+            .map(|x| x.clamp(1, 50) as usize)
+            .unwrap_or(12);
+        let store = cloud_store(&app);
+        let cred = match store.load(provider) {
+            Ok(Some(c)) => c,
+            Ok(None) => {
+                return Ok(json!({
+                    "ok": false,
+                    "error": "[CLOUD_AUTH_NOT_CONNECTED] Connect this provider in Cloud Git first."
+                }))
+            }
+            Err(e) => return Ok(json!({ "ok": false, "error": e })),
+        };
+        let result = match provider {
+            "github" => cloud_auth::GitHubProvider::list_open_pull_requests(&cred.token, limit).await,
+            "gitlab" => cloud_auth::GitLabProvider::list_open_pull_requests(&cred.token, limit).await,
+            _ => Err("[CLOUD_GIT_NETWORK] Unknown provider".to_string()),
+        };
+        match result {
+            Ok(items) => {
+                let prs: Vec<Value> = items
+                    .into_iter()
+                    .map(|x| {
+                        json!({
+                            "id": x.id,
+                            "title": x.title,
+                            "url": x.url,
+                            "repo": x.repo,
+                            "author": x.author,
+                            "updatedAt": x.updated_at,
+                        })
+                    })
+                    .collect();
+                json!({ "ok": true, "prs": prs })
+            }
+            Err(e) => json!({ "ok": false, "error": e }),
+        }
+    },
+
     "dh:git:vcs:status" => {
         let repo_path = body.get("repoPath").and_then(|v| v.as_str()).unwrap_or_default();
         if repo_path.is_empty() {

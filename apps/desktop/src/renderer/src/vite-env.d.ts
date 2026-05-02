@@ -136,6 +136,14 @@ declare global {
         accounts: import('@linux-dev-home/shared').ConnectedAccount[]
         error?: string
       }>
+      cloudGitPrs: (payload: {
+        provider: 'github' | 'gitlab'
+        limit?: number
+      }) => Promise<{
+        ok: boolean
+        prs?: import('@linux-dev-home/shared').CloudPullRequestEntry[]
+        error?: string
+      }>
       gitVcsStatus: (payload: { repoPath: string }) => Promise<{
         ok: boolean
         branch?: string
