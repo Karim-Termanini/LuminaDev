@@ -269,8 +269,8 @@ Missing: real dep graph (`removableDeps` always empty), Ruby slow on Fedora.
 - [x] Diagnostics bundle export
 - [x] Docker cleanup + compose health
 - [x] Integrity: in-app host probes via whitelisted `hostExec`
-
-Missing: user-defined task checklist, git config backup/restore.
+- [x] **User-defined task checklist** — persisted `maintenance_state.tasks`; **Overview** shows open items + jump to Schedule; **Schedule** tab supports inline title rename (click title).
+- [x] **Git config backup/restore** — **Git Config → Backups**: JSON export (clipboard) + import restores keys via existing preset/set-key flow.
 
 ---
 

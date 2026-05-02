@@ -22,7 +22,7 @@ Status legend:
 | `/profiles` | partial | CRUD + duplicate + export/import; **Set Active** writes `active_profile` as `baseTemplate` (`ComposeProfile`). **On launch**: optional `composeUp` for active profile + dashboard `layoutGet`/`layoutSet` refresh (store `on_login_automation`, runner after wizard). Deeper preset/dashboard unification still evolving. |
 | `/terminal` | partial | Embedded terminal works; host/sandbox differences still affect behavior. |
 | `/runtimes` | partial | Status/version/deps/uninstall preview are live; install/update/remove backend is in active hardening. |
-| `/maintenance` | partial | Guardian scoring and diagnostics IPC are real; Integrity includes dismissible/auto-clearing status and **in-app** host probes (Docker df/ps, journalctl, cache `du`) via whitelisted `hostExec`—no clipboard-to-terminal runbook. Compose health, cleanup, bundles, tasks, and job runner work; no arbitrary host shell or full remediation. |
+| `/maintenance` | partial | Guardian + diagnostics + host probes as above. **Tasks**: user checklist on Overview + full editor on Schedule (inline rename). **Git backups** live on **Git Config → Backups**. No arbitrary host shell or full remediation. |
 
 ## Update Rule
 

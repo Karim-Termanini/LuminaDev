@@ -95,6 +95,8 @@ export function MaintenancePage(): ReactElement {
   const [runbook, setRunbook] = useState<{ title: string; text: string } | null>(null)
   const [runbookBusyId, setRunbookBusyId] = useState<string | null>(null)
   const [commandPeek, setCommandPeek] = useState<string | null>(null)
+  const [editTaskId, setEditTaskId] = useState<string | null>(null)
+  const [editDraft, setEditDraft] = useState('')
 
   const saveState = useCallback(async (next: MaintenanceStateStore) => {
     setSavingState(true)
@@ -204,6 +206,7 @@ export function MaintenancePage(): ReactElement {
   const runningContainers = containers.filter((c) => c.state === 'running').length
   const guardian = useMemo(() => evaluateGuardian(m, security, containers), [m, security, containers])
   const activeJobCount = useMemo(() => jobs.filter((j) => j.state === 'running').length, [jobs])
+  const pendingTasks = useMemo(() => state.tasks.filter((t) => !t.done), [state.tasks])
   const degradedProfiles = state.profileHealth.filter((p) => p.health === 'degraded').length
   const lastMaintenanceDaysAgo = state.lastMaintenanceAtIso
     ? Math.floor((Date.now() - new Date(state.lastMaintenanceAtIso).getTime()) / (1000 * 3600 * 24))
@@ -586,6 +589,37 @@ export function MaintenancePage(): ReactElement {
                 </div>
               ))}
             </div>
+            <div style={{ marginTop: 22 }}>
+              <div className="hp-section-title">Your checklist</div>
+              <p className="hp-muted" style={{ fontSize: 12, lineHeight: 1.55, marginTop: 6, marginBottom: 10 }}>
+                Open items from <strong>Schedule</strong> → Maintenance Tasks. Checking a box here updates the same list.
+              </p>
+              {pendingTasks.length === 0 ? (
+                <div className="hp-muted" style={{ fontSize: 13 }}>No open tasks. Add reminders from the Schedule tab.</div>
+              ) : (
+                <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: 8 }}>
+                  {pendingTasks.slice(0, 8).map((task) => (
+                    <li key={task.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <input
+                        type="checkbox"
+                        checked={task.done}
+                        onChange={() => void updateTask(task.id, { done: !task.done })}
+                        aria-label={`Done: ${task.title}`}
+                      />
+                      <span style={{ fontSize: 14 }}>{task.title}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <button
+                type="button"
+                className="hp-btn"
+                style={{ marginTop: 12 }}
+                onClick={() => setActiveTab('Scheduled / Automation')}
+              >
+                Open Schedule tab
+              </button>
+            </div>
           </div>
         ) : null}
       </section>
@@ -685,10 +719,62 @@ export function MaintenancePage(): ReactElement {
             state.tasks.map((task) => (
               <div key={task.id} style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 10 }}>
                 <div className="hp-row-wrap" style={{ justifyContent: 'space-between' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <input type="checkbox" checked={task.done} onChange={() => void updateTask(task.id, { done: !task.done })} />
-                    <span style={{ textDecoration: task.done ? 'line-through' : 'none' }}>{task.title}</span>
-                  </label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+                    <input
+                      type="checkbox"
+                      checked={task.done}
+                      onChange={() => void updateTask(task.id, { done: !task.done })}
+                      aria-label={task.done ? 'Mark not done' : 'Mark done'}
+                    />
+                    {editTaskId === task.id ? (
+                      <input
+                        className="hp-input"
+                        style={{ flex: 1, minWidth: 0 }}
+                        value={editDraft}
+                        onChange={(e) => setEditDraft(e.target.value)}
+                        onBlur={() => {
+                          void (async () => {
+                            const t = editDraft.trim()
+                            if (t) await updateTask(task.id, { title: t })
+                            setEditTaskId(null)
+                          })()
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+                          if (e.key === 'Escape') {
+                            setEditTaskId(null)
+                            setEditDraft('')
+                          }
+                        }}
+                        autoFocus
+                        aria-label="Edit task title"
+                      />
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditTaskId(task.id)
+                          setEditDraft(task.title)
+                        }}
+                        className="hp-btn"
+                        style={{
+                          textAlign: 'left',
+                          textDecoration: task.done ? 'line-through' : 'none',
+                          background: 'transparent',
+                          border: 'none',
+                          color: 'var(--text)',
+                          cursor: 'pointer',
+                          padding: '2px 6px',
+                          font: 'inherit',
+                          flex: 1,
+                          minWidth: 0,
+                        }}
+                        title="Rename task"
+                      >
+                        {task.title}
+                      </button>
+                    )}
+                  </div>
                   <button className="hp-btn hp-btn-danger" onClick={() => void removeTask(task.id)}>Delete</button>
                 </div>
                 {task.cronHint ? <div className="mono hp-muted" style={{ fontSize: 11, marginTop: 6 }}>cron: {task.cronHint}</div> : null}
