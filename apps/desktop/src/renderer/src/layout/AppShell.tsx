@@ -42,7 +42,17 @@ function resolveCloudGitNavTarget(): string {
   }
 }
 
+function resolveCloudGitTab(): 'github' | 'gitlab' {
+  try {
+    const raw = window.localStorage.getItem('cloud_git_last_tab')
+    return raw === 'gitlab' ? 'gitlab' : 'github'
+  } catch {
+    return 'github'
+  }
+}
+
 export function AppShell({ children }: { children: ReactNode }): ReactElement {
+  const cloudGitTab = resolveCloudGitTab()
   const cloudGitTarget = resolveCloudGitNavTarget()
   return (
     <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
@@ -90,6 +100,24 @@ export function AppShell({ children }: { children: ReactNode }): ReactElement {
             >
               <span className={`codicon codicon-${item.icon}`} aria-hidden />
               <span style={{ flex: 1 }}>{item.label}</span>
+              {item.to === '/cloud-git' ? (
+                <span
+                  className="mono"
+                  title={`Last selected provider: ${cloudGitTab}`}
+                  style={{
+                    fontSize: 9,
+                    fontWeight: 700,
+                    letterSpacing: '0.04em',
+                    color: cloudGitTab === 'gitlab' ? '#fc6d26' : '#58a6ff',
+                    border: `1px solid ${cloudGitTab === 'gitlab' ? 'rgba(252,109,38,0.35)' : 'rgba(88,166,255,0.35)'}`,
+                    background: cloudGitTab === 'gitlab' ? 'rgba(252,109,38,0.1)' : 'rgba(88,166,255,0.1)',
+                    borderRadius: 999,
+                    padding: '2px 6px',
+                  }}
+                >
+                  {cloudGitTab === 'gitlab' ? 'GL' : 'GH'}
+                </span>
+              ) : null}
               <span
                 className="mono"
                 title={`Route status: ${item.status}`}
