@@ -283,11 +283,11 @@ Missing: user-defined task checklist, git config backup/restore.
 
 ---
 
-## Phase 9 — Profiles 🔄 PARTIAL (`/profiles` → `partial`)
+## Phase 9 — Profiles ✅ DONE
 
 - [x] **CRUD**: add / delete / duplicate / export / import
 - [x] **setActive**: writes `active_profile` as the entry’s `baseTemplate` (`ComposeProfile`); clear via store delete.
-- [ ] **On-login automation (remaining scope)** — optional post-start hooks: e.g. `composeUp` for `active_profile`, restore `layoutGet` layout, or other user-toggled actions (store + UI; no duplicate of Phase 1 stub creation work).
+- [x] **On-login automation** — optional post-start hooks: `composeUp` for `active_profile`, refresh dashboard layout via `layoutGet` / `layoutSet`; toggles + store key `on_login_automation`; runner in `AppShell` (after wizard).
 - [x] **Preset alignment**: dashboard preset grid reads the same `active_profile` key as wizard / Profiles.
 
 ---
@@ -385,7 +385,7 @@ Full preparation for Flathub submission and official v1.0 stability.
 ✅  Phase 7  — Maintenance / Guardian
 ✅  SPRINT   — Flatpak + Tests + Audit + Cross-distro + v0.2.0-alpha (shipped)
 🔄  Phase 1  — Dashboard (**full stack definitions** per preset; minimal Alpine stubs + resolver shipped)
-🔄  Phase 9  — Profiles (**on-login automation** only)
+✅  Phase 9  — Profiles (incl. on-login automation)
 🔄  Phase 11 — Wizard (**optional**: persist name/email/SSH fields for richer resume, not just `stepIndex`)
 📋  Phase 8  — Settings (SSH Bookmarks, Hosts Editor, Env Vars)
 📋  Phase 12 — Cloud Git (PRs/MRs, CI/CD Status, Interactive Sync)

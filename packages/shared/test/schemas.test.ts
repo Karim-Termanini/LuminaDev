@@ -8,6 +8,7 @@ import {
   GitCloneRequestSchema,
   GitConfigSetSchema,
   HostExecRequestSchema,
+  parseOnLoginAutomation,
   parseStoredActiveProfile,
   RuntimeCheckDepsRequestSchema,
   WizardStateStoreSchema,
@@ -169,5 +170,27 @@ describe('schemas', () => {
     expect(parseStoredActiveProfile('desktop-qt')).toBe('desktop-gui')
     expect(parseStoredActiveProfile('typo')).toBe(null)
     expect(parseStoredActiveProfile(null)).toBe(null)
+  })
+
+  it('parseOnLoginAutomation falls back on invalid data', () => {
+    expect(parseOnLoginAutomation(null)).toEqual({
+      composeUpForActiveProfile: false,
+      reloadDashboardLayout: false,
+    })
+    expect(parseOnLoginAutomation({ composeUpForActiveProfile: true })).toEqual({
+      composeUpForActiveProfile: true,
+      reloadDashboardLayout: false,
+    })
+  })
+
+  it('parses on_login_automation store set', () => {
+    const v = StoreSetRequestSchema.parse({
+      key: 'on_login_automation',
+      data: { composeUpForActiveProfile: true, reloadDashboardLayout: true },
+    })
+    expect(v).toEqual({
+      key: 'on_login_automation',
+      data: { composeUpForActiveProfile: true, reloadDashboardLayout: true },
+    })
   })
 })

@@ -1,7 +1,10 @@
 import {
   CustomProfilesStoreSchema,
+  OnLoginAutomationStoreSchema,
   type ComposeProfile,
   type CustomProfileEntry,
+  type OnLoginAutomationStore,
+  parseOnLoginAutomation,
   parseStoredActiveProfile,
 } from '@linux-dev-home/shared'
 import type { ReactElement } from 'react'
@@ -12,6 +15,9 @@ export function ProfilesPage(): ReactElement {
   const [activeProfile, setActiveProfile] = useState<ComposeProfile | null>(null)
   const [importText, setImportText] = useState('')
   const [status, setStatus] = useState<string | null>(null)
+  const [onLogin, setOnLogin] = useState<OnLoginAutomationStore>(() =>
+    OnLoginAutomationStoreSchema.parse({}),
+  )
 
   async function load(): Promise<void> {
     try {
@@ -28,6 +34,10 @@ export function ProfilesPage(): ReactElement {
     try {
       const ar = (await window.dh.storeGet({ key: 'active_profile' })) as { ok: boolean; data: unknown }
       if (ar.ok) setActiveProfile(parseStoredActiveProfile(ar.data))
+    } catch { /* ignore */ }
+    try {
+      const ol = (await window.dh.storeGet({ key: 'on_login_automation' })) as { ok: boolean; data: unknown }
+      if (ol.ok) setOnLogin(parseOnLoginAutomation(ol.data))
     } catch { /* ignore */ }
   }
 
@@ -59,6 +69,24 @@ export function ProfilesPage(): ReactElement {
       await window.dh.storeDelete({ key: 'active_profile' })
       setActiveProfile(null)
       setStatus('Active profile cleared.')
+    } catch (e) {
+      setStatus(e instanceof Error ? e.message : String(e))
+    }
+  }
+
+  async function saveOnLogin(next: OnLoginAutomationStore): Promise<void> {
+    try {
+      const parsed = OnLoginAutomationStoreSchema.parse(next)
+      const res = (await window.dh.storeSet({ key: 'on_login_automation', data: parsed })) as {
+        ok: boolean
+        error?: string
+      }
+      if (res.ok) {
+        setOnLogin(parsed)
+        setStatus('On-login automation preferences saved.')
+      } else {
+        setStatus(res.error || 'Failed to save on-login automation.')
+      }
     } catch (e) {
       setStatus(e instanceof Error ? e.message : String(e))
     }
@@ -122,6 +150,36 @@ export function ProfilesPage(): ReactElement {
           </div>
         )}
       </header>
+
+      <section style={card}>
+        <div style={{ fontWeight: 600, marginBottom: 8 }}>On launch</div>
+        <p style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5, maxWidth: 720 }}>
+          After the Setup Wizard is dismissed, optionally start your active compose stack or refresh the dashboard
+          widget layout from disk. Requires Docker for compose; Flatpak needs socket access.
+        </p>
+        <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 10, cursor: 'pointer' }}>
+          <input
+            type="checkbox"
+            checked={onLogin.composeUpForActiveProfile}
+            onChange={(e) => void saveOnLogin({ ...onLogin, composeUpForActiveProfile: e.target.checked })}
+            style={{ marginTop: 3 }}
+          />
+          <span style={{ fontSize: 14 }}>
+            <strong>Compose up</strong> for the active profile once per app launch (if an active profile is set).
+          </span>
+        </label>
+        <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer' }}>
+          <input
+            type="checkbox"
+            checked={onLogin.reloadDashboardLayout}
+            onChange={(e) => void saveOnLogin({ ...onLogin, reloadDashboardLayout: e.target.checked })}
+            style={{ marginTop: 3 }}
+          />
+          <span style={{ fontSize: 14 }}>
+            <strong>Refresh dashboard layout</strong> from <span className="mono">layout.json</span> on launch.
+          </span>
+        </label>
+      </section>
 
       {status && (
         <div className={`hp-status-alert ${isOk(status) ? 'success' : 'warning'}`}>
