@@ -300,14 +300,14 @@ Missing: user-defined task checklist, git config backup/restore.
 
 ---
 
-## Phase 11 — First-run Wizard 🔄 PARTIAL
+## Phase 11 — First-run Wizard ✅ DONE
 
 - [x] **7 steps**: Welcome → Environment → Docker check → Git setup → SSH keygen → **Pick starter profile** → All set
 - [x] **Auto-shows** on first launch, skip on each step, "show again" checkbox
 - [x] **Profile-pick step**: nine compose presets; writes `active_profile` when confirmed
 - [x] **Re-entry**: sidebar **Setup Wizard** resets `wizard_state` + reload
 - [x] **Resume logic**: `wizard_state.stepIndex` (0–6) persisted while incomplete; restored on next launch
-- [ ] **(Optional) Rich resume**: persist in-wizard fields (Git name/email, Flatpak `target`, SSH pub key text or “generated” flag) in `wizard_state` so mid-wizard restarts do not wipe form state — **not required** if step-only resume is enough.
+- [x] **Rich resume**: `wizard_state` persists Git name/email draft, Flatpak `gitTarget`, `sshPubKey` / `sshKeyGenerated` (refetch via `sshGetPub` when needed), and `pickedStarterProfile`; `WizardFlow` hydrates and re-saves on change.
 
 ---
 
@@ -386,7 +386,7 @@ Full preparation for Flathub submission and official v1.0 stability.
 ✅  SPRINT   — Flatpak + Tests + Audit + Cross-distro + v0.2.0-alpha (shipped)
 🔄  Phase 1  — Dashboard (**full stack definitions** per preset; minimal Alpine stubs + resolver shipped)
 ✅  Phase 9  — Profiles (incl. on-login automation)
-🔄  Phase 11 — Wizard (**optional**: persist name/email/SSH fields for richer resume, not just `stepIndex`)
+✅  Phase 11 — Wizard (step + rich field resume in `wizard_state`)
 📋  Phase 8  — Settings (SSH Bookmarks, Hosts Editor, Env Vars)
 📋  Phase 12 — Cloud Git (PRs/MRs, CI/CD Status, Interactive Sync)
 📋  Phase 13 — Theme Rollout (System-wide pilot)

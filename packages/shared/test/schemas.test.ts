@@ -164,6 +164,21 @@ describe('schemas', () => {
     expect(() => WizardStateStoreSchema.parse({ completed: false, stepIndex: 99 })).toThrow()
   })
 
+  it('parses wizard_state rich resume fields', () => {
+    const v = WizardStateStoreSchema.parse({
+      completed: false,
+      stepIndex: 4,
+      gitName: 'Ada',
+      gitEmail: 'ada@example.com',
+      gitTarget: 'host',
+      sshPubKey: 'ssh-ed25519 AAAA',
+      sshKeyGenerated: true,
+      pickedStarterProfile: 'web-dev',
+    })
+    expect(v.gitName).toBe('Ada')
+    expect(v.pickedStarterProfile).toBe('web-dev')
+  })
+
   it('parseStoredActiveProfile accepts canonical and legacy ids', () => {
     expect(parseStoredActiveProfile('empty')).toBe('empty')
     expect(parseStoredActiveProfile('minimal')).toBe('empty')
