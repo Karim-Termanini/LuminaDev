@@ -6,25 +6,41 @@ import { parseAppearance, parseSshBookmarks } from '@linux-dev-home/shared'
 
 import { applyAppearanceAccent, DEFAULT_ACCENT_HEX } from '../theme/applyAccent'
 
-const panel: React.CSSProperties = {
-  border: '1px solid var(--border)',
-  borderRadius: 12,
-  padding: 20,
-  background: 'var(--bg-panel)',
-}
-
-const muted: React.CSSProperties = {
-  color: 'var(--text-muted)',
-  fontSize: 14,
-  lineHeight: 1.55,
-}
-
 const ACCENT_PRESETS: ReadonlyArray<{ label: string; hex: string }> = [
   { label: 'Violet', hex: '#7c4dff' },
   { label: 'Blue', hex: '#1976d2' },
   { label: 'Green', hex: '#43a047' },
   { label: 'Coral', hex: '#ff7043' },
   { label: 'Teal', hex: '#00897b' },
+]
+
+type SettingsNavId = 'personalization' | 'remote' | 'system'
+
+const NAV: ReadonlyArray<{
+  id: SettingsNavId
+  label: string
+  hint: string
+  /** Codicon suffix only, e.g. `color-mode` → `codicon codicon-color-mode` */
+  icon: string
+}> = [
+  {
+    id: 'personalization',
+    label: 'Personalization',
+    hint: 'Colors & appearance',
+    icon: 'color-mode',
+  },
+  {
+    id: 'remote',
+    label: 'SSH & remote',
+    hint: 'Saved connections',
+    icon: 'terminal-linux',
+  },
+  {
+    id: 'system',
+    label: 'System',
+    hint: 'Hosts & environment',
+    icon: 'inspect',
+  },
 ]
 
 function hostExecStringResult(
@@ -36,8 +52,26 @@ function hostExecStringResult(
   return { ok: false, error: h.error ?? fallbackError }
 }
 
-/** Phase 8: cross-cutting preferences; SSH bookmarks share store with `/ssh`; accent persists in `appearance`. */
+const codeBox: React.CSSProperties = {
+  marginTop: 14,
+  marginBottom: 0,
+  padding: 14,
+  maxHeight: 320,
+  overflow: 'auto',
+  fontSize: 12,
+  lineHeight: 1.5,
+  background: 'var(--bg-input)',
+  border: '1px solid var(--border)',
+  borderRadius: 10,
+  whiteSpace: 'pre-wrap',
+  wordBreak: 'break-word',
+  fontFamily: 'var(--font-mono)',
+}
+
+/** Settings hub: personalization, remote bookmarks overview, read-only system previews. */
 export function SettingsPage(): ReactElement {
+  const [navId, setNavId] = useState<SettingsNavId>('personalization')
+
   const [bookmarks, setBookmarks] = useState<SshBookmark[]>([])
   const [loadError, setLoadError] = useState<string | null>(null)
 
@@ -193,242 +227,309 @@ export function SettingsPage(): ReactElement {
     }
   }
 
+  const activeNav = NAV.find((n) => n.id === navId) ?? NAV[0]
+
   return (
-    <div style={{ padding: 24, maxWidth: 920, display: 'flex', flexDirection: 'column', gap: 20 }}>
-      <header>
-        <div className="mono" style={{ color: 'var(--accent)', fontSize: 12, marginBottom: 8 }}>
-          SETTINGS
-        </div>
-        <h1 style={{ margin: 0, fontSize: 28, fontWeight: 700 }}>Settings</h1>
-        <p style={{ ...muted, marginTop: 10, maxWidth: 720 }}>
-          Phase 8 hub: SSH bookmarks share storage with the SSH page. Accent color is persisted app-wide. Hosts and
-          environment previews are read-only; profile file editing is not offered yet.
+    <div
+      style={{
+        minHeight: '100%',
+        padding: '28px 32px 48px',
+        maxWidth: 1040,
+        margin: '0 auto',
+        boxSizing: 'border-box',
+      }}
+    >
+      <header style={{ marginBottom: 28 }}>
+        <h1 className="hp-title" style={{ fontSize: 32, fontWeight: 700, letterSpacing: '-0.03em' }}>
+          Settings
+        </h1>
+        <p className="hp-muted" style={{ marginTop: 10, maxWidth: 560, fontSize: 14 }}>
+          Personalize Linux Dev Home, review saved SSH targets, and inspect read-only system context when something
+          behaves differently in Flatpak or native installs.
         </p>
       </header>
 
-      <section style={panel}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>SSH bookmarks</h2>
-          <Link to="/ssh" style={{ fontSize: 13, fontWeight: 600, color: 'var(--accent)' }}>
-            Open SSH page →
-          </Link>
-        </div>
-        <p style={{ ...muted, marginTop: 8, marginBottom: 0 }}>
-          Add, edit, and connect from the SSH workspace. This list stays in sync with the same saved entries.
-        </p>
-        {loadError ? (
-          <p style={{ color: 'var(--red)', marginTop: 12, marginBottom: 0, fontSize: 14 }}>{loadError}</p>
-        ) : null}
-        {bookmarks.length === 0 && !loadError ? (
-          <p style={{ ...muted, marginTop: 14, marginBottom: 0 }}>No bookmarks yet. Create one on the SSH page.</p>
-        ) : null}
-        {bookmarks.length > 0 ? (
-          <div style={{ marginTop: 14, overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
-              <thead>
-                <tr style={{ textAlign: 'left', color: 'var(--text-muted)', fontSize: 12 }}>
-                  <th style={{ padding: '8px 10px', borderBottom: '1px solid var(--border)' }}>Name</th>
-                  <th style={{ padding: '8px 10px', borderBottom: '1px solid var(--border)' }}>Target</th>
-                  <th style={{ padding: '8px 10px', borderBottom: '1px solid var(--border)' }}>Port</th>
-                </tr>
-              </thead>
-              <tbody>
-                {bookmarks.map((b) => (
-                  <tr key={b.id}>
-                    <td style={{ padding: '10px', borderBottom: '1px solid var(--border)', fontWeight: 500 }}>{b.name}</td>
-                    <td style={{ padding: '10px', borderBottom: '1px solid var(--border)', fontFamily: 'var(--font-mono)' }}>
-                      {b.user}@{b.host}
-                    </td>
-                    <td style={{ padding: '10px', borderBottom: '1px solid var(--border)' }}>{b.port}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      <div
+        className="settings-layout-grid"
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'minmax(200px, 240px) minmax(0, 1fr)',
+          gap: 32,
+          alignItems: 'start',
+        }}
+      >
+        <nav
+          aria-label="Settings categories"
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 4,
+            position: 'sticky',
+            top: 12,
+          }}
+        >
+          {NAV.map((item) => {
+            const active = item.id === navId
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setNavId(item.id)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: 12,
+                  textAlign: 'left',
+                  width: '100%',
+                  padding: '12px 14px',
+                  borderRadius: 8,
+                  border: '1px solid',
+                  borderColor: active ? 'color-mix(in srgb, var(--accent) 45%, var(--border))' : 'transparent',
+                  background: active
+                    ? 'color-mix(in srgb, var(--accent) 14%, var(--bg-widget))'
+                    : 'color-mix(in srgb, var(--bg-widget) 88%, transparent)',
+                  color: 'var(--text)',
+                  cursor: 'pointer',
+                  transition: 'background 0.15s ease, border-color 0.15s ease',
+                  boxShadow: active ? '0 1px 0 rgba(255,255,255,0.04)' : 'none',
+                }}
+              >
+                <span
+                  className={`codicon codicon-${item.icon}`}
+                  style={{
+                    fontSize: 20,
+                    marginTop: 2,
+                    opacity: active ? 1 : 0.85,
+                    color: active ? 'var(--accent)' : 'var(--text-muted)',
+                  }}
+                  aria-hidden
+                />
+                <span style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+                  <span style={{ fontWeight: 650, fontSize: 14, letterSpacing: '0.01em' }}>{item.label}</span>
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.4 }}>{item.hint}</span>
+                </span>
+              </button>
+            )
+          })}
+        </nav>
+
+        <main key={navId} className="settings-pane-animate" style={{ minWidth: 0 }}>
+          <div className="hp-card" style={{ padding: '22px 24px' }}>
+            <div className="hp-card-header" style={{ marginBottom: 16 }}>
+              <h2 className="hp-card-title" style={{ fontSize: 16 }}>
+                {activeNav.label}
+              </h2>
+              <p className="hp-card-subtitle" style={{ fontSize: 13 }}>
+                {activeNav.id === 'personalization' &&
+                  'Choose an accent color for links, highlights, and focus across the app. Save to keep it after restart.'}
+                {activeNav.id === 'remote' &&
+                  'These entries are the same as on the SSH page. Open there to add, edit, or connect.'}
+                {activeNav.id === 'system' &&
+                  'Read-only diagnostics: hosts file and a small set of process environment variables (no profile editing yet).'}
+              </p>
+            </div>
+
+            {navId === 'personalization' ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 16,
+                    padding: '14px 0',
+                    borderTop: '1px solid var(--border)',
+                    borderBottom: '1px solid var(--border)',
+                  }}
+                >
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>Accent color</div>
+                    <p className="hp-muted" style={{ margin: 0, maxWidth: 360 }}>
+                      Controls the global <span className="mono">--accent</span> design token.
+                    </p>
+                  </div>
+                  <div className="hp-row-wrap" style={{ gap: 10 }}>
+                    {ACCENT_PRESETS.map((p) => (
+                      <button
+                        key={p.hex}
+                        type="button"
+                        title={p.label}
+                        onClick={() => setAccentDraft(p.hex)}
+                        style={{
+                          width: 40,
+                          height: 40,
+                          borderRadius: 10,
+                          border:
+                            accentDraft.toLowerCase() === p.hex
+                              ? '2px solid var(--text)'
+                              : '1px solid var(--border)',
+                          background: p.hex,
+                          cursor: 'pointer',
+                          boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.15)',
+                        }}
+                      />
+                    ))}
+                    <label
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 10,
+                        fontSize: 13,
+                        color: 'var(--text-muted)',
+                        paddingLeft: 4,
+                      }}
+                    >
+                      Custom
+                      <input
+                        type="color"
+                        value={accentDraft}
+                        onChange={(ev) => setAccentDraft(ev.target.value)}
+                        style={{
+                          width: 44,
+                          height: 40,
+                          padding: 0,
+                          border: '1px solid var(--border)',
+                          borderRadius: 10,
+                          cursor: 'pointer',
+                          background: 'var(--bg-input)',
+                        }}
+                      />
+                    </label>
+                  </div>
+                </div>
+                <div className="hp-row-wrap">
+                  <button
+                    type="button"
+                    className="hp-btn hp-btn-primary"
+                    disabled={accentBusy}
+                    onClick={() => void saveAccent()}
+                  >
+                    Save
+                  </button>
+                  <button type="button" className="hp-btn" disabled={accentBusy} onClick={() => void resetAccent()}>
+                    Reset to default
+                  </button>
+                </div>
+                {accentMsg ? (
+                  <div
+                    className={`hp-status-alert ${
+                      accentMsg.toLowerCase().includes('could not') || accentMsg.toLowerCase().includes('failed')
+                        ? 'error'
+                        : 'success'
+                    }`}
+                    style={{ marginTop: 4 }}
+                  >
+                    {accentMsg}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+
+            {navId === 'remote' ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <div className="hp-row-wrap" style={{ justifyContent: 'space-between' }}>
+                  <span className="hp-muted" style={{ fontSize: 13 }}>
+                    {bookmarks.length === 1 ? '1 saved bookmark' : `${bookmarks.length} saved bookmarks`}
+                  </span>
+                  <Link to="/ssh" className="hp-btn hp-btn-primary" style={{ textDecoration: 'none' }}>
+                    <span className="codicon codicon-arrow-right" aria-hidden />
+                    Manage on SSH page
+                  </Link>
+                </div>
+                {loadError ? <div className="hp-status-alert error">{loadError}</div> : null}
+                {bookmarks.length === 0 && !loadError ? (
+                  <p className="hp-muted" style={{ margin: 0 }}>
+                    No bookmarks yet. Add one on the SSH page — it will show up here automatically.
+                  </p>
+                ) : null}
+                {bookmarks.length > 0 ? (
+                  <div className="hp-table-wrap">
+                    <table className="hp-table">
+                      <thead>
+                        <tr>
+                          <th className="hp-table-cell hp-table-head">Name</th>
+                          <th className="hp-table-cell hp-table-head">Target</th>
+                          <th className="hp-table-cell hp-table-head" style={{ width: 72 }}>
+                            Port
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {bookmarks.map((b) => (
+                          <tr key={b.id} className="hp-table-row">
+                            <td className="hp-table-cell" style={{ fontWeight: 600 }}>
+                              {b.name}
+                            </td>
+                            <td className="hp-table-cell mono" style={{ fontFamily: 'var(--font-mono)' }}>
+                              {b.user}@{b.host}
+                            </td>
+                            <td className="hp-table-cell">{b.port}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+
+            {navId === 'system' ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
+                <section>
+                  <div className="hp-row-wrap" style={{ justifyContent: 'space-between', marginBottom: 8 }}>
+                    <div>
+                      <div style={{ fontWeight: 650, fontSize: 14 }}>Hosts file</div>
+                      <p className="hp-muted" style={{ margin: '6px 0 0', maxWidth: 520 }}>
+                        Read-only view of <span className="mono">/etc/hosts</span>. In Flatpak you may see the sandbox
+                        copy, not the host.
+                      </p>
+                    </div>
+                    <button type="button" className="hp-btn" disabled={hostsBusy} onClick={() => void refreshHosts()}>
+                      <span className="codicon codicon-refresh" aria-hidden />
+                      Refresh
+                    </button>
+                  </div>
+                  {hostsErr ? <div className="hp-status-alert error">{hostsErr}</div> : null}
+                  {hostsBusy && hostsPreview === null && !hostsErr ? (
+                    <p className="hp-muted" style={{ marginTop: 12 }}>
+                      Loading…
+                    </p>
+                  ) : null}
+                  {hostsPreview !== null ? <pre style={codeBox}>{hostsPreview}</pre> : null}
+                </section>
+
+                <section style={{ borderTop: '1px solid var(--border)', paddingTop: 24 }}>
+                  <div className="hp-row-wrap" style={{ justifyContent: 'space-between', marginBottom: 8 }}>
+                    <div>
+                      <div style={{ fontWeight: 650, fontSize: 14 }}>Environment</div>
+                      <p className="hp-muted" style={{ margin: '6px 0 0', maxWidth: 520 }}>
+                        Allowlisted variables from this app process (not a login shell). Useful for PATH and Flatpak
+                        detection.
+                      </p>
+                    </div>
+                    <button type="button" className="hp-btn" disabled={envBusy} onClick={() => void refreshEnv()}>
+                      <span className="codicon codicon-refresh" aria-hidden />
+                      Refresh
+                    </button>
+                  </div>
+                  {envErr ? <div className="hp-status-alert error">{envErr}</div> : null}
+                  {envBusy && envPreview === null && !envErr ? (
+                    <p className="hp-muted" style={{ marginTop: 12 }}>
+                      Loading…
+                    </p>
+                  ) : null}
+                  {envPreview !== null ? <pre style={codeBox}>{envPreview}</pre> : null}
+                </section>
+              </div>
+            ) : null}
           </div>
-        ) : null}
-      </section>
 
-      <section style={panel}>
-        <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>Accent color</h2>
-        <p style={{ ...muted, marginTop: 8, marginBottom: 12 }}>
-          Updates the global <span className="mono">--accent</span> token (links, nav active state, highlights). Save to
-          persist; reset removes the override.
-        </p>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
-          {ACCENT_PRESETS.map((p) => (
-            <button
-              key={p.hex}
-              type="button"
-              title={p.label}
-              onClick={() => setAccentDraft(p.hex)}
-              style={{
-                width: 36,
-                height: 36,
-                borderRadius: 8,
-                border: accentDraft.toLowerCase() === p.hex ? '2px solid var(--text)' : '1px solid var(--border)',
-                background: p.hex,
-                cursor: 'pointer',
-              }}
-            />
-          ))}
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}>
-            <span className="mono" style={{ color: 'var(--text-muted)' }}>
-              Custom
-            </span>
-            <input
-              type="color"
-              value={accentDraft}
-              onChange={(ev) => setAccentDraft(ev.target.value)}
-              style={{ width: 48, height: 36, padding: 0, border: '1px solid var(--border)', borderRadius: 8, cursor: 'pointer' }}
-            />
-          </label>
-        </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 16 }}>
-          <button
-            type="button"
-            disabled={accentBusy}
-            onClick={() => void saveAccent()}
-            style={{
-              padding: '8px 16px',
-              borderRadius: 8,
-              border: '1px solid var(--accent)',
-              background: 'color-mix(in srgb, var(--accent) 18%, transparent)',
-              color: 'var(--accent)',
-              fontWeight: 600,
-              cursor: accentBusy ? 'wait' : 'pointer',
-            }}
-          >
-            Save accent
-          </button>
-          <button
-            type="button"
-            disabled={accentBusy}
-            onClick={() => void resetAccent()}
-            style={{
-              padding: '8px 16px',
-              borderRadius: 8,
-              border: '1px solid var(--border)',
-              background: 'var(--bg-input)',
-              color: 'var(--text)',
-              fontWeight: 500,
-              cursor: accentBusy ? 'wait' : 'pointer',
-            }}
-          >
-            Reset to default
-          </button>
-        </div>
-        {accentMsg ? (
-          <p style={{ marginTop: 12, marginBottom: 0, fontSize: 13, color: 'var(--text-muted)' }}>{accentMsg}</p>
-        ) : null}
-      </section>
-
-      <section style={panel}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>Hosts file</h2>
-          <button
-            type="button"
-            disabled={hostsBusy}
-            onClick={() => void refreshHosts()}
-            style={{
-              padding: '8px 16px',
-              borderRadius: 8,
-              border: '1px solid var(--border)',
-              background: 'var(--bg-input)',
-              color: 'var(--text)',
-              fontWeight: 600,
-              fontSize: 13,
-              cursor: hostsBusy ? 'wait' : 'pointer',
-            }}
-          >
-            Refresh preview
-          </button>
-        </div>
-        <p style={{ ...muted, marginTop: 8, marginBottom: 0 }}>
-          Read-only snapshot of <span className="mono">/etc/hosts</span> (bounded size). Flatpak or sandboxed installs may
-          not see the host file; editing is not offered yet.
-        </p>
-        {hostsErr ? (
-          <p style={{ color: 'var(--red)', marginTop: 12, marginBottom: 0, fontSize: 14 }}>{hostsErr}</p>
-        ) : null}
-        {hostsBusy && hostsPreview === null && !hostsErr ? (
-          <p style={{ ...muted, marginTop: 12, marginBottom: 0 }}>Loading hosts preview…</p>
-        ) : null}
-        {hostsPreview !== null ? (
-          <pre
-            className="mono"
-            style={{
-              marginTop: 12,
-              marginBottom: 0,
-              padding: 12,
-              maxHeight: 280,
-              overflow: 'auto',
-              fontSize: 12,
-              lineHeight: 1.45,
-              background: 'var(--bg-input)',
-              border: '1px solid var(--border)',
-              borderRadius: 8,
-              whiteSpace: 'pre-wrap',
-              wordBreak: 'break-word',
-            }}
-          >
-            {hostsPreview}
-          </pre>
-        ) : null}
-      </section>
-
-      <section style={panel}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>Environment</h2>
-          <button
-            type="button"
-            disabled={envBusy}
-            onClick={() => void refreshEnv()}
-            style={{
-              padding: '8px 16px',
-              borderRadius: 8,
-              border: '1px solid var(--border)',
-              background: 'var(--bg-input)',
-              color: 'var(--text)',
-              fontWeight: 600,
-              fontSize: 13,
-              cursor: envBusy ? 'wait' : 'pointer',
-            }}
-          >
-            Refresh preview
-          </button>
-        </div>
-        <p style={{ ...muted, marginTop: 8, marginBottom: 0 }}>
-          Allowlisted variables from this app process (not an interactive login shell). PATH and display-related entries
-          help confirm Flatpak vs native context. Profile-scoped env files with diff-before-apply remain planned.
-        </p>
-        {envErr ? (
-          <p style={{ color: 'var(--red)', marginTop: 12, marginBottom: 0, fontSize: 14 }}>{envErr}</p>
-        ) : null}
-        {envBusy && envPreview === null && !envErr ? (
-          <p style={{ ...muted, marginTop: 12, marginBottom: 0 }}>Loading environment preview…</p>
-        ) : null}
-        {envPreview !== null ? (
-          <pre
-            className="mono"
-            style={{
-              marginTop: 12,
-              marginBottom: 0,
-              padding: 12,
-              maxHeight: 280,
-              overflow: 'auto',
-              fontSize: 12,
-              lineHeight: 1.45,
-              background: 'var(--bg-input)',
-              border: '1px solid var(--border)',
-              borderRadius: 8,
-              whiteSpace: 'pre-wrap',
-              wordBreak: 'break-word',
-            }}
-          >
-            {envPreview}
-          </pre>
-        ) : null}
-      </section>
+          <p className="hp-muted" style={{ marginTop: 18, fontSize: 12, textAlign: 'right' }}>
+            Profile-scoped env files and hosts editing are not available yet.
+          </p>
+        </main>
+      </div>
     </div>
   )
 }
