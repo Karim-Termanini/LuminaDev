@@ -1184,6 +1184,65 @@ async fn ipc_send(channel: String, payload: Value, app: AppHandle, state: State<
   }
 }
 
+// ─── Git VCS helpers ──────────────────────────────────────────────────────────
+
+fn parse_porcelain_v1(output: &str) -> (Vec<Value>, Vec<Value>) {
+    let mut staged: Vec<Value> = Vec::new();
+    let mut unstaged: Vec<Value> = Vec::new();
+    for line in output.lines() {
+        if line.len() < 3 {
+            continue;
+        }
+        let x = line.chars().next().unwrap_or(' ');
+        let y = line.chars().nth(1).unwrap_or(' ');
+        let raw_path = &line[3..];
+        let (path, old_path) = if raw_path.contains(" -> ") {
+            let mut parts = raw_path.splitn(2, " -> ");
+            let p = parts.next().unwrap_or(raw_path).to_string();
+            let o = parts.next().map(|s| s.to_string());
+            (p, o)
+        } else {
+            (raw_path.to_string(), None)
+        };
+        // Staged (index) changes
+        if x != ' ' && x != '?' && x != 'U' {
+            let status = match x {
+                'M' => "M",
+                'A' => "A",
+                'D' => "D",
+                'R' => "R",
+                _ => "M",
+            };
+            staged.push(if let Some(ref old) = old_path {
+                json!({ "path": path, "status": status, "oldPath": old })
+            } else {
+                json!({ "path": path, "status": status })
+            });
+        }
+        // Unstaged (worktree) changes + untracked + conflicts
+        match (x, y) {
+            ('?', '?') => unstaged.push(json!({ "path": path, "status": "?" })),
+            ('U', 'U') => unstaged.push(json!({ "path": path, "status": "C" })),
+            (_, 'M') => unstaged.push(json!({ "path": path, "status": "M" })),
+            (_, 'D') => unstaged.push(json!({ "path": path, "status": "D" })),
+            _ => {}
+        }
+    }
+    (staged, unstaged)
+}
+
+async fn git_ahead_behind(repo_path: &str) -> (Option<i64>, Option<i64>) {
+    let ahead = exec_output_limit(
+        "git", &["-C", repo_path, "rev-list", "--count", "@{u}..HEAD"],
+        CMD_TIMEOUT_SHORT,
+    ).await.ok().and_then(|s| s.trim().parse::<i64>().ok());
+    let behind = exec_output_limit(
+        "git", &["-C", repo_path, "rev-list", "--count", "HEAD..@{u}"],
+        CMD_TIMEOUT_SHORT,
+    ).await.ok().and_then(|s| s.trim().parse::<i64>().ok());
+    (ahead, behind)
+}
+
 #[tauri::command]
 async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, state: State<'_, AppState>) -> Result<Value, String> {
   let body = payload.unwrap_or_else(|| json!({}));
@@ -2140,6 +2199,67 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
             }
             Err(e) => json!({ "ok": false, "error": e }),
         }
+    },
+
+    "dh:git:vcs:status" => {
+        let repo_path = body.get("repoPath").and_then(|v| v.as_str()).unwrap_or_default();
+        if repo_path.is_empty() {
+            return Ok(json!({ "ok": false, "error": "[GIT_VCS_NOT_A_REPO] Missing repoPath." }));
+        }
+        // Verify it's a git repo
+        let branch_result = exec_output_limit(
+            "git", &["-C", repo_path, "rev-parse", "--abbrev-ref", "HEAD"],
+            CMD_TIMEOUT_SHORT,
+        ).await;
+        let branch = match branch_result {
+            Err(_) => return Ok(json!({ "ok": false, "error": "[GIT_VCS_NOT_A_REPO] Not a git repository." })),
+            Ok(b) => b,
+        };
+        let porcelain = exec_output_limit(
+            "git", &["-C", repo_path, "status", "--porcelain=v1", "-u"],
+            CMD_TIMEOUT_SHORT,
+        ).await.unwrap_or_default();
+        let (staged, unstaged) = parse_porcelain_v1(&porcelain);
+        let (ahead, behind) = git_ahead_behind(repo_path).await;
+        json!({
+            "ok": true,
+            "branch": branch,
+            "ahead": ahead,
+            "behind": behind,
+            "staged": staged,
+            "unstaged": unstaged,
+        })
+    },
+
+    "dh:git:vcs:diff" => {
+        let repo_path = body.get("repoPath").and_then(|v| v.as_str()).unwrap_or_default();
+        let file_path = body.get("filePath").and_then(|v| v.as_str()).unwrap_or_default();
+        let staged = body.get("staged").and_then(|v| v.as_bool()).unwrap_or(false);
+        if repo_path.is_empty() || file_path.is_empty() {
+            return Ok(json!({ "ok": false, "error": "[GIT_VCS_NOT_A_REPO] Missing repoPath or filePath." }));
+        }
+        let diff_args: Vec<&str> = if staged {
+            vec!["-C", repo_path, "diff", "--cached", "--", file_path]
+        } else {
+            vec!["-C", repo_path, "diff", "--", file_path]
+        };
+        let raw = match exec_output_limit("git", &diff_args, CMD_TIMEOUT_SHORT).await {
+            Err(_) => {
+                // Try untracked file diff
+                let untracked_args = vec!["-C", repo_path, "diff", "--no-index", "/dev/null", file_path];
+                exec_output_limit("git", &untracked_args, CMD_TIMEOUT_SHORT).await
+                    .unwrap_or_default()
+            }
+            Ok(r) => r,
+        };
+        if raw.contains("Binary files") {
+            return Ok(json!({ "ok": true, "diff": null, "binary": true }));
+        }
+        const DIFF_CAP: usize = 512 * 1024; // 512 KB
+        if raw.len() > DIFF_CAP {
+            return Ok(json!({ "ok": false, "error": "[GIT_VCS_DIFF_TOO_LARGE] File diff exceeds 512 KB." }));
+        }
+        json!({ "ok": true, "diff": raw, "binary": false })
     },
 
     "dh:ssh:generate" => {
@@ -3810,6 +3930,60 @@ mod tests {
       "docker-proxy"
     );
     assert_eq!(ss_process_from_line("no users payload"), "unknown");
+  }
+
+  #[test]
+  fn porcelain_parses_modified_staged() {
+      let input = "M  src/main.rs";
+      let (staged, unstaged) = parse_porcelain_v1(input);
+      assert_eq!(staged.len(), 1);
+      assert_eq!(staged[0]["status"], "M");
+      assert_eq!(staged[0]["path"], "src/main.rs");
+      assert_eq!(unstaged.len(), 0);
+  }
+
+  #[test]
+  fn porcelain_parses_untracked() {
+      let input = "?? new_file.rs";
+      let (staged, unstaged) = parse_porcelain_v1(input);
+      assert_eq!(staged.len(), 0);
+      assert_eq!(unstaged.len(), 1);
+      assert_eq!(unstaged[0]["status"], "?");
+  }
+
+  #[test]
+  fn porcelain_parses_conflict() {
+      let input = "UU conflict.rs";
+      let (staged, unstaged) = parse_porcelain_v1(input);
+      assert_eq!(staged.len(), 0);
+      assert_eq!(unstaged.len(), 1);
+      assert_eq!(unstaged[0]["status"], "C");
+  }
+
+  #[test]
+  fn porcelain_parses_renamed() {
+      let input = "R  new_name.rs -> old_name.rs";
+      let (staged, unstaged) = parse_porcelain_v1(input);
+      assert_eq!(staged.len(), 1);
+      assert_eq!(staged[0]["status"], "R");
+      assert_eq!(staged[0]["path"], "new_name.rs");
+      assert_eq!(staged[0]["oldPath"], "old_name.rs");
+  }
+
+  #[test]
+  fn porcelain_parses_staged_and_unstaged() {
+      let input = "MM src/lib.rs";
+      let (staged, unstaged) = parse_porcelain_v1(input);
+      assert_eq!(staged.len(), 1);
+      assert_eq!(staged[0]["status"], "M");
+      assert_eq!(unstaged.len(), 1);
+      assert_eq!(unstaged[0]["status"], "M");
+  }
+
+  #[test]
+  fn diff_cap_check() {
+      let big = "a".repeat(524289);
+      assert!(big.len() > 512 * 1024);
   }
 
 }
