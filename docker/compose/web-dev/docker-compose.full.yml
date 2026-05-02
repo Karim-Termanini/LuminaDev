@@ -1,0 +1,10 @@
+# Optional “realistic” overlay merged with docker-compose.yml when the app process has
+# LUMINA_DEV_COMPOSE_FULL=1 (or true/yes). Default remains stub-only for CI and low-resource hosts.
+name: lumina-web-dev
+
+services:
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "18080:80"
+    restart: unless-stopped
