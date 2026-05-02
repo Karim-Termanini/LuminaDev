@@ -130,6 +130,8 @@ function createTauriDhApi(): DhApi {
     runtimeRemoveVersion: (payload) => tauriInvoke(IPC.runtimeRemoveVersion, payload),
     perfSnapshot: () => tauriInvoke(IPC.perfSnapshot),
     diagnosticsBundleCreate: (payload) => tauriInvoke(IPC.diagnosticsBundleCreate, payload),
+    systemReadinessCheck: () => tauriInvoke(IPC.systemReadinessCheck, {}),
+    systemReadinessFix: (payload) => tauriInvoke(IPC.systemReadinessFix, payload),
     terminalGetAllEnv: () => tauriInvoke(IPC.terminalGetAllEnv),
     cloudAuthConnectStart: (provider) => tauriInvoke(IPC.cloudAuthConnectStart, { provider }),
     cloudAuthConnectPoll: (payload) => tauriInvoke(IPC.cloudAuthConnectPoll, payload),

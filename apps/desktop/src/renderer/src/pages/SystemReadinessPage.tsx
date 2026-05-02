@@ -43,7 +43,7 @@ export function SystemReadinessPage(): ReactElement {
   const fetchReport = async () => {
     setLoading(true)
     try {
-      const res = await (window.dh.ipcInvoke('dh:system:readiness:check', {}) as Promise<{ ok: boolean; report: ReadinessReport }>)
+      const res = (await window.dh.systemReadinessCheck()) as { ok: boolean; report: ReadinessReport }
       if (res.ok) setReport(res.report)
     } catch (e) {
       console.error('Readiness check failed', e)
@@ -107,7 +107,7 @@ export function SystemReadinessPage(): ReactElement {
           onFix={!software.docker_running ? async () => {
             setFixing('docker-start')
             try {
-              const res = await (window.dh.ipcInvoke('dh:system:readiness:fix', { id: 'docker-start' }) as Promise<{ ok: boolean; error?: string }>)
+              const res = await window.dh.systemReadinessFix({ id: 'docker-start' })
               if (res.ok) await fetchReport()
               else alert(res.error)
             } finally {
@@ -122,7 +122,7 @@ export function SystemReadinessPage(): ReactElement {
           onFix={!software.in_docker_group ? async () => {
             setFixing('docker-group')
             try {
-              const res = await (window.dh.ipcInvoke('dh:system:readiness:fix', { id: 'docker-group' }) as Promise<{ ok: boolean; error?: string }>)
+              const res = await window.dh.systemReadinessFix({ id: 'docker-group' })
               if (res.ok) alert('Added to group. You may need to log out and back in for changes to take effect.')
               else alert(res.error)
               await fetchReport()

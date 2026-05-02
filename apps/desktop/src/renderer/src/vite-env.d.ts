@@ -104,6 +104,8 @@ declare global {
       runtimeRemoveVersion: (payload: { runtimeId: string; version: string; path: string }) => Promise<{ ok: boolean; error?: string }>
       perfSnapshot: () => Promise<{ ok: boolean; snapshot?: import('@linux-dev-home/shared').PerfSnapshot; error?: string }>
       diagnosticsBundleCreate: (payload: { report: unknown; includeSensitive?: boolean }) => Promise<{ ok: boolean; path?: string; error?: string }>
+      systemReadinessCheck: () => Promise<{ ok: boolean; report: unknown; error?: string }>
+      systemReadinessFix: (payload: { id: string }) => Promise<{ ok: boolean; error?: string }>
       terminalGetAllEnv: () => Promise<{ ok: boolean; env: Record<string, string>; error?: string }>
       cloudAuthConnectStart: (provider: 'github' | 'gitlab') => Promise<{
         ok: boolean

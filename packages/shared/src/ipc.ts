@@ -234,6 +234,8 @@ export const IPC = {
   runtimeRemoveVersion: 'dh:runtime:remove-version',
   perfSnapshot: 'dh:perf:snapshot',
   diagnosticsBundleCreate: 'dh:diagnostics:bundle:create',
+  systemReadinessCheck: 'dh:system:readiness:check',
+  systemReadinessFix: 'dh:system:readiness:fix',
   terminalGetAllEnv: 'dh:terminal:get-all-env',
   cloudAuthConnectStart: 'dh:cloud:auth:connect-start',
   cloudAuthConnectPoll: 'dh:cloud:auth:connect-poll',
