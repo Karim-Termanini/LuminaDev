@@ -2,6 +2,7 @@ import type { DashboardLayoutFile } from '@linux-dev-home/shared'
 import type { ReactElement, ReactNode } from 'react'
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { assertDashboardLayoutGet } from '../pages/dashboardContract'
+import { LAYOUT_RELOAD_EVENT } from './layoutReloadEvent'
 
 export type WidgetLayoutContextValue = {
   layout: DashboardLayoutFile | null
@@ -36,6 +37,14 @@ export function WidgetLayoutProvider({ children }: { children: ReactNode }): Rea
 
   useEffect(() => {
     void reloadLayout()
+  }, [reloadLayout])
+
+  useEffect(() => {
+    const onReload = (): void => {
+      void reloadLayout()
+    }
+    window.addEventListener(LAYOUT_RELOAD_EVENT, onReload)
+    return () => window.removeEventListener(LAYOUT_RELOAD_EVENT, onReload)
   }, [reloadLayout])
 
   const removePlacement = useCallback(

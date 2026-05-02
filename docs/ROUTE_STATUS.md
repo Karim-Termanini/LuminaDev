@@ -19,7 +19,7 @@ Status legend:
 | `/ssh` | partial | Core SSH key/test/setup flows work; advanced transfer/remote UX still evolving. |
 | `/git-config` | partial | Identity/behavior/security/inspector sections work via IPC; Git Doctor and backup/restore not yet implemented. |
 | `/registry` | partial | Search/tags/path actions work; broader registry/repo workflows remain minimal. |
-| `/profiles` | partial | CRUD + duplicate + export/import work; **Set Active** writes `active_profile` as the entry's `baseTemplate` (`ComposeProfile`). On-login actions and deeper preset/dashboard unification (e.g. auto compose from active) still evolving. |
+| `/profiles` | partial | CRUD + duplicate + export/import; **Set Active** writes `active_profile` as `baseTemplate` (`ComposeProfile`). **On launch**: optional `composeUp` for active profile + dashboard `layoutGet`/`layoutSet` refresh (store `on_login_automation`, runner after wizard). Deeper preset/dashboard unification still evolving. |
 | `/terminal` | partial | Embedded terminal works; host/sandbox differences still affect behavior. |
 | `/runtimes` | partial | Status/version/deps/uninstall preview are live; install/update/remove backend is in active hardening. |
 | `/maintenance` | partial | Guardian scoring and diagnostics IPC are real; Integrity includes dismissible/auto-clearing status and **in-app** host probes (Docker df/ps, journalctl, cache `du`) via whitelisted `hostExec`—no clipboard-to-terminal runbook. Compose health, cleanup, bundles, tasks, and job runner work; no arbitrary host shell or full remediation. |

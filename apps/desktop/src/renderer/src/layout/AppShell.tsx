@@ -3,6 +3,7 @@ import { NavLink } from 'react-router-dom'
 
 import { ActiveJobsStrip } from './ActiveJobsStrip'
 import { EnvironmentBanner } from './EnvironmentBanner'
+import { OnLoginAutomationRunner } from './OnLoginAutomationRunner'
 import { TopBar } from './TopBar'
 import { WidgetLayoutProvider } from './WidgetLayoutContext'
 
@@ -144,6 +145,7 @@ export function AppShell({ children }: { children: ReactNode }): ReactElement {
       </aside>
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
         <WidgetLayoutProvider>
+          <OnLoginAutomationRunner />
           <EnvironmentBanner />
           <TopBar />
           <main style={{ flex: 1, overflow: 'auto', padding: 24 }}>{children}</main>
