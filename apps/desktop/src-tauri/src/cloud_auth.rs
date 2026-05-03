@@ -1934,7 +1934,19 @@ impl GitLabProvider {
             return Err("[CLOUD_AUTH_INVALID_TOKEN] GitLab token is invalid or expired.".to_string());
         }
         if resp.status() == 403 {
-            return Err("[CLOUD_GIT_INSUFFICIENT_SCOPE] Your GitLab token lacks the 'api' scope needed to create merge requests. Reconnect in Cloud Git with a token that has the 'api' scope enabled.".to_string());
+            let mut has_api_scope = true; 
+            if let Some(scopes_header) = resp.headers().get("X-Gitlab-Token-Scopes") {
+                if let Ok(scopes_str) = scopes_header.to_str() {
+                    let scopes: Vec<&str> = scopes_str.split(',').map(|s| s.trim()).collect();
+                    has_api_scope = scopes.contains(&"api");
+                }
+            }
+            
+            if !has_api_scope {
+                return Err("[CLOUD_GIT_INSUFFICIENT_SCOPE] Your GitLab token lacks the 'api' scope needed to create merge requests. Reconnect in Cloud Git with a token that has the 'api' scope enabled.".to_string());
+            } else {
+                return Err("[CLOUD_GIT_PERMISSION_DENIED] GitLab denied creation (403). Your token has the 'api' scope, but you may lack 'Developer' or higher permissions in this specific project.".to_string());
+            }
         }
         if resp.status() == 409 {
             return Err("[CLOUD_GIT_PR_EXISTS] A merge request for this branch already exists.".to_string());
