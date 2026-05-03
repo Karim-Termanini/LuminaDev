@@ -748,6 +748,10 @@ export function CloudGitPage(): ReactElement {
               autoComplete="off"
               style={{ width: '100%', marginBottom: 12, boxSizing: 'border-box' }}
             />
+            <p className="hp-muted" style={{ fontSize: 11, margin: '-8px 0 14px', color: '#ffb74d' }}>
+              <span className="codicon codicon-warning" style={{ fontSize: 12, marginRight: 4 }} />
+              Note: If using a custom Client ID, your GitLab OAuth App must have the <strong style={{ color: '#ffcc80' }}>'api'</strong> scope enabled to create Merge Requests.
+            </p>
             <div className="hp-row-wrap" style={{ gap: 10, alignItems: 'center' }}>
               <button type="button" className="hp-btn hp-btn-primary" disabled={advSaving} onClick={() => void saveAdvOauth()}>
                 Save client IDs
