@@ -39,8 +39,9 @@ export function computeGitVcsNextAction(input: {
   if (behind != null && behind > 0) return 'pull'
 
   const hasWork = stagedCount > 0 || unstagedCount > 0
+  const messageReady = commitMessageTrimmed.trim().length > 0
   if (hasWork) {
-    if (!commitMessageTrimmed) return 'commit_message'
+    if (!messageReady) return 'commit_message'
     return 'commit'
   }
 
