@@ -1190,21 +1190,40 @@ fn porcelain_xy_unmerged(x: char, y: char) -> bool {
     x == 'U' || y == 'U' || (x == 'A' && y == 'A') || (x == 'D' && y == 'D')
 }
 
+/// Text after the two status characters in `git status --porcelain=v1` / short format, with
+/// leading field separators trimmed. Git documents `<xy> <path>`; trimming avoids assuming
+/// exactly one ASCII space (and matches real `git` output for `M  file`, ` M file`, etc.).
+fn porcelain_rest_after_xy(line: &str) -> &str {
+    let mut it = line.chars();
+    it.next();
+    it.next();
+    let tail = it.as_str();
+    tail.trim_start_matches([' ', '\t'])
+}
+
 fn parse_porcelain_v1(output: &str) -> (Vec<Value>, Vec<Value>) {
     let mut staged: Vec<Value> = Vec::new();
     let mut unstaged: Vec<Value> = Vec::new();
     for line in output.lines() {
-        if line.len() < 3 {
+        let line = line.trim_end();
+        if line.chars().nth(1).is_none() {
             continue;
         }
         let x = line.chars().next().unwrap_or(' ');
         let y = line.chars().nth(1).unwrap_or(' ');
-        let raw_path = &line[3..];
+        let raw_path = porcelain_rest_after_xy(line);
+        if raw_path.is_empty() {
+            continue;
+        }
+        // Rename/copy lines: `orig -> path` (path is the current tree / index name).
         let (path, old_path) = if raw_path.contains(" -> ") {
             let mut parts = raw_path.splitn(2, " -> ");
-            let p = parts.next().unwrap_or(raw_path).to_string();
-            let o = parts.next().map(|s| s.to_string());
-            (p, o)
+            let from = parts.next().unwrap_or(raw_path).to_string();
+            let to = parts.next().map(|s| s.to_string());
+            match to {
+                Some(dest) => (dest, Some(from)),
+                None => (from, None),
+            }
         } else {
             (raw_path.to_string(), None)
         };
@@ -2252,7 +2271,9 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
     | "dh:cloud:git:pipelines"
     | "dh:cloud:git:issues"
     | "dh:cloud:git:releases"
-    | "dh:cloud:git:create-pr" => cloud_git_ipc::invoke(&app, channel.as_str(), &body).await,
+    | "dh:cloud:git:create-pr"
+    | "dh:cloud:git:get-pr-checks"
+    | "dh:cloud:git:merge-pr" => cloud_git_ipc::invoke(&app, channel.as_str(), &body).await,
 
     "dh:git:vcs:status" => {
         let repo_path = body.get("repoPath").and_then(|v| v.as_str()).unwrap_or_default();
@@ -2331,12 +2352,22 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
 
     "dh:git:vcs:stage" => {
         let repo_path = body.get("repoPath").and_then(|v| v.as_str()).unwrap_or_default();
+        if repo_path.is_empty() {
+            return Ok(json!({ "ok": false, "error": "[GIT_VCS_NOT_A_REPO] Missing repoPath." }));
+        }
+        let stage_all = body.get("stageAll").and_then(|v| v.as_bool()) == Some(true);
+        if stage_all {
+            return match exec_output_limit("git", &["-C", repo_path, "add", "-A"], CMD_TIMEOUT_SHORT).await {
+                Ok(_) => Ok(json!({ "ok": true })),
+                Err(e) => Ok(json!({ "ok": false, "error": format!("[GIT_VCS_NOT_A_REPO] {}", e.trim()) })),
+            };
+        }
         let file_paths: Vec<&str> = body.get("filePaths")
             .and_then(|v| v.as_array())
             .map(|arr| arr.iter().filter_map(|x| x.as_str()).collect())
             .unwrap_or_default();
-        if repo_path.is_empty() || file_paths.is_empty() {
-            return Ok(json!({ "ok": false, "error": "[GIT_VCS_NOT_A_REPO] Missing repoPath or filePaths." }));
+        if file_paths.is_empty() {
+            return Ok(json!({ "ok": false, "error": "[GIT_VCS_NOT_A_REPO] Missing filePaths (or pass stageAll: true)." }));
         }
         let mut args = vec!["-C", repo_path, "add", "--"];
         args.extend_from_slice(&file_paths);
@@ -2604,7 +2635,9 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
     | "dh:git:vcs:rebase-skip"
     | "dh:git:vcs:rename-branch"
     | "dh:git:vcs:conflict-diff"
-    | "dh:git:vcs:resolve-conflict" => git_vcs_ipc::invoke_extended(channel.as_str(), &body).await,
+    | "dh:git:vcs:conflict-hunks"
+    | "dh:git:vcs:resolve-conflict"
+    | "dh:git:vcs:resolve-hunk" => git_vcs_ipc::invoke_extended(channel.as_str(), &body).await,
 
     "dh:ssh:generate" => {
       let email = body.get("email").and_then(|v| v.as_str()).unwrap_or("lumina@local");
@@ -4276,15 +4309,24 @@ mod tests {
     assert_eq!(ss_process_from_line("no users payload"), "unknown");
   }
 
-  #[test]
-  fn porcelain_parses_modified_staged() {
-      let input = "M  src/main.rs";
-      let (staged, unstaged) = parse_porcelain_v1(input);
-      assert_eq!(staged.len(), 1);
-      assert_eq!(staged[0]["status"], "M");
-      assert_eq!(staged[0]["path"], "src/main.rs");
-      assert_eq!(unstaged.len(), 0);
-  }
+    #[test]
+    fn porcelain_parses_modified_staged() {
+        let input = "M  src/main.rs";
+        let (staged, unstaged) = parse_porcelain_v1(input);
+        assert_eq!(staged.len(), 1);
+        assert_eq!(staged[0]["status"], "M");
+        assert_eq!(staged[0]["path"], "src/main.rs");
+        assert_eq!(unstaged.len(), 0);
+    }
+
+    #[test]
+    fn porcelain_preserves_apps_prefix_worktree_modified() {
+        let input = " M apps/desktop/src/renderer/src/pages/GitVcsPage.tsx";
+        let (staged, unstaged) = parse_porcelain_v1(input);
+        assert_eq!(staged.len(), 0);
+        assert_eq!(unstaged.len(), 1);
+        assert_eq!(unstaged[0]["path"], "apps/desktop/src/renderer/src/pages/GitVcsPage.tsx");
+    }
 
   #[test]
   fn porcelain_parses_untracked() {
@@ -4323,16 +4365,17 @@ mod tests {
       assert_eq!(unstaged[0]["status"], "C");
   }
 
-  #[test]
-  fn porcelain_parses_renamed() {
-      let input = "R  new_name.rs -> old_name.rs";
-      let (staged, unstaged) = parse_porcelain_v1(input);
-      assert_eq!(staged.len(), 1);
-      assert_eq!(staged[0]["status"], "R");
-      assert_eq!(staged[0]["path"], "new_name.rs");
-      assert_eq!(staged[0]["oldPath"], "old_name.rs");
-      assert_eq!(unstaged.len(), 0);
-  }
+    #[test]
+    fn porcelain_parses_renamed() {
+        // Matches real `git status --porcelain=v1` after `git mv`: `R  <from> -> <to>`.
+        let input = "R  old_name.rs -> new_name.rs";
+        let (staged, unstaged) = parse_porcelain_v1(input);
+        assert_eq!(staged.len(), 1);
+        assert_eq!(staged[0]["status"], "R");
+        assert_eq!(staged[0]["path"], "new_name.rs");
+        assert_eq!(staged[0]["oldPath"], "old_name.rs");
+        assert_eq!(unstaged.len(), 0);
+    }
 
   #[test]
   fn porcelain_parses_staged_and_unstaged() {

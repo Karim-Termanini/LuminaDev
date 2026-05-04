@@ -23,6 +23,9 @@ export function humanizeCloudAuthError(err: unknown): string {
   if (code === 'CLOUD_AUTH_DEVICE_START_REJECTED') {
     return `The provider refused device sign-in (this is usually a bad or missing OAuth client ID, or the app is not allowed to use the device flow). ${detail}`.trim()
   }
+  if (code === 'CLOUD_AUTH_DEVICE_FLOW_DISABLED') {
+    return (detail || 'Use a personal access token on the Cloud Git page instead.').trim()
+  }
   if (code === 'CLOUD_AUTH_NETWORK') {
     return `Could not reach the provider. Check your connection and try again. ${detail}`.trim()
   }
@@ -32,5 +35,29 @@ export function humanizeCloudAuthError(err: unknown): string {
   if (code === 'CLOUD_GIT_SCOPE') {
     return `${detail || 'Could not scope CI to this repository.'}`.trim()
   }
-  return detail || 'Cloud auth operation failed.'
+  if (code === 'CLOUD_GIT_INSUFFICIENT_SCOPE') {
+    return (detail || 'Your token lacks the required scope for this operation. Reconnect with a token that has the necessary permissions.').trim()
+  }
+  if (code === 'CLOUD_GIT_CREATE_PR') {
+    return (detail || 'Could not create the pull or merge request.').trim()
+  }
+  if (code === 'CLOUD_GIT_MERGE_PR') {
+    return (detail || 'Could not merge this pull or merge request on the server.').trim()
+  }
+  if (code === 'CLOUD_GIT_NETWORK') {
+    return `The provider API request failed. ${detail || 'Try again in a moment.'}`.trim()
+  }
+  if (code === 'CLOUD_GIT_MR_BRANCH_NOT_ON_REMOTE') {
+    return (
+      detail ||
+      'This branch is not on the remote yet. Push it to that remote first, then open the merge or pull request again.'
+    ).trim()
+  }
+  if (code === 'CLOUD_GIT_PR_EXISTS') {
+    return (detail || 'A pull or merge request for this branch already exists on the host.').trim()
+  }
+  if (code === 'CLOUD_GIT_PERMISSION_DENIED') {
+    return (detail || 'The host denied this action for your account or token.').trim()
+  }
+  return detail || 'Cloud operation failed.'
 }
