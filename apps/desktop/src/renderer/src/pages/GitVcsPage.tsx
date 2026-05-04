@@ -700,6 +700,13 @@ export function GitVcsPage(): ReactElement {
     try {
       const r = await window.dh.gitVcsMergeContinue({ repoPath: repoPath.trim() })
       assertGitVcsOk(r)
+      const out =
+        r && typeof r === 'object' && 'output' in r && typeof (r as { output?: unknown }).output === 'string'
+          ? String((r as { output: string }).output).trim()
+          : ''
+      setSoftSuccessNotice(
+        out ? `Merge concluded. ${out.slice(0, 280)}${out.length > 280 ? '…' : ''}` : 'Merge concluded.',
+      )
       const lists = await refreshStatus()
       setSelected((prev) => reconcileGitVcsSelection(prev, lists.staged, lists.unstaged))
     } catch (e) {
@@ -716,6 +723,13 @@ export function GitVcsPage(): ReactElement {
     try {
       const r = await window.dh.gitVcsRebaseContinue({ repoPath: repoPath.trim() })
       assertGitVcsOk(r)
+      const out =
+        r && typeof r === 'object' && 'output' in r && typeof (r as { output?: unknown }).output === 'string'
+          ? String((r as { output: string }).output).trim()
+          : ''
+      setSoftSuccessNotice(
+        out ? `Rebase continued. ${out.slice(0, 280)}${out.length > 280 ? '…' : ''}` : 'Rebase continued.',
+      )
       const lists = await refreshStatus()
       setSelected((prev) => reconcileGitVcsSelection(prev, lists.staged, lists.unstaged))
     } catch (e) {

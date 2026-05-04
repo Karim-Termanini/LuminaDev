@@ -259,8 +259,12 @@ export function GitVcsIntegrateWizardModal({
           </div>
 
           {/* Quick Note */}
-          <div style={{ padding: 12, borderRadius: 8, background: 'rgba(255,255,255,0.05)', fontSize: 12, color: 'var(--text-muted)' }}>
+          <div style={{ padding: 12, borderRadius: 8, background: 'rgba(255,255,255,0.05)', fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>
             <span style={{ fontWeight: 600 }}>Tip:</span> LuminaDev will automatically open the Resolution Studio if conflicts occur during the process.
+            <br />
+            <span style={{ fontWeight: 600 }}>Scope:</span> This only updates your <span className="mono">{currentBranch || 'current branch'}</span> in this
+            clone (local merge/rebase). It does <strong>not</strong> merge a pull or merge request on GitHub/GitLab—you still push, then complete the MR/PR
+            on the website (or merge via API) when you are ready.
           </div>
         </div>
 

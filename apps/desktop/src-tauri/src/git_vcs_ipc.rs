@@ -3,7 +3,7 @@
 use serde_json::{json, Value};
 use uuid::Uuid;
 
-use crate::host_exec::{exec_output_limit, CMD_TIMEOUT_LONG, CMD_TIMEOUT_SHORT};
+use crate::host_exec::{exec_output_limit, exec_result_limit, CMD_TIMEOUT_LONG, CMD_TIMEOUT_SHORT};
 
 fn missing_repo() -> Value {
     json!({ "ok": false, "error": "[GIT_VCS_NOT_A_REPO] Missing repoPath." })
@@ -137,8 +137,11 @@ async fn rebase_abort(repo_path: &str) -> Value {
 
 async fn merge_continue(repo_path: &str) -> Value {
     let args = ["-C", repo_path, "merge", "--continue"];
-    match exec_output_limit("git", &args, CMD_TIMEOUT_LONG).await {
-        Ok(output) => json!({ "ok": true, "output": output }),
+    match exec_result_limit("git", &args, CMD_TIMEOUT_LONG).await {
+        Ok((stdout, stderr)) => {
+            let out = format!("{}\n{}", stdout.trim(), stderr.trim()).trim().to_string();
+            json!({ "ok": true, "output": out })
+        }
         Err(e) => {
             let msg = e.trim();
             let code = merge_continue_error_code(msg);
@@ -158,8 +161,11 @@ fn merge_continue_error_code(msg: &str) -> &'static str {
 
 async fn rebase_continue(repo_path: &str) -> Value {
     let args = ["-C", repo_path, "rebase", "--continue"];
-    match exec_output_limit("git", &args, CMD_TIMEOUT_LONG).await {
-        Ok(output) => json!({ "ok": true, "output": output }),
+    match exec_result_limit("git", &args, CMD_TIMEOUT_LONG).await {
+        Ok((stdout, stderr)) => {
+            let out = format!("{}\n{}", stdout.trim(), stderr.trim()).trim().to_string();
+            json!({ "ok": true, "output": out })
+        }
         Err(e) => {
             let msg = e.trim();
             let code = rebase_continue_error_code(msg);

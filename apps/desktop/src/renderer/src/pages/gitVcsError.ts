@@ -85,7 +85,7 @@ export function humanizeGitVcsError(err: unknown): string {
   if (code === 'GIT_VCS_STASH_POP_EMPTY') return 'There is no stash entry to apply.'
   if (code === 'GIT_VCS_STASH_POP') return `Stash pop failed. ${detail}`.trim()
   if (code === 'GIT_VCS_MERGE_CONTINUE')
-    return `Merge could not continue. Stage all resolved files, ensure a merge is in progress, or check hook output. ${detail}`.trim()
+    return `Merge could not finish. Stage every resolved file, ensure a merge is in progress, or read the message below — a failing pre-commit or hook often blocks the merge commit step. ${detail}`.trim()
   if (code === 'GIT_VCS_REBASE_CONTINUE')
     return `Rebase could not continue. Stage resolved files, fix the commit message if prompted, or check hook output. ${detail}`.trim()
   if (code === 'GIT_VCS_CHECKOUT')
