@@ -1571,7 +1571,13 @@ export function GitVcsPage(): ReactElement {
               }
             } else {
               setIntegrateWizardOpen(false)
-              setSoftSuccessNotice(`Successfully ${method}d ${targetRef}`)
+              const hostHint =
+                activeFetchProvider === 'gitlab'
+                  ? ' Push to GitLab, then use Merge on the MR page when you want it closed on the server.'
+                  : activeFetchProvider === 'github'
+                    ? ' Push to GitHub, then merge the PR on the web when you want it closed on the server.'
+                    : ''
+              setSoftSuccessNotice(`Successfully ${method}d ${targetRef} into your branch.${hostHint}`)
             }
           } finally {
             setBusy(false)

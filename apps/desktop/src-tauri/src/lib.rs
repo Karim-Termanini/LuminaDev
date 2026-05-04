@@ -1190,21 +1190,40 @@ fn porcelain_xy_unmerged(x: char, y: char) -> bool {
     x == 'U' || y == 'U' || (x == 'A' && y == 'A') || (x == 'D' && y == 'D')
 }
 
+/// Text after the two status characters in `git status --porcelain=v1` / short format, with
+/// leading field separators trimmed. Git documents `<xy> <path>`; trimming avoids assuming
+/// exactly one ASCII space (and matches real `git` output for `M  file`, ` M file`, etc.).
+fn porcelain_rest_after_xy(line: &str) -> &str {
+    let mut it = line.chars();
+    it.next();
+    it.next();
+    let tail = it.as_str();
+    tail.trim_start_matches(|c: char| c == ' ' || c == '\t')
+}
+
 fn parse_porcelain_v1(output: &str) -> (Vec<Value>, Vec<Value>) {
     let mut staged: Vec<Value> = Vec::new();
     let mut unstaged: Vec<Value> = Vec::new();
     for line in output.lines() {
-        if line.len() < 3 {
+        let line = line.trim_end();
+        if line.chars().nth(1).is_none() {
             continue;
         }
         let x = line.chars().next().unwrap_or(' ');
         let y = line.chars().nth(1).unwrap_or(' ');
-        let raw_path = &line[3..];
+        let raw_path = porcelain_rest_after_xy(line);
+        if raw_path.is_empty() {
+            continue;
+        }
+        // Rename/copy lines: `orig -> path` (path is the current tree / index name).
         let (path, old_path) = if raw_path.contains(" -> ") {
             let mut parts = raw_path.splitn(2, " -> ");
-            let p = parts.next().unwrap_or(raw_path).to_string();
-            let o = parts.next().map(|s| s.to_string());
-            (p, o)
+            let from = parts.next().unwrap_or(raw_path).to_string();
+            let to = parts.next().map(|s| s.to_string());
+            match to {
+                Some(dest) => (dest, Some(from)),
+                None => (from, None),
+            }
         } else {
             (raw_path.to_string(), None)
         };
@@ -4289,15 +4308,24 @@ mod tests {
     assert_eq!(ss_process_from_line("no users payload"), "unknown");
   }
 
-  #[test]
-  fn porcelain_parses_modified_staged() {
-      let input = "M  src/main.rs";
-      let (staged, unstaged) = parse_porcelain_v1(input);
-      assert_eq!(staged.len(), 1);
-      assert_eq!(staged[0]["status"], "M");
-      assert_eq!(staged[0]["path"], "src/main.rs");
-      assert_eq!(unstaged.len(), 0);
-  }
+    #[test]
+    fn porcelain_parses_modified_staged() {
+        let input = "M  src/main.rs";
+        let (staged, unstaged) = parse_porcelain_v1(input);
+        assert_eq!(staged.len(), 1);
+        assert_eq!(staged[0]["status"], "M");
+        assert_eq!(staged[0]["path"], "src/main.rs");
+        assert_eq!(unstaged.len(), 0);
+    }
+
+    #[test]
+    fn porcelain_preserves_apps_prefix_worktree_modified() {
+        let input = " M apps/desktop/src/renderer/src/pages/GitVcsPage.tsx";
+        let (staged, unstaged) = parse_porcelain_v1(input);
+        assert_eq!(staged.len(), 0);
+        assert_eq!(unstaged.len(), 1);
+        assert_eq!(unstaged[0]["path"], "apps/desktop/src/renderer/src/pages/GitVcsPage.tsx");
+    }
 
   #[test]
   fn porcelain_parses_untracked() {
@@ -4336,16 +4364,17 @@ mod tests {
       assert_eq!(unstaged[0]["status"], "C");
   }
 
-  #[test]
-  fn porcelain_parses_renamed() {
-      let input = "R  new_name.rs -> old_name.rs";
-      let (staged, unstaged) = parse_porcelain_v1(input);
-      assert_eq!(staged.len(), 1);
-      assert_eq!(staged[0]["status"], "R");
-      assert_eq!(staged[0]["path"], "new_name.rs");
-      assert_eq!(staged[0]["oldPath"], "old_name.rs");
-      assert_eq!(unstaged.len(), 0);
-  }
+    #[test]
+    fn porcelain_parses_renamed() {
+        // Matches real `git status --porcelain=v1` after `git mv`: `R  <from> -> <to>`.
+        let input = "R  old_name.rs -> new_name.rs";
+        let (staged, unstaged) = parse_porcelain_v1(input);
+        assert_eq!(staged.len(), 1);
+        assert_eq!(staged[0]["status"], "R");
+        assert_eq!(staged[0]["path"], "new_name.rs");
+        assert_eq!(staged[0]["oldPath"], "old_name.rs");
+        assert_eq!(unstaged.len(), 0);
+    }
 
   #[test]
   fn porcelain_parses_staged_and_unstaged() {
