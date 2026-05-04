@@ -21,6 +21,7 @@ import { GitVcsDirtyCheckoutModal } from './GitVcsDirtyCheckoutModal'
 import { GitVcsProviderRail } from './gitVcsProviderRail'
 import { GitVcsRepoPicker } from './gitVcsRepoPicker'
 import { GitVcsFlowHints } from './gitVcsFlowHints'
+import { computeGitVcsNextAction, nextActionButtonStyle } from './gitVcsNextAction'
 import { GitVcsStateBanner, type GitVcsOperation } from './GitVcsStateBanner'
 import { assertGitRecentList } from './registryContract'
 import { CLOUD_GIT_PROVIDER_THEME } from './cloudGitTheme'
@@ -798,6 +799,32 @@ export function GitVcsPage(): ReactElement {
     if (ambiguousPipelineHost) return ambiguousCiToken
     return resolvePipelineProvider(activeFetchRemoteUrl, cloudAccounts)
   }, [activeFetchRemoteUrl, cloudAccounts, ambiguousPipelineHost, ambiguousCiToken])
+
+  const nextGitAction = useMemo(
+    () =>
+      repoPath.trim()
+        ? computeGitVcsNextAction({
+            gitOperation,
+            conflictFileCount,
+            stagedCount: staged.length,
+            unstagedCount: unstaged.length,
+            ahead,
+            behind,
+            commitMessageTrimmed: commitMessage.trim(),
+          })
+        : null,
+    [
+      repoPath,
+      gitOperation,
+      conflictFileCount,
+      staged.length,
+      unstaged.length,
+      ahead,
+      behind,
+      commitMessage,
+    ],
+  )
+
   const vcsTheme = activeFetchProvider === 'other' ? null : CLOUD_GIT_PROVIDER_THEME[activeFetchProvider]
   const vcsScopedStyle = vcsTheme
     ? ({
@@ -904,17 +931,25 @@ export function GitVcsPage(): ReactElement {
           unstagedCount={unstaged.length}
           ahead={ahead}
           behind={behind}
+          nextAction={nextGitAction}
         />
       ) : null}
 
       {repoPath.trim() ? (
         <GitVcsStateBanner
-        operation={gitOperation}
-        conflictFileCount={conflictFileCount}
-        onOpenResolutionStudio={() => setConflictWizardOpen(true)}
-        onContinueOperation={gitOperation === 'merging' ? runMergeContinue : runRebaseContinue}
-        onAbortOperation={gitOperation === 'merging' ? runMergeAbort : runRebaseAbort}
-      />
+          operation={gitOperation}
+          conflictFileCount={conflictFileCount}
+          onOpenResolutionStudio={() => setConflictWizardOpen(true)}
+          onContinueOperation={gitOperation === 'merging' ? runMergeContinue : runRebaseContinue}
+          onAbortOperation={gitOperation === 'merging' ? runMergeAbort : runRebaseAbort}
+          emphasizeNext={
+            nextGitAction === 'resolution_studio'
+              ? 'resolution_studio'
+              : nextGitAction === 'continue_merge'
+                ? 'continue_merge'
+                : null
+          }
+        />
       ) : null}
 
       {trackingPr && activeFetchPipelineProvider !== 'other' && (
@@ -957,7 +992,17 @@ export function GitVcsPage(): ReactElement {
           <span>{opErrorDisplay}</span>
           {integrationNotice ? (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              <button type="button" className="hp-btn hp-btn-primary" disabled={busy} onClick={() => void runPull()}>
+              <button
+                type="button"
+                className="hp-btn hp-btn-primary"
+                disabled={busy}
+                onClick={() => void runPull()}
+                style={
+                  nextGitAction === 'pull' || integrationNotice
+                    ? nextActionButtonStyle('pull', 'pull', {})
+                    : {}
+                }
+              >
                 Pull latest
               </button>
               <button type="button" className="hp-btn" disabled={busy} onClick={() => void runFetch()}>
@@ -1161,10 +1206,22 @@ export function GitVcsPage(): ReactElement {
             <button type="button" className="hp-btn" disabled={busy} onClick={() => void runFetch()}>
               Fetch
             </button>
-            <button type="button" className="hp-btn" disabled={busy} onClick={() => void runPull()}>
+            <button
+              type="button"
+              className="hp-btn"
+              disabled={busy}
+              onClick={() => void runPull()}
+              style={nextActionButtonStyle(nextGitAction, 'pull', {})}
+            >
               Pull
             </button>
-            <button type="button" className="hp-btn hp-btn-primary" disabled={busy} onClick={() => void runPush()}>
+            <button
+              type="button"
+              className="hp-btn hp-btn-primary"
+              disabled={busy}
+              onClick={() => void runPush()}
+              style={nextActionButtonStyle(nextGitAction, 'push', {})}
+            >
               Push
             </button>
             {activeFetchProvider !== 'other' && cloudAccounts.some((a) => a.provider === activeFetchProvider) ? (
@@ -1213,11 +1270,12 @@ export function GitVcsPage(): ReactElement {
               </button>
               {gitOperation !== 'none' && (
                  <>
-                   <button 
-                     type="button" 
-                     className="hp-btn hp-btn-primary" 
+                   <button
+                     type="button"
+                     className="hp-btn hp-btn-primary"
                      onClick={() => gitOperation === 'merging' ? runMergeContinue() : runRebaseContinue()}
                      disabled={busy || conflictFileCount > 0}
+                     style={nextActionButtonStyle(nextGitAction, 'continue_merge', {})}
                    >
                      Continue
                    </button>
@@ -1284,6 +1342,9 @@ export function GitVcsPage(): ReactElement {
             onCommit={() => void runCommit()}
             busy={busy}
             disabled={staged.length === 0 && unstaged.length === 0}
+            emphasizeCommit={
+              nextGitAction === 'commit' ? 'commit' : nextGitAction === 'commit_message' ? 'commit_message' : null
+            }
           />
         </>
       )}

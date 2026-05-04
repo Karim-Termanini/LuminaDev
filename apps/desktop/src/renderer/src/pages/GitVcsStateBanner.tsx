@@ -1,4 +1,6 @@
-import type { ReactElement } from 'react'
+import type { CSSProperties, ReactElement } from 'react'
+
+import { GIT_VCS_NEXT_ACTION_RING } from './gitVcsUiTokens'
 
 export type GitVcsOperation = 'none' | 'merging' | 'rebasing'
 
@@ -8,12 +10,15 @@ export function GitVcsStateBanner({
   onOpenResolutionStudio,
   onContinueOperation,
   onAbortOperation,
+  emphasizeNext,
 }: {
   operation: GitVcsOperation
   conflictFileCount: number
   onOpenResolutionStudio: () => void
   onContinueOperation: () => void
   onAbortOperation: () => void
+  /** Matches workflow hint “next” control — adds green focus ring. */
+  emphasizeNext?: 'resolution_studio' | 'continue_merge' | null
 }): ReactElement | null {
   if (operation === 'none' && conflictFileCount === 0) {
     return null
@@ -36,6 +41,9 @@ export function GitVcsStateBanner({
     title = 'Unmerged paths detected'
     body = `Git still lists ${conflictFileCount} file(s) with merge conflicts.`
   }
+
+  const resStyle = (kind: 'resolution_studio' | 'continue_merge', base: CSSProperties): CSSProperties =>
+    emphasizeNext === kind ? { ...base, ...GIT_VCS_NEXT_ACTION_RING } : base
 
   return (
     <div
@@ -60,7 +68,7 @@ export function GitVcsStateBanner({
               type="button"
               className="hp-btn hp-btn-primary"
               onClick={onOpenResolutionStudio}
-              style={{ padding: '4px 12px', fontSize: 12 }}
+              style={resStyle('resolution_studio', { padding: '4px 12px', fontSize: 12 })}
             >
               <span className="codicon codicon-tools" style={{ marginRight: 6 }} />
               Open Resolution Studio
@@ -70,7 +78,12 @@ export function GitVcsStateBanner({
               type="button"
               className="hp-btn hp-btn-primary"
               onClick={onContinueOperation}
-              style={{ padding: '4px 12px', fontSize: 12, background: 'var(--success)', border: 'none' }}
+              style={resStyle('continue_merge', {
+                padding: '4px 12px',
+                fontSize: 12,
+                background: 'var(--success)',
+                border: 'none',
+              })}
             >
               <span className="codicon codicon-check" style={{ marginRight: 6 }} />
               Conclude {operation === 'merging' ? 'Merge' : 'Rebase'}

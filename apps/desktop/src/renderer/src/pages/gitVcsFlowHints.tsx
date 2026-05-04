@@ -1,5 +1,6 @@
-import type { ReactElement, ReactNode } from 'react'
+import type { CSSProperties, ReactElement, ReactNode } from 'react'
 import type { GitVcsOperation } from './GitVcsStateBanner'
+import type { GitVcsNextAction } from './gitVcsNextAction'
 
 export type GitVcsFlowHintsProps = {
   gitOperation: GitVcsOperation
@@ -8,6 +9,24 @@ export type GitVcsFlowHintsProps = {
   unstagedCount: number
   ahead: number | null
   behind: number | null
+  /** Primary control to call out (green chip + matches highlighted buttons). */
+  nextAction: GitVcsNextAction
+}
+
+const CHIP: CSSProperties = {
+  display: 'inline-block',
+  padding: '2px 10px',
+  borderRadius: 8,
+  background: 'rgba(105, 240, 174, 0.2)',
+  border: '1px solid rgba(105, 240, 174, 0.75)',
+  color: '#c8e6c9',
+  fontWeight: 700,
+  fontSize: 13,
+  verticalAlign: 'middle',
+}
+
+function NextChip({ children }: { children: ReactNode }): ReactElement {
+  return <span style={CHIP}>{children}</span>
 }
 
 function Ol({ children }: { children: ReactNode }): ReactElement {
@@ -26,9 +45,67 @@ function Ol({ children }: { children: ReactNode }): ReactElement {
   )
 }
 
+function nextLead(nextAction: GitVcsNextAction): ReactElement | null {
+  if (!nextAction) return null
+  if (nextAction === 'resolution_studio') {
+    return (
+      <p style={{ margin: '10px 0 0', fontSize: 14, lineHeight: 1.55, color: 'var(--text)' }}>
+        <span className="codicon codicon-debug-step-into" style={{ marginRight: 8, color: '#69f0ae' }} aria-hidden />
+        <strong>Do this now:</strong> click <NextChip>Open Resolution Studio</NextChip> in the yellow banner just
+        below, pick a side per conflict, save, then use <NextChip>+</NextChip> on each file you fixed.
+      </p>
+    )
+  }
+  if (nextAction === 'continue_merge') {
+    return (
+      <p style={{ margin: '10px 0 0', fontSize: 14, lineHeight: 1.55, color: 'var(--text)' }}>
+        <span className="codicon codicon-debug-step-into" style={{ marginRight: 8, color: '#69f0ae' }} aria-hidden />
+        <strong>Do this now:</strong> click <NextChip>Continue</NextChip> (green, in the yellow banner or next to
+        Integrate) to finish this merge/rebase step.
+      </p>
+    )
+  }
+  if (nextAction === 'pull') {
+    return (
+      <p style={{ margin: '10px 0 0', fontSize: 14, lineHeight: 1.55, color: 'var(--text)' }}>
+        <span className="codicon codicon-debug-step-into" style={{ marginRight: 8, color: '#69f0ae' }} aria-hidden />
+        <strong>Do this now:</strong> click <NextChip>Pull</NextChip> in the toolbar (same row as Fetch / Push) so
+        your branch includes the remote commits you are behind on — then commit or push again.
+      </p>
+    )
+  }
+  if (nextAction === 'commit_message') {
+    return (
+      <p style={{ margin: '10px 0 0', fontSize: 14, lineHeight: 1.55, color: 'var(--text)' }}>
+        <span className="codicon codicon-debug-step-into" style={{ marginRight: 8, color: '#69f0ae' }} aria-hidden />
+        <strong>Do this now:</strong> type a short message in the <NextChip>Commit message</NextChip> field at the
+        bottom (green outline) — then click <NextChip>Commit</NextChip>.
+      </p>
+    )
+  }
+  if (nextAction === 'commit') {
+    return (
+      <p style={{ margin: '10px 0 0', fontSize: 14, lineHeight: 1.55, color: 'var(--text)' }}>
+        <span className="codicon codicon-debug-step-into" style={{ marginRight: 8, color: '#69f0ae' }} aria-hidden />
+        <strong>Do this now:</strong> click the green-outlined <NextChip>Commit</NextChip> button at the bottom —
+        staged files (and any other local changes) go into one commit.
+      </p>
+    )
+  }
+  if (nextAction === 'push') {
+    return (
+      <p style={{ margin: '10px 0 0', fontSize: 14, lineHeight: 1.55, color: 'var(--text)' }}>
+        <span className="codicon codicon-debug-step-into" style={{ marginRight: 8, color: '#69f0ae' }} aria-hidden />
+        <strong>Do this now:</strong> click <NextChip>Push</NextChip> in the toolbar to publish your commits. If the
+        host blocks the branch, follow the yellow notice for a new branch + PR/MR.
+      </p>
+    )
+  }
+  return null
+}
+
 /**
- * Always-visible workflow hints so users are not left guessing after commit / sync / conflicts.
- * Copy is intentionally plain and ordered (no separate wizard required).
+ * Workflow hints: one “Do this now” line tied to the highlighted control, then short reference bullets.
  */
 export function GitVcsFlowHints({
   gitOperation,
@@ -37,110 +114,87 @@ export function GitVcsFlowHints({
   unstagedCount,
   ahead,
   behind,
+  nextAction,
 }: GitVcsFlowHintsProps): ReactElement {
   const behindRemote = behind != null && behind > 0
   const aheadOfRemote = ahead != null && ahead > 0
 
-  let title = 'Typical workflow'
+  let title = 'Git workflow on this page'
   let body: ReactElement
 
   if (conflictFileCount > 0) {
-    title = 'Merge conflicts — what to do'
+    title = 'You have merge conflicts'
     body = (
       <Ol>
         <li>
-          In the file list, conflicted rows are marked <strong style={{ color: 'var(--text)' }}>C</strong> (red). Select
-          one to inspect the diff.
+          Conflicted files show status <strong style={{ color: 'var(--text)' }}>C</strong> (often red). Click one to
+          read the diff.
         </li>
-        <li>
-          Open <strong style={{ color: 'var(--text)' }}>Resolution Studio</strong> from the banner above (or fix markers
-          in your editor), then save the file.
-        </li>
-        <li>
-          <strong style={{ color: 'var(--text)' }}>Stage</strong> each resolved file with the + control so Git records
-          the fix.
-        </li>
-        <li>
-          When nothing is left to resolve, use <strong style={{ color: 'var(--text)' }}>Continue</strong> in the banner
-          to finish the {gitOperation === 'rebasing' ? 'rebase' : 'merge'} (when that button is shown). Use{' '}
-          <strong>Abort</strong> only if you want to cancel the whole operation.
-        </li>
+        <li>After Resolution Studio (or your editor), stage with <strong>+</strong> so Git sees the fix.</li>
         {gitOperation === 'none' ? (
           <li>
-            If the yellow banner only shows <strong>Resolution Studio</strong>, fix and stage files, then use{' '}
-            <strong>Fetch</strong> or click another file so the status refreshes — Continue appears once Git sees no
-            remaining conflict markers.
+            If <NextChip>Continue</NextChip> is missing, refresh with <strong>Fetch</strong> or select another file until
+            the banner updates.
           </li>
         ) : null}
       </Ol>
     )
   } else if (gitOperation === 'merging' || gitOperation === 'rebasing') {
-    title = `${gitOperation === 'merging' ? 'Merge' : 'Rebase'} in progress — next step`
+    title = `${gitOperation === 'merging' ? 'Merge' : 'Rebase'} is waiting on you`
     body = (
       <Ol>
+        <li>When the index is clean for this step, Continue lets Git move forward or finish.</li>
         <li>
-          All listed conflicts are cleared. <strong style={{ color: 'var(--text)' }}>Stage</strong> any last changes if
-          the banner still asks for it.
-        </li>
-        <li>
-          Click <strong style={{ color: 'var(--text)' }}>Continue</strong> in the banner to complete this step. Git may
-          run the next rebase commit or finalize the merge.
-        </li>
-        <li>
-          If something went wrong, <strong>Abort</strong> restores the pre-{gitOperation === 'merging' ? 'merge' : 'rebase'}{' '}
-          state (you may still need to clean the working tree afterward).
+          <strong>Abort</strong> cancels the whole {gitOperation === 'merging' ? 'merge' : 'rebase'} (you may need to
+          tidy the tree afterward).
         </li>
       </Ol>
     )
   } else {
-    title = 'How to use this page (in order)'
+    title = 'End-to-end: edit → commit → sync'
     body = (
       <Ol>
         <li>
-          Select a file to see its <strong style={{ color: 'var(--text)' }}>diff</strong> on the right. Use{' '}
-          <strong>+ / −</strong> to stage or unstage; you can mix files.
+          <strong>Left:</strong> files. <strong>Right:</strong> diff. <strong>+ / −</strong> stage or unstage.
         </li>
         <li>
-          <strong style={{ color: 'var(--text)' }}>Commit</strong> uses the message bar at the bottom. If nothing is
-          staged but you have local changes, Commit <strong>stages everything</strong> (except merge conflicts) and then
-          commits. If some files are already staged, remaining unstaged changes are included in the same commit.
+          <strong>Bottom:</strong> message + <strong>Commit</strong>. Empty index + local changes → Commit stages all
+          (except conflicts) then commits. Partial staging + other edits → one Commit includes the rest too.
         </li>
         <li>
-          <strong style={{ color: 'var(--text)' }}>Fetch</strong> updates what you know about the remote.{' '}
-          <strong>Pull</strong> brings remote commits into your branch when you are behind.
+          <strong>Toolbar:</strong> <strong>Fetch</strong> updates remote knowledge; <strong>Pull</strong> when you
+          are behind; <strong>Push</strong> when you are ready to publish.
         </li>
         {behindRemote ? (
           <li style={{ color: '#ffb74d' }}>
-            You are <strong>{behind}</strong> commit(s) behind the remote — Pull or use <strong>Integrate / Sync</strong>{' '}
-            before pushing.
+            Behind by <strong>{behind}</strong> — Pull (or Integrate / Sync) before expecting Push to succeed.
+          </li>
+        ) : null}
+        {aheadOfRemote && !behindRemote ? (
+          <li>
+            Ahead by <strong>{ahead}</strong> — after commits are clean, Push sends them upstream.
           </li>
         ) : null}
         <li>
-          <strong style={{ color: 'var(--text)' }}>Push</strong> publishes your branch.
-          {aheadOfRemote ? (
-            <>
-              {' '}
-              You are <strong>{ahead}</strong> commit(s) ahead; push will send them upstream (unless the branch is
-              protected — then follow the yellow notice to open a PR/MR).
-            </>
-          ) : (
-            <> If the remote rejects the push, read the notice and use the suggested buttons.</>
-          )}
-        </li>
-        <li>
-          Use <strong style={{ color: 'var(--text)' }}>Integrate / Sync</strong> when you need merge or rebase with
-          another branch, or <strong>Stash pop</strong> to restore stashed work.
+          <strong>Integrate / Sync</strong> for merge/rebase flows; stash icon pops the latest stash.
         </li>
       </Ol>
     )
   }
 
-  const summaryHint =
-    stagedCount === 0 && unstagedCount > 0 ? (
+  const lead = nextLead(nextAction)
+
+  const extra =
+    nextAction !== 'commit_message' &&
+    nextAction !== 'commit' &&
+    stagedCount === 0 &&
+    unstagedCount > 0 &&
+    conflictFileCount === 0 &&
+    gitOperation === 'none' ? (
       <p className="hp-muted" style={{ margin: '10px 0 0', fontSize: 12, lineHeight: 1.45 }}>
         <span className="codicon codicon-info" style={{ marginRight: 6, opacity: 0.85 }} aria-hidden />
-        Nothing staged yet — stage files with <strong>+</strong>, or press <strong>Commit</strong> to stage all and
-        commit in one step.
+        You can stage with <strong>+</strong> first, or go straight to a commit message + <strong>Commit</strong> — both
+        work.
       </p>
     ) : null
 
@@ -162,8 +216,9 @@ export function GitVcsFlowHints({
         />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontWeight: 650, fontSize: 14, color: 'var(--text)', marginBottom: 2 }}>{title}</div>
+          {lead}
           {body}
-          {summaryHint}
+          {extra}
         </div>
       </div>
     </section>
