@@ -147,6 +147,7 @@ export function GitVcsCiChecks({
                       repoPath: repoPath.trim(),
                       remote,
                       prUrl,
+                      reference,
                     })
                     if (!res.ok) {
                       setError(humanizeCloudAuthError(new Error(res.error ?? 'Merge failed')))

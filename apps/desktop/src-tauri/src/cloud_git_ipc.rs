@@ -465,14 +465,29 @@ fn parse_gitlab_mr_merge_params(pr_url: &str) -> Result<(String, String, u32), S
     Ok((web_origin, path_ns, num))
 }
 
-fn origins_equal_case_insensitive(a: &str, b: &str) -> bool {
-    a.trim_end_matches('/')
-        .to_ascii_lowercase()
-        == b.trim_end_matches('/').to_ascii_lowercase()
+fn merge_gitlab_web_origins_match(a: &str, b: &str) -> bool {
+    fn key(s: &str) -> String {
+        s.trim_end_matches('/')
+            .to_ascii_lowercase()
+            .replace("://www.", "://")
+    }
+    key(a) == key(b)
+}
+
+fn gitlab_path_canonical(s: &str) -> String {
+    match urlencoding::decode(s) {
+        Ok(c) => c.to_string().trim_matches('/').to_ascii_lowercase(),
+        Err(_) => s.trim_matches('/').to_ascii_lowercase(),
+    }
 }
 
 async fn merge_pr(app: &AppHandle, body: &Value) -> Value {
     let provider = body.get("provider").and_then(|v| v.as_str()).unwrap_or("");
+    let branch_fallback = body
+        .get("reference")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty());
     let pr_url = body
         .get("prUrl")
         .and_then(|v| v.as_str())
@@ -562,13 +577,13 @@ async fn merge_pr(app: &AppHandle, body: &Value) -> Value {
                 Ok(x) => x,
                 Err(e) => return json!({ "ok": false, "error": e }),
             };
-            if !origins_equal_case_insensitive(&url_origin, web_origin) {
+            if !merge_gitlab_web_origins_match(&url_origin, web_origin) {
                 return json!({
                     "ok": false,
                     "error": "[CLOUD_GIT_MERGE_PR] Merge request URL host does not match this repository remote."
                 });
             }
-            if url_path.to_ascii_lowercase() != path_with_namespace.to_ascii_lowercase() {
+            if gitlab_path_canonical(&url_path) != gitlab_path_canonical(path_with_namespace) {
                 return json!({
                     "ok": false,
                     "error": "[CLOUD_GIT_MERGE_PR] Merge request is for a different project than the selected remote."
@@ -579,6 +594,7 @@ async fn merge_pr(app: &AppHandle, body: &Value) -> Value {
                 web_origin,
                 path_with_namespace,
                 num,
+                branch_fallback,
             )
             .await
         }
@@ -637,7 +653,26 @@ async fn releases(app: &AppHandle, body: &Value) -> Value {
 
 #[cfg(test)]
 mod merge_pr_url_tests {
-    use super::{parse_github_pr_merge_params, parse_gitlab_mr_merge_params};
+    use super::{
+        gitlab_path_canonical, merge_gitlab_web_origins_match, parse_github_pr_merge_params,
+        parse_gitlab_mr_merge_params,
+    };
+
+    #[test]
+    fn gitlab_origin_ignores_www() {
+        assert!(merge_gitlab_web_origins_match(
+            "https://www.gitlab.com/foo/bar",
+            "https://gitlab.com/foo/bar"
+        ));
+    }
+
+    #[test]
+    fn gitlab_path_decodes_percent_encoded() {
+        assert_eq!(
+            gitlab_path_canonical("group%2Fsub"),
+            gitlab_path_canonical("group/sub")
+        );
+    }
 
     #[test]
     fn parses_github_pr_url() {

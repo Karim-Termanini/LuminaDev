@@ -902,10 +902,14 @@ export function GitVcsPage(): ReactElement {
     const provider = activeFetchPipelineProvider
     const entry = trackingPrByHost[provider]
     if (!entry) return []
-    const remote = gitRemotes.find((r) => classifyGitRemoteUrl(r.fetchUrl) === provider)?.name
+    const active = gitRemotes.find((r) => r.name === activeFetchRemoteName)
+    const remote =
+      active && classifyGitRemoteUrl(active.fetchUrl) === provider
+        ? activeFetchRemoteName
+        : gitRemotes.find((r) => classifyGitRemoteUrl(r.fetchUrl) === provider)?.name
     if (!remote) return []
     return [{ provider, remote, reference: entry.reference, url: entry.url }]
-  }, [trackingPrByHost, gitRemotes, activeFetchPipelineProvider])
+  }, [trackingPrByHost, gitRemotes, activeFetchPipelineProvider, activeFetchRemoteName])
 
   const nextGitAction = useMemo(
     () =>

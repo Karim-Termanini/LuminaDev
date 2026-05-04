@@ -278,6 +278,8 @@ declare global {
         repoPath: string
         remote?: string
         prUrl: string
+        /** GitLab: branch name used to re-resolve open MR if merge-by-URL returns 404 (stale IID). */
+        reference?: string
       }) => Promise<{ ok: boolean; url?: string; error?: string }>
     }
   }
