@@ -78,8 +78,9 @@ function nextLead(nextAction: GitVcsNextAction): ReactElement | null {
     return (
       <p style={{ margin: '10px 0 0', fontSize: 14, lineHeight: 1.55, color: 'var(--text)' }}>
         <span className="codicon codicon-debug-step-into" style={{ marginRight: 8, color: '#69f0ae' }} aria-hidden />
-        <strong>Do this now:</strong> type a short message in the <NextChip>Commit message</NextChip> field at the
-        bottom (green outline) — then click <NextChip>Commit</NextChip>.
+        <strong>Do this now:</strong> type a short summary in the <NextChip>Commit message</NextChip> field at the
+        bottom (green outline), then <NextChip>Commit</NextChip>. After a commit that leaves the tree clean, the
+        message is cleared for the next one.
       </p>
     )
   }

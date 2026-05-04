@@ -1008,7 +1008,7 @@ impl GitHubProvider {
                 if resp.status().is_success() {
                     if let Ok(body) = resp.json::<serde_json::Value>().await {
                         if let Some(pr) = body.as_array().and_then(|a| a.first()) {
-                            if pr["merged_at"].as_str().map_or(false, |s| !s.is_empty()) {
+                            if pr["merged_at"].as_str().is_some_and(|s| !s.is_empty()) {
                                 pr_merged = true;
                                 base_branch = pr["base"]["ref"].as_str().unwrap_or(&base_branch).to_string();
                             }

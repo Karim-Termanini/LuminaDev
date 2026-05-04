@@ -412,9 +412,14 @@ export function GitVcsPage(): ReactElement {
       }
       const r = await window.dh.gitVcsCommit({ repoPath: path, message: commitMessage.trim() })
       assertGitVcsOk(r)
-      setCommitMessage('')
-      await refreshStatus()
-      setSelected(null)
+      const lists = await refreshStatus()
+      const stillDirty = lists.staged.length > 0 || lists.unstaged.length > 0
+      // Clear the box only when the tree is clean — if files remain, reusing the message avoids a
+      // false "type a new message" step for the next commit (user can still edit before Commit).
+      if (!stillDirty) {
+        setCommitMessage('')
+      }
+      setSelected((prev) => (stillDirty ? reconcileGitVcsSelection(prev, lists.staged, lists.unstaged) : null))
     } catch (e) {
       setOpErrorRaw(e instanceof Error ? e.message : String(e))
       try {
