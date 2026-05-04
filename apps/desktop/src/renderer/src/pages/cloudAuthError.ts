@@ -41,6 +41,9 @@ export function humanizeCloudAuthError(err: unknown): string {
   if (code === 'CLOUD_GIT_CREATE_PR') {
     return (detail || 'Could not create the pull or merge request.').trim()
   }
+  if (code === 'CLOUD_GIT_MERGE_PR') {
+    return (detail || 'Could not merge this pull or merge request on the server.').trim()
+  }
   if (code === 'CLOUD_GIT_NETWORK') {
     return `The provider API request failed. ${detail || 'Try again in a moment.'}`.trim()
   }

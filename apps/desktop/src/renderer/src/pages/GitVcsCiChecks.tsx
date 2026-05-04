@@ -2,6 +2,7 @@ import type { ReactElement } from 'react'
 import { useEffect, useState, useMemo } from 'react'
 import type { CloudCiCheck } from '@linux-dev-home/shared'
 import { GLASS } from '../layout/GLASS'
+import { humanizeCloudAuthError } from './cloudAuthError'
 
 export type GitVcsCiChecksProps = {
   provider: 'github' | 'gitlab'
@@ -29,6 +30,7 @@ export function GitVcsCiChecks({
   const [resolving, setResolving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date())
+  const [mergeBusy, setMergeBusy] = useState(false)
 
   const fetchChecks = useMemo(() => {
     const active = true
@@ -86,6 +88,14 @@ export function GitVcsCiChecks({
   const hasConflicts = mergeable === false
   const statusColor = (stats.failed > 0 || hasConflicts) ? '#ff5252' : stats.inProgress > 0 ? 'var(--cg-accent, var(--accent))' : '#4caf50'
 
+  const canMergeOnServer =
+    Boolean(prUrl) &&
+    !hasConflicts &&
+    stats.failed === 0 &&
+    stats.inProgress === 0 &&
+    !loading &&
+    !error
+
   return (
     <div
       style={{
@@ -112,6 +122,57 @@ export function GitVcsCiChecks({
               View on {provider === 'github' ? 'GitHub' : 'GitLab'}
             </a>
           )}
+          {prUrl && repoPath.trim() ? (
+            <button
+              type="button"
+              className="hp-btn hp-btn-sm hp-btn-primary"
+              disabled={!canMergeOnServer || mergeBusy}
+              title={
+                hasConflicts
+                  ? 'Resolve merge conflicts before merging on the server.'
+                  : stats.failed > 0
+                    ? 'Fix failing checks before merging on the server.'
+                    : stats.inProgress > 0
+                      ? 'Wait for checks to finish.'
+                      : `Merge this ${provider === 'github' ? 'pull request' : 'merge request'} on ${provider === 'github' ? 'GitHub' : 'GitLab'} (requires permission).`
+              }
+              onClick={() => {
+                void (async () => {
+                  if (!prUrl || !repoPath.trim()) return
+                  setMergeBusy(true)
+                  setError(null)
+                  try {
+                    const res = await window.dh.cloudGitMergePr({
+                      provider,
+                      repoPath: repoPath.trim(),
+                      remote,
+                      prUrl,
+                    })
+                    if (!res.ok) {
+                      setError(humanizeCloudAuthError(new Error(res.error ?? 'Merge failed')))
+                      return
+                    }
+                    await fetchChecks()
+                  } catch (e) {
+                    setError(humanizeCloudAuthError(e))
+                  } finally {
+                    setMergeBusy(false)
+                  }
+                })()
+              }}
+            >
+              {mergeBusy ? (
+                <>
+                  <span className="codicon codicon-loading spin" style={{ marginRight: 6 }} aria-hidden />
+                  Merging…
+                </>
+              ) : provider === 'gitlab' ? (
+                'Merge MR on GitLab'
+              ) : (
+                'Merge PR on GitHub'
+              )}
+            </button>
+          ) : null}
           {onClose && (
             <button type="button" className="hp-btn hp-btn-sm" onClick={onClose}>
               ✕

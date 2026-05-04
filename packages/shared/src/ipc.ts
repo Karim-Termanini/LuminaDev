@@ -274,6 +274,7 @@ export const IPC = {
   gitVcsResolveHunk: 'dh:git:vcs:resolve-hunk',
   cloudGitCreatePr: 'dh:cloud:git:create-pr',
   cloudGitGetPrChecks: 'dh:cloud:git:get-pr-checks',
+  cloudGitMergePr: 'dh:cloud:git:merge-pr',
 } as const
 
 export type DockerActionPayload = { id: string; action: DockerContainerAction }

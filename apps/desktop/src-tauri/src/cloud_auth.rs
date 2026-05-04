@@ -1963,6 +1963,65 @@ impl GitHubProvider {
         data["html_url"].as_str().map(|s| s.to_string())
             .ok_or_else(|| "[CLOUD_GIT_NETWORK] GitHub create PR: missing html_url in response".to_string())
     }
+
+    /// Merge an open pull request on GitHub or GitHub Enterprise (`merge` merge commit).
+    pub async fn merge_pull_request(
+        token: &str,
+        hostname: &str,
+        full_name: &str,
+        pull_number: u32,
+    ) -> Result<String, String> {
+        let client = reqwest::Client::new();
+        let base_url = if hostname == "github.com" {
+            "https://api.github.com".to_string()
+        } else {
+            format!("https://{}/api/v3", hostname)
+        };
+        let url = format!(
+            "{}/repos/{}/pulls/{}/merge",
+            base_url, full_name, pull_number
+        );
+        let payload = serde_json::json!({ "merge_method": "merge" });
+        let resp = client
+            .put(&url)
+            .header("Authorization", format!("Bearer {}", token))
+            .header("User-Agent", "LuminaDev/0.2.0")
+            .header("Accept", "application/vnd.github+json")
+            .json(&payload)
+            .send()
+            .await
+            .map_err(|e| format!("[CLOUD_GIT_NETWORK] GitHub merge PR: {}", e))?;
+        if resp.status() == 401 {
+            return Err("[CLOUD_AUTH_INVALID_TOKEN] GitHub token is invalid or expired.".to_string());
+        }
+        if resp.status() == 403 {
+            return Err("[CLOUD_GIT_INSUFFICIENT_SCOPE] Your GitHub token cannot merge this pull request (needs merge rights and a token with the 'repo' scope).".to_string());
+        }
+        if resp.status() == 404 {
+            return Err("[CLOUD_GIT_MERGE_PR] Pull request not found, or the URL does not match this repository.".to_string());
+        }
+        if resp.status() == 405 {
+            return Err("[CLOUD_GIT_MERGE_PR] GitHub refused to merge (branch not mergeable, required reviews, or checks not passing).".to_string());
+        }
+        if resp.status() == 409 {
+            return Err("[CLOUD_GIT_MERGE_PR] Merge could not be completed (empty merge commit or merge already in progress).".to_string());
+        }
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let text = resp.text().await.unwrap_or_default();
+            return Err(format!(
+                "[CLOUD_GIT_NETWORK] GitHub merge PR returned {}: {}",
+                status,
+                text.chars().take(240).collect::<String>()
+            ));
+        }
+        let web = if hostname == "github.com" {
+            format!("https://github.com/{}/pull/{}", full_name, pull_number)
+        } else {
+            format!("https://{}/{}/pull/{}", hostname, full_name, pull_number)
+        };
+        Ok(web)
+    }
 }
 
 impl GitLabProvider {
@@ -2034,6 +2093,64 @@ impl GitLabProvider {
             .map_err(|e| format!("[CLOUD_GIT_NETWORK] GitLab create MR parse: {}", e))?;
         data["web_url"].as_str().map(|s| s.to_string())
             .ok_or_else(|| "[CLOUD_GIT_NETWORK] GitLab create MR: missing web_url in response".to_string())
+    }
+
+    /// Accept / merge an open merge request (when allowed by GitLab project rules).
+    pub async fn merge_merge_request(
+        token: &str,
+        web_origin: &str,
+        path_with_namespace: &str,
+        merge_request_iid: u32,
+    ) -> Result<String, String> {
+        let client = reqwest::Client::new();
+        let project_id: String = path_with_namespace
+            .chars()
+            .flat_map(|c| if c == '/' { vec!['%', '2', 'F'] } else { vec![c] })
+            .collect();
+        let url = format!(
+            "{}/api/v4/projects/{}/merge_requests/{}/merge",
+            web_origin.trim_end_matches('/'),
+            project_id,
+            merge_request_iid
+        );
+        let resp = client
+            .post(&url)
+            .header("Authorization", format!("Bearer {}", token))
+            .header("User-Agent", "LuminaDev/0.2.0")
+            .header("Content-Type", "application/json")
+            .json(&serde_json::json!({}))
+            .send()
+            .await
+            .map_err(|e| format!("[CLOUD_GIT_NETWORK] GitLab merge MR: {}", e))?;
+        if resp.status() == 401 {
+            return Err("[CLOUD_AUTH_INVALID_TOKEN] GitLab token is invalid or expired.".to_string());
+        }
+        if resp.status() == 403 {
+            return Err("[CLOUD_GIT_PERMISSION_DENIED] GitLab denied the merge (token scope or your role in the project may be insufficient).".to_string());
+        }
+        if resp.status() == 404 {
+            return Err("[CLOUD_GIT_MERGE_PR] Merge request not found, or the URL does not match this repository.".to_string());
+        }
+        if resp.status() == 405 {
+            return Err("[CLOUD_GIT_MERGE_PR] GitLab refused to merge (MR not mergeable, pipeline required, or conflicts).".to_string());
+        }
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let text = resp.text().await.unwrap_or_default();
+            return Err(format!(
+                "[CLOUD_GIT_NETWORK] GitLab merge MR returned {}: {}",
+                status,
+                text.chars().take(240).collect::<String>()
+            ));
+        }
+        let data: serde_json::Value = resp
+            .json()
+            .await
+            .map_err(|e| format!("[CLOUD_GIT_NETWORK] GitLab merge MR parse: {}", e))?;
+        data["web_url"]
+            .as_str()
+            .map(|s| s.to_string())
+            .ok_or_else(|| "[CLOUD_GIT_NETWORK] GitLab merge MR: missing web_url in response".to_string())
     }
 }
 

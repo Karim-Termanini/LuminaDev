@@ -100,7 +100,7 @@ describe('humanizeGitVcsError', () => {
   })
 
   it('humanizes GIT_VCS_MERGE_CONTINUE', () => {
-    expect(humanizeGitVcsError(new Error('[GIT_VCS_MERGE_CONTINUE] no merge'))).toContain('Merge could not continue')
+    expect(humanizeGitVcsError(new Error('[GIT_VCS_MERGE_CONTINUE] no merge'))).toContain('Merge could not finish')
   })
 
   it('humanizes GIT_VCS_REBASE_CONTINUE', () => {

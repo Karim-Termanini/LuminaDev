@@ -273,6 +273,12 @@ declare global {
         remote?: string
         reference: string
       }) => Promise<{ ok: boolean; details?: import('@linux-dev-home/shared').CloudPrDetails; error?: string }>
+      cloudGitMergePr: (payload: {
+        provider: 'github' | 'gitlab'
+        repoPath: string
+        remote?: string
+        prUrl: string
+      }) => Promise<{ ok: boolean; url?: string; error?: string }>
     }
   }
 }
