@@ -1428,6 +1428,7 @@ export function GitVcsPage(): ReactElement {
         isOpen={integrateWizardOpen}
         repoPath={repoPath.trim()}
         currentBranch={branch}
+        branchOptions={branches}
         suggestedTarget={suggestedIntegrateTarget}
         onClose={() => {
           setIntegrateWizardOpen(false)

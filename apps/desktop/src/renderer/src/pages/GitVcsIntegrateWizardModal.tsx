@@ -1,13 +1,43 @@
+import type { BranchEntry } from '@linux-dev-home/shared'
 import type { ReactElement } from 'react'
-import { useState, useEffect } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { GLASS } from '../layout/GLASS'
 
 export type IntegrateMethod = 'merge' | 'rebase' | 'fast-forward'
+
+/** Remote + local branch names for merge/rebase targets (excludes current local branch). */
+function buildIntegrateRefGroups(
+  branches: BranchEntry[],
+  currentBranch: string,
+): { remotes: string[]; locals: string[] } {
+  const cur = currentBranch.trim()
+  const seen = new Set<string>()
+  const remotes: string[] = []
+  const locals: string[] = []
+  const push = (name: string, bucket: 'remote' | 'local'): void => {
+    const n = name.trim()
+    if (!n || seen.has(n)) return
+    const entry = branches.find((b) => b.name === n)
+    if (entry && !entry.remote && n === cur) return
+    seen.add(n)
+    if (bucket === 'remote') remotes.push(n)
+    else locals.push(n)
+  }
+  for (const b of branches.filter((x) => x.remote).sort((a, c) => a.name.localeCompare(c.name))) {
+    push(b.name, 'remote')
+  }
+  for (const b of branches.filter((x) => !x.remote).sort((a, c) => a.name.localeCompare(c.name))) {
+    push(b.name, 'local')
+  }
+  return { remotes, locals }
+}
 
 export type GitVcsIntegrateWizardModalProps = {
   isOpen: boolean
   repoPath: string
   currentBranch: string
+  /** Local + remote branches from `git branch`; drives suggestions (datalist). */
+  branchOptions: BranchEntry[]
   suggestedTarget?: string
   onClose: () => void
   onAction: (method: IntegrateMethod, target: string) => Promise<void>
@@ -17,6 +47,7 @@ export type GitVcsIntegrateWizardModalProps = {
 export function GitVcsIntegrateWizardModal({
   isOpen,
   currentBranch,
+  branchOptions,
   suggestedTarget,
   onClose,
   onAction,
@@ -25,10 +56,17 @@ export function GitVcsIntegrateWizardModal({
   const [target, setTarget] = useState(suggestedTarget ?? '')
   const [method, setMethod] = useState<IntegrateMethod>('merge')
 
-  // Sync state when suggestedTarget changes
+  const { remotes: remoteRefs, locals: localRefs } = useMemo(
+    () => buildIntegrateRefGroups(branchOptions, currentBranch),
+    [branchOptions, currentBranch],
+  )
+  const refSuggestions = useMemo(() => [...remoteRefs, ...localRefs], [remoteRefs, localRefs])
+
   useEffect(() => {
-    if (suggestedTarget) setTarget(suggestedTarget)
-  }, [suggestedTarget])
+    if (!isOpen) return
+    setMethod('merge')
+    setTarget(suggestedTarget ?? '')
+  }, [isOpen, suggestedTarget])
 
   const [localLoading, setLocalLoading] = useState(false)
 
@@ -37,11 +75,8 @@ export function GitVcsIntegrateWizardModal({
   const handleRun = async () => {
     if (!target.trim()) return
     setLocalLoading(true)
-    console.log('[IntegrateWizard] handleRun triggered', { method, target })
     try {
       await onAction(method, target.trim())
-    } catch (e) {
-      console.error('[IntegrateWizard] Action failed:', e)
     } finally {
       setLocalLoading(false)
     }
@@ -92,19 +127,55 @@ export function GitVcsIntegrateWizardModal({
               Branch or remote ref to merge/rebase from
             </label>
             <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 10px', lineHeight: 1.45 }}>
-              Enter the ref you want to fold <em>into</em> <span className="mono">{currentBranch || 'this branch'}</span>{' '}
-              (examples: <span className="mono">main</span>, <span className="mono">origin/main</span>,{' '}
-              <span className="mono">origin/develop</span>). If you only need to upload commits or open a PR, close
-              this dialog and use <strong>Push</strong> or <strong>New PR</strong> in the toolbar instead.
+              Choose a branch below or type any ref. That ref is merged/rebased <em>into</em>{' '}
+              <span className="mono">{currentBranch || 'this branch'}</span>. For Push or New PR only, close this
+              dialog.
             </p>
+            {refSuggestions.length > 0 ? (
+              <select
+                className="mono hp-input"
+                value={refSuggestions.includes(target) ? target : ''}
+                onChange={(e) => setTarget(e.target.value)}
+                disabled={busy}
+                autoFocus
+                style={{ width: '100%', fontSize: 13, marginBottom: 10 }}
+                aria-label="Pick a branch to integrate from"
+              >
+                <option value="">— Choose branch —</option>
+                {remoteRefs.length > 0 ? (
+                  <optgroup label="Remote">
+                    {remoteRefs.map((r) => (
+                      <option key={`r:${r}`} value={r}>
+                        {r}
+                      </option>
+                    ))}
+                  </optgroup>
+                ) : null}
+                {localRefs.length > 0 ? (
+                  <optgroup label="Local">
+                    {localRefs.map((r) => (
+                      <option key={`l:${r}`} value={r}>
+                        {r}
+                      </option>
+                    ))}
+                  </optgroup>
+                ) : null}
+              </select>
+            ) : null}
+            <label
+              style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}
+            >
+              Ref to integrate from
+            </label>
             <input
-              className="hp-input"
+              className="hp-input mono"
               value={target}
               onChange={(e) => setTarget(e.target.value)}
-              placeholder="main or origin/main"
-              autoFocus
+              placeholder={refSuggestions.length > 0 ? 'Matches the menu above; edit here if needed' : 'e.g. origin/main'}
+              autoFocus={refSuggestions.length === 0}
               disabled={busy}
               style={{ width: '100%', fontSize: 14 }}
+              aria-label="Branch or remote ref to merge or rebase from"
             />
           </div>
 
