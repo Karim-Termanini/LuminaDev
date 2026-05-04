@@ -86,7 +86,33 @@ export function GitVcsCiChecks({
   }, [checks])
 
   const hasConflicts = mergeable === false
-  const statusColor = (stats.failed > 0 || hasConflicts) ? '#ff5252' : stats.inProgress > 0 ? 'var(--cg-accent, var(--accent))' : '#4caf50'
+  const noJobRows = stats.total === 0 && !loading && !error
+  const statusColor =
+    stats.failed > 0 || hasConflicts
+      ? '#ff5252'
+      : stats.inProgress > 0
+        ? 'var(--cg-accent, var(--accent))'
+        : noJobRows
+          ? 'var(--text-muted)'
+          : '#4caf50'
+
+  const checksHeadline = loading
+    ? 'Loading checks…'
+    : hasConflicts
+      ? 'This branch has conflicts'
+      : stats.inProgress > 0
+        ? "Some checks haven't completed yet"
+        : stats.failed > 0
+          ? 'Checks failed'
+          : noJobRows
+            ? 'No pipeline jobs listed'
+            : 'All checks passed'
+
+  const checksSubline = loading
+    ? 'Fetching merge status and latest pipeline jobs…'
+    : noJobRows
+      ? 'GitLab did not return job rows for this branch (pipelines may be disabled or the token cannot read jobs).'
+      : `${stats.inProgress} in progress, ${stats.successful} successful checks`
 
   const canMergeOnServer =
     Boolean(prUrl) &&
@@ -182,11 +208,7 @@ export function GitVcsCiChecks({
         </div>
         <div style={{ flex: 1, minWidth: 0, textAlign: 'right' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'flex-end', marginBottom: 4 }}>
-            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>
-              {hasConflicts ? 'This branch has conflicts' :
-               stats.inProgress > 0 ? 'Some checks haven\'t completed yet' : 
-               stats.failed > 0 ? 'Checks failed' : 'All checks passed'}
-            </h3>
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>{checksHeadline}</h3>
             <div
               style={{
                 width: 12,
@@ -198,8 +220,8 @@ export function GitVcsCiChecks({
               }}
             />
           </div>
-          <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-            {stats.inProgress} in progress, {stats.successful} successful checks
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.35, maxWidth: 420, marginLeft: 'auto' }}>
+            {checksSubline}
           </div>
         </div>
       </div>

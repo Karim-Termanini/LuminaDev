@@ -2145,65 +2145,43 @@ impl GitLabProvider {
         Ok(iid.map(|x| x as u32))
     }
 
-    /// Accept / merge an open merge request (when allowed by GitLab project rules).
-    /// If the merge URL IID returns 404, optionally re-resolves via `source_branch_fallback` (tracked branch name).
-    pub async fn merge_merge_request(
+    async fn gitlab_merge_post(
+        client: &reqwest::Client,
         token: &str,
-        web_origin: &str,
-        path_with_namespace: &str,
-        merge_request_iid: u32,
-        source_branch_fallback: Option<&str>,
-    ) -> Result<String, String> {
-        let client = reqwest::Client::new();
-        let base = web_origin.trim_end_matches('/');
-        let project_id = urlencoding::encode(path_with_namespace);
-        let merge_url = |iid: u32| {
-            format!(
-                "{}/api/v4/projects/{}/merge_requests/{}/merge",
-                base,
-                project_id.as_ref(),
-                iid
-            )
+        merge_url: &str,
+        squash: bool,
+    ) -> Result<reqwest::Response, String> {
+        let payload = if squash {
+            serde_json::json!({ "squash": true })
+        } else {
+            serde_json::json!({})
         };
-
-        let mut resp = client
-            .post(merge_url(merge_request_iid))
+        client
+            .post(merge_url)
             .header("Authorization", format!("Bearer {}", token))
             .header("User-Agent", "LuminaDev/0.2.0")
             .header("Content-Type", "application/json")
-            .json(&serde_json::json!({}))
+            .json(&payload)
             .send()
             .await
-            .map_err(|e| format!("[CLOUD_GIT_NETWORK] GitLab merge MR: {}", e))?;
+            .map_err(|e| format!("[CLOUD_GIT_NETWORK] GitLab merge MR: {}", e))
+    }
 
-        if resp.status() == 404 {
-            let _ = resp.text().await;
-            if let Some(branch) = source_branch_fallback.map(str::trim).filter(|s| !s.is_empty()) {
-                match Self::resolve_open_merge_request_iid(token, base, path_with_namespace, branch).await {
-                    Ok(Some(resolved_iid)) if resolved_iid != merge_request_iid => {
-                        resp = client
-                            .post(merge_url(resolved_iid))
-                            .header("Authorization", format!("Bearer {}", token))
-                            .header("User-Agent", "LuminaDev/0.2.0")
-                            .header("Content-Type", "application/json")
-                            .json(&serde_json::json!({}))
-                            .send()
-                            .await
-                            .map_err(|e| format!("[CLOUD_GIT_NETWORK] GitLab merge MR: {}", e))?;
-                    }
-                    Ok(Some(_)) => {
-                        return Err("[CLOUD_GIT_MERGE_PR] Merge request not found for this IID (already merged, revoked, or your token cannot access it).".to_string());
-                    }
-                    Ok(None) => {
-                        return Err("[CLOUD_GIT_MERGE_PR] No open merge request for this branch. The link may be stale or the MR was already merged.".to_string());
-                    }
-                    Err(e) => return Err(e),
-                }
-            } else {
-                return Err("[CLOUD_GIT_MERGE_PR] Merge request not found for this project (wrong link, already merged, or insufficient access).".to_string());
-            }
+    /// Merge API: try a regular merge commit, then squash merge (many GitLab projects only allow squash).
+    async fn gitlab_merge_try_strategies(
+        client: &reqwest::Client,
+        token: &str,
+        merge_url: &str,
+    ) -> Result<reqwest::Response, String> {
+        let r = Self::gitlab_merge_post(client, token, merge_url, false).await?;
+        if r.status().is_success() || r.status() == 401 || r.status() == 403 {
+            return Ok(r);
         }
+        let _ = r.text().await;
+        Self::gitlab_merge_post(client, token, merge_url, true).await
+    }
 
+    async fn gitlab_merge_finish_response(resp: reqwest::Response) -> Result<String, String> {
         if resp.status() == 401 {
             return Err("[CLOUD_AUTH_INVALID_TOKEN] GitLab token is invalid or expired.".to_string());
         }
@@ -2212,7 +2190,7 @@ impl GitLabProvider {
         }
         if resp.status() == 404 {
             let _ = resp.text().await;
-            return Err("[CLOUD_GIT_MERGE_PR] Merge request not found after retry; check the MR link and your token access.".to_string());
+            return Err("[CLOUD_GIT_MERGE_PR] Merge request not found for this project (wrong link, already merged, or insufficient access).".to_string());
         }
         if resp.status() == 405 {
             return Err("[CLOUD_GIT_MERGE_PR] GitLab refused to merge (MR not mergeable, pipeline required, or conflicts).".to_string());
@@ -2234,6 +2212,62 @@ impl GitLabProvider {
             .as_str()
             .map(|s| s.to_string())
             .ok_or_else(|| "[CLOUD_GIT_NETWORK] GitLab merge MR: missing web_url in response".to_string())
+    }
+
+    /// Accept / merge an open merge request (when allowed by GitLab project rules).
+    /// Tries a normal merge then **squash merge** (required on many GitLab projects). If merge-by-IID
+    /// still fails with 404, optionally re-resolves IID via `source_branch_fallback` (tracked branch).
+    pub async fn merge_merge_request(
+        token: &str,
+        web_origin: &str,
+        path_with_namespace: &str,
+        merge_request_iid: u32,
+        source_branch_fallback: Option<&str>,
+    ) -> Result<String, String> {
+        let client = reqwest::Client::new();
+        let base = web_origin.trim_end_matches('/');
+        let project_id = urlencoding::encode(path_with_namespace);
+        let merge_url = |iid: u32| {
+            format!(
+                "{}/api/v4/projects/{}/merge_requests/{}/merge",
+                base,
+                project_id.as_ref(),
+                iid
+            )
+        };
+
+        let url_first = merge_url(merge_request_iid);
+        let mut resp = Self::gitlab_merge_try_strategies(&client, token, &url_first).await?;
+
+        if resp.status().is_success() {
+            return Self::gitlab_merge_finish_response(resp).await;
+        }
+        if resp.status() == 401 || resp.status() == 403 {
+            return Self::gitlab_merge_finish_response(resp).await;
+        }
+
+        if resp.status() == 404 {
+            let _ = resp.text().await;
+            if let Some(branch) = source_branch_fallback.map(str::trim).filter(|s| !s.is_empty()) {
+                match Self::resolve_open_merge_request_iid(token, base, path_with_namespace, branch).await {
+                    Ok(Some(resolved_iid)) if resolved_iid != merge_request_iid => {
+                        let url2 = merge_url(resolved_iid);
+                        resp = Self::gitlab_merge_try_strategies(&client, token, &url2).await?;
+                    }
+                    Ok(Some(_)) => {
+                        return Err("[CLOUD_GIT_MERGE_PR] GitLab blocked this merge (approvals, pipeline rules, or settings only available on the web). Open the merge request on GitLab and use Merge there.".to_string());
+                    }
+                    Ok(None) => {
+                        return Err("[CLOUD_GIT_MERGE_PR] No open merge request for this branch. The link may be stale or the MR was already merged.".to_string());
+                    }
+                    Err(e) => return Err(e),
+                }
+            } else {
+                return Err("[CLOUD_GIT_MERGE_PR] Merge request not found for this project (wrong link, already merged, or insufficient access).".to_string());
+            }
+        }
+
+        Self::gitlab_merge_finish_response(resp).await
     }
 }
 
