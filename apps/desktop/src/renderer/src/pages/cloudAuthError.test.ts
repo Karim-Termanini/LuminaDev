@@ -56,6 +56,13 @@ describe('humanizeCloudAuthError', () => {
     expect(msg).toContain('Use a PAT')
   })
 
+  it('humanizes CLOUD_GIT_MR_BRANCH_NOT_ON_REMOTE', () => {
+    const msg = humanizeCloudAuthError(
+      new Error('[CLOUD_GIT_MR_BRANCH_NOT_ON_REMOTE] Push to GitLab first.'),
+    )
+    expect(msg).toContain('Push to GitLab first')
+  })
+
   it('humanizes CLOUD_GIT_PR_EXISTS', () => {
     const msg = humanizeCloudAuthError(new Error('[CLOUD_GIT_PR_EXISTS] Already exists.'))
     expect(msg).toMatch(/already exists/i)

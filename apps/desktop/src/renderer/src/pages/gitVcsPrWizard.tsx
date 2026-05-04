@@ -206,6 +206,14 @@ export function GitVcsPrWizard({
           </button>
         </div>
 
+        {provider === 'gitlab' ? (
+          <p className="hp-muted" style={{ margin: 0, fontSize: 12, lineHeight: 1.45 }}>
+            GitLab only accepts a source branch that already exists on{' '}
+            <span className="mono">{remoteName}</span>. If you only pushed to another remote (for example GitHub), push this
+            branch to GitLab first, then create the merge request.
+          </p>
+        ) : null}
+
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {/* Branch row */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>

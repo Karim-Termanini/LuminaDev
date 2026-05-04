@@ -1996,6 +1996,13 @@ impl GitLabProvider {
         if !resp.status().is_success() {
             let status = resp.status();
             let text = resp.text().await.unwrap_or_default();
+            // Typical when the branch was never pushed to this GitLab project (token is fine).
+            if status == 400
+                && text.contains("source_branch")
+                && (text.contains("does not exist") || text.contains("not exist"))
+            {
+                return Err("[CLOUD_GIT_MR_BRANCH_NOT_ON_REMOTE] GitLab does not have this branch on the project yet. Push your branch to the GitLab remote you selected, then create the merge request again.".to_string());
+            }
             return Err(format!("[CLOUD_GIT_NETWORK] GitLab create MR returned {}: {}", status, text.chars().take(200).collect::<String>()));
         }
         let data: serde_json::Value = resp.json().await
