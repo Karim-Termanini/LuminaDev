@@ -20,6 +20,7 @@ import { parseCheckoutDirtyFileList } from './gitVcsCheckoutDirty'
 import { GitVcsDirtyCheckoutModal } from './GitVcsDirtyCheckoutModal'
 import { GitVcsProviderRail } from './gitVcsProviderRail'
 import { GitVcsRepoPicker } from './gitVcsRepoPicker'
+import { GitVcsFlowHints } from './gitVcsFlowHints'
 import { GitVcsStateBanner, type GitVcsOperation } from './GitVcsStateBanner'
 import { assertGitRecentList } from './registryContract'
 import { CLOUD_GIT_PROVIDER_THEME } from './cloudGitTheme'
@@ -379,11 +380,25 @@ export function GitVcsPage(): ReactElement {
     setBusy(true)
     setOpErrorRaw(null)
     try {
-      // Like VS Code "Git: Smart Commit" — if nothing is staged but there are local changes, stage all then commit.
-      if (staged.length === 0 && unstaged.length > 0) {
+      const path = repoPath.trim()
+      const stageableUnstaged = unstaged.filter((f) => f.status !== 'C')
+      // Smart commit: stage everything when nothing is staged; if something is staged but other files
+      // still have working-tree changes, include those too (excludes conflict rows).
+      if (staged.length === 0 && stageableUnstaged.length > 0) {
         const rStage = await window.dh.gitVcsStage({
-          repoPath: repoPath.trim(),
-          filePaths: unstaged.map((f) => f.path),
+          repoPath: path,
+          filePaths: stageableUnstaged.map((f) => f.path),
+        })
+        assertGitVcsOk(rStage)
+        const lists = await refreshStatus()
+        setSelected((prev) => reconcileGitVcsSelection(prev, lists.staged, lists.unstaged))
+        if (lists.staged.length === 0) {
+          throw new Error('[GIT_VCS_NO_STAGED] ')
+        }
+      } else if (staged.length > 0 && stageableUnstaged.length > 0) {
+        const rStage = await window.dh.gitVcsStage({
+          repoPath: path,
+          filePaths: stageableUnstaged.map((f) => f.path),
         })
         assertGitVcsOk(rStage)
         const lists = await refreshStatus()
@@ -394,7 +409,7 @@ export function GitVcsPage(): ReactElement {
       } else if (staged.length === 0) {
         throw new Error('[GIT_VCS_NO_STAGED] ')
       }
-      const r = await window.dh.gitVcsCommit({ repoPath: repoPath.trim(), message: commitMessage.trim() })
+      const r = await window.dh.gitVcsCommit({ repoPath: path, message: commitMessage.trim() })
       assertGitVcsOk(r)
       setCommitMessage('')
       await refreshStatus()
@@ -880,6 +895,17 @@ export function GitVcsPage(): ReactElement {
         onOpenFolder={() => void openFolder()}
         highlightPath={null}
       />
+
+      {repoPath.trim() ? (
+        <GitVcsFlowHints
+          gitOperation={gitOperation}
+          conflictFileCount={conflictFileCount}
+          stagedCount={staged.length}
+          unstagedCount={unstaged.length}
+          ahead={ahead}
+          behind={behind}
+        />
+      ) : null}
 
       {repoPath.trim() ? (
         <GitVcsStateBanner

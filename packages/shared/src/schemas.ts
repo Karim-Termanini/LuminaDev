@@ -636,6 +636,8 @@ export interface CloudPrDetails {
   mergeable: boolean | null
   mergeable_state: string
   base_branch?: string
+  /** True when no open PR exists for this head but a merged closed PR does (GitHub/GitLab). */
+  pr_merged?: boolean
   checks: CloudCiCheck[]
 }
 

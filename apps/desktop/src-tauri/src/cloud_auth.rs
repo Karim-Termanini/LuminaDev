@@ -440,6 +440,9 @@ pub struct CloudPrDetails {
     pub base_branch: String,
     pub mergeable: Option<bool>,
     pub mergeable_state: String, // 'clean', 'dirty', 'unstable', etc.
+    /// True when there is no open PR for this head but a merged closed MR/PR exists (host merged).
+    #[serde(default)]
+    pub pr_merged: bool,
     pub checks: Vec<CloudCiCheckEntry>,
 }
 
@@ -949,6 +952,8 @@ impl GitHubProvider {
         let mut mergeable = None;
         let mut mergeable_state = "unknown".to_string();
         let mut base_branch = "main".to_string(); // fallback
+        let mut pr_merged = false;
+        let mut found_open_pr = false;
 
         let prs_resp = client
             .get(&pr_search_url)
@@ -963,6 +968,7 @@ impl GitHubProvider {
             if resp.status().is_success() {
                 if let Ok(body) = resp.json::<serde_json::Value>().await {
                     if let Some(pr) = body.as_array().and_then(|a| a.first()) {
+                        found_open_pr = true;
                         base_branch = pr["base"]["ref"].as_str().unwrap_or("main").to_string();
                         // We found the PR. Now get its detailed info (for mergeable status)
                         let pr_url = pr["url"].as_str().unwrap_or("");
@@ -975,6 +981,36 @@ impl GitHubProvider {
                                     mergeable = detail["mergeable"].as_bool();
                                     mergeable_state = detail["mergeable_state"].as_str().unwrap_or("unknown").to_string();
                                 }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // After merge, GitHub returns no open PR for this head — detect merged closed PR so the UI can dismiss CI tracking.
+        if !found_open_pr {
+            let closed_resp = client
+                .get(&pr_search_url)
+                .header("Authorization", format!("Bearer {}", token))
+                .header("User-Agent", "LuminaDev/0.2.0")
+                .header("Accept", "application/vnd.github+json")
+                .query(&[
+                    ("head", format!("{}:{}", owner, reference)),
+                    ("state", "closed".to_string()),
+                    ("sort", "updated".to_string()),
+                    ("direction", "desc".to_string()),
+                    ("per_page", "1".to_string()),
+                ])
+                .send()
+                .await;
+            if let Ok(resp) = closed_resp {
+                if resp.status().is_success() {
+                    if let Ok(body) = resp.json::<serde_json::Value>().await {
+                        if let Some(pr) = body.as_array().and_then(|a| a.first()) {
+                            if pr["merged_at"].as_str().map_or(false, |s| !s.is_empty()) {
+                                pr_merged = true;
+                                base_branch = pr["base"]["ref"].as_str().unwrap_or(&base_branch).to_string();
                             }
                         }
                     }
@@ -1016,6 +1052,7 @@ impl GitHubProvider {
             base_branch,
             mergeable,
             mergeable_state,
+            pr_merged,
             checks: check_entries,
         })
     }
@@ -1227,30 +1264,6 @@ impl GitHubProvider {
 pub struct GitLabProvider;
 
 impl GitLabProvider {
-    pub async fn device_auth_start(scopes: &[&str], client_id: &str) -> Result<DeviceAuthChallenge, String> {
-        if oauth_client_id_unconfigured(client_id) {
-            return Err(
-                "[CLOUD_AUTH_OAUTH_NOT_CONFIGURED] GitLab device flow needs a registered OAuth app (device grant enabled). Add the client ID under Cloud Git → Advanced (saved locally), set LUMINA_GITLAB_OAUTH_CLIENT_ID, compile with that var, replace GITLAB_OAUTH_CLIENT_ID in cloud_auth.rs, or use a personal access token."
-                    .to_string(),
-            );
-        }
-        let client = reqwest::Client::new();
-        let scope = scopes.join(" ");
-        let resp = client
-            .post("https://gitlab.com/oauth/authorize_device")
-            .header("Accept", "application/json")
-            .form(&[("client_id", client_id), ("scope", scope.as_str())])
-            .send()
-            .await
-            .map_err(|e| format!("[CLOUD_AUTH_NETWORK] GitLab device start: {}", e))?;
-        let status = resp.status();
-        let body: serde_json::Value = resp
-            .json()
-            .await
-            .map_err(|e| format!("[CLOUD_AUTH_NETWORK] GitLab device start parse: {}", e))?;
-        parse_device_authorize_body("GitLab", status, body, 300)
-    }
-
     pub async fn device_auth_poll(device_code: &str, client_id: &str) -> Result<PollResult, String> {
         let client = reqwest::Client::new();
         let resp = client
@@ -1553,9 +1566,11 @@ impl GitLabProvider {
         let mut mergeable = None;
         let mut mergeable_state = "unknown".to_string();
         let mut base_branch = "main".to_string();
+        let mut pr_merged = false;
+        let mut found_open_mr = false;
 
         let mrs_resp = client
-            .get(mrs_url)
+            .get(mrs_url.clone())
             .header("Authorization", format!("Bearer {}", token))
             .query(&[("source_branch", reference.to_string()), ("state", "opened".to_string())])
             .send()
@@ -1565,10 +1580,35 @@ impl GitLabProvider {
             if resp.status().is_success() {
                 if let Ok(body) = resp.json::<serde_json::Value>().await {
                     if let Some(mr) = body.as_array().and_then(|a| a.first()) {
+                        found_open_mr = true;
                         base_branch = mr["target_branch"].as_str().unwrap_or("main").to_string();
                         let status = mr["merge_status"].as_str().unwrap_or("unknown");
                         mergeable = Some(status == "can_be_merged");
                         mergeable_state = status.to_string();
+                    }
+                }
+            }
+        }
+
+        if !found_open_mr {
+            let merged_resp = client
+                .get(&mrs_url)
+                .header("Authorization", format!("Bearer {}", token))
+                .query(&[
+                    ("source_branch", reference.to_string()),
+                    ("state", "merged".to_string()),
+                    ("order_by", "updated_at".to_string()),
+                    ("sort", "desc".to_string()),
+                ])
+                .send()
+                .await;
+            if let Ok(resp) = merged_resp {
+                if resp.status().is_success() {
+                    if let Ok(body) = resp.json::<serde_json::Value>().await {
+                        if let Some(mr) = body.as_array().and_then(|a| a.first()) {
+                            pr_merged = true;
+                            base_branch = mr["target_branch"].as_str().unwrap_or(&base_branch).to_string();
+                        }
                     }
                 }
             }
@@ -1598,6 +1638,7 @@ impl GitLabProvider {
                     base_branch,
                     mergeable,
                     mergeable_state,
+                    pr_merged,
                     checks: vec![],
                 });
             }
@@ -1633,6 +1674,7 @@ impl GitLabProvider {
             base_branch,
             mergeable,
             mergeable_state,
+            pr_merged,
             checks: check_entries,
         })
     }

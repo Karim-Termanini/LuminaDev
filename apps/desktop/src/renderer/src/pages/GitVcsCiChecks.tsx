@@ -46,6 +46,14 @@ export function GitVcsCiChecks({
         if (!res.ok) {
           setError(res.error ?? 'Failed to fetch checks')
         } else if (res.details) {
+          if (res.details.pr_merged === true) {
+            setChecks([])
+            setMergeable(null)
+            setError(null)
+            setLoading(false)
+            onClose?.()
+            return
+          }
           setChecks(res.details.checks ?? [])
           setMergeable(res.details.mergeable)
           setBaseBranch(res.details.base_branch ?? 'main')
@@ -59,7 +67,7 @@ export function GitVcsCiChecks({
       }
     }
     return run
-  }, [provider, repoPath, remote, reference])
+  }, [provider, repoPath, remote, reference, onClose])
 
   useEffect(() => {
     void fetchChecks()
