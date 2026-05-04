@@ -344,6 +344,22 @@ export function GitVcsPage(): ReactElement {
     await persistRepoChoice(dir)
   }
 
+  async function runStageEntireTree(): Promise<void> {
+    if (!repoPath.trim()) return
+    setBusy(true)
+    setOpErrorRaw(null)
+    try {
+      const r = await window.dh.gitVcsStage({ repoPath: repoPath.trim(), filePaths: [], stageAll: true })
+      assertGitVcsOk(r)
+      const lists = await refreshStatus()
+      setSelected((prev) => reconcileGitVcsSelection(prev, lists.staged, lists.unstaged))
+    } catch (e) {
+      setOpErrorRaw(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function runStage(paths: string[]): Promise<void> {
     if (!repoPath.trim() || paths.length === 0) return
     setBusy(true)
@@ -376,41 +392,60 @@ export function GitVcsPage(): ReactElement {
     }
   }
 
-  async function runCommit(): Promise<void> {
+  async function runCommit(liveMessageFromField: string): Promise<void> {
     if (!repoPath.trim()) return
     setBusy(true)
     setOpErrorRaw(null)
     try {
+      const message = liveMessageFromField.trim()
+      if (!message) {
+        setOpErrorRaw('[GIT_VCS_EMPTY_MESSAGE] Commit message cannot be empty.')
+        return
+      }
+      if (liveMessageFromField !== commitMessage) {
+        setCommitMessage(liveMessageFromField)
+      }
       const path = repoPath.trim()
-      const stageableUnstaged = unstaged.filter((f) => f.status !== 'C')
+      // Re-read status from Git before branching — React `staged` / `unstaged` can lag the real index
+      // (e.g. reset in a terminal), which would skip auto-stage and call `git commit` on an empty index.
+      let { staged: stagedFiles, unstaged: unstagedFiles } = await refreshStatus()
+      setSelected((prev) => reconcileGitVcsSelection(prev, stagedFiles, unstagedFiles))
+
+      const stageableUnstaged = unstagedFiles.filter((f) => f.status !== 'C')
       // Smart commit: stage everything when nothing is staged; if something is staged but other files
       // still have working-tree changes, include those too (excludes conflict rows).
-      if (staged.length === 0 && stageableUnstaged.length > 0) {
+      if (stagedFiles.length === 0 && stageableUnstaged.length > 0) {
+        // `git add -A` matches Git’s full view of changes; path lists can miss rows our porcelain parser skips.
+        const rStage = await window.dh.gitVcsStage({
+          repoPath: path,
+          filePaths: [],
+          stageAll: true,
+        })
+        assertGitVcsOk(rStage)
+        const lists = await refreshStatus()
+        stagedFiles = lists.staged
+        unstagedFiles = lists.unstaged
+        setSelected((prev) => reconcileGitVcsSelection(prev, lists.staged, lists.unstaged))
+        if (lists.staged.length === 0) {
+          throw new Error('[GIT_VCS_NO_STAGED] ')
+        }
+      } else if (stagedFiles.length > 0 && stageableUnstaged.length > 0) {
         const rStage = await window.dh.gitVcsStage({
           repoPath: path,
           filePaths: stageableUnstaged.map((f) => f.path),
         })
         assertGitVcsOk(rStage)
         const lists = await refreshStatus()
+        stagedFiles = lists.staged
+        unstagedFiles = lists.unstaged
         setSelected((prev) => reconcileGitVcsSelection(prev, lists.staged, lists.unstaged))
         if (lists.staged.length === 0) {
           throw new Error('[GIT_VCS_NO_STAGED] ')
         }
-      } else if (staged.length > 0 && stageableUnstaged.length > 0) {
-        const rStage = await window.dh.gitVcsStage({
-          repoPath: path,
-          filePaths: stageableUnstaged.map((f) => f.path),
-        })
-        assertGitVcsOk(rStage)
-        const lists = await refreshStatus()
-        setSelected((prev) => reconcileGitVcsSelection(prev, lists.staged, lists.unstaged))
-        if (lists.staged.length === 0) {
-          throw new Error('[GIT_VCS_NO_STAGED] ')
-        }
-      } else if (staged.length === 0) {
+      } else if (stagedFiles.length === 0) {
         throw new Error('[GIT_VCS_NO_STAGED] ')
       }
-      const r = await window.dh.gitVcsCommit({ repoPath: path, message: commitMessage.trim() })
+      const r = await window.dh.gitVcsCommit({ repoPath: path, message })
       assertGitVcsOk(r)
       const lists = await refreshStatus()
       const stillDirty = lists.staged.length > 0 || lists.unstaged.length > 0
@@ -418,6 +453,7 @@ export function GitVcsPage(): ReactElement {
       // false "type a new message" step for the next commit (user can still edit before Commit).
       if (!stillDirty) {
         setCommitMessage('')
+        setSoftSuccessNotice('Commit created.')
       }
       setSelected((prev) => (stillDirty ? reconcileGitVcsSelection(prev, lists.staged, lists.unstaged) : null))
     } catch (e) {
@@ -1331,6 +1367,7 @@ export function GitVcsPage(): ReactElement {
                 busy={busy}
                 onSelect={(path, st) => setSelected({ path, staged: st })}
                 onStage={(paths) => void runStage(paths)}
+                onStageEntireTree={() => void runStageEntireTree()}
                 onUnstage={(paths) => void runUnstage(paths)}
               />
             </div>
@@ -1344,7 +1381,7 @@ export function GitVcsPage(): ReactElement {
           <GitVcsCommitBar
             message={commitMessage}
             onMessageChange={setCommitMessage}
-            onCommit={() => void runCommit()}
+            onCommit={(live) => void runCommit(live)}
             busy={busy}
             disabled={staged.length === 0 && unstaged.length === 0}
             emphasizeCommit={

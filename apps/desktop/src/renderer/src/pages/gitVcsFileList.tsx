@@ -21,6 +21,8 @@ export type GitVcsFileListProps = {
   busy: boolean
   onSelect: (path: string, staged: boolean) => void
   onStage: (paths: string[]) => void
+  /** Stage every change Git sees (`git add -A`) — use for "Stage all" so the file list cannot omit paths. */
+  onStageEntireTree: () => void
   onUnstage: (paths: string[]) => void
   onResolveConflicts?: () => void
 }
@@ -136,6 +138,7 @@ export function GitVcsFileList({
   busy,
   onSelect,
   onStage,
+  onStageEntireTree,
   onUnstage,
   onResolveConflicts,
 }: GitVcsFileListProps): ReactElement {
@@ -198,7 +201,7 @@ export function GitVcsFileList({
               className="hp-btn"
               disabled={busy}
               style={{ fontSize: 12 }}
-              onClick={() => onStage(unstaged.map((f) => f.path))}
+              onClick={() => onStageEntireTree()}
             >
               Stage all
             </button>

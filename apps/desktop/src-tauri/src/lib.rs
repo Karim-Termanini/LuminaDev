@@ -2317,12 +2317,22 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
 
     "dh:git:vcs:stage" => {
         let repo_path = body.get("repoPath").and_then(|v| v.as_str()).unwrap_or_default();
+        if repo_path.is_empty() {
+            return Ok(json!({ "ok": false, "error": "[GIT_VCS_NOT_A_REPO] Missing repoPath." }));
+        }
+        let stage_all = body.get("stageAll").and_then(|v| v.as_bool()) == Some(true);
+        if stage_all {
+            return match exec_output_limit("git", &["-C", repo_path, "add", "-A"], CMD_TIMEOUT_SHORT).await {
+                Ok(_) => Ok(json!({ "ok": true })),
+                Err(e) => Ok(json!({ "ok": false, "error": format!("[GIT_VCS_NOT_A_REPO] {}", e.trim()) })),
+            };
+        }
         let file_paths: Vec<&str> = body.get("filePaths")
             .and_then(|v| v.as_array())
             .map(|arr| arr.iter().filter_map(|x| x.as_str()).collect())
             .unwrap_or_default();
-        if repo_path.is_empty() || file_paths.is_empty() {
-            return Ok(json!({ "ok": false, "error": "[GIT_VCS_NOT_A_REPO] Missing repoPath or filePaths." }));
+        if file_paths.is_empty() {
+            return Ok(json!({ "ok": false, "error": "[GIT_VCS_NOT_A_REPO] Missing filePaths (or pass stageAll: true)." }));
         }
         let mut args = vec!["-C", repo_path, "add", "--"];
         args.extend_from_slice(&file_paths);

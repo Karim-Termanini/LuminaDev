@@ -205,7 +205,11 @@ declare global {
         binary?: boolean
         error?: string
       }>
-      gitVcsStage: (payload: { repoPath: string; filePaths: string[] }) => Promise<{ ok: boolean; error?: string }>
+      gitVcsStage: (payload: {
+        repoPath: string
+        filePaths: string[]
+        stageAll?: boolean
+      }) => Promise<{ ok: boolean; error?: string }>
       gitVcsUnstage: (payload: { repoPath: string; filePaths: string[] }) => Promise<{ ok: boolean; error?: string }>
       gitVcsCommit: (payload: { repoPath: string; message: string }) => Promise<{ ok: boolean; sha?: string; error?: string }>
       gitVcsPush: (payload: { repoPath: string; remote?: string; branch?: string; forceWithLease?: boolean }) => Promise<{ ok: boolean; output?: string; error?: string }>
