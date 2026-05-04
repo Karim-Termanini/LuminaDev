@@ -2193,7 +2193,16 @@ impl GitLabProvider {
             return Err("[CLOUD_GIT_MERGE_PR] Merge request not found for this project (wrong link, already merged, or insufficient access).".to_string());
         }
         if resp.status() == 405 {
-            return Err("[CLOUD_GIT_MERGE_PR] GitLab refused to merge (MR not mergeable, pipeline required, or conflicts).".to_string());
+            let text = resp.text().await.unwrap_or_default();
+            let snippet: String = text.chars().take(280).collect();
+            return Err(format!(
+                "[CLOUD_GIT_MERGE_PR] GitLab refused to merge (HTTP 405). {} Open the merge request on GitLab for the full reason (approvals, pipelines, draft, etc.).",
+                if snippet.is_empty() {
+                    String::new()
+                } else {
+                    format!("Detail: {} ", snippet)
+                }
+            ));
         }
         if !resp.status().is_success() {
             let status = resp.status();
@@ -2212,6 +2221,52 @@ impl GitLabProvider {
             .as_str()
             .map(|s| s.to_string())
             .ok_or_else(|| "[CLOUD_GIT_NETWORK] GitLab merge MR: missing web_url in response".to_string())
+    }
+
+    /// Best-effort: GET single MR so merge failures can show `merge_error` / draft / status from GitLab.
+    async fn gitlab_merge_request_detail_hint(
+        client: &reqwest::Client,
+        token: &str,
+        web_origin_base: &str,
+        path_with_namespace: &str,
+        iid: u32,
+    ) -> Option<String> {
+        let enc = urlencoding::encode(path_with_namespace);
+        let url = format!(
+            "{}/api/v4/projects/{}/merge_requests/{}",
+            web_origin_base.trim_end_matches('/'),
+            enc.as_ref(),
+            iid
+        );
+        let resp = client
+            .get(&url)
+            .header("Authorization", format!("Bearer {}", token))
+            .header("User-Agent", "LuminaDev/0.2.0")
+            .send()
+            .await
+            .ok()?;
+        if !resp.status().is_success() {
+            return None;
+        }
+        let v: serde_json::Value = resp.json().await.ok()?;
+        let mut parts: Vec<String> = Vec::new();
+        if let Some(s) = v["merge_error"].as_str().filter(|x| !x.trim().is_empty()) {
+            parts.push(format!("merge_error: {}", s.trim().chars().take(200).collect::<String>()));
+        }
+        if let Some(s) = v["detailed_merge_status"].as_str() {
+            parts.push(format!("detailed_merge_status: {}", s.chars().take(80).collect::<String>()));
+        }
+        if v["draft"].as_bool() == Some(true) {
+            parts.push("MR is in draft.".to_string());
+        }
+        if v["work_in_progress"].as_bool() == Some(true) {
+            parts.push("MR is marked work-in-progress.".to_string());
+        }
+        if parts.is_empty() {
+            None
+        } else {
+            Some(parts.join(" "))
+        }
     }
 
     /// Accept / merge an open merge request (when allowed by GitLab project rules).
@@ -2255,7 +2310,19 @@ impl GitLabProvider {
                         resp = Self::gitlab_merge_try_strategies(&client, token, &url2).await?;
                     }
                     Ok(Some(_)) => {
-                        return Err("[CLOUD_GIT_MERGE_PR] GitLab blocked this merge (approvals, pipeline rules, or settings only available on the web). Open the merge request on GitLab and use Merge there.".to_string());
+                        let detail = Self::gitlab_merge_request_detail_hint(
+                            &client,
+                            token,
+                            base,
+                            path_with_namespace,
+                            merge_request_iid,
+                        )
+                        .await
+                        .map(|h| format!("{} ", h))
+                        .unwrap_or_default();
+                        return Err(format!(
+                            "[CLOUD_GIT_MERGE_PR] GitLab declined the merge API call (with **api** on your token, missing scopes is rarely the cause). {detail}Common blockers: required **approvals**, **Merge when pipeline succeeds**, pipeline or changelog rules, or a **draft** MR. **Owners and Maintainers can still hit these rules**—they are not the same as “low role”. Finish the merge on the MR page if the API cannot complete it.",
+                        ));
                     }
                     Ok(None) => {
                         return Err("[CLOUD_GIT_MERGE_PR] No open merge request for this branch. The link may be stale or the MR was already merged.".to_string());

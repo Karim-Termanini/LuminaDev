@@ -1198,7 +1198,7 @@ fn porcelain_rest_after_xy(line: &str) -> &str {
     it.next();
     it.next();
     let tail = it.as_str();
-    tail.trim_start_matches(|c: char| c == ' ' || c == '\t')
+    tail.trim_start_matches([' ', '\t'])
 }
 
 fn parse_porcelain_v1(output: &str) -> (Vec<Value>, Vec<Value>) {

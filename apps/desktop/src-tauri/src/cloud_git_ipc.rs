@@ -555,13 +555,13 @@ async fn merge_pr(app: &AppHandle, body: &Value) -> Value {
                 Ok(x) => x,
                 Err(e) => return json!({ "ok": false, "error": e }),
             };
-            if url_host != hostname.to_ascii_lowercase() {
+            if !url_host.eq_ignore_ascii_case(hostname) {
                 return json!({
                     "ok": false,
                     "error": "[CLOUD_GIT_MERGE_PR] Pull request URL host does not match this repository remote."
                 });
             }
-            if url_repo.to_ascii_lowercase() != full_name.to_ascii_lowercase() {
+            if !url_repo.eq_ignore_ascii_case(full_name) {
                 return json!({
                     "ok": false,
                     "error": "[CLOUD_GIT_MERGE_PR] Pull request is for a different repository than the selected remote."
