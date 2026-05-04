@@ -1,14 +1,37 @@
-import type { BranchEntry } from '@linux-dev-home/shared'
+import type { BranchEntry, GitRemoteEntry } from '@linux-dev-home/shared'
 import type { ReactElement } from 'react'
 import { useEffect, useMemo, useState } from 'react'
 import { GLASS } from '../layout/GLASS'
+import { classifyGitRemoteUrl, type GitProviderFamily } from './gitVcsProviderHost'
 
 export type IntegrateMethod = 'merge' | 'rebase' | 'fast-forward'
+
+function trackingRemoteName(refShortName: string): string | null {
+  const i = refShortName.indexOf('/')
+  if (i <= 0) return null
+  return refShortName.slice(0, i)
+}
+
+/** Whether a remote-tracking ref (e.g. `origin/main`) belongs to the same host family as the toolbar fetch remote. */
+function remoteBranchMatchesFilter(
+  refShortName: string,
+  gitRemotes: GitRemoteEntry[],
+  filter: GitProviderFamily,
+): boolean {
+  if (filter === 'other') return true
+  const remoteName = trackingRemoteName(refShortName)
+  if (!remoteName) return false
+  const url = gitRemotes.find((r) => r.name === remoteName)?.fetchUrl
+  if (!url?.trim()) return false
+  return classifyGitRemoteUrl(url) === filter
+}
 
 /** Remote + local branch names for merge/rebase targets (excludes current local branch). */
 function buildIntegrateRefGroups(
   branches: BranchEntry[],
   currentBranch: string,
+  gitRemotes: GitRemoteEntry[],
+  remoteProviderFilter: GitProviderFamily,
 ): { remotes: string[]; locals: string[] } {
   const cur = currentBranch.trim()
   const seen = new Set<string>()
@@ -24,6 +47,7 @@ function buildIntegrateRefGroups(
     else locals.push(n)
   }
   for (const b of branches.filter((x) => x.remote).sort((a, c) => a.name.localeCompare(c.name))) {
+    if (!remoteBranchMatchesFilter(b.name, gitRemotes, remoteProviderFilter)) continue
     push(b.name, 'remote')
   }
   for (const b of branches.filter((x) => !x.remote).sort((a, c) => a.name.localeCompare(c.name))) {
@@ -36,8 +60,12 @@ export type GitVcsIntegrateWizardModalProps = {
   isOpen: boolean
   repoPath: string
   currentBranch: string
-  /** Local + remote branches from `git branch`; drives suggestions (datalist). */
+  /** Local + remote branches from `git branch`; drives suggestions. */
   branchOptions: BranchEntry[]
+  /** Used to classify `remote/branch` rows (GitHub vs GitLab vs other). */
+  gitRemotes: GitRemoteEntry[]
+  /** Match toolbar fetch remote: only that host’s remote-tracking branches are listed (locals always listed). */
+  remoteProviderFilter: GitProviderFamily
   suggestedTarget?: string
   onClose: () => void
   onAction: (method: IntegrateMethod, target: string) => Promise<void>
@@ -48,6 +76,8 @@ export function GitVcsIntegrateWizardModal({
   isOpen,
   currentBranch,
   branchOptions,
+  gitRemotes,
+  remoteProviderFilter,
   suggestedTarget,
   onClose,
   onAction,
@@ -57,8 +87,8 @@ export function GitVcsIntegrateWizardModal({
   const [method, setMethod] = useState<IntegrateMethod>('merge')
 
   const { remotes: remoteRefs, locals: localRefs } = useMemo(
-    () => buildIntegrateRefGroups(branchOptions, currentBranch),
-    [branchOptions, currentBranch],
+    () => buildIntegrateRefGroups(branchOptions, currentBranch, gitRemotes, remoteProviderFilter),
+    [branchOptions, currentBranch, gitRemotes, remoteProviderFilter],
   )
   const refSuggestions = useMemo(() => [...remoteRefs, ...localRefs], [remoteRefs, localRefs])
 
@@ -130,6 +160,18 @@ export function GitVcsIntegrateWizardModal({
               Choose a branch below or type any ref. That ref is merged/rebased <em>into</em>{' '}
               <span className="mono">{currentBranch || 'this branch'}</span>. For Push or New PR only, close this
               dialog.
+              {remoteProviderFilter === 'github' ? (
+                <>
+                  {' '}
+                  Remote suggestions are <strong>GitHub</strong> remotes only (same host as your fetch remote).
+                </>
+              ) : null}
+              {remoteProviderFilter === 'gitlab' ? (
+                <>
+                  {' '}
+                  Remote suggestions are <strong>GitLab</strong> remotes only (same host as your fetch remote).
+                </>
+              ) : null}
             </p>
             {refSuggestions.length > 0 ? (
               <select

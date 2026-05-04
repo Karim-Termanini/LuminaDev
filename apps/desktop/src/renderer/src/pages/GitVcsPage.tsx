@@ -1429,6 +1429,8 @@ export function GitVcsPage(): ReactElement {
         repoPath={repoPath.trim()}
         currentBranch={branch}
         branchOptions={branches}
+        gitRemotes={gitRemotes}
+        remoteProviderFilter={activeFetchProvider}
         suggestedTarget={suggestedIntegrateTarget}
         onClose={() => {
           setIntegrateWizardOpen(false)
