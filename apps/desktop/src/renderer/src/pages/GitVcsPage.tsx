@@ -480,6 +480,24 @@ export function GitVcsPage(): ReactElement {
       } else if (stagedFiles.length === 0) {
         throw new Error('[GIT_VCS_NO_STAGED] ')
       }
+      // If nothing remains to stage from the worktree, re-`git add` the paths we treat as staged so
+      // the index cannot be empty while the file list still shows "Staged" (hooks, a terminal reset,
+      // or status skew). Idempotent when already staged.
+      const stageableRemaining = unstagedFiles.filter((f) => f.status !== 'C')
+      if (stagedFiles.length > 0 && stageableRemaining.length === 0) {
+        const rEnsure = await window.dh.gitVcsStage({
+          repoPath: path,
+          filePaths: stagedFiles.map((f) => f.path),
+        })
+        assertGitVcsOk(rEnsure)
+        const listsEnsure = await refreshStatus()
+        stagedFiles = listsEnsure.staged
+        unstagedFiles = listsEnsure.unstaged
+        setSelected((prev) => reconcileGitVcsSelection(prev, listsEnsure.staged, listsEnsure.unstaged))
+        if (listsEnsure.staged.length === 0) {
+          throw new Error('[GIT_VCS_NO_STAGED] ')
+        }
+      }
       const r = await window.dh.gitVcsCommit({ repoPath: path, message })
       assertGitVcsOk(r)
       const lists = await refreshStatus()

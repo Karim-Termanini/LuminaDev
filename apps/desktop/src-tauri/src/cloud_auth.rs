@@ -2024,6 +2024,13 @@ impl GitHubProvider {
     }
 }
 
+/// First merge POST (merge commit) failed before we retry with squash; keep body so errors are not
+/// dominated by the second response alone (GitLab sometimes returns 404 on the squash try while GET MR still says mergeable).
+struct GitlabPriorMergePost {
+    status: u16,
+    body_snippet: String,
+}
+
 impl GitLabProvider {
     /// Creates a merge request on GitLab. Returns the MR web URL.
     pub async fn create_merge_request(
@@ -2145,6 +2152,73 @@ impl GitLabProvider {
         Ok(iid.map(|x| x as u32))
     }
 
+    fn gitlab_single_mr_read_api_url(web_origin_base: &str, path_with_namespace: &str, iid: u32) -> String {
+        let enc = urlencoding::encode(path_with_namespace);
+        format!(
+            "{}/api/v4/projects/{}/merge_requests/{}",
+            web_origin_base.trim_end_matches('/'),
+            enc.as_ref(),
+            iid
+        )
+    }
+
+    fn gitlab_mr_merge_api_url(web_origin_base: &str, project_api_segment: &str, iid: u32) -> String {
+        format!(
+            "{}/api/v4/projects/{}/merge_requests/{}/merge",
+            web_origin_base.trim_end_matches('/'),
+            project_api_segment,
+            iid
+        )
+    }
+
+    async fn gitlab_merge_request_get_json_optional(
+        client: &reqwest::Client,
+        token: &str,
+        web_origin_base: &str,
+        path_with_namespace: &str,
+        iid: u32,
+    ) -> Option<serde_json::Value> {
+        let url = Self::gitlab_single_mr_read_api_url(web_origin_base, path_with_namespace, iid);
+        let resp = client
+            .get(&url)
+            .header("Authorization", format!("Bearer {}", token))
+            .header("User-Agent", "LuminaDev/0.2.0")
+            .send()
+            .await
+            .ok()?;
+        if !resp.status().is_success() {
+            return None;
+        }
+        resp.json().await.ok()
+    }
+
+    fn gitlab_mr_hint_from_json(v: &serde_json::Value) -> Option<String> {
+        let mut parts: Vec<String> = Vec::new();
+        if let Some(s) = v["merge_error"].as_str().filter(|x| !x.trim().is_empty()) {
+            parts.push(format!(
+                "merge_error: {}",
+                s.trim().chars().take(200).collect::<String>()
+            ));
+        }
+        if let Some(s) = v["detailed_merge_status"].as_str() {
+            parts.push(format!(
+                "detailed_merge_status: {}",
+                s.chars().take(80).collect::<String>()
+            ));
+        }
+        if v["draft"].as_bool() == Some(true) {
+            parts.push("MR is in draft.".to_string());
+        }
+        if v["work_in_progress"].as_bool() == Some(true) {
+            parts.push("MR is marked work-in-progress.".to_string());
+        }
+        if parts.is_empty() {
+            None
+        } else {
+            Some(parts.join(" "))
+        }
+    }
+
     async fn gitlab_merge_post(
         client: &reqwest::Client,
         token: &str,
@@ -2172,13 +2246,24 @@ impl GitLabProvider {
         client: &reqwest::Client,
         token: &str,
         merge_url: &str,
-    ) -> Result<reqwest::Response, String> {
+    ) -> Result<(reqwest::Response, Option<GitlabPriorMergePost>), String> {
         let r = Self::gitlab_merge_post(client, token, merge_url, false).await?;
-        if r.status().is_success() || r.status() == 401 || r.status() == 403 {
-            return Ok(r);
+        let s = r.status();
+        if s.is_success() || s == 401 || s == 403 {
+            return Ok((r, None));
         }
-        let _ = r.text().await;
-        Self::gitlab_merge_post(client, token, merge_url, true).await
+        let prior = GitlabPriorMergePost {
+            status: s.as_u16(),
+            body_snippet: r
+                .text()
+                .await
+                .unwrap_or_default()
+                .chars()
+                .take(500)
+                .collect(),
+        };
+        let r2 = Self::gitlab_merge_post(client, token, merge_url, true).await?;
+        Ok((r2, Some(prior)))
     }
 
     async fn gitlab_merge_finish_response(resp: reqwest::Response) -> Result<String, String> {
@@ -2231,42 +2316,15 @@ impl GitLabProvider {
         path_with_namespace: &str,
         iid: u32,
     ) -> Option<String> {
-        let enc = urlencoding::encode(path_with_namespace);
-        let url = format!(
-            "{}/api/v4/projects/{}/merge_requests/{}",
-            web_origin_base.trim_end_matches('/'),
-            enc.as_ref(),
-            iid
-        );
-        let resp = client
-            .get(&url)
-            .header("Authorization", format!("Bearer {}", token))
-            .header("User-Agent", "LuminaDev/0.2.0")
-            .send()
-            .await
-            .ok()?;
-        if !resp.status().is_success() {
-            return None;
-        }
-        let v: serde_json::Value = resp.json().await.ok()?;
-        let mut parts: Vec<String> = Vec::new();
-        if let Some(s) = v["merge_error"].as_str().filter(|x| !x.trim().is_empty()) {
-            parts.push(format!("merge_error: {}", s.trim().chars().take(200).collect::<String>()));
-        }
-        if let Some(s) = v["detailed_merge_status"].as_str() {
-            parts.push(format!("detailed_merge_status: {}", s.chars().take(80).collect::<String>()));
-        }
-        if v["draft"].as_bool() == Some(true) {
-            parts.push("MR is in draft.".to_string());
-        }
-        if v["work_in_progress"].as_bool() == Some(true) {
-            parts.push("MR is marked work-in-progress.".to_string());
-        }
-        if parts.is_empty() {
-            None
-        } else {
-            Some(parts.join(" "))
-        }
+        let v = Self::gitlab_merge_request_get_json_optional(
+            client,
+            token,
+            web_origin_base,
+            path_with_namespace,
+            iid,
+        )
+        .await?;
+        Self::gitlab_mr_hint_from_json(&v)
     }
 
     /// Accept / merge an open merge request (when allowed by GitLab project rules).
@@ -2281,18 +2339,30 @@ impl GitLabProvider {
     ) -> Result<String, String> {
         let client = reqwest::Client::new();
         let base = web_origin.trim_end_matches('/');
-        let project_id = urlencoding::encode(path_with_namespace);
-        let merge_url = |iid: u32| {
-            format!(
-                "{}/api/v4/projects/{}/merge_requests/{}/merge",
-                base,
-                project_id.as_ref(),
-                iid
-            )
-        };
+        // GitLab accepts URL-encoded path or numeric id. Some hosts return 404 on POST /merge when
+        // using the path segment but the same GET by path succeeds—prefer numeric `project_id`
+        // from the MR payload when available.
+        let enc_seg = urlencoding::encode(path_with_namespace).into_owned();
+        let mr_prefetch = Self::gitlab_merge_request_get_json_optional(
+            &client,
+            token,
+            base,
+            path_with_namespace,
+            merge_request_iid,
+        )
+        .await;
+        let project_segment = mr_prefetch
+            .as_ref()
+            .and_then(|v| {
+                v.get("project_id")
+                    .and_then(|x| x.as_u64().or_else(|| x.as_i64().map(|i| i as u64)))
+                    .map(|id| id.to_string())
+            })
+            .unwrap_or_else(|| enc_seg.clone());
+        let merge_url = |iid: u32| Self::gitlab_mr_merge_api_url(base, &project_segment, iid);
 
         let url_first = merge_url(merge_request_iid);
-        let mut resp = Self::gitlab_merge_try_strategies(&client, token, &url_first).await?;
+        let (mut resp, prior) = Self::gitlab_merge_try_strategies(&client, token, &url_first).await?;
 
         if resp.status().is_success() {
             return Self::gitlab_merge_finish_response(resp).await;
@@ -2307,21 +2377,39 @@ impl GitLabProvider {
                 match Self::resolve_open_merge_request_iid(token, base, path_with_namespace, branch).await {
                     Ok(Some(resolved_iid)) if resolved_iid != merge_request_iid => {
                         let url2 = merge_url(resolved_iid);
-                        resp = Self::gitlab_merge_try_strategies(&client, token, &url2).await?;
+                        (resp, _) = Self::gitlab_merge_try_strategies(&client, token, &url2).await?;
                     }
                     Ok(Some(_)) => {
-                        let detail = Self::gitlab_merge_request_detail_hint(
-                            &client,
-                            token,
-                            base,
-                            path_with_namespace,
-                            merge_request_iid,
-                        )
-                        .await
-                        .map(|h| format!("{} ", h))
-                        .unwrap_or_default();
+                        let detail = match mr_prefetch.as_ref().and_then(Self::gitlab_mr_hint_from_json) {
+                            Some(h) => format!("{} ", h),
+                            None => {
+                                Self::gitlab_merge_request_detail_hint(
+                                    &client,
+                                    token,
+                                    base,
+                                    path_with_namespace,
+                                    merge_request_iid,
+                                )
+                                .await
+                                .map(|h| format!("{} ", h))
+                                .unwrap_or_default()
+                            }
+                        };
+                        if let Some(ref p) = prior {
+                            if matches!(p.status, 400 | 405 | 409 | 422) {
+                                let body = if p.body_snippet.trim().is_empty() {
+                                    "(empty body)".to_string()
+                                } else {
+                                    p.body_snippet.trim().to_string()
+                                };
+                                return Err(format!(
+                                    "[CLOUD_GIT_MERGE_PR] Merge commit POST returned HTTP {} (`{}`), then squash POST returned HTTP 404. {detail}The first response is usually the real GitLab rule (approvals, merge method, pipeline). **detailed_merge_status: mergeable** only reflects whether the diff can merge, not whether this merge style is allowed. Finish on the MR page or change the project’s allowed merge methods.",
+                                    p.status, body
+                                ));
+                            }
+                        }
                         return Err(format!(
-                            "[CLOUD_GIT_MERGE_PR] GitLab declined the merge API call (with **api** on your token, missing scopes is rarely the cause). {detail}Common blockers: required **approvals**, **Merge when pipeline succeeds**, pipeline or changelog rules, or a **draft** MR. **Owners and Maintainers can still hit these rules**—they are not the same as “low role”. Finish the merge on the MR page if the API cannot complete it.",
+                            "[CLOUD_GIT_MERGE_PR] GitLab merge POST returned 404 while listing the MR still succeeds. {detail}Typical causes: wrong project path vs. token, MR already merged elsewhere, or an unsupported merge flow for this host. Try **Merge** on the MR page.",
                         ));
                     }
                     Ok(None) => {
@@ -2330,7 +2418,17 @@ impl GitLabProvider {
                     Err(e) => return Err(e),
                 }
             } else {
-                return Err("[CLOUD_GIT_MERGE_PR] Merge request not found for this project (wrong link, already merged, or insufficient access).".to_string());
+                let prior_tail = prior.as_ref().map(|p| {
+                    format!(
+                        " First merge attempt: HTTP {} `{}`.",
+                        p.status,
+                        p.body_snippet.chars().take(200).collect::<String>()
+                    )
+                }).unwrap_or_default();
+                return Err(format!(
+                    "[CLOUD_GIT_MERGE_PR] Merge request not found for this project (wrong link, already merged, or insufficient access).{}",
+                    prior_tail
+                ));
             }
         }
 
