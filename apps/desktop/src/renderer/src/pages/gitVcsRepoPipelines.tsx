@@ -6,15 +6,32 @@ import { Link } from 'react-router-dom'
 import { humanizeCloudAuthError } from './cloudAuthError'
 import { CLOUD_GIT_PROVIDER_THEME } from './cloudGitTheme'
 import type { GitProviderFamily } from './gitVcsProviderHost'
+import { GLASS } from '../layout/GLASS'
 
-const CARD = {
-  display: 'flex',
-  flexDirection: 'column' as const,
-  gap: 10,
-  padding: '12px 14px',
-  borderRadius: 12,
-  border: '1px solid var(--border)',
-  background: 'rgba(20, 20, 24, 0.35)',
+function pipelineStatusPill(status: string): { label: string; bg: string; color: string } {
+  const s = status.trim().toLowerCase()
+  if (s.includes('success') || s === 'passed' || s === 'completed')
+    return { label: status, bg: 'rgba(76, 175, 80, 0.18)', color: '#a5d6a7' }
+  if (s.includes('fail') || s.includes('error') || s.includes('cancel'))
+    return { label: status, bg: 'rgba(244, 67, 54, 0.16)', color: '#ffab91' }
+  if (s.includes('progress') || s.includes('pending') || s.includes('running') || s.includes('queued') || s.includes('waiting'))
+    return { label: status, bg: 'rgba(129, 212, 250, 0.14)', color: '#81d4fa' }
+  return { label: status, bg: 'rgba(255,255,255,0.08)', color: 'var(--text-muted)' }
+}
+
+function formatPipelineTime(iso: string): string {
+  const t = Date.parse(iso)
+  if (Number.isNaN(t)) return iso
+  try {
+    return new Intl.DateTimeFormat(undefined, {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(new Date(t))
+  } catch {
+    return iso
+  }
 }
 
 export function GitVcsRepoPipelines({
@@ -90,17 +107,49 @@ export function GitVcsRepoPipelines({
   const errDisplay = errRaw ? humanizeCloudAuthError(new Error(errRaw)) : null
 
   return (
-    <div style={{ ...CARD, ...scopedStyle }}>
-      <div className="mono" style={{ fontSize: 11, color: 'var(--text-muted)', letterSpacing: 0.04 }}>
-        CI / PIPELINES (THIS REPO)
+    <div
+      style={{
+        ...GLASS,
+        ...scopedStyle,
+        borderRadius: 16,
+        padding: '16px 18px',
+        border: '1px solid color-mix(in srgb, var(--cg-accent, var(--accent)) 22%, var(--border))',
+        background: 'color-mix(in srgb, var(--cg-accent, var(--accent)) 5%, var(--bg-widget))',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 12,
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+        <div style={{ minWidth: 0 }}>
+          <div
+            className="mono"
+            style={{
+              fontSize: 10,
+              fontWeight: 700,
+              letterSpacing: '0.12em',
+              color: 'var(--cg-accent-muted, var(--text-muted))',
+              marginBottom: 4,
+            }}
+          >
+            CI · THIS REPO
+          </div>
+          <div style={{ fontSize: 15, fontWeight: 650, color: 'var(--text)', lineHeight: 1.3 }}>Pipelines</div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.45, marginTop: 4 }}>
+            Latest runs for <span className="mono">{remoteName}</span> via{' '}
+            <Link to={`/cloud-git?tab=${provider}`} style={{ color: 'var(--cg-accent, var(--accent))' }}>
+              Cloud Git
+            </Link>
+            .
+          </div>
+        </div>
+        <span
+          className={`codicon ${provider === 'gitlab' ? 'codicon-repo' : 'codicon-github'}`}
+          style={{ fontSize: 22, color: 'var(--cg-accent, var(--accent))', opacity: 0.85, flexShrink: 0 }}
+          aria-hidden
+        />
       </div>
-      <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.45 }}>
-        Latest runs for remote <span className="mono">{remoteName}</span> via your{' '}
-        <Link to={`/cloud-git?tab=${provider}`} style={{ color: 'var(--cg-accent, var(--accent))' }}>
-          Cloud Git
-        </Link>{' '}
-        account.
-      </div>
+
       {ambiguousHost && onAmbiguousTokenChange ? (
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
           <span className="hp-muted" style={{ fontSize: 11 }}>
@@ -126,47 +175,76 @@ export function GitVcsRepoPipelines({
           </div>
         </div>
       ) : null}
+
       {loading ? (
-        <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Loading pipelines…</div>
+        <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: '8px 0' }}>Loading pipelines…</div>
       ) : errDisplay ? (
-        <div role="alert" style={{ fontSize: 13, color: '#f87171' }}>
+        <div role="alert" style={{ fontSize: 13, color: '#f87171', padding: '4px 0' }}>
           {errDisplay}
         </div>
       ) : pipelines.length === 0 ? (
-        <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>No recent runs returned for this repository.</div>
+        <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: '4px 0' }}>No recent runs for this repository.</div>
       ) : (
-        <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {pipelines.map((row) => (
-            <li
-              key={row.id}
-              style={{
-                display: 'flex',
-                flexWrap: 'wrap',
-                alignItems: 'baseline',
-                gap: 8,
-                fontSize: 13,
-                borderBottom: '1px solid rgba(255,255,255,0.06)',
-                paddingBottom: 6,
-              }}
-            >
-              <a
-                href={row.url}
-                target="_blank"
-                rel="noreferrer"
-                style={{ color: 'var(--cg-accent, var(--accent))', fontWeight: 600, textDecoration: 'none' }}
+        <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {pipelines.map((row) => {
+            const pill = pipelineStatusPill(row.status)
+            return (
+              <li
+                key={row.id}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 12,
+                  padding: '10px 12px',
+                  borderRadius: 10,
+                  background: 'rgba(0,0,0,0.2)',
+                  border: '1px solid rgba(255,255,255,0.06)',
+                }}
               >
-                {row.name}
-              </a>
-              <span className="mono" style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                {row.status}
-              </span>
-              {row.updatedAt ? (
-                <span className="mono" style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                  {row.updatedAt}
-                </span>
-              ) : null}
-            </li>
-          ))}
+                <a
+                  href={row.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{
+                    color: 'var(--cg-accent, var(--accent))',
+                    fontWeight: 600,
+                    fontSize: 13,
+                    textDecoration: 'none',
+                    minWidth: 0,
+                    flex: 1,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {row.name}
+                </a>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                  <span
+                    className="mono"
+                    style={{
+                      fontSize: 10,
+                      fontWeight: 700,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.04em',
+                      padding: '3px 8px',
+                      borderRadius: 6,
+                      background: pill.bg,
+                      color: pill.color,
+                    }}
+                  >
+                    {pill.label}
+                  </span>
+                  {row.updatedAt ? (
+                    <span className="mono" style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                      {formatPipelineTime(row.updatedAt)}
+                    </span>
+                  ) : null}
+                </div>
+              </li>
+            )
+          })}
         </ul>
       )}
     </div>

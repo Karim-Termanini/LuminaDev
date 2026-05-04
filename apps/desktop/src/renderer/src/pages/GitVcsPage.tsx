@@ -841,6 +841,11 @@ export function GitVcsPage(): ReactElement {
     return resolvePipelineProvider(activeFetchRemoteUrl, cloudAccounts)
   }, [activeFetchRemoteUrl, cloudAccounts, ambiguousPipelineHost, ambiguousCiToken])
 
+  /** Right column: PR checks + repo pipelines (GitHub/GitLab only). */
+  const ciHostRail =
+    !!repoPath.trim() &&
+    (activeFetchPipelineProvider === 'github' || activeFetchPipelineProvider === 'gitlab')
+
   const nextGitAction = useMemo(
     () =>
       repoPath.trim()
@@ -992,23 +997,6 @@ export function GitVcsPage(): ReactElement {
           }
         />
       ) : null}
-
-      {trackingPr && activeFetchPipelineProvider !== 'other' && (
-        <GitVcsCiChecks
-          provider={activeFetchPipelineProvider as 'github' | 'gitlab'}
-          repoPath={repoPath.trim()}
-          remote={activeFetchRemoteName}
-          reference={trackingPr.reference}
-          prUrl={trackingPr.url}
-          onResolveConflicts={handleResolveRemoteConflicts}
-          onClose={() => {
-            setTrackingPr(null)
-            const key = `vcs_pr_tracking_${repoPath.trim()}_${branch}`
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            void window.dh.storeDelete({ key: key as any })
-          }}
-        />
-      )}
 
       {opErrorDisplay ? (
         <div
@@ -1175,8 +1163,8 @@ export function GitVcsPage(): ReactElement {
       {!repoPath.trim() ? (
         <div style={{ color: 'var(--text-muted)', fontSize: 14 }}>Choose a repository above.</div>
       ) : (
-        <>
-          {/* Single action bar: branch | status | remote | Fetch Pull Push */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {/* Branch + Fetch / Pull / Push — full width above the work area / CI rail */}
           <div
             style={{
               display: 'flex',
@@ -1279,6 +1267,36 @@ export function GitVcsPage(): ReactElement {
             ) : null}
           </div>
 
+          <div
+            style={
+              ciHostRail
+                ? {
+                    display: 'grid',
+                    gridTemplateColumns: 'minmax(0, 1fr) minmax(280px, 380px)',
+                    gap: 20,
+                    alignItems: 'start',
+                  }
+                : { display: 'flex', flexDirection: 'column', gap: 16 }
+            }
+          >
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
+          {!ciHostRail && trackingPr && activeFetchPipelineProvider !== 'other' && (
+            <GitVcsCiChecks
+              provider={activeFetchPipelineProvider as 'github' | 'gitlab'}
+              repoPath={repoPath.trim()}
+              remote={activeFetchRemoteName}
+              reference={trackingPr.reference}
+              prUrl={trackingPr.url}
+              onResolveConflicts={handleResolveRemoteConflicts}
+              onClose={() => {
+                setTrackingPr(null)
+                const key = `vcs_pr_tracking_${repoPath.trim()}_${branch}`
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                void window.dh.storeDelete({ key: key as any })
+              }}
+            />
+          )}
+
           {lastCreatedPrUrl ? (
             <div style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
               <span className="codicon codicon-check" style={{ color: '#69f0ae' }} aria-hidden />
@@ -1342,13 +1360,15 @@ export function GitVcsPage(): ReactElement {
             </div>
           </div>
 
-          <GitVcsRepoPipelines
-            repoPath={repoPath.trim()}
-            remoteName={activeFetchRemoteName}
-            provider={activeFetchPipelineProvider}
-            ambiguousHost={ambiguousPipelineHost}
-            onAmbiguousTokenChange={setAmbiguousCiToken}
-          />
+          {!ciHostRail ? (
+            <GitVcsRepoPipelines
+              repoPath={repoPath.trim()}
+              remoteName={activeFetchRemoteName}
+              provider={activeFetchPipelineProvider}
+              ambiguousHost={ambiguousPipelineHost}
+              onAmbiguousTokenChange={setAmbiguousCiToken}
+            />
+          ) : null}
 
           <div style={{ display: 'grid', gridTemplateColumns: 'minmax(260px, 34%) 1fr', gap: 16, minHeight: 360 }}>
             <div
@@ -1388,7 +1408,46 @@ export function GitVcsPage(): ReactElement {
               nextGitAction === 'commit' ? 'commit' : nextGitAction === 'commit_message' ? 'commit_message' : null
             }
           />
-        </>
+          </div>
+          {ciHostRail ? (
+            <aside
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 16,
+                position: 'sticky',
+                top: 12,
+                alignSelf: 'start',
+                minWidth: 0,
+              }}
+            >
+              {trackingPr && activeFetchPipelineProvider !== 'other' && (
+                <GitVcsCiChecks
+                  provider={activeFetchPipelineProvider as 'github' | 'gitlab'}
+                  repoPath={repoPath.trim()}
+                  remote={activeFetchRemoteName}
+                  reference={trackingPr.reference}
+                  prUrl={trackingPr.url}
+                  onResolveConflicts={handleResolveRemoteConflicts}
+                  onClose={() => {
+                    setTrackingPr(null)
+                    const key = `vcs_pr_tracking_${repoPath.trim()}_${branch}`
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    void window.dh.storeDelete({ key: key as any })
+                  }}
+                />
+              )}
+              <GitVcsRepoPipelines
+                repoPath={repoPath.trim()}
+                remoteName={activeFetchRemoteName}
+                provider={activeFetchPipelineProvider}
+                ambiguousHost={ambiguousPipelineHost}
+                onAmbiguousTokenChange={setAmbiguousCiToken}
+              />
+            </aside>
+          ) : null}
+        </div>
+        </div>
       )}
 
       <GitVcsDirtyCheckoutModal

@@ -99,33 +99,12 @@ export function GitVcsCiChecks({
         animation: 'hp-fade-in 0.3s ease-out',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-            <div 
-              style={{ 
-                width: 12, 
-                height: 12, 
-                borderRadius: '50%', 
-                background: statusColor,
-                boxShadow: `0 0 8px ${statusColor}44`
-              }} 
-            />
-            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>
-              {hasConflicts ? 'This branch has conflicts' :
-               stats.inProgress > 0 ? 'Some checks haven\'t completed yet' : 
-               stats.failed > 0 ? 'Checks failed' : 'All checks passed'}
-            </h3>
-          </div>
-          <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-            {stats.inProgress} in progress, {stats.successful} successful checks
-          </div>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
           {prUrl && (
-            <a 
-              href={prUrl} 
-              target="_blank" 
+            <a
+              href={prUrl}
+              target="_blank"
               rel="noreferrer"
               className="hp-btn hp-btn-sm"
               style={{ textDecoration: 'none' }}
@@ -138,6 +117,28 @@ export function GitVcsCiChecks({
               ✕
             </button>
           )}
+        </div>
+        <div style={{ flex: 1, minWidth: 0, textAlign: 'right' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'flex-end', marginBottom: 4 }}>
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>
+              {hasConflicts ? 'This branch has conflicts' :
+               stats.inProgress > 0 ? 'Some checks haven\'t completed yet' : 
+               stats.failed > 0 ? 'Checks failed' : 'All checks passed'}
+            </h3>
+            <div
+              style={{
+                width: 12,
+                height: 12,
+                borderRadius: '50%',
+                background: statusColor,
+                boxShadow: `0 0 8px ${statusColor}44`,
+                flexShrink: 0,
+              }}
+            />
+          </div>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+            {stats.inProgress} in progress, {stats.successful} successful checks
+          </div>
         </div>
       </div>
 
