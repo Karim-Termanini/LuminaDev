@@ -27,6 +27,11 @@ import { assertGitRecentList } from './registryContract'
 import { CLOUD_GIT_PROVIDER_THEME } from './cloudGitTheme'
 import { fetchRemoteOptions } from './gitVcsFetchRemotes'
 import { classifyGitRemoteUrl, resolvePipelineProvider } from './gitVcsProviderHost'
+import {
+  gitVcsPrTrackingSnapshotForStore,
+  parseGitVcsPrTrackingFromStore,
+  type GitVcsPrTrackingState,
+} from './gitVcsPrTracking'
 import { reconcileGitVcsSelection } from './gitVcsSelection'
 import { GLASS } from '../layout/GLASS'
 
@@ -65,7 +70,7 @@ export function GitVcsPage(): ReactElement {
   const [suggestedIntegrateTarget, setSuggestedIntegrateTarget] = useState('')
   const [conflictedFiles, setConflictedFiles] = useState<string[]>([])
   const [prWizardOpen, setPrWizardOpen] = useState(false)
-  const [trackingPr, setTrackingPr] = useState<{ url: string; reference: string; provider: 'github' | 'gitlab' } | null>(null)
+  const [trackingPrByHost, setTrackingPrByHost] = useState<GitVcsPrTrackingState>({})
   const [lastCreatedPrUrl, setLastCreatedPrUrl] = useState<string | null>(null)
   /** When fetch remote host is unknown and both Cloud accounts exist, user picks which token scopes repo CI. */
   const [ambiguousCiToken, setAmbiguousCiToken] = useState<'github' | 'gitlab'>('github')
@@ -84,13 +89,14 @@ export function GitVcsPage(): ReactElement {
     ? fetchRemote
     : (fetchRemoteNames[0] ?? 'origin')
 
-  const handleResolveRemoteConflicts = async (targetBase: string) => {
-    console.log('[GitVcs] ResolveRemoteConflicts triggered for base:', targetBase)
+  const handleResolveRemoteConflicts = async (targetBase: string, remoteForHost?: string) => {
+    const remoteName = remoteForHost ?? activeFetchRemoteName
+    console.log('[GitVcs] ResolveRemoteConflicts triggered for base:', targetBase, 'remote:', remoteName)
     setBusy(true)
     try {
       // Ensure we have the latest remote info before showing the wizard
-      await window.dh.gitVcsFetch({ repoPath: repoPath.trim(), remote: activeFetchRemoteName })
-      const remoteRef = `${activeFetchRemoteName}/${targetBase}`
+      await window.dh.gitVcsFetch({ repoPath: repoPath.trim(), remote: remoteName })
+      const remoteRef = `${remoteName}/${targetBase}`
       setSuggestedIntegrateTarget(remoteRef)
       setIntegrateWizardOpen(true)
     } catch (e) {
@@ -284,13 +290,42 @@ export function GitVcsPage(): ReactElement {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     window.dh.storeGet({ key: key as any }).then((res) => {
       if (res.ok && res.data) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        setTrackingPr(res.data as any)
+        setTrackingPrByHost(parseGitVcsPrTrackingFromStore(res.data))
       } else {
-        setTrackingPr(null)
+        setTrackingPrByHost({})
       }
     })
   }, [repoPath, branch])
+
+  const persistTrackingState = useCallback(
+    async (next: GitVcsPrTrackingState) => {
+      const path = repoPath.trim()
+      if (!path || !branch) return
+      const key = `vcs_pr_tracking_${path}_${branch}`
+      const snap = gitVcsPrTrackingSnapshotForStore(next)
+      if (!snap) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await window.dh.storeDelete({ key: key as any })
+      } else {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await window.dh.storeSet({ key: key as any, data: snap as any })
+      }
+    },
+    [repoPath, branch],
+  )
+
+  const removeTrackingSlot = useCallback(
+    (provider: 'github' | 'gitlab') => {
+      setTrackingPrByHost((prev) => {
+        if (!prev[provider]) return prev
+        const next: GitVcsPrTrackingState = { ...prev }
+        delete next[provider]
+        void persistTrackingState(next)
+        return next
+      })
+    },
+    [persistTrackingState],
+  )
 
   useEffect(() => {
     setFetchRemote((cur) => (fetchRemoteNames.includes(cur) ? cur : fetchRemoteNames[0] ?? 'origin'))
@@ -846,6 +881,18 @@ export function GitVcsPage(): ReactElement {
     !!repoPath.trim() &&
     (activeFetchPipelineProvider === 'github' || activeFetchPipelineProvider === 'gitlab')
 
+  /** Only the host that matches the selected fetch remote — avoids GitHub checks while you are on GitLab (both can stay tracked in store). */
+  const trackedPrRenderSlots = useMemo(() => {
+    if (activeFetchPipelineProvider !== 'github' && activeFetchPipelineProvider !== 'gitlab') return []
+    const slots: { provider: 'github' | 'gitlab'; remote: string; reference: string; url: string }[] = []
+    const provider = activeFetchPipelineProvider
+    const entry = trackingPrByHost[provider]
+    if (!entry) return []
+    const remote = gitRemotes.find((r) => classifyGitRemoteUrl(r.fetchUrl) === provider)?.name
+    if (!remote) return []
+    return [{ provider, remote, reference: entry.reference, url: entry.url }]
+  }, [trackingPrByHost, gitRemotes, activeFetchPipelineProvider])
+
   const nextGitAction = useMemo(
     () =>
       repoPath.trim()
@@ -1280,22 +1327,19 @@ export function GitVcsPage(): ReactElement {
             }
           >
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
-          {!ciHostRail && trackingPr && activeFetchPipelineProvider !== 'other' && (
-            <GitVcsCiChecks
-              provider={activeFetchPipelineProvider as 'github' | 'gitlab'}
-              repoPath={repoPath.trim()}
-              remote={activeFetchRemoteName}
-              reference={trackingPr.reference}
-              prUrl={trackingPr.url}
-              onResolveConflicts={handleResolveRemoteConflicts}
-              onClose={() => {
-                setTrackingPr(null)
-                const key = `vcs_pr_tracking_${repoPath.trim()}_${branch}`
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                void window.dh.storeDelete({ key: key as any })
-              }}
-            />
-          )}
+          {!ciHostRail &&
+            trackedPrRenderSlots.map(({ provider, remote, reference, url }) => (
+              <GitVcsCiChecks
+                key={provider}
+                provider={provider}
+                repoPath={repoPath.trim()}
+                remote={remote}
+                reference={reference}
+                prUrl={url}
+                onResolveConflicts={(base) => void handleResolveRemoteConflicts(base, remote)}
+                onClose={() => removeTrackingSlot(provider)}
+              />
+            ))}
 
           {lastCreatedPrUrl ? (
             <div style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -1421,22 +1465,18 @@ export function GitVcsPage(): ReactElement {
                 minWidth: 0,
               }}
             >
-              {trackingPr && activeFetchPipelineProvider !== 'other' && (
+              {trackedPrRenderSlots.map(({ provider, remote, reference, url }) => (
                 <GitVcsCiChecks
-                  provider={activeFetchPipelineProvider as 'github' | 'gitlab'}
+                  key={provider}
+                  provider={provider}
                   repoPath={repoPath.trim()}
-                  remote={activeFetchRemoteName}
-                  reference={trackingPr.reference}
-                  prUrl={trackingPr.url}
-                  onResolveConflicts={handleResolveRemoteConflicts}
-                  onClose={() => {
-                    setTrackingPr(null)
-                    const key = `vcs_pr_tracking_${repoPath.trim()}_${branch}`
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    void window.dh.storeDelete({ key: key as any })
-                  }}
+                  remote={remote}
+                  reference={reference}
+                  prUrl={url}
+                  onResolveConflicts={(base) => void handleResolveRemoteConflicts(base, remote)}
+                  onClose={() => removeTrackingSlot(provider)}
                 />
-              )}
+              ))}
               <GitVcsRepoPipelines
                 repoPath={repoPath.trim()}
                 remoteName={activeFetchRemoteName}
@@ -1474,11 +1514,13 @@ export function GitVcsPage(): ReactElement {
           setLastCreatedPrUrl(url)
           setPrWizardOpen(false)
           if (activeFetchProvider !== 'other') {
-            const info = { url, reference: branch, provider: activeFetchProvider }
-            setTrackingPr(info)
-            const key = `vcs_pr_tracking_${repoPath.trim()}_${branch}`
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            void window.dh.storeSet({ key: key as any, data: info as any })
+            const p = activeFetchProvider
+            const entry = { url, reference: branch }
+            setTrackingPrByHost((prev) => {
+              const next = { ...prev, [p]: entry }
+              void persistTrackingState(next)
+              return next
+            })
           }
         }}
       />
