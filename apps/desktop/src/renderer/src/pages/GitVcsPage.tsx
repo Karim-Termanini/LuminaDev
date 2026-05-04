@@ -6,6 +6,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { assertGitOk } from './gitContract'
 import { assertGitVcsOk } from './gitVcsContract'
 import { humanizeGitVcsError, parseGitVcsErrorCode } from './gitVcsError'
+import { isPlausibleGitBranchName, suggestBypassBranchName } from './gitVcsProtectedBranch'
 import { GitVcsBranchPicker } from './gitVcsBranchPicker'
 import { GitVcsCiChecks } from './GitVcsCiChecks'
 import { GitVcsCommitBar } from './gitVcsCommitBar'
@@ -67,8 +68,16 @@ export function GitVcsPage(): ReactElement {
   /** When fetch remote host is unknown and both Cloud accounts exist, user picks which token scopes repo CI. */
   const [ambiguousCiToken, setAmbiguousCiToken] = useState<'github' | 'gitlab'>('github')
   const [softSuccessNotice, setSoftSuccessNotice] = useState<string | null>(null)
+  /** Editable target when push fails with `GIT_VCS_PROTECTED_BRANCH` (create + push + open PR/MR). */
+  const [protectedBypassDraft, setProtectedBypassDraft] = useState('')
+  /** Keeps bypass UI visible after client validation errors until dismiss or success. */
+  const [protectedFlowActive, setProtectedFlowActive] = useState(false)
 
   const fetchRemoteNames = useMemo(() => fetchRemoteOptions(branches), [branches])
+  const localBranchNames = useMemo(
+    () => new Set(branches.filter((b) => !b.remote).map((b) => b.name)),
+    [branches],
+  )
   const activeFetchRemoteName = fetchRemoteNames.includes(fetchRemote)
     ? fetchRemote
     : (fetchRemoteNames[0] ?? 'origin')
@@ -106,6 +115,13 @@ export function GitVcsPage(): ReactElement {
 
   useEffect(() => {
     setRawErrorCopyHint('idle')
+  }, [opErrorRaw])
+
+  useEffect(() => {
+    if (!opErrorRaw?.trim()) {
+      setProtectedBypassDraft('')
+      setProtectedFlowActive(false)
+    }
   }, [opErrorRaw])
 
   const copyRawGitError = useCallback(async () => {
@@ -453,45 +469,24 @@ export function GitVcsPage(): ReactElement {
         setSelected((prev) => reconcileGitVcsSelection(prev, lists.staged, lists.unstaged))
         return
       }
-      const r = await window.dh.gitVcsPush({ repoPath: path })
+      const r = await window.dh.gitVcsPush({
+        repoPath: path,
+        remote: activeFetchRemoteName,
+        branch: branch || undefined,
+      })
       assertGitVcsOk(r)
       const lists = await refreshStatus()
       setSelected((prev) => reconcileGitVcsSelection(prev, lists.staged, lists.unstaged))
     } catch (e) {
+      const raw = e instanceof Error ? e.message : String(e)
       const code = parseGitVcsErrorCode(e)
       if (code === 'GIT_VCS_PROTECTED_BRANCH') {
-        // Smart Flow: Suggest creating a new branch if current is main/master
-        if (branch === 'main' || branch === 'master') {
-          const suggestedName = `feature/work-${Math.floor(Math.random() * 1000)}`
-          if (confirm(`This branch is protected. Would you like to move your local commits to a new branch "${suggestedName}" and open a Pull Request?`)) {
-            void (async () => {
-              setBusy(true)
-              try {
-                // 1. Create and switch to new branch (keeping local commits)
-                const res = await window.dh.gitVcsCheckout({ repoPath: path, branch: suggestedName, create: true })
-                assertGitVcsOk(res)
-                
-                // 2. Push the new branch
-                const pushRes = await window.dh.gitVcsPush({ repoPath: path })
-                assertGitVcsOk(pushRes)
-                
-                // 3. Open PR Wizard
-                setPrWizardOpen(true)
-                setOpErrorRaw(null)
-              } catch (inner) {
-                setOpErrorRaw(inner instanceof Error ? inner.message : String(inner))
-              } finally {
-                setBusy(false)
-                await refreshStatus()
-              }
-            })()
-          }
-        } else {
-          setPrWizardOpen(true)
-          setOpErrorRaw(null)
-        }
+        setProtectedFlowActive(true)
+        setProtectedBypassDraft(suggestBypassBranchName(branch, localBranchNames))
+        setOpErrorRaw(raw)
       } else {
-        setOpErrorRaw(e instanceof Error ? e.message : String(e))
+        setProtectedFlowActive(false)
+        setOpErrorRaw(raw)
       }
     } finally {
       setBusy(false)
@@ -701,12 +696,75 @@ export function GitVcsPage(): ReactElement {
     }
   }
 
+  const runProtectedBypassPushAndOpenPr = useCallback(async () => {
+    const path = repoPath.trim()
+    if (!path) return
+    const name = protectedBypassDraft.trim() || suggestBypassBranchName(branch, localBranchNames)
+    if (!isPlausibleGitBranchName(name)) {
+      setProtectedFlowActive(true)
+      setOpErrorRaw('[GIT_VCS_BRANCH_NAME_INVALID] Use a valid branch name (no spaces or odd characters).')
+      return
+    }
+    if (localBranchNames.has(name)) {
+      setProtectedFlowActive(true)
+      setOpErrorRaw(
+        `[GIT_VCS_BRANCH_NAME_TAKEN] A local branch named "${name}" already exists — choose another name.`,
+      )
+      return
+    }
+    setBusy(true)
+    try {
+      const co = await window.dh.gitVcsCheckout({ repoPath: path, branch: name, create: true })
+      assertGitVcsOk(co)
+      const pushRes = await window.dh.gitVcsPush({
+        repoPath: path,
+        remote: activeFetchRemoteName,
+        branch: name,
+      })
+      assertGitVcsOk(pushRes)
+      setOpErrorRaw(null)
+      setProtectedBypassDraft('')
+      setProtectedFlowActive(false)
+      const lists = await refreshStatus()
+      setSelected((prev) => reconcileGitVcsSelection(prev, lists.staged, lists.unstaged))
+      setPrWizardOpen(true)
+    } catch (inner) {
+      setProtectedFlowActive(false)
+      setOpErrorRaw(inner instanceof Error ? inner.message : String(inner))
+    } finally {
+      setBusy(false)
+    }
+  }, [
+    repoPath,
+    protectedBypassDraft,
+    branch,
+    localBranchNames,
+    activeFetchRemoteName,
+    refreshStatus,
+  ])
+
+  const openPrWizardFromProtectedNotice = useCallback(() => {
+    setProtectedFlowActive(false)
+    setOpErrorRaw(null)
+    setProtectedBypassDraft('')
+    setPrWizardOpen(true)
+  }, [])
+
   const errCode = opErrorRaw ? parseGitVcsErrorCode(new Error(opErrorRaw)) : null
   const authBanner = errCode === 'GIT_VCS_AUTH_FAILED'
   const integrationNotice = errCode === 'GIT_VCS_INTEGRATION_REQUIRED'
   const protectedBranchNotice = errCode === 'GIT_VCS_PROTECTED_BRANCH'
+  const protectedBypassPanel =
+    protectedFlowActive &&
+    (protectedBranchNotice ||
+      errCode === 'GIT_VCS_BRANCH_NAME_TAKEN' ||
+      errCode === 'GIT_VCS_BRANCH_NAME_INVALID')
   const pushRejectedNotice = errCode === 'GIT_VCS_PUSH_REJECTED'
-  const softGitNotice = integrationNotice || protectedBranchNotice || pushRejectedNotice
+  const softGitNotice =
+    integrationNotice ||
+    protectedBranchNotice ||
+    protectedBypassPanel ||
+    pushRejectedNotice
   const opErrorDisplay = opErrorRaw ? humanizeGitVcsError(new Error(opErrorRaw)) : null
   const activeFetchRemoteUrl = gitRemotes.find((r) => r.name === activeFetchRemoteName)?.fetchUrl
   const activeFetchProvider = activeFetchRemoteUrl ? classifyGitRemoteUrl(activeFetchRemoteUrl) : 'other'
@@ -824,7 +882,13 @@ export function GitVcsPage(): ReactElement {
       />
 
       {repoPath.trim() ? (
-        <GitVcsStateBanner operation={gitOperation} conflictFileCount={conflictFileCount} />
+        <GitVcsStateBanner
+        operation={gitOperation}
+        conflictFileCount={conflictFileCount}
+        onOpenResolutionStudio={() => setConflictWizardOpen(true)}
+        onContinueOperation={gitOperation === 'merging' ? runMergeContinue : runRebaseContinue}
+        onAbortOperation={gitOperation === 'merging' ? runMergeAbort : runRebaseAbort}
+      />
       ) : null}
 
       {trackingPr && activeFetchPipelineProvider !== 'other' && (
@@ -896,23 +960,69 @@ export function GitVcsPage(): ReactElement {
               </button>
             </div>
           ) : null}
-          {protectedBranchNotice ? (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
-              <Link
-                to={`/cloud-git?tab=${cloudGitTabForRemote}`}
-                className="hp-btn hp-btn-primary"
-                style={{ textDecoration: 'none' }}
-              >
-                Open Cloud Git
-              </Link>
+          {protectedBypassPanel ? (
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 10,
+                alignItems: 'stretch',
+                maxWidth: 640,
+              }}
+            >
+              <p className="hp-muted" style={{ margin: 0, fontSize: 12, lineHeight: 1.5 }}>
+                Move your commits to a <strong>new local branch</strong>, push it to{' '}
+                <span className="mono">{activeFetchRemoteName}</span>, then open the{' '}
+                {activeFetchProvider === 'gitlab' ? 'merge request' : 'pull request'} wizard (title and target branch
+                are prefilled).
+              </p>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+                <label htmlFor="git-vcs-protected-branch-input" className="mono" style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                  New branch
+                </label>
+                <input
+                  id="git-vcs-protected-branch-input"
+                  type="text"
+                  className="mono hp-input"
+                  value={protectedBypassDraft}
+                  onChange={(e) => setProtectedBypassDraft(e.target.value)}
+                  disabled={busy}
+                  style={{ flex: '1 1 220px', minWidth: 0, maxWidth: 360, fontSize: 13 }}
+                  autoComplete="off"
+                  spellCheck={false}
+                  aria-label="Name for the new branch used to bypass protected-branch rules"
+                />
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+                <button
+                  type="button"
+                  className="hp-btn hp-btn-primary"
+                  disabled={busy}
+                  onClick={() => void runProtectedBypassPushAndOpenPr()}
+                >
+                  Create branch, push, open {activeFetchProvider === 'gitlab' ? 'MR' : 'PR'}
+                </button>
+                {activeFetchProvider !== 'other' && cloudAccounts.some((a) => a.provider === activeFetchProvider) ? (
+                  <button type="button" className="hp-btn" disabled={busy} onClick={openPrWizardFromProtectedNotice}>
+                    Open {activeFetchProvider === 'gitlab' ? 'MR' : 'PR'} wizard only
+                  </button>
+                ) : null}
+                <Link
+                  to={`/cloud-git?tab=${cloudGitTabForRemote}`}
+                  className="hp-btn"
+                  style={{ textDecoration: 'none' }}
+                >
+                  Open Cloud Git
+                </Link>
+                <button type="button" className="hp-btn" onClick={() => setOpErrorRaw(null)} disabled={busy}>
+                  Dismiss
+                </button>
+              </div>
               {activeFetchProvider === 'other' ? (
                 <span className="mono" style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                   Pick GitHub or GitLab tab if the default host is wrong for this remote.
                 </span>
               ) : null}
-              <button type="button" className="hp-btn" onClick={() => setOpErrorRaw(null)}>
-                Dismiss
-              </button>
             </div>
           ) : null}
           {authBanner ? (
@@ -940,7 +1050,7 @@ export function GitVcsPage(): ReactElement {
                   Clipboard unavailable
                 </span>
               ) : null}
-              {!integrationNotice && !protectedBranchNotice ? (
+              {!integrationNotice && !protectedBranchNotice && !protectedBypassPanel ? (
                 <button type="button" className="hp-btn" onClick={() => setOpErrorRaw(null)}>
                   Dismiss
                 </button>

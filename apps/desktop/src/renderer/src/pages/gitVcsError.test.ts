@@ -35,6 +35,18 @@ describe('humanizeGitVcsError', () => {
     expect(msg).toContain('merge')
   })
 
+  it('humanizes GIT_VCS_BRANCH_NAME_TAKEN', () => {
+    const msg = humanizeGitVcsError(
+      new Error('[GIT_VCS_BRANCH_NAME_TAKEN] A local branch named "x" already exists.'),
+    )
+    expect(msg).toMatch(/already exists/i)
+  })
+
+  it('humanizes GIT_VCS_BRANCH_NAME_INVALID', () => {
+    const msg = humanizeGitVcsError(new Error('[GIT_VCS_BRANCH_NAME_INVALID]'))
+    expect(msg).toMatch(/branch name/i)
+  })
+
   it('humanizes GIT_VCS_INTEGRATION_REQUIRED', () => {
     const msg = humanizeGitVcsError(
       new Error('[GIT_VCS_INTEGRATION_REQUIRED] Remote "origin" has 3 commit(s) not in your branch yet.'),
@@ -121,6 +133,10 @@ describe('parseGitVcsErrorCode', () => {
     expect(parseGitVcsErrorCode(new Error('[GIT_VCS_PROTECTED_BRANCH] remote'))).toBe(
       'GIT_VCS_PROTECTED_BRANCH',
     )
+  })
+
+  it('extracts GIT_VCS_BRANCH_NAME_TAKEN', () => {
+    expect(parseGitVcsErrorCode(new Error('[GIT_VCS_BRANCH_NAME_TAKEN] x'))).toBe('GIT_VCS_BRANCH_NAME_TAKEN')
   })
 
   it('returns null for non-coded error', () => {

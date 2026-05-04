@@ -2105,7 +2105,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
     },
 
     "dh:cloud:auth:connect-start" => {
-        let (gh_store, gl_store) = read_cloud_oauth_store_overrides(&app);
+        let (gh_store, _gl_store) = read_cloud_oauth_store_overrides(&app);
         let provider = body.get("provider").and_then(|v| v.as_str()).unwrap_or("");
         match provider {
             "github" => {
@@ -2127,25 +2127,10 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
                     Err(e) => json!({ "ok": false, "error": e }),
                 }
             }
-            "gitlab" => {
-                let cid = cloud_auth::compose_gitlab_client_id(gl_store.as_deref());
-                match cloud_auth::GitLabProvider::device_auth_start(
-                    &["read_api", "read_user", "read_repository", "write_repository"],
-                    cid.as_str(),
-                )
-                .await
-                {
-                    Ok(c) => json!({
-                        "ok": true,
-                        "user_code": c.user_code,
-                        "verification_uri": c.verification_uri,
-                        "device_code": c.device_code,
-                        "interval": c.interval,
-                        "expires_in": c.expires_in,
-                    }),
-                    Err(e) => json!({ "ok": false, "error": e }),
-                }
-            }
+            "gitlab" => json!({
+                "ok": false,
+                "error": "[CLOUD_AUTH_DEVICE_FLOW_DISABLED] GitLab uses a personal access token on the Cloud Git page (GitLab tab → paste token with api scope). Browser device flow is not available for GitLab."
+            }),
             _ => json!({ "ok": false, "error": "[CLOUD_AUTH_NETWORK] Unknown provider" }),
         }
     },

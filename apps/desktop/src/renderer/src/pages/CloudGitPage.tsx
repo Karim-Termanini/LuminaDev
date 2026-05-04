@@ -59,7 +59,6 @@ export function CloudGitPage(): ReactElement {
   const [patError, setPatError] = useState<string | null>(null)
   const [connecting, setConnecting] = useState(false)
   const [advGithub, setAdvGithub] = useState('')
-  const [advGitlab, setAdvGitlab] = useState('')
   const [advMsg, setAdvMsg] = useState<string | null>(null)
   const [advSaving, setAdvSaving] = useState(false)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -67,6 +66,9 @@ export function CloudGitPage(): ReactElement {
   const theme = CLOUD_GIT_PROVIDER_THEME[activeTab]
   const account = accounts.find((a) => a.provider === activeTab) ?? null
   const meta = PROVIDER_META[activeTab]
+  const effectivePatProvider: Provider | null =
+    patProvider ?? (activeTab === 'gitlab' && !account ? 'gitlab' : null)
+  const showPatForm = effectivePatProvider === activeTab
 
   const stopPoll = useCallback(() => {
     if (pollRef.current) {
@@ -136,7 +138,6 @@ export function CloudGitPage(): ReactElement {
       const parsed = CloudOauthClientsStoreSchema.safeParse(bag.data)
       if (parsed.success) {
         setAdvGithub(parsed.data.github_client_id ?? '')
-        setAdvGitlab(parsed.data.gitlab_client_id ?? '')
       }
     })()
   }, [])
@@ -214,12 +215,13 @@ export function CloudGitPage(): ReactElement {
   }
 
   const submitPat = async (): Promise<void> => {
-    if (!patProvider || !patToken.trim()) return
+    const provider = patProvider ?? (activeTab === 'gitlab' && !account ? 'gitlab' : null)
+    if (!provider || !patToken.trim()) return
     setPatError(null)
     setConnecting(true)
     try {
       const res = await window.dh.cloudAuthConnectPat({
-        provider: patProvider,
+        provider,
         token: patToken.trim(),
       })
       assertCloudAuthOk(res)
@@ -240,11 +242,10 @@ export function CloudGitPage(): ReactElement {
     try {
       const data = CloudOauthClientsStoreSchema.parse({
         github_client_id: advGithub.trim() || undefined,
-        gitlab_client_id: advGitlab.trim() || undefined,
       })
       const res = await window.dh.storeSet({ key: 'cloud_oauth_clients', data })
       if (!res.ok) throw new Error(res.error ?? 'Could not save.')
-      setAdvMsg('Saved. Use Connect again to start device flow with these client IDs.')
+      setAdvMsg('Saved. Use Connect on the GitHub tab again to start device flow with this client ID.')
     } catch (e) {
       setAdvMsg(e instanceof Error ? e.message : String(e))
     } finally {
@@ -585,22 +586,30 @@ export function CloudGitPage(): ReactElement {
                 <h2 id={`cloud-git-hero-${activeTab}`} style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>
                   Connect {meta.label}
                 </h2>
-                <p className="hp-muted" style={{ margin: '12px 0 20px', fontSize: 14, lineHeight: 1.55, maxWidth: 520 }}>
-                  Sign in with device flow (browser) or paste a personal access token. Credentials stay on this machine
-                  and power HTTPS remotes on the Git VCS page.
-                </p>
-                {patProvider !== activeTab ? (
+                {activeTab === 'gitlab' ? (
+                  <p className="hp-muted" style={{ margin: '12px 0 20px', fontSize: 14, lineHeight: 1.55, maxWidth: 520 }}>
+                    Paste a <strong>personal access token</strong> from GitLab (Preferences → Access Tokens, or the same
+                    path on your self-managed instance). Include the <strong>api</strong> scope so merge requests and API
+                    actions work. Credentials stay on this machine and power HTTPS remotes on the Git VCS page.
+                  </p>
+                ) : (
+                  <p className="hp-muted" style={{ margin: '12px 0 20px', fontSize: 14, lineHeight: 1.55, maxWidth: 520 }}>
+                    Sign in with device flow (browser) or paste a personal access token. Credentials stay on this machine
+                    and power HTTPS remotes on the Git VCS page.
+                  </p>
+                )}
+                {!showPatForm ? (
                   <>
                     <button
                       type="button"
                       disabled={connecting}
-                      onClick={() => void startDeviceFlow(activeTab)}
+                      onClick={() => void startDeviceFlow('github')}
                       style={{
                         padding: '12px 22px',
                         borderRadius: 10,
                         border: 'none',
                         background: 'var(--cg-accent)',
-                        color: activeTab === 'github' ? '#0d1117' : '#1a0b05',
+                        color: '#0d1117',
                         fontWeight: 700,
                         fontSize: 14,
                         cursor: connecting ? 'wait' : 'pointer',
@@ -609,12 +618,6 @@ export function CloudGitPage(): ReactElement {
                     >
                       Connect {meta.label}
                     </button>
-                    {activeTab === 'gitlab' && (
-                      <p className="hp-muted" style={{ fontSize: 11, marginTop: 10, maxWidth: 320 }}>
-                        <span className="codicon codicon-info" style={{ fontSize: 12, marginRight: 4, color: 'var(--cg-accent)' }} />
-                        GitLab requires the <strong style={{ color: 'var(--cg-accent)' }}>'api'</strong> scope for Merge Request management.
-                      </p>
-                    )}
                     <button
                       type="button"
                       style={{
@@ -629,7 +632,7 @@ export function CloudGitPage(): ReactElement {
                         textDecoration: 'underline',
                       }}
                       onClick={() => {
-                        setPatProvider(activeTab)
+                        setPatProvider('github')
                         setPatError(null)
                       }}
                     >
@@ -687,17 +690,19 @@ export function CloudGitPage(): ReactElement {
                       >
                         Verify & save
                       </button>
-                      <button
-                        type="button"
-                        className="hp-btn"
-                        onClick={() => {
-                          setPatProvider(null)
-                          setPatToken('')
-                          setPatError(null)
-                        }}
-                      >
-                        Cancel
-                      </button>
+                      {patProvider !== null ? (
+                        <button
+                          type="button"
+                          className="hp-btn"
+                          onClick={() => {
+                            setPatProvider(null)
+                            setPatToken('')
+                            setPatError(null)
+                          }}
+                        >
+                          Cancel
+                        </button>
+                      ) : null}
                     </div>
                   </div>
                 )}
@@ -716,13 +721,13 @@ export function CloudGitPage(): ReactElement {
       <section style={{ marginTop: 8 }}>
         <details style={{ maxWidth: '100%' }}>
           <summary className="hp-muted" style={{ cursor: 'pointer', fontSize: 13, userSelect: 'none' }}>
-            Advanced: OAuth client IDs (device flow)
+            Advanced: GitHub OAuth client ID (device flow)
           </summary>
           <div className="hp-card" style={{ marginTop: 12, padding: 16 }}>
             <p className="hp-muted" style={{ margin: '0 0 14px', fontSize: 12, lineHeight: 1.5 }}>
-              Public OAuth application client IDs from your GitHub / GitLab developer settings. Stored locally in{' '}
-              <span className="mono">store.json</span>. Required for browser device flow unless the build already
-              embeds defaults.
+              Public OAuth application client ID from GitHub developer settings. Stored locally in{' '}
+              <span className="mono">store.json</span>. Used only for GitHub browser device flow when the build does not
+              embed a default client ID.
             </p>
             <label className="hp-muted" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
               GitHub client ID
@@ -736,22 +741,6 @@ export function CloudGitPage(): ReactElement {
               autoComplete="off"
               style={{ width: '100%', marginBottom: 12, boxSizing: 'border-box' }}
             />
-            <label className="hp-muted" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
-              GitLab client ID
-            </label>
-            <input
-              type="text"
-              className="hp-input"
-              value={advGitlab}
-              onChange={(e) => setAdvGitlab(e.target.value)}
-              placeholder="Application ID from GitLab OAuth app"
-              autoComplete="off"
-              style={{ width: '100%', marginBottom: 12, boxSizing: 'border-box' }}
-            />
-            <p className="hp-muted" style={{ fontSize: 11, margin: '-8px 0 14px', color: '#ffb74d' }}>
-              <span className="codicon codicon-warning" style={{ fontSize: 12, marginRight: 4 }} />
-              Note: If using a custom Client ID, your GitLab OAuth App must have the <strong style={{ color: '#ffcc80' }}>'api'</strong> scope enabled to create Merge Requests.
-            </p>
             <div className="hp-row-wrap" style={{ gap: 10, alignItems: 'center' }}>
               <button type="button" className="hp-btn hp-btn-primary" disabled={advSaving} onClick={() => void saveAdvOauth()}>
                 Save client IDs

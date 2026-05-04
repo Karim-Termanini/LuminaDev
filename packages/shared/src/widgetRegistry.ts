@@ -41,7 +41,7 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
   {
     typeId: 'link.cloud-git',
     title: 'Cloud Git',
-    description: 'Link GitHub or GitLab (device flow or PAT) for HTTPS remotes, PRs, issues, CI, and releases.',
+    description: 'Link GitHub (device flow or PAT) or GitLab (PAT) for HTTPS remotes, PRs, issues, CI, and releases.',
     minCols: 1,
     ipcHints: ['dh:cloud:auth:status', 'dh:cloud:auth:connect-start'],
   },

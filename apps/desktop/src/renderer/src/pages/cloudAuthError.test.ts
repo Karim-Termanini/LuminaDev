@@ -49,6 +49,18 @@ describe('humanizeCloudAuthError', () => {
     expect(msg).toContain('401')
   })
 
+  it('humanizes CLOUD_AUTH_DEVICE_FLOW_DISABLED', () => {
+    const msg = humanizeCloudAuthError(
+      new Error('[CLOUD_AUTH_DEVICE_FLOW_DISABLED] Use a PAT on the Cloud Git page.'),
+    )
+    expect(msg).toContain('Use a PAT')
+  })
+
+  it('humanizes CLOUD_GIT_PR_EXISTS', () => {
+    const msg = humanizeCloudAuthError(new Error('[CLOUD_GIT_PR_EXISTS] Already exists.'))
+    expect(msg).toMatch(/already exists/i)
+  })
+
   it('humanizes CLOUD_AUTH_STORE_* codes', () => {
     const msg = humanizeCloudAuthError(new Error('[CLOUD_AUTH_STORE_DECRYPT] Failed to decrypt credentials'))
     expect(msg).toContain('Could not read or save cloud account credentials')
