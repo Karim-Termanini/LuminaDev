@@ -168,16 +168,30 @@ export function GitVcsFlowHints({
         </li>
         {behindRemote ? (
           <li style={{ color: '#ffb74d' }}>
-            Behind by <strong>{behind}</strong> — Pull (or Integrate / Sync) before expecting Push to succeed.
+            Behind by <strong>{behind}</strong> — use <strong>Pull</strong> first. Use <strong>Integrate / Sync</strong>{' '}
+            only if you intentionally want to merge/rebase another ref instead of a straight pull.
           </li>
         ) : null}
         {aheadOfRemote && !behindRemote ? (
           <li>
-            Ahead by <strong>{ahead}</strong> — after commits are clean, Push sends them upstream.
+            Ahead by <strong>{ahead}</strong> — after commits are clean, <strong>Push</strong> sends them upstream;{' '}
+            <strong>New PR</strong> opens a review on the host.
+          </li>
+        ) : null}
+        {ahead != null && behind != null && ahead === 0 && behind === 0 ? (
+          <li style={{ color: 'var(--text-muted)' }}>
+            Even with your upstream — you do <strong>not</strong> need <strong>Integrate / Sync</strong> unless you are
+            merging another branch/ref (e.g. <span className="mono">origin/main</span>) into this one. To publish new
+            commits, use <strong>Push</strong>; to start review, use <strong>New PR</strong>.
           </li>
         ) : null}
         <li>
-          <strong>Integrate / Sync</strong> for merge/rebase flows; stash icon pops the latest stash.
+          <strong>Integrate / Sync</strong> opens a merge/rebase wizard: you enter the <strong>other</strong> branch or
+          remote ref (e.g. <span className="mono">main</span>, <span className="mono">origin/main</span>) to bring into
+          your current branch. It is <strong>not</strong> the same as Push or opening a PR.
+        </li>
+        <li>
+          Stash icon: pop the latest stash when you need it.
         </li>
       </Ol>
     )

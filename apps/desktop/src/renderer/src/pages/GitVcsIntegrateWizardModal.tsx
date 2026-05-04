@@ -89,13 +89,19 @@ export function GitVcsIntegrateWizardModal({
           {/* Target Selection */}
           <div>
             <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 8, display: 'block' }}>
-              Source Branch / Remote Ref
+              Branch or remote ref to merge/rebase from
             </label>
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 10px', lineHeight: 1.45 }}>
+              Enter the ref you want to fold <em>into</em> <span className="mono">{currentBranch || 'this branch'}</span>{' '}
+              (examples: <span className="mono">main</span>, <span className="mono">origin/main</span>,{' '}
+              <span className="mono">origin/develop</span>). If you only need to upload commits or open a PR, close
+              this dialog and use <strong>Push</strong> or <strong>New PR</strong> in the toolbar instead.
+            </p>
             <input
               className="hp-input"
               value={target}
               onChange={(e) => setTarget(e.target.value)}
-              placeholder="e.g. main or origin/main"
+              placeholder="main or origin/main"
               autoFocus
               disabled={busy}
               style={{ width: '100%', fontSize: 14 }}
