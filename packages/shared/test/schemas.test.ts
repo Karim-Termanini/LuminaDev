@@ -7,6 +7,7 @@ import {
   DockerLogsRequestSchema,
   GitCloneRequestSchema,
   GitConfigSetSchema,
+  GitVcsStageRequestSchema,
   HostExecRequestSchema,
   parseAppearance,
   parseOnLoginAutomation,
@@ -286,5 +287,21 @@ describe('schemas', () => {
     if (v.key !== 'cloud_oauth_clients') throw new Error('expected cloud_oauth_clients')
     expect(v.data.github_client_id).toBe('Iv1.test')
     expect(v.data.gitlab_client_id).toBe('glid')
+  })
+
+  it('accepts git VCS stage-all (empty filePaths)', () => {
+    expect(
+      GitVcsStageRequestSchema.parse({ repoPath: '/repo', filePaths: [], stageAll: true }),
+    ).toEqual({ repoPath: '/repo', filePaths: [], stageAll: true })
+  })
+
+  it('rejects git VCS stage-all with non-empty filePaths', () => {
+    expect(() =>
+      GitVcsStageRequestSchema.parse({ repoPath: '/repo', filePaths: ['a.ts'], stageAll: true }),
+    ).toThrow()
+  })
+
+  it('rejects git VCS stage paths with empty filePaths', () => {
+    expect(() => GitVcsStageRequestSchema.parse({ repoPath: '/repo', filePaths: [] })).toThrow()
   })
 })

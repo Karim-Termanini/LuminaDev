@@ -21,7 +21,10 @@ export type GitVcsFileListProps = {
   busy: boolean
   onSelect: (path: string, staged: boolean) => void
   onStage: (paths: string[]) => void
+  /** Stage every change Git sees (`git add -A`) — use for "Stage all" so the file list cannot omit paths. */
+  onStageEntireTree: () => void
   onUnstage: (paths: string[]) => void
+  onResolveConflicts?: () => void
 }
 
 function FileRow(props: {
@@ -135,7 +138,9 @@ export function GitVcsFileList({
   busy,
   onSelect,
   onStage,
+  onStageEntireTree,
   onUnstage,
+  onResolveConflicts,
 }: GitVcsFileListProps): ReactElement {
   const unstagedSorted = useMemo(
     () =>
@@ -196,7 +201,7 @@ export function GitVcsFileList({
               className="hp-btn"
               disabled={busy}
               style={{ fontSize: 12 }}
-              onClick={() => onStage(unstaged.map((f) => f.path))}
+              onClick={() => onStageEntireTree()}
             >
               Stage all
             </button>
@@ -208,14 +213,31 @@ export function GitVcsFileList({
             style={{
               fontSize: 11,
               color: '#ff8a80',
-              marginBottom: 6,
+              marginBottom: 10,
+              padding: '8px 12px',
+              background: 'rgba(255, 82, 82, 0.08)',
+              borderRadius: 8,
+              border: '1px solid rgba(255, 82, 82, 0.2)',
               display: 'flex',
               alignItems: 'center',
-              gap: 6,
+              justifyContent: 'space-between',
+              gap: 8,
             }}
           >
-            <span aria-hidden>⚠</span>
-            <span>Unresolved merge conflicts — fix in your editor, then stage (+) each file.</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span aria-hidden>⚠</span>
+              <span>Unresolved merge conflicts.</span>
+            </div>
+            {onResolveConflicts && (
+              <button
+                type="button"
+                className="hp-btn hp-btn-primary"
+                style={{ fontSize: 10, padding: '4px 8px', background: '#ff5252', borderColor: '#ff5252' }}
+                onClick={onResolveConflicts}
+              >
+                RESOLVE IN STUDIO
+              </button>
+            )}
           </div>
         ) : null}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
