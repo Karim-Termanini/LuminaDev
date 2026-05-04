@@ -1,11 +1,13 @@
 import type { CSSProperties, ReactElement } from 'react'
+import { useRef } from 'react'
 
 import { GIT_VCS_NEXT_ACTION_RING } from './gitVcsUiTokens'
 
 export type GitVcsCommitBarProps = {
   message: string
   onMessageChange: (v: string) => void
-  onCommit: () => void
+  /** Receives the live textarea value at click time (avoids stale React state during async commit). */
+  onCommit: (liveMessage: string) => void
   busy: boolean
   disabled: boolean
   /** Highlights message field or Commit to match workflow hints. */
@@ -32,6 +34,7 @@ export function GitVcsCommitBar({
   disabled,
   emphasizeCommit = null,
 }: GitVcsCommitBarProps): ReactElement {
+  const taRef = useRef<HTMLTextAreaElement>(null)
   const taStyle =
     emphasizeCommit === 'commit_message' ? { ...BASE_TEXTAREA, ...GIT_VCS_NEXT_ACTION_RING } : BASE_TEXTAREA
   const commitBtnStyle = emphasizeCommit === 'commit' ? GIT_VCS_NEXT_ACTION_RING : undefined
@@ -51,6 +54,7 @@ export function GitVcsCommitBar({
       </label>
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
         <textarea
+          ref={taRef}
           value={message}
           onChange={(e) => onMessageChange(e.target.value)}
           disabled={busy || disabled}
@@ -62,7 +66,7 @@ export function GitVcsCommitBar({
           type="button"
           className="hp-btn hp-btn-primary"
           disabled={busy || disabled || !message.trim()}
-          onClick={() => void onCommit()}
+          onClick={() => void onCommit(taRef.current?.value ?? message)}
           style={commitBtnStyle}
         >
           Commit
