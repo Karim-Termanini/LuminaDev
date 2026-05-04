@@ -672,5 +672,3 @@ export interface CloudGitGetPrChecksRequest {
   remote?: string
   reference: string // branch name or SHA
 }
-
-/** Check if the current workspace is a Git repository. */

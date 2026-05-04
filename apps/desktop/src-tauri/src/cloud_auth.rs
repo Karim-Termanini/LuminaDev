@@ -1057,6 +1057,7 @@ impl GitHubProvider {
         })
     }
 
+    /// Recent Actions workflow runs for a single `owner/repo` repository (github.com or GitHub Enterprise).
     pub async fn list_repo_pipelines(
         token: &str,
         hostname: &str,
@@ -1264,6 +1265,30 @@ impl GitHubProvider {
 pub struct GitLabProvider;
 
 impl GitLabProvider {
+    pub async fn device_auth_start(scopes: &[&str], client_id: &str) -> Result<DeviceAuthChallenge, String> {
+        if oauth_client_id_unconfigured(client_id) {
+            return Err(
+                "[CLOUD_AUTH_OAUTH_NOT_CONFIGURED] GitLab device flow needs a registered OAuth app (device grant enabled). Add the client ID under Cloud Git → Advanced (saved locally), set LUMINA_GITLAB_OAUTH_CLIENT_ID, compile with that var, replace GITLAB_OAUTH_CLIENT_ID in cloud_auth.rs, or use a personal access token."
+                    .to_string(),
+            );
+        }
+        let client = reqwest::Client::new();
+        let scope = scopes.join(" ");
+        let resp = client
+            .post("https://gitlab.com/oauth/authorize_device")
+            .header("Accept", "application/json")
+            .form(&[("client_id", client_id), ("scope", scope.as_str())])
+            .send()
+            .await
+            .map_err(|e| format!("[CLOUD_AUTH_NETWORK] GitLab device start: {}", e))?;
+        let status = resp.status();
+        let body: serde_json::Value = resp
+            .json()
+            .await
+            .map_err(|e| format!("[CLOUD_AUTH_NETWORK] GitLab device start parse: {}", e))?;
+        parse_device_authorize_body("GitLab", status, body, 300)
+    }
+
     pub async fn device_auth_poll(device_code: &str, client_id: &str) -> Result<PollResult, String> {
         let client = reqwest::Client::new();
         let resp = client
