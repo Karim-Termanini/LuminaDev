@@ -29,7 +29,6 @@ const statusStyles: Record<RouteStatus, { label: string; color: string; bg: stri
   partial: { label: 'PARTIAL', color: 'var(--yellow)', bg: 'rgba(255, 193, 7, 0.1)', border: 'rgba(255, 193, 7, 0.25)' },
   stub: { label: 'STUB', color: '#ff8a80', bg: 'rgba(255, 82, 82, 0.1)', border: 'rgba(255, 82, 82, 0.25)' },
 }
-
 export function AppShell({ children }: { children: ReactNode }): ReactElement {
   return (
     <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
