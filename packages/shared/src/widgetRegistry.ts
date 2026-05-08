@@ -61,6 +61,13 @@ export const WIDGET_DEFINITIONS: readonly WidgetDefinition[] = [
     ipcHints: [],
   },
   {
+    typeId: 'live.cloud-notifications',
+    title: 'Cloud Notifications',
+    description: 'Failed pipelines and open issues from connected GitHub / GitLab accounts.',
+    minCols: 2,
+    ipcHints: ['dh:cloud:auth:status', 'dh:cloud:git:pipelines', 'dh:cloud:git:issues'],
+  },
+  {
     typeId: 'guardian.summary',
     title: 'Guardian Status',
     description: 'High-level system health and maintenance summary.',

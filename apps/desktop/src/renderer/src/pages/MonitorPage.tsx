@@ -659,7 +659,7 @@ export function MonitorPage(): ReactElement {
                   <MonitorGitScoreTile title="Compatibility" score={gitCompatibilityScore(gitCfg)} subtitle="Line endings, prune" />
                 </div>
                 <Link
-                  to="/git-config"
+                  to="/git?tab=config"
                   className="hp-btn hp-btn-primary"
                   style={{
                     fontSize: 13,

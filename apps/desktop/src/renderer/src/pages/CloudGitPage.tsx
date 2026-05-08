@@ -49,7 +49,7 @@ export function CloudGitPage(): ReactElement {
   const parseTab = (raw: string | null): Provider => (raw === 'gitlab' ? 'gitlab' : 'github')
 
   const [accounts, setAccounts] = useState<ConnectedAccount[]>([])
-  const [activeTab, setActiveTab] = useState<Provider>(() => parseTab(searchParams.get('tab')))
+  const [activeTab, setActiveTab] = useState<Provider>(() => parseTab(searchParams.get('provider')))
   const [deviceFlow, setDeviceFlow] = useState<DeviceFlowState | null>(null)
   const [patProvider, setPatProvider] = useState<Provider | null>(null)
   const [patToken, setPatToken] = useState('')
@@ -97,15 +97,15 @@ export function CloudGitPage(): ReactElement {
   }, [deviceFlow])
 
   useEffect(() => {
-    const next = parseTab(searchParams.get('tab'))
+    const next = parseTab(searchParams.get('provider'))
     setActiveTab((cur) => (cur === next ? cur : next))
   }, [searchParams])
 
   useEffect(() => {
-    const q = parseTab(searchParams.get('tab'))
+    const q = parseTab(searchParams.get('provider'))
     if (q === activeTab) return
     const next = new URLSearchParams(searchParams)
-    next.set('tab', activeTab)
+    next.set('provider', activeTab)
     setSearchParams(next, { replace: true })
   }, [activeTab, searchParams, setSearchParams])
 
@@ -369,7 +369,7 @@ export function CloudGitPage(): ReactElement {
               onClick={() => {
                 setActiveTab(p)
                 const next = new URLSearchParams(searchParams)
-                next.set('tab', p)
+                next.set('provider', p)
                 setSearchParams(next, { replace: true })
               }}
               style={{

@@ -63,7 +63,7 @@ export function RecentReposWidget(props: { comfortable: boolean }): ReactElement
         </p>
       ) : rows.length === 0 ? (
         <p className="hp-muted" style={{ margin: 0, fontSize: fs(12), lineHeight: 1.45 }}>
-          Open a folder in <Link to="/git-vcs">Git VCS</Link> to populate recents.
+          Open a folder in <Link to="/git?tab=vcs">Git VCS</Link> to populate recents.
         </p>
       ) : (
         <ul style={{ margin: 0, paddingLeft: 18, fontSize: fs(12), lineHeight: 1.5 }}>
@@ -77,7 +77,7 @@ export function RecentReposWidget(props: { comfortable: boolean }): ReactElement
                 {row.dirty ? ` · ${row.dirty}` : ''}
               </div>
               <Link
-                to={`/git-vcs?repoPath=${encodeURIComponent(row.path)}`}
+                to={`/git?tab=vcs&repoPath=${encodeURIComponent(row.path)}`}
                 style={{
                   display: 'inline-block',
                   marginTop: 4,

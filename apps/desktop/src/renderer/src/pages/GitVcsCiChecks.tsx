@@ -148,7 +148,7 @@ export function GitVcsCiChecks({
               View on {provider === 'github' ? 'GitHub' : 'GitLab'}
             </a>
           )}
-          {prUrl && repoPath.trim() ? (
+          {prUrl && repoPath.trim() && provider === 'github' ? (
             <button
               type="button"
               className="hp-btn hp-btn-sm hp-btn-primary"
@@ -160,7 +160,7 @@ export function GitVcsCiChecks({
                     ? 'Fix failing checks before merging on the server.'
                     : stats.inProgress > 0
                       ? 'Wait for checks to finish.'
-                      : `Merge this ${provider === 'github' ? 'pull request' : 'merge request'} on ${provider === 'github' ? 'GitHub' : 'GitLab'} (requires permission).`
+                      : 'Merge this pull request on GitHub (requires permission).'
               }
               onClick={() => {
                 void (async () => {
@@ -193,8 +193,6 @@ export function GitVcsCiChecks({
                   <span className="codicon codicon-loading spin" style={{ marginRight: 6 }} aria-hidden />
                   Merging…
                 </>
-              ) : provider === 'gitlab' ? (
-                'Merge MR on GitLab'
               ) : (
                 'Merge PR on GitHub'
               )}

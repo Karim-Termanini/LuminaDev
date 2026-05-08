@@ -318,7 +318,7 @@ export function CloudGitActivityPanel({ provider, label }: { provider: Provider;
                     </span>
                     {localRepoPathFor(pr.repo) ? (
                       <Link
-                        to={`/git-vcs?repoPath=${encodeURIComponent(localRepoPathFor(pr.repo) ?? '')}`}
+                        to={`/git?tab=vcs&repoPath=${encodeURIComponent(localRepoPathFor(pr.repo) ?? '')}`}
                         className="mono"
                         style={{
                           marginLeft: 8,
@@ -438,7 +438,7 @@ export function CloudGitActivityPanel({ provider, label }: { provider: Provider;
                     </span>
                     {localRepoPathFor(pr.repo) ? (
                       <Link
-                        to={`/git-vcs?repoPath=${encodeURIComponent(localRepoPathFor(pr.repo) ?? '')}`}
+                        to={`/git?tab=vcs&repoPath=${encodeURIComponent(localRepoPathFor(pr.repo) ?? '')}`}
                         className="mono"
                         style={{
                           marginLeft: 8,
@@ -567,7 +567,7 @@ export function CloudGitActivityPanel({ provider, label }: { provider: Provider;
                     </span>
                     {localRepoPathFor(it.repo) ? (
                       <Link
-                        to={`/git-vcs?repoPath=${encodeURIComponent(localRepoPathFor(it.repo) ?? '')}`}
+                        to={`/git?tab=vcs&repoPath=${encodeURIComponent(localRepoPathFor(it.repo) ?? '')}`}
                         className="mono"
                         style={{
                           color: 'var(--cg-accent, var(--accent))',
@@ -694,7 +694,7 @@ export function CloudGitActivityPanel({ provider, label }: { provider: Provider;
                     </span>
                     {localRepoPathFor(p.repo) ? (
                       <Link
-                        to={`/git-vcs?repoPath=${encodeURIComponent(localRepoPathFor(p.repo) ?? '')}`}
+                        to={`/git?tab=vcs&repoPath=${encodeURIComponent(localRepoPathFor(p.repo) ?? '')}`}
                         className="mono"
                         style={{
                           color: 'var(--cg-accent, var(--accent))',
@@ -802,7 +802,7 @@ export function CloudGitActivityPanel({ provider, label }: { provider: Provider;
                     ) : null}
                     {localRepoPathFor(r.repo) ? (
                       <Link
-                        to={`/git-vcs?repoPath=${encodeURIComponent(localRepoPathFor(r.repo) ?? '')}`}
+                        to={`/git?tab=vcs&repoPath=${encodeURIComponent(localRepoPathFor(r.repo) ?? '')}`}
                         className="mono"
                         style={{
                           color: 'var(--cg-accent, var(--accent))',

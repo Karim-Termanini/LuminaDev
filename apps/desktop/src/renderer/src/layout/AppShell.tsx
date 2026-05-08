@@ -1,5 +1,4 @@
 import type { ReactElement, ReactNode } from 'react'
-import { useEffect, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 
 import { ActiveJobsStrip } from './ActiveJobsStrip'
@@ -16,10 +15,7 @@ const nav = [
   { to: '/system', label: 'Monitor', icon: 'pulse', status: 'live' as RouteStatus },
   { to: '/docker', label: 'Docker', icon: 'package', status: 'live' as RouteStatus },
   { to: '/ssh', label: 'SSH', icon: 'key', status: 'partial' as RouteStatus },
-  { to: '/git-config', label: 'Git Config', icon: 'git-branch', status: 'live' as RouteStatus },
-  { to: '/git-vcs', label: 'Git VCS', icon: 'source-control', status: 'partial' as RouteStatus },
-  { to: '/cloud-git', label: 'Cloud Git', icon: 'github', status: 'partial' as RouteStatus },
-  { to: '/registry', label: 'Registry', icon: 'package', status: 'partial' as RouteStatus },
+  { to: '/git', label: 'Developer Git', icon: 'git-branch', status: 'live' as RouteStatus },
   { to: '/profiles', label: 'Profiles', icon: 'account', status: 'partial' as RouteStatus },
   { to: '/terminal', label: 'Terminal', icon: 'terminal', status: 'live' as RouteStatus },
   { to: '/runtimes', label: 'Runtimes', icon: 'zap', status: 'live' as RouteStatus },
@@ -33,38 +29,7 @@ const statusStyles: Record<RouteStatus, { label: string; color: string; bg: stri
   partial: { label: 'PARTIAL', color: 'var(--yellow)', bg: 'rgba(255, 193, 7, 0.1)', border: 'rgba(255, 193, 7, 0.25)' },
   stub: { label: 'STUB', color: '#ff8a80', bg: 'rgba(255, 82, 82, 0.1)', border: 'rgba(255, 82, 82, 0.25)' },
 }
-const CLOUD_GIT_TAB_EVENT = 'cloud-git:tab-changed'
-
-function resolveCloudGitTab(): 'github' | 'gitlab' {
-  try {
-    const raw = window.localStorage.getItem('cloud_git_last_tab')
-    return raw === 'gitlab' ? 'gitlab' : 'github'
-  } catch {
-    return 'github'
-  }
-}
-
 export function AppShell({ children }: { children: ReactNode }): ReactElement {
-  const [cloudGitTab, setCloudGitTab] = useState<'github' | 'gitlab'>(() => resolveCloudGitTab())
-  const cloudGitTarget = `/cloud-git?tab=${cloudGitTab}`
-  const cloudGitProviderLabel = cloudGitTab === 'gitlab' ? 'GitLab' : 'GitHub'
-
-  useEffect(() => {
-    const onTabChanged = (e: Event): void => {
-      const maybe = e as CustomEvent<{ tab?: string }>
-      setCloudGitTab(maybe.detail?.tab === 'gitlab' ? 'gitlab' : 'github')
-    }
-    const onStorage = (e: StorageEvent): void => {
-      if (e.key !== 'cloud_git_last_tab') return
-      setCloudGitTab(e.newValue === 'gitlab' ? 'gitlab' : 'github')
-    }
-    window.addEventListener(CLOUD_GIT_TAB_EVENT, onTabChanged as EventListener)
-    window.addEventListener('storage', onStorage)
-    return () => {
-      window.removeEventListener(CLOUD_GIT_TAB_EVENT, onTabChanged as EventListener)
-      window.removeEventListener('storage', onStorage)
-    }
-  }, [])
   return (
     <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
       <aside
@@ -95,12 +60,7 @@ export function AppShell({ children }: { children: ReactNode }): ReactElement {
           {nav.map((item) => (
             <NavLink
               key={item.to}
-              to={item.to === '/cloud-git' ? cloudGitTarget : item.to}
-              title={
-                item.to === '/cloud-git'
-                  ? `Opens Cloud Git (${cloudGitProviderLabel} context). Last tab: ${cloudGitTab}.`
-                  : undefined
-              }
+              to={item.to}
               style={({ isActive }) => ({
                 display: 'flex',
                 alignItems: 'center',
@@ -116,24 +76,6 @@ export function AppShell({ children }: { children: ReactNode }): ReactElement {
             >
               <span className={`codicon codicon-${item.icon}`} aria-hidden />
               <span style={{ flex: 1 }}>{item.label}</span>
-              {item.to === '/cloud-git' ? (
-                <span
-                  className="mono"
-                  title={`Last Cloud Git tab: ${cloudGitProviderLabel} (${cloudGitTab})`}
-                  style={{
-                    fontSize: 9,
-                    fontWeight: 700,
-                    letterSpacing: '0.04em',
-                    color: cloudGitTab === 'gitlab' ? '#fc6d26' : '#58a6ff',
-                    border: `1px solid ${cloudGitTab === 'gitlab' ? 'rgba(252,109,38,0.35)' : 'rgba(88,166,255,0.35)'}`,
-                    background: cloudGitTab === 'gitlab' ? 'rgba(252,109,38,0.1)' : 'rgba(88,166,255,0.1)',
-                    borderRadius: 999,
-                    padding: '2px 6px',
-                  }}
-                >
-                  {cloudGitTab === 'gitlab' ? 'GL' : 'GH'}
-                </span>
-              ) : null}
               <span
                 className="mono"
                 title={`Route status: ${item.status}`}

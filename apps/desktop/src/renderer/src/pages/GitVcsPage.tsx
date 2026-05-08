@@ -110,7 +110,7 @@ export function GitVcsPage(): ReactElement {
     (provider: 'github' | 'gitlab') => {
       const candidates = gitRemotes.filter((r) => classifyGitRemoteUrl(r.fetchUrl) === provider)
       if (candidates.length === 0) {
-        void navigate(`/cloud-git?tab=${provider}`)
+        void navigate(`/git?tab=cloud&provider=${provider}`)
         return
       }
       const pick = candidates.find((r) => r.name === 'origin') ?? candidates[0]
@@ -1028,7 +1028,7 @@ export function GitVcsPage(): ReactElement {
         <h1 style={{ margin: 0, fontSize: 24, fontWeight: 700 }}>Git VCS</h1>
         <p style={{ color: 'var(--text-muted)', marginTop: 6, maxWidth: 720, lineHeight: 1.5 }}>
           Status, diffs, stage, commit, fetch, pull, push, merge, rebase, and stash pop. HTTPS remotes use credentials from{' '}
-          <Link to="/cloud-git?tab=github" style={{ color: 'var(--cg-accent, var(--accent))' }}>
+          <Link to="/git?tab=cloud&provider=github" style={{ color: 'var(--cg-accent, var(--accent))' }}>
             Cloud Git
           </Link>
           .
@@ -1190,7 +1190,7 @@ export function GitVcsPage(): ReactElement {
                   </button>
                 ) : null}
                 <Link
-                  to={`/cloud-git?tab=${cloudGitTabForRemote}`}
+                  to={`/git?tab=cloud&provider=${cloudGitTabForRemote}`}
                   className="hp-btn"
                   style={{ textDecoration: 'none' }}
                 >
@@ -1208,7 +1208,7 @@ export function GitVcsPage(): ReactElement {
             </div>
           ) : null}
           {authBanner ? (
-            <Link to="/cloud-git?tab=github" className="hp-btn hp-btn-primary" style={{ textDecoration: 'none' }}>
+            <Link to="/git?tab=cloud&provider=github" className="hp-btn hp-btn-primary" style={{ textDecoration: 'none' }}>
               Connect in Cloud Git
             </Link>
           ) : null}

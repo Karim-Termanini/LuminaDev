@@ -5,7 +5,7 @@ import {
   parseStoredActiveProfile,
 } from '@linux-dev-home/shared'
 import type { ReactElement } from 'react'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { humanizeDashboardError } from './dashboardError'
 import { humanizeDockerError } from './dockerError'
@@ -69,6 +69,21 @@ export function DashboardMainPage(): ReactElement {
   }
 
   const m = snap?.metrics
+  const ramUsedPct = useMemo(() => {
+    if (!m || m.totalMemMb <= 0) return 0
+    return Math.min(100, Math.max(0, ((m.totalMemMb - m.freeMemMb) / m.totalMemMb) * 100))
+  }, [m])
+  const diskUsedPct = useMemo(() => {
+    if (!m || m.diskTotalGb <= 0) return 0
+    return Math.min(100, Math.max(0, ((m.diskTotalGb - m.diskFreeGb) / m.diskTotalGb) * 100))
+  }, [m])
+  const dockerFleet = useMemo(() => {
+    if (!docker || !docker.ok) return null
+    const total = docker.rows.length
+    const running = docker.rows.filter((r) => r.state === 'running').length
+    const pct = total > 0 ? (running / total) * 100 : 0
+    return { total, running, pct, barColor: dockerFleetBarColor(running, total) }
+  }, [docker])
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -241,37 +256,65 @@ export function DashboardMainPage(): ReactElement {
           display: 'flex',
           flexWrap: 'wrap',
           gap: 24,
-          alignItems: 'center',
+          alignItems: 'stretch',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span className="codicon codicon-package" style={{ color: 'var(--text-muted)' }} aria-hidden />
-          <span style={{ fontSize: 13 }}>
-            {!docker ? '—' : !docker.ok ? (
-              <span style={{ color: 'var(--orange)' }}>Docker offline</span>
-            ) : (
-              <><strong>{docker.rows.filter(r => r.state === 'running').length}</strong> running / {docker.rows.length} total</>
-            )}
-          </span>
-          <Link to="/docker" style={{ fontSize: 12, color: 'var(--accent)', marginLeft: 4 }}>Open Docker →</Link>
-        </div>
+        {!docker ? (
+          <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 6, minWidth: 100 }}>
+            <span className="codicon codicon-package" style={{ color: 'var(--text-muted)' }} aria-hidden title="Docker" />
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>—</span>
+          </div>
+        ) : !docker.ok ? (
+          <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 8, minWidth: 120 }}>
+            <span className="codicon codicon-package" style={{ color: 'var(--orange)' }} aria-hidden />
+            <span style={{ fontSize: 12, color: 'var(--orange)' }}>{humanizeDockerError(docker.error)}</span>
+            <Link to="/docker" style={{ fontSize: 12, color: 'var(--accent)' }}>
+              Open Docker →
+            </Link>
+          </div>
+        ) : dockerFleet ? (
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 6,
+              minWidth: 120,
+              flex: '1 1 140px',
+              maxWidth: 240,
+            }}
+          >
+            <DashboardMetricBar
+              label="Docker"
+              valueText={`${dockerFleet.running} / ${dockerFleet.total} running`}
+              percent={dockerFleet.pct}
+              barColor={dockerFleet.barColor}
+            />
+            <Link to="/docker" style={{ fontSize: 12, color: 'var(--accent)' }}>
+              Open Docker →
+            </Link>
+          </div>
+        ) : null}
         {m ? (
           <>
-            <div style={{ fontSize: 13 }}>
-              <span style={{ color: 'var(--text-muted)' }}>CPU </span>
-              <strong style={{ color: m.cpuUsagePercent > 85 ? 'var(--red)' : m.cpuUsagePercent > 60 ? 'var(--yellow)' : 'var(--green)' }}>
-                {m.cpuUsagePercent.toFixed(0)}%
-              </strong>
-            </div>
-            <div style={{ fontSize: 13 }}>
-              <span style={{ color: 'var(--text-muted)' }}>RAM </span>
-              <strong>{((m.totalMemMb - m.freeMemMb) / 1024).toFixed(1)} / {(m.totalMemMb / 1024).toFixed(1)} GB</strong>
-            </div>
-            <div style={{ fontSize: 13 }}>
-              <span style={{ color: 'var(--text-muted)' }}>Disk </span>
-              <strong>{m.diskFreeGb} GB free</strong>
-            </div>
-            <Link to="/system" style={{ fontSize: 12, color: 'var(--accent)' }}>Full Monitor →</Link>
+            <DashboardMetricBar
+              label="CPU"
+              valueText={`${m.cpuUsagePercent.toFixed(0)}%`}
+              percent={m.cpuUsagePercent}
+              subline={m.cpuModel ? truncateMiddle(m.cpuModel, 36) : undefined}
+            />
+            <DashboardMetricBar
+              label="RAM"
+              valueText={`${((m.totalMemMb - m.freeMemMb) / 1024).toFixed(1)} / ${(m.totalMemMb / 1024).toFixed(1)} GB`}
+              percent={ramUsedPct}
+            />
+            <DashboardMetricBar
+              label="Disk"
+              valueText={`${m.diskFreeGb.toFixed(0)} GB free`}
+              percent={diskUsedPct}
+            />
+            <Link to="/system" style={{ fontSize: 12, color: 'var(--accent)', alignSelf: 'center' }}>
+              Full Monitor →
+            </Link>
           </>
         ) : metricsError ? (
           <span style={{ fontSize: 12, color: 'var(--orange)' }}>{metricsError}</span>
@@ -282,6 +325,98 @@ export function DashboardMainPage(): ReactElement {
     </div>
   )
 
+}
+
+/** Horizontal utilization bar + label (dashboard metrics strip). */
+function DashboardMetricBar(props: {
+  label: string
+  valueText: string
+  percent: number
+  subline?: string
+  /** When set, bar and value color ignore utilization thresholds (e.g. Docker fleet mix). */
+  barColor?: string
+}): ReactElement {
+  const pct = Number.isFinite(props.percent) ? Math.min(100, Math.max(0, props.percent)) : 0
+  const tone = props.barColor ?? utilizationTone(pct)
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 4,
+        minWidth: 120,
+        flex: '1 1 140px',
+        maxWidth: 240,
+      }}
+      role="group"
+      aria-label={`${props.label} utilization`}
+    >
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'baseline',
+          gap: 8,
+          flexWrap: 'wrap',
+        }}
+      >
+        <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>{props.label}</span>
+        <strong style={{ fontSize: 13, color: tone }}>{props.valueText}</strong>
+      </div>
+      <div
+        role="progressbar"
+        aria-valuenow={Math.round(pct)}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-label={`${props.label} ${pct.toFixed(0)} percent`}
+        style={{
+          height: 6,
+          borderRadius: 4,
+          background: 'color-mix(in srgb, var(--border) 80%, transparent)',
+          overflow: 'hidden',
+        }}
+      >
+        <div
+          style={{
+            width: `${pct}%`,
+            height: '100%',
+            borderRadius: 4,
+            background: tone,
+            transition: 'width 0.35s ease-out',
+          }}
+        />
+      </div>
+      {props.subline ? (
+        <span
+          className="mono"
+          style={{ fontSize: 10, color: 'var(--text-muted)', lineHeight: 1.25, wordBreak: 'break-word' }}
+        >
+          {props.subline}
+        </span>
+      ) : null}
+    </div>
+  )
+}
+
+function utilizationTone(percent: number): string {
+  if (percent > 85) return 'var(--red)'
+  if (percent > 60) return 'var(--yellow)'
+  return 'var(--green)'
+}
+
+function dockerFleetBarColor(running: number, total: number): string {
+  if (total === 0) return 'var(--text-muted)'
+  if (running === 0) return 'var(--yellow)'
+  if (running < total) return 'var(--accent)'
+  return 'var(--green)'
+}
+
+function truncateMiddle(s: string, max: number): string {
+  if (s.length <= max) return s
+  const keep = max - 3
+  const head = Math.ceil(keep / 2)
+  const tail = Math.floor(keep / 2)
+  return `${s.slice(0, head)}…${s.slice(s.length - tail)}`
 }
 
 function ProfileCard(props: {
