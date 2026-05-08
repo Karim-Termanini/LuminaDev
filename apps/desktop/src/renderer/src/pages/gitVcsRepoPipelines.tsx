@@ -137,7 +137,7 @@ export function GitVcsRepoPipelines({
           <div style={{ fontSize: 15, fontWeight: 650, color: 'var(--text)', lineHeight: 1.3 }}>Pipelines</div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.45, marginTop: 4 }}>
             Latest runs for <span className="mono">{remoteName}</span> via{' '}
-            <Link to={`/cloud-git?tab=${provider}`} style={{ color: 'var(--cg-accent, var(--accent))' }}>
+            <Link to={`/git?tab=cloud&provider=${provider}`} style={{ color: 'var(--cg-accent, var(--accent))' }}>
               Cloud Git
             </Link>
             .

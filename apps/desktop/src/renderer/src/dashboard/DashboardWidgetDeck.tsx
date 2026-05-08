@@ -3,6 +3,7 @@ import { getWidgetDefinition } from '@linux-dev-home/shared'
 import type { ReactElement } from 'react'
 import { Link } from 'react-router-dom'
 
+import { CloudNotificationsWidget } from './CloudNotificationsWidget'
 import { RecentReposWidget } from './RecentReposWidget'
 
 export function DashboardWidgetDeck(props: {
@@ -139,13 +140,16 @@ function WidgetTile(props: {
       break
     case 'link.cloud-git':
       body = (
-        <Link to="/cloud-git?tab=github" style={{ color: 'var(--accent)', fontWeight: 600, fontSize: fs(13) }}>
+        <Link to="/git?tab=cloud&provider=github" style={{ color: 'var(--accent)', fontWeight: 600, fontSize: fs(13) }}>
           Open Cloud Git →
         </Link>
       )
       break
     case 'live.git-recents':
       body = <RecentReposWidget comfortable={c} />
+      break
+    case 'live.cloud-notifications':
+      body = <CloudNotificationsWidget comfortable={c} />
       break
     case 'static.docker-permission-hint':
       body = (

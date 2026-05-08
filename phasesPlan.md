@@ -336,25 +336,25 @@ Missing: real dep graph (`removableDeps` always empty), Ruby slow on Fedora.
 
 ---
 
-## Phase 12 — Cloud Git (GitHub / GitLab) 🔄 IN PROGRESS (auth layer shipped)
+## Phase 12 — Cloud Git (GitHub / GitLab) ✅ DONE
 
 This phase turns the app into a true daily driver for software engineers managing repositories and cloud source control platforms.
 
-- **Authentication** (shipped): Encrypted store for tokens; device flow + PAT; optional OAuth client IDs via **Cloud Git → Advanced** / env / compile-time; dashboard **Cloud Git** link widget (`link.cloud-git`).
-- **Interactive Version Control (Smart Workflow)**: Visual-first implementation following the "Microsoft Philosophy" (Zero Terminal).
-    - **Smart Push/Sync**: Instead of simple commands, the app implements a "Proactive Guardian". It fetches remote status before pushing. If the branch is protected or "Local is behind", it guides the user before side effects. *(v0: fetch-before-push, `behind > 0` blocks push with notice; protected-branch host messages → `[GIT_VCS_PROTECTED_BRANCH]` + Cloud Git link; **Copy raw error** on the panel. **Still:** branch rename + PR/MR wizard.)*
-  - **Integration & Resolve**:
-    - **Integrate Bar**: Guided UI for Merge, Rebase, and Stash (Fast-forward defaults).
-    - **Conflict Resolution Studio**: A dedicated 3-way merge view (Local vs Incoming vs Result) with "Accept Current", "Accept Incoming", and "Accept Both" buttons. No manual text editing required for conflicts.
-    - **State Management**: Automatic handling of `MERGING` and `REBASING` states with "Continue" or "Abort" actions. *(v0: `dh:git:vcs:status` exposes `gitOperation` + `conflictFileCount`; `/git-vcs` shows a guidance banner.)*
-- **Cloud Dashboards (API Integration)**:
-  - **Pull Requests / Merge Requests**:
-    - **Cloud Awareness**: Protected-branch push failures use a humanized code + guidance + Cloud Git entry point (see `docs/SMART_FLOW_VCS.md`). **Still to do:** PR/MR creation wizard + suggested new branch name after rename/checkout.
-    - **PR/MR Wizard**: Create new PRs/MRs directly from the app. It auto-fills titles from commit history and allows choosing target branches via a visual picker. *(Not shipped.)*
-  - **Issues Tracking**: List open issues assigned to the user across repositories.
-  - **CI/CD Pipelines**: Real-time status of GitHub Actions and GitLab CI/CD pipelines (Success, Failure, In Progress) for the active local repo.
-  - **Releases & Tags**: Overview of the latest releases.
-- **Repository Widgets**: A dedicated dashboard widget displaying a summary of all active local repositories (status, uncommitted changes, behind/ahead commits) and another widget for cloud notifications (Mentions, Failed Pipelines).
+- **Authentication** ✅: Encrypted store for tokens; device flow + PAT; optional OAuth client IDs via **Cloud Git → Advanced** / env / compile-time; dashboard **Cloud Git** link widget (`link.cloud-git`). Device-flow failure now maps to `[CLOUD_AUTH_DEVICE_POLL_REJECTED]` with actionable guidance.
+- **Interactive Version Control (Smart Workflow)** ✅:
+    - **Smart Push/Sync**: Fetch-before-push; `behind > 0` blocks push with notice; protected-branch failures → `[GIT_VCS_PROTECTED_BRANCH]` + Cloud Git link; **Copy raw error** on panel.
+    - **Branch rename after protected-branch push**: Suggests a new branch name, creates + pushes it, then opens PR/MR wizard automatically.
+    - **Integrate Bar**: Guided UI for Merge, Rebase, and Stash (fast-forward defaults).
+    - **Conflict Resolution Studio**: 3-way merge view (Local / Incoming / Result) with Accept Current, Accept Incoming, Accept Both. No manual text editing required.
+    - **State Management**: Automatic handling of `MERGING` / `REBASING` states with Continue or Abort actions.
+- **Cloud Dashboards (API Integration)** ✅:
+  - **PR/MR Wizard**: Create PRs/MRs directly from the app. Auto-fills title from branch name, visual branch picker, opens after protected-branch bypass flow. GitLab merge button removed from CI panel (policy always blocks it); "View on GitLab" link used instead.
+  - **CI/CD Pipelines**: `GitVcsCiChecks` + `gitVcsRepoPipelines` — real-time status (GitHub Actions + GitLab CI) with 30s polling. GitHub-only server-side merge button.
+  - **Issues Tracking**: Open issues across repos via `CloudGitActivityPanel`.
+  - **Releases & Tags**: Latest releases per provider via `CloudGitActivityPanel`.
+- **Dashboard Widgets** ✅:
+  - `live.git-recents`: Recent local repos — branch, dirty files, ahead/behind counts.
+  - `live.cloud-notifications` *(new)*: Failed pipelines + open issues from all connected GitHub/GitLab accounts. Registered in widget registry + `DashboardWidgetDeck`.
 
 ---
 
@@ -449,7 +449,7 @@ Full preparation for Flathub submission and official v1.0 stability.
 ✅  Phase 11 — Wizard (step + rich field resume in `wizard_state`)
 🔄  Phase 8  — Settings (hub: accent + SSH overview + read-only hosts/env; editors / profile env TBD)
 ✅  Phase 13 — Advanced CI & Environment Hardening
-🔄  Phase 12 — Cloud Git (Auth specs + VCS UI design in progress)
+✅  Phase 12 — Cloud Git (fully shipped; /git unified page)
 📋  Phase 16 — System Readiness Wizard (Pre-Requisites screen)
 📋  Phase 15 — Theme Rollout (System-wide pilot)
 📋  Phase 10 — Extensions (Plugin model v0, Dev API)

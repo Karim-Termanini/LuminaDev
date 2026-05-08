@@ -9,11 +9,8 @@ import { DashboardLogsPage } from './pages/DashboardLogsPage'
 import { DashboardMainPage } from './pages/DashboardMainPage'
 import { DashboardWidgetsPage } from './pages/DashboardWidgetsPage'
 import { DockerPage } from './pages/DockerPage'
-import { CloudGitPage } from './pages/CloudGitPage'
-import { GitConfigPage } from './pages/GitConfigPage'
-import { GitVcsPage } from './pages/GitVcsPage'
+import { DeveloperGitPage } from './pages/DeveloperGitPage'
 import { ProfilesPage } from './pages/ProfilesPage'
-import { RegistryPage } from './pages/RegistryPage'
 import { MonitorPage } from './pages/MonitorPage'
 import { SshPage } from './pages/SshPage'
 import { TerminalPage } from './pages/TerminalPage'
@@ -70,10 +67,12 @@ export default function App(): ReactElement | null {
         <Route path="/system" element={<MonitorPage />} />
         <Route path="/docker" element={<DockerPage />} />
         <Route path="/ssh" element={<SshPage />} />
-        <Route path="/git-config" element={<GitConfigPage />} />
-        <Route path="/git-vcs" element={<GitVcsPage />} />
-        <Route path="/cloud-git" element={<CloudGitPage />} />
-        <Route path="/registry" element={<RegistryPage />} />
+        <Route path="/git" element={<DeveloperGitPage />} />
+        {/* Legacy redirects */}
+        <Route path="/git-config" element={<Navigate to="/git?tab=config" replace />} />
+        <Route path="/git-vcs" element={<Navigate to="/git?tab=vcs" replace />} />
+        <Route path="/cloud-git" element={<Navigate to="/git?tab=cloud" replace />} />
+        <Route path="/registry" element={<Navigate to="/git?tab=vcs" replace />} />
         <Route path="/profiles" element={<ProfilesPage />} />
         <Route path="/terminal" element={<TerminalPage />} />
         <Route path="/runtimes" element={<RuntimesPage />} />

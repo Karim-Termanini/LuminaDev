@@ -128,7 +128,7 @@ function ProviderCard(props: {
           <span style={{ fontWeight: 700, fontSize: 15, letterSpacing: 0.02 }}>{title}</span>
         </div>
         <Link
-          to={`/cloud-git?tab=${provider}`}
+          to={`/git?tab=cloud&provider=${provider}`}
           className="mono"
           onClick={(e) => e.stopPropagation()}
           style={{ fontSize: 11, color: 'var(--cg-accent, var(--accent))', textDecoration: 'none', flexShrink: 0 }}
