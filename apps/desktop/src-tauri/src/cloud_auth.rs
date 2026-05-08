@@ -671,13 +671,30 @@ impl GitHubProvider {
                 avatar_url: profile.avatar_url,
             });
         }
-        match body["error"].as_str() {
+        let err = body.get("error").and_then(|v| v.as_str());
+        let desc = body
+            .get("error_description")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .unwrap_or("");
+        match err {
             Some("authorization_pending") | Some("slow_down") => Ok(PollResult::Pending),
             Some("expired_token") => Ok(PollResult::Expired),
             Some("access_denied") => Ok(PollResult::Denied),
-            other => Err(format!(
-                "[CLOUD_AUTH_NETWORK] GitHub poll unexpected error: {:?}",
-                other
+            Some(e) => Err(format!(
+                "[CLOUD_AUTH_DEVICE_POLL_REJECTED] GitHub token step returned error `{}`. {}",
+                e,
+                if desc.is_empty() {
+                    "If this mentions the client or redirect URL, create a GitHub OAuth App (Device flow) and set its Client ID under Cloud Git → Advanced, or use a personal access token instead."
+                        .to_string()
+                } else {
+                    desc.to_string()
+                }
+            )),
+            None => Err(format!(
+                "[CLOUD_AUTH_DEVICE_POLL_REJECTED] GitHub returned JSON without access_token or error field. {}",
+                body.to_string().chars().take(240).collect::<String>()
             )),
         }
     }
