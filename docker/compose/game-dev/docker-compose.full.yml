@@ -1,0 +1,16 @@
+# LUMINA_DEV_COMPOSE_FULL=1 overlay — game dev stack
+name: lumina-game-dev
+
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "16379:6379"
+    restart: unless-stopped
+
+  game-server:
+    image: alpine:latest
+    command: ["sleep", "infinity"]
+    ports:
+      - "17777:7777"
+    restart: unless-stopped

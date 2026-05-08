@@ -273,6 +273,19 @@ export function SettingsPage(): ReactElement {
   const [hostsPreview, setHostsPreview] = useState<string | null>(null)
   const [hostsErr, setHostsErr] = useState<string | null>(null)
   const [hostsBusy, setHostsBusy] = useState(false)
+  const [hostsEditing, setHostsEditing] = useState(false)
+  const [hostsDraft, setHostsDraft] = useState('')
+  const [hostsSaving, setHostsSaving] = useState(false)
+  const [hostsSaveMsg, setHostsSaveMsg] = useState<string | null>(null)
+
+  const [profileEnvContent, setProfileEnvContent] = useState<string | null>(null)
+  const [profileEnvPath, setProfileEnvPath] = useState('')
+  const [profileEnvBusy, setProfileEnvBusy] = useState(false)
+  const [profileEnvErr, setProfileEnvErr] = useState<string | null>(null)
+  const [profileEnvNewKey, setProfileEnvNewKey] = useState('')
+  const [profileEnvNewVal, setProfileEnvNewVal] = useState('')
+  const [profileEnvDiff, setProfileEnvDiff] = useState<{ key: string; value: string; action: 'set' | 'remove' } | null>(null)
+  const [profileEnvSaving, setProfileEnvSaving] = useState(false)
 
   const [envPreview, setEnvPreview] = useState<string | null>(null)
   const [envErr, setEnvErr] = useState<string | null>(null)
@@ -402,6 +415,83 @@ export function SettingsPage(): ReactElement {
       setEnvBusy(false)
     }
   }
+
+  async function saveHosts(): Promise<void> {
+    setHostsSaving(true)
+    setHostsSaveMsg(null)
+    try {
+      const res = await window.dh.hostExec({ command: 'settings_write_hosts', content: hostsDraft })
+      if ((res as { ok: boolean }).ok) {
+        setHostsSaveMsg('Saved.')
+        setHostsPreview(hostsDraft)
+        setHostsEditing(false)
+      } else {
+        setHostsSaveMsg((res as { error?: string }).error ?? 'Save failed.')
+      }
+    } catch (e) {
+      setHostsSaveMsg(e instanceof Error ? e.message : 'Save failed.')
+    } finally {
+      setHostsSaving(false)
+    }
+  }
+
+  async function loadProfileEnv(): Promise<void> {
+    setProfileEnvBusy(true)
+    setProfileEnvErr(null)
+    try {
+      const res = await window.dh.hostExec({ command: 'settings_read_profile_env' }) as { ok: boolean; result?: string; path?: string; error?: string }
+      if (res.ok) {
+        setProfileEnvContent(res.result ?? '')
+        setProfileEnvPath(res.path ?? '~/.profile')
+      } else {
+        setProfileEnvErr(res.error ?? 'Failed to read profile.')
+      }
+    } catch (e) {
+      setProfileEnvErr(e instanceof Error ? e.message : 'Failed to read profile.')
+    } finally {
+      setProfileEnvBusy(false)
+    }
+  }
+
+  async function applyProfileEnvDiff(): Promise<void> {
+    if (!profileEnvDiff) return
+    setProfileEnvSaving(true)
+    try {
+      const res = await window.dh.hostExec({
+        command: 'settings_write_profile_env',
+        action: profileEnvDiff.action,
+        key: profileEnvDiff.key,
+        value: profileEnvDiff.value,
+      }) as { ok: boolean; error?: string }
+      if (res.ok) {
+        setProfileEnvDiff(null)
+        setProfileEnvNewKey('')
+        setProfileEnvNewVal('')
+        await loadProfileEnv()
+      } else {
+        setProfileEnvErr(res.error ?? 'Write failed.')
+        setProfileEnvDiff(null)
+      }
+    } catch (e) {
+      setProfileEnvErr(e instanceof Error ? e.message : 'Write failed.')
+    } finally {
+      setProfileEnvSaving(false)
+    }
+  }
+
+  const parsedProfileExports = useMemo(() => {
+    if (!profileEnvContent) return []
+    return profileEnvContent.split('\n')
+          .map((l) => l.trim())
+          .filter((l) => l.startsWith('export '))
+          .map((l) => {
+            const rest = l.slice('export '.length)
+            const eq = rest.indexOf('=')
+            if (eq < 0) return null
+            return { key: rest.slice(0, eq), value: rest.slice(eq + 1).replace(/^["']|["']$/g, '') }
+          })
+          .filter(Boolean) as { key: string; value: string }[]
+  }, [profileEnvContent])
 
   async function saveAccent(): Promise<void> {
     setAccentBusy(true)
@@ -987,9 +1077,154 @@ export function SettingsPage(): ReactElement {
           </div>
 
           {navId === 'system' ? (
-            <p className="hp-muted" style={{ marginTop: 18, fontSize: 12, textAlign: 'right' }}>
-              Profile-scoped env files and hosts editing are not available yet.
-            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 28, marginTop: 28 }}>
+              {/* Hosts Editor */}
+              <section style={{ borderTop: '1px solid var(--border)', paddingTop: 24 }}>
+                <div className="hp-row-wrap" style={{ justifyContent: 'space-between', marginBottom: 10, gap: 12 }}>
+                  <div>
+                    <div style={{ fontWeight: 650, fontSize: 14 }}>/etc/hosts editor</div>
+                    <p className="hp-muted" style={{ margin: '6px 0 0', maxWidth: 520, fontSize: 13 }}>
+                      Edit requires sudo. Changes take effect immediately.
+                    </p>
+                  </div>
+                  {!hostsEditing ? (
+                    <button
+                      type="button"
+                      className="hp-btn"
+                      disabled={hostsBusy}
+                      onClick={() => {
+                        setHostsDraft(hostsPreview ?? '')
+                        setHostsSaveMsg(null)
+                        setHostsEditing(true)
+                      }}
+                    >
+                      <span className="codicon codicon-edit" aria-hidden /> Edit
+                    </button>
+                  ) : (
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button type="button" className="hp-btn" onClick={() => setHostsEditing(false)} disabled={hostsSaving}>Cancel</button>
+                      <button type="button" className="hp-btn hp-btn-primary" onClick={() => void saveHosts()} disabled={hostsSaving}>
+                        {hostsSaving ? 'Saving…' : 'Save'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+                {hostsEditing ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <textarea
+                      value={hostsDraft}
+                      onChange={(e) => setHostsDraft(e.target.value)}
+                      rows={14}
+                      className="mono"
+                      style={{
+                        width: '100%', boxSizing: 'border-box', padding: '10px 12px',
+                        borderRadius: 8, border: '1px solid var(--border)',
+                        background: 'var(--bg-input)', color: 'var(--text)', fontSize: 12,
+                        resize: 'vertical', fontFamily: 'monospace',
+                      }}
+                    />
+                    {hostsSaveMsg ? (
+                      <p style={{ margin: 0, fontSize: 12, color: hostsSaveMsg === 'Saved.' ? 'var(--green)' : 'var(--red)' }}>{hostsSaveMsg}</p>
+                    ) : null}
+                  </div>
+                ) : null}
+              </section>
+
+              {/* Profile-scoped env */}
+              <section style={{ borderTop: '1px solid var(--border)', paddingTop: 24 }}>
+                <div className="hp-row-wrap" style={{ justifyContent: 'space-between', marginBottom: 10, gap: 12 }}>
+                  <div>
+                    <div style={{ fontWeight: 650, fontSize: 14 }}>Profile environment ({profileEnvPath || '~/.profile'})</div>
+                    <p className="hp-muted" style={{ margin: '6px 0 0', maxWidth: 520, fontSize: 13 }}>
+                      Add or remove <span className="mono">export KEY=VALUE</span> lines. Changes apply on next login/shell.
+                    </p>
+                  </div>
+                  <button type="button" className="hp-btn" disabled={profileEnvBusy} onClick={() => void loadProfileEnv()}>
+                    <span className="codicon codicon-refresh" aria-hidden /> {profileEnvContent === null ? 'Load' : 'Refresh'}
+                  </button>
+                </div>
+                {profileEnvErr ? <div className="hp-status-alert error" style={{ marginBottom: 10 }}>{profileEnvErr}</div> : null}
+                {profileEnvContent !== null ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    {parsedProfileExports.length > 0 ? (
+                      <div style={listShell}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                          <tbody>
+                            {parsedProfileExports.map((row) => (
+                              <tr key={row.key} style={{ borderTop: '1px solid var(--border)' }}>
+                                <td style={{ padding: '10px 14px', fontWeight: 650, width: 180 }} className="mono">{row.key}</td>
+                                <td style={{ padding: '10px 14px', color: 'var(--text-muted)' }} className="mono">{row.value}</td>
+                                <td style={{ padding: '10px 14px', textAlign: 'right' }}>
+                                  <button
+                                    type="button"
+                                    className="hp-btn"
+                                    style={{ fontSize: 11, padding: '3px 10px', color: 'var(--red)' }}
+                                    onClick={() => setProfileEnvDiff({ key: row.key, value: row.value, action: 'remove' })}
+                                  >
+                                    Remove
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <p className="hp-muted" style={{ fontSize: 13 }}>No export lines found in {profileEnvPath}.</p>
+                    )}
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                      <input
+                        type="text"
+                        className="mono hp-input"
+                        placeholder="KEY"
+                        value={profileEnvNewKey}
+                        onChange={(e) => setProfileEnvNewKey(e.target.value)}
+                        style={{ width: 140, fontSize: 12 }}
+                      />
+                      <span style={{ color: 'var(--text-muted)' }}>=</span>
+                      <input
+                        type="text"
+                        className="hp-input"
+                        placeholder="value"
+                        value={profileEnvNewVal}
+                        onChange={(e) => setProfileEnvNewVal(e.target.value)}
+                        style={{ flex: '1 1 160px', fontSize: 12 }}
+                      />
+                      <button
+                        type="button"
+                        className="hp-btn hp-btn-primary"
+                        style={{ fontSize: 12 }}
+                        disabled={!profileEnvNewKey.trim()}
+                        onClick={() => setProfileEnvDiff({ key: profileEnvNewKey.trim(), value: profileEnvNewVal, action: 'set' })}
+                      >
+                        Add / Update
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+                {/* Diff confirmation modal */}
+                {profileEnvDiff ? (
+                  <div style={{
+                    marginTop: 12, padding: '14px 16px', borderRadius: 10,
+                    border: '1px solid var(--border)', background: 'rgba(124,77,255,0.06)',
+                    display: 'flex', flexDirection: 'column', gap: 10,
+                  }}>
+                    <div style={{ fontWeight: 600, fontSize: 13 }}>Preview change</div>
+                    <pre className="mono" style={{ margin: 0, fontSize: 12, color: profileEnvDiff.action === 'remove' ? 'var(--red)' : 'var(--green)' }}>
+                      {profileEnvDiff.action === 'remove'
+                        ? `- export ${profileEnvDiff.key}=...`
+                        : `+ export ${profileEnvDiff.key}=${profileEnvDiff.value}`}
+                    </pre>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button type="button" className="hp-btn" onClick={() => setProfileEnvDiff(null)} disabled={profileEnvSaving}>Cancel</button>
+                      <button type="button" className="hp-btn hp-btn-primary" onClick={() => void applyProfileEnvDiff()} disabled={profileEnvSaving}>
+                        {profileEnvSaving ? 'Applying…' : 'Apply'}
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+              </section>
+            </div>
           ) : null}
         </main>
       </div>

@@ -1,0 +1,15 @@
+# LUMINA_DEV_COMPOSE_FULL=1 overlay — mobile dev stack
+name: lumina-mobile
+
+services:
+  appium:
+    image: appium/appium:latest
+    ports:
+      - "14723:4723"
+    restart: unless-stopped
+
+  json-server:
+    image: vimagick/json-server:latest
+    ports:
+      - "13000:3000"
+    restart: unless-stopped

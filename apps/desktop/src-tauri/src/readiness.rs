@@ -15,6 +15,7 @@ pub struct ReadinessReport {
 pub struct HardwareStatus {
     pub cpu_model: String,
     pub cpu_cores: usize,
+    pub architecture: String,
     pub ram_total_gb: f64,
     pub ram_free_gb: f64,
     pub disk_total_gb: f64,
@@ -82,9 +83,16 @@ fn probe_hardware() -> HardwareStatus {
 
     let (disk_total_gb, disk_free_gb) = probe_disk_space("/");
 
+    let architecture = Command::new("uname")
+        .arg("-m")
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .unwrap_or_else(|_| std::env::consts::ARCH.to_string());
+
     HardwareStatus {
         cpu_model,
         cpu_cores,
+        architecture,
         ram_total_gb,
         ram_free_gb,
         disk_total_gb,

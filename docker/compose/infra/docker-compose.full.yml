@@ -1,0 +1,34 @@
+# LUMINA_DEV_COMPOSE_FULL=1 overlay — realistic infra/k8s dev stack
+name: lumina-infra
+
+services:
+  traefik:
+    image: traefik:v3.0
+    ports:
+      - "18080:80"
+      - "18443:443"
+      - "18900:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command:
+      - --api.insecure=true
+      - --providers.docker=true
+    restart: unless-stopped
+
+  portainer:
+    image: portainer/portainer-ce:latest
+    ports:
+      - "19000:9000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "19090:9090"
+    restart: unless-stopped
+
+volumes:
+  portainer_data:

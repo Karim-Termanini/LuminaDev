@@ -1,0 +1,26 @@
+# LUMINA_DEV_COMPOSE_FULL=1 overlay — AI/ML dev stack
+name: lumina-ai-ml
+
+services:
+  jupyter:
+    image: jupyter/scipy-notebook:latest
+    ports:
+      - "18888:8888"
+    environment:
+      - JUPYTER_ENABLE_LAB=yes
+      - JUPYTER_TOKEN=luminadev
+    volumes:
+      - jupyter_data:/home/jovyan/work
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+
+volumes:
+  jupyter_data:
+  ollama_data:

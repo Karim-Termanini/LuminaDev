@@ -14,14 +14,12 @@ This project is in active development. Features below are split by maturity:
   - SSH and Git configuration UI flows.
   - Typed IPC boundaries via `@linux-dev-home/shared` schemas.
 - **Partial / evolving**:
-  - Tauri migration: core port done; packaging (Flatpak) intentionally last — heavy CI.
-  - `dh:docker:install` / `dh:docker:remap-port`: Tauri — **native session:** install wizard (distro + sudo) and Ports-tab remap form call the Rust handlers; **Flatpak:** blocked with explicit docs; remap clones then **stops and removes** the source container when stop succeeds (`sourceRemoved` in response).
-  - **Settings** (`/settings`): personalization (accent), read-only SSH bookmark overview, structured **hosts** and **process env** diagnostics (`settings_read_hosts` / `settings_process_env` over `dh:host:exec`). Host file editing and profile-scoped env files are not implemented yet ([`docs/ROUTE_STATUS.md`](docs/ROUTE_STATUS.md)).
-  - Flatpak packaging and cross-distro consistency.
+  - `dh:docker:install` / `dh:docker:remap-port`: install wizard (distro + sudo) and port-remap clone flow; remap stops and removes the source container on success (`sourceRemoved` in response).
+  - **Settings** (`/settings`): personalization (accent), read-only SSH bookmark overview, structured **hosts** and **process env** diagnostics. Host file editing and profile-scoped env files are not implemented yet ([`docs/ROUTE_STATUS.md`](docs/ROUTE_STATUS.md)).
   - Runtime install/update matrix hardening.
   - Diagnostics and support bundle depth.
 - **Planned**:
-  - Advanced source-control cloud integrations, extensions, and broader automation.
+  - Extensions, theme rollout, and broader automation.
 
 ## Quality Gate Policy
 
@@ -35,10 +33,7 @@ Until Docker vertical slice hardening is complete:
 
 ## Known Limitations
 
-- **Flatpak on Arch Linux:** Launching with Docker socket overrides may fail with `bwrap: Can't make symlink at /var/run`. This is due to a conflict between Arch's filesystem structure and Flatpak's sandbox management.
-- **Flatpak sessions:** Require explicit host overrides for some operations (Docker socket, SSH paths).
 - **Security boundaries:** Some cleanup operations are manual-assisted due to host privilege boundaries.
-- **PTY access:** Flatpak builds may need host overrides for Docker socket, SSH, and terminal PTY access.
 - **Modularization:** `apps/desktop/src-tauri/src/lib.rs` was partially modularized in Alpha 0.2.0; remaining IPC domains will be split in future iterations.
 
 ## 🛠️ Prerequisites
@@ -73,10 +68,9 @@ docker build -f docker/Dockerfile .
 ```
 The image runs tests, typecheck, lint, and production build inside Node 20.
 
-## 📦 Flatpak & Docker socket
+## 📦 Flatpak
 
-See [docs/DOCKER_FLATPAK.md](docs/DOCKER_FLATPAK.md), [docs/INSTALL_TEST.md](docs/INSTALL_TEST.md), and [docs/FLATHUB_CHECKLIST.md](docs/FLATHUB_CHECKLIST.md).
-Privilege behavior matrix and verification steps: [docs/PRIVILEGE_BOUNDARY_MATRIX.md](docs/PRIVILEGE_BOUNDARY_MATRIX.md).
+Distributed as a Flatpak with full host permissions (`--filesystem=host`, `--device=all`, `--socket=system-bus`). No sandbox overrides required — Docker socket, SSH, PTY, and `/proc` all work out of the box.
 
 ## ✅ Stabilization Tracker
 

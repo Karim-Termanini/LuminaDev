@@ -1,0 +1,11 @@
+# LUMINA_DEV_COMPOSE_FULL=1 overlay — desktop GUI dev stack
+name: lumina-desktop-gui
+
+services:
+  xpra:
+    image: jare/xpra:latest
+    ports:
+      - "18100:14500"
+    environment:
+      - DISPLAY=:0
+    restart: unless-stopped
