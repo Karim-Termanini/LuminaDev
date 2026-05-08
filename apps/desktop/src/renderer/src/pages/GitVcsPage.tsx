@@ -916,7 +916,6 @@ export function GitVcsPage(): ReactElement {
   /** Only the host that matches the selected fetch remote — avoids GitHub checks while you are on GitLab (both can stay tracked in store). */
   const trackedPrRenderSlots = useMemo(() => {
     if (activeFetchPipelineProvider !== 'github' && activeFetchPipelineProvider !== 'gitlab') return []
-    const slots: { provider: 'github' | 'gitlab'; remote: string; reference: string; url: string }[] = []
     const provider = activeFetchPipelineProvider
     const entry = trackingPrByHost[provider]
     if (!entry) return []
