@@ -56,6 +56,16 @@ describe('humanizeCloudAuthError', () => {
     expect(msg).toContain('Use a PAT')
   })
 
+  it('humanizes CLOUD_AUTH_DEVICE_POLL_REJECTED', () => {
+    const msg = humanizeCloudAuthError(
+      new Error(
+        '[CLOUD_AUTH_DEVICE_POLL_REJECTED] GitHub token step returned error `incorrect_client_credentials`. The client_id and/or client_secret passed are incorrect.',
+      ),
+    )
+    expect(msg).toContain('incorrect_client_credentials')
+    expect(msg).toContain('client_id')
+  })
+
   it('humanizes CLOUD_GIT_MR_BRANCH_NOT_ON_REMOTE', () => {
     const msg = humanizeCloudAuthError(
       new Error('[CLOUD_GIT_MR_BRANCH_NOT_ON_REMOTE] Push to GitLab first.'),
