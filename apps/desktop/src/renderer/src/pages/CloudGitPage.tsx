@@ -412,9 +412,15 @@ export function CloudGitPage(): ReactElement {
             <div style={{ fontWeight: 700, fontSize: 17, marginBottom: 8, color: 'var(--text)' }}>
               Connecting to {PROVIDER_META[deviceFlow.provider].label}
             </div>
+            <p className="hp-muted" style={{ fontSize: 13, marginBottom: 12 }}>
+              On GitHub, approve the app and enter this user code if prompted. Keep this page open
+              until it shows connected — Lumina polls in the background. If the browser step succeeds
+              but this screen never finishes, the OAuth Client ID is usually wrong: set your own under{' '}
+              <strong>Advanced</strong> (or use a <strong>personal access token</strong> on this tab).
+            </p>
             <p className="hp-muted" style={{ fontSize: 13, marginBottom: 22 }}>
-              Enter this code at{' '}
-              <span className="mono" style={{ color: 'var(--text)' }}>
+              Open:{' '}
+              <span className="mono" style={{ color: 'var(--text)', wordBreak: 'break-all' }}>
                 {deviceFlow.verification_uri}
               </span>
             </p>
@@ -436,7 +442,11 @@ export function CloudGitPage(): ReactElement {
                 type="button"
                 onClick={() => {
                   void navigator.clipboard.writeText(deviceFlow.user_code).catch(() => {})
-                  void window.dh.openExternal(deviceFlow.verification_uri)
+                  void window.dh.openExternal(deviceFlow.verification_uri).catch(() => {
+                    setError(
+                      `Could not open the browser automatically. Open ${deviceFlow.verification_uri} manually and paste the code above.`,
+                    )
+                  })
                 }}
                 style={{
                   padding: '10px 18px',

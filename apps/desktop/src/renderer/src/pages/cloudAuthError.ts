@@ -26,6 +26,12 @@ export function humanizeCloudAuthError(err: unknown): string {
   if (code === 'CLOUD_AUTH_DEVICE_FLOW_DISABLED') {
     return (detail || 'Use a personal access token on the Cloud Git page instead.').trim()
   }
+  if (code === 'CLOUD_AUTH_DEVICE_POLL_REJECTED') {
+    return (
+      detail ||
+      'GitHub rejected the token step after browser authorization. Register a Device-flow OAuth app Client ID under Cloud Git → Advanced, or connect with a PAT.'
+    ).trim()
+  }
   if (code === 'CLOUD_AUTH_NETWORK') {
     return `Could not reach the provider. Check your connection and try again. ${detail}`.trim()
   }
