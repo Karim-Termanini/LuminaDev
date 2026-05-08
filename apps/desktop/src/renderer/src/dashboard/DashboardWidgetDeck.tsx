@@ -41,15 +41,68 @@ export function DashboardWidgetDeck(props: {
           gap: comfortable ? 20 : 14,
         }}
       >
-        {props.layout.placements.map((p) => (
-          <WidgetTile
-            key={p.instanceId}
-            placement={p}
-            comfortable={comfortable}
-            onRemove={() => props.onRemove(p.instanceId)}
-            onReorder={props.onReorder}
-          />
-        ))}
+        {props.layout.placements.length === 0 ? (
+          <div
+            style={{
+              gridColumn: '1 / -1',
+              border: '2px dashed color-mix(in srgb, var(--border) 75%, transparent)',
+              borderRadius: comfortable ? 14 : 'var(--radius)',
+              padding: comfortable ? 36 : 26,
+              textAlign: 'center',
+              background: 'color-mix(in srgb, var(--bg-input) 45%, transparent)',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'center',
+                gap: comfortable ? 12 : 10,
+                marginBottom: comfortable ? 16 : 12,
+                opacity: 0.55,
+              }}
+              aria-hidden
+            >
+              {[0, 1, 2].map((i) => (
+                <div
+                  key={i}
+                  style={{
+                    width: comfortable ? 52 : 42,
+                    height: comfortable ? 38 : 30,
+                    borderRadius: 8,
+                    background: 'var(--border)',
+                  }}
+                />
+              ))}
+            </div>
+            <p style={{ margin: 0, fontSize: comfortable ? 16 : 14, fontWeight: 700, color: 'var(--text)' }}>
+              No pinned widgets yet
+            </p>
+            <p
+              style={{
+                margin: '10px 0 0',
+                fontSize: comfortable ? 14 : 13,
+                color: 'var(--text-muted)',
+                maxWidth: 460,
+                marginLeft: 'auto',
+                marginRight: 'auto',
+                lineHeight: 1.5,
+              }}
+            >
+              Use <strong style={{ color: 'var(--text)' }}>Add widget</strong> to pin tips, quick links, or recent repos.
+              With two or more cards, drag one onto another to reorder.
+            </p>
+          </div>
+        ) : (
+          props.layout.placements.map((p) => (
+            <WidgetTile
+              key={p.instanceId}
+              placement={p}
+              comfortable={comfortable}
+              onRemove={() => props.onRemove(p.instanceId)}
+              onReorder={props.onReorder}
+            />
+          ))
+        )}
       </div>
     </section>
   )

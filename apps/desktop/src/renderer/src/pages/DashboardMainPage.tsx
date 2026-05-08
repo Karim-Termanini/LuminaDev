@@ -77,6 +77,13 @@ export function DashboardMainPage(): ReactElement {
     if (!m || m.diskTotalGb <= 0) return 0
     return Math.min(100, Math.max(0, ((m.diskTotalGb - m.diskFreeGb) / m.diskTotalGb) * 100))
   }, [m])
+  const dockerFleet = useMemo(() => {
+    if (!docker || !docker.ok) return null
+    const total = docker.rows.length
+    const running = docker.rows.filter((r) => r.state === 'running').length
+    const pct = total > 0 ? (running / total) * 100 : 0
+    return { total, running, pct, barColor: dockerFleetBarColor(running, total) }
+  }, [docker])
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -249,20 +256,44 @@ export function DashboardMainPage(): ReactElement {
           display: 'flex',
           flexWrap: 'wrap',
           gap: 24,
-          alignItems: 'center',
+          alignItems: 'stretch',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span className="codicon codicon-package" style={{ color: 'var(--text-muted)' }} aria-hidden />
-          <span style={{ fontSize: 13 }}>
-            {!docker ? '—' : !docker.ok ? (
-              <span style={{ color: 'var(--orange)' }}>Docker offline</span>
-            ) : (
-              <><strong>{docker.rows.filter(r => r.state === 'running').length}</strong> running / {docker.rows.length} total</>
-            )}
-          </span>
-          <Link to="/docker" style={{ fontSize: 12, color: 'var(--accent)', marginLeft: 4 }}>Open Docker →</Link>
-        </div>
+        {!docker ? (
+          <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 6, minWidth: 100 }}>
+            <span className="codicon codicon-package" style={{ color: 'var(--text-muted)' }} aria-hidden title="Docker" />
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>—</span>
+          </div>
+        ) : !docker.ok ? (
+          <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 8, minWidth: 120 }}>
+            <span className="codicon codicon-package" style={{ color: 'var(--orange)' }} aria-hidden />
+            <span style={{ fontSize: 12, color: 'var(--orange)' }}>{humanizeDockerError(docker.error)}</span>
+            <Link to="/docker" style={{ fontSize: 12, color: 'var(--accent)' }}>
+              Open Docker →
+            </Link>
+          </div>
+        ) : dockerFleet ? (
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 6,
+              minWidth: 120,
+              flex: '1 1 140px',
+              maxWidth: 240,
+            }}
+          >
+            <DashboardMetricBar
+              label="Docker"
+              valueText={`${dockerFleet.running} / ${dockerFleet.total} running`}
+              percent={dockerFleet.pct}
+              barColor={dockerFleet.barColor}
+            />
+            <Link to="/docker" style={{ fontSize: 12, color: 'var(--accent)' }}>
+              Open Docker →
+            </Link>
+          </div>
+        ) : null}
         {m ? (
           <>
             <DashboardMetricBar
@@ -302,9 +333,11 @@ function DashboardMetricBar(props: {
   valueText: string
   percent: number
   subline?: string
+  /** When set, bar and value color ignore utilization thresholds (e.g. Docker fleet mix). */
+  barColor?: string
 }): ReactElement {
   const pct = Number.isFinite(props.percent) ? Math.min(100, Math.max(0, props.percent)) : 0
-  const tone = utilizationTone(pct)
+  const tone = props.barColor ?? utilizationTone(pct)
   return (
     <div
       style={{
@@ -368,6 +401,13 @@ function DashboardMetricBar(props: {
 function utilizationTone(percent: number): string {
   if (percent > 85) return 'var(--red)'
   if (percent > 60) return 'var(--yellow)'
+  return 'var(--green)'
+}
+
+function dockerFleetBarColor(running: number, total: number): string {
+  if (total === 0) return 'var(--text-muted)'
+  if (running === 0) return 'var(--yellow)'
+  if (running < total) return 'var(--accent)'
   return 'var(--green)'
 }
 
