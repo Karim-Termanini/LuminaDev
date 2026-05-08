@@ -480,12 +480,37 @@ export const GitVcsDiffRequestSchema = z.object({
   staged: z.boolean(),
 })
 
-export const GitVcsStageRequestSchema = z.object({
+/** When `stageAll` is true, runs `git add -A` and `filePaths` must be empty. */
+export const GitVcsStageRequestSchema = z
+  .object({
+    repoPath: z.string().min(1).max(4096),
+    filePaths: z.array(z.string().min(1).max(4096)),
+    stageAll: z.boolean().optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.stageAll === true) {
+      if (data.filePaths.length > 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'filePaths must be empty when stageAll is true',
+          path: ['filePaths'],
+        })
+      }
+      return
+    }
+    if (data.filePaths.length < 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'filePaths must contain at least one path unless stageAll is true',
+        path: ['filePaths'],
+      })
+    }
+  })
+
+export const GitVcsUnstageRequestSchema = z.object({
   repoPath: z.string().min(1).max(4096),
   filePaths: z.array(z.string().min(1).max(4096)).min(1),
 })
-
-export const GitVcsUnstageRequestSchema = GitVcsStageRequestSchema
 
 export const GitVcsCommitRequestSchema = z.object({
   repoPath: z.string().min(1).max(4096),
@@ -636,6 +661,8 @@ export interface CloudPrDetails {
   mergeable: boolean | null
   mergeable_state: string
   base_branch?: string
+  /** True when no open PR exists for this head but a merged closed PR does (GitHub/GitLab). */
+  pr_merged?: boolean
   checks: CloudCiCheck[]
 }
 
@@ -645,5 +672,3 @@ export interface CloudGitGetPrChecksRequest {
   remote?: string
   reference: string // branch name or SHA
 }
-
-/** Check if the current workspace is a Git repository. */

@@ -206,7 +206,7 @@ function AccountsSummarySection(): ReactElement {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <p className="hp-muted" style={{ margin: 0, fontSize: 13, lineHeight: 1.5 }}>
-        Link GitHub or GitLab for device-flow or PAT-based auth. Sign in, revoke tokens, and disconnect on the Cloud Git
+        GitHub supports device flow or a PAT; GitLab uses a personal access token only. Manage accounts on the Cloud Git
         page.
       </p>
       {loading ? (
@@ -543,7 +543,7 @@ export function SettingsPage(): ReactElement {
                 {activeNav.id === 'system' &&
                   'Read-only diagnostics: hosts file and a small set of process environment variables (no profile editing yet).'}
                 {activeNav.id === 'accounts' &&
-                  'Overview of accounts stored for GitHub and GitLab. Manage tokens and device flow on the Cloud Git page.'}
+                  'Overview of accounts stored for GitHub and GitLab. Manage tokens on the Cloud Git page (GitHub device flow or PAT; GitLab PAT).'}
               </p>
             </div>
 

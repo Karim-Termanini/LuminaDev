@@ -5,6 +5,8 @@ export type GitVcsErrorCode =
   | 'GIT_VCS_EMPTY_MESSAGE'
   | 'GIT_VCS_PUSH_REJECTED'
   | 'GIT_VCS_PROTECTED_BRANCH'
+  | 'GIT_VCS_BRANCH_NAME_TAKEN'
+  | 'GIT_VCS_BRANCH_NAME_INVALID'
   | 'GIT_VCS_INTEGRATION_REQUIRED'
   | 'GIT_VCS_AUTH_FAILED'
   | 'GIT_VCS_DIFF_TOO_LARGE'
@@ -48,6 +50,10 @@ export function humanizeGitVcsError(err: unknown): string {
     return `Remote rejected the push (non-fast-forward). If you rebased, use Force push below. Otherwise pull first and push again. ${detail}`.trim()
   if (code === 'GIT_VCS_PROTECTED_BRANCH')
     return `This branch is protected on the remote — you usually cannot push directly. Push your work to a new branch and open a merge or pull request from the host, or ask a maintainer to merge. ${detail}`.trim()
+  if (code === 'GIT_VCS_BRANCH_NAME_TAKEN')
+    return (detail || 'That branch name already exists locally. Pick another name.').trim()
+  if (code === 'GIT_VCS_BRANCH_NAME_INVALID')
+    return (detail || 'Use a simple branch name (letters, numbers, hyphens, slashes, dots, underscores; no spaces).').trim()
   if (code === 'GIT_VCS_INTEGRATION_REQUIRED')
     return `Integration required — after a quick fetch, your branch is behind the remote. Pull or merge the latest changes, then push again. ${detail}`.trim()
   if (code === 'GIT_VCS_AUTH_FAILED')
@@ -79,7 +85,7 @@ export function humanizeGitVcsError(err: unknown): string {
   if (code === 'GIT_VCS_STASH_POP_EMPTY') return 'There is no stash entry to apply.'
   if (code === 'GIT_VCS_STASH_POP') return `Stash pop failed. ${detail}`.trim()
   if (code === 'GIT_VCS_MERGE_CONTINUE')
-    return `Merge could not continue. Stage all resolved files, ensure a merge is in progress, or check hook output. ${detail}`.trim()
+    return `Merge could not finish. Stage every resolved file, ensure a merge is in progress, or read the message below — a failing pre-commit or hook often blocks the merge commit step. ${detail}`.trim()
   if (code === 'GIT_VCS_REBASE_CONTINUE')
     return `Rebase could not continue. Stage resolved files, fix the commit message if prompted, or check hook output. ${detail}`.trim()
   if (code === 'GIT_VCS_CHECKOUT')

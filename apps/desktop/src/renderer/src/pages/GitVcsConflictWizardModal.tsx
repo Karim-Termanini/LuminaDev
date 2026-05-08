@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { GitVcsConflictResolver } from './GitVcsConflictResolver'
 
 export type GitVcsConflictWizardModalProps = {
@@ -23,6 +23,15 @@ export function GitVcsConflictWizardModal({
   const [currentFileIdx, setCurrentFileIdx] = useState(0)
   const [resolvedFiles, setResolvedFiles] = useState<Set<string>>(new Set())
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (isOpen) {
+      setStep('overview')
+      setCurrentFileIdx(0)
+      setResolvedFiles(new Set())
+      setError(null)
+    }
+  }, [isOpen])
 
   if (!isOpen) return null
 
@@ -92,11 +101,12 @@ export function GitVcsConflictWizardModal({
                   background: 'linear-gradient(135deg, var(--accent-light) 0%, var(--accent) 100%)',
                 }}
               >
-                <div style={{ fontSize: 16, fontWeight: 600, color: 'white' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 16, fontWeight: 600, color: 'white' }}>
+                  <span className="codicon codicon-git-merge" style={{ fontSize: 20 }} />
                   Resolve Merge Conflicts
                 </div>
                 <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.8)', marginTop: 4 }}>
-                  Step {currentFileIdx + 1} of {totalFiles}
+                  File {currentFileIdx + 1} of {totalFiles} with conflicts
                 </div>
               </div>
 
@@ -178,7 +188,8 @@ export function GitVcsConflictWizardModal({
                   className="hp-btn hp-btn-primary"
                   onClick={() => setStep('resolving')}
                 >
-                  Resolve Conflicts in this File
+                  <span className="codicon codicon-git-merge" style={{ marginRight: 6 }} />
+                  Open Resolution Studio
                 </button>
               </div>
             </>
@@ -194,8 +205,9 @@ export function GitVcsConflictWizardModal({
                   background: 'linear-gradient(135deg, #69f0ae 0%, #52d394 100%)',
                 }}
               >
-                <div style={{ fontSize: 16, fontWeight: 600, color: 'white' }}>
-                  All Conflicts Resolved ✓
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 16, fontWeight: 600, color: 'white' }}>
+                  <span className="codicon codicon-check" style={{ fontSize: 20 }} />
+                  All Conflicts Resolved
                 </div>
                 <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.8)', marginTop: 4 }}>
                   Ready to continue with merge
@@ -285,8 +297,8 @@ export function GitVcsConflictWizardModal({
           background: 'var(--bg)',
           borderRadius: 8,
           boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)',
-          maxWidth: 1200,
-          width: '95%',
+          maxWidth: 1400,
+          width: '96%',
           height: '90vh',
           display: 'flex',
           flexDirection: 'column',

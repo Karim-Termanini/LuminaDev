@@ -170,6 +170,7 @@ function createTauriDhApi(): DhApi {
     gitVcsResolveHunk: (payload) => tauriInvoke(IPC.gitVcsResolveHunk, payload),
     cloudGitCreatePr: (payload) => tauriInvoke(IPC.cloudGitCreatePr, payload),
     cloudGitGetPrChecks: (payload) => tauriInvoke(IPC.cloudGitGetPrChecks, payload),
+    cloudGitMergePr: (payload) => tauriInvoke(IPC.cloudGitMergePr, payload),
   } satisfies DhApi
 }
 

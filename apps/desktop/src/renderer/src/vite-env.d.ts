@@ -205,7 +205,11 @@ declare global {
         binary?: boolean
         error?: string
       }>
-      gitVcsStage: (payload: { repoPath: string; filePaths: string[] }) => Promise<{ ok: boolean; error?: string }>
+      gitVcsStage: (payload: {
+        repoPath: string
+        filePaths: string[]
+        stageAll?: boolean
+      }) => Promise<{ ok: boolean; error?: string }>
       gitVcsUnstage: (payload: { repoPath: string; filePaths: string[] }) => Promise<{ ok: boolean; error?: string }>
       gitVcsCommit: (payload: { repoPath: string; message: string }) => Promise<{ ok: boolean; sha?: string; error?: string }>
       gitVcsPush: (payload: { repoPath: string; remote?: string; branch?: string; forceWithLease?: boolean }) => Promise<{ ok: boolean; output?: string; error?: string }>
@@ -269,6 +273,14 @@ declare global {
         remote?: string
         reference: string
       }) => Promise<{ ok: boolean; details?: import('@linux-dev-home/shared').CloudPrDetails; error?: string }>
+      cloudGitMergePr: (payload: {
+        provider: 'github' | 'gitlab'
+        repoPath: string
+        remote?: string
+        prUrl: string
+        /** GitLab: branch name used to re-resolve open MR if merge-by-URL returns 404 (stale IID). */
+        reference?: string
+      }) => Promise<{ ok: boolean; url?: string; error?: string }>
     }
   }
 }

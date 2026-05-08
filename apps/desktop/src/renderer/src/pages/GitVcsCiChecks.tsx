@@ -2,6 +2,7 @@ import type { ReactElement } from 'react'
 import { useEffect, useState, useMemo } from 'react'
 import type { CloudCiCheck } from '@linux-dev-home/shared'
 import { GLASS } from '../layout/GLASS'
+import { humanizeCloudAuthError } from './cloudAuthError'
 
 export type GitVcsCiChecksProps = {
   provider: 'github' | 'gitlab'
@@ -29,6 +30,7 @@ export function GitVcsCiChecks({
   const [resolving, setResolving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date())
+  const [mergeBusy, setMergeBusy] = useState(false)
 
   const fetchChecks = useMemo(() => {
     const active = true
@@ -46,6 +48,14 @@ export function GitVcsCiChecks({
         if (!res.ok) {
           setError(res.error ?? 'Failed to fetch checks')
         } else if (res.details) {
+          if (res.details.pr_merged === true) {
+            setChecks([])
+            setMergeable(null)
+            setError(null)
+            setLoading(false)
+            onClose?.()
+            return
+          }
           setChecks(res.details.checks ?? [])
           setMergeable(res.details.mergeable)
           setBaseBranch(res.details.base_branch ?? 'main')
@@ -59,7 +69,7 @@ export function GitVcsCiChecks({
       }
     }
     return run
-  }, [provider, repoPath, remote, reference])
+  }, [provider, repoPath, remote, reference, onClose])
 
   useEffect(() => {
     void fetchChecks()
@@ -76,7 +86,41 @@ export function GitVcsCiChecks({
   }, [checks])
 
   const hasConflicts = mergeable === false
-  const statusColor = (stats.failed > 0 || hasConflicts) ? '#ff5252' : stats.inProgress > 0 ? 'var(--cg-accent, var(--accent))' : '#4caf50'
+  const noJobRows = stats.total === 0 && !loading && !error
+  const statusColor =
+    stats.failed > 0 || hasConflicts
+      ? '#ff5252'
+      : stats.inProgress > 0
+        ? 'var(--cg-accent, var(--accent))'
+        : noJobRows
+          ? 'var(--text-muted)'
+          : '#4caf50'
+
+  const checksHeadline = loading
+    ? 'Loading checks…'
+    : hasConflicts
+      ? 'This branch has conflicts'
+      : stats.inProgress > 0
+        ? "Some checks haven't completed yet"
+        : stats.failed > 0
+          ? 'Checks failed'
+          : noJobRows
+            ? 'No pipeline jobs listed'
+            : 'All checks passed'
+
+  const checksSubline = loading
+    ? 'Fetching merge status and latest pipeline jobs…'
+    : noJobRows
+      ? 'GitLab did not return job rows for this branch (pipelines may be disabled or the token cannot read jobs).'
+      : `${stats.inProgress} in progress, ${stats.successful} successful checks`
+
+  const canMergeOnServer =
+    Boolean(prUrl) &&
+    !hasConflicts &&
+    stats.failed === 0 &&
+    stats.inProgress === 0 &&
+    !loading &&
+    !error
 
   return (
     <div
@@ -91,33 +135,12 @@ export function GitVcsCiChecks({
         animation: 'hp-fade-in 0.3s ease-out',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-            <div 
-              style={{ 
-                width: 12, 
-                height: 12, 
-                borderRadius: '50%', 
-                background: statusColor,
-                boxShadow: `0 0 8px ${statusColor}44`
-              }} 
-            />
-            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>
-              {hasConflicts ? 'This branch has conflicts' :
-               stats.inProgress > 0 ? 'Some checks haven\'t completed yet' : 
-               stats.failed > 0 ? 'Checks failed' : 'All checks passed'}
-            </h3>
-          </div>
-          <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-            {stats.inProgress} in progress, {stats.successful} successful checks
-          </div>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
           {prUrl && (
-            <a 
-              href={prUrl} 
-              target="_blank" 
+            <a
+              href={prUrl}
+              target="_blank"
               rel="noreferrer"
               className="hp-btn hp-btn-sm"
               style={{ textDecoration: 'none' }}
@@ -125,11 +148,81 @@ export function GitVcsCiChecks({
               View on {provider === 'github' ? 'GitHub' : 'GitLab'}
             </a>
           )}
+          {prUrl && repoPath.trim() ? (
+            <button
+              type="button"
+              className="hp-btn hp-btn-sm hp-btn-primary"
+              disabled={!canMergeOnServer || mergeBusy}
+              title={
+                hasConflicts
+                  ? 'Resolve merge conflicts before merging on the server.'
+                  : stats.failed > 0
+                    ? 'Fix failing checks before merging on the server.'
+                    : stats.inProgress > 0
+                      ? 'Wait for checks to finish.'
+                      : `Merge this ${provider === 'github' ? 'pull request' : 'merge request'} on ${provider === 'github' ? 'GitHub' : 'GitLab'} (requires permission).`
+              }
+              onClick={() => {
+                void (async () => {
+                  if (!prUrl || !repoPath.trim()) return
+                  setMergeBusy(true)
+                  setError(null)
+                  try {
+                    const res = await window.dh.cloudGitMergePr({
+                      provider,
+                      repoPath: repoPath.trim(),
+                      remote,
+                      prUrl,
+                      reference,
+                    })
+                    if (!res.ok) {
+                      setError(humanizeCloudAuthError(new Error(res.error ?? 'Merge failed')))
+                      return
+                    }
+                    await fetchChecks()
+                  } catch (e) {
+                    setError(humanizeCloudAuthError(e))
+                  } finally {
+                    setMergeBusy(false)
+                  }
+                })()
+              }}
+            >
+              {mergeBusy ? (
+                <>
+                  <span className="codicon codicon-loading spin" style={{ marginRight: 6 }} aria-hidden />
+                  Merging…
+                </>
+              ) : provider === 'gitlab' ? (
+                'Merge MR on GitLab'
+              ) : (
+                'Merge PR on GitHub'
+              )}
+            </button>
+          ) : null}
           {onClose && (
             <button type="button" className="hp-btn hp-btn-sm" onClick={onClose}>
               ✕
             </button>
           )}
+        </div>
+        <div style={{ flex: 1, minWidth: 0, textAlign: 'right' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'flex-end', marginBottom: 4 }}>
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>{checksHeadline}</h3>
+            <div
+              style={{
+                width: 12,
+                height: 12,
+                borderRadius: '50%',
+                background: statusColor,
+                boxShadow: `0 0 8px ${statusColor}44`,
+                flexShrink: 0,
+              }}
+            />
+          </div>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.35, maxWidth: 420, marginLeft: 'auto' }}>
+            {checksSubline}
+          </div>
         </div>
       </div>
 
