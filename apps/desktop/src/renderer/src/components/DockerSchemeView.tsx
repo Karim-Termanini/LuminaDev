@@ -33,7 +33,7 @@ function ContainerNode({ data }: { data: ContainerRow }) {
         boxSizing: 'border-box',
       }}
     >
-      <Handle type="target" position={Position.Top} style={{ background: 'var(--accent)' }} />
+      <Handle type="target" position={Position.Top} id="in" style={{ background: 'var(--accent)' }} />
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
         <div
           style={{
@@ -123,6 +123,8 @@ function ContainerNode({ data }: { data: ContainerRow }) {
   )
 }
 
+const NETWORK_NODE_WIDTH = 200
+
 function NetworkNode({ data }: { data: NetworkRow }) {
   const isSystem = data.name === 'bridge' || data.name === 'host' || data.name === 'none'
   return (
@@ -131,20 +133,27 @@ function NetworkNode({ data }: { data: NetworkRow }) {
         background: isSystem ? 'var(--bg-widget)' : 'var(--accent)',
         color: isSystem ? 'var(--text)' : '#fff',
         border: `1px solid ${isSystem ? 'var(--border)' : 'var(--accent)'}`,
-        borderRadius: 8,
-        padding: '8px 16px',
+        borderRadius: 10,
+        padding: '10px 14px',
         fontWeight: 600,
         fontSize: 14,
         textAlign: 'center',
-        boxShadow: '0 4px 8px rgba(0,0,0,0.2)',
-        width: 140,
+        boxShadow: '0 4px 12px rgba(0,0,0,0.25)',
+        width: NETWORK_NODE_WIDTH,
+        maxWidth: NETWORK_NODE_WIDTH,
+        boxSizing: 'border-box',
         cursor: 'default',
+        wordBreak: 'break-word',
+        lineHeight: 1.25,
       }}
     >
-      <Handle type="target" position={Position.Top} style={{ background: '#555' }} />
-      {data.name}
-      <div style={{ fontSize: 10, opacity: 0.8, marginTop: 2 }}>{data.driver}</div>
-      <Handle type="source" position={Position.Bottom} style={{ background: '#555' }} />
+      <div style={{ fontWeight: 700 }} title={data.name}>
+        {data.name}
+      </div>
+      <div style={{ fontSize: 11, opacity: 0.88, marginTop: 4 }} className="mono">
+        {data.driver}
+      </div>
+      <Handle type="source" position={Position.Bottom} id="out" style={{ background: isSystem ? 'var(--text-muted)' : '#fff' }} />
     </div>
   )
 }
@@ -152,28 +161,39 @@ function NetworkNode({ data }: { data: NetworkRow }) {
 function ClusterGroupNode({ data }: { data: { isSystem: boolean } }) {
   const isSystem = data.isSystem
   return (
-    <div style={{
-      width: '100%',
-      height: '100%',
-      background: isSystem ? 'rgba(30,30,30,0.3)' : 'rgba(124,77,255,0.03)',
-      border: `2px dashed ${isSystem ? 'var(--border)' : 'var(--accent)'}`,
-      borderRadius: 16,
-      position: 'relative',
-    }}>
-      <div style={{
-        position: 'absolute',
-        top: -10,
-        left: 20,
-        background: isSystem ? 'var(--bg-panel)' : 'var(--accent)',
-        color: isSystem ? 'var(--text-muted)' : '#fff',
-        padding: '2px 10px',
-        borderRadius: 4,
-        fontSize: 10,
-        fontWeight: 700,
-        textTransform: 'uppercase',
-        border: `1px solid ${isSystem ? 'var(--border)' : 'var(--accent)'}`,
-        letterSpacing: '0.06em',
-      }}>
+    <div
+      style={{
+        width: '100%',
+        height: '100%',
+        boxSizing: 'border-box',
+        background: isSystem ? 'rgba(30,30,30,0.22)' : 'color-mix(in srgb, var(--accent) 6%, transparent)',
+        border: `2px dashed ${isSystem ? 'var(--border)' : 'var(--accent)'}`,
+        borderRadius: 16,
+        position: 'relative',
+        pointerEvents: 'none',
+      }}
+    >
+      <div
+        style={{
+          position: 'absolute',
+          top: 10,
+          left: 14,
+          zIndex: 1,
+          background: isSystem ? 'var(--bg-panel)' : 'var(--accent)',
+          color: isSystem ? 'var(--text-muted)' : '#fff',
+          padding: '3px 10px',
+          borderRadius: 6,
+          fontSize: 10,
+          fontWeight: 700,
+          textTransform: 'uppercase',
+          border: `1px solid ${isSystem ? 'var(--border)' : 'color-mix(in srgb, var(--accent) 70%, #000)'}`,
+          letterSpacing: '0.06em',
+          maxWidth: 'calc(100% - 28px)',
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+        }}
+      >
         {isSystem ? 'System Network' : 'Custom Project Network'}
       </div>
     </div>
@@ -212,17 +232,25 @@ export function DockerSchemeView({ containers, networks }: SchemeProps) {
 
     const CONTAINER_WIDTH = 260
     const GAP = 30
-    const NET_H = 80
-    const CARD_H = 380   // generous — cards won't be clipped
-    const PAD = 30
+    const NET_H = 88
+    /** Vertical stack: top padding (cluster label) + network + gap + container card region + bottom pad */
+    const CLUSTER_PAD_TOP = 44
+    const CLUSTER_PAD_BOTTOM = 20
+    const NET_TO_CARD_GAP = 28
+    const CONTAINER_REGION_H = 220
+    const CLUSTER_MIN_W = 300
 
     let currentX = 50
 
     networks.forEach((net) => {
       const conts = networkContainers[net.name] || []
       const count = conts.length
-      const boxWidth = Math.max(300, count * CONTAINER_WIDTH + (count + 1) * GAP)
-      const boxHeight = count > 0 ? PAD + NET_H + GAP + CARD_H + PAD : PAD + NET_H + PAD
+      const innerRowW = count > 0 ? count * CONTAINER_WIDTH + Math.max(0, count - 1) * GAP : 0
+      const boxWidth = Math.max(CLUSTER_MIN_W, innerRowW + 2 * GAP, NETWORK_NODE_WIDTH + 2 * GAP)
+      const boxHeight =
+        count > 0
+          ? CLUSTER_PAD_TOP + NET_H + NET_TO_CARD_GAP + CONTAINER_REGION_H + CLUSTER_PAD_BOTTOM
+          : CLUSTER_PAD_TOP + NET_H + CLUSTER_PAD_BOTTOM
 
       // Cluster background
       newNodes.push({
@@ -236,23 +264,29 @@ export function DockerSchemeView({ containers, networks }: SchemeProps) {
         zIndex: 0,
       })
 
-      // Network pill — child for positioning, no extent constraint
+      const rowCenter = count > 0 ? GAP + innerRowW / 2 : boxWidth / 2
+      const netX = Math.max(GAP, rowCenter - NETWORK_NODE_WIDTH / 2)
+
+      // Network node — centered above its container row (or cluster when empty)
       newNodes.push({
         id: `net-${net.name}`,
         type: 'networkNode',
         parentId: `cluster-${net.name}`,
-        position: { x: boxWidth / 2 - 70, y: PAD },
+        position: { x: netX, y: CLUSTER_PAD_TOP },
         data: net,
         zIndex: 2,
       })
 
-      // Container cards — child for positioning, NO extent:'parent' so ReactFlow won't clip
+      // Container cards — left-aligned row under the network
       conts.forEach((c, idx) => {
         newNodes.push({
           id: `cont-${c.id}`,
           type: 'containerNode',
           parentId: `cluster-${net.name}`,
-          position: { x: GAP + idx * (CONTAINER_WIDTH + GAP), y: PAD + NET_H + GAP },
+          position: {
+            x: GAP + idx * (CONTAINER_WIDTH + GAP),
+            y: CLUSTER_PAD_TOP + NET_H + NET_TO_CARD_GAP,
+          },
           data: c,
           zIndex: 2,
         })
@@ -276,18 +310,25 @@ export function DockerSchemeView({ containers, networks }: SchemeProps) {
       })
     })
 
-    // Create Edges for ALL networks
+    // Create Edges for ALL networks (vertical link: network bottom → container top)
     containers.forEach((c) => {
       if (c.networks) {
         c.networks.forEach((netName) => {
-          // Verify network exists
-          if (networks.find(n => n.name === netName)) {
+          if (networks.find((n) => n.name === netName)) {
+            const isSystemNet = netName === 'bridge' || netName === 'host' || netName === 'none'
             newEdges.push({
               id: `e-${c.id}-${netName}`,
               source: `net-${netName}`,
               target: `cont-${c.id}`,
+              sourceHandle: 'out',
+              targetHandle: 'in',
               animated: c.state.toLowerCase() === 'running',
-              style: { stroke: 'var(--accent)', strokeWidth: 2 },
+              zIndex: 1,
+              style: {
+                stroke: isSystemNet ? 'var(--text-muted)' : 'var(--accent)',
+                strokeWidth: 2,
+                strokeDasharray: isSystemNet ? undefined : '8 5',
+              },
             })
           }
         })
@@ -299,7 +340,16 @@ export function DockerSchemeView({ containers, networks }: SchemeProps) {
   }, [containers, networks, setNodes, setEdges])
 
   return (
-    <div style={{ width: '100%', height: 'calc(100vh - 200px)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
+    <div
+      style={{
+        width: '100%',
+        minHeight: 440,
+        height: 'min(70vh, calc(100vh - 220px))',
+        border: '1px solid var(--border)',
+        borderRadius: 12,
+        overflow: 'hidden',
+      }}
+    >
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -307,12 +357,15 @@ export function DockerSchemeView({ containers, networks }: SchemeProps) {
         onEdgesChange={onEdgesChange}
         nodeTypes={nodeTypes}
         fitView
+        fitViewOptions={{ padding: 0.12, maxZoom: 1.35 }}
         colorMode="dark"
         nodesConnectable={false}
         elementsSelectable={false}
         edgesFocusable={false}
+        elevateEdgesOnSelect={false}
+        proOptions={{ hideAttribution: true }}
       >
-        <Background />
+        <Background gap={18} size={1} color="var(--border)" />
         <Controls />
       </ReactFlow>
     </div>
