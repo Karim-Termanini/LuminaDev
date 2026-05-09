@@ -27,8 +27,10 @@ function ContainerNode({ data }: { data: ContainerRow }) {
         width: 260,
         display: 'flex',
         flexDirection: 'column',
-        gap: 12,
+        gap: 8,
         cursor: 'default',
+        overflow: 'visible',
+        boxSizing: 'border-box',
       }}
     >
       <Handle type="target" position={Position.Top} style={{ background: 'var(--accent)' }} />
@@ -148,33 +150,31 @@ function NetworkNode({ data }: { data: NetworkRow }) {
 }
 
 function ClusterGroupNode({ data }: { data: { isSystem: boolean } }) {
+  const isSystem = data.isSystem
   return (
-    <div
-      style={{
-        width: '100%',
-        height: '100%',
-        background: data.isSystem ? 'rgba(30, 30, 30, 0.3)' : 'rgba(124, 77, 255, 0.03)',
-        border: `2px dashed ${data.isSystem ? 'var(--border)' : 'var(--accent)'}`,
-        borderRadius: 16,
-        position: 'relative',
-      }}
-    >
-      <div
-        style={{
-          position: 'absolute',
-          top: -10,
-          left: 20,
-          background: data.isSystem ? 'var(--bg-panel)' : 'var(--accent)',
-          color: data.isSystem ? 'var(--text-muted)' : '#fff',
-          padding: '2px 10px',
-          borderRadius: 4,
-          fontSize: 10,
-          fontWeight: 700,
-          textTransform: 'uppercase',
-          border: `1px solid ${data.isSystem ? 'var(--border)' : 'var(--accent)'}`,
-        }}
-      >
-        {data.isSystem ? 'System Network' : 'Custom Project Network'}
+    <div style={{
+      width: '100%',
+      height: '100%',
+      background: isSystem ? 'rgba(30,30,30,0.3)' : 'rgba(124,77,255,0.03)',
+      border: `2px dashed ${isSystem ? 'var(--border)' : 'var(--accent)'}`,
+      borderRadius: 16,
+      position: 'relative',
+    }}>
+      <div style={{
+        position: 'absolute',
+        top: -10,
+        left: 20,
+        background: isSystem ? 'var(--bg-panel)' : 'var(--accent)',
+        color: isSystem ? 'var(--text-muted)' : '#fff',
+        padding: '2px 10px',
+        borderRadius: 4,
+        fontSize: 10,
+        fontWeight: 700,
+        textTransform: 'uppercase',
+        border: `1px solid ${isSystem ? 'var(--border)' : 'var(--accent)'}`,
+        letterSpacing: '0.06em',
+      }}>
+        {isSystem ? 'System Network' : 'Custom Project Network'}
       </div>
     </div>
   )
@@ -210,50 +210,55 @@ export function DockerSchemeView({ containers, networks }: SchemeProps) {
       networkContainers[primaryNet].push(c)
     })
 
+    const CONTAINER_WIDTH = 260
+    const GAP = 30
+    const NET_H = 80
+    const CARD_H = 380   // generous — cards won't be clipped
+    const PAD = 30
+
     let currentX = 50
 
-    // Build Clusters
     networks.forEach((net) => {
       const conts = networkContainers[net.name] || []
       const count = conts.length
-      
-      const CONTAINER_WIDTH = 260
-      const GAP = 30
       const boxWidth = Math.max(300, count * CONTAINER_WIDTH + (count + 1) * GAP)
-      const boxHeight = count > 0 ? 320 : 120
+      const boxHeight = count > 0 ? PAD + NET_H + GAP + CARD_H + PAD : PAD + NET_H + PAD
 
-      // Add Cluster Background Box
+      // Cluster background
       newNodes.push({
         id: `cluster-${net.name}`,
         type: 'clusterGroupNode',
         position: { x: currentX, y: 50 },
         style: { width: boxWidth, height: boxHeight },
         data: { isSystem: net.name === 'bridge' || net.name === 'host' || net.name === 'none' },
+        draggable: false,
+        selectable: false,
+        zIndex: 0,
       })
 
-      // Add Network Node (the pill) inside the cluster
+      // Network pill — child for positioning, no extent constraint
       newNodes.push({
         id: `net-${net.name}`,
         type: 'networkNode',
         parentId: `cluster-${net.name}`,
-        extent: 'parent',
-        position: { x: boxWidth / 2 - 86, y: 30 }, // 86 is half of 140px width + padding approx
+        position: { x: boxWidth / 2 - 70, y: PAD },
         data: net,
+        zIndex: 2,
       })
 
-      // Add Containers inside the cluster
+      // Container cards — child for positioning, NO extent:'parent' so ReactFlow won't clip
       conts.forEach((c, idx) => {
         newNodes.push({
           id: `cont-${c.id}`,
           type: 'containerNode',
           parentId: `cluster-${net.name}`,
-          extent: 'parent',
-          position: { x: GAP + idx * (CONTAINER_WIDTH + GAP), y: 130 },
+          position: { x: GAP + idx * (CONTAINER_WIDTH + GAP), y: PAD + NET_H + GAP },
           data: c,
+          zIndex: 2,
         })
       })
 
-      currentX += boxWidth + 50 // Advance X for next cluster
+      currentX += boxWidth + 50
     })
 
     // Handle unmapped containers
