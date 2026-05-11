@@ -666,7 +666,6 @@ export function DockerPage(): ReactElement {
     return state === 'running' || status.startsWith('up ')
   })
   const stoppedRows = rows.filter((r) => !runningRows.some((x) => x.id === r.id))
-  const rowsRemappableFromPs = rows.filter((r) => extractFirstHostPort(r.ports) !== '')
   const remapTargetRow = rows.find((r) => r.id === remapContainerId)
   const remapTargetHasHostBinding = Boolean(remapTargetRow && extractFirstHostPort(remapTargetRow.ports))
 
