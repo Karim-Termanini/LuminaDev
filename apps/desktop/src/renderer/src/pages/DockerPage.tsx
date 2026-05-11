@@ -104,6 +104,7 @@ export function DockerPage(): ReactElement {
   const [selectedTag, setSelectedTag] = useState('latest')
   const [isLoadingTags, setIsLoadingTags] = useState(false)
   const [activeTermContainer, setActiveTermContainer] = useState<ContainerRow | null>(null)
+  const [inspectRow, setInspectRow] = useState<ContainerRow | null>(null)
   const [sessionKind, setSessionKind] = useState<'flatpak' | 'native' | 'unknown'>('unknown')
   const [remapContainerId, setRemapContainerId] = useState('')
   const [remapOldPort, setRemapOldPort] = useState('')
@@ -2262,6 +2263,220 @@ function ContainerTable(props: ContainerTableProps & { onConsole: (row: Containe
   )
 }
 
+
+type InspectDrawerProps = {
+  row: ContainerRow
+  networks: NetworkRow[]
+  onClose: () => void
+  onRefresh: () => Promise<void>
+}
+
+function ContainerInspectDrawer({ row, networks, onClose, onRefresh }: InspectDrawerProps): ReactElement {
+  const [drawerTab, setDrawerTab] = useState<'info' | 'ports' | 'networks' | 'env' | 'volumes' | 'logs'>('info')
+  const [logs, setLogs] = useState<string>('')
+  const [logsBusy, setLogsBusy] = useState(false)
+  const [applying, setApplying] = useState(false)
+  const [applyFeedback, setApplyFeedback] = useState('')
+  const [editPorts, setEditPorts] = useState<Array<{ hostPort: string; containerPort: string; protocol: 'tcp' | 'udp' }>>(
+    () => {
+      if (!row.ports || row.ports === '—') return []
+      return row.ports.split(',').map((p) => {
+        const m = p.trim().match(/(?:[\d.]+:)?(\d+)->(\d+)\/(tcp|udp)/)
+        if (!m) return null
+        return { hostPort: m[1], containerPort: m[2], protocol: m[3] as 'tcp' | 'udp' }
+      }).filter(Boolean) as Array<{ hostPort: string; containerPort: string; protocol: 'tcp' | 'udp' }>
+    }
+  )
+  const [editEnv, setEditEnv] = useState<string[]>([])
+  const [editNetwork, setEditNetwork] = useState(row.networks?.[0] ?? 'bridge')
+  const [editRestart, setEditRestart] = useState('no')
+
+  async function loadLogs() {
+    setLogsBusy(true)
+    try {
+      const res = (await window.dh.dockerLogs({ id: row.id, tail: 200 })) as { ok: boolean; logs?: string; error?: string }
+      setLogs(res.ok ? (res.logs ?? '') : (res.error ?? 'Error loading logs'))
+    } finally {
+      setLogsBusy(false)
+    }
+  }
+
+  useEffect(() => {
+    if (drawerTab === 'logs') void loadLogs()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [drawerTab])
+
+  async function applyChanges() {
+    setApplying(true)
+    setApplyFeedback('')
+    try {
+      const res = (await window.dh.dockerReconfigure({
+        id: row.id,
+        ports: editPorts
+          .filter((p) => p.hostPort && p.containerPort)
+          .map((p) => ({ hostPort: Number(p.hostPort), containerPort: Number(p.containerPort), protocol: p.protocol })),
+        env: editEnv.filter((e) => e.trim()),
+        networkMode: editNetwork,
+        restartPolicy: editRestart,
+      })) as { ok: boolean; error?: string }
+      if (res.ok) {
+        setApplyFeedback('Applied. Container restarted.')
+        await onRefresh()
+      } else {
+        setApplyFeedback(res.error ?? 'Apply failed.')
+      }
+    } catch (e) {
+      setApplyFeedback(String(e))
+    } finally {
+      setApplying(false)
+    }
+  }
+
+  const tabStyle = (t: typeof drawerTab): React.CSSProperties => ({
+    padding: '6px 14px',
+    cursor: 'pointer',
+    fontWeight: drawerTab === t ? 600 : 400,
+    color: drawerTab === t ? 'var(--accent)' : 'var(--text-muted)',
+    background: 'none',
+    border: 'none',
+    borderBottom: drawerTab === t ? '2px solid var(--accent)' : '2px solid transparent',
+    fontSize: 13,
+  })
+
+  const isRunning = row.state.toLowerCase() === 'running'
+
+  return (
+    <div style={{
+      position: 'fixed', top: 0, right: 0, bottom: 0, width: 480, zIndex: 200,
+      background: 'var(--sidebar)', borderLeft: '1px solid var(--border)',
+      display: 'flex', flexDirection: 'column', boxShadow: '-4px 0 20px rgba(0,0,0,0.3)',
+    }}>
+      <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ width: 10, height: 10, borderRadius: '50%', flexShrink: 0, background: isRunning ? 'var(--green)' : 'var(--text-muted)' }} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontWeight: 600, fontSize: 15, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.name}</div>
+          <div className="mono" style={{ fontSize: 11, color: 'var(--text-muted)' }}>{row.id.slice(0, 12)}</div>
+        </div>
+        <button type="button" className="hp-btn" onClick={onClose} style={{ padding: '4px 10px' }}>✕</button>
+      </div>
+
+      <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', overflowX: 'auto' }}>
+        {(['info', 'ports', 'networks', 'env', 'volumes', 'logs'] as const).map((t) => (
+          <button key={t} type="button" style={tabStyle(t)} onClick={() => setDrawerTab(t)}>
+            {t.charAt(0).toUpperCase() + t.slice(1)}
+          </button>
+        ))}
+      </div>
+
+      <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px' }}>
+        {drawerTab === 'info' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div><span style={{ color: 'var(--text-muted)', fontSize: 12 }}>IMAGE</span><div className="mono" style={{ marginTop: 4 }}>{row.image}</div></div>
+            <div><span style={{ color: 'var(--text-muted)', fontSize: 12 }}>STATE</span><div style={{ marginTop: 4 }}>{row.state} — {row.status}</div></div>
+            <div><span style={{ color: 'var(--text-muted)', fontSize: 12 }}>ID</span><div className="mono" style={{ marginTop: 4, fontSize: 12 }}>{row.id}</div></div>
+            <div>
+              <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>RESTART POLICY</span>
+              <select className="hp-input" value={editRestart} onChange={(e) => setEditRestart(e.target.value)} style={{ marginTop: 4, display: 'block', width: '100%', background: '#1e1e1e', color: '#e8e8e8', border: '1px solid var(--border)', height: 36 }}>
+                <option value="no">no (default)</option>
+                <option value="always">always</option>
+                <option value="unless-stopped">unless-stopped</option>
+                <option value="on-failure">on-failure</option>
+              </select>
+            </div>
+            <button type="button" className="hp-btn" onClick={() => void applyChanges()} disabled={applying} style={{ alignSelf: 'flex-start', marginTop: 8 }}>
+              {applying ? 'Applying…' : 'Apply restart policy'}
+            </button>
+            {applyFeedback && <div style={{ fontSize: 12, color: applyFeedback.startsWith('Applied') ? 'var(--green)' : 'var(--red)' }}>{applyFeedback}</div>}
+          </div>
+        )}
+
+        {drawerTab === 'ports' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Port bindings. Apply recreates the container.</div>
+            {editPorts.map((p, i) => (
+              <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <input className="hp-input" type="number" min={1} max={65535} value={p.hostPort} onChange={(e) => setEditPorts((prev) => prev.map((x, j) => j === i ? { ...x, hostPort: e.target.value } : x))} placeholder="Host" style={{ width: 80 }} />
+                <span style={{ color: 'var(--text-muted)' }}>→</span>
+                <input className="hp-input" type="number" min={1} max={65535} value={p.containerPort} onChange={(e) => setEditPorts((prev) => prev.map((x, j) => j === i ? { ...x, containerPort: e.target.value } : x))} placeholder="Container" style={{ width: 90 }} />
+                <select className="hp-input" value={p.protocol} onChange={(e) => setEditPorts((prev) => prev.map((x, j) => j === i ? { ...x, protocol: e.target.value as 'tcp' | 'udp' } : x))} style={{ width: 70, background: '#1e1e1e', color: '#e8e8e8', border: '1px solid var(--border)', height: 36 }}>
+                  <option value="tcp">tcp</option>
+                  <option value="udp">udp</option>
+                </select>
+                <button type="button" className="hp-btn hp-btn-danger" onClick={() => setEditPorts((prev) => prev.filter((_, j) => j !== i))} style={{ padding: '4px 10px' }}>✕</button>
+              </div>
+            ))}
+            <button type="button" className="hp-btn" onClick={() => setEditPorts((prev) => [...prev, { hostPort: '', containerPort: '', protocol: 'tcp' }])} style={{ alignSelf: 'flex-start' }}>
+              + Add binding
+            </button>
+            <button type="button" className="hp-btn" onClick={() => void applyChanges()} disabled={applying} style={{ alignSelf: 'flex-start' }}>
+              {applying ? 'Applying…' : 'Apply port changes'}
+            </button>
+            {applyFeedback && <div style={{ fontSize: 12, color: applyFeedback.startsWith('Applied') ? 'var(--green)' : 'var(--red)' }}>{applyFeedback}</div>}
+          </div>
+        )}
+
+        {drawerTab === 'networks' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Network mode. Apply recreates the container.</div>
+            <select className="hp-input" value={editNetwork} onChange={(e) => setEditNetwork(e.target.value)} style={{ background: '#1e1e1e', color: '#e8e8e8', border: '1px solid var(--border)', height: 36, width: '100%' }}>
+              <option value="bridge">bridge</option>
+              <option value="host">host</option>
+              <option value="none">none</option>
+              {networks.filter((n) => !['bridge', 'host', 'none'].includes(n.name)).map((n) => (
+                <option key={n.id} value={n.name}>{n.name}</option>
+              ))}
+            </select>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Currently: {row.networks?.join(', ') || 'unknown'}</div>
+            <button type="button" className="hp-btn" onClick={() => void applyChanges()} disabled={applying} style={{ alignSelf: 'flex-start' }}>
+              {applying ? 'Applying…' : 'Apply network change'}
+            </button>
+            {applyFeedback && <div style={{ fontSize: 12, color: applyFeedback.startsWith('Applied') ? 'var(--green)' : 'var(--red)' }}>{applyFeedback}</div>}
+          </div>
+        )}
+
+        {drawerTab === 'env' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Environment variables. Apply recreates the container.</div>
+            {editEnv.map((e, i) => (
+              <div key={i} style={{ display: 'flex', gap: 8 }}>
+                <input className="hp-input" value={e} onChange={(ev) => setEditEnv((prev) => prev.map((x, j) => j === i ? ev.target.value : x))} placeholder="KEY=VALUE" style={{ flex: 1 }} />
+                <button type="button" className="hp-btn hp-btn-danger" onClick={() => setEditEnv((prev) => prev.filter((_, j) => j !== i))} style={{ padding: '4px 10px' }}>✕</button>
+              </div>
+            ))}
+            <button type="button" className="hp-btn" onClick={() => setEditEnv((prev) => [...prev, ''])} style={{ alignSelf: 'flex-start' }}>+ Add env var</button>
+            <button type="button" className="hp-btn" onClick={() => void applyChanges()} disabled={applying} style={{ alignSelf: 'flex-start' }}>
+              {applying ? 'Applying…' : 'Apply env changes'}
+            </button>
+            {applyFeedback && <div style={{ fontSize: 12, color: applyFeedback.startsWith('Applied') ? 'var(--green)' : 'var(--red)' }}>{applyFeedback}</div>}
+          </div>
+        )}
+
+        {drawerTab === 'volumes' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Volume mounts (read-only).</div>
+            {(row.volumes ?? []).length === 0
+              ? <div style={{ color: 'var(--text-muted)' }}>No volume mounts.</div>
+              : (row.volumes ?? []).map((v, i) => (
+                  <div key={i} className="mono" style={{ fontSize: 12, background: 'var(--bg)', padding: '6px 10px', borderRadius: 6 }}>{v}</div>
+                ))
+            }
+          </div>
+        )}
+
+        {drawerTab === 'logs' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <button type="button" className="hp-btn" onClick={() => void loadLogs()} disabled={logsBusy} style={{ alignSelf: 'flex-start' }}>
+              {logsBusy ? 'Loading…' : '↻ Refresh'}
+            </button>
+            <pre style={{ fontSize: 11, whiteSpace: 'pre-wrap', wordBreak: 'break-all', margin: 0, color: 'var(--text)', background: 'var(--bg)', padding: 12, borderRadius: 6, minHeight: 200 }}>
+              {logs || (logsBusy ? 'Loading…' : 'No logs.')}
+            </pre>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
 
 function DockerTerminalModal({ container, onClose }: { container: ContainerRow; onClose: () => void }): ReactElement {
   const termWrapRef = useRef<HTMLDivElement>(null)
