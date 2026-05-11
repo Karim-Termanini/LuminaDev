@@ -108,6 +108,8 @@ export function DockerPage(): ReactElement {
   const [remapContainerId, setRemapContainerId] = useState('')
   const [remapOldPort, setRemapOldPort] = useState('')
   const [remapNewPort, setRemapNewPort] = useState('')
+  const [remapContainerPort, setRemapContainerPort] = useState('')
+  const [remapProtocol, setRemapProtocol] = useState<'tcp' | 'udp'>('tcp')
   const [remapNetworkMode, setRemapNetworkMode] = useState('bridge')
   const [remapBusy, setRemapBusy] = useState(false)
   const [remapFeedback, setRemapFeedback] = useState<string | null>(null)
@@ -246,15 +248,17 @@ export function DockerPage(): ReactElement {
 
   useEffect(() => {
     if (tab !== 'ports' || !docker?.ok) return
-    const withP = docker.rows.filter((r) => r.ports !== '—')
-    if (withP.length === 0) {
+    const list = docker.rows
+    if (list.length === 0) {
       setRemapContainerId('')
+      setRemapOldPort('')
       return
     }
-    setRemapContainerId((current) =>
-      current && withP.some((r) => r.id === current) ? current : withP[0].id,
-    )
-    setRemapOldPort((current) => current || extractFirstHostPort(withP[0].ports))
+    const remappable = list.filter((r) => extractFirstHostPort(r.ports) !== '')
+    setRemapContainerId((current) => {
+      if (current && list.some((r) => r.id === current)) return current
+      return remappable[0]?.id ?? list[0].id
+    })
   }, [tab, docker])
 
   useEffect(() => {
@@ -262,6 +266,8 @@ export function DockerPage(): ReactElement {
     const selected = docker?.ok ? docker.rows.find((r) => r.id === remapContainerId) : undefined
     const firstNet = selected?.networks?.[0]
     if (firstNet) setRemapNetworkMode(firstNet)
+    const hp = selected ? extractFirstHostPort(selected.ports) : ''
+    setRemapOldPort(hp)
   }, [remapContainerId, docker])
 
 
@@ -318,34 +324,50 @@ export function DockerPage(): ReactElement {
   }
 
   async function runRemapPort(): Promise<void> {
-    const selectedId = remapContainerId.trim() || rowsWithPorts[0]?.id || ''
-    const selected = rowsWithPorts.find((r) => r.id === selectedId)
+    const list = docker?.ok ? docker.rows : []
+    const remappable = list.filter((r) => extractFirstHostPort(r.ports) !== '')
+    const selectedId = remapContainerId.trim() || remappable[0]?.id || list[0]?.id || ''
+    const selected = list.find((r) => r.id === selectedId)
     const oldPortRaw = remapOldPort || (selected ? extractFirstHostPort(selected.ports) : '')
-    const oldHost = Number.parseInt(oldPortRaw, 10)
-    const newHost = Number.parseInt(remapNewPort, 10)
-    if (!selectedId || !Number.isFinite(oldHost) || !Number.isFinite(newHost)) {
-      setRemapFeedback('Choose a container and enter numeric host ports. Use the same port to change only the network.')
+    const oldPort = parseInt(oldPortRaw, 10)
+    const newPort = parseInt(remapNewPort, 10)
+    const hasExistingBinding = Boolean(selected && extractFirstHostPort(selected.ports))
+
+    if (!selected) {
+      setRemapFeedback('Select a container first.')
       return
     }
+    if (!newPort || newPort < 1 || newPort > 65535) {
+      setRemapFeedback('Enter a valid new host port (1-65535).')
+      return
+    }
+    if (!hasExistingBinding) {
+      const cp = parseInt(remapContainerPort, 10)
+      if (!cp || cp < 1 || cp > 65535) {
+        setRemapFeedback('Enter the container port to bind (1-65535).')
+        return
+      }
+    }
+
     setRemapBusy(true)
     setRemapFeedback(null)
     try {
       const res = (await window.dh.dockerRemapPort({
-        id: selectedId,
-        oldHostPort: oldHost,
-        newHostPort: newHost,
+        id: selected.id,
+        oldHostPort: hasExistingBinding ? oldPort : 0,
+        newHostPort: newPort,
+        containerPort: hasExistingBinding ? 0 : parseInt(remapContainerPort, 10),
+        protocol: remapProtocol,
         networkMode: remapNetworkMode,
       })) as { ok: boolean; error?: string }
-      if (res.ok) {
-        setRemapFeedback('Remap finished. Container list refreshed.')
-        setRemapOldPort('')
-        setRemapNewPort('')
-        await refreshAll()
+      if (!res.ok) {
+        setRemapFeedback(res.error ?? 'Remap failed.')
       } else {
-        setRemapFeedback(humanizeDockerError(res.error || '[DOCKER_REMAP_FAILED] Unknown error'))
+        setRemapFeedback('Done. Refreshing...')
+        await refreshAll()
       }
     } catch (e) {
-      setRemapFeedback(humanizeDockerError(e))
+      setRemapFeedback(String(e))
     } finally {
       setRemapBusy(false)
     }
@@ -643,7 +665,9 @@ export function DockerPage(): ReactElement {
     return state === 'running' || status.startsWith('up ')
   })
   const stoppedRows = rows.filter((r) => !runningRows.some((x) => x.id === r.id))
-  const rowsWithPorts = rows.filter((r) => r.ports !== '—')
+  const rowsRemappableFromPs = rows.filter((r) => extractFirstHostPort(r.ports) !== '')
+  const remapTargetRow = rows.find((r) => r.id === remapContainerId)
+  const remapTargetHasHostBinding = Boolean(remapTargetRow && extractFirstHostPort(remapTargetRow.ports))
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20, paddingInline: 12 }}>
@@ -1248,12 +1272,14 @@ export function DockerPage(): ReactElement {
         {docker?.ok && tab === 'ports' ? (
           <div style={{ display: 'grid', gap: 12 }}>
             <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>
-              Port manager for conflicts: clone container with remapped host port.
+              Lists every container. The <strong>Host publish</strong> column is “yes” only when{' '}
+              <span className="mono">docker ps</span> shows a binding like <span className="mono">0.0.0.0:8080-&gt;80/tcp</span>
+              {' '}(that is what Remap can clone and change).
             </div>
             <div className="hp-card">
-              <div style={{ fontWeight: 600, marginBottom: 8 }}>Current published ports</div>
-              {rowsWithPorts.length === 0 ? (
-                <div style={{ color: 'var(--text-muted)' }}>No containers with published ports.</div>
+              <div style={{ fontWeight: 600, marginBottom: 8 }}>Containers and Docker Ports column</div>
+              {rows.length === 0 ? (
+                <div style={{ color: 'var(--text-muted)' }}>No containers.</div>
               ) : (
                 <div style={tableWrap}>
                   <table style={table}>
@@ -1262,14 +1288,22 @@ export function DockerPage(): ReactElement {
                         <th style={{ padding: '8px 6px' }}>Container</th>
                         <th>State</th>
                         <th>Ports</th>
+                        <th>Host publish</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {rowsWithPorts.map((r) => (
+                      {rows.map((r) => (
                         <tr key={r.id} style={{ borderTop: '1px solid var(--border)' }}>
                           <td style={{ padding: '9px 6px', fontWeight: 600 }}>{r.name}</td>
                           <td>{r.state}</td>
                           <td className="mono" style={monoCell} title={r.ports}>{r.ports}</td>
+                          <td style={{ fontSize: 13 }}>
+                            {extractFirstHostPort(r.ports) ? (
+                              <span style={{ color: 'var(--green)' }}>yes</span>
+                            ) : (
+                              <span style={{ color: 'var(--text-muted)' }}>no</span>
+                            )}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -1278,7 +1312,7 @@ export function DockerPage(): ReactElement {
               )}
             </div>
             <div className="hp-card">
-              <div style={{ fontWeight: 600, marginBottom: 8 }}>Remap host port</div>
+              <div style={{ fontWeight: 600, marginBottom: 8 }}>Port bindings</div>
               {sessionKind === 'flatpak' ? (
                 <div className="hp-status-alert warning" style={{ marginBottom: 0 }}>
                   <span className="codicon codicon-tools" aria-hidden />
@@ -1303,9 +1337,10 @@ export function DockerPage(): ReactElement {
                   <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)' }}>
                     Clones the container with a new host port binding, then stops/removes the original when possible. Container must be running or stoppable as Docker allows.
                   </p>
-                  {rowsWithPorts.length === 0 ? (
-                    <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>No published ports to pick from — start a container with port mappings first.</div>
-                  ) : (
+                  {rows.length === 0 ? (
+                    <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>No containers yet.</div>
+                  ) : null}
+                  {rows.length > 0 ? (
                     <>
                       <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13 }}>
                         <span style={{ fontWeight: 600 }}>Container</span>
@@ -1315,7 +1350,7 @@ export function DockerPage(): ReactElement {
                           onChange={(e) => {
                             const nextId = e.target.value
                             setRemapContainerId(nextId)
-                            const next = rowsWithPorts.find((r) => r.id === nextId)
+                            const next = rows.find((r) => r.id === nextId)
                             if (next) setRemapOldPort(extractFirstHostPort(next.ports))
                           }}
                           style={{
@@ -1328,64 +1363,116 @@ export function DockerPage(): ReactElement {
                             padding: '0 12px'
                           }}
                         >
-                          {rowsWithPorts.map((r) => (
+                          {rows.map((r) => (
                             <option key={r.id} value={r.id} style={{ background: '#1e1e1e', color: '#e8e8e8' }}>
                               {r.name} ({r.id.slice(0, 12)}) — {r.ports}
+                              {extractFirstHostPort(r.ports) ? '' : ' (no host publish in ps)'}
                             </option>
                           ))}
                         </select>
                       </label>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end' }}>
-                        <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13 }}>
-                          <span style={{ fontWeight: 600 }}>Current host port</span>
-                          <input
-                            className="hp-input"
-                            type="number"
-                            min={1}
-                            max={65535}
-                            placeholder="8080"
-                            value={remapOldPort}
-                            onChange={(e) => setRemapOldPort(e.target.value)}
-                            style={{ width: 120 }}
-                          />
-                        </label>
-                        <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13 }}>
-                          <span style={{ fontWeight: 600 }}>New host port <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>(same = keep port)</span></span>
-                          <input
-                            className="hp-input"
-                            type="number"
-                            min={1}
-                            max={65535}
-                            placeholder="same or new"
-                            value={remapNewPort}
-                            onChange={(e) => setRemapNewPort(e.target.value)}
-                            style={{ width: 140 }}
-                          />
-                        </label>
-                        <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13, minWidth: 180 }}>
-                          <span style={{ fontWeight: 600 }}>Target network</span>
-                          <select
-                            className="hp-input"
-                            value={remapNetworkMode}
-                            onChange={(e) => setRemapNetworkMode(e.target.value)}
+                      {!remapTargetHasHostBinding ? (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end' }}>
+                          <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13 }}>
+                            <span style={{ fontWeight: 600 }}>Container port</span>
+                            <input
+                              className="hp-input"
+                              type="number"
+                              min={1}
+                              max={65535}
+                              value={remapContainerPort}
+                              onChange={(e) => setRemapContainerPort(e.target.value)}
+                              placeholder="e.g. 80"
+                              style={{ width: 100 }}
+                            />
+                          </label>
+                          <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13 }}>
+                            <span style={{ fontWeight: 600 }}>Host port</span>
+                            <input
+                              className="hp-input"
+                              type="number"
+                              min={1}
+                              max={65535}
+                              value={remapNewPort}
+                              onChange={(e) => setRemapNewPort(e.target.value)}
+                              placeholder="e.g. 8080"
+                              style={{ width: 100 }}
+                            />
+                          </label>
+                          <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13 }}>
+                            <span style={{ fontWeight: 600 }}>Protocol</span>
+                            <select
+                              className="hp-input"
+                              value={remapProtocol}
+                              onChange={(e) => setRemapProtocol(e.target.value as 'tcp' | 'udp')}
+                              style={{ width: 80, background: '#1e1e1e', color: '#e8e8e8', border: '1px solid var(--border)', height: 38 }}
+                            >
+                              <option value="tcp">tcp</option>
+                              <option value="udp">udp</option>
+                            </select>
+                          </label>
+                          <button
+                            type="button"
+                            className="hp-btn hp-btn-primary"
+                            disabled={remapBusy}
+                            onClick={() => void runRemapPort()}
                           >
-                            {networks.map((n) => (
-                              <option key={n.name} value={n.name}>
-                                {n.name}
-                              </option>
-                            ))}
-                            {networks.length === 0 ? <option value="bridge">bridge</option> : null}
-                          </select>
-                        </label>
-                        <button
-                          type="button"
-                          className="hp-btn hp-btn-primary"
-                          disabled={remapBusy}
-                          onClick={() => void runRemapPort()}
-                        >
-                          {remapBusy ? 'Working…' : 'Remap port'}
-                        </button>
-                      </div>
+                            {remapBusy ? 'Working…' : 'Add binding'}
+                          </button>
+                        </div>
+                      ) : (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end' }}>
+                          <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13 }}>
+                            <span style={{ fontWeight: 600 }}>Current host port</span>
+                            <input
+                              className="hp-input"
+                              type="number"
+                              min={1}
+                              max={65535}
+                              placeholder="8080"
+                              value={remapOldPort}
+                              onChange={(e) => setRemapOldPort(e.target.value)}
+                              style={{ width: 120 }}
+                            />
+                          </label>
+                          <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13 }}>
+                            <span style={{ fontWeight: 600 }}>New host port <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>(same = keep port)</span></span>
+                            <input
+                              className="hp-input"
+                              type="number"
+                              min={1}
+                              max={65535}
+                              placeholder="same or new"
+                              value={remapNewPort}
+                              onChange={(e) => setRemapNewPort(e.target.value)}
+                              style={{ width: 140 }}
+                            />
+                          </label>
+                          <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13, minWidth: 180 }}>
+                            <span style={{ fontWeight: 600 }}>Target network</span>
+                            <select
+                              className="hp-input"
+                              value={remapNetworkMode}
+                              onChange={(e) => setRemapNetworkMode(e.target.value)}
+                            >
+                              {networks.map((n) => (
+                                <option key={n.name} value={n.name}>
+                                  {n.name}
+                                </option>
+                              ))}
+                              {networks.length === 0 ? <option value="bridge">bridge</option> : null}
+                            </select>
+                          </label>
+                          <button
+                            type="button"
+                            className="hp-btn hp-btn-primary"
+                            disabled={remapBusy}
+                            onClick={() => void runRemapPort()}
+                          >
+                            {remapBusy ? 'Working…' : 'Remap port'}
+                          </button>
+                        </div>
+                      )}
                       {remapFeedback ? (
                         <div
                           className={remapFeedback.startsWith('Remap finished') ? 'hp-status-alert success' : 'hp-status-alert warning'}
@@ -1395,7 +1482,7 @@ export function DockerPage(): ReactElement {
                         </div>
                       ) : null}
                     </>
-                  )}
+                  ) : null}
                 </div>
               )}
             </div>
@@ -2057,7 +2144,7 @@ function parseVolumeMappings(text: string): Array<{ hostPath: string; containerP
 
 function getNetworkDescription(name: string): string {
   if (name === 'bridge') return 'Default network. Connects containers together and provides internet access.'
-  if (name === 'host') return 'Removes network isolation. Containers share the host’s exact IP and ports.'
+  if (name === 'host') return "Removes network isolation. Containers share the host's exact IP and ports."
   if (name === 'none') return 'Completely disables networking. Container has no internet or local access.'
   if (name.endsWith('_default')) return 'Custom bridge network (usually created by Docker Compose) to isolate an app.'
   return 'User-created custom network.'
