@@ -923,12 +923,19 @@ async fn docker_remap_port_invoke(body: &Value) -> Value {
   let id = body.get("id").and_then(|v| v.as_str()).unwrap_or_default();
   let old_hp = body.get("oldHostPort").and_then(|v| v.as_u64()).unwrap_or(0);
   let new_hp = body.get("newHostPort").and_then(|v| v.as_u64()).unwrap_or(0);
+  let container_port = body.get("containerPort").and_then(|v| v.as_u64()).unwrap_or(0);
+  let protocol = body
+    .get("protocol")
+    .and_then(|v| v.as_str())
+    .unwrap_or("tcp")
+    .to_string();
+  let add_mode = old_hp == 0;
   let requested_network = body
     .get("networkMode")
     .and_then(|v| v.as_str())
     .map(|s| s.trim())
     .filter(|s| !s.is_empty());
-  if id.is_empty() || old_hp == 0 || new_hp == 0 {
+  if id.is_empty() || new_hp == 0 || (add_mode && container_port == 0) || (!add_mode && old_hp == 0) {
     return json!({ "ok": false, "error": "[DOCKER_INVALID_REQUEST] id and host ports (1-65535) are required." });
   }
 
@@ -968,7 +975,7 @@ async fn docker_remap_port_invoke(body: &Value) -> Value {
   let target_network_mode = requested_network.unwrap_or(current_network_mode.as_str()).to_string();
 
   // Nothing to do: same port AND same network.
-  if old_hp == new_hp && target_network_mode == current_network_mode {
+  if !add_mode && old_hp == new_hp && target_network_mode == current_network_mode {
     return json!({ "ok": false, "error": "[DOCKER_INVALID_REQUEST] port and network are identical — nothing to change." });
   }
 
@@ -979,34 +986,40 @@ async fn docker_remap_port_invoke(body: &Value) -> Value {
   let Some(bind_obj) = bindings.as_object() else {
     return json!({ "ok": false, "error": "[DOCKER_INVALID_REQUEST] PortBindings missing or invalid." });
   };
-  if bind_obj.is_empty() {
+  if bind_obj.is_empty() && !add_mode {
     return json!({ "ok": false, "error": "[DOCKER_INVALID_REQUEST] no published host ports to remap." });
   }
 
-  let mut matched = false;
-  if let Some(obj) = bindings.as_object_mut() {
-    for arr_val in obj.values_mut() {
-      let Some(arr) = arr_val.as_array_mut() else {
-        continue;
-      };
-      for b in arr.iter_mut() {
-        let Some(o) = b.as_object_mut() else {
-          continue;
-        };
-        if let Some(hp) = o.get("HostPort").and_then(|v| v.as_str()) {
-          if hp.parse::<u64>().ok() == Some(old_hp) {
-            o.insert("HostPort".to_string(), json!(new_hp.to_string()));
-            matched = true;
+  let mut matched = !add_mode;
+  if add_mode {
+    let key = format!("{}/{}", container_port, protocol);
+    if let Some(obj) = bindings.as_object_mut() {
+      obj.entry(key.clone()).or_insert_with(|| json!([]));
+      if let Some(arr) = obj.get_mut(&key).and_then(|v| v.as_array_mut()) {
+        arr.push(json!({ "HostPort": new_hp.to_string() }));
+      }
+    }
+  } else {
+    if let Some(obj) = bindings.as_object_mut() {
+      for arr_val in obj.values_mut() {
+        let Some(arr) = arr_val.as_array_mut() else { continue; };
+        for b in arr.iter_mut() {
+          let Some(o) = b.as_object_mut() else { continue; };
+          if let Some(hp) = o.get("HostPort").and_then(|v| v.as_str()) {
+            if hp.parse::<u64>().ok() == Some(old_hp) {
+              o.insert("HostPort".to_string(), json!(new_hp.to_string()));
+              matched = true;
+            }
           }
         }
       }
     }
-  }
-  if !matched {
-    return json!({
-      "ok": false,
-      "error": format!("[DOCKER_INVALID_REQUEST] host port {old_hp} not found in container port bindings.")
-    });
+    if !matched {
+      return json!({
+        "ok": false,
+        "error": format!("[DOCKER_INVALID_REQUEST] host port {old_hp} not found in container port bindings.")
+      });
+    }
   }
 
   let build_create_args = |name_try: &str| -> Vec<String> {
