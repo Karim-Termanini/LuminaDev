@@ -17,3 +17,8 @@ flatpak-build-dir
 .flatpak-builder
 apps/desktop/src-tauri/target
 apps/desktop/src-tauri/gen
+
+# Local iii / agentmemory KV when the engine uses the repo root as cwd (do not ship)
+data/state_store.db
+data/state_store.db/
+data/stream_store/

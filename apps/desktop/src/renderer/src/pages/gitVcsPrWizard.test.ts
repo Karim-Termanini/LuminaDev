@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { BranchEntry } from '@linux-dev-home/shared'
-import { computeBaseBranchOptions, defaultBaseBranch, stripRemoteBranchPrefix } from './gitVcsPrWizard'
+import { computeBaseBranchOptions, defaultBaseBranch, stripRemoteBranchPrefix } from './gitVcsPrWizardBranch'
 
 describe('stripRemoteBranchPrefix', () => {
   it('strips matching remote prefix', () => {
