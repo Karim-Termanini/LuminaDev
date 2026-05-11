@@ -1,0 +1,28 @@
+# LUMINA_DEV_COMPOSE_FULL=1 overlay — data science stack
+name: lumina-data-science
+
+services:
+  jupyter:
+    image: jupyter/datascience-notebook:latest
+    ports:
+      - "18888:8888"
+    environment:
+      - JUPYTER_TOKEN=luminadev
+    volumes:
+      - notebooks:/home/jovyan/work
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "15432:5432"
+    environment:
+      - POSTGRES_PASSWORD=luminadev
+      - POSTGRES_DB=datasci
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  notebooks:
+  pg_data:

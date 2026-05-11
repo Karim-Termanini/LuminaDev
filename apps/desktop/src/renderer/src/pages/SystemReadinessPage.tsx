@@ -6,6 +6,7 @@ type ReadinessReport = {
   hardware: {
     cpu_model: string
     cpu_cores: number
+    architecture: string
     ram_total_gb: number
     ram_free_gb: number
     disk_total_gb: number
@@ -72,6 +73,12 @@ export function SystemReadinessPage(): ReactElement {
         <h2 style={{ margin: 0 }}>Hardware Health</h2>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
           <StatCard label="CPU Model" value={hardware.cpu_model} subValue={`${hardware.cpu_cores} Cores`} />
+          <StatCard
+            label="Architecture"
+            value={hardware.architecture}
+            subValue={hardware.architecture === 'x86_64' ? 'Fully supported' : 'Some runtimes may not be available'}
+            status={hardware.architecture === 'x86_64' ? 'ok' : 'warning'}
+          />
           <StatCard 
             label="RAM" 
             value={`${hardware.ram_total_gb.toFixed(1)} GB`} 

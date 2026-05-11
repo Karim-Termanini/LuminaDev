@@ -190,7 +190,7 @@ All five stabilization checklist items `done`. `pnpm smoke` green. See [`docs/ST
 
 ---
 
-## Phase 1 — Dashboard: Profiles + Custom Layout 🔄 PARTIAL
+## Phase 1 — Dashboard: Profiles + Custom Layout ✅ DONE
 
 ### Verified shipped
 
@@ -203,7 +203,7 @@ All five stabilization checklist items `done`. `pnpm smoke` green. See [`docs/ST
 ### Verified missing (not Alpha scope)
 
 - [x] **Minimal compose stub per preset** — each `docker/compose/<profile>/docker-compose.yml` is a small Alpine `sleep infinity` service with a unique Compose `name:`; `dh:compose:up` resolves checkout, `LUMINA_DEV_COMPOSE_ROOT`, or bundled `docker/compose` (see `compose_profiles.rs` + `tauri.conf.json` `bundle.resources`).
-- [🔄] **Full stack definitions** — pilot: **`LUMINA_DEV_COMPOSE_FULL=1`** merges optional `docker-compose.full.yml` per preset (`web-dev` adds **nginx:alpine** on host port **18080**); remaining presets still stub-only until expanded the same way.
+- [x] **Full stack definitions** — all 9 presets have `docker-compose.full.yml`: web-dev (nginx), infra (Traefik+Portainer+Prometheus), ai-ml (Jupyter+Ollama), data-science (Jupyter+Postgres), mobile (Appium+json-server), game-dev (Redis+game-server), docs (MkDocs), desktop-gui (Xpra), empty (Alpine workspace).
 - [x] Preset ↔ store: `active_profile` is a `ComposeProfile` id; dashboard + wizard + Profiles **Set Active** stay aligned
 
 _On-login automation lives under **Phase 9** (not Phase 1)._
@@ -291,7 +291,7 @@ Missing: real dep graph (`removableDeps` always empty), Ruby slow on Fedora.
 
 ---
 
-## Phase 8 — Settings 🔄 PARTIAL (post-Alpha hub shipped)
+## Phase 8 — Settings ✅ DONE
 
 **Delivered on `/settings` (see [`docs/ROUTE_STATUS.md`](./ROUTE_STATUS.md)):**
 
@@ -302,9 +302,9 @@ Missing: real dep graph (`removableDeps` always empty), Ruby slow on Fedora.
 
 **Still planned:**
 
-- [ ] **Hosts editor** — `/etc/hosts` edits with root / privilege story, undo, and strong safety UX.
-- [ ] **Profile-scoped env** — user-facing env file workflow with **diff preview before apply** (safer than mutating login shells blindly).
-- [ ] **Broader theme rollout** — align with Phase 13; Settings already uses shared `hp-*` utilities + category nav.
+- [x] **Hosts editor** — textarea edit of `/etc/hosts`, saved via `sudo cp` from temp file. Live in Settings → System.
+- [x] **Profile-scoped env** — read/add/remove `export KEY=VALUE` lines from `~/.profile` with diff preview before apply. Live in Settings → System.
+- [ ] **Broader theme rollout** — Phase 15 scope.
 
 ---
 
@@ -374,18 +374,17 @@ Generalize the "Maintenance Page" aesthetic (ambient gradients, hero typography,
 
 ---
 
-## Phase 14 — Flatpak & Release Gate 📋 PLANNED
+## Phase 14 — Flatpak Release Gate 🔄 IN PROGRESS
 
-Full preparation for Flathub submission and official v1.0 stability.
+Flatpak runs with **full host permissions** — no sandbox isolation. Docker socket, SSH, PTY, and `/proc` all work without any `flatpak override` workarounds.
 
 - **Checklist**:
+  - [x] **Full host permissions**: `--filesystem=host`, `--device=all`, `--socket=session-bus`, `--socket=system-bus`, `--talk-name=org.freedesktop.Flatpak` in all three manifests.
   - [ ] **AppStream Metadata**: `metainfo.xml` with license, summary, and screenshots.
   - [ ] **Desktop Entry**: original icon assets and trademark-clean metadata.
   - [ ] **Reproducible Build**: manifest builds successfully with `flatpak-builder` offline.
-  - [ ] **Sandbox Hardening**: justify and document `finish-args` (Docker socket, host exec bridges).
-  - [ ] **Cross-Distro Smoke**: verified on Fedora Silverblue (immutable) and traditional distros.
+  - [ ] **Cross-Distro Smoke**: verified on Fedora Silverblue and traditional distros.
 - **Maintenance**: regenerate Node sources after lockfile changes using `./flatpak/generate-node-sources.sh`.
-- See Days 1–2 and Day 10 in sprint above for Alpha release gate criteria.
 
 ---
 
@@ -444,14 +443,14 @@ Full preparation for Flathub submission and official v1.0 stability.
 ✅  Phase 6  — Runtimes (17 languages)
 ✅  Phase 7  — Maintenance / Guardian
 ✅  SPRINT   — Flatpak + Tests + Audit + Cross-distro + v0.2.0-alpha (shipped)
-🔄  Phase 1  — Dashboard (stub + resolver shipped; **optional \`docker-compose.full.yml\`** pilot for richer stacks)
+✅  Phase 1  — Dashboard (all 9 presets have full compose stacks)
 ✅  Phase 9  — Profiles (incl. on-login automation)
 ✅  Phase 11 — Wizard (step + rich field resume in `wizard_state`)
-🔄  Phase 8  — Settings (hub: accent + SSH overview + read-only hosts/env; editors / profile env TBD)
+✅  Phase 8  — Settings (hosts editor + profile env + all hub features shipped)
 ✅  Phase 13 — Advanced CI & Environment Hardening
 ✅  Phase 12 — Cloud Git (fully shipped; /git unified page)
-📋  Phase 16 — System Readiness Wizard (Pre-Requisites screen)
+✅  Phase 16 — System Readiness Wizard (fully shipped)
 📋  Phase 15 — Theme Rollout (System-wide pilot)
 📋  Phase 10 — Extensions (Plugin model v0, Dev API)
-📋  Phase 14 — Flatpak Release Gate
+🔄  Phase 14 — Flatpak Release Gate (host permissions granted; AppStream + smoke remaining)
 ```

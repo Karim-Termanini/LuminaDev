@@ -557,7 +557,13 @@ export function SshPage(): ReactElement {
 
         {/* Enable SSH on This Machine */}
         <section>
-          <h2 style={{ fontSize: 18, marginBottom: 12 }}>SSH Server</h2>
+          <div style={{ marginBottom: 14 }}>
+            <div className="mono" style={{ fontSize: 11, color: 'var(--accent)', marginBottom: 4, letterSpacing: '0.08em' }}>STEP 0 · OPTIONAL</div>
+            <h2 style={{ fontSize: 18, margin: '0 0 4px' }}>SSH Server</h2>
+            <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+              Turn this machine into an SSH host. Other devices on your network can then connect to it. Skip if you only need to connect <em>to</em> remote servers.
+            </p>
+          </div>
           <div className="hp-card" style={{ flexDirection: 'column', gap: 12 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 }}>
               <div>
@@ -588,7 +594,13 @@ export function SshPage(): ReactElement {
 
         {/* SSH Identity Wizard Section */}
         <section>
-          <h2 style={{ fontSize: 18, marginBottom: 16 }}>Local Identity Setup</h2>
+          <div style={{ marginBottom: 16 }}>
+            <div className="mono" style={{ fontSize: 11, color: 'var(--accent)', marginBottom: 4, letterSpacing: '0.08em' }}>STEP 1 · REQUIRED</div>
+            <h2 style={{ fontSize: 18, margin: '0 0 4px' }}>Local Identity Setup</h2>
+            <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+              Your SSH key is your identity on the network. Generate one here, then copy the public key to any remote server or GitHub/GitLab account you want to access without a password.
+            </p>
+          </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             
             <div className="hp-card">
@@ -643,7 +655,13 @@ export function SshPage(): ReactElement {
 
         {/* Bookmarks Section */}
         <section>
-          <h2 style={{ fontSize: 18, marginBottom: 16 }}>Saved Servers</h2>
+          <div style={{ marginBottom: 16 }}>
+            <div className="mono" style={{ fontSize: 11, color: 'var(--accent)', marginBottom: 4, letterSpacing: '0.08em' }}>STEP 2 · CONNECT</div>
+            <h2 style={{ fontSize: 18, margin: '0 0 4px' }}>Saved Servers</h2>
+            <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+              Bookmark remote machines by label. Hit <strong>Connect</strong> to open a live shell, browse files, or push your public key automatically.
+            </p>
+          </div>
           <div
             className="hp-card"
             style={{
@@ -729,7 +747,13 @@ export function SshPage(): ReactElement {
       {/* RIGHT COLUMN: Connection History & Active Sessions */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 8, borderBottom: '1px solid var(--border)' }}>
-          <h2 style={{ fontSize: 18, margin: 0 }}>Connection History</h2>
+          <div>
+            <div className="mono" style={{ fontSize: 11, color: 'var(--accent)', marginBottom: 4, letterSpacing: '0.08em' }}>ACTIVITY</div>
+            <h2 style={{ fontSize: 18, margin: '0 0 4px' }}>Connection History</h2>
+            <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+              Recent connections and active sessions. Click a session to re-open the terminal or file browser.
+            </p>
+          </div>
           <span className="mono" style={{ fontSize: 12, color: 'var(--text-muted)' }}>
             {connectedCount} active / {sessions.length} total
           </span>

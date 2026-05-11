@@ -1,0 +1,11 @@
+# LUMINA_DEV_COMPOSE_FULL=1 overlay — docs/writing stack
+name: lumina-docs
+
+services:
+  mkdocs:
+    image: squidfunk/mkdocs-material:latest
+    ports:
+      - "18000:8000"
+    volumes:
+      - ./:/docs
+    restart: unless-stopped

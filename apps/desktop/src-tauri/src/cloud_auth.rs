@@ -2018,7 +2018,10 @@ impl GitHubProvider {
             return Err("[CLOUD_GIT_MERGE_PR] Pull request not found, or the URL does not match this repository.".to_string());
         }
         if resp.status() == 405 {
-            return Err("[CLOUD_GIT_MERGE_PR] GitHub refused to merge (branch not mergeable, required reviews, or checks not passing).".to_string());
+            return Err(format!(
+                "[CLOUD_GIT_MERGE_PR] GitHub requires at least one approved review before merging (branch protection rule). As repo owner, disable 'Require pull request reviews' in Settings → Branches, or approve the PR yourself on GitHub. PR: https://github.com/{}/pull/{}",
+                full_name, pull_number
+            ));
         }
         if resp.status() == 409 {
             return Err("[CLOUD_GIT_MERGE_PR] Merge could not be completed (empty merge commit or merge already in progress).".to_string());

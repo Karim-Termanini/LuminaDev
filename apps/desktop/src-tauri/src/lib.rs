@@ -241,6 +241,14 @@ async fn runtime_bash_user_step(
 }
 
 /// Bound text returned from maintenance host probes (UTF-8 safe).
+fn shell_quote_value(v: &str) -> String {
+    if v.chars().all(|c| c.is_alphanumeric() || matches!(c, '_' | '-' | '.' | '/' | ':')) {
+        v.to_string()
+    } else {
+        format!("\"{}\"", v.replace('\\', "\\\\").replace('"', "\\\"").replace('$', "\\$").replace('`', "\\`"))
+    }
+}
+
 fn truncate_probe_output(s: &str) -> String {
     const MAX_CHARS: usize = 48_000;
     let count = s.chars().count();
@@ -3912,6 +3920,68 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
             lines.join("\n")
           };
           json!({ "ok": true, "result": truncate_probe_output(&out) })
+        },
+        "settings_write_hosts" => {
+          let content = match body.get("content").and_then(|v| v.as_str()) {
+            Some(c) => c.to_string(),
+            None => return Ok(json!({ "ok": false, "error": "[HOST_EXEC_FAILED] missing content" })),
+          };
+          // Write to a temp file then sudo cp to avoid shell-escaping issues
+          let tmp = format!("/tmp/lumina_hosts_{}", std::process::id());
+          if let Err(e) = std::fs::write(&tmp, &content) {
+            return Ok(json!({ "ok": false, "error": format!("[HOST_EXEC_FAILED] {}", e) }));
+          }
+          let result = exec_result_limit("sudo", &["cp", &tmp, "/etc/hosts"], CMD_TIMEOUT_SHORT).await;
+          let _ = std::fs::remove_file(&tmp);
+          match result {
+            Ok(_) => json!({ "ok": true }),
+            Err(e) => json!({ "ok": false, "error": format!("[HOST_EXEC_FAILED] {}", e) }),
+          }
+        },
+        "settings_read_profile_env" => {
+          let home = std::env::var("HOME").unwrap_or_else(|_| "/root".to_string());
+          let profile_path = format!("{}/.profile", home);
+          match exec_output_limit("cat", &[&profile_path], CMD_TIMEOUT_SHORT).await {
+            Ok(out) => json!({ "ok": true, "result": out, "path": profile_path }),
+            Err(_) => json!({ "ok": true, "result": "", "path": profile_path }),
+          }
+        },
+        "settings_write_profile_env" => {
+          let action = body.get("action").and_then(|v| v.as_str()).unwrap_or("");
+          let key = body.get("key").and_then(|v| v.as_str()).unwrap_or("");
+          let value = body.get("value").and_then(|v| v.as_str()).unwrap_or("");
+          let home = std::env::var("HOME").unwrap_or_else(|_| "/root".to_string());
+          let profile_path = format!("{}/.profile", home);
+          if key.is_empty() || key.contains(|c: char| !c.is_alphanumeric() && c != '_') {
+            return Ok(json!({ "ok": false, "error": "[HOST_EXEC_FAILED] invalid key name" }));
+          }
+          let current = exec_output_limit("cat", &[&profile_path], CMD_TIMEOUT_SHORT).await.unwrap_or_default();
+          let new_content = match action {
+            "set" => {
+              let export_line = format!("export {}={}", key, shell_quote_value(value));
+              // Remove existing export for this key, then append new one
+              let filtered: String = current.lines()
+                .filter(|l| {
+                  let t = l.trim();
+                  !t.starts_with(&format!("export {}=", key)) && !t.starts_with(&format!("export {}=", key))
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+              let base = if filtered.trim().is_empty() { String::new() } else { format!("{}\n", filtered.trim_end()) };
+              format!("{}{}\n", base, export_line)
+            },
+            "remove" => {
+              current.lines()
+                .filter(|l| !l.trim().starts_with(&format!("export {}=", key)))
+                .collect::<Vec<_>>()
+                .join("\n") + "\n"
+            },
+            _ => return Ok(json!({ "ok": false, "error": "[HOST_EXEC_FAILED] unknown action" })),
+          };
+          match std::fs::write(&profile_path, &new_content) {
+            Ok(_) => json!({ "ok": true, "path": profile_path }),
+            Err(e) => json!({ "ok": false, "error": format!("[HOST_EXEC_FAILED] {}", e) }),
+          }
         },
         _ => json!({ "ok": false, "result": Value::Null, "error": "[HOST_EXEC_NOT_ALLOWED] command not allowed" }),
       }
