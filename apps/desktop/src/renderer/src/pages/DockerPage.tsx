@@ -2370,8 +2370,9 @@ function ContainerInspectDrawer({ row, networks, onClose, onRefresh }: InspectDr
   return (
     <div style={{
       position: 'fixed', top: 0, right: 0, bottom: 0, width: 520, zIndex: 200,
-      background: 'var(--sidebar)', borderLeft: '1px solid var(--border)',
-      display: 'flex', flexDirection: 'column', boxShadow: '-4px 0 20px rgba(0,0,0,0.3)',
+      background: '#161616', borderLeft: '1px solid var(--border)',
+      display: 'flex', flexDirection: 'column', boxShadow: '-8px 0 32px rgba(0,0,0,0.6)',
+      color: '#e8e8e8',
     }}>
       <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 12 }}>
         <div style={{ width: 10, height: 10, borderRadius: '50%', flexShrink: 0, background: isRunning ? 'var(--green)' : 'var(--text-muted)' }} />
@@ -2390,7 +2391,7 @@ function ContainerInspectDrawer({ row, networks, onClose, onRefresh }: InspectDr
         ))}
       </div>
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px' }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', background: '#161616', color: '#e8e8e8' }}>
         {drawerTab === 'info' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div><span style={{ color: 'var(--text-muted)', fontSize: 12 }}>IMAGE</span><div className="mono" style={{ marginTop: 4 }}>{row.image}</div></div>
