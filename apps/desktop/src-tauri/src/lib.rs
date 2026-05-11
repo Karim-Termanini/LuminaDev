@@ -919,6 +919,171 @@ async fn docker_install_invoke(body: &Value) -> Value {
   json!({ "ok": true, "log": logs })
 }
 
+async fn docker_reconfigure_invoke(body: &Value) -> Value {
+  let id = body.get("id").and_then(|v| v.as_str()).unwrap_or_default();
+  if id.is_empty() {
+    return json!({ "ok": false, "error": "[DOCKER_RECONFIG_FAILED] id is required." });
+  }
+
+  // 1. Inspect
+  let inspect_raw = match exec_output("docker", &["inspect", id]).await {
+    Ok(s) => s,
+    Err(e) => return json!({ "ok": false, "error": format!("[DOCKER_RECONFIG_NOT_FOUND] {}", e.trim()) }),
+  };
+  let arr: Vec<Value> = match serde_json::from_str(&inspect_raw) {
+    Ok(a) => a,
+    Err(e) => return json!({ "ok": false, "error": format!("[DOCKER_RECONFIG_FAILED] inspect parse: {}", e) }),
+  };
+  let Some(info) = arr.first() else {
+    return json!({ "ok": false, "error": "[DOCKER_RECONFIG_NOT_FOUND] empty inspect result." });
+  };
+
+  let image = info.pointer("/Config/Image").and_then(|v| v.as_str()).unwrap_or_default();
+  if image.is_empty() {
+    return json!({ "ok": false, "error": "[DOCKER_RECONFIG_FAILED] container image missing from inspect." });
+  }
+
+  let name_raw = info.pointer("/Name").and_then(|v| v.as_str()).unwrap_or("");
+  let container_name = name_raw.trim_start_matches('/').to_string();
+
+  // 2. Resolve overrides
+  let network_mode = body
+    .get("networkMode")
+    .and_then(|v| v.as_str())
+    .filter(|s| !s.is_empty())
+    .unwrap_or_else(|| {
+      info.pointer("/HostConfig/NetworkMode")
+        .and_then(|v| v.as_str())
+        .unwrap_or("bridge")
+    })
+    .to_string();
+
+  let restart_policy = body
+    .get("restartPolicy")
+    .and_then(|v| v.as_str())
+    .filter(|s| !s.is_empty())
+    .unwrap_or_else(|| {
+      info.pointer("/HostConfig/RestartPolicy/Name")
+        .and_then(|v| v.as_str())
+        .unwrap_or("no")
+    })
+    .to_string();
+
+  // 3. Build create args
+  let mut args: Vec<String> = vec!["create".into(), "--name".into(), container_name.clone()];
+  args.push("--network".into());
+  args.push(network_mode.clone());
+  if restart_policy != "no" && !restart_policy.is_empty() {
+    args.push("--restart".into());
+    args.push(restart_policy.clone());
+  }
+  if let Some(true) = info.pointer("/Config/Tty").and_then(|v| v.as_bool()) {
+    args.push("-t".into());
+  }
+  if let Some(true) = info.pointer("/Config/OpenStdin").and_then(|v| v.as_bool()) {
+    args.push("-i".into());
+  }
+
+  // Ports: use override if provided, else keep existing PortBindings
+  if let Some(port_arr) = body.get("ports").and_then(|v| v.as_array()) {
+    for p in port_arr {
+      let hp = p.get("hostPort").and_then(|v| v.as_u64()).unwrap_or(0);
+      let cp = p.get("containerPort").and_then(|v| v.as_u64()).unwrap_or(0);
+      let proto = p.get("protocol").and_then(|v| v.as_str()).unwrap_or("tcp");
+      if hp > 0 && cp > 0 {
+        args.push("-p".into());
+        args.push(format!("{hp}:{cp}/{proto}"));
+      }
+    }
+  } else if let Some(bindings) = info.pointer("/HostConfig/PortBindings").and_then(|v| v.as_object()) {
+    for (ctr_key, arr_val) in bindings.iter() {
+      let parts: Vec<&str> = ctr_key.split('/').collect();
+      if parts.len() != 2 { continue; }
+      let (ctr_port, proto) = (parts[0], parts[1]);
+      if let Some(arr) = arr_val.as_array() {
+        for b in arr {
+          let hp = b.get("HostPort").and_then(|v| v.as_str()).unwrap_or("");
+          if hp.is_empty() { continue; }
+          args.push("-p".into());
+          args.push(format!("{hp}:{ctr_port}/{proto}"));
+        }
+      }
+    }
+  }
+
+  // Env: use override if provided, else keep existing
+  if let Some(env_arr) = body.get("env").and_then(|v| v.as_array()) {
+    for e in env_arr {
+      if let Some(s) = e.as_str() {
+        if !s.is_empty() {
+          args.push("-e".into());
+          args.push(s.to_string());
+        }
+      }
+    }
+  } else if let Some(envs) = info.pointer("/Config/Env").and_then(|v| v.as_array()) {
+    for e in envs {
+      if let Some(s) = e.as_str() {
+        args.push("-e".into());
+        args.push(s.to_string());
+      }
+    }
+  }
+
+  // Volumes/binds — always preserved from inspect
+  if let Some(binds) = info.pointer("/HostConfig/Binds").and_then(|v| v.as_array()) {
+    for b in binds {
+      if let Some(s) = b.as_str() {
+        args.push("-v".into());
+        args.push(s.to_string());
+      }
+    }
+  }
+
+  args.push(image.to_string());
+  // Preserve CMD
+  if let Some(cmd_arr) = info.pointer("/Config/Cmd").and_then(|v| v.as_array()) {
+    for c in cmd_arr {
+      if let Some(s) = c.as_str() { args.push(s.to_string()); }
+    }
+  }
+
+  // 4. Create new container FIRST (so old is untouched if create fails)
+  // Use a temp name to avoid name collision with existing container
+  let temp_name = format!("{}-reconfig-tmp", &container_name);
+  let mut create_args = args.clone();
+  // Replace "--name <container_name>" with temp name
+  if let Some(ni) = create_args.iter().position(|a| a == "--name") {
+    if create_args.len() > ni + 1 {
+      create_args[ni + 1] = temp_name.clone();
+    }
+  }
+  let create_refs: Vec<&str> = create_args.iter().map(|s| s.as_str()).collect();
+  let new_id = match exec_output("docker", &create_refs).await {
+    Ok(out) => out.trim().to_string(),
+    Err(e) => return json!({ "ok": false, "error": format!("[DOCKER_RECONFIG_CREATE_FAILED] {}", e.trim()) }),
+  };
+  if new_id.is_empty() {
+    return json!({ "ok": false, "error": "[DOCKER_RECONFIG_CREATE_FAILED] docker create returned empty id." });
+  }
+
+  // 5. Stop + remove old container
+  let _ = exec_output("docker", &["stop", id]).await;
+  let _ = exec_output("docker", &["rm", id]).await;
+
+  // 6. Rename temp to original name
+  if let Err(e) = exec_output("docker", &["rename", &temp_name, &container_name]).await {
+    return json!({ "ok": false, "error": format!("[DOCKER_RECONFIG_FAILED] rename failed: {}", e.trim()) });
+  }
+
+  // 7. Start
+  if let Err(e) = exec_output("docker", &["start", &container_name]).await {
+    return json!({ "ok": false, "error": format!("[DOCKER_RECONFIG_START_FAILED] {}", e.trim()) });
+  }
+
+  json!({ "ok": true, "name": container_name })
+}
+
 async fn docker_remap_port_invoke(body: &Value) -> Value {
   let id = body.get("id").and_then(|v| v.as_str()).unwrap_or_default();
   let old_hp = body.get("oldHostPort").and_then(|v| v.as_u64()).unwrap_or(0);
@@ -4067,6 +4232,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       }
     },
     "dh:docker:remap-port" => docker_remap_port_invoke(&body).await,
+    "dh:docker:reconfigure" => docker_reconfigure_invoke(&body).await,
     "dh:ssh:list:dir" => {
       let user = body.get("user").and_then(|v| v.as_str()).unwrap_or_default();
       let host_str = body.get("host").and_then(|v| v.as_str()).unwrap_or_default();
