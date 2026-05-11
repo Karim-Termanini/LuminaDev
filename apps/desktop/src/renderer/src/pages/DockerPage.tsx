@@ -2205,7 +2205,7 @@ function ContainerTable(props: ContainerTableProps & { onConsole: (row: Containe
       {rows.length === 0 ? (
         <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>No containers in this group.</div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))', gap: 16 }}>
           {rows.map((r) => {
             const isRunning = r.state.toLowerCase() === 'running'
             return (
@@ -2248,7 +2248,7 @@ function ContainerTable(props: ContainerTableProps & { onConsole: (row: Containe
                   </div>
                 )}
                 
-                <div style={{ marginTop: 'auto', display: 'flex', gap: 8, paddingTop: 4 }}>
+                <div style={{ marginTop: 'auto', display: 'flex', gap: 8, paddingTop: 4, flexWrap: 'wrap' }}>
                   <button type="button" className="hp-btn" onClick={() => void onAction(r.id, isRunning ? 'stop' : 'start')} disabled={busy}>
                     {isRunning ? 'Stop' : 'Start'}
                   </button>
