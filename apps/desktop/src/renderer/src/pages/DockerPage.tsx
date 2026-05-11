@@ -985,6 +985,7 @@ export function DockerPage(): ReactElement {
                 onAction={runAction}
                 onLogs={openLogs}
                 onConsole={(r) => setActiveTermContainer(r)}
+                onConfigure={(r) => setInspectRow(r)}
               />
               <ContainerTable
                 title={`Not running (${stoppedRows.length})`}
@@ -993,6 +994,7 @@ export function DockerPage(): ReactElement {
                 onAction={runAction}
                 onLogs={openLogs}
                 onConsole={(r) => setActiveTermContainer(r)}
+                onConfigure={(r) => setInspectRow(r)}
               />
               {stoppedRows.length === 0 ? (
                 <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>
@@ -1899,6 +1901,21 @@ export function DockerPage(): ReactElement {
           </div>
         </div>
       ) : null}
+
+      {inspectRow && (
+        <>
+          <div
+            style={{ position: 'fixed', inset: 0, zIndex: 199, background: 'rgba(0,0,0,0.35)' }}
+            onClick={() => setInspectRow(null)}
+          />
+          <ContainerInspectDrawer
+            row={inspectRow}
+            networks={networks}
+            onClose={() => setInspectRow(null)}
+            onRefresh={refreshAll}
+          />
+        </>
+      )}
     </div>
   )
 }
@@ -2178,10 +2195,11 @@ type ContainerTableProps = {
   busy: boolean
   onAction: (id: string, action: 'start' | 'stop' | 'restart' | 'remove') => Promise<void>
   onLogs: (row: ContainerRow) => Promise<void>
+  onConfigure: (row: ContainerRow) => void
 }
 
 function ContainerTable(props: ContainerTableProps & { onConsole: (row: ContainerRow) => void }): ReactElement {
-  const { title, rows, busy, onAction, onLogs, onConsole } = props
+  const { title, rows, busy, onAction, onLogs, onConsole, onConfigure } = props
   return (
     <div>
       <div className="hp-section-title">{title}</div>
@@ -2253,6 +2271,9 @@ function ContainerTable(props: ContainerTableProps & { onConsole: (row: Containe
                       Remove
                     </button>
                   ) : null}
+                  <button type="button" className="hp-btn" onClick={() => onConfigure(r)} disabled={busy}>
+                    Configure
+                  </button>
                 </div>
               </div>
             )
