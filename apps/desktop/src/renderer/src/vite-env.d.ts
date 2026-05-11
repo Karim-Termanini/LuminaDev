@@ -27,7 +27,8 @@ declare global {
         networkMode?: string
       }) => Promise<unknown>
       dockerPull: (payload: { image: string }) => Promise<unknown>
-      dockerRemapPort: (payload: { id: string; oldHostPort: number; newHostPort: number; networkMode?: string }) => Promise<unknown>
+      dockerRemapPort: (payload: { id: string; oldHostPort: number; newHostPort: number; containerPort?: number; protocol?: string; networkMode?: string }) => Promise<unknown>
+      dockerReconfigure: (payload: { id: string; ports?: Array<{ hostPort: number; containerPort: number; protocol: string }>; env?: string[]; networkMode?: string; restartPolicy?: string }) => Promise<unknown>
       dockerImagesList: () => Promise<unknown>
       dockerImageAction: (payload: { id: string; action: 'remove'; force?: boolean }) => Promise<unknown>
       dockerVolumesList: () => Promise<unknown>
