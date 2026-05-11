@@ -2353,21 +2353,23 @@ function ContainerInspectDrawer({ row, networks, onClose, onRefresh }: InspectDr
   }
 
   const tabStyle = (t: typeof drawerTab): React.CSSProperties => ({
-    padding: '6px 14px',
+    padding: '6px 10px',
     cursor: 'pointer',
     fontWeight: drawerTab === t ? 600 : 400,
     color: drawerTab === t ? 'var(--accent)' : 'var(--text-muted)',
     background: 'none',
     border: 'none',
     borderBottom: drawerTab === t ? '2px solid var(--accent)' : '2px solid transparent',
-    fontSize: 13,
+    fontSize: 12,
+    whiteSpace: 'nowrap',
+    flexShrink: 0,
   })
 
   const isRunning = row.state.toLowerCase() === 'running'
 
   return (
     <div style={{
-      position: 'fixed', top: 0, right: 0, bottom: 0, width: 480, zIndex: 200,
+      position: 'fixed', top: 0, right: 0, bottom: 0, width: 520, zIndex: 200,
       background: 'var(--sidebar)', borderLeft: '1px solid var(--border)',
       display: 'flex', flexDirection: 'column', boxShadow: '-4px 0 20px rgba(0,0,0,0.3)',
     }}>
