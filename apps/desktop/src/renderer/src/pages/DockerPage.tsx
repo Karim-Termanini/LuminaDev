@@ -104,10 +104,13 @@ export function DockerPage(): ReactElement {
   const [selectedTag, setSelectedTag] = useState('latest')
   const [isLoadingTags, setIsLoadingTags] = useState(false)
   const [activeTermContainer, setActiveTermContainer] = useState<ContainerRow | null>(null)
+  const [inspectRow, setInspectRow] = useState<ContainerRow | null>(null)
   const [sessionKind, setSessionKind] = useState<'flatpak' | 'native' | 'unknown'>('unknown')
   const [remapContainerId, setRemapContainerId] = useState('')
   const [remapOldPort, setRemapOldPort] = useState('')
   const [remapNewPort, setRemapNewPort] = useState('')
+  const [remapContainerPort, setRemapContainerPort] = useState('')
+  const [remapProtocol, setRemapProtocol] = useState<'tcp' | 'udp'>('tcp')
   const [remapNetworkMode, setRemapNetworkMode] = useState('bridge')
   const [remapBusy, setRemapBusy] = useState(false)
   const [remapFeedback, setRemapFeedback] = useState<string | null>(null)
@@ -246,15 +249,17 @@ export function DockerPage(): ReactElement {
 
   useEffect(() => {
     if (tab !== 'ports' || !docker?.ok) return
-    const withP = docker.rows.filter((r) => r.ports !== '—')
-    if (withP.length === 0) {
+    const list = docker.rows
+    if (list.length === 0) {
       setRemapContainerId('')
+      setRemapOldPort('')
       return
     }
-    setRemapContainerId((current) =>
-      current && withP.some((r) => r.id === current) ? current : withP[0].id,
-    )
-    setRemapOldPort((current) => current || extractFirstHostPort(withP[0].ports))
+    const remappable = list.filter((r) => extractFirstHostPort(r.ports) !== '')
+    setRemapContainerId((current) => {
+      if (current && list.some((r) => r.id === current)) return current
+      return remappable[0]?.id ?? list[0].id
+    })
   }, [tab, docker])
 
   useEffect(() => {
@@ -262,6 +267,8 @@ export function DockerPage(): ReactElement {
     const selected = docker?.ok ? docker.rows.find((r) => r.id === remapContainerId) : undefined
     const firstNet = selected?.networks?.[0]
     if (firstNet) setRemapNetworkMode(firstNet)
+    const hp = selected ? extractFirstHostPort(selected.ports) : ''
+    setRemapOldPort(hp)
   }, [remapContainerId, docker])
 
 
@@ -318,34 +325,50 @@ export function DockerPage(): ReactElement {
   }
 
   async function runRemapPort(): Promise<void> {
-    const selectedId = remapContainerId.trim() || rowsWithPorts[0]?.id || ''
-    const selected = rowsWithPorts.find((r) => r.id === selectedId)
+    const list = docker?.ok ? docker.rows : []
+    const remappable = list.filter((r) => extractFirstHostPort(r.ports) !== '')
+    const selectedId = remapContainerId.trim() || remappable[0]?.id || list[0]?.id || ''
+    const selected = list.find((r) => r.id === selectedId)
     const oldPortRaw = remapOldPort || (selected ? extractFirstHostPort(selected.ports) : '')
-    const oldHost = Number.parseInt(oldPortRaw, 10)
-    const newHost = Number.parseInt(remapNewPort, 10)
-    if (!selectedId || !Number.isFinite(oldHost) || !Number.isFinite(newHost)) {
-      setRemapFeedback('Choose a container and enter numeric host ports. Use the same port to change only the network.')
+    const oldPort = parseInt(oldPortRaw, 10)
+    const newPort = parseInt(remapNewPort, 10)
+    const hasExistingBinding = Boolean(selected && extractFirstHostPort(selected.ports))
+
+    if (!selected) {
+      setRemapFeedback('Select a container first.')
       return
     }
+    if (!newPort || newPort < 1 || newPort > 65535) {
+      setRemapFeedback('Enter a valid new host port (1-65535).')
+      return
+    }
+    if (!hasExistingBinding) {
+      const cp = parseInt(remapContainerPort, 10)
+      if (!cp || cp < 1 || cp > 65535) {
+        setRemapFeedback('Enter the container port to bind (1-65535).')
+        return
+      }
+    }
+
     setRemapBusy(true)
     setRemapFeedback(null)
     try {
       const res = (await window.dh.dockerRemapPort({
-        id: selectedId,
-        oldHostPort: oldHost,
-        newHostPort: newHost,
+        id: selected.id,
+        oldHostPort: hasExistingBinding ? oldPort : 0,
+        newHostPort: newPort,
+        containerPort: hasExistingBinding ? 0 : parseInt(remapContainerPort, 10),
+        protocol: remapProtocol,
         networkMode: remapNetworkMode,
       })) as { ok: boolean; error?: string }
-      if (res.ok) {
-        setRemapFeedback('Remap finished. Container list refreshed.')
-        setRemapOldPort('')
-        setRemapNewPort('')
-        await refreshAll()
+      if (!res.ok) {
+        setRemapFeedback(res.error ?? 'Remap failed.')
       } else {
-        setRemapFeedback(humanizeDockerError(res.error || '[DOCKER_REMAP_FAILED] Unknown error'))
+        setRemapFeedback('Done. Refreshing...')
+        await refreshAll()
       }
     } catch (e) {
-      setRemapFeedback(humanizeDockerError(e))
+      setRemapFeedback(String(e))
     } finally {
       setRemapBusy(false)
     }
@@ -643,7 +666,8 @@ export function DockerPage(): ReactElement {
     return state === 'running' || status.startsWith('up ')
   })
   const stoppedRows = rows.filter((r) => !runningRows.some((x) => x.id === r.id))
-  const rowsWithPorts = rows.filter((r) => r.ports !== '—')
+  const remapTargetRow = rows.find((r) => r.id === remapContainerId)
+  const remapTargetHasHostBinding = Boolean(remapTargetRow && extractFirstHostPort(remapTargetRow.ports))
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20, paddingInline: 12 }}>
@@ -960,6 +984,7 @@ export function DockerPage(): ReactElement {
                 onAction={runAction}
                 onLogs={openLogs}
                 onConsole={(r) => setActiveTermContainer(r)}
+                onConfigure={(r) => setInspectRow(r)}
               />
               <ContainerTable
                 title={`Not running (${stoppedRows.length})`}
@@ -968,6 +993,7 @@ export function DockerPage(): ReactElement {
                 onAction={runAction}
                 onLogs={openLogs}
                 onConsole={(r) => setActiveTermContainer(r)}
+                onConfigure={(r) => setInspectRow(r)}
               />
               {stoppedRows.length === 0 ? (
                 <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>
@@ -1248,12 +1274,14 @@ export function DockerPage(): ReactElement {
         {docker?.ok && tab === 'ports' ? (
           <div style={{ display: 'grid', gap: 12 }}>
             <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>
-              Port manager for conflicts: clone container with remapped host port.
+              Lists every container. The <strong>Host publish</strong> column is “yes” only when{' '}
+              <span className="mono">docker ps</span> shows a binding like <span className="mono">0.0.0.0:8080-&gt;80/tcp</span>
+              {' '}(that is what Remap can clone and change).
             </div>
             <div className="hp-card">
-              <div style={{ fontWeight: 600, marginBottom: 8 }}>Current published ports</div>
-              {rowsWithPorts.length === 0 ? (
-                <div style={{ color: 'var(--text-muted)' }}>No containers with published ports.</div>
+              <div style={{ fontWeight: 600, marginBottom: 8 }}>Containers and Docker Ports column</div>
+              {rows.length === 0 ? (
+                <div style={{ color: 'var(--text-muted)' }}>No containers.</div>
               ) : (
                 <div style={tableWrap}>
                   <table style={table}>
@@ -1262,14 +1290,22 @@ export function DockerPage(): ReactElement {
                         <th style={{ padding: '8px 6px' }}>Container</th>
                         <th>State</th>
                         <th>Ports</th>
+                        <th>Host publish</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {rowsWithPorts.map((r) => (
+                      {rows.map((r) => (
                         <tr key={r.id} style={{ borderTop: '1px solid var(--border)' }}>
                           <td style={{ padding: '9px 6px', fontWeight: 600 }}>{r.name}</td>
                           <td>{r.state}</td>
                           <td className="mono" style={monoCell} title={r.ports}>{r.ports}</td>
+                          <td style={{ fontSize: 13 }}>
+                            {extractFirstHostPort(r.ports) ? (
+                              <span style={{ color: 'var(--green)' }}>yes</span>
+                            ) : (
+                              <span style={{ color: 'var(--text-muted)' }}>no</span>
+                            )}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -1278,7 +1314,7 @@ export function DockerPage(): ReactElement {
               )}
             </div>
             <div className="hp-card">
-              <div style={{ fontWeight: 600, marginBottom: 8 }}>Remap host port</div>
+              <div style={{ fontWeight: 600, marginBottom: 8 }}>Port bindings</div>
               {sessionKind === 'flatpak' ? (
                 <div className="hp-status-alert warning" style={{ marginBottom: 0 }}>
                   <span className="codicon codicon-tools" aria-hidden />
@@ -1303,9 +1339,10 @@ export function DockerPage(): ReactElement {
                   <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)' }}>
                     Clones the container with a new host port binding, then stops/removes the original when possible. Container must be running or stoppable as Docker allows.
                   </p>
-                  {rowsWithPorts.length === 0 ? (
-                    <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>No published ports to pick from — start a container with port mappings first.</div>
-                  ) : (
+                  {rows.length === 0 ? (
+                    <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>No containers yet.</div>
+                  ) : null}
+                  {rows.length > 0 ? (
                     <>
                       <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13 }}>
                         <span style={{ fontWeight: 600 }}>Container</span>
@@ -1315,7 +1352,7 @@ export function DockerPage(): ReactElement {
                           onChange={(e) => {
                             const nextId = e.target.value
                             setRemapContainerId(nextId)
-                            const next = rowsWithPorts.find((r) => r.id === nextId)
+                            const next = rows.find((r) => r.id === nextId)
                             if (next) setRemapOldPort(extractFirstHostPort(next.ports))
                           }}
                           style={{
@@ -1328,64 +1365,116 @@ export function DockerPage(): ReactElement {
                             padding: '0 12px'
                           }}
                         >
-                          {rowsWithPorts.map((r) => (
+                          {rows.map((r) => (
                             <option key={r.id} value={r.id} style={{ background: '#1e1e1e', color: '#e8e8e8' }}>
                               {r.name} ({r.id.slice(0, 12)}) — {r.ports}
+                              {extractFirstHostPort(r.ports) ? '' : ' (no host publish in ps)'}
                             </option>
                           ))}
                         </select>
                       </label>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end' }}>
-                        <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13 }}>
-                          <span style={{ fontWeight: 600 }}>Current host port</span>
-                          <input
-                            className="hp-input"
-                            type="number"
-                            min={1}
-                            max={65535}
-                            placeholder="8080"
-                            value={remapOldPort}
-                            onChange={(e) => setRemapOldPort(e.target.value)}
-                            style={{ width: 120 }}
-                          />
-                        </label>
-                        <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13 }}>
-                          <span style={{ fontWeight: 600 }}>New host port <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>(same = keep port)</span></span>
-                          <input
-                            className="hp-input"
-                            type="number"
-                            min={1}
-                            max={65535}
-                            placeholder="same or new"
-                            value={remapNewPort}
-                            onChange={(e) => setRemapNewPort(e.target.value)}
-                            style={{ width: 140 }}
-                          />
-                        </label>
-                        <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13, minWidth: 180 }}>
-                          <span style={{ fontWeight: 600 }}>Target network</span>
-                          <select
-                            className="hp-input"
-                            value={remapNetworkMode}
-                            onChange={(e) => setRemapNetworkMode(e.target.value)}
+                      {!remapTargetHasHostBinding ? (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end' }}>
+                          <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13 }}>
+                            <span style={{ fontWeight: 600 }}>Container port</span>
+                            <input
+                              className="hp-input"
+                              type="number"
+                              min={1}
+                              max={65535}
+                              value={remapContainerPort}
+                              onChange={(e) => setRemapContainerPort(e.target.value)}
+                              placeholder="e.g. 80"
+                              style={{ width: 100 }}
+                            />
+                          </label>
+                          <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13 }}>
+                            <span style={{ fontWeight: 600 }}>Host port</span>
+                            <input
+                              className="hp-input"
+                              type="number"
+                              min={1}
+                              max={65535}
+                              value={remapNewPort}
+                              onChange={(e) => setRemapNewPort(e.target.value)}
+                              placeholder="e.g. 8080"
+                              style={{ width: 100 }}
+                            />
+                          </label>
+                          <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13 }}>
+                            <span style={{ fontWeight: 600 }}>Protocol</span>
+                            <select
+                              className="hp-input"
+                              value={remapProtocol}
+                              onChange={(e) => setRemapProtocol(e.target.value as 'tcp' | 'udp')}
+                              style={{ width: 80, background: '#1e1e1e', color: '#e8e8e8', border: '1px solid var(--border)', height: 38 }}
+                            >
+                              <option value="tcp">tcp</option>
+                              <option value="udp">udp</option>
+                            </select>
+                          </label>
+                          <button
+                            type="button"
+                            className="hp-btn hp-btn-primary"
+                            disabled={remapBusy}
+                            onClick={() => void runRemapPort()}
                           >
-                            {networks.map((n) => (
-                              <option key={n.name} value={n.name}>
-                                {n.name}
-                              </option>
-                            ))}
-                            {networks.length === 0 ? <option value="bridge">bridge</option> : null}
-                          </select>
-                        </label>
-                        <button
-                          type="button"
-                          className="hp-btn hp-btn-primary"
-                          disabled={remapBusy}
-                          onClick={() => void runRemapPort()}
-                        >
-                          {remapBusy ? 'Working…' : 'Remap port'}
-                        </button>
-                      </div>
+                            {remapBusy ? 'Working…' : 'Add binding'}
+                          </button>
+                        </div>
+                      ) : (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end' }}>
+                          <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13 }}>
+                            <span style={{ fontWeight: 600 }}>Current host port</span>
+                            <input
+                              className="hp-input"
+                              type="number"
+                              min={1}
+                              max={65535}
+                              placeholder="8080"
+                              value={remapOldPort}
+                              onChange={(e) => setRemapOldPort(e.target.value)}
+                              style={{ width: 120 }}
+                            />
+                          </label>
+                          <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13 }}>
+                            <span style={{ fontWeight: 600 }}>New host port <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>(same = keep port)</span></span>
+                            <input
+                              className="hp-input"
+                              type="number"
+                              min={1}
+                              max={65535}
+                              placeholder="same or new"
+                              value={remapNewPort}
+                              onChange={(e) => setRemapNewPort(e.target.value)}
+                              style={{ width: 140 }}
+                            />
+                          </label>
+                          <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13, minWidth: 180 }}>
+                            <span style={{ fontWeight: 600 }}>Target network</span>
+                            <select
+                              className="hp-input"
+                              value={remapNetworkMode}
+                              onChange={(e) => setRemapNetworkMode(e.target.value)}
+                            >
+                              {networks.map((n) => (
+                                <option key={n.name} value={n.name}>
+                                  {n.name}
+                                </option>
+                              ))}
+                              {networks.length === 0 ? <option value="bridge">bridge</option> : null}
+                            </select>
+                          </label>
+                          <button
+                            type="button"
+                            className="hp-btn hp-btn-primary"
+                            disabled={remapBusy}
+                            onClick={() => void runRemapPort()}
+                          >
+                            {remapBusy ? 'Working…' : 'Remap port'}
+                          </button>
+                        </div>
+                      )}
                       {remapFeedback ? (
                         <div
                           className={remapFeedback.startsWith('Remap finished') ? 'hp-status-alert success' : 'hp-status-alert warning'}
@@ -1395,7 +1484,7 @@ export function DockerPage(): ReactElement {
                         </div>
                       ) : null}
                     </>
-                  )}
+                  ) : null}
                 </div>
               )}
             </div>
@@ -1811,6 +1900,21 @@ export function DockerPage(): ReactElement {
           </div>
         </div>
       ) : null}
+
+      {inspectRow && (
+        <>
+          <div
+            style={{ position: 'fixed', inset: 0, zIndex: 199, background: 'rgba(0,0,0,0.35)' }}
+            onClick={() => setInspectRow(null)}
+          />
+          <ContainerInspectDrawer
+            row={inspectRow}
+            networks={networks}
+            onClose={() => setInspectRow(null)}
+            onRefresh={refreshAll}
+          />
+        </>
+      )}
     </div>
   )
 }
@@ -2057,7 +2161,7 @@ function parseVolumeMappings(text: string): Array<{ hostPath: string; containerP
 
 function getNetworkDescription(name: string): string {
   if (name === 'bridge') return 'Default network. Connects containers together and provides internet access.'
-  if (name === 'host') return 'Removes network isolation. Containers share the host’s exact IP and ports.'
+  if (name === 'host') return "Removes network isolation. Containers share the host's exact IP and ports."
   if (name === 'none') return 'Completely disables networking. Container has no internet or local access.'
   if (name.endsWith('_default')) return 'Custom bridge network (usually created by Docker Compose) to isolate an app.'
   return 'User-created custom network.'
@@ -2090,17 +2194,18 @@ type ContainerTableProps = {
   busy: boolean
   onAction: (id: string, action: 'start' | 'stop' | 'restart' | 'remove') => Promise<void>
   onLogs: (row: ContainerRow) => Promise<void>
+  onConfigure: (row: ContainerRow) => void
 }
 
 function ContainerTable(props: ContainerTableProps & { onConsole: (row: ContainerRow) => void }): ReactElement {
-  const { title, rows, busy, onAction, onLogs, onConsole } = props
+  const { title, rows, busy, onAction, onLogs, onConsole, onConfigure } = props
   return (
     <div>
       <div className="hp-section-title">{title}</div>
       {rows.length === 0 ? (
         <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>No containers in this group.</div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))', gap: 16 }}>
           {rows.map((r) => {
             const isRunning = r.state.toLowerCase() === 'running'
             return (
@@ -2143,7 +2248,7 @@ function ContainerTable(props: ContainerTableProps & { onConsole: (row: Containe
                   </div>
                 )}
                 
-                <div style={{ marginTop: 'auto', display: 'flex', gap: 8, paddingTop: 4 }}>
+                <div style={{ marginTop: 'auto', display: 'flex', gap: 8, paddingTop: 4, flexWrap: 'wrap' }}>
                   <button type="button" className="hp-btn" onClick={() => void onAction(r.id, isRunning ? 'stop' : 'start')} disabled={busy}>
                     {isRunning ? 'Stop' : 'Start'}
                   </button>
@@ -2165,6 +2270,9 @@ function ContainerTable(props: ContainerTableProps & { onConsole: (row: Containe
                       Remove
                     </button>
                   ) : null}
+                  <button type="button" className="hp-btn" onClick={() => onConfigure(r)} disabled={busy}>
+                    Configure
+                  </button>
                 </div>
               </div>
             )
@@ -2175,6 +2283,223 @@ function ContainerTable(props: ContainerTableProps & { onConsole: (row: Containe
   )
 }
 
+
+type InspectDrawerProps = {
+  row: ContainerRow
+  networks: NetworkRow[]
+  onClose: () => void
+  onRefresh: () => Promise<void>
+}
+
+function ContainerInspectDrawer({ row, networks, onClose, onRefresh }: InspectDrawerProps): ReactElement {
+  const [drawerTab, setDrawerTab] = useState<'info' | 'ports' | 'networks' | 'env' | 'volumes' | 'logs'>('info')
+  const [logs, setLogs] = useState<string>('')
+  const [logsBusy, setLogsBusy] = useState(false)
+  const [applying, setApplying] = useState(false)
+  const [applyFeedback, setApplyFeedback] = useState('')
+  const [editPorts, setEditPorts] = useState<Array<{ hostPort: string; containerPort: string; protocol: 'tcp' | 'udp' }>>(
+    () => {
+      if (!row.ports || row.ports === '—') return []
+      return row.ports.split(',').map((p) => {
+        const m = p.trim().match(/(?:[\d.]+:)?(\d+)->(\d+)\/(tcp|udp)/)
+        if (!m) return null
+        return { hostPort: m[1], containerPort: m[2], protocol: m[3] as 'tcp' | 'udp' }
+      }).filter(Boolean) as Array<{ hostPort: string; containerPort: string; protocol: 'tcp' | 'udp' }>
+    }
+  )
+  const [editEnv, setEditEnv] = useState<string[]>([])
+  const [editNetwork, setEditNetwork] = useState(row.networks?.[0] ?? 'bridge')
+  const [editRestart, setEditRestart] = useState('no')
+
+  async function loadLogs() {
+    setLogsBusy(true)
+    try {
+      const res = (await window.dh.dockerLogs({ id: row.id, tail: 200 })) as { ok: boolean; logs?: string; error?: string }
+      setLogs(res.ok ? (res.logs ?? '') : (res.error ?? 'Error loading logs'))
+    } finally {
+      setLogsBusy(false)
+    }
+  }
+
+  useEffect(() => {
+    if (drawerTab === 'logs') void loadLogs()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [drawerTab])
+
+  async function applyChanges() {
+    setApplying(true)
+    setApplyFeedback('')
+    try {
+      const res = (await window.dh.dockerReconfigure({
+        id: row.id,
+        ports: editPorts
+          .filter((p) => p.hostPort && p.containerPort)
+          .map((p) => ({ hostPort: Number(p.hostPort), containerPort: Number(p.containerPort), protocol: p.protocol })),
+        env: editEnv.filter((e) => e.trim()),
+        networkMode: editNetwork,
+        restartPolicy: editRestart,
+      })) as { ok: boolean; error?: string }
+      if (res.ok) {
+        setApplyFeedback('Applied. Container restarted.')
+        await onRefresh()
+      } else {
+        setApplyFeedback(res.error ?? 'Apply failed.')
+      }
+    } catch (e) {
+      setApplyFeedback(String(e))
+    } finally {
+      setApplying(false)
+    }
+  }
+
+  const tabStyle = (t: typeof drawerTab): React.CSSProperties => ({
+    padding: '6px 10px',
+    cursor: 'pointer',
+    fontWeight: drawerTab === t ? 600 : 400,
+    color: drawerTab === t ? 'var(--accent)' : 'var(--text-muted)',
+    background: 'none',
+    border: 'none',
+    borderBottom: drawerTab === t ? '2px solid var(--accent)' : '2px solid transparent',
+    fontSize: 12,
+    whiteSpace: 'nowrap',
+    flexShrink: 0,
+  })
+
+  const isRunning = row.state.toLowerCase() === 'running'
+
+  return (
+    <div style={{
+      position: 'fixed', top: 0, right: 0, bottom: 0, width: 520, zIndex: 200,
+      background: '#161616', borderLeft: '1px solid var(--border)',
+      display: 'flex', flexDirection: 'column', boxShadow: '-8px 0 32px rgba(0,0,0,0.6)',
+      color: '#e8e8e8',
+    }}>
+      <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ width: 10, height: 10, borderRadius: '50%', flexShrink: 0, background: isRunning ? 'var(--green)' : 'var(--text-muted)' }} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontWeight: 600, fontSize: 15, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.name}</div>
+          <div className="mono" style={{ fontSize: 11, color: 'var(--text-muted)' }}>{row.id.slice(0, 12)}</div>
+        </div>
+        <button type="button" className="hp-btn" onClick={onClose} style={{ padding: '4px 10px' }}>✕</button>
+      </div>
+
+      <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', overflowX: 'auto' }}>
+        {(['info', 'ports', 'networks', 'env', 'volumes', 'logs'] as const).map((t) => (
+          <button key={t} type="button" style={tabStyle(t)} onClick={() => setDrawerTab(t)}>
+            {t.charAt(0).toUpperCase() + t.slice(1)}
+          </button>
+        ))}
+      </div>
+
+      <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', background: '#161616', color: '#e8e8e8' }}>
+        {drawerTab === 'info' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div><span style={{ color: 'var(--text-muted)', fontSize: 12 }}>IMAGE</span><div className="mono" style={{ marginTop: 4 }}>{row.image}</div></div>
+            <div><span style={{ color: 'var(--text-muted)', fontSize: 12 }}>STATE</span><div style={{ marginTop: 4 }}>{row.state} — {row.status}</div></div>
+            <div><span style={{ color: 'var(--text-muted)', fontSize: 12 }}>ID</span><div className="mono" style={{ marginTop: 4, fontSize: 12 }}>{row.id}</div></div>
+            <div>
+              <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>RESTART POLICY</span>
+              <select className="hp-input" value={editRestart} onChange={(e) => setEditRestart(e.target.value)} style={{ marginTop: 4, display: 'block', width: '100%', background: '#1e1e1e', color: '#e8e8e8', border: '1px solid var(--border)', height: 36 }}>
+                <option value="no">no (default)</option>
+                <option value="always">always</option>
+                <option value="unless-stopped">unless-stopped</option>
+                <option value="on-failure">on-failure</option>
+              </select>
+            </div>
+            <button type="button" className="hp-btn" onClick={() => void applyChanges()} disabled={applying} style={{ alignSelf: 'flex-start', marginTop: 8 }}>
+              {applying ? 'Applying…' : 'Apply restart policy'}
+            </button>
+            {applyFeedback && <div style={{ fontSize: 12, color: applyFeedback.startsWith('Applied') ? 'var(--green)' : 'var(--red)' }}>{applyFeedback}</div>}
+          </div>
+        )}
+
+        {drawerTab === 'ports' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Port bindings. Apply recreates the container.</div>
+            {editPorts.map((p, i) => (
+              <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <input className="hp-input" type="number" min={1} max={65535} value={p.hostPort} onChange={(e) => setEditPorts((prev) => prev.map((x, j) => j === i ? { ...x, hostPort: e.target.value } : x))} placeholder="Host" style={{ width: 80 }} />
+                <span style={{ color: 'var(--text-muted)' }}>→</span>
+                <input className="hp-input" type="number" min={1} max={65535} value={p.containerPort} onChange={(e) => setEditPorts((prev) => prev.map((x, j) => j === i ? { ...x, containerPort: e.target.value } : x))} placeholder="Container" style={{ width: 90 }} />
+                <select className="hp-input" value={p.protocol} onChange={(e) => setEditPorts((prev) => prev.map((x, j) => j === i ? { ...x, protocol: e.target.value as 'tcp' | 'udp' } : x))} style={{ width: 70, background: '#1e1e1e', color: '#e8e8e8', border: '1px solid var(--border)', height: 36 }}>
+                  <option value="tcp">tcp</option>
+                  <option value="udp">udp</option>
+                </select>
+                <button type="button" className="hp-btn hp-btn-danger" onClick={() => setEditPorts((prev) => prev.filter((_, j) => j !== i))} style={{ padding: '4px 10px' }}>✕</button>
+              </div>
+            ))}
+            <button type="button" className="hp-btn" onClick={() => setEditPorts((prev) => [...prev, { hostPort: '', containerPort: '', protocol: 'tcp' }])} style={{ alignSelf: 'flex-start' }}>
+              + Add binding
+            </button>
+            <button type="button" className="hp-btn" onClick={() => void applyChanges()} disabled={applying} style={{ alignSelf: 'flex-start' }}>
+              {applying ? 'Applying…' : 'Apply port changes'}
+            </button>
+            {applyFeedback && <div style={{ fontSize: 12, color: applyFeedback.startsWith('Applied') ? 'var(--green)' : 'var(--red)' }}>{applyFeedback}</div>}
+          </div>
+        )}
+
+        {drawerTab === 'networks' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Network mode. Apply recreates the container.</div>
+            <select className="hp-input" value={editNetwork} onChange={(e) => setEditNetwork(e.target.value)} style={{ background: '#1e1e1e', color: '#e8e8e8', border: '1px solid var(--border)', height: 36, width: '100%' }}>
+              <option value="bridge">bridge</option>
+              <option value="host">host</option>
+              <option value="none">none</option>
+              {networks.filter((n) => !['bridge', 'host', 'none'].includes(n.name)).map((n) => (
+                <option key={n.id} value={n.name}>{n.name}</option>
+              ))}
+            </select>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Currently: {row.networks?.join(', ') || 'unknown'}</div>
+            <button type="button" className="hp-btn" onClick={() => void applyChanges()} disabled={applying} style={{ alignSelf: 'flex-start' }}>
+              {applying ? 'Applying…' : 'Apply network change'}
+            </button>
+            {applyFeedback && <div style={{ fontSize: 12, color: applyFeedback.startsWith('Applied') ? 'var(--green)' : 'var(--red)' }}>{applyFeedback}</div>}
+          </div>
+        )}
+
+        {drawerTab === 'env' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Environment variables. Apply recreates the container.</div>
+            {editEnv.map((e, i) => (
+              <div key={i} style={{ display: 'flex', gap: 8 }}>
+                <input className="hp-input" value={e} onChange={(ev) => setEditEnv((prev) => prev.map((x, j) => j === i ? ev.target.value : x))} placeholder="KEY=VALUE" style={{ flex: 1 }} />
+                <button type="button" className="hp-btn hp-btn-danger" onClick={() => setEditEnv((prev) => prev.filter((_, j) => j !== i))} style={{ padding: '4px 10px' }}>✕</button>
+              </div>
+            ))}
+            <button type="button" className="hp-btn" onClick={() => setEditEnv((prev) => [...prev, ''])} style={{ alignSelf: 'flex-start' }}>+ Add env var</button>
+            <button type="button" className="hp-btn" onClick={() => void applyChanges()} disabled={applying} style={{ alignSelf: 'flex-start' }}>
+              {applying ? 'Applying…' : 'Apply env changes'}
+            </button>
+            {applyFeedback && <div style={{ fontSize: 12, color: applyFeedback.startsWith('Applied') ? 'var(--green)' : 'var(--red)' }}>{applyFeedback}</div>}
+          </div>
+        )}
+
+        {drawerTab === 'volumes' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Volume mounts (read-only).</div>
+            {(row.volumes ?? []).length === 0
+              ? <div style={{ color: 'var(--text-muted)' }}>No volume mounts.</div>
+              : (row.volumes ?? []).map((v, i) => (
+                  <div key={i} className="mono" style={{ fontSize: 12, background: 'var(--bg)', padding: '6px 10px', borderRadius: 6 }}>{v}</div>
+                ))
+            }
+          </div>
+        )}
+
+        {drawerTab === 'logs' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <button type="button" className="hp-btn" onClick={() => void loadLogs()} disabled={logsBusy} style={{ alignSelf: 'flex-start' }}>
+              {logsBusy ? 'Loading…' : '↻ Refresh'}
+            </button>
+            <pre style={{ fontSize: 11, whiteSpace: 'pre-wrap', wordBreak: 'break-all', margin: 0, color: 'var(--text)', background: 'var(--bg)', padding: 12, borderRadius: 6, minHeight: 200 }}>
+              {logs || (logsBusy ? 'Loading…' : 'No logs.')}
+            </pre>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
 
 function DockerTerminalModal({ container, onClose }: { container: ContainerRow; onClose: () => void }): ReactElement {
   const termWrapRef = useRef<HTMLDivElement>(null)

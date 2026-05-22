@@ -18,6 +18,32 @@ export type ContainerRow = {
   volumes?: string[]
 }
 
+export type ContainerPortBinding = {
+  hostPort: number
+  containerPort: number
+  protocol: 'tcp' | 'udp'
+}
+
+export type ContainerReconfigureRequest = {
+  id: string
+  ports?: ContainerPortBinding[]
+  env?: string[]
+  networkMode?: string
+  restartPolicy?: string
+}
+
+export type ContainerInspectData = {
+  id: string
+  name: string
+  image: string
+  state: string
+  ports: ContainerPortBinding[]
+  env: string[]
+  networks: string[]
+  volumes: string[]
+  restartPolicy: string
+}
+
 export type ImageRow = {
   id: string
   repoTags: string[]
@@ -177,6 +203,7 @@ export const IPC = {
   dockerCleanupRun: 'dh:docker:cleanup:run',
   dockerPull: 'dh:docker:pull',
   dockerRemapPort: 'dh:docker:remap-port',
+  dockerReconfigure: 'dh:docker:reconfigure',
   /** Returns HostMetricsResponse (metrics + read-only systemd rows). */
   metrics: 'dh:metrics',
   hostExec: 'dh:host:exec',
