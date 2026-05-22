@@ -1,4 +1,4 @@
-import type { ContainerRow, ImageRow, NetworkRow, SessionInfo, VolumeRow } from '@linux-dev-home/shared'
+import type { ContainerInspectData, ContainerRow, ImageRow, NetworkRow, SessionInfo, VolumeRow } from '@linux-dev-home/shared'
 import type { ReactElement } from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Terminal } from '@xterm/xterm'
@@ -1903,7 +1903,7 @@ export function DockerPage(): ReactElement {
       {inspectRow && (
         <>
           <div
-            style={{ position: 'fixed', inset: 0, zIndex: 199, background: 'rgba(0,0,0,0.35)' }}
+            style={{ position: 'fixed', inset: 0, zIndex: 1199, background: 'rgba(0,0,0,0.35)' }}
             onClick={() => setInspectRow(null)}
           />
           <ContainerInspectDrawer
@@ -1960,30 +1960,6 @@ const btnSmallDanger = {
   padding: '5px 10px',
   cursor: 'pointer',
   fontSize: 12,
-}
-
-const sideTab = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 8,
-  border: '1px solid transparent',
-  background: 'transparent',
-  color: 'var(--text-muted)',
-  borderRadius: 8,
-  padding: '8px 12px',
-  cursor: 'pointer',
-  fontSize: 13,
-  fontWeight: 500,
-  textAlign: 'left' as const,
-  width: '100%',
-  transition: 'background 0.15s, color 0.15s',
-}
-
-const sideTabActive = {
-  ...sideTab,
-  background: 'color-mix(in srgb, var(--accent) 12%, transparent)',
-  border: '1px solid color-mix(in srgb, var(--accent) 35%, transparent)',
-  color: 'var(--accent)',
 }
 
 const tableWrap = {
@@ -2290,25 +2266,83 @@ type InspectDrawerProps = {
   onRefresh: () => Promise<void>
 }
 
+const DRAWER_TABS = ['info', 'ports', 'networks', 'env', 'volumes', 'logs'] as const
+type DrawerTab = (typeof DRAWER_TABS)[number]
+
+function portsFromRowDisplay(ports: string): Array<{ hostPort: string; containerPort: string; protocol: 'tcp' | 'udp' }> {
+  if (!ports || ports === '—') return []
+  return ports
+    .split(',')
+    .map((p) => {
+      const m = p.trim().match(/(?:[\d.]+:)?(\d+)->(\d+)\/(tcp|udp)/)
+      if (!m) return null
+      return { hostPort: m[1], containerPort: m[2], protocol: m[3] as 'tcp' | 'udp' }
+    })
+    .filter(Boolean) as Array<{ hostPort: string; containerPort: string; protocol: 'tcp' | 'udp' }>
+}
+
+function hydrateDrawerFromInspect(data: ContainerInspectData): {
+  editPorts: Array<{ hostPort: string; containerPort: string; protocol: 'tcp' | 'udp' }>
+  editEnv: string[]
+  editNetwork: string
+  editRestart: string
+} {
+  return {
+    editPorts: data.ports.map((p) => ({
+      hostPort: String(p.hostPort),
+      containerPort: String(p.containerPort),
+      protocol: (p.protocol === 'udp' ? 'udp' : 'tcp') as 'tcp' | 'udp',
+    })),
+    editEnv: [...data.env],
+    editNetwork: data.networks[0] ?? 'bridge',
+    editRestart: data.restartPolicy || 'no',
+  }
+}
+
 function ContainerInspectDrawer({ row, networks, onClose, onRefresh }: InspectDrawerProps): ReactElement {
-  const [drawerTab, setDrawerTab] = useState<'info' | 'ports' | 'networks' | 'env' | 'volumes' | 'logs'>('info')
+  const [drawerTab, setDrawerTab] = useState<DrawerTab>('info')
   const [logs, setLogs] = useState<string>('')
   const [logsBusy, setLogsBusy] = useState(false)
+  const [inspectBusy, setInspectBusy] = useState(true)
+  const [inspectError, setInspectError] = useState<string | null>(null)
   const [applying, setApplying] = useState(false)
   const [applyFeedback, setApplyFeedback] = useState('')
   const [editPorts, setEditPorts] = useState<Array<{ hostPort: string; containerPort: string; protocol: 'tcp' | 'udp' }>>(
-    () => {
-      if (!row.ports || row.ports === '—') return []
-      return row.ports.split(',').map((p) => {
-        const m = p.trim().match(/(?:[\d.]+:)?(\d+)->(\d+)\/(tcp|udp)/)
-        if (!m) return null
-        return { hostPort: m[1], containerPort: m[2], protocol: m[3] as 'tcp' | 'udp' }
-      }).filter(Boolean) as Array<{ hostPort: string; containerPort: string; protocol: 'tcp' | 'udp' }>
-    }
+    () => portsFromRowDisplay(row.ports),
   )
   const [editEnv, setEditEnv] = useState<string[]>([])
   const [editNetwork, setEditNetwork] = useState(row.networks?.[0] ?? 'bridge')
   const [editRestart, setEditRestart] = useState('no')
+  const [inspectVolumes, setInspectVolumes] = useState<string[]>(row.volumes ?? [])
+
+  useEffect(() => {
+    let cancelled = false
+    setInspectBusy(true)
+    setInspectError(null)
+    void (async () => {
+      try {
+        const res = await window.dh.dockerInspect({ id: row.id })
+        if (cancelled) return
+        if (!res.ok || !res.data) {
+          setInspectError(res.error ?? 'Could not load container inspect data.')
+          return
+        }
+        const h = hydrateDrawerFromInspect(res.data)
+        setEditPorts(h.editPorts)
+        setEditEnv(h.editEnv)
+        setEditNetwork(h.editNetwork)
+        setEditRestart(h.editRestart)
+        setInspectVolumes(res.data.volumes)
+      } catch (e) {
+        if (!cancelled) setInspectError(String(e))
+      } finally {
+        if (!cancelled) setInspectBusy(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [row.id])
 
   async function loadLogs() {
     setLogsBusy(true)
@@ -2351,49 +2385,64 @@ function ContainerInspectDrawer({ row, networks, onClose, onRefresh }: InspectDr
     }
   }
 
-  const tabStyle = (t: typeof drawerTab): React.CSSProperties => ({
-    padding: '10px 14px',
-    cursor: 'pointer',
-    fontWeight: drawerTab === t ? 600 : 500,
-    color: drawerTab === t ? '#7c4dff' : '#e8e8e8',
-    background: drawerTab === t ? 'rgba(124,77,255,0.15)' : 'transparent',
-    border: 'none',
-    borderBottom: drawerTab === t ? '3px solid #7c4dff' : '3px solid transparent',
-    fontSize: 13,
-    whiteSpace: 'nowrap',
-    flexShrink: 0,
-    transition: 'all 150ms ease',
-  })
-
   const isRunning = row.state.toLowerCase() === 'running'
+  const volumeMounts = inspectVolumes.length > 0 ? inspectVolumes : (row.volumes ?? [])
+
+  const sectionLabels: Record<DrawerTab, string> = {
+    info: 'Info',
+    ports: 'Ports',
+    networks: 'Networks',
+    env: 'Env',
+    volumes: 'Volumes',
+    logs: 'Logs',
+  }
 
   return (
-    <div style={{
-      position: 'fixed', top: 0, right: 0, bottom: 0, width: 520, zIndex: 200,
-      background: '#161616', borderLeft: '1px solid var(--border)',
-      display: 'flex', flexDirection: 'column', boxShadow: '-8px 0 32px rgba(0,0,0,0.6)',
-      color: '#e8e8e8',
-    }}>
-      <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 12 }}>
+    <div className="docker-inspect-drawer" role="dialog" aria-label={`Configure ${row.name}`}>
+      <div className="docker-inspect-drawer__header">
         <div style={{ width: 10, height: 10, borderRadius: '50%', flexShrink: 0, background: isRunning ? 'var(--green)' : 'var(--text-muted)' }} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontWeight: 600, fontSize: 15, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.name}</div>
           <div className="mono" style={{ fontSize: 11, color: 'var(--text-muted)' }}>{row.id.slice(0, 12)}</div>
         </div>
-        <button type="button" className="hp-btn" onClick={onClose} style={{ padding: '4px 10px' }}>✕</button>
+        <button type="button" className="hp-btn" onClick={onClose} style={{ padding: '4px 10px' }} aria-label="Close">✕</button>
       </div>
 
-      <div style={{ display: 'flex', borderBottom: '1px solid #2a2a2a', overflowX: 'auto', background: '#0a0a0a', paddingBottom: 0, gap: 0 }}>
-        {(['info', 'ports', 'networks', 'env', 'volumes', 'logs'] as const).map((t) => (
-          <button key={t} type="button" style={tabStyle(t)} onClick={() => setDrawerTab(t)}>
-            {t.charAt(0).toUpperCase() + t.slice(1)}
+      <div className="docker-inspect-drawer__tabs" role="tablist">
+        {DRAWER_TABS.map((t) => (
+          <button
+            key={t}
+            type="button"
+            role="tab"
+            aria-selected={drawerTab === t}
+            className={`docker-inspect-drawer__tab${drawerTab === t ? ' docker-inspect-drawer__tab--active' : ''}`}
+            onClick={() => setDrawerTab(t)}
+          >
+            {sectionLabels[t]}
           </button>
         ))}
       </div>
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', background: '#161616', color: '#e8e8e8' }}>
+      <div className="docker-inspect-drawer__body">
+        {inspectBusy && (
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>Loading inspect data…</div>
+        )}
+        {inspectError && !inspectBusy && (
+          <div style={{ fontSize: 12, color: 'var(--red)', marginBottom: 12 }}>{inspectError}</div>
+        )}
+
         {drawerTab === 'info' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div className="docker-inspect-drawer__section-nav" aria-label="Jump to section">
+              {DRAWER_TABS.filter((t) => t !== 'info').map((t) => (
+                <button key={t} type="button" onClick={() => setDrawerTab(t)}>
+                  {sectionLabels[t]}
+                  {t === 'ports' && editPorts.length > 0 ? ` (${editPorts.length})` : ''}
+                  {t === 'env' && editEnv.length > 0 ? ` (${editEnv.length})` : ''}
+                  {t === 'volumes' && volumeMounts.length > 0 ? ` (${volumeMounts.length})` : ''}
+                </button>
+              ))}
+            </div>
             <div><span style={{ color: 'var(--text-muted)', fontSize: 12 }}>IMAGE</span><div className="mono" style={{ marginTop: 4 }}>{row.image}</div></div>
             <div><span style={{ color: 'var(--text-muted)', fontSize: 12 }}>STATE</span><div style={{ marginTop: 4 }}>{row.state} — {row.status}</div></div>
             <div><span style={{ color: 'var(--text-muted)', fontSize: 12 }}>ID</span><div className="mono" style={{ marginTop: 4, fontSize: 12 }}>{row.id}</div></div>
@@ -2477,9 +2526,9 @@ function ContainerInspectDrawer({ row, networks, onClose, onRefresh }: InspectDr
         {drawerTab === 'volumes' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Volume mounts (read-only).</div>
-            {(row.volumes ?? []).length === 0
+            {volumeMounts.length === 0
               ? <div style={{ color: 'var(--text-muted)' }}>No volume mounts.</div>
-              : (row.volumes ?? []).map((v, i) => (
+              : volumeMounts.map((v, i) => (
                   <div key={i} className="mono" style={{ fontSize: 12, background: 'var(--bg)', padding: '6px 10px', borderRadius: 6 }}>{v}</div>
                 ))
             }
