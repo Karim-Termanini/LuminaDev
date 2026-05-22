@@ -8,6 +8,7 @@ import '@xterm/xterm/css/xterm.css'
 import { DockerSchemeView } from '../components/DockerSchemeView'
 import { assertDockerOk } from './dockerContract'
 import { humanizeDockerError } from './dockerError'
+import './DockerPage.css'
 
 type TabId = 'scheme' | 'create' | 'containers' | 'images' | 'volumes' | 'networks' | 'ports' | 'cleanup'
 
@@ -670,22 +671,20 @@ export function DockerPage(): ReactElement {
   const remapTargetHasHostBinding = Boolean(remapTargetRow && extractFirstHostPort(remapTargetRow.ports))
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20, paddingInline: 12 }}>
-      <header>
-        <div className="mono" style={{ color: 'var(--accent)', fontSize: 12, marginBottom: 8 }}>
-          DOCKER.SURFACE
-        </div>
-        <h1 style={{ margin: 0, fontSize: 28, fontWeight: 700 }}>Docker</h1>
-        <p style={{ color: 'var(--text-muted)', marginTop: 10, maxWidth: 860 }}>
+    <div className="docker-page">
+      <div className="docker-hero">
+        <div className="docker-hero-eyebrow">Docker.Surface</div>
+        <h1 className="docker-hero-title">Docker</h1>
+        <p className="docker-hero-subtitle">
           Full Docker surface from one click UI: containers, images, volumes, networks, and cleanup.
         </p>
-      </header>
+      </div>
 
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', rowGap: 8 }}>
+      <div className="docker-toolbar">
         <button type="button" className="hp-btn" onClick={() => void refreshAll()} disabled={busy || refreshing}>
           {refreshing ? 'Refreshing…' : 'Refresh'}
         </button>
-        <button type="button" style={btnWarn} onClick={() => void runPrune()} disabled={busy}>
+        <button type="button" className="hp-btn" style={btnWarn} onClick={() => void runPrune()} disabled={busy}>
           Cleanup unused (prune)
         </button>
         <button
@@ -702,7 +701,7 @@ export function DockerPage(): ReactElement {
         >
           Install / Setup
         </button>
-        <span className="mono" style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+        <span className="docker-toolbar-stats">
           {docker?.ok
             ? `${rows.length} containers • ${images.length} images • ${volumes.length} volumes • ${networks.length} networks`
             : 'docker unavailable'}
@@ -740,9 +739,9 @@ export function DockerPage(): ReactElement {
         </div>
       ) : null}
 
-      <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+      <div className="docker-layout">
         {/* Sidebar nav */}
-        <nav style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 140, flexShrink: 0 }}>
+        <nav className="docker-sidebar">
           {(
             [
               { id: 'scheme',     icon: '🗺', label: 'Scheme'     },
@@ -759,16 +758,16 @@ export function DockerPage(): ReactElement {
               key={id}
               type="button"
               onClick={() => setTab(id)}
-              style={tab === id ? sideTabActive : sideTab}
+              className={`docker-tab-button ${tab === id ? 'active' : ''}`}
             >
-              <span style={{ fontSize: 15 }}>{icon}</span>
+              <span>{icon}</span>
               <span>{label}</span>
             </button>
           ))}
         </nav>
 
         {/* Content pane */}
-        <section className="hp-card" style={{ flex: 1, minWidth: 0 }}>
+        <section className="docker-content">
         {!docker ? <div style={{ color: 'var(--text-muted)' }}>Checking Docker daemon…</div> : null}
         {docker && !docker.ok ? <div style={{ color: 'var(--orange)' }}>{humanizeDockerError(docker.error)}</div> : null}
         {docker?.ok && tab === 'create' ? (
