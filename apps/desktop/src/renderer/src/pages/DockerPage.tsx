@@ -2352,16 +2352,17 @@ function ContainerInspectDrawer({ row, networks, onClose, onRefresh }: InspectDr
   }
 
   const tabStyle = (t: typeof drawerTab): React.CSSProperties => ({
-    padding: '6px 10px',
+    padding: '10px 14px',
     cursor: 'pointer',
-    fontWeight: drawerTab === t ? 600 : 400,
-    color: drawerTab === t ? 'var(--accent)' : 'var(--text-muted)',
-    background: 'none',
+    fontWeight: drawerTab === t ? 600 : 500,
+    color: drawerTab === t ? 'var(--accent)' : 'var(--text)',
+    background: drawerTab === t ? 'rgba(124,77,255,0.1)' : 'transparent',
     border: 'none',
-    borderBottom: drawerTab === t ? '2px solid var(--accent)' : '2px solid transparent',
-    fontSize: 12,
+    borderBottom: drawerTab === t ? '3px solid var(--accent)' : '3px solid transparent',
+    fontSize: 13,
     whiteSpace: 'nowrap',
     flexShrink: 0,
+    transition: 'all 150ms ease',
   })
 
   const isRunning = row.state.toLowerCase() === 'running'
@@ -2382,7 +2383,7 @@ function ContainerInspectDrawer({ row, networks, onClose, onRefresh }: InspectDr
         <button type="button" className="hp-btn" onClick={onClose} style={{ padding: '4px 10px' }}>✕</button>
       </div>
 
-      <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', overflowX: 'auto' }}>
+      <div style={{ display: 'flex', borderBottom: '2px solid var(--border)', overflowX: 'auto', background: 'rgba(0,0,0,0.3)', paddingBottom: 0 }}>
         {(['info', 'ports', 'networks', 'env', 'volumes', 'logs'] as const).map((t) => (
           <button key={t} type="button" style={tabStyle(t)} onClick={() => setDrawerTab(t)}>
             {t.charAt(0).toUpperCase() + t.slice(1)}
