@@ -1360,28 +1360,28 @@ export function GitConfigPage(): ReactElement {
 
   return (
     <div className="git-config-page elevated-page">
-      {/* Sidebar */}
-      <nav className="git-config-sidebar" style={{ paddingRight: 0 }}>
-        <div style={{ padding: '0 16px 16px', borderBottom: '1px solid var(--border)', marginBottom: 8 }}>
-          <div className="git-config-section-title">Git Config</div>
-          <div className="hp-muted" style={{ fontSize: 11 }}>Environment Manager</div>
-        </div>
+      {/* Header */}
+      <header style={{ marginBottom: 4 }}>
+        <div className="mono" style={{ color: 'var(--accent)', fontSize: 12, marginBottom: 8 }}>GIT CONFIG</div>
+        <h1 style={{ margin: 0, fontSize: 28, fontWeight: 700 }}>Git Configuration</h1>
+        <p style={{ color: 'var(--text-muted)', marginTop: 10, maxWidth: 760, lineHeight: 1.5 }}>
+          Manage your Git identity, SSH keys, security settings, and repository behavior globally.
+        </p>
+      </header>
+
+      {/* Horizontal Tabs */}
+      <nav className="git-config-tabs-wrap">
         {NAV_ITEMS.map((item) => (
           <button
             key={item.id}
             type="button"
             onClick={() => setSection(item.id)}
-            className={`git-config-nav-button ${section === item.id ? 'active' : ''}`}
+            className={`git-config-tab ${section === item.id ? 'git-config-tab-active' : ''}`}
           >
             <span className={`codicon codicon-${item.icon}`} />
             <span>{item.label}</span>
           </button>
         ))}
-        <div style={{ padding: '16px 16px 0', borderTop: '1px solid var(--border)', marginTop: 8 }}>
-          <button type="button" className="hp-btn" onClick={() => void loadConfig()} disabled={loading || busy} style={{ width: '100%' }}>
-            {loading ? 'Loading…' : 'Refresh'}
-          </button>
-        </div>
       </nav>
 
       {/* Content */}

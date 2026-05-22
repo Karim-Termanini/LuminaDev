@@ -48,46 +48,50 @@
   gap: 16px;
 }
 
-/* Sidebar navigation */
-.git-config-sidebar {
+/* Horizontal tabs navigation */
+.git-config-tabs-wrap {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 16px;
 }
 
-.git-config-nav-button {
-  padding: 10px 14px;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(0, 0, 0, 0.2);
+.git-config-tab {
+  padding: 8px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-input);
   color: var(--text-muted);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
   transition: all 150ms ease-out;
-  text-align: left;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  white-space: nowrap;
 }
 
-.git-config-nav-button:hover {
-  border-color: rgba(124, 77, 255, 0.45);
-  background: rgba(124, 77, 255, 0.1);
-  color: var(--text);
-  transform: translateY(-1px);
-}
-
-.git-config-nav-button.active {
+.git-config-tab:hover {
   border-color: var(--accent);
-  background: rgba(124, 77, 255, 0.2);
+  background: rgba(124, 77, 255, 0.05);
   color: var(--text);
-  box-shadow: 0 8px 24px rgba(124, 77, 255, 0.2);
+}
+
+.git-config-tab-active {
+  border-color: var(--accent);
+  background: rgba(124, 77, 255, 0.15);
+  color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent), inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
 /* Content area */
 .git-config-content {
-  flex: 1;
+  width: 100%;
   min-width: 0;
 }
 
