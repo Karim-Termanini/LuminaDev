@@ -595,7 +595,7 @@
 .docker-inspect-drawer__tabs {
   flex-shrink: 0;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 6px;
   padding: 10px 12px;
   background: #0f0f0f;
@@ -603,6 +603,8 @@
   position: sticky;
   top: 0;
   z-index: 10;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
 .docker-inspect-drawer__tab {
