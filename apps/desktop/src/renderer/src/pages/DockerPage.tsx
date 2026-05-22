@@ -671,7 +671,7 @@ export function DockerPage(): ReactElement {
   const remapTargetHasHostBinding = Boolean(remapTargetRow && extractFirstHostPort(remapTargetRow.ports))
 
   return (
-    <div className="docker-page">
+    <div className="docker-page elevated-page">
       <div className="docker-hero">
         <div className="docker-hero-eyebrow">Docker.Surface</div>
         <h1 className="docker-hero-title">Docker</h1>

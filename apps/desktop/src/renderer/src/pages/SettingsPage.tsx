@@ -537,7 +537,7 @@ export function SettingsPage(): ReactElement {
   const activeNav = NAV.find((n) => n.id === navId) ?? NAV[0]
 
   return (
-    <div className="settings-page" style={{ padding: '28px 32px 48px', maxWidth: 1040 }}>
+    <div className="settings-page elevated-page" style={{ padding: '28px 32px 48px', maxWidth: 1040 }}>
       <header style={{ marginBottom: 28 }}>
         <h1 className="hp-title" style={{ fontSize: 32, fontWeight: 700, letterSpacing: '-0.03em' }}>
           Settings

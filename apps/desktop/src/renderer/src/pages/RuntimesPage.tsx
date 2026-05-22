@@ -404,7 +404,7 @@ export function RuntimesPage(): ReactElement {
   }
 
   return (
-    <div className="runtimes-page" style={{ display: 'flex', height: 'calc(100vh - 120px)', overflow: 'hidden', position: 'relative' }}>
+    <div className="runtimes-page elevated-page" style={{ display: 'flex', height: 'calc(100vh - 120px)', overflow: 'hidden', position: 'relative' }}>
       {/* Sidebar List */}
       <aside style={{ width: 280, borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', background: 'rgba(0,0,0,0.1)' }}>
         <div style={{ padding: '20px 16px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

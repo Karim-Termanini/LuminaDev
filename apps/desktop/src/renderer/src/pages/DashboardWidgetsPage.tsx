@@ -35,7 +35,7 @@ export function DashboardWidgetsPage(): ReactElement {
   }
 
   return (
-    <div className="dashboard-page" style={{ display: 'flex', flexDirection: 'column', gap: 24, maxWidth: 1200 }}>
+    <div className="dashboard-page elevated-page" style={{ display: 'flex', flexDirection: 'column', gap: 24, maxWidth: 1200 }}>
       <header>
         <div className="mono" style={{ color: 'var(--accent)', fontSize: 12, marginBottom: 8 }}>
           DASHBOARD.WIDGETS

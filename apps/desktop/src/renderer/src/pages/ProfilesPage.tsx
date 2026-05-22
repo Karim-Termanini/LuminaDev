@@ -7,6 +7,7 @@ import {
   parseOnLoginAutomation,
   parseStoredActiveProfile,
 } from '@linux-dev-home/shared'
+import './ProfilesPage.css'
 import type { ReactElement } from 'react'
 import { useEffect, useMemo, useState } from 'react'
 
@@ -134,7 +135,7 @@ export function ProfilesPage(): ReactElement {
   const isOk = (s: string) => /copied|saved|removed|duplicated|imported|cleared|set to/i.test(s)
 
   return (
-    <div className="profiles-page" style={{ maxWidth: 1040, display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div className="profiles-page elevated-page" style={{ maxWidth: 1040, display: 'flex', flexDirection: 'column', gap: 20 }}>
       <header>
         <div className="mono" style={{ color: 'var(--accent)', fontSize: 12, marginBottom: 8 }}>PROFILES</div>
         <h1 style={{ margin: 0, fontSize: 28, fontWeight: 700 }}>Profile Manager</h1>

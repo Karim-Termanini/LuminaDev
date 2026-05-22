@@ -125,7 +125,7 @@ export function TerminalPage(): ReactElement {
   }, [sessionKey])
 
   return (
-    <div className="terminal-page" style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 420 }}>
+    <div className="terminal-page elevated-page" style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 420 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
         <h1 style={{ margin: 0 }}>Embedded terminal</h1>
         <div style={{ display: 'flex', gap: 8 }}>

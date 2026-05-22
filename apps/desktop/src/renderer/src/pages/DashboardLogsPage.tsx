@@ -49,7 +49,7 @@ export function DashboardLogsPage(): ReactElement {
   const doneJobs = jobs.filter(j => j.state !== 'running').slice(-10)
 
   return (
-    <div className="logs-page" style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 1100, paddingInline: 12 }}>
+    <div className="logs-page elevated-page" style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 1100, paddingInline: 12 }}>
       <header>
         <div className="mono" style={{ color: 'var(--accent)', fontSize: 12, marginBottom: 8 }}>DASHBOARD.LOGS</div>
         <h1 style={{ margin: 0, fontSize: 28, fontWeight: 700 }}>Logs</h1>

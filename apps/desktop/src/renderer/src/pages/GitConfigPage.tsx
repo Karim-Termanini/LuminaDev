@@ -1359,7 +1359,7 @@ export function GitConfigPage(): ReactElement {
   }
 
   return (
-    <div className="git-config-page">
+    <div className="git-config-page elevated-page">
       {/* Sidebar */}
       <nav className="git-config-sidebar" style={{ paddingRight: 0 }}>
         <div style={{ padding: '0 16px 16px', borderBottom: '1px solid var(--border)', marginBottom: 8 }}>
