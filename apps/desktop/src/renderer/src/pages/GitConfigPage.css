@@ -3,6 +3,8 @@
 
 .git-config-page {
   /* Inherits .elevated-page: grid layout, padding, gradients */
+  overflow-y: auto;
+  max-height: 100%;
 }
 
 /* Hero section */
@@ -93,6 +95,9 @@
 .git-config-content {
   width: 100%;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 }
 
 .git-config-panel {
