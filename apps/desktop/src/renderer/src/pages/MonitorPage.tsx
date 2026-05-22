@@ -6,6 +6,7 @@ import { humanizeDashboardError } from './dashboardError'
 import { assertGitOk } from './gitContract'
 import { humanizeGitError } from './gitError'
 import { assertMonitorOk } from './monitorContract'
+import './MonitorPage.css'
 
 // ─── Git global config score (aligned with Git Config page) ─────────────────
 
@@ -270,22 +271,13 @@ export function MonitorPage(): ReactElement {
   const gitTotal = gitCfg ? gitTotalConfigScore(gitCfg) : null
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 24, paddingBottom: 40 }}>
+    <div className="monitor-page">
       <header>
-        <h1 style={{ margin: 0, fontSize: 28, fontWeight: 700 }}>Engineering Dashboard</h1>
-        <p style={{ color: 'var(--text-muted)', marginTop: 8 }}>Real-time system health and development activity.</p>
+        <h1>Engineering Dashboard</h1>
+        <p>Real-time system health and development activity.</p>
       </header>
       {monitorError ? (
-        <div
-          style={{
-            padding: '10px 12px',
-            border: '1px solid rgba(255, 183, 77, 0.35)',
-            background: 'rgba(255, 183, 77, 0.14)',
-            color: '#ffcc80',
-            borderRadius: 8,
-            fontSize: 13,
-          }}
-        >
+        <div className="monitor-alert-error">
           {monitorError}
         </div>
       ) : null}
@@ -296,14 +288,10 @@ export function MonitorPage(): ReactElement {
             key={tab.id}
             type="button"
             onClick={() => jumpToTab(tab.id)}
+            className={activeTab === tab.id ? 'active' : ''}
             style={{
-              border: '1px solid var(--border)',
               background: activeTab === tab.id ? 'rgba(124,77,255,0.2)' : 'var(--bg-input)',
               color: activeTab === tab.id ? 'var(--accent)' : 'var(--text)',
-              borderRadius: 8,
-              padding: '8px 12px',
-              fontWeight: 700,
-              cursor: 'pointer',
             }}
           >
             {tab.label}
@@ -312,7 +300,7 @@ export function MonitorPage(): ReactElement {
       </div>
 
       {/* Primary Metrics Row */}
-      <div id="monitor-overview" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 20 }}>
+      <div id="monitor-overview" className="monitor-grid-metrics">
         <MetricCard title="CPU LOAD" value={m ? `${m.cpuUsagePercent.toFixed(1)}%` : '—'} subValue={m?.cpuModel}>
           <LiveLineChart data={cpuHistory} color="var(--accent)" height={60} />
         </MetricCard>
@@ -343,26 +331,26 @@ export function MonitorPage(): ReactElement {
       </div>
 
       {/* Network Activity */}
-      <div id="monitor-network" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 20 }}>
+      <div id="monitor-network" className="monitor-grid-wide">
         <MetricCard title="NETWORK ACTIVITY" value={`${m?.netRxMbps.toFixed(2) ?? '0.00'} Mbps`} subValue="Downlink / Uplink traffic">
-          <div style={{ border: '1px solid var(--border)', borderRadius: 10, background: 'rgba(255,255,255,0.02)', padding: 10 }}>
+          <div className="monitor-chart-container">
             <NetworkChart data={netHistory} height={120} />
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 12 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <div style={{ width: 12, height: 12, borderRadius: 2, background: 'var(--accent)' }} />
-              <span style={{ fontSize: 12 }}>RX: {m?.netRxMbps.toFixed(2) ?? '0.00'} Mbps</span>
+          <div className="monitor-chart-legend">
+            <div className="monitor-chart-legend-item">
+              <div className="monitor-chart-legend-swatch" style={{ background: 'var(--accent)' }} />
+              <span>RX: {m?.netRxMbps.toFixed(2) ?? '0.00'} Mbps</span>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <div style={{ width: 12, height: 12, borderRadius: 2, background: '#ff1744' }} />
-              <span style={{ fontSize: 12 }}>TX: {m?.netTxMbps.toFixed(2) ?? '0.00'} Mbps</span>
+            <div className="monitor-chart-legend-item">
+              <div className="monitor-chart-legend-swatch" style={{ background: '#ff1744' }} />
+              <span>TX: {m?.netTxMbps.toFixed(2) ?? '0.00'} Mbps</span>
             </div>
           </div>
         </MetricCard>
       </div>
 
       {/* Engineering Hub Row - 2 Columns */}
-      <div id="monitor-docker" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: 20 }}>
+      <div id="monitor-docker" className="monitor-grid-dual">
         <MetricCard
           title={portsView === 'listen' ? 'ACTIVE PORTS (LISTEN)' : 'ACTIVE PORTS (ALL)'}
           value={`${visiblePortRows.length}`}
@@ -677,7 +665,7 @@ export function MonitorPage(): ReactElement {
       </div>
 
       {/* Disk / Processes with Alerts under Disk */}
-      <div id="monitor-disk" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: 20, alignItems: 'start' }}>
+      <div id="monitor-disk" className="monitor-grid-dual" style={{ alignItems: 'start' }}>
         <div style={{ display: 'grid', gap: 20 }}>
           <MetricCard title="DISK I/O LIVE" value={`${m?.diskReadMbps.toFixed(2) ?? '0.00'} Mbps`} subValue="Read / Write throughput" titleColor="#80cbc4" valueColor="#80cbc4">
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
