@@ -3,6 +3,8 @@
 
 .docker-page {
   /* Inherits .elevated-page: grid layout, padding, gradients */
+  overflow-y: auto;
+  max-height: 100%;
 }
 
 /* Hero section */
