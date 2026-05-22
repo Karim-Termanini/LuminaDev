@@ -1,0 +1,379 @@
+/* Monitor Page Theme Rollout - Phase 13 */
+/* MaintenancePage Aesthetic: ambient gradients, elevated cards, hero section */
+
+.monitor-page {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding-bottom: 40px;
+  position: relative;
+  z-index: 1;
+}
+
+/* Ambient background gradients */
+.monitor-page::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(
+      circle at 20% 50%,
+      rgba(124, 77, 255, 0.08) 0%,
+      transparent 40%
+    ),
+    radial-gradient(
+      circle at 80% 80%,
+      rgba(86, 182, 245, 0.06) 0%,
+      transparent 50%
+    ),
+    var(--bg-app);
+  pointer-events: none;
+}
+
+/* Hero / Header Section */
+.monitor-page > header {
+  margin-bottom: 8px;
+}
+
+.monitor-page > header h1 {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 700;
+  background: linear-gradient(to right, var(--text), var(--accent));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.monitor-page > header p {
+  color: var(--text-muted);
+  margin-top: 8px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* Error Alert */
+.monitor-alert-error {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 183, 77, 0.35);
+  background: rgba(255, 183, 77, 0.14);
+  color: #ffcc80;
+  border-radius: 8px;
+  font-size: 13px;
+  transition: all 150ms ease-out;
+}
+
+/* Tab Navigation */
+.monitor-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.monitor-tab-button {
+  border: 1px solid var(--border);
+  background: var(--bg-input);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-weight: 700;
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 150ms ease-out;
+}
+
+.monitor-tab-button:hover {
+  border-color: var(--accent);
+  background: rgba(124, 77, 255, 0.1);
+  color: var(--accent);
+}
+
+.monitor-tab-button.active {
+  background: rgba(124, 77, 255, 0.2);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* Elevated Cards */
+.monitor-page .hp-card {
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.03) 0%,
+    rgba(255, 255, 255, 0.01) 100%
+  );
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(10px);
+  transition: all 200ms ease-out;
+}
+
+.monitor-page .hp-card:hover {
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow:
+    0 12px 48px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  transform: translateY(-2px);
+}
+
+/* Metric Card Base */
+.monitor-metric-card {
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.03) 0%,
+    rgba(255, 255, 255, 0.01) 100%
+  );
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(10px);
+  transition: all 200ms ease-out;
+  padding: 20px;
+  position: relative;
+  overflow: hidden;
+  border-radius: 8px;
+}
+
+.monitor-metric-card:hover {
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow:
+    0 12px 48px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  transform: translateY(-2px);
+}
+
+/* Metric Title and Value */
+.monitor-metric-title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.monitor-metric-value {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.2;
+  margin-bottom: 4px;
+  color: var(--text);
+}
+
+.monitor-metric-subtitle {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+}
+
+/* Progress Bar */
+.monitor-progress-bar {
+  height: 6px;
+  background: var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.monitor-progress-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.4s ease;
+}
+
+/* Grid Layouts */
+.monitor-grid-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 20px;
+}
+
+.monitor-grid-wide {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
+}
+
+.monitor-grid-dual {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  gap: 20px;
+}
+
+/* Chart Container */
+.monitor-chart-container {
+  position: relative;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  min-height: 240px;
+  margin-top: 10px;
+}
+
+.monitor-chart-legend {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.monitor-chart-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.monitor-chart-legend-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+/* Table Styling */
+.monitor-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  margin-top: 10px;
+}
+
+.monitor-table thead {
+  background: rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid var(--border);
+}
+
+.monitor-table th {
+  padding: 8px 4px;
+  text-align: left;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  font-size: 10px;
+  letter-spacing: 0.5px;
+}
+
+.monitor-table td {
+  padding: 8px 4px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+}
+
+.monitor-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+/* Buttons */
+.monitor-btn {
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 150ms ease-out;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.monitor-btn:hover {
+  border-color: var(--accent);
+  background: rgba(124, 77, 255, 0.1);
+  color: var(--accent);
+}
+
+.monitor-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.monitor-btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #000;
+  font-weight: 600;
+}
+
+.monitor-btn-primary:hover:not(:disabled) {
+  background: rgb(99, 64, 212);
+  border-color: rgb(99, 64, 212);
+}
+
+/* Accessibility */
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* Utility Classes */
+.mono {
+  font-family: monospace;
+}
+
+.hp-muted {
+  color: var(--text-muted);
+}
+
+.hp-btn {
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 150ms ease-out;
+}
+
+.hp-btn:hover {
+  border-color: var(--accent);
+  background: rgba(124, 77, 255, 0.1);
+  color: var(--accent);
+}
+
+.hp-btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #000;
+  font-weight: 600;
+}
+
+.hp-btn-primary:hover:not(:disabled) {
+  background: rgb(99, 64, 212);
+  border-color: rgb(99, 64, 212);
+}
+
+/* Scrollable Containers */
+.monitor-scroll-container {
+  max-height: 300px;
+  overflow-y: auto;
+  margin-top: 10px;
+}
+
+.monitor-help-text {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+  margin-top: 10px;
+}
+
+/* Section Anchors */
+#monitor-overview,
+#monitor-network,
+#monitor-docker,
+#monitor-processes,
+#monitor-disk {
+  scroll-margin-top: 24px;
+}
