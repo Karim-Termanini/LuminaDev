@@ -2433,16 +2433,6 @@ function ContainerInspectDrawer({ row, networks, onClose, onRefresh }: InspectDr
 
         {drawerTab === 'info' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div className="docker-inspect-drawer__section-nav" aria-label="Jump to section">
-              {DRAWER_TABS.filter((t) => t !== 'info').map((t) => (
-                <button key={t} type="button" onClick={() => setDrawerTab(t)}>
-                  {sectionLabels[t]}
-                  {t === 'ports' && editPorts.length > 0 ? ` (${editPorts.length})` : ''}
-                  {t === 'env' && editEnv.length > 0 ? ` (${editEnv.length})` : ''}
-                  {t === 'volumes' && volumeMounts.length > 0 ? ` (${volumeMounts.length})` : ''}
-                </button>
-              ))}
-            </div>
             <div><span style={{ color: 'var(--text-muted)', fontSize: 12 }}>IMAGE</span><div className="mono" style={{ marginTop: 4 }}>{row.image}</div></div>
             <div><span style={{ color: 'var(--text-muted)', fontSize: 12 }}>STATE</span><div style={{ marginTop: 4 }}>{row.state} — {row.status}</div></div>
             <div><span style={{ color: 'var(--text-muted)', fontSize: 12 }}>ID</span><div className="mono" style={{ marginTop: 4, fontSize: 12 }}>{row.id}</div></div>
