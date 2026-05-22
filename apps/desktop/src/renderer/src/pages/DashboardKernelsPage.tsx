@@ -52,7 +52,7 @@ export function DashboardKernelsPage(): ReactElement {
   }, [refresh])
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 980, margin: '0 auto', paddingInline: 12 }}>
+    <div className="kernels-page" style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 980, paddingInline: 12 }}>
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 12 }}>
         <div>
           <div className="mono" style={{ color: 'var(--accent)', fontSize: 12, marginBottom: 8 }}>DASHBOARD.KERNELS</div>

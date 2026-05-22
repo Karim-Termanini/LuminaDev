@@ -94,7 +94,7 @@ export function RegistryPage(): ReactElement {
   }
 
   return (
-    <div style={{ maxWidth: 980, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 18 }}>
+    <div className="registry-page" style={{ maxWidth: 980, display: 'flex', flexDirection: 'column', gap: 18 }}>
       <header>
       <h1 style={{ marginTop: 0, marginBottom: 6 }}>Registry &amp; Git</h1>
       <p style={{ color: 'var(--text-muted)', marginTop: 0, lineHeight: 1.5 }}>
