@@ -2355,10 +2355,10 @@ function ContainerInspectDrawer({ row, networks, onClose, onRefresh }: InspectDr
     padding: '10px 14px',
     cursor: 'pointer',
     fontWeight: drawerTab === t ? 600 : 500,
-    color: drawerTab === t ? 'var(--accent)' : 'var(--text)',
-    background: drawerTab === t ? 'rgba(124,77,255,0.1)' : 'transparent',
+    color: drawerTab === t ? '#7c4dff' : '#e8e8e8',
+    background: drawerTab === t ? 'rgba(124,77,255,0.15)' : 'transparent',
     border: 'none',
-    borderBottom: drawerTab === t ? '3px solid var(--accent)' : '3px solid transparent',
+    borderBottom: drawerTab === t ? '3px solid #7c4dff' : '3px solid transparent',
     fontSize: 13,
     whiteSpace: 'nowrap',
     flexShrink: 0,
@@ -2383,7 +2383,7 @@ function ContainerInspectDrawer({ row, networks, onClose, onRefresh }: InspectDr
         <button type="button" className="hp-btn" onClick={onClose} style={{ padding: '4px 10px' }}>✕</button>
       </div>
 
-      <div style={{ display: 'flex', borderBottom: '2px solid var(--border)', overflowX: 'auto', background: 'rgba(0,0,0,0.3)', paddingBottom: 0 }}>
+      <div style={{ display: 'flex', borderBottom: '1px solid #2a2a2a', overflowX: 'auto', background: '#0a0a0a', paddingBottom: 0, gap: 0 }}>
         {(['info', 'ports', 'networks', 'env', 'volumes', 'logs'] as const).map((t) => (
           <button key={t} type="button" style={tabStyle(t)} onClick={() => setDrawerTab(t)}>
             {t.charAt(0).toUpperCase() + t.slice(1)}

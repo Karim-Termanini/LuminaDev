@@ -567,6 +567,25 @@
   word-break: break-all;
 }
 
+/* Drawer tabs - make visible and styled */
+.docker-page [style*="display: flex"][style*="borderBottom"] > button {
+  padding: 10px 14px !important;
+  font-weight: 500 !important;
+  font-size: 13px !important;
+  color: var(--text) !important;
+  background: transparent !important;
+  border: none !important;
+  cursor: pointer !important;
+  white-space: nowrap !important;
+  transition: all 150ms ease !important;
+  border-bottom: 3px solid transparent !important;
+}
+
+.docker-page [style*="display: flex"][style*="borderBottom"] > button:hover {
+  background: rgba(124, 77, 255, 0.08) !important;
+  color: var(--accent) !important;
+}
+
 /* Logs display */
 .docker-logs-container {
   background: var(--bg-widget);
