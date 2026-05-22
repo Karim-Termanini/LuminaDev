@@ -6,6 +6,7 @@ import { humanizeDashboardError } from './dashboardError'
 import { assertGitOk } from './gitContract'
 import { humanizeGitError } from './gitError'
 import { assertMonitorOk } from './monitorContract'
+import './MonitorPage.css'
 
 // ─── Git global config score (aligned with Git Config page) ─────────────────
 
@@ -270,7 +271,7 @@ export function MonitorPage(): ReactElement {
   const gitTotal = gitCfg ? gitTotalConfigScore(gitCfg) : null
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 24, paddingBottom: 40 }}>
+    <div className="monitor-page">
       <header>
         <h1 style={{ margin: 0, fontSize: 28, fontWeight: 700 }}>Engineering Dashboard</h1>
         <p style={{ color: 'var(--text-muted)', marginTop: 8 }}>Real-time system health and development activity.</p>
@@ -312,7 +313,7 @@ export function MonitorPage(): ReactElement {
       </div>
 
       {/* Primary Metrics Row */}
-      <div id="monitor-overview" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 20 }}>
+      <div id="monitor-overview" className="monitor-grid-metrics">
         <MetricCard title="CPU LOAD" value={m ? `${m.cpuUsagePercent.toFixed(1)}%` : '—'} subValue={m?.cpuModel}>
           <LiveLineChart data={cpuHistory} color="var(--accent)" height={60} />
         </MetricCard>
@@ -343,7 +344,7 @@ export function MonitorPage(): ReactElement {
       </div>
 
       {/* Network Activity */}
-      <div id="monitor-network" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 20 }}>
+      <div id="monitor-network" className="monitor-grid-wide">
         <MetricCard title="NETWORK ACTIVITY" value={`${m?.netRxMbps.toFixed(2) ?? '0.00'} Mbps`} subValue="Downlink / Uplink traffic">
           <div style={{ border: '1px solid var(--border)', borderRadius: 10, background: 'rgba(255,255,255,0.02)', padding: 10 }}>
             <NetworkChart data={netHistory} height={120} />
@@ -362,7 +363,7 @@ export function MonitorPage(): ReactElement {
       </div>
 
       {/* Engineering Hub Row - 2 Columns */}
-      <div id="monitor-docker" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: 20 }}>
+      <div id="monitor-docker" className="monitor-grid-dual">
         <MetricCard
           title={portsView === 'listen' ? 'ACTIVE PORTS (LISTEN)' : 'ACTIVE PORTS (ALL)'}
           value={`${visiblePortRows.length}`}
@@ -677,7 +678,7 @@ export function MonitorPage(): ReactElement {
       </div>
 
       {/* Disk / Processes with Alerts under Disk */}
-      <div id="monitor-disk" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: 20, alignItems: 'start' }}>
+      <div id="monitor-disk" className="monitor-grid-dual" style={{ alignItems: 'start' }}>
         <div style={{ display: 'grid', gap: 20 }}>
           <MetricCard title="DISK I/O LIVE" value={`${m?.diskReadMbps.toFixed(2) ?? '0.00'} Mbps`} subValue="Read / Write throughput" titleColor="#80cbc4" valueColor="#80cbc4">
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
@@ -738,19 +739,11 @@ export function MonitorPage(): ReactElement {
 
 function MetricCard({ title, value, subValue, children, minHeight, contentMarginTop = 16, titleColor, valueColor }: { title: string, value?: string, subValue?: string, children?: ReactNode, minHeight?: number, contentMarginTop?: number, titleColor?: string, valueColor?: string }): ReactElement {
   return (
-    <section style={{
-      background: 'var(--bg-widget)',
-      border: '1px solid var(--border)',
-      borderRadius: 'var(--radius)',
-      padding: 20,
-      position: 'relative',
-      overflow: 'hidden',
-      minHeight,
-    }}>
-      <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: 4, background: 'linear-gradient(90deg, var(--accent), transparent)' }} />
-      <div style={{ fontSize: 11, fontWeight: 700, color: titleColor ?? 'var(--text-muted)', letterSpacing: '0.05em', marginBottom: 12 }}>{title}</div>
-      {value && <div style={{ fontSize: 32, fontWeight: 800, letterSpacing: '-0.02em', color: valueColor ?? 'var(--text-main)' }}>{value}</div>}
-      {subValue && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>{subValue}</div>}
+    <section className="monitor-metric-card" style={{ minHeight }}>
+      <div className="monitor-metric-card-bar" />
+      <div className="monitor-metric-title" style={{ color: titleColor }}>{title}</div>
+      {value && <div className="monitor-metric-value" style={{ color: valueColor }}>{value}</div>}
+      {subValue && <div className="monitor-metric-subtitle">{subValue}</div>}
       <div style={{ marginTop: contentMarginTop }}>{children}</div>
     </section>
   )
