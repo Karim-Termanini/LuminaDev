@@ -6,6 +6,7 @@ import { humanizeDashboardError } from './dashboardError'
 import { assertGitOk } from './gitContract'
 import { humanizeGitError } from './gitError'
 import { assertMonitorOk } from './monitorContract'
+import './MonitorPage.css'
 
 // ─── Git global config score (aligned with Git Config page) ─────────────────
 
@@ -270,7 +271,7 @@ export function MonitorPage(): ReactElement {
   const gitTotal = gitCfg ? gitTotalConfigScore(gitCfg) : null
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 24, paddingBottom: 40 }}>
+    <div className="monitor-page">
       <header>
         <h1 style={{ margin: 0, fontSize: 28, fontWeight: 700 }}>Engineering Dashboard</h1>
         <p style={{ color: 'var(--text-muted)', marginTop: 8 }}>Real-time system health and development activity.</p>
