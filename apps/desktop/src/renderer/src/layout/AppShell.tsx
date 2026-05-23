@@ -6,6 +6,7 @@ import { EnvironmentBanner } from './EnvironmentBanner'
 import { OnLoginAutomationRunner } from './OnLoginAutomationRunner'
 import { TopBar } from './TopBar'
 import { WidgetLayoutProvider } from './WidgetLayoutContext'
+import './AppShell.css'
 
 type RouteStatus = 'live' | 'partial' | 'stub'
 
@@ -31,86 +32,38 @@ const statusStyles: Record<RouteStatus, { label: string; color: string; bg: stri
 }
 export function AppShell({ children }: { children: ReactNode }): ReactElement {
   return (
-    <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
-      <aside
-        style={{
-          width: 'var(--rail-width)',
-          background: 'var(--bg-panel)',
-          borderRight: '1px solid var(--border)',
-          display: 'flex',
-          flexDirection: 'column',
-          flexShrink: 0,
-        }}
-      >
-        <div style={{ padding: '18px 16px 12px' }}>
-          <div style={{ fontWeight: 700, letterSpacing: '0.02em' }}>LuminaDev</div>
-          <div
-            className="mono"
-            style={{
-              fontSize: '11px',
-              color: 'var(--text-muted)',
-              marginTop: 4,
-              textTransform: 'uppercase',
-            }}
-          >
-            Linux session
-          </div>
+    <div className="app-shell">
+      <aside className="app-shell-nav">
+        <div className="app-shell-header">
+          <div className="app-shell-header-title">LuminaDev</div>
+          <div className="mono app-shell-header-subtitle">Linux session</div>
         </div>
-        <nav style={{ flex: 1, padding: '8px 0' }}>
+        <nav className="app-shell-nav-list">
           {nav.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
-              style={({ isActive }) => ({
-                display: 'flex',
-                alignItems: 'center',
-                gap: 12,
-                padding: '10px 16px',
-                color: isActive ? 'var(--accent)' : 'var(--text-muted)',
-                background: isActive ? 'rgba(124, 77, 255, 0.08)' : 'transparent',
-                borderLeft: isActive ? '3px solid var(--accent)' : '3px solid transparent',
-                textDecoration: 'none',
-                fontWeight: isActive ? 600 : 500,
-                fontSize: 14,
-              })}
+              className={({ isActive }) => `app-shell-nav-item ${isActive ? 'active' : ''}`}
             >
               <span className={`codicon codicon-${item.icon}`} aria-hidden />
-              <span style={{ flex: 1 }}>{item.label}</span>
+              <span className="app-shell-nav-item-label">{item.label}</span>
               <span
-                className="mono"
+                className={`mono app-shell-nav-item-status ${item.status}`}
                 title={`Route status: ${item.status}`}
-                style={{
-                  fontSize: 9,
-                  fontWeight: 700,
-                  letterSpacing: '0.04em',
-                  color: statusStyles[item.status].color,
-                  border: `1px solid ${statusStyles[item.status].border}`,
-                  background: statusStyles[item.status].bg,
-                  borderRadius: 999,
-                  padding: '2px 6px',
-                }}
               >
                 {statusStyles[item.status].label}
               </span>
             </NavLink>
           ))}
         </nav>
-        <div
-          style={{
-            borderTop: '1px solid var(--border)',
-            padding: '12px 16px 16px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 8,
-          }}
-        >
+        <div className="app-shell-footer">
           <a
             href="#"
             onClick={(e) => {
               e.preventDefault()
               void window.dh.openExternal('https://github.com/')
             }}
-            style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-muted)', fontSize: 13 }}
+            className="app-shell-footer-link"
           >
             <span className="codicon codicon-book" aria-hidden />
             Docs
@@ -125,25 +78,21 @@ export function AppShell({ children }: { children: ReactNode }): ReactElement {
               })
                 .then(() => window.location.reload())
             }}
-            style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-muted)', fontSize: 13 }}
+            className="app-shell-footer-link"
           >
             <span className="codicon codicon-wand" aria-hidden />
             Setup Wizard
           </a>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6 }}>
-            <span
-              className="codicon codicon-account"
-              style={{ fontSize: 22, color: 'var(--text-muted)' }}
-              aria-hidden
-            />
-            <div>
-              <div style={{ fontWeight: 600, fontSize: 13 }}>Local user</div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Developer</div>
+          <div className="app-shell-profile-section">
+            <span className="codicon codicon-account app-shell-profile-icon" aria-hidden />
+            <div className="app-shell-profile-info">
+              <div className="app-shell-profile-name">Local user</div>
+              <div className="app-shell-profile-session">Developer</div>
             </div>
           </div>
         </div>
       </aside>
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+      <div className="app-shell-main">
         <WidgetLayoutProvider>
           <OnLoginAutomationRunner />
           <EnvironmentBanner />
