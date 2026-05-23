@@ -184,29 +184,99 @@ pub fn probe_tools() -> ToolsStatus {
     }
 }
 
+fn detect_package_manager() -> Option<(&'static str, Vec<&'static str>)> {
+    // Returns (pm_name, install_args) where install_args = [cmd, package_name]
+    if Command::new("which").arg("apt-get").output().map(|o| o.status.success()).unwrap_or(false) {
+        return Some(("apt", vec!["apt-get", "install", "-y"]));
+    }
+    if Command::new("which").arg("dnf").output().map(|o| o.status.success()).unwrap_or(false) {
+        return Some(("dnf", vec!["dnf", "install", "-y"]));
+    }
+    if Command::new("which").arg("pacman").output().map(|o| o.status.success()).unwrap_or(false) {
+        return Some(("pacman", vec!["pacman", "-S", "--noconfirm"]));
+    }
+    if Command::new("which").arg("zypper").output().map(|o| o.status.success()).unwrap_or(false) {
+        return Some(("zypper", vec!["zypper", "install", "-y"]));
+    }
+    None
+}
+
+fn get_package_name(tool: &str, pm: &str) -> Option<&'static str> {
+    // Map tool names to package names per distro
+    match (tool, pm) {
+        ("docker", "apt") => Some("docker.io"),
+        ("docker", "dnf") => Some("docker"),
+        ("docker", "pacman") => Some("docker"),
+        ("docker", "zypper") => Some("docker"),
+        ("git", _) => Some("git"),
+        ("curl", _) => Some("curl"),
+        ("tar", _) => Some("tar"),
+        ("unzip", _) => Some("unzip"),
+        _ => None,
+    }
+}
+
 pub async fn run_fix(id: &str) -> Result<(), String> {
     match id {
+        // Package installation fixes
+        "install-docker" | "install-git" | "install-curl" | "install-tar" | "install-unzip" => {
+            let tool = id.strip_prefix("install-").unwrap_or("");
+            let (pm, mut cmd_args) = detect_package_manager()
+                .ok_or_else(|| "Could not detect system package manager.".to_string())?;
+
+            let pkg = get_package_name(tool, pm)
+                .ok_or_else(|| format!("Package mapping not found for {} on {}", tool, pm))?;
+
+            cmd_args.push(pkg);
+
+            // Use pkexec for privilege escalation (native password prompt)
+            let status = Command::new("pkexec")
+                .args(cmd_args)
+                .status()
+                .map_err(|e| format!("Failed to execute pkexec: {}", e))?;
+
+            if status.success() {
+                Ok(())
+            } else {
+                Err(format!("Failed to install {}: package manager returned error.", tool))
+            }
+        },
+
+        // Docker daemon start
         "docker-start" => {
-            let status = Command::new("sudo")
+            let status = Command::new("pkexec")
                 .arg("systemctl")
                 .arg("start")
                 .arg("docker")
                 .status()
                 .map_err(|e| format!("Failed to start docker: {}", e))?;
-            if status.success() { Ok(()) } else { Err("Failed to start docker service.".to_string()) }
+            if status.success() {
+                Ok(())
+            } else {
+                Err("Failed to start docker service.".to_string())
+            }
         },
+
+        // Add user to docker group
         "docker-group" => {
             let user = std::env::var("USER").unwrap_or_default();
             if user.is_empty() { return Err("Could not detect current user.".to_string()); }
-            let status = Command::new("sudo")
+
+            let status = Command::new("pkexec")
                 .arg("usermod")
                 .arg("-aG")
                 .arg("docker")
                 .arg(&user)
                 .status()
                 .map_err(|e| format!("Failed to add user to group: {}", e))?;
-            if status.success() { Ok(()) } else { Err("Failed to update group membership.".to_string()) }
+
+            if status.success() {
+                Ok(())
+            } else {
+                Err("Failed to update group membership. User may need to log out and back in.".to_string())
+            }
         },
-        _ => Err(format!("Unknown fix ID: {}", id)),
+
+        _ => Err(format!("[UNKNOWN_FIX_ID] {}", id)),
     }
 }

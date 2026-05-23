@@ -18,21 +18,34 @@ import { RuntimesPage } from './pages/RuntimesPage'
 import { MaintenancePage } from './pages/MaintenancePage'
 import { SettingsPage } from './pages/SettingsPage'
 import { SystemReadinessPage } from './pages/SystemReadinessPage'
+import { ReadinessWizardPage } from './pages/ReadinessWizardPage'
 import { WizardFlow } from './wizard/WizardFlow'
 import { WizardStateStoreSchema } from '@linux-dev-home/shared'
 import { syncAppearanceFromStore } from './theme/applyAccent'
 
 export default function App(): ReactElement | null {
   const [ready, setReady] = useState(false)
+  const [showReadinessWizard, setShowReadinessWizard] = useState(false)
   const [showWizard, setShowWizard] = useState(false)
 
   useEffect(() => {
-    void window.dh.storeGet({ key: 'wizard_state' }).then((res: unknown) => {
-      const bag = res as { ok?: boolean; data?: unknown }
-      const w = bag.ok ? WizardStateStoreSchema.safeParse(bag.data).data : undefined
-      if (!w?.completed || !!w?.showOnStartup) {
-        setShowWizard(true)
-      }
+    void Promise.all([
+      window.dh.storeGet({ key: 'readiness_wizard_complete' }).then((res: unknown) => {
+        const bag = res as { ok?: boolean; data?: unknown }
+        const completed = bag.ok ? bag.data === true : false
+        if (!completed) {
+          setShowReadinessWizard(true)
+          return
+        }
+      }),
+      window.dh.storeGet({ key: 'wizard_state' }).then((res: unknown) => {
+        const bag = res as { ok?: boolean; data?: unknown }
+        const w = bag.ok ? WizardStateStoreSchema.safeParse(bag.data).data : undefined
+        if (!w?.completed || !!w?.showOnStartup) {
+          setShowWizard(true)
+        }
+      }),
+    ]).then(() => {
       setReady(true)
     })
   }, [])
@@ -43,6 +56,16 @@ export default function App(): ReactElement | null {
   }, [ready, showWizard])
 
   if (!ready) return null
+  if (showReadinessWizard) {
+    return (
+      <ReadinessWizardPage
+        onComplete={() => {
+          setShowReadinessWizard(false)
+          setShowWizard(true)
+        }}
+      />
+    )
+  }
   if (showWizard) {
     return (
       <WizardFlow
