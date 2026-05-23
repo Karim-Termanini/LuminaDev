@@ -2,6 +2,7 @@ import type { ReactElement } from 'react'
 import { useCallback, useEffect, useState } from 'react'
 import { assertGitOk } from './gitContract'
 import { humanizeGitError } from './gitError'
+import './GitConfigPage.css'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -1358,74 +1359,33 @@ export function GitConfigPage(): ReactElement {
   }
 
   return (
-    <div style={{ display: 'flex', height: '100%', minHeight: 0 }}>
-      {/* Sidebar */}
-      <nav style={{
-         width: 220,
-         flexShrink: 0,
-         background: 'rgba(20, 20, 20, 0.4)',
-         backdropFilter: 'blur(16px)',
-         borderRight: '1px solid rgba(255, 255, 255, 0.05)',
-         paddingTop: 24,
-         paddingBottom: 16,
-         overflowY: 'auto',
-       }}>
-        <div style={{ padding: '0 16px 16px', borderBottom: '1px solid var(--border)', marginBottom: 8 }}>
-          <div style={{ fontWeight: 700, fontSize: 14 }}>Git Config</div>
-          <div className="hp-muted" style={{ fontSize: 11 }}>Environment Manager</div>
-        </div>
+    <div className="git-config-page elevated-page">
+      {/* Header */}
+      <header style={{ marginBottom: 4 }}>
+        <div className="mono" style={{ color: 'var(--accent)', fontSize: 12, marginBottom: 8 }}>GIT CONFIG</div>
+        <h1 style={{ margin: 0, fontSize: 28, fontWeight: 700 }}>Git Configuration</h1>
+        <p style={{ color: 'var(--text-muted)', marginTop: 10, maxWidth: 760, lineHeight: 1.5 }}>
+          Manage your Git identity, SSH keys, security settings, and repository behavior globally.
+        </p>
+      </header>
+
+      {/* Horizontal Tabs */}
+      <nav className="git-config-tabs-wrap">
         {NAV_ITEMS.map((item) => (
           <button
             key={item.id}
             type="button"
             onClick={() => setSection(item.id)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 12,
-              width: '100%',
-              padding: '12px 16px',
-              border: 'none',
-              background: section === item.id ? 'rgba(124, 77, 255, 0.08)' : 'transparent',
-              color: section === item.id ? 'var(--accent)' : 'var(--text-muted)',
-              cursor: 'pointer',
-              textAlign: 'left',
-              position: 'relative',
-              transition: 'all 0.3s'
-            }}
+            className={`git-config-tab ${section === item.id ? 'git-config-tab-active' : ''}`}
           >
-            <div style={{
-              position: 'absolute',
-              left: 0, top: '20%', bottom: '20%',
-              width: 3,
-              background: section === item.id ? 'var(--accent)' : 'transparent',
-              boxShadow: section === item.id ? '0 0 10px var(--accent)' : 'none',
-              transition: 'all 0.3s'
-            }} />
-            <span className={`codicon codicon-${item.icon}`} style={{ 
-              fontSize: 16, 
-              color: section === item.id ? 'var(--accent)' : 'var(--text-muted)',
-              textShadow: section === item.id ? '0 0 8px var(--accent)66' : 'none',
-              transition: 'all 0.3s'
-            }} />
-            <span style={{ 
-              flex: 1, 
-              fontSize: 13, 
-              fontWeight: section === item.id ? 700 : 500,
-              letterSpacing: section === item.id ? '0.02em' : 'normal',
-              color: section === item.id ? 'var(--text)' : 'inherit'
-            }}>{item.label}</span>
+            <span className={`codicon codicon-${item.icon}`} />
+            <span>{item.label}</span>
           </button>
         ))}
-        <div style={{ padding: '16px 16px 0', borderTop: '1px solid var(--border)', marginTop: 8 }}>
-          <button type="button" className="hp-btn" style={{ width: '100%', fontSize: 12 }} onClick={() => void loadConfig()} disabled={loading || busy}>
-            {loading ? 'Loading…' : 'Refresh'}
-          </button>
-        </div>
       </nav>
 
       {/* Content */}
-      <main style={{ flex: 1, overflowY: 'auto', padding: '24px 28px', position: 'relative' }}>
+      <main className="git-config-content">
         {toast && (
           <div style={{
             position: 'fixed',

@@ -967,7 +967,7 @@ export function GitVcsPage(): ReactElement {
 
   if (emptyRepo && recents.length === 0) {
     return (
-      <div style={{ maxWidth: 960, margin: '0 auto', padding: '24px 16px', ...vcsScopedStyle }}>
+      <div className="elevated-page" style={{ maxWidth: 960, margin: '0 auto', padding: '24px 16px', ...vcsScopedStyle }}>
         <header style={{ marginBottom: 28 }}>
           <div className="mono" style={{ color: 'var(--cg-accent, var(--accent))', fontSize: 12, marginBottom: 8 }}>
             GIT.WORKTREE

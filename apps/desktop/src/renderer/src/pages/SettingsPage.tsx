@@ -5,6 +5,7 @@ import type { ConnectedAccount, SshBookmark } from '@linux-dev-home/shared'
 import { parseAppearance, parseSshBookmarks } from '@linux-dev-home/shared'
 
 import { applyAppearanceAccent, DEFAULT_ACCENT_HEX } from '../theme/applyAccent'
+import './SettingsPage.css'
 
 const ACCENT_PRESETS: ReadonlyArray<{ label: string; hex: string }> = [
   { label: 'Violet', hex: '#7c4dff' },
@@ -536,15 +537,7 @@ export function SettingsPage(): ReactElement {
   const activeNav = NAV.find((n) => n.id === navId) ?? NAV[0]
 
   return (
-    <div
-      style={{
-        minHeight: '100%',
-        padding: '28px 32px 48px',
-        maxWidth: 1040,
-        margin: '0 auto',
-        boxSizing: 'border-box',
-      }}
-    >
+    <div className="settings-page elevated-page" style={{ padding: '28px 32px 48px', maxWidth: 1040 }}>
       <header style={{ marginBottom: 28 }}>
         <h1 className="hp-title" style={{ fontSize: 32, fontWeight: 700, letterSpacing: '-0.03em' }}>
           Settings

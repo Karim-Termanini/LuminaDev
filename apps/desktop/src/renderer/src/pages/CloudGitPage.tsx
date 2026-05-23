@@ -276,6 +276,7 @@ export function CloudGitPage(): ReactElement {
 
   return (
     <div
+      className="elevated-page"
       style={{
         minHeight: '100%',
         padding: '28px 32px 48px',

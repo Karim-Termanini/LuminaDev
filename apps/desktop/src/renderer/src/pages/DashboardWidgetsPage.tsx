@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { AddWidgetModal } from '../dashboard/AddWidgetModal'
 import { DashboardWidgetDeck } from '../dashboard/DashboardWidgetDeck'
 import { useWidgetLayout } from '../layout/WidgetLayoutContext'
+import './DashboardWidgetsPage.css'
 
 export function DashboardWidgetsPage(): ReactElement {
   const { layout, setLayout, removePlacement } = useWidgetLayout()
@@ -34,7 +35,7 @@ export function DashboardWidgetsPage(): ReactElement {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 24, maxWidth: 1200 }}>
+    <div className="dashboard-page elevated-page" style={{ display: 'flex', flexDirection: 'column', gap: 24, maxWidth: 1200 }}>
       <header>
         <div className="mono" style={{ color: 'var(--accent)', fontSize: 12, marginBottom: 8 }}>
           DASHBOARD.WIDGETS

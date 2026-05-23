@@ -1,0 +1,541 @@
+/* Theme Elevated — Shared utility classes for elevated product surface aesthetic */
+/* Imported by all page CSS files; provides foundation for ambient gradients, hero, cards, tabs, tiles */
+
+/* Root Container — Base for all elevated pages */
+.elevated-page {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
+  width: 100%;
+  padding: 24px;
+  box-sizing: border-box;
+  position: relative;
+  z-index: 1;
+}
+
+/* Ambient Background Gradients — Fixed pseudo-element behind content */
+.elevated-page::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      circle at 20% 50%,
+      rgba(124, 77, 255, 0.08) 0%,
+      transparent 40%
+    ),
+    radial-gradient(
+      circle at 80% 80%,
+      rgba(86, 182, 245, 0.06) 0%,
+      transparent 50%
+    ),
+    var(--bg-app);
+}
+
+/* Hero Section */
+.elevated-hero {
+  margin-bottom: 16px;
+}
+
+.elevated-hero-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 8px;
+}
+
+.elevated-hero-title {
+  margin: 0 0 12px;
+  font-size: 28px;
+  font-weight: 700;
+  background: linear-gradient(to right, var(--text), var(--accent));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  line-height: 1.1;
+}
+
+.elevated-hero-subtitle {
+  margin: 0;
+  max-width: 600px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+/* Tab Navigation */
+.elevated-tabs-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.elevated-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.2);
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: var(--font-ui);
+  transition: all 150ms ease-out;
+}
+
+.elevated-tab:hover {
+  border-color: rgba(124, 77, 255, 0.45);
+  background: rgba(124, 77, 255, 0.1);
+  color: var(--text);
+  transform: translateY(-1px);
+}
+
+.elevated-tab-active {
+  border-color: var(--accent);
+  background: rgba(124, 77, 255, 0.2);
+  color: var(--text);
+  box-shadow: 0 8px 24px rgba(124, 77, 255, 0.2);
+}
+
+/* Card Elevation */
+.elevated-card {
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.03) 0%,
+    rgba(255, 255, 255, 0.01) 100%
+  );
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(10px);
+  border-radius: 12px;
+  padding: 16px;
+  transition: all 200ms ease-out;
+}
+
+.elevated-card:hover {
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow:
+    0 12px 48px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  transform: translateY(-2px);
+}
+
+/* Metric Card (variant with bar accent) */
+.elevated-metric-card {
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.03) 0%,
+    rgba(255, 255, 255, 0.01) 100%
+  );
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(10px);
+  border-radius: 12px;
+  padding: 20px;
+  transition: all 200ms ease-out;
+}
+
+.elevated-metric-card:hover {
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow:
+    0 12px 48px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  transform: translateY(-2px);
+}
+
+.elevated-metric-card-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--accent), transparent);
+  border-radius: 12px 12px 0 0;
+}
+
+.elevated-metric-title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.elevated-metric-value {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.2;
+  margin-bottom: 4px;
+  color: var(--text);
+}
+
+.elevated-metric-subtitle {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+}
+
+/* Tiles with Accent Bars */
+.elevated-tile {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.02);
+  border-left: 3px solid var(--accent);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  transition: all 150ms ease-out;
+}
+
+.elevated-tile:hover {
+  background: rgba(255, 255, 255, 0.04);
+  transform: translateX(2px);
+}
+
+.elevated-tile.ok {
+  border-left-color: var(--green);
+}
+
+.elevated-tile.ok .elevated-tile-icon {
+  color: var(--green);
+}
+
+.elevated-tile.warning {
+  border-left-color: var(--orange);
+}
+
+.elevated-tile.warning .elevated-tile-icon {
+  color: var(--orange);
+}
+
+.elevated-tile.error {
+  border-left-color: var(--red);
+}
+
+.elevated-tile.error .elevated-tile-icon {
+  color: var(--red);
+}
+
+.elevated-tile-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  color: var(--accent);
+  font-size: 14px;
+}
+
+.elevated-tile-content {
+  flex: 1;
+}
+
+.elevated-tile-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 2px;
+}
+
+.elevated-tile-detail {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+/* KPI Pills */
+.elevated-kpi-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(124, 77, 255, 0.15);
+  border: 1px solid rgba(124, 77, 255, 0.3);
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+  transition: all 150ms ease-out;
+}
+
+.elevated-kpi-pill:hover {
+  background: rgba(124, 77, 255, 0.25);
+  border-color: var(--accent);
+}
+
+.elevated-kpi-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  color: var(--accent);
+  font-size: 12px;
+}
+
+.elevated-kpi-value {
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.elevated-kpi-label {
+  color: var(--text-muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Grid Utilities */
+.elevated-grid-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 20px;
+}
+
+.elevated-grid-wide {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
+}
+
+.elevated-grid-dual {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  gap: 20px;
+}
+
+/* Charts & Data Containers */
+.elevated-chart-container {
+  position: relative;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  min-height: 240px;
+  margin-top: 10px;
+}
+
+.elevated-table-wrap {
+  position: relative;
+  overflow-x: auto;
+  background: rgba(0, 0, 0, 0.1);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.elevated-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.elevated-table thead {
+  background: rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid var(--border);
+}
+
+.elevated-table th {
+  padding: 8px 12px;
+  text-align: left;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  font-size: 10px;
+  letter-spacing: 0.5px;
+}
+
+.elevated-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+  color: var(--text);
+}
+
+.elevated-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+/* Button Overrides (Scoped under .elevated-page) */
+.elevated-page .hp-btn {
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  border-radius: 8px;
+  transition: all 150ms ease-out;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.elevated-page .hp-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: rgba(124, 77, 255, 0.1);
+  color: var(--accent);
+  transform: translateY(-1px);
+}
+
+.elevated-page .hp-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.elevated-page .hp-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.elevated-page .hp-btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #000;
+  font-weight: 600;
+}
+
+.elevated-page .hp-btn-primary:hover:not(:disabled) {
+  background: rgb(99, 64, 212);
+  border-color: rgb(99, 64, 212);
+}
+
+.elevated-page .hp-btn-danger {
+  background: rgba(248, 81, 73, 0.1);
+  border-color: var(--red);
+  color: var(--red);
+}
+
+.elevated-page .hp-btn-danger:hover:not(:disabled) {
+  background: var(--red);
+  color: #fff;
+}
+
+/* Focus Rings & Accessibility */
+.elevated-page button:focus-visible,
+.elevated-page input:focus-visible,
+.elevated-page select:focus-visible,
+.elevated-page a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* Form Inputs */
+.elevated-page .hp-input {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.elevated-page .hp-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(124, 77, 255, 0.2);
+}
+
+/* Status Alerts */
+.elevated-page .hp-status-alert {
+  padding: 12px 16px;
+  border-radius: 10px;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid transparent;
+}
+
+.elevated-page .hp-status-alert.success {
+  background: rgba(63, 185, 80, 0.1);
+  border-color: var(--green);
+  color: var(--green);
+}
+
+.elevated-page .hp-status-alert.warning {
+  background: rgba(255, 140, 66, 0.1);
+  border-color: var(--orange);
+  color: var(--orange);
+}
+
+.elevated-page .hp-status-alert.error {
+  background: rgba(248, 81, 73, 0.1);
+  border-color: var(--red);
+  color: var(--red);
+}
+
+/* Progress Bar */
+.elevated-progress-bar {
+  height: 6px;
+  background: var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.elevated-progress-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--accent);
+  transition: width 0.4s ease;
+}
+
+/* Utility Classes */
+.elevated-mono {
+  font-family: var(--font-mono);
+}
+
+.elevated-muted {
+  color: var(--text-muted);
+}
+
+.elevated-section-title {
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+  margin-top: 24px;
+}
+
+.elevated-section-title:first-child {
+  margin-top: 0;
+}
+
+/* Scrollable Containers */
+.elevated-scroll-container {
+  max-height: 300px;
+  overflow-y: auto;
+  margin-top: 10px;
+}
+
+/* Help Text */
+.elevated-help-text {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+  margin-top: 10px;
+  line-height: 1.4;
+}

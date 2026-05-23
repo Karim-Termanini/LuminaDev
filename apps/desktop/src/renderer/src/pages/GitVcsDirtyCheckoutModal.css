@@ -1,0 +1,114 @@
+/* Git VCS Dirty Checkout Modal — Elevated theme */
+@import '../theme/theme-elevated.css';
+
+.git-vcs-dirty-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.git-vcs-dirty-modal {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 500px;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+}
+
+.git-vcs-dirty-modal-header {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 16px;
+}
+
+.git-vcs-dirty-modal-body {
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.5;
+  margin-bottom: 16px;
+}
+
+.git-vcs-dirty-modal-warning {
+  background: rgba(255, 140, 66, 0.1);
+  border: 1px solid var(--orange);
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 16px;
+  color: var(--orange);
+  font-size: 12px;
+}
+
+.git-vcs-dirty-modal-files {
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 16px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.git-vcs-dirty-modal-file-item {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  padding: 4px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+}
+
+.git-vcs-dirty-modal-file-item:last-child {
+  border-bottom: none;
+}
+
+.git-vcs-dirty-modal-footer {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.git-vcs-dirty-modal .hp-btn {
+  padding: 8px 14px;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 100ms ease-out;
+}
+
+.git-vcs-dirty-modal .hp-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: rgba(124, 77, 255, 0.1);
+  color: var(--accent);
+}
+
+.git-vcs-dirty-modal .hp-btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #000;
+  font-weight: 600;
+}
+
+.git-vcs-dirty-modal .hp-btn-primary:hover:not(:disabled) {
+  background: rgb(99, 64, 212);
+}
+
+.git-vcs-dirty-modal .hp-btn-danger {
+  background: rgba(248, 81, 73, 0.1);
+  border-color: var(--red);
+  color: var(--red);
+}
+
+.git-vcs-dirty-modal .hp-btn-danger:hover:not(:disabled) {
+  background: var(--red);
+  color: #fff;
+}

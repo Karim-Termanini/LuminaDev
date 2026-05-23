@@ -11,6 +11,8 @@ import { humanizeDashboardError } from './dashboardError'
 import { humanizeDockerError } from './dockerError'
 
 
+import './DashboardPage.css'
+
 export function DashboardMainPage(): ReactElement {
   const [docker, setDocker] = useState<
     { ok: true; rows: ContainerRow[] } | { ok: false; error: string } | null
@@ -86,32 +88,18 @@ export function DashboardMainPage(): ReactElement {
   }, [docker])
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      <header>
-        <div className="mono" style={{ color: 'var(--accent)', fontSize: 12, marginBottom: 8 }}>
-          SYSTEM.INIT()
-        </div>
-        <h1 style={{ margin: 0, fontSize: 28, fontWeight: 700 }}>What do you want to do today?</h1>
-        <p style={{ color: 'var(--text-muted)', marginTop: 8, maxWidth: 720 }}>
+    <div className="dashboard-page elevated-page">
+      <header className="dashboard-hero">
+        <div className="dashboard-section-label">SYSTEM.INIT()</div>
+        <h1 className="dashboard-hero-title">What do you want to do today?</h1>
+        <p className="dashboard-hero-subtitle">
           Select a predefined environment profile or continue your existing local clusters. Compose
           stacks run via Docker; Flatpak users must allow Docker socket access.
         </p>
       </header>
 
       {composeMsg ? (
-        <pre
-          className="mono"
-          style={{
-            background: 'var(--bg-widget)',
-            border: '1px solid var(--border)',
-            borderRadius: 'var(--radius)',
-            padding: 12,
-            whiteSpace: 'pre-wrap',
-            fontSize: 12,
-            maxHeight: 160,
-            overflow: 'auto',
-          }}
-        >
+        <pre className="dashboard-compose-log">
           {composeMsg}
         </pre>
       ) : null}
@@ -148,13 +136,7 @@ export function DashboardMainPage(): ReactElement {
         </div>
       </div>
 
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 260px), 1fr))',
-          gap: 16,
-        }}
-      >
+      <div className="dashboard-profiles-grid">
         <ProfileCard
           tag="PROFILE_01"
           title="Set up Web Development"
@@ -247,18 +229,7 @@ export function DashboardMainPage(): ReactElement {
         />
       </div>
 
-      <section
-        style={{
-          background: 'var(--bg-widget)',
-          border: '1px solid var(--border)',
-          borderRadius: 'var(--radius)',
-          padding: '12px 16px',
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: 24,
-          alignItems: 'stretch',
-        }}
-      >
+      <section className="dashboard-metrics-section">
         {!docker ? (
           <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 6, minWidth: 100 }}>
             <span className="codicon codicon-package" style={{ color: 'var(--text-muted)' }} aria-hidden title="Docker" />

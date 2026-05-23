@@ -21,6 +21,7 @@ function createTauriDhApi(): DhApi {
     dockerCreate: (payload) => tauriInvoke(IPC.dockerCreate, payload),
     dockerPull: (payload) => tauriInvoke(IPC.dockerPull, payload),
     dockerRemapPort: (payload) => tauriInvoke(IPC.dockerRemapPort, payload),
+    dockerInspect: (payload) => tauriInvoke(IPC.dockerInspect, payload),
     dockerReconfigure: (payload) => tauriInvoke(IPC.dockerReconfigure, payload),
     dockerImagesList: () => tauriInvoke(IPC.dockerImagesList),
     dockerImageAction: (payload) => tauriInvoke(IPC.dockerImageAction, payload),

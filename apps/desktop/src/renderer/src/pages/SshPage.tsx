@@ -5,6 +5,7 @@ import { parseSshBookmarks } from '@linux-dev-home/shared'
 import { FitAddon } from '@xterm/addon-fit'
 import { Terminal } from '@xterm/xterm'
 import '@xterm/xterm/css/xterm.css'
+import './SshPage.css'
 import { SSH_FLATPAK_HINT } from './environmentHints'
 import { assertSshOk } from './sshContract'
 import { humanizeSshError } from './sshError'
@@ -540,31 +541,30 @@ export function SshPage(): ReactElement {
   }
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 24, paddingBottom: 40, alignItems: 'start' }}>
-      
+    <div className="ssh-page elevated-page">
       {/* LEFT COLUMN: Setup & Bookmarks */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-        <header>
-          <div className="mono" style={{ color: 'var(--accent)', fontSize: 12, marginBottom: 8 }}>SETTINGS.SSH</div>
-          <h1 style={{ margin: 0, fontSize: 28, fontWeight: 700 }}>SSH Identity & Servers</h1>
-          <p style={{ color: 'var(--text-muted)', marginTop: 10 }}>
+      <div className="ssh-left-column">
+        <header className="ssh-hero">
+          <div className="ssh-section-label">SETTINGS.SSH</div>
+          <h1 className="ssh-hero-title">SSH Identity & Servers</h1>
+          <p className="ssh-hero-subtitle">
             Configure your local identity and manage your remote connections securely.
           </p>
-          <p style={{ color: 'var(--text-muted)', marginTop: 8, fontSize: 13 }}>
+          <p className="ssh-hero-subtitle" style={{ marginTop: 8 }}>
             {SSH_FLATPAK_HINT}
           </p>
         </header>
 
         {/* Enable SSH on This Machine */}
-        <section>
-          <div style={{ marginBottom: 14 }}>
-            <div className="mono" style={{ fontSize: 11, color: 'var(--accent)', marginBottom: 4, letterSpacing: '0.08em' }}>STEP 0 · OPTIONAL</div>
-            <h2 style={{ fontSize: 18, margin: '0 0 4px' }}>SSH Server</h2>
-            <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+        <section className="ssh-section">
+          <div className="ssh-section-header">
+            <div className="ssh-section-label">STEP 0 · OPTIONAL</div>
+            <h2 className="ssh-section-title">SSH Server</h2>
+            <p className="ssh-section-subtitle">
               Turn this machine into an SSH host. Other devices on your network can then connect to it. Skip if you only need to connect <em>to</em> remote servers.
             </p>
           </div>
-          <div className="hp-card" style={{ flexDirection: 'column', gap: 12 }}>
+          <div className="elevated-card" style={{ flexDirection: 'column', gap: 12 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 }}>
               <div>
                 <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>Enable SSH on This Machine</div>
@@ -583,27 +583,27 @@ export function SshPage(): ReactElement {
               </button>
             </div>
             {enableLocalLog && (
-              <pre style={{ margin: 0, fontSize: 11, fontFamily: 'monospace', background: 'var(--bg)', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border)', whiteSpace: 'pre-wrap', color: 'var(--text-muted)' }}>
+              <pre style={{ margin: 0, fontSize: 11, fontFamily: 'monospace', background: 'rgba(0, 0, 0, 0.2)', padding: '8px 12px', borderRadius: 6, border: '1px solid rgba(255, 255, 255, 0.08)', whiteSpace: 'pre-wrap', color: 'var(--text-muted)' }}>
                 {enableLocalLog}
               </pre>
             )}
           </div>
         </section>
 
-        <hr style={{ border: 0, borderTop: '1px solid var(--border)' }} />
+        <hr className="ssh-divider" />
 
         {/* SSH Identity Wizard Section */}
-        <section>
-          <div style={{ marginBottom: 16 }}>
-            <div className="mono" style={{ fontSize: 11, color: 'var(--accent)', marginBottom: 4, letterSpacing: '0.08em' }}>STEP 1 · REQUIRED</div>
-            <h2 style={{ fontSize: 18, margin: '0 0 4px' }}>Local Identity Setup</h2>
-            <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+        <section className="ssh-section">
+          <div className="ssh-section-header">
+            <div className="ssh-section-label">STEP 1 · REQUIRED</div>
+            <h2 className="ssh-section-title">Local Identity Setup</h2>
+            <p className="ssh-section-subtitle">
               Your SSH key is your identity on the network. Generate one here, then copy the public key to any remote server or GitHub/GitLab account you want to access without a password.
             </p>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            
-            <div className="hp-card">
+
+            <div className="elevated-card">
               <div style={stepCircle}>1</div>
               <div>
                 <h3 style={stepTitle}>Generate Local ID</h3>
@@ -615,7 +615,7 @@ export function SshPage(): ReactElement {
               </div>
             </div>
 
-            <div className="hp-card">
+            <div className="elevated-card">
               <div style={stepCircle}>2</div>
               <div style={{ flex: 1 }}>
                 <h3 style={stepTitle}>Identity Options</h3>
@@ -651,19 +651,19 @@ export function SshPage(): ReactElement {
           )}
         </section>
 
-        <hr style={{ border: 0, borderTop: '1px solid var(--border)' }} />
+        <hr className="ssh-divider" />
 
         {/* Bookmarks Section */}
-        <section>
-          <div style={{ marginBottom: 16 }}>
-            <div className="mono" style={{ fontSize: 11, color: 'var(--accent)', marginBottom: 4, letterSpacing: '0.08em' }}>STEP 2 · CONNECT</div>
-            <h2 style={{ fontSize: 18, margin: '0 0 4px' }}>Saved Servers</h2>
-            <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+        <section className="ssh-section">
+          <div className="ssh-section-header">
+            <div className="ssh-section-label">STEP 2 · CONNECT</div>
+            <h2 className="ssh-section-title">Saved Servers</h2>
+            <p className="ssh-section-subtitle">
               Bookmark remote machines by label. Hit <strong>Connect</strong> to open a live shell, browse files, or push your public key automatically.
             </p>
           </div>
           <div
-            className="hp-card"
+            className="elevated-card"
             style={{
               display: 'flex',
               flexWrap: 'wrap',
@@ -694,27 +694,27 @@ export function SshPage(): ReactElement {
           </div>
 
           {bookmarks.length === 0 ? (
-            <div style={{ color: 'var(--text-muted)' }}>No saved servers yet.</div>
+            <div className="ssh-empty-state">No saved servers yet.</div>
           ) : (
             <div style={{ display: 'grid', gap: 8 }}>
               {bookmarks.map((bm) =>
                 editBmId === bm.id ? (
-                  <div key={bm.id} style={{ ...card, padding: '12px 16px', flexDirection: 'column', gap: 12 }}>
+                  <div key={bm.id} className="ssh-bookmark-item" style={{ flexDirection: 'column', gap: 12 }}>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'flex-end' }}>
                       <div style={{ flex: '1 1 120px', minWidth: 0 }}>
-                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 3 }}>Label</div>
+                        <div className="ssh-form-label">Label</div>
                         <input value={editBmName} onChange={(e) => setEditBmName(e.target.value)} className="hp-input" style={{ width: '100%' }} />
                       </div>
                       <div style={{ flex: '1 1 90px', minWidth: 0 }}>
-                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 3 }}>User</div>
+                        <div className="ssh-form-label">User</div>
                         <input value={editBmUser} onChange={(e) => setEditBmUser(e.target.value)} className="hp-input" style={{ width: '100%' }} />
                       </div>
                       <div style={{ flex: '1.5 1 160px', minWidth: 0 }}>
-                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 3 }}>Host</div>
+                        <div className="ssh-form-label">Host</div>
                         <input value={editBmHost} onChange={(e) => setEditBmHost(e.target.value)} className="hp-input" style={{ width: '100%' }} />
                       </div>
                       <div style={{ flex: '0.5 1 60px', minWidth: 0 }}>
-                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 3 }}>Port</div>
+                        <div className="ssh-form-label">Port</div>
                         <input value={editBmPort} onChange={(e) => setEditBmPort(e.target.value)} className="hp-input" style={{ width: '100%' }} />
                       </div>
                     </div>
@@ -724,10 +724,10 @@ export function SshPage(): ReactElement {
                     </div>
                   </div>
                 ) : (
-                  <div key={bm.id} style={{ ...card, padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div key={bm.id} className="ssh-bookmark-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
-                      <div style={{ fontWeight: 600, fontSize: 15 }}>{bm.name}</div>
-                      <div className="mono" style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 4 }}>
+                      <div className="ssh-bookmark-name">{bm.name}</div>
+                      <div className="ssh-bookmark-info">
                         {bm.user}@{bm.host}:{bm.port}
                       </div>
                     </div>
@@ -745,32 +745,32 @@ export function SshPage(): ReactElement {
       </div>
 
       {/* RIGHT COLUMN: Connection History & Active Sessions */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 8, borderBottom: '1px solid var(--border)' }}>
+      <div className="ssh-right-column">
+        <div className="ssh-activity-header">
           <div>
-            <div className="mono" style={{ fontSize: 11, color: 'var(--accent)', marginBottom: 4, letterSpacing: '0.08em' }}>ACTIVITY</div>
-            <h2 style={{ fontSize: 18, margin: '0 0 4px' }}>Connection History</h2>
-            <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+            <div className="ssh-section-label">ACTIVITY</div>
+            <h2 className="ssh-section-title">Connection History</h2>
+            <p className="ssh-section-subtitle">
               Recent connections and active sessions. Click a session to re-open the terminal or file browser.
             </p>
           </div>
-          <span className="mono" style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+          <span className="ssh-activity-stats">
             {connectedCount} active / {sessions.length} total
           </span>
         </div>
 
         {/* Prerequisites accordion */}
-        <div style={{ background: 'var(--bg-widget)', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+        <div className="ssh-prereqs-accordion">
           <button
             type="button"
             onClick={() => setShowPrereqs(v => !v)}
-            style={{ width: '100%', background: 'none', border: 'none', color: 'var(--text)', cursor: 'pointer', padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, fontWeight: 600 }}
+            className="ssh-prereqs-button"
           >
             <span>📋 Remote Device Prerequisites</span>
             <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{showPrereqs ? '▲' : '▼'}</span>
           </button>
           {showPrereqs && (
-            <div style={{ padding: '0 14px 14px', display: 'flex', flexDirection: 'column', gap: 12, fontSize: 12 }}>
+            <div className="ssh-prereqs-content">
               <p style={{ margin: 0, color: 'var(--text-muted)', lineHeight: 1.6 }}>
                 The <b>remote machine</b> must have SSH running and port 22 open before you can connect. Run the commands matching its distro:
               </p>
@@ -822,16 +822,16 @@ export function SshPage(): ReactElement {
                   ],
                 },
               ] as const).map(({ label, color, cmds }) => (
-                <div key={label}>
-                  <div style={{ fontWeight: 600, marginBottom: 4, color }}>▸ {label}</div>
-                  <pre style={{ margin: 0, background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 4, padding: '6px 10px', fontSize: 11, fontFamily: 'monospace', overflowX: 'auto', lineHeight: 1.7 }}>
+                <div key={label} className="ssh-prereqs-distro">
+                  <div className="ssh-prereqs-distro-title" style={{ color }}>▸ {label}</div>
+                  <pre className="ssh-prereqs-code">
                     {cmds.join('\n')}
                   </pre>
                 </div>
               ))}
 
-              <div style={{ marginTop: 4, padding: '8px 10px', background: 'rgba(124,77,255,0.08)', border: '1px solid rgba(124,77,255,0.2)', borderRadius: 6, color: 'var(--text-muted)', lineHeight: 1.6 }}>
-                <b style={{ color: 'var(--accent)' }}>Local machine</b> also needs <span className="mono">ssh</span> and <span className="mono">sshpass</span> installed.<br />
+              <div className="ssh-prereqs-hint">
+                <b className="ssh-prereqs-hint-strong">Local machine</b> also needs <span className="mono">ssh</span> and <span className="mono">sshpass</span> installed.<br />
                 Fedora: <span className="mono">sudo dnf install openssh sshpass</span><br />
                 Ubuntu/Debian: <span className="mono">sudo apt install openssh-client sshpass</span><br />
                 Arch: <span className="mono">sudo pacman -S openssh sshpass</span>
@@ -839,20 +839,19 @@ export function SshPage(): ReactElement {
             </div>
           )}
         </div>
-        
+
         {sessions.length === 0 ? (
-          <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: 16, background: 'var(--bg-widget)', borderRadius: 8 }}>
+          <div className="ssh-empty-state">
             No connections yet. Click "Connect" on a saved server.
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {sessions.map((sess) => (
-              <div key={sess.id} style={{ ...card, padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <div style={{ fontWeight: 600 }}>{sess.bmName}</div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
-                    <div style={{
-                      width: 8, height: 8, borderRadius: 4,
+              <div key={sess.id} className="ssh-session-item">
+                <div className="ssh-session-header">
+                  <div className="ssh-session-name">{sess.bmName}</div>
+                  <div className="ssh-session-status">
+                    <div className="ssh-session-status-dot" style={{
                       background: sess.status === 'connected' ? 'var(--green)' : sess.status === 'disconnected' ? 'var(--text-muted)' : 'var(--orange)',
                       boxShadow: sess.status === 'connected' ? '0 0 8px var(--green)' : 'none'
                     }} />
@@ -861,8 +860,8 @@ export function SshPage(): ReactElement {
                     </span>
                   </div>
                 </div>
-                
-                <div className="mono" style={{ color: 'var(--text-muted)', fontSize: 11 }}>
+
+                <div className="ssh-session-info">
                   {sess.user}@{sess.host}:{sess.port}
                 </div>
                 <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
@@ -903,11 +902,11 @@ export function SshPage(): ReactElement {
 
       {/* File Transfer Modal Overlay */}
       {ftSession && (
-        <div style={modalOverlay}>
-          <div style={{ ...modalContent, maxWidth: 600, height: 'auto', maxHeight: '90vh' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <h2 style={{ margin: 0, fontSize: 18 }}>📦 File Transfer: {ftSession.bmName}</h2>
-              <button type="button" style={{ background: 'transparent', border: 'none', color: 'var(--text)', cursor: 'pointer', fontSize: 20 }} onClick={() => setFtSession(null)}>
+        <div className="ssh-modal-overlay">
+          <div className="ssh-modal ssh-modal-small">
+            <div className="ssh-modal-header">
+              <h2 className="ssh-modal-title">📦 File Transfer: {ftSession.bmName}</h2>
+              <button type="button" className="ssh-modal-close" onClick={() => setFtSession(null)}>
                 ×
               </button>
             </div>
@@ -966,7 +965,7 @@ export function SshPage(): ReactElement {
               </div>
 
               {/* File Selection Flow */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: 12, background: 'var(--bg)', borderRadius: 8, border: '1px solid var(--border)' }}>
+              <div className="ssh-file-transfer-section">
                 {ftDirection === 'upload' ? (
                   <>
                     <div style={{ fontSize: 13, fontWeight: 600 }}>Step 1: Choose Local Files</div>
@@ -1001,24 +1000,14 @@ export function SshPage(): ReactElement {
 
                 {/* Remote Browser results inside modal */}
                 {remoteEntries.length > 0 && (
-                  <div style={{ marginTop: 8, background: 'var(--bg-input)', border: '1px solid var(--border)', borderRadius: 6, maxHeight: 200, overflowY: 'auto' }}>
+                  <div className="ssh-remote-browser">
                     {remoteEntries.map(entry => {
                       const isDir = entry.endsWith('/') || entry === '../'
                       const cleanName = entry.replace(/\/$/, '')
-                      
+
                       return (
-                        <div key={entry} 
-                          style={{ 
-                            padding: '8px 12px', 
-                            cursor: 'pointer', 
-                            fontSize: 12, 
-                            borderBottom: '1px solid var(--border)', 
-                            display: 'flex', 
-                            alignItems: 'center',
-                            gap: 10,
-                            transition: 'background 0.2s',
-                          }}
-                          className="hover-bg-widget"
+                        <div key={entry}
+                          className="ssh-remote-entry"
                           onClick={() => {
                             if (entry === '../') {
                               const parent = ftRemotePath.replace(/\/[^/]+\/?$/, '') || '/'
@@ -1032,8 +1021,8 @@ export function SshPage(): ReactElement {
                             }
                           }}
                         >
-                          <span style={{ fontSize: 16 }}>{isDir ? '📁' : '📄'}</span>
-                          <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          <span className="ssh-remote-entry-icon">{isDir ? '📁' : '📄'}</span>
+                          <span className="ssh-remote-entry-name">
                             {entry === '../' ? '.. (Parent Directory)' : cleanName}
                           </span>
                         </div>
@@ -1055,19 +1044,19 @@ export function SshPage(): ReactElement {
 
       {/* Terminal Modal overlay */}
       {activeTermSession && (
-        <div style={modalOverlay}>
-          <div style={modalContent}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <div className="ssh-modal-overlay">
+          <div className="ssh-modal">
+            <div className="ssh-modal-header">
               <div style={{ fontWeight: 600 }}>SSH Session: {activeTermSession.bmName}</div>
-              <button type="button" style={{ background: 'transparent', border: 'none', color: 'var(--text)', cursor: 'pointer', fontSize: 20 }} onClick={() => setActiveTermSession(null)}>
+              <button type="button" className="ssh-modal-close" onClick={() => setActiveTermSession(null)}>
                 ×
               </button>
             </div>
-            <div style={{ flex: 1, minHeight: 400, background: '#0a0a0a', borderRadius: 8, padding: 8, overflow: 'hidden' }}>
+            <div className="ssh-terminal-container">
               <div ref={termWrapRef} style={{ width: '100%', height: '100%', padding: '16px' }} />
             </div>
             {!activeTermSession.isTransfer && (
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center', paddingTop: 6 }}>
+              <div className="ssh-terminal-hint">
                 Type <span className="mono" style={{ color: 'var(--accent)' }}>exit</span> to end the session — window closes automatically
               </div>
             )}
@@ -1077,15 +1066,15 @@ export function SshPage(): ReactElement {
 
       {/* Password Modal for Key Setup */}
       {passModalSess && (
-        <div style={modalOverlay}>
-          <div style={{ ...modalContent, maxWidth: 400, height: 'auto', padding: 24 }}>
-            <h2 style={{ margin: '0 0 16px 0', fontSize: 18 }}>🔑 Activate Remote Access</h2>
-            <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
+        <div className="ssh-modal-overlay">
+          <div className="ssh-modal ssh-modal-password">
+            <h2 className="ssh-modal-title">🔑 Activate Remote Access</h2>
+            <p className="ssh-modal-title" style={{ fontSize: 13, color: 'var(--text-muted)', margin: '0 0 16px 0', fontWeight: 400 }}>
               Enter the password for <b>{passModalSess.user}@{passModalSess.host}</b> to enable the file browser.
             </p>
-            <input 
-              type="password" 
-              value={passInput} 
+            <input
+              type="password"
+              value={passInput}
               onChange={e => setPassInput(e.target.value)}
               placeholder="Server Password"
               onKeyDown={e => e.key === 'Enter' && runSetupWithPassword()}
@@ -1104,16 +1093,6 @@ export function SshPage(): ReactElement {
       )}
     </div>
   )
-}
-
-const card = {
-  background: 'var(--bg-widget)',
-  border: '1px solid var(--border)',
-  borderRadius: 'var(--radius)',
-  display: 'flex',
-  alignItems: 'flex-start',
-  gap: 16,
-  padding: 16,
 }
 
 const stepCircle = {
@@ -1158,30 +1137,4 @@ const area = {
   minHeight: 60,
   fontFamily: 'monospace',
   fontSize: 12,
-}
-
-const modalOverlay: React.CSSProperties = {
-  position: 'fixed',
-  top: 0, left: 0, right: 0, bottom: 0,
-  background: 'rgba(0,0,0,0.6)',
-  backdropFilter: 'blur(4px)',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  zIndex: 9999,
-  padding: 40,
-}
-
-const modalContent: React.CSSProperties = {
-  width: '100%',
-  maxWidth: 900,
-  height: '100%',
-  maxHeight: 600,
-  background: 'var(--bg-widget)',
-  border: '1px solid var(--border)',
-  borderRadius: 12,
-  padding: 20,
-  display: 'flex',
-  flexDirection: 'column',
-  boxShadow: '0 20px 40px rgba(0,0,0,0.4)',
 }

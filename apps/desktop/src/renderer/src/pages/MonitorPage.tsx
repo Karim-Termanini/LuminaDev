@@ -271,7 +271,7 @@ export function MonitorPage(): ReactElement {
   const gitTotal = gitCfg ? gitTotalConfigScore(gitCfg) : null
 
   return (
-    <div className="monitor-page">
+    <div className="monitor-page elevated-page">
       <header>
         <h1 style={{ margin: 0, fontSize: 28, fontWeight: 700 }}>Engineering Dashboard</h1>
         <p style={{ color: 'var(--text-muted)', marginTop: 8 }}>Real-time system health and development activity.</p>

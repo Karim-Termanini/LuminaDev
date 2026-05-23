@@ -44,6 +44,7 @@ export function GitVcsDirtyCheckoutModal(props: GitVcsDirtyCheckoutModalProps): 
 
   return (
     <div
+      className="git-vcs-dirty-modal-overlay"
       role="dialog"
       aria-modal
       aria-labelledby="git-vcs-dirty-checkout-title"
@@ -62,6 +63,7 @@ export function GitVcsDirtyCheckoutModal(props: GitVcsDirtyCheckoutModalProps): 
       }}
     >
       <div
+        className="git-vcs-dirty-modal"
         style={{
           width: 'min(560px, 100%)',
           maxHeight: 'min(88vh, 720px)',

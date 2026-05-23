@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import type { RuntimeStatus, JobSummary } from '@linux-dev-home/shared'
 import { assertRuntimeOk } from './runtimeContract'
 import { humanizeRuntimeError } from './runtimeError'
+import './RuntimesPage.css'
 
 const RUNTIME_DETAILS: Record<string, { description: string, website: string, icon: string }> = {
   node: { description: 'Node.js is a JavaScript runtime built on Chrome\'s V8 JavaScript engine. Ideal for scalable network applications.', website: 'https://nodejs.org', icon: 'symbol-method' },
@@ -403,7 +404,7 @@ export function RuntimesPage(): ReactElement {
   }
 
   return (
-    <div style={{ display: 'flex', height: 'calc(100vh - 120px)', background: 'var(--bg-panel)', borderRadius: 'var(--radius)', border: '1px solid var(--border)', overflow: 'hidden', position: 'relative' }}>
+    <div className="runtimes-page elevated-page" style={{ display: 'flex', height: 'calc(100vh - 120px)', overflow: 'hidden', position: 'relative' }}>
       {/* Sidebar List */}
       <aside style={{ width: 280, borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', background: 'rgba(0,0,0,0.1)' }}>
         <div style={{ padding: '20px 16px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

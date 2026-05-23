@@ -919,6 +919,105 @@ async fn docker_install_invoke(body: &Value) -> Value {
   json!({ "ok": true, "log": logs })
 }
 
+fn container_inspect_data_from_json(info: &Value) -> Value {
+  let mut ports: Vec<Value> = Vec::new();
+  if let Some(bindings) = info.pointer("/HostConfig/PortBindings").and_then(|v| v.as_object()) {
+    for (ctr_key, arr_val) in bindings {
+      let parts: Vec<&str> = ctr_key.split('/').collect();
+      if parts.len() != 2 {
+        continue;
+      }
+      let (ctr_port, proto) = (parts[0], parts[1]);
+      if let Some(arr) = arr_val.as_array() {
+        for b in arr {
+          let hp = b.get("HostPort").and_then(|v| v.as_str()).unwrap_or("");
+          if hp.is_empty() {
+            continue;
+          }
+          if let (Ok(h), Ok(c)) = (hp.parse::<u64>(), ctr_port.parse::<u64>()) {
+            ports.push(json!({
+              "hostPort": h,
+              "containerPort": c,
+              "protocol": proto,
+            }));
+          }
+        }
+      }
+    }
+  }
+
+  let env: Vec<Value> = info
+    .pointer("/Config/Env")
+    .and_then(|v| v.as_array())
+    .map(|arr| {
+      arr.iter()
+        .filter_map(|e| e.as_str().map(|s| Value::String(s.to_string())))
+        .collect()
+    })
+    .unwrap_or_default();
+
+  let mut networks: Vec<String> = Vec::new();
+  if let Some(net_mode) = info.pointer("/HostConfig/NetworkMode").and_then(|v| v.as_str()) {
+    if !net_mode.is_empty() {
+      networks.push(net_mode.to_string());
+    }
+  }
+  if let Some(net_map) = info.pointer("/NetworkSettings/Networks").and_then(|v| v.as_object()) {
+    for key in net_map.keys() {
+      if !networks.iter().any(|n| n == key) {
+        networks.push(key.clone());
+      }
+    }
+  }
+
+  let volumes: Vec<Value> = info
+    .pointer("/HostConfig/Binds")
+    .and_then(|v| v.as_array())
+    .map(|arr| {
+      arr.iter()
+        .filter_map(|b| b.as_str().map(|s| Value::String(s.to_string())))
+        .collect()
+    })
+    .unwrap_or_default();
+
+  let restart_policy = info
+    .pointer("/HostConfig/RestartPolicy/Name")
+    .and_then(|v| v.as_str())
+    .unwrap_or("no")
+    .to_string();
+
+  json!({
+    "id": info.pointer("/Id").and_then(|v| v.as_str()).unwrap_or(""),
+    "name": info.pointer("/Name").and_then(|v| v.as_str()).unwrap_or("").trim_start_matches('/'),
+    "image": info.pointer("/Config/Image").and_then(|v| v.as_str()).unwrap_or(""),
+    "state": info.pointer("/State/Status").and_then(|v| v.as_str()).unwrap_or(""),
+    "ports": ports,
+    "env": env,
+    "networks": networks,
+    "volumes": volumes,
+    "restartPolicy": restart_policy,
+  })
+}
+
+async fn docker_inspect_invoke(body: &Value) -> Value {
+  let id = body.get("id").and_then(|v| v.as_str()).unwrap_or_default();
+  if id.is_empty() {
+    return json!({ "ok": false, "error": "[DOCKER_INVALID_REQUEST] id is required." });
+  }
+  let inspect_raw = match exec_output("docker", &["inspect", id]).await {
+    Ok(s) => s,
+    Err(e) => return json!({ "ok": false, "error": format!("[DOCKER_NOT_FOUND] {}", e.trim()) }),
+  };
+  let arr: Vec<Value> = match serde_json::from_str(&inspect_raw) {
+    Ok(a) => a,
+    Err(e) => return json!({ "ok": false, "error": format!("[DOCKER_INVALID_REQUEST] inspect parse: {}", e) }),
+  };
+  let Some(info) = arr.first() else {
+    return json!({ "ok": false, "error": "[DOCKER_NOT_FOUND] empty inspect result." });
+  };
+  json!({ "ok": true, "data": container_inspect_data_from_json(info) })
+}
+
 async fn docker_reconfigure_invoke(body: &Value) -> Value {
   let id = body.get("id").and_then(|v| v.as_str()).unwrap_or_default();
   if id.is_empty() {
@@ -4232,6 +4331,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       }
     },
     "dh:docker:remap-port" => docker_remap_port_invoke(&body).await,
+    "dh:docker:inspect" => docker_inspect_invoke(&body).await,
     "dh:docker:reconfigure" => docker_reconfigure_invoke(&body).await,
     "dh:ssh:list:dir" => {
       let user = body.get("user").and_then(|v| v.as_str()).unwrap_or_default();

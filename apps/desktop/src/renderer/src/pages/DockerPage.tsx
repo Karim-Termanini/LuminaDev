@@ -1,4 +1,4 @@
-import type { ContainerRow, ImageRow, NetworkRow, SessionInfo, VolumeRow } from '@linux-dev-home/shared'
+import type { ContainerInspectData, ContainerRow, ImageRow, NetworkRow, SessionInfo, VolumeRow } from '@linux-dev-home/shared'
 import type { ReactElement } from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Terminal } from '@xterm/xterm'
@@ -8,6 +8,7 @@ import '@xterm/xterm/css/xterm.css'
 import { DockerSchemeView } from '../components/DockerSchemeView'
 import { assertDockerOk } from './dockerContract'
 import { humanizeDockerError } from './dockerError'
+import './DockerPage.css'
 
 type TabId = 'scheme' | 'create' | 'containers' | 'images' | 'volumes' | 'networks' | 'ports' | 'cleanup'
 
@@ -68,8 +69,6 @@ export function DockerPage(): ReactElement {
   const [volumes, setVolumes] = useState<VolumeRow[]>([])
   const [networks, setNetworks] = useState<NetworkRow[]>([])
   const [err, setErr] = useState<string>('')
-  const [selected, setSelected] = useState<ContainerRow | null>(null)
-  const [logText, setLogText] = useState<string>('')
   const [pruneInfo, setPruneInfo] = useState<string>('')
   const [busy, setBusy] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
@@ -419,23 +418,6 @@ export function DockerPage(): ReactElement {
     }
   }
 
-  async function openLogs(row: ContainerRow): Promise<void> {
-    setSelected(row)
-    setLogText('Loading logs…')
-    const res = (await window.dh.dockerLogs({ id: row.id, tail: 200 })) as
-      | string
-      | { ok: boolean; text?: string; error?: string }
-    if (typeof res === 'string') {
-      setLogText(res || 'No logs')
-      return
-    }
-    if (!res.ok) {
-      setLogText(humanizeDockerError(res.error || 'Failed to read logs.'))
-      return
-    }
-    setLogText(res.text || 'No logs')
-  }
-
   async function removeImage(id: string): Promise<void> {
     setBusy(true)
     try {
@@ -670,22 +652,20 @@ export function DockerPage(): ReactElement {
   const remapTargetHasHostBinding = Boolean(remapTargetRow && extractFirstHostPort(remapTargetRow.ports))
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20, paddingInline: 12 }}>
-      <header>
-        <div className="mono" style={{ color: 'var(--accent)', fontSize: 12, marginBottom: 8 }}>
-          DOCKER.SURFACE
-        </div>
-        <h1 style={{ margin: 0, fontSize: 28, fontWeight: 700 }}>Docker</h1>
-        <p style={{ color: 'var(--text-muted)', marginTop: 10, maxWidth: 860 }}>
+    <div className="docker-page elevated-page">
+      <div className="docker-hero">
+        <div className="docker-hero-eyebrow">Docker.Surface</div>
+        <h1 className="docker-hero-title">Docker</h1>
+        <p className="docker-hero-subtitle">
           Full Docker surface from one click UI: containers, images, volumes, networks, and cleanup.
         </p>
-      </header>
+      </div>
 
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', rowGap: 8 }}>
+      <div className="docker-toolbar">
         <button type="button" className="hp-btn" onClick={() => void refreshAll()} disabled={busy || refreshing}>
           {refreshing ? 'Refreshing…' : 'Refresh'}
         </button>
-        <button type="button" style={btnWarn} onClick={() => void runPrune()} disabled={busy}>
+        <button type="button" className="hp-btn" style={btnWarn} onClick={() => void runPrune()} disabled={busy}>
           Cleanup unused (prune)
         </button>
         <button
@@ -702,7 +682,7 @@ export function DockerPage(): ReactElement {
         >
           Install / Setup
         </button>
-        <span className="mono" style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+        <span className="docker-toolbar-stats">
           {docker?.ok
             ? `${rows.length} containers • ${images.length} images • ${volumes.length} volumes • ${networks.length} networks`
             : 'docker unavailable'}
@@ -740,9 +720,9 @@ export function DockerPage(): ReactElement {
         </div>
       ) : null}
 
-      <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+      <div className="docker-layout">
         {/* Sidebar nav */}
-        <nav style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 140, flexShrink: 0 }}>
+        <nav className="docker-sidebar">
           {(
             [
               { id: 'scheme',     icon: '🗺', label: 'Scheme'     },
@@ -759,16 +739,16 @@ export function DockerPage(): ReactElement {
               key={id}
               type="button"
               onClick={() => setTab(id)}
-              style={tab === id ? sideTabActive : sideTab}
+              className={`docker-tab-button ${tab === id ? 'active' : ''}`}
             >
-              <span style={{ fontSize: 15 }}>{icon}</span>
+              <span>{icon}</span>
               <span>{label}</span>
             </button>
           ))}
         </nav>
 
         {/* Content pane */}
-        <section className="hp-card" style={{ flex: 1, minWidth: 0 }}>
+        <section className="docker-content">
         {!docker ? <div style={{ color: 'var(--text-muted)' }}>Checking Docker daemon…</div> : null}
         {docker && !docker.ok ? <div style={{ color: 'var(--orange)' }}>{humanizeDockerError(docker.error)}</div> : null}
         {docker?.ok && tab === 'create' ? (
@@ -982,7 +962,6 @@ export function DockerPage(): ReactElement {
                 rows={runningRows}
                 busy={busy}
                 onAction={runAction}
-                onLogs={openLogs}
                 onConsole={(r) => setActiveTermContainer(r)}
                 onConfigure={(r) => setInspectRow(r)}
               />
@@ -991,7 +970,6 @@ export function DockerPage(): ReactElement {
                 rows={stoppedRows}
                 busy={busy}
                 onAction={runAction}
-                onLogs={openLogs}
                 onConsole={(r) => setActiveTermContainer(r)}
                 onConfigure={(r) => setInspectRow(r)}
               />
@@ -1843,18 +1821,6 @@ export function DockerPage(): ReactElement {
 
 
 
-      {selected ? (
-        <section className="hp-card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ fontWeight: 600 }}>Logs: {selected.name}</div>
-            <button type="button" className="hp-btn" onClick={() => setSelected(null)}>
-              Close
-            </button>
-          </div>
-          <pre className="mono" style={pre}>{logText}</pre>
-        </section>
-      ) : null}
-
       {activeTermContainer && (
         <DockerTerminalModal 
           container={activeTermContainer} 
@@ -1904,7 +1870,7 @@ export function DockerPage(): ReactElement {
       {inspectRow && (
         <>
           <div
-            style={{ position: 'fixed', inset: 0, zIndex: 199, background: 'rgba(0,0,0,0.35)' }}
+            style={{ position: 'fixed', inset: 0, zIndex: 1199, background: 'rgba(0,0,0,0.35)' }}
             onClick={() => setInspectRow(null)}
           />
           <ContainerInspectDrawer
@@ -1961,30 +1927,6 @@ const btnSmallDanger = {
   padding: '5px 10px',
   cursor: 'pointer',
   fontSize: 12,
-}
-
-const sideTab = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 8,
-  border: '1px solid transparent',
-  background: 'transparent',
-  color: 'var(--text-muted)',
-  borderRadius: 8,
-  padding: '8px 12px',
-  cursor: 'pointer',
-  fontSize: 13,
-  fontWeight: 500,
-  textAlign: 'left' as const,
-  width: '100%',
-  transition: 'background 0.15s, color 0.15s',
-}
-
-const sideTabActive = {
-  ...sideTab,
-  background: 'color-mix(in srgb, var(--accent) 12%, transparent)',
-  border: '1px solid color-mix(in srgb, var(--accent) 35%, transparent)',
-  color: 'var(--accent)',
 }
 
 const tableWrap = {
@@ -2107,18 +2049,6 @@ const formGrid = {
   gap: 8,
 }
 
-const pre = {
-  margin: '12px 0 0 0',
-  padding: 12,
-  background: '#0a0a0a',
-  border: '1px solid var(--border)',
-  borderRadius: 8,
-  maxHeight: 420,
-  overflow: 'auto' as const,
-  whiteSpace: 'pre-wrap' as const,
-  fontSize: 12,
-}
-
 function truncateMiddle(input: string, maxLen: number): string {
   if (input.length <= maxLen) return input
   const side = Math.max(8, Math.floor((maxLen - 1) / 2))
@@ -2193,12 +2123,11 @@ type ContainerTableProps = {
   rows: ContainerRow[]
   busy: boolean
   onAction: (id: string, action: 'start' | 'stop' | 'restart' | 'remove') => Promise<void>
-  onLogs: (row: ContainerRow) => Promise<void>
   onConfigure: (row: ContainerRow) => void
 }
 
 function ContainerTable(props: ContainerTableProps & { onConsole: (row: ContainerRow) => void }): ReactElement {
-  const { title, rows, busy, onAction, onLogs, onConsole, onConfigure } = props
+  const { title, rows, busy, onAction, onConsole, onConfigure } = props
   return (
     <div>
       <div className="hp-section-title">{title}</div>
@@ -2257,9 +2186,6 @@ function ContainerTable(props: ContainerTableProps & { onConsole: (row: Containe
                       Restart
                     </button>
                   )}
-                  <button type="button" className="hp-btn" onClick={() => void onLogs(r)} disabled={busy}>
-                    Logs
-                  </button>
                   {isRunning && (
                     <button type="button" className="hp-btn" onClick={() => onConsole(r)} disabled={busy}>
                       Console
@@ -2291,40 +2217,105 @@ type InspectDrawerProps = {
   onRefresh: () => Promise<void>
 }
 
+const DRAWER_TABS = ['info', 'ports', 'networks', 'env', 'volumes', 'logs'] as const
+type DrawerTab = (typeof DRAWER_TABS)[number]
+
+function portsFromRowDisplay(ports: string): Array<{ hostPort: string; containerPort: string; protocol: 'tcp' | 'udp' }> {
+  if (!ports || ports === '—') return []
+  return ports
+    .split(',')
+    .map((p) => {
+      const m = p.trim().match(/(?:[\d.]+:)?(\d+)->(\d+)\/(tcp|udp)/)
+      if (!m) return null
+      return { hostPort: m[1], containerPort: m[2], protocol: m[3] as 'tcp' | 'udp' }
+    })
+    .filter(Boolean) as Array<{ hostPort: string; containerPort: string; protocol: 'tcp' | 'udp' }>
+}
+
+function hydrateDrawerFromInspect(data: ContainerInspectData): {
+  editPorts: Array<{ hostPort: string; containerPort: string; protocol: 'tcp' | 'udp' }>
+  editEnv: string[]
+  editNetwork: string
+  editRestart: string
+} {
+  return {
+    editPorts: data.ports.map((p) => ({
+      hostPort: String(p.hostPort),
+      containerPort: String(p.containerPort),
+      protocol: (p.protocol === 'udp' ? 'udp' : 'tcp') as 'tcp' | 'udp',
+    })),
+    editEnv: [...data.env],
+    editNetwork: data.networks[0] ?? 'bridge',
+    editRestart: data.restartPolicy || 'no',
+  }
+}
+
 function ContainerInspectDrawer({ row, networks, onClose, onRefresh }: InspectDrawerProps): ReactElement {
-  const [drawerTab, setDrawerTab] = useState<'info' | 'ports' | 'networks' | 'env' | 'volumes' | 'logs'>('info')
+  const [drawerTab, setDrawerTab] = useState<DrawerTab>('info')
   const [logs, setLogs] = useState<string>('')
   const [logsBusy, setLogsBusy] = useState(false)
+  const [inspectBusy, setInspectBusy] = useState(true)
+  const [inspectError, setInspectError] = useState<string | null>(null)
   const [applying, setApplying] = useState(false)
   const [applyFeedback, setApplyFeedback] = useState('')
   const [editPorts, setEditPorts] = useState<Array<{ hostPort: string; containerPort: string; protocol: 'tcp' | 'udp' }>>(
-    () => {
-      if (!row.ports || row.ports === '—') return []
-      return row.ports.split(',').map((p) => {
-        const m = p.trim().match(/(?:[\d.]+:)?(\d+)->(\d+)\/(tcp|udp)/)
-        if (!m) return null
-        return { hostPort: m[1], containerPort: m[2], protocol: m[3] as 'tcp' | 'udp' }
-      }).filter(Boolean) as Array<{ hostPort: string; containerPort: string; protocol: 'tcp' | 'udp' }>
-    }
+    () => portsFromRowDisplay(row.ports),
   )
   const [editEnv, setEditEnv] = useState<string[]>([])
   const [editNetwork, setEditNetwork] = useState(row.networks?.[0] ?? 'bridge')
   const [editRestart, setEditRestart] = useState('no')
+  const [inspectVolumes, setInspectVolumes] = useState<string[]>(row.volumes ?? [])
 
-  async function loadLogs() {
+  useEffect(() => {
+    let cancelled = false
+    setInspectBusy(true)
+    setInspectError(null)
+    void (async () => {
+      try {
+        const res = await window.dh.dockerInspect({ id: row.id })
+        if (cancelled) return
+        if (!res.ok || !res.data) {
+          setInspectError(res.error ?? 'Could not load container inspect data.')
+          return
+        }
+        const h = hydrateDrawerFromInspect(res.data)
+        setEditPorts(h.editPorts)
+        setEditEnv(h.editEnv)
+        setEditNetwork(h.editNetwork)
+        setEditRestart(h.editRestart)
+        setInspectVolumes(res.data.volumes)
+      } catch (e) {
+        if (!cancelled) setInspectError(String(e))
+      } finally {
+        if (!cancelled) setInspectBusy(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [row.id])
+
+  const loadLogs = useCallback(async () => {
     setLogsBusy(true)
     try {
-      const res = (await window.dh.dockerLogs({ id: row.id, tail: 200 })) as { ok: boolean; logs?: string; error?: string }
-      setLogs(res.ok ? (res.logs ?? '') : (res.error ?? 'Error loading logs'))
+      const res = (await window.dh.dockerLogs({ id: row.id, tail: 200 })) as string | { ok: boolean; text?: string; error?: string }
+      if (typeof res === 'string') {
+        setLogs(res || 'No logs')
+        return
+      }
+      if (!res.ok) {
+        setLogs(res.error || 'Error loading logs')
+        return
+      }
+      setLogs(res.text || 'No logs')
     } finally {
       setLogsBusy(false)
     }
-  }
+  }, [row.id])
 
   useEffect(() => {
     if (drawerTab === 'logs') void loadLogs()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [drawerTab])
+  }, [drawerTab, row.id, loadLogs])
 
   async function applyChanges() {
     setApplying(true)
@@ -2352,46 +2343,57 @@ function ContainerInspectDrawer({ row, networks, onClose, onRefresh }: InspectDr
     }
   }
 
-  const tabStyle = (t: typeof drawerTab): React.CSSProperties => ({
-    padding: '6px 10px',
-    cursor: 'pointer',
-    fontWeight: drawerTab === t ? 600 : 400,
-    color: drawerTab === t ? 'var(--accent)' : 'var(--text-muted)',
-    background: 'none',
-    border: 'none',
-    borderBottom: drawerTab === t ? '2px solid var(--accent)' : '2px solid transparent',
-    fontSize: 12,
-    whiteSpace: 'nowrap',
-    flexShrink: 0,
-  })
-
   const isRunning = row.state.toLowerCase() === 'running'
+  const volumeMounts = inspectVolumes.length > 0 ? inspectVolumes : (row.volumes ?? [])
+
+  const sectionLabels: Record<DrawerTab, string> = {
+    info: 'Info',
+    ports: 'Ports',
+    networks: 'Networks',
+    env: 'Env',
+    volumes: 'Volumes',
+    logs: 'Logs',
+  }
 
   return (
-    <div style={{
-      position: 'fixed', top: 0, right: 0, bottom: 0, width: 520, zIndex: 200,
-      background: '#161616', borderLeft: '1px solid var(--border)',
-      display: 'flex', flexDirection: 'column', boxShadow: '-8px 0 32px rgba(0,0,0,0.6)',
-      color: '#e8e8e8',
-    }}>
-      <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 12 }}>
+    <div className="docker-inspect-drawer" role="dialog" aria-label={`Configure ${row.name}`}>
+      <div className="docker-inspect-drawer__header">
         <div style={{ width: 10, height: 10, borderRadius: '50%', flexShrink: 0, background: isRunning ? 'var(--green)' : 'var(--text-muted)' }} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontWeight: 600, fontSize: 15, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.name}</div>
           <div className="mono" style={{ fontSize: 11, color: 'var(--text-muted)' }}>{row.id.slice(0, 12)}</div>
         </div>
-        <button type="button" className="hp-btn" onClick={onClose} style={{ padding: '4px 10px' }}>✕</button>
+        <button type="button" className="hp-btn" onClick={onClose} style={{ padding: '4px 10px' }} aria-label="Close">✕</button>
       </div>
 
-      <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', overflowX: 'auto' }}>
-        {(['info', 'ports', 'networks', 'env', 'volumes', 'logs'] as const).map((t) => (
-          <button key={t} type="button" style={tabStyle(t)} onClick={() => setDrawerTab(t)}>
-            {t.charAt(0).toUpperCase() + t.slice(1)}
+      <div className="elevated-tabs-wrap docker-inspect-drawer__tabs" role="tablist">
+        {DRAWER_TABS.map((t) => (
+          <button
+            key={t}
+            type="button"
+            role="tab"
+            aria-selected={drawerTab === t}
+            className={`elevated-tab${drawerTab === t ? ' elevated-tab-active' : ''}`}
+            onClick={() => setDrawerTab(t)}
+          >
+            {sectionLabels[t]}
           </button>
         ))}
       </div>
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', background: '#161616', color: '#e8e8e8' }}>
+      <div className="docker-inspect-drawer__body">
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 12,
+        }}>
+          {inspectBusy && (
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>Loading inspect data…</div>
+        )}
+        {inspectError && !inspectBusy && (
+          <div style={{ fontSize: 12, color: 'var(--red)', marginBottom: 12 }}>{inspectError}</div>
+        )}
+
         {drawerTab === 'info' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div><span style={{ color: 'var(--text-muted)', fontSize: 12 }}>IMAGE</span><div className="mono" style={{ marginTop: 4 }}>{row.image}</div></div>
@@ -2477,25 +2479,26 @@ function ContainerInspectDrawer({ row, networks, onClose, onRefresh }: InspectDr
         {drawerTab === 'volumes' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Volume mounts (read-only).</div>
-            {(row.volumes ?? []).length === 0
+            {volumeMounts.length === 0
               ? <div style={{ color: 'var(--text-muted)' }}>No volume mounts.</div>
-              : (row.volumes ?? []).map((v, i) => (
-                  <div key={i} className="mono" style={{ fontSize: 12, background: 'var(--bg)', padding: '6px 10px', borderRadius: 6 }}>{v}</div>
+              : volumeMounts.map((v, i) => (
+                  <div key={i} className="mono" style={{ fontSize: 12, background: 'rgba(0, 0, 0, 0.2)', padding: '6px 10px', borderRadius: 6 }}>{v}</div>
                 ))
             }
           </div>
         )}
 
         {drawerTab === 'logs' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, height: '100%' }}>
             <button type="button" className="hp-btn" onClick={() => void loadLogs()} disabled={logsBusy} style={{ alignSelf: 'flex-start' }}>
               {logsBusy ? 'Loading…' : '↻ Refresh'}
             </button>
-            <pre style={{ fontSize: 11, whiteSpace: 'pre-wrap', wordBreak: 'break-all', margin: 0, color: 'var(--text)', background: 'var(--bg)', padding: 12, borderRadius: 6, minHeight: 200 }}>
+            <pre style={{ fontSize: 11, whiteSpace: 'pre-wrap', wordBreak: 'break-all', margin: 0, color: 'var(--text)', background: 'rgba(0, 0, 0, 0.2)', padding: 12, borderRadius: 6, minHeight: '300px', flex: 1, overflow: 'auto' }}>
               {logs || (logsBusy ? 'Loading…' : 'No logs.')}
             </pre>
           </div>
         )}
+        </div>
       </div>
     </div>
   )

@@ -5,6 +5,7 @@ import { Terminal } from '@xterm/xterm'
 import '@xterm/xterm/css/xterm.css'
 import { TERMINAL_OPEN_EXTERNAL_HINT, TERMINAL_PTY_HINT } from './environmentHints'
 import { humanizeTerminalError } from './terminalError'
+import './TerminalPage.css'
 
 export function TerminalPage(): ReactElement {
   const wrapRef = useRef<HTMLDivElement | null>(null)
@@ -124,7 +125,7 @@ export function TerminalPage(): ReactElement {
   }, [sessionKey])
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 420 }}>
+    <div className="terminal-page elevated-page" style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 420 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
         <h1 style={{ margin: 0 }}>Embedded terminal</h1>
         <div style={{ display: 'flex', gap: 8 }}>

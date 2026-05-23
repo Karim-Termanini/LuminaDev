@@ -1,0 +1,69 @@
+/* Terminal Page — Elevated theme */
+@import '../theme/theme-elevated.css';
+
+.terminal-page {
+  /* Inherits .elevated-page */
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.terminal-hero {
+  margin-bottom: 8px;
+}
+
+.terminal-hero-title {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.terminal-hero-subtitle {
+  margin: 8px 0 0;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.terminal-controls {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.terminal-container {
+  flex: 1;
+  min-height: 400px;
+  background: var(--bg-widget);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.terminal-page .hp-btn {
+  padding: 8px 14px;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 100ms ease-out;
+}
+
+.terminal-page .hp-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: rgba(124, 77, 255, 0.1);
+  color: var(--accent);
+}
+
+.terminal-page .hp-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
