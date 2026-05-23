@@ -1,5 +1,6 @@
 import type { ReactElement } from 'react'
 import { useEffect } from 'react'
+import './GitVcsDirtyCheckoutModal.css'
 
 export type GitVcsDirtyCheckoutModalProps = {
   open: boolean
@@ -48,45 +49,16 @@ export function GitVcsDirtyCheckoutModal(props: GitVcsDirtyCheckoutModalProps): 
       role="dialog"
       aria-modal
       aria-labelledby="git-vcs-dirty-checkout-title"
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(0,0,0,0.6)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 80,
-        padding: 24,
-      }}
       onClick={() => {
         if (!busy) onCancel()
       }}
     >
       <div
-        className="git-vcs-dirty-modal"
-        style={{
-          width: 'min(560px, 100%)',
-          maxHeight: 'min(88vh, 720px)',
-          display: 'flex',
-          flexDirection: 'column',
-          background: 'var(--bg-widget)',
-          border: '1px solid var(--border)',
-          borderRadius: 'var(--radius)',
-          boxShadow: '0 24px 64px rgba(0,0,0,0.45)',
-          overflow: 'hidden',
-        }}
+        className="git-vcs-dirty-modal elevated-card"
         onClick={(e) => e.stopPropagation()}
       >
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            padding: '18px 20px',
-            borderBottom: '1px solid var(--border)',
-          }}
-        >
-          <h2 id="git-vcs-dirty-checkout-title" style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>
+        <div className="git-vcs-dirty-modal-header-wrap">
+          <h2 id="git-vcs-dirty-checkout-title" className="git-vcs-dirty-modal-header">
             {title}
           </h2>
           <button
@@ -95,25 +67,17 @@ export function GitVcsDirtyCheckoutModal(props: GitVcsDirtyCheckoutModalProps): 
               if (!busy) onCancel()
             }}
             disabled={busy}
-            style={{
-              border: 'none',
-              background: 'none',
-              color: 'var(--text-muted)',
-              cursor: busy ? 'default' : 'pointer',
-              fontSize: 22,
-              lineHeight: 1,
-              padding: 4,
-            }}
+            className="git-vcs-dirty-modal-close"
             aria-label="Close"
           >
             ×
           </button>
         </div>
 
-        <div style={{ padding: '16px 20px', overflow: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: 14, lineHeight: 1.55 }}>
+        <div className="git-vcs-dirty-modal-body">
+          <p className="git-vcs-dirty-modal-text">
             Git cannot {creatingNewBranch ? `create and check out` : `check out`}{' '}
-            <span className="mono" style={{ color: 'var(--accent)', fontWeight: 600 }}>
+            <span className="git-vcs-dirty-modal-branch">
               {targetBranch}
             </span>{' '}
             because local changes would be overwritten. Choose how to proceed.
@@ -121,48 +85,25 @@ export function GitVcsDirtyCheckoutModal(props: GitVcsDirtyCheckoutModalProps): 
 
           {files.length > 0 ? (
             <div>
-              <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8, color: 'var(--text-muted)' }}>
+              <div className="git-vcs-dirty-modal-files-label">
                 Affected paths ({files.length})
               </div>
-              <ul
-                className="mono"
-                style={{
-                  margin: 0,
-                  padding: '10px 12px',
-                  maxHeight: 220,
-                  overflow: 'auto',
-                  listStyle: 'none',
-                  background: 'var(--bg-panel)',
-                  border: '1px solid var(--border)',
-                  borderRadius: 8,
-                  fontSize: 12,
-                  lineHeight: 1.5,
-                }}
-              >
+              <ul className="git-vcs-dirty-modal-files mono">
                 {files.map((f) => (
-                  <li key={f} style={{ padding: '3px 0', wordBreak: 'break-all' }}>
+                  <li key={f} className="git-vcs-dirty-modal-file-item">
                     {f}
                   </li>
                 ))}
               </ul>
             </div>
           ) : (
-            <p className="mono" style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)' }}>
+            <p className="git-vcs-dirty-modal-text mono">
               (Could not parse file list from Git output — stash still includes tracked changes and, if enabled,
               untracked files.)
             </p>
           )}
 
-          <label
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 10,
-              cursor: busy ? 'default' : 'pointer',
-              fontSize: 13,
-              color: 'var(--text-muted)',
-            }}
-          >
+          <label className="git-vcs-dirty-modal-checkbox-label">
             <input
               type="checkbox"
               checked={includeUntracked}
@@ -172,23 +113,13 @@ export function GitVcsDirtyCheckoutModal(props: GitVcsDirtyCheckoutModalProps): 
             Include untracked files in stash (<span className="mono">git stash push -u</span>)
           </label>
 
-          <p className="mono" style={{ margin: 0, fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.45 }}>
-            After switching, restore your shelved work with <span style={{ color: 'var(--text)' }}>git stash pop</span>{' '}
-            or <span style={{ color: 'var(--text)' }}>git stash apply</span> in a terminal.
+          <p className="git-vcs-dirty-modal-help-text mono">
+            After switching, restore your shelved work with <span>git stash pop</span>{' '}
+            or <span>git stash apply</span> in a terminal.
           </p>
         </div>
 
-        <div
-          style={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            justifyContent: 'flex-end',
-            gap: 10,
-            padding: '14px 20px',
-            borderTop: '1px solid var(--border)',
-            background: 'rgba(0,0,0,0.15)',
-          }}
-        >
+        <div className="git-vcs-dirty-modal-footer">
           <button type="button" className="hp-btn" disabled={busy} onClick={() => onCancel()}>
             Cancel
           </button>
