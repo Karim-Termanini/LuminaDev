@@ -541,7 +541,7 @@ export function SshPage(): ReactElement {
   }
 
   return (
-    <div className="ssh-page">
+    <div className="ssh-page elevated-page">
       {/* LEFT COLUMN: Setup & Bookmarks */}
       <div className="ssh-left-column">
         <header className="ssh-hero">
