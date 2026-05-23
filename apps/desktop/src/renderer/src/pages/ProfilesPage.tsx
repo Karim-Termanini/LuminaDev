@@ -23,6 +23,12 @@ export function ProfilesPage(): ReactElement {
   )
   const [switchingProfileIdx, setSwitchingProfileIdx] = useState<number | null>(null)
   const [expandedProfileIdx, setExpandedProfileIdx] = useState<number | null>(null)
+  const [editingProfileIdx, setEditingProfileIdx] = useState<number | null>(null)
+  const [editingData, setEditingData] = useState<CustomProfileEntry | null>(null)
+  const [credInputId, setCredInputId] = useState('')
+  const [credInputValue, setCredInputValue] = useState('')
+  const [envKeyInput, setEnvKeyInput] = useState('')
+  const [envValueInput, setEnvValueInput] = useState('')
 
   async function load(): Promise<void> {
     try {
@@ -121,6 +127,73 @@ export function ProfilesPage(): ReactElement {
     if (!p) return
     const next = [...profiles, { ...p, name: `${p.name} Copy` }]
     await save(next, 'Profile duplicated.')
+  }
+
+  function openEditModal(idx: number): void {
+    const p = profiles[idx]
+    if (!p) return
+    setEditingProfileIdx(idx)
+    setEditingData({ ...p })
+    setCredInputId('')
+    setCredInputValue('')
+    setEnvKeyInput('')
+    setEnvValueInput('')
+  }
+
+  function closeEditModal(): void {
+    setEditingProfileIdx(null)
+    setEditingData(null)
+    setCredInputId('')
+    setCredInputValue('')
+    setEnvKeyInput('')
+    setEnvValueInput('')
+  }
+
+  function updateEnvVar(varIdx: number, key: string, value: string): void {
+    if (!editingData) return
+    const vars = [...(editingData.envVars || [])]
+    vars[varIdx] = { key, value }
+    setEditingData({ ...editingData, envVars: vars })
+  }
+
+  function addEnvVar(key: string, value: string): void {
+    if (!editingData || !key.trim() || !value.trim()) return
+    const vars = [...(editingData.envVars || []), { key: key.trim(), value: value.trim() }]
+    setEditingData({ ...editingData, envVars: vars })
+    setEnvKeyInput('')
+    setEnvValueInput('')
+  }
+
+  function removeEnvVar(varIdx: number): void {
+    if (!editingData) return
+    const vars = (editingData.envVars || []).filter((_, i) => i !== varIdx)
+    setEditingData({ ...editingData, envVars: vars })
+  }
+
+  function addCredential(id: string, value: string): void {
+    if (!editingData || !id.trim() || !value.trim()) return
+    const credIds = [...(editingData.credentialIds || []), id.trim()]
+    setEditingData({ ...editingData, credentialIds: credIds })
+    void window.dh.profileCredentialsStore({ id: id.trim(), value: value.trim() })
+    setCredInputId('')
+    setCredInputValue('')
+  }
+
+  function removeCredential(credIdx: number): void {
+    if (!editingData) return
+    const oldIds = editingData.credentialIds || []
+    const credId = oldIds[credIdx]
+    if (credId) void window.dh.profileCredentialsDelete({ id: credId })
+    const credIds = oldIds.filter((_, i) => i !== credIdx)
+    setEditingData({ ...editingData, credentialIds: credIds })
+  }
+
+  async function saveProfileChanges(): Promise<void> {
+    if (editingProfileIdx === null || !editingData) return
+    const next = [...profiles]
+    next[editingProfileIdx] = editingData
+    await save(next, 'Profile updated.')
+    closeEditModal()
   }
 
   async function exportJson(): Promise<void> {
@@ -295,6 +368,7 @@ export function ProfilesPage(): ReactElement {
                     >
                       {isExpanded ? 'Collapse' : 'Details'}
                     </button>
+                    <button type="button" style={btnSmall} onClick={() => openEditModal(i)}>Edit</button>
                     <button type="button" style={btnSmall} onClick={() => void duplicateAt(i)}>Duplicate</button>
                     <button type="button" style={btnSmallDanger} onClick={() => void removeAt(i)}>Delete</button>
                   </div>
@@ -332,6 +406,86 @@ export function ProfilesPage(): ReactElement {
             ))}
           </ul>
         </section>
+      )}
+
+      {editingProfileIdx !== null && editingData && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ background: 'var(--bg-widget)', border: '1px solid var(--border)', borderRadius: 8, padding: 24, maxWidth: 600, maxHeight: '80vh', overflow: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
+            <h2 style={{ margin: '0 0 20px 0', fontSize: 20, fontWeight: 700 }}>Edit Profile: {editingData.name}</h2>
+
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Environment Variables</div>
+              {(editingData.envVars || []).map((ev, vi) => (
+                <div key={vi} style={{ display: 'flex', gap: 8, marginBottom: 10, alignItems: 'center' }}>
+                  <input
+                    type="text"
+                    value={ev.key}
+                    onChange={(e) => updateEnvVar(vi, e.target.value, ev.value)}
+                    placeholder="KEY"
+                    style={{ flex: 1, padding: '8px', background: 'var(--bg-input)', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--text)', fontFamily: 'monospace', fontSize: 12 }}
+                  />
+                  <input
+                    type="text"
+                    value={ev.value}
+                    onChange={(e) => updateEnvVar(vi, ev.key, e.target.value)}
+                    placeholder="value"
+                    style={{ flex: 2, padding: '8px', background: 'var(--bg-input)', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--text)', fontFamily: 'monospace', fontSize: 12 }}
+                  />
+                  <button type="button" style={{ ...btnSmallDanger, padding: '5px 8px' }} onClick={() => removeEnvVar(vi)}>✕</button>
+                </div>
+              ))}
+              <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+                <input
+                  type="text"
+                  value={envKeyInput}
+                  onChange={(e) => setEnvKeyInput(e.target.value)}
+                  placeholder="New KEY"
+                  style={{ flex: 1, padding: '8px', background: 'var(--bg-input)', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--text)', fontFamily: 'monospace', fontSize: 12 }}
+                />
+                <input
+                  type="text"
+                  value={envValueInput}
+                  onChange={(e) => setEnvValueInput(e.target.value)}
+                  placeholder="value"
+                  style={{ flex: 2, padding: '8px', background: 'var(--bg-input)', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--text)', fontFamily: 'monospace', fontSize: 12 }}
+                />
+                <button type="button" style={btnSmall} onClick={() => addEnvVar(envKeyInput, envValueInput)}>Add</button>
+              </div>
+            </div>
+
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Credentials</div>
+              {(editingData.credentialIds || []).map((credId, ci) => (
+                <div key={ci} style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'center' }}>
+                  <span className="mono" style={{ flex: 1, padding: '8px', background: 'var(--bg-input)', borderRadius: 4, fontSize: 12, color: 'var(--text-muted)' }}>{credId}</span>
+                  <button type="button" style={{ ...btnSmallDanger, padding: '5px 8px' }} onClick={() => removeCredential(ci)}>Delete</button>
+                </div>
+              ))}
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  type="text"
+                  value={credInputId}
+                  onChange={(e) => setCredInputId(e.target.value)}
+                  placeholder="Credential ID"
+                  style={{ flex: 1, padding: '8px', background: 'var(--bg-input)', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--text)', fontSize: 12 }}
+                />
+                <input
+                  type="password"
+                  value={credInputValue}
+                  onChange={(e) => setCredInputValue(e.target.value)}
+                  placeholder="Secret value"
+                  style={{ flex: 1, padding: '8px', background: 'var(--bg-input)', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--text)', fontSize: 12 }}
+                />
+                <button type="button" style={btnSmall} onClick={() => addCredential(credInputId, credInputValue)}>Add</button>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button type="button" style={btn} onClick={closeEditModal}>Cancel</button>
+              <button type="button" style={{ ...btn, background: 'var(--accent)', color: '#fff' }} onClick={() => void saveProfileChanges()}>Save Changes</button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
