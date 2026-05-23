@@ -192,6 +192,27 @@ export const CloudOauthClientsStoreSchema = z.object({
 })
 export type CloudOauthClientsStore = z.infer<typeof CloudOauthClientsStoreSchema>
 
+/** General application settings (startup behavior, window size, telemetry). */
+export const GeneralSettingsSchema = z.object({
+  startupBehavior: z.enum(['default', 'minimized']).default('default').optional(),
+  windowSize: z
+    .object({
+      width: z.number().int().min(320),
+      height: z.number().int().min(240),
+    })
+    .optional(),
+  telemetry: z.boolean().default(false).optional(),
+})
+export type GeneralSettings = z.infer<typeof GeneralSettingsSchema>
+
+/** Update settings (release channel, check-on-startup). */
+export const UpdateSettingsSchema = z.object({
+  releaseChannel: z.enum(['stable', 'alpha']).default('stable'),
+  checkOnStartup: z.boolean().default(true),
+  lastChecked: z.number().optional(),
+})
+export type UpdateSettings = z.infer<typeof UpdateSettingsSchema>
+
 /** Keys with typed payloads persisted under userData (`store_<key>.json`). */
 export const StoreKeySchema = z.enum([
   'custom_profiles',
@@ -203,6 +224,8 @@ export const StoreKeySchema = z.enum([
   'appearance',
   'cloud_oauth_clients',
   'readiness_wizard_complete',
+  'general_settings',
+  'update_settings',
 ])
 
 export const StoreGetRequestSchema = z.object({
@@ -246,6 +269,14 @@ export const StoreSetRequestSchema = z.discriminatedUnion('key', [
   z.object({
     key: z.literal('readiness_wizard_complete'),
     data: z.boolean(),
+  }),
+  z.object({
+    key: z.literal('general_settings'),
+    data: GeneralSettingsSchema,
+  }),
+  z.object({
+    key: z.literal('update_settings'),
+    data: UpdateSettingsSchema,
   }),
 ])
 export const ComposeUpRequestSchema = z.object({

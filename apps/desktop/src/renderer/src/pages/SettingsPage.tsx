@@ -5,6 +5,7 @@ import type { ConnectedAccount, SshBookmark } from '@linux-dev-home/shared'
 import { parseAppearance, parseSshBookmarks } from '@linux-dev-home/shared'
 
 import { applyAppearanceAccent, DEFAULT_ACCENT_HEX } from '../theme/applyAccent'
+import { assertSettingsOk } from './settingsContract'
 import './SettingsPage.css'
 
 const ACCENT_PRESETS: ReadonlyArray<{ label: string; hex: string }> = [
@@ -15,14 +16,14 @@ const ACCENT_PRESETS: ReadonlyArray<{ label: string; hex: string }> = [
   { label: 'Teal', hex: '#00897b' },
 ]
 
-type SettingsNavId = 'personalization' | 'remote' | 'system' | 'accounts'
+type SettingsNavId = 'personalization' | 'remote' | 'system' | 'accounts' | 'general' | 'update' | 'resources' | 'app-engine' | 'builder' | 'extension' | 'beta'
 
 const NAV: ReadonlyArray<{
   id: SettingsNavId
   label: string
   hint: string
-  /** Codicon suffix only, e.g. `color-mode` → `codicon codicon-color-mode` */
   icon: string
+  beta?: boolean
 }> = [
   {
     id: 'personalization',
@@ -47,6 +48,53 @@ const NAV: ReadonlyArray<{
     label: 'Connected accounts',
     hint: 'GitHub & GitLab',
     icon: 'github',
+  },
+  {
+    id: 'general',
+    label: 'General',
+    hint: 'Startup, window, telemetry',
+    icon: 'settings',
+  },
+  {
+    id: 'update',
+    label: 'Update',
+    hint: 'Release channel & checks',
+    icon: 'arrow-circle-up',
+  },
+  {
+    id: 'resources',
+    label: 'Resources',
+    hint: 'Coming soon',
+    icon: 'server-process',
+    beta: true,
+  },
+  {
+    id: 'app-engine',
+    label: 'App Engine',
+    hint: 'Coming soon',
+    icon: 'server',
+    beta: true,
+  },
+  {
+    id: 'builder',
+    label: 'Builder',
+    hint: 'Coming soon',
+    icon: 'tools',
+    beta: true,
+  },
+  {
+    id: 'extension',
+    label: 'Extension',
+    hint: 'Coming soon',
+    icon: 'extensions',
+    beta: true,
+  },
+  {
+    id: 'beta',
+    label: 'Beta Features',
+    hint: 'Coming soon',
+    icon: 'beaker',
+    beta: true,
   },
 ]
 
@@ -267,6 +315,16 @@ export function SettingsPage(): ReactElement {
   const [bookmarks, setBookmarks] = useState<SshBookmark[]>([])
   const [loadError, setLoadError] = useState<string | null>(null)
 
+  // General settings
+  const [generalSettings, setGeneralSettings] = useState<{ startupBehavior?: string; windowSize?: { width: number; height: number }; telemetry?: boolean }>({})
+  const [generalMsg, setGeneralMsg] = useState<string | null>(null)
+  const [generalBusy, setGeneralBusy] = useState(false)
+
+  // Update settings
+  const [updateSettings, setUpdateSettings] = useState<{ releaseChannel: string; checkOnStartup: boolean; lastChecked?: number }>({ releaseChannel: 'stable', checkOnStartup: true })
+  const [updateMsg, setUpdateMsg] = useState<string | null>(null)
+  const [updateBusy, setUpdateBusy] = useState(false)
+
   const [accentDraft, setAccentDraft] = useState(DEFAULT_ACCENT_HEX)
   const [accentBusy, setAccentBusy] = useState(false)
   const [accentMsg, setAccentMsg] = useState<string | null>(null)
@@ -326,11 +384,13 @@ export function SettingsPage(): ReactElement {
       setHostsBusy(true)
       setEnvBusy(true)
       try {
-        const [bm, ap, hr, er] = await Promise.all([
+        const [bm, ap, hr, er, gs, us] = await Promise.all([
           window.dh.storeGet({ key: 'ssh_bookmarks' }),
           window.dh.storeGet({ key: 'appearance' }),
           window.dh.hostExec({ command: 'settings_read_hosts' }),
           window.dh.hostExec({ command: 'settings_process_env' }),
+          window.dh.storeGet({ key: 'general_settings' }),
+          window.dh.storeGet({ key: 'update_settings' }),
         ])
         if (bm.ok) {
           setBookmarks(parseSshBookmarks(bm.data))
@@ -359,6 +419,16 @@ export function SettingsPage(): ReactElement {
         } else {
           setEnvPreview(null)
           setEnvErr(envParsed.error)
+        }
+        if (gs.ok && gs.data && typeof gs.data === 'object') {
+          setGeneralSettings(gs.data as typeof generalSettings)
+        } else {
+          setGeneralSettings({})
+        }
+        if (us.ok && us.data && typeof us.data === 'object') {
+          setUpdateSettings(us.data as typeof updateSettings)
+        } else {
+          setUpdateSettings({ releaseChannel: 'stable', checkOnStartup: true })
         }
       } catch (e) {
         setBookmarks([])
@@ -477,6 +547,47 @@ export function SettingsPage(): ReactElement {
       setProfileEnvErr(e instanceof Error ? e.message : 'Write failed.')
     } finally {
       setProfileEnvSaving(false)
+    }
+  }
+
+  async function saveGeneralSettings(): Promise<void> {
+    setGeneralBusy(true)
+    setGeneralMsg(null)
+    try {
+      const data = {
+        startupBehavior: generalSettings.startupBehavior as 'default' | 'minimized' | undefined,
+        windowSize: generalSettings.windowSize,
+        telemetry: generalSettings.telemetry,
+      }
+      const res = await window.dh.storeSet({ key: 'general_settings', data })
+      assertSettingsOk(res)
+      setGeneralMsg('Saved.')
+      setTimeout(() => setGeneralMsg(null), 3000)
+    } catch (e) {
+      setGeneralMsg(e instanceof Error ? e.message : 'Save failed.')
+    } finally {
+      setGeneralBusy(false)
+    }
+  }
+
+  async function saveUpdateSettings(): Promise<void> {
+    setUpdateBusy(true)
+    setUpdateMsg(null)
+    try {
+      const data = {
+        releaseChannel: updateSettings.releaseChannel as 'stable' | 'alpha',
+        checkOnStartup: updateSettings.checkOnStartup,
+        lastChecked: Date.now(),
+      }
+      const res = await window.dh.storeSet({ key: 'update_settings', data })
+      assertSettingsOk(res)
+      setUpdateSettings(data)
+      setUpdateMsg('Saved.')
+      setTimeout(() => setUpdateMsg(null), 3000)
+    } catch (e) {
+      setUpdateMsg(e instanceof Error ? e.message : 'Save failed.')
+    } finally {
+      setUpdateBusy(false)
     }
   }
 
@@ -1067,6 +1178,89 @@ export function SettingsPage(): ReactElement {
             ) : null}
 
             {navId === 'accounts' ? <AccountsSummarySection /> : null}
+
+            {/* General Tab */}
+            {navId === 'general' ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                <div style={{ paddingTop: 8 }}>
+                  <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 10 }}>Startup behavior</div>
+                  <select
+                    value={(generalSettings.startupBehavior ?? 'default') as string}
+                    onChange={(e) => setGeneralSettings((prev) => ({ ...prev, startupBehavior: e.target.value as 'default' | 'minimized' }))}
+                    className="hp-input"
+                    style={{ fontSize: 13 }}
+                  >
+                    <option value="default">Default (show app window)</option>
+                    <option value="minimized">Minimized (start in background)</option>
+                  </select>
+                </div>
+                <div style={{ paddingTop: 8 }}>
+                  <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 10 }}>Telemetry</div>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={generalSettings.telemetry ?? false}
+                      onChange={(e) => setGeneralSettings((prev) => ({ ...prev, telemetry: e.target.checked }))}
+                    />
+                    <span style={{ fontSize: 13 }}>Send usage data to help improve LuminaDev</span>
+                  </label>
+                </div>
+                <div style={{ paddingTop: 8 }}>
+                  <button type="button" className="hp-btn hp-btn-primary" onClick={() => void saveGeneralSettings()} disabled={generalBusy} style={{ fontSize: 13, padding: '8px 16px' }}>
+                    {generalBusy ? 'Saving…' : 'Save'}
+                  </button>
+                  {generalMsg ? <p style={{ margin: '8px 0 0', fontSize: 12, color: generalMsg === 'Saved.' ? 'var(--green)' : 'var(--red)' }}>{generalMsg}</p> : null}
+                </div>
+              </div>
+            ) : null}
+
+            {/* Update Tab */}
+            {navId === 'update' ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                <div style={{ paddingTop: 8 }}>
+                  <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 10 }}>Release channel</div>
+                  <select
+                    value={updateSettings.releaseChannel ?? 'stable'}
+                    onChange={(e) => setUpdateSettings((prev) => ({ ...prev, releaseChannel: e.target.value as 'stable' | 'alpha' }))}
+                    className="hp-input"
+                    style={{ fontSize: 13 }}
+                  >
+                    <option value="stable">Stable (recommended)</option>
+                    <option value="alpha">Alpha (early features, frequent updates)</option>
+                  </select>
+                </div>
+                <div style={{ paddingTop: 8 }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={updateSettings.checkOnStartup ?? true}
+                      onChange={(e) => setUpdateSettings((prev) => ({ ...prev, checkOnStartup: e.target.checked }))}
+                    />
+                    <span style={{ fontSize: 13 }}>Check for updates on app startup</span>
+                  </label>
+                </div>
+                <div style={{ paddingTop: 8 }}>
+                  {updateSettings.lastChecked ? <p className="hp-muted" style={{ margin: 0, fontSize: 12 }}>Last checked: {new Date(updateSettings.lastChecked).toLocaleDateString()}</p> : <p className="hp-muted" style={{ margin: 0, fontSize: 12 }}>Never checked</p>}
+                </div>
+                <div style={{ paddingTop: 8 }}>
+                  <button type="button" className="hp-btn hp-btn-primary" onClick={() => void saveUpdateSettings()} disabled={updateBusy} style={{ fontSize: 13, padding: '8px 16px' }}>
+                    {updateBusy ? 'Saving…' : 'Save'}
+                  </button>
+                  {updateMsg ? <p style={{ margin: '8px 0 0', fontSize: 12, color: updateMsg === 'Saved.' ? 'var(--green)' : 'var(--red)' }}>{updateMsg}</p> : null}
+                </div>
+              </div>
+            ) : null}
+
+            {/* Placeholder Tabs */}
+            {(navId === 'resources' || navId === 'app-engine' || navId === 'builder' || navId === 'extension' || navId === 'beta') ? (
+              <div style={{ paddingTop: 12, textAlign: 'center' }}>
+                <span className="codicon codicon-beaker" style={{ fontSize: 32, opacity: 0.4, marginBottom: 12, display: 'block' }} />
+                <p style={{ margin: 0, fontSize: 14, color: 'var(--text-muted)' }}>Coming in a future release</p>
+                <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--text-muted)', maxWidth: 320 }}>
+                  See the <Link to="/settings" style={{ color: 'var(--accent)' }}>roadmap</Link> for planned features and timeline.
+                </p>
+              </div>
+            ) : null}
           </div>
 
           {navId === 'system' ? (
