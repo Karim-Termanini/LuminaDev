@@ -27,7 +27,20 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
   const runProbes = useCallback(async () => {
     setLoading(true)
     try {
-      const res = (await window.dh.systemReadinessCheck()) as { ok: boolean; report?: unknown }
+      const res = (await window.dh.systemReadinessCheck()) as {
+        ok: boolean
+        report?: {
+          hardware: { ram_total_gb: number; cpu_cores: number; architecture: string }
+          software: {
+            docker_installed: boolean
+            docker_running: boolean
+            docker_version: string
+            in_docker_group: boolean
+            kvm_supported: boolean
+          }
+          tools: { git: boolean; curl: boolean; tar: boolean; unzip: boolean }
+        }
+      }
       if (res.ok && res.report) {
         buildCategories(res.report)
       }
@@ -44,7 +57,13 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
 
   const buildCategories = (report: {
     hardware: { ram_total_gb: number; cpu_cores: number; architecture: string }
-    software: { docker_installed: boolean; docker_running: boolean; docker_version: string; kvm_supported: boolean }
+    software: {
+      docker_installed: boolean
+      docker_running: boolean
+      docker_version: string
+      in_docker_group: boolean
+      kvm_supported: boolean
+    }
     tools: { git: boolean; curl: boolean; tar: boolean; unzip: boolean }
   }) => {
     const { hardware, software, tools } = report
@@ -156,15 +175,33 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
     cat.requirements.every((req) => !req.critical || req.status === 'ok'),
   )
 
+  const getFixId = (reqId: string): string => {
+    // Map requirement IDs to fix IDs in readiness.rs
+    const fixMap: Record<string, string> = {
+      docker: 'install-docker',
+      git: 'install-git',
+      curl: 'install-curl',
+      tar: 'install-tar',
+      unzip: 'install-unzip',
+      daemon: 'docker-start',
+      group: 'docker-group',
+    }
+    return fixMap[reqId] || reqId
+  }
+
   const handleInstall = async (reqId: string) => {
     setInstalling(reqId)
     try {
-      const res = await window.dh.systemReadinessFix({ id: reqId })
+      const fixId = getFixId(reqId)
+      const res = (await window.dh.systemReadinessFix({ id: fixId })) as { ok: boolean; error?: string }
       if (res.ok) {
+        await new Promise((r) => setTimeout(r, 500)) // Brief pause before recheck
         await runProbes()
       } else {
-        alert(`Failed to install: ${res.error}`)
+        alert(`Failed to fix ${reqId}: ${res.error || 'Unknown error'}`)
       }
+    } catch (e) {
+      alert(`Error: ${e instanceof Error ? e.message : String(e)}`)
     } finally {
       setInstalling(null)
     }
@@ -250,10 +287,21 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
                               className="readiness-btn readiness-btn-install"
                               onClick={() => void handleInstall(req.id)}
                               disabled={installing === req.id}
+                              title={`Fix: ${req.label}`}
                             >
-                              {installing === req.id ? 'Installing...' : 'Install'}
+                              {installing === req.id ? (
+                                <>
+                                  <span className="codicon codicon-loading codicon-modifier-spin" />
+                                  Installing...
+                                </>
+                              ) : (
+                                'Fix It'
+                              )}
                             </button>
-                            <button className="readiness-btn readiness-btn-help" title="How to fix manually">
+                            <button
+                              className="readiness-btn readiness-btn-help"
+                              title="How to fix manually"
+                            >
                               <span className="codicon codicon-question" />
                             </button>
                           </div>
