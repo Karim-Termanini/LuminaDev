@@ -1,18 +1,19 @@
-import type { ContainerRow, HostMetrics, HostSecuritySnapshot } from '@linux-dev-home/shared'
+import type { ContainerRow, HostMetrics, HostSecuritySnapshot, TopProcessRow } from '@linux-dev-home/shared'
 
 /**
  * Phase 7 — Maintenance “Guardian” contract (codified).
  *
- * Each layer maps to observable signals from `dh:metrics`, Docker list, and
- * `dh:monitor:security`. The headline score is 100 minus the sum of layer
- * deductions (clamped to 0..100). This module is the single source of truth
- * for that math so the UI cannot drift from the documented behavior.
+ * Each layer maps to observable signals from `dh:metrics`, Docker list,
+ * `dh:monitor:top-processes`, and `dh:monitor:security`. The headline score is
+ * 100 minus the sum of layer deductions (clamped to 0..100). This module is the
+ * single source of truth for that math so the UI cannot drift from documented behavior.
  */
 export type GuardianLayerId =
   | 'host_compute'
   | 'memory_pressure'
   | 'storage_pressure'
   | 'container_fleet'
+  | 'process_health'
   | 'host_security'
 
 export type GuardianLayer = {
@@ -35,11 +36,14 @@ const CPU_WARN = 85
 const MEM_WARN_PCT = 90
 const DISK_WARN_PCT = 92
 const FLEET_MIN_RUNNING_RATIO = 0.3
+const PROC_CPU_WARN = 80
+const PROC_MEM_WARN = 50
 
 export function evaluateGuardian(
   metrics: HostMetrics | undefined,
   security: HostSecuritySnapshot | null,
-  containers: ContainerRow[]
+  containers: ContainerRow[],
+  topProcesses: TopProcessRow[] = []
 ): GuardianEvaluation {
   if (!metrics) {
     return {
@@ -78,6 +82,14 @@ export function evaluateGuardian(
           deduction: 0,
         },
         {
+          id: 'process_health',
+          title: 'Process health',
+          signals: 'dh:monitor:top-processes → cpu, memory',
+          ok: true,
+          detail: topProcesses.length > 0 ? `${topProcesses.length} processes tracked (metrics pending)` : 'Waiting for process list…',
+          deduction: 0,
+        },
+        {
           id: 'host_security',
           title: 'Host security posture',
           signals: 'dh:monitor:security → firewall, sshPasswordAuth',
@@ -103,6 +115,11 @@ export function evaluateGuardian(
   const diskDed = diskPct > DISK_WARN_PCT ? 20 : 0
   let fleetDed = 0
   if (total > 0 && ratio < FLEET_MIN_RUNNING_RATIO) fleetDed = 8
+
+  let procDed = 0
+  const highCpuProc = topProcesses.find((p) => p.cpuPercent > PROC_CPU_WARN)
+  const highMemProc = topProcesses.find((p) => p.memPercent > PROC_MEM_WARN)
+  if (highCpuProc || highMemProc) procDed = 12
 
   let fwDed = 0
   let sshDed = 0
@@ -144,6 +161,21 @@ export function evaluateGuardian(
       ok: total === 0 || ratio >= FLEET_MIN_RUNNING_RATIO,
       detail: total === 0 ? 'No containers reported.' : `${running}/${total} running (warn if <${Math.round(FLEET_MIN_RUNNING_RATIO * 100)}% running)`,
       deduction: fleetDed,
+    },
+    {
+      id: 'process_health',
+      title: 'Process health',
+      signals: 'dh:monitor:top-processes',
+      ok: !highCpuProc && !highMemProc,
+      detail:
+        topProcesses.length === 0
+          ? 'No processes available.'
+          : highCpuProc && highMemProc
+            ? `High CPU: ${highCpuProc.command} (${highCpuProc.cpuPercent.toFixed(1)}%), High MEM: ${highMemProc.command} (${highMemProc.memPercent.toFixed(1)}%) (−${procDed})`
+            : highCpuProc
+              ? `High CPU: ${highCpuProc.command} (${highCpuProc.cpuPercent.toFixed(1)}% warn >${PROC_CPU_WARN}%) (−${procDed})`
+              : `High MEM: ${highMemProc?.command} (${highMemProc?.memPercent.toFixed(1)}% warn >${PROC_MEM_WARN}%) (−${procDed})`,
+      deduction: procDed,
     },
     {
       id: 'host_security',

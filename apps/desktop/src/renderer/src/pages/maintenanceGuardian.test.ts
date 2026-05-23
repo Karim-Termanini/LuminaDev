@@ -32,7 +32,7 @@ describe('evaluateGuardian', () => {
   it('returns null score until metrics exist', () => {
     const g = evaluateGuardian(undefined, null, [])
     expect(g.score).toBeNull()
-    expect(g.layers).toHaveLength(5)
+    expect(g.layers).toHaveLength(6)
   })
 
   it('returns 100 when all layers healthy', () => {

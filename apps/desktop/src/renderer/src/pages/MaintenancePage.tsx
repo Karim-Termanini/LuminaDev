@@ -1,4 +1,4 @@
-import { ComposeProfileSchema, type ComposeProfile, type ContainerRow, type HostMetricsResponse, type HostSecuritySnapshot, type JobSummary, type MaintenanceProfileHealth, type MaintenanceStateStore, type MaintenanceTask } from '@linux-dev-home/shared'
+import { ComposeProfileSchema, type ComposeProfile, type ContainerRow, type HostMetricsResponse, type HostSecuritySnapshot, type JobSummary, type MaintenanceProfileHealth, type MaintenanceStateStore, type MaintenanceTask, type TopProcessRow } from '@linux-dev-home/shared'
 import type { ReactElement } from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { humanizeDashboardError } from './dashboardError'
@@ -72,6 +72,7 @@ export function MaintenancePage(): ReactElement {
   const [metrics, setMetrics] = useState<HostMetricsResponse | null>(null)
   const [containers, setContainers] = useState<ContainerRow[]>([])
   const [security, setSecurity] = useState<HostSecuritySnapshot | null>(null)
+  const [topProcesses, setTopProcesses] = useState<TopProcessRow[]>([])
   const [jobs, setJobs] = useState<JobSummary[]>([])
   const [state, setState] = useState<MaintenanceStateStore>({ tasks: [], profileHealth: [], history: [] })
   const [serviceState, setServiceState] = useState<ServiceState>({})
@@ -141,6 +142,10 @@ export function MaintenancePage(): ReactElement {
       const c = (await window.dh.dockerList()) as { ok: boolean; rows: ContainerRow[]; error?: string }
       if (c.ok) setContainers(c.rows)
       else setStatus(humanizeDockerError(c.error))
+      const proc = await window.dh.monitorTopProcesses()
+      if (proc && 'processes' in proc && Array.isArray(proc.processes)) {
+        setTopProcesses(proc.processes)
+      }
       const j = (await window.dh.jobsList()) as JobSummary[]
       setJobs(Array.isArray(j) ? j : [])
       await refreshCleanupPreview()
@@ -204,7 +209,7 @@ export function MaintenancePage(): ReactElement {
 
   const m = metrics?.metrics
   const runningContainers = containers.filter((c) => c.state === 'running').length
-  const guardian = useMemo(() => evaluateGuardian(m, security, containers), [m, security, containers])
+  const guardian = useMemo(() => evaluateGuardian(m, security, containers, topProcesses), [m, security, containers, topProcesses])
   const activeJobCount = useMemo(() => jobs.filter((j) => j.state === 'running').length, [jobs])
   const pendingTasks = useMemo(() => state.tasks.filter((t) => !t.done), [state.tasks])
   const degradedProfiles = state.profileHealth.filter((p) => p.health === 'degraded').length

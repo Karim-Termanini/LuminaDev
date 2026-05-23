@@ -180,6 +180,110 @@ All five stabilization checklist items `done`. `pnpm smoke` green. See [`docs/ST
 
 ---
 
+## 🏗️ Rust Backend Architecture Standards
+
+**CRITICAL:** `apps/desktop/src-tauri/src/lib.rs` must remain a **thin Tauri entry point only**. All domain logic lives in dedicated modules. Current monolith (200KB+, 10K+ lines) will be refactored into modular structure.
+
+### Module Organization Rules
+
+**lib.rs responsibilities (ONLY):**
+
+- `#[tauri::command]` handler declarations (1 line each)
+- `pub async fn ipc_invoke()` dispatcher (match on channel name)
+- `pub async fn ipc_send()` dispatcher (fire-and-forget)
+- AppState struct definition
+- Module declarations (`mod utils; mod docker_ext; ...`)
+
+**Create a new module when:**
+
+- Logic > 200 lines → extract into module
+- Domain has 5+ related functions → create domain module (e.g., `docker_ext.rs` for all Docker ops)
+- Testability requires isolation → `#[cfg(test)] mod tests { ... }` in module
+- Reusability across multiple handlers → goes in `utils.rs` or domain module
+
+**Module structure pattern:**
+
+```rust
+// module.rs
+pub async fn handler_name(payload: Value, state: &AppState) -> Result<Value> { ... }
+fn helper_private() { ... }  // Private helpers
+
+#[cfg(test)]
+mod tests { ... }
+```
+
+**Dependency flow (one-way, no cycles):**
+
+```
+lib.rs (dispatcher)
+  ↓
+[domain modules: docker_ext, terminal_pty, ssh_ext, git_parser, runtime_installer]
+  ↓
+utils.rs (generic file/system/process helpers)
+```
+
+**Imports in modules:**
+
+- ✅ `use crate::utils::*;` — reference utils only
+- ✅ `use serde_json::*;` — external crates
+- ✅ `use std::*;` — stdlib
+- ❌ NO circular imports (`docker_ext` ↔ `terminal_pty` forbidden; move shared logic to `utils.rs`)
+
+**lib.rs dispatcher pattern (strict):**
+
+```rust
+pub async fn ipc_invoke(channel: &str, payload: Value, state: AppState) -> Result<Value> {
+  match channel {
+    IPC::DOCKER_CONTAINERS => docker_ext::list_containers(payload, &state).await,
+    IPC::SSH_GENERATE => ssh_ext::generate_key(payload, &state).await,
+    _ => Err(format!("Unknown channel: {}", channel)),
+  }
+}
+```
+
+→ **One line per handler.** Handler logic lives in module, not here.
+
+**Red flags (DON'T DO THIS):**
+
+- ❌ Handler > 50 lines in lib.rs → extract to domain module
+- ❌ Module A calls Module B calls Module A → move shared code to utils.rs
+- ❌ Utility function at bottom of lib.rs → goes in utils.rs
+- ❌ Duplicate similar logic in two handlers → factor into utils or domain helper
+
+**Testing:**
+
+- Unit tests: module `#[cfg(test)]` block; run `cargo test --lib <module_name>`
+- Integration tests: `tests/` dir (IPC E2E)
+- Never test lib.rs dispatcher directly; test module functions
+
+**lib.rs Size Limits:**
+
+- < 300 lines: OK for thin dispatcher + AppState
+- 300–500 lines: Extract AppState helpers to `app_state.rs`
+- ≥ 500 lines: Audit for missed module boundaries
+
+### Proposed 6-Module Refactoring (Phase 16 follow-up)
+
+Current monolith → Extract into:
+
+- `utils.rs` — generic file/system/process utilities (no state)
+- `docker_ext.rs` — Docker + Compose orchestration
+- `terminal_pty.rs` — embedded terminal + PTY logic
+- `ssh_ext.rs` — SSH helpers + key generation
+- `git_parser.rs` — Git porcelain parsers (stateless)
+- `runtime_installer.rs` — OS package manager + privilege escalation
+
+**Refactoring order:** Extract in dependency order (utils → git_parser → docker_ext → terminal_pty → ssh_ext → runtime_installer). Per-step: `cargo check` + `cargo test --lib` + smoke-ci gate.
+
+**Verification after refactor:**
+
+- `cargo check` — compiles cleanly
+- `cargo test --lib` — all tests pass
+- `pnpm smoke` — full CI gate passes
+- All IPC contracts unchanged (no Zod schema changes)
+
+---
+
 ## Phase 0 — Foundations ✅ SHIPPED
 
 - [x] Widget registry + `dashboard-layout.json` persisted in app data dir
@@ -278,14 +382,20 @@ Missing: real dep graph (`removableDeps` always empty), Ruby slow on Fedora.
 
 ---
 
-## Phase 7 — Maintenance 🔄 IN PROGRESS
+## Phase 7 — Maintenance 🔄 ✅ DONE
 
-**Goal:** Must process actual, real-time data for the entire program (no mocks).
+**Goal:** Process actual, real-time data for the entire program (no mocks).
 
-- [ ] **Backend Probes:** Must execute real-time `sysinfo` or `/proc` queries to gather exact memory, CPU, and disk usage (no hardcoded `memPct`/`diskPct`).
-- [ ] **Fleet Scanning:** Must actively query the Docker daemon and local process list to show genuine container/process health rather than static mocks.
-- [ ] **Diagnostics Bundle:** Must package real logs and system metrics from the host machine into the export.
-- [ ] **Data Authenticity:** Complete removal of all mock data and static fallback values in the maintenance layer.
+- [x] **Backend Probes:** Real-time `/proc` queries: CPU %, memory, swap, disk, I/O, network, load, uptime. No hardcoded values.
+- [x] **Fleet Scanning:** Docker daemon (containers + systemd) + process list via `ps`. Real container/process health.
+- [x] **Diagnostics Bundle:** Exports real logs and system metrics to JSON.
+- [x] **Data Authenticity:** Complete removal of mock data. Guardian evaluates:
+  - Host compute (CPU usage)
+  - Memory pressure (RAM %)
+  - Storage pressure (disk %)
+  - Container fleet (running/total)
+  - **Process health** (runaway CPU/memory detection)
+  - Host security (firewall + SSH config)
 
 ---
 
@@ -487,6 +597,92 @@ When user clicks "Install" / "Fix":
 - [ ] **Dashboard - Logs:** Implement a unified log viewer using `xterm.js` that multiplexes stdout/stderr streams from all active background jobs and containers into a single searchable buffer.
 - [ ] **Global Navigation (Chrome) Fixes:** Define the specific Tauri commands (e.g., `open_terminal`, `show_notifications_panel`) that must be bound to the Top Bar buttons (Search, Notification, Terminal, Settings) and Left Sidebar buttons (Docs, Setup Wizard, Local User).
 - [ ] **Bottom Bar:** Completely rip out the "Phase 0 task runner" and replace it with a clean, minimized status bar or remove it entirely if a replacement is unnecessary.
+
+---
+
+---
+
+## 📋 Future Phases — Scope & Dependencies
+
+Based on current app state (Phase 16 + Phase 7 complete), here's what remaining phases need:
+
+### Phase 8 — Settings
+
+**Depends on:** Phase 15 (theme system must be complete first)
+
+**Scope:** Full settings persistence architecture with tabs:
+- General: startup behavior, window size, telemetry
+- Resources: CPU/RAM limits, job execution tuning
+- App Engine: IPC timeouts, thread pools, daemon config
+- Builder: toolchain paths (Cargo, Node, Python), registry mirrors
+- Extension: enable/disable plugins, real-time loading
+- Update: release channel (Stable/Alpha), check-on-startup
+- Beta Features: experimental flags toggle
+- Notification: global mute, severity filters, OS notifications
+- Shortcuts: keybinding UI, custom action mapping
+- Help & About: dynamic version from package.json
+- Date/Time: 12h/24h, timezone
+- Languages: i18n real-time switching
+
+**Implementation:** New `/settings` page (or refactor existing), store in `settings.json`, IPC contract for `dh:settings:*` handlers.
+
+### Phase 15 — Theme Rollout (Prerequisite for Phase 8)
+
+**Current state:** Maintenance + MonitorPage have elevated theme; others inline-only.
+
+**Scope:** Convert 11 remaining pages to elevated theme system:
+- Create `theme-elevated.css` shared utilities
+- Per-page CSS files with imports + class overrides
+- Light/Dark/HighContrast token system
+- Dynamic theme swapping without reload
+
+**Pages to convert:** Docker, GitConfig, Settings, Runtimes, Dashboard, Terminal, Registry, Profiles, Kernels, Logs, Modals.
+
+**Note:** Use new code-in-separate-files rule — no more monolithic refactoring.
+
+### Phase 14 — Flatpak Release Gate
+
+**Current state:** Full host permissions; local build works.
+
+**Scope:**
+- AppStream metadata (`metainfo.xml`): license, summary, screenshots
+- Desktop entry: icon assets, trademark-clean metadata
+- Reproducible build: manifest builds offline consistently
+- Cross-distro smoke: verified on Fedora Silverblue + traditional distros
+
+**Blocker:** Phase 15 (theme) should be done for polished release appearance.
+
+### Phase 9 — Profiles
+
+**Depends on:** Phase 8 (Settings must exist for profile env var storage)
+
+**Scope:** Real profile management (currently static templates only).
+- Data structure: robust JSON with creds, SSH keys, Compose config, env vars
+- Authentication: local user accounts, secure credential storage
+- Switching engine: tear-down + spin-up profile state atomically
+- Per-profile environment variables + Docker/service isolation
+
+**Note:** Profiles feed into Phase 16 installer (compose profile selection). Tight coupling.
+
+### Phase 11 — First-run Wizard (Merged into Phase 16)
+
+**Status:** ✅ Merged into 8-step unified installer (Phase 16). No separate implementation needed.
+
+### Phase 10 — Extensions (Post-Alpha)
+
+**Scope:** Plugin model v0 (signed/allowlisted widgets + optional IPC namespaces).
+- Developer API: versioned, lifecycle hooks
+- Marketplace: browsable community directory (post-v0)
+
+**Dependency:** Stable Phase 0–7 + Phase 15 (theme must be locked) before plugin stability.
+
+### UI/UX & Performance (Ongoing)
+
+**Runtimes page:** >1 minute load time — profile Tauri invokes, implement lazy loading + caching.
+**Dashboard widgets:** Remove mocked JSON, tie to live event emitters.
+**Kernel management:** Config grid for start/stop/link local kernels.
+**Log viewer:** xterm.js multiplexing stdout/stderr from jobs + containers.
+**Navigation polish:** Wire `dh:terminal:openExternal`, notifications, search.
 
 ---
 
