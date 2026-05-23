@@ -2049,18 +2049,6 @@ const formGrid = {
   gap: 8,
 }
 
-const pre = {
-  margin: '12px 0 0 0',
-  padding: 12,
-  background: '#0a0a0a',
-  border: '1px solid var(--border)',
-  borderRadius: 8,
-  maxHeight: 420,
-  overflow: 'auto' as const,
-  whiteSpace: 'pre-wrap' as const,
-  fontSize: 12,
-}
-
 function truncateMiddle(input: string, maxLen: number): string {
   if (input.length <= maxLen) return input
   const side = Math.max(8, Math.floor((maxLen - 1) / 2))
@@ -2307,7 +2295,7 @@ function ContainerInspectDrawer({ row, networks, onClose, onRefresh }: InspectDr
     }
   }, [row.id])
 
-  async function loadLogs() {
+  const loadLogs = useCallback(async () => {
     setLogsBusy(true)
     try {
       const res = (await window.dh.dockerLogs({ id: row.id, tail: 200 })) as string | { ok: boolean; text?: string; error?: string }
@@ -2323,11 +2311,11 @@ function ContainerInspectDrawer({ row, networks, onClose, onRefresh }: InspectDr
     } finally {
       setLogsBusy(false)
     }
-  }
+  }, [row.id])
 
   useEffect(() => {
     if (drawerTab === 'logs') void loadLogs()
-  }, [drawerTab, row.id])
+  }, [drawerTab, row.id, loadLogs])
 
   async function applyChanges() {
     setApplying(true)
