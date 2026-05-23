@@ -1095,16 +1095,6 @@ export function SshPage(): ReactElement {
   )
 }
 
-const card = {
-  background: 'var(--bg-widget)',
-  border: '1px solid var(--border)',
-  borderRadius: 'var(--radius)',
-  display: 'flex',
-  alignItems: 'flex-start',
-  gap: 16,
-  padding: 16,
-}
-
 const stepCircle = {
   width: 28,
   height: 28,
@@ -1147,30 +1137,4 @@ const area = {
   minHeight: 60,
   fontFamily: 'monospace',
   fontSize: 12,
-}
-
-const modalOverlay: React.CSSProperties = {
-  position: 'fixed',
-  top: 0, left: 0, right: 0, bottom: 0,
-  background: 'rgba(0,0,0,0.6)',
-  backdropFilter: 'blur(4px)',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  zIndex: 9999,
-  padding: 40,
-}
-
-const modalContent: React.CSSProperties = {
-  width: '100%',
-  maxWidth: 900,
-  height: '100%',
-  maxHeight: 600,
-  background: 'var(--bg-widget)',
-  border: '1px solid var(--border)',
-  borderRadius: 12,
-  padding: 20,
-  display: 'flex',
-  flexDirection: 'column',
-  boxShadow: '0 20px 40px rgba(0,0,0,0.4)',
 }
