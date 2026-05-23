@@ -27,7 +27,21 @@ type InstallProgress = {
   message: string
 }
 
-const TOTAL_STEPS = 6
+const TOTAL_STEPS = 8
+
+type ComposeProfile = 'web-dev' | 'data-science' | 'ai-ml' | 'mobile' | 'game-dev' | 'infra' | 'desktop-gui' | 'docs' | 'empty'
+
+const STARTER_PROFILES: Array<{ id: ComposeProfile; label: string; icon: string }> = [
+  { id: 'web-dev', label: 'Web Development', icon: '🌐' },
+  { id: 'data-science', label: 'Data Science', icon: '📊' },
+  { id: 'ai-ml', label: 'AI / ML Local', icon: '🤖' },
+  { id: 'mobile', label: 'Mobile App Dev', icon: '📱' },
+  { id: 'game-dev', label: 'Game Dev', icon: '🎮' },
+  { id: 'infra', label: 'Infra / K8s', icon: '🏗' },
+  { id: 'desktop-gui', label: 'Desktop Qt/GTK', icon: '🖥' },
+  { id: 'docs', label: 'Docs / Writing', icon: '📝' },
+  { id: 'empty', label: 'Empty Minimal', icon: '⬜' },
+]
 
 type InstallationTask = {
   id: string
@@ -59,6 +73,10 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
   const [installationTasks, setInstallationTasks] = useState<InstallationTask[]>([])
   const [installationStatus, setInstallationStatus] = useState<'not-started' | 'running' | 'complete' | 'error'>('not-started')
   const [installationError, setInstallationError] = useState<string | null>(null)
+  const [sshPublicKey, setSshPublicKey] = useState<string | null>(null)
+  const [sshGenerating, setSshGenerating] = useState(false)
+  const [sshError, setSshError] = useState<string | null>(null)
+  const [pickedProfile, setPickedProfile] = useState<ComposeProfile | null>(null)
 
   const runProbes = useCallback(async () => {
     setLoading(true)
@@ -282,7 +300,7 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
 
   const canProceed = (): boolean => {
     if (currentStep === 3) return allCriticalMet
-    if (currentStep === 6) return installationStatus === 'complete'
+    if (currentStep === 8) return installationStatus === 'complete'
     return true
   }
 
@@ -365,6 +383,28 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
     setInstallationStatus('not-started')
     setInstallationError(null)
     setInstallationTasks([])
+  }
+
+  const handleGenerateSshKey = async () => {
+    setSshGenerating(true)
+    setSshError(null)
+    try {
+      const genRes = (await window.dh.sshGenerate({ target: 'host' })) as { ok: boolean; error?: string }
+      if (genRes.ok) {
+        const pubRes = (await window.dh.sshGetPub({ target: 'host' })) as { ok: boolean; pub?: string; error?: string }
+        if (pubRes.ok && pubRes.pub) {
+          setSshPublicKey(pubRes.pub)
+        } else {
+          setSshError(pubRes.error || 'Failed to retrieve public key')
+        }
+      } else {
+        setSshError(genRes.error || 'Failed to generate SSH key')
+      }
+    } catch (e) {
+      setSshError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setSshGenerating(false)
+    }
   }
 
   const handleBack = () => {
@@ -602,8 +642,84 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
             </div>
           )}
 
-          {/* STEP 6: Installation Progress */}
+          {/* STEP 6: SSH Key Generation */}
           {currentStep === 6 && (
+            <div className="readiness-step-ssh">
+              <h2 className="readiness-ssh-title">SSH Key Generation</h2>
+              <p className="readiness-ssh-subtitle">Generate an Ed25519 SSH key for GitHub/GitLab authentication</p>
+
+              {sshPublicKey ? (
+                <div className="readiness-ssh-success">
+                  <div className="readiness-ssh-icon">
+                    <span className="codicon codicon-check" />
+                  </div>
+                  <p className="readiness-ssh-message">Key generated! Add this to your GitHub account:</p>
+                  <pre className="readiness-ssh-key">{sshPublicKey}</pre>
+                  <p className="readiness-ssh-hint">Save this key in your GitHub Settings → SSH and GPG keys</p>
+                </div>
+              ) : (
+                <div className="readiness-ssh-info">
+                  <span className="codicon codicon-info" />
+                  <div>
+                    <strong>What is an SSH key?</strong> It's a secure way to authenticate with GitHub/GitLab without passwords. We'll generate one at <code>~/.ssh/id_ed25519</code>
+                  </div>
+                </div>
+              )}
+
+              {sshError && (
+                <div className="readiness-ssh-error">
+                  <span className="codicon codicon-error" />
+                  <div>{sshError}</div>
+                </div>
+              )}
+
+              <div className="readiness-ssh-actions">
+                {!sshPublicKey && (
+                  <button
+                    className="readiness-ssh-generate-btn"
+                    onClick={() => void handleGenerateSshKey()}
+                    disabled={sshGenerating}
+                  >
+                    {sshGenerating ? (
+                      <>
+                        <span className="codicon codicon-loading codicon-modifier-spin" />
+                        Generating...
+                      </>
+                    ) : (
+                      <>
+                        <span className="codicon codicon-key" />
+                        Generate SSH Key
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* STEP 7: Starter Profile Selection */}
+          {currentStep === 7 && (
+            <div className="readiness-step-profile">
+              <h2 className="readiness-profile-title">Choose a Starter Profile</h2>
+              <p className="readiness-profile-subtitle">Select your development environment preset. You can change this anytime in Profiles.</p>
+
+              <div className="readiness-profile-grid">
+                {STARTER_PROFILES.map((profile) => (
+                  <button
+                    key={profile.id}
+                    className={`readiness-profile-option ${pickedProfile === profile.id ? 'active' : ''}`}
+                    onClick={() => setPickedProfile(profile.id)}
+                  >
+                    <span className="readiness-profile-icon">{profile.icon}</span>
+                    <span className="readiness-profile-label">{profile.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* STEP 8: Installation Progress */}
+          {currentStep === 8 && (
             <div className="readiness-step-install">
               {installationStatus === 'complete' ? (
                 <div className="readiness-install-complete">
@@ -673,8 +789,8 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
           <button
             className="readiness-btn-nav readiness-btn-back"
             onClick={handleBack}
-            disabled={currentStep === 1 || currentStep === 6}
-            title={currentStep === 1 || currentStep === 6 ? 'Cannot go back' : 'Go back'}
+            disabled={currentStep === 1 || currentStep === 8}
+            title={currentStep === 1 || currentStep === 8 ? 'Cannot go back' : 'Go back'}
           >
             <span className="codicon codicon-chevron-left" />
             Back
@@ -687,14 +803,14 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
             title={
               currentStep === 3 && !allCriticalMet
                 ? 'Install missing requirements to continue'
-                : currentStep === 6 && installationStatus !== 'complete'
+                : currentStep === 8 && installationStatus !== 'complete'
                   ? 'Waiting for installation to complete'
-                  : currentStep === 6
+                  : currentStep === 8
                     ? 'Start LuminaDev'
                     : 'Continue to next step'
             }
           >
-            {currentStep === 6 && installationStatus === 'complete' ? 'Start LuminaDev' : 'Next'}
+            {currentStep === 8 && installationStatus === 'complete' ? 'Start LuminaDev' : 'Next'}
             <span className="codicon codicon-chevron-right" />
           </button>
         </div>
