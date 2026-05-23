@@ -16,7 +16,7 @@ const nav = [
   { to: '/docker', label: 'Docker', icon: 'package', status: 'live' as RouteStatus },
   { to: '/ssh', label: 'SSH', icon: 'key', status: 'live' as RouteStatus },
   { to: '/git', label: 'Developer Git', icon: 'git-branch', status: 'live' as RouteStatus },
-  { to: '/profiles', label: 'Profiles', icon: 'account', status: 'partial' as RouteStatus },
+  { to: '/profiles', label: 'Profiles', icon: 'account', status: 'live' as RouteStatus },
   { to: '/terminal', label: 'Terminal', icon: 'terminal', status: 'live' as RouteStatus },
   { to: '/runtimes', label: 'Runtimes', icon: 'zap', status: 'live' as RouteStatus },
   { to: '/maintenance', label: 'Maintenance', icon: 'shield', status: 'live' as RouteStatus },
