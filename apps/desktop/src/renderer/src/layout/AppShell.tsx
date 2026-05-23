@@ -21,7 +21,7 @@ const nav = [
   { to: '/runtimes', label: 'Runtimes', icon: 'zap', status: 'live' as RouteStatus },
   { to: '/maintenance', label: 'Maintenance', icon: 'shield', status: 'live' as RouteStatus },
   { to: '/system-readiness', label: 'Readiness', icon: 'checklist', status: 'live' as RouteStatus },
-  { to: '/settings', label: 'Settings', icon: 'settings', status: 'partial' as RouteStatus },
+  { to: '/settings', label: 'Settings', icon: 'settings', status: 'live' as RouteStatus },
 ] as const
 
 const statusStyles: Record<RouteStatus, { label: string; color: string; bg: string; border: string }> = {
