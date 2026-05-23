@@ -1,6 +1,86 @@
 /* Dashboard Pages — Elevated theme + dashboard-specific styling */
 @import '../theme/theme-elevated.css';
 
+/* Split layout: left main view + right fixed sidebar */
+.dashboard-split-layout {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 20px;
+  width: 100%;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 24px;
+  box-sizing: border-box;
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+}
+
+.dashboard-main-view {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  overflow-y: auto;
+}
+
+.dashboard-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: fit-content;
+  position: sticky;
+  top: 24px;
+}
+
+/* Profile list */
+.profile-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: calc(100vh - 200px);
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.profile-list-item {
+  all: unset;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 13px;
+  margin-bottom: 8px;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.profile-list-item:hover {
+  border-color: rgba(124, 77, 255, 0.5);
+  background: rgba(124, 77, 255, 0.04);
+}
+
+.profile-list-item.active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--bg-widget));
+}
+
+/* Hero section for selected profile */
+.profile-hero {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 24px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0.01) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+}
+
 .dashboard-page {
   /* Inherits .elevated-page: grid layout, padding, gradients */
   display: flex;
@@ -171,6 +251,14 @@
 }
 
 /* Responsive */
+@media (max-width: 1024px) {
+  .dashboard-split-layout {
+    grid-template-columns: 1fr 280px;
+    gap: 16px;
+    padding: 16px;
+  }
+}
+
 @media (max-width: 768px) {
   .dashboard-page {
     padding: 16px;
@@ -179,5 +267,19 @@
 
   .dashboard-profiles-grid {
     grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  }
+
+  .dashboard-split-layout {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    padding: 12px;
+  }
+
+  .dashboard-sidebar {
+    display: none;
+  }
+
+  .dashboard-main-view {
+    gap: 16px;
   }
 }
