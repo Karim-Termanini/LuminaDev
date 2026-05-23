@@ -491,7 +491,7 @@ export function MaintenancePage(): ReactElement {
   }
 
   return (
-    <div className="maint-page">
+    <div className="maint-page elevated-page">
       <header className="maint-hero">
         <div className="maint-hero-eyebrow">Workspace care</div>
         <h1 className="maint-hero-title">Maintenance</h1>

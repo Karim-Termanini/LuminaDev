@@ -192,7 +192,7 @@ export function SystemReadinessPage(): ReactElement {
   }
 
   return (
-    <div style={{ display: 'flex', gap: 32, height: '100%' }}>
+    <div className="elevated-page" style={{ display: 'flex', gap: 32, height: '100%' }}>
       <aside style={{ width: 240, display: 'flex', flexDirection: 'column', gap: 8 }}>
         <div className="mono" style={{ fontSize: 12, color: 'var(--text-muted)', padding: '0 12px 12px' }}>
           READINESS WIZARD
