@@ -28,8 +28,8 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
     setLoading(true)
     try {
       const res = (await window.dh.systemReadinessCheck()) as { ok: boolean; report?: unknown }
-      if (res.ok) {
-        buildCategories()
+      if (res.ok && res.report) {
+        buildCategories(res.report)
       }
     } catch (e) {
       console.error('Readiness check failed', e)
@@ -42,37 +42,113 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
     void runProbes()
   }, [runProbes])
 
-  const buildCategories = () => {
-    // Placeholder: will be populated with real probe data
+  const buildCategories = (report: {
+    hardware: { ram_total_gb: number; cpu_cores: number; architecture: string }
+    software: { docker_installed: boolean; docker_running: boolean; docker_version: string; kvm_supported: boolean }
+    tools: { git: boolean; curl: boolean; tar: boolean; unzip: boolean }
+  }) => {
+    const { hardware, software, tools } = report
+
+    // Hardware requirements
+    const hardwareReqs: Requirement[] = [
+      {
+        id: 'ram',
+        label: 'RAM',
+        description: '≥4GB required',
+        status: hardware.ram_total_gb >= 4 ? 'ok' : 'warning',
+        critical: hardware.ram_total_gb >= 4,
+        value: `${hardware.ram_total_gb.toFixed(1)}GB total`,
+      },
+      {
+        id: 'cpu',
+        label: 'CPU Cores',
+        description: '≥2 required',
+        status: hardware.cpu_cores >= 2 ? 'ok' : 'warning',
+        critical: hardware.cpu_cores >= 2,
+        value: `${hardware.cpu_cores} cores`,
+      },
+      {
+        id: 'arch',
+        label: 'Architecture',
+        description: 'x86_64 required',
+        status: hardware.architecture === 'x86_64' ? 'ok' : 'error',
+        critical: hardware.architecture === 'x86_64',
+        value: hardware.architecture,
+      },
+      {
+        id: 'virt',
+        label: 'Virtualization',
+        description: 'KVM support required',
+        status: software.kvm_supported ? 'ok' : 'error',
+        critical: software.kvm_supported,
+        value: software.kvm_supported ? 'Enabled' : 'Not available',
+      },
+    ]
+
+    // System Tools
+    const toolReqs: Requirement[] = [
+      {
+        id: 'docker',
+        label: 'Docker',
+        description: 'v20.10+',
+        status: software.docker_installed ? 'ok' : 'error',
+        critical: true,
+        value: software.docker_installed ? software.docker_version : 'Not installed',
+      },
+      {
+        id: 'git',
+        label: 'Git',
+        description: 'Required',
+        status: tools.git ? 'ok' : 'error',
+        critical: true,
+      },
+      {
+        id: 'curl',
+        label: 'Curl',
+        description: 'Required',
+        status: tools.curl ? 'ok' : 'warning',
+        critical: false,
+      },
+      {
+        id: 'tar',
+        label: 'Tar',
+        description: 'Required',
+        status: tools.tar ? 'ok' : 'warning',
+        critical: false,
+      },
+      {
+        id: 'unzip',
+        label: 'Unzip',
+        description: 'Required',
+        status: tools.unzip ? 'ok' : 'warning',
+        critical: false,
+      },
+    ]
+
+    // Docker State
+    const dockerReqs: Requirement[] = [
+      {
+        id: 'daemon',
+        label: 'Docker Daemon',
+        description: 'Must be running',
+        status: software.docker_running ? 'ok' : 'error',
+        critical: true,
+        value: software.docker_running ? 'Running' : 'Not running',
+      },
+      {
+        id: 'group',
+        label: 'Docker Group',
+        description: 'User in docker group',
+        status: software.in_docker_group ? 'ok' : 'warning',
+        critical: true,
+        value: software.in_docker_group ? 'Yes' : 'No',
+      },
+    ]
+
     setCategories([
-      {
-        title: 'Hardware',
-        icon: 'circuit-board',
-        requirements: [
-          { id: 'ram', label: 'RAM', description: '≥4GB required', status: 'ok', critical: true, value: '16GB' },
-          { id: 'cpu', label: 'CPU Cores', description: '≥2 required', status: 'ok', critical: true, value: '8' },
-          { id: 'virt', label: 'Virtualization', description: 'KVM/VT-x required', status: 'ok', critical: true, value: 'Enabled' },
-        ],
-      },
-      {
-        title: 'System Tools',
-        icon: 'wrench',
-        requirements: [
-          { id: 'docker', label: 'Docker', description: 'v20.10+', status: 'error', critical: true },
-          { id: 'git', label: 'Git', description: 'Required', status: 'ok', critical: true, value: 'v2.40.0' },
-          { id: 'ssh', label: 'SSH', description: 'Required', status: 'ok', critical: true },
-          { id: 'curl', label: 'Curl', description: 'Required', status: 'ok', critical: false },
-          { id: 'tar', label: 'Tar', description: 'Required', status: 'ok', critical: false },
-        ],
-      },
-      {
-        title: 'Docker State',
-        icon: 'package',
-        requirements: [
-          { id: 'daemon', label: 'Daemon Running', description: 'Must be active', status: 'error', critical: true },
-          { id: 'group', label: 'Docker Group', description: 'User must be in group', status: 'warning', critical: true },
-        ],
-      },
+      { title: 'Hardware', icon: 'circuit-board', requirements: hardwareReqs },
+      { title: 'System Tools', icon: 'wrench', requirements: toolReqs },
+      { title: 'Docker', icon: 'package', requirements: dockerReqs },
     ])
   }
 
