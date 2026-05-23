@@ -1,0 +1,264 @@
+/* Readiness Wizard — WinBoat installer philosophy */
+
+.readiness-wizard {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--bg-app);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  overflow: auto;
+}
+
+.readiness-wizard-bg {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: -1;
+  background: radial-gradient(ellipse at 20% 50%, rgba(124, 77, 255, 0.15) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 20%, rgba(100, 200, 255, 0.1) 0%, transparent 50%);
+  pointer-events: none;
+}
+
+.readiness-wizard-container {
+  width: 100%;
+  max-width: 800px;
+  padding: 60px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+}
+
+/* Hero Section */
+.readiness-hero {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.readiness-hero-title {
+  font-size: 36px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 12px;
+  background: linear-gradient(to right, var(--text), var(--accent));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.readiness-hero-subtitle {
+  font-size: 16px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+/* Content */
+.readiness-content {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.readiness-category {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.readiness-category-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.readiness-category-header span {
+  font-size: 20px;
+}
+
+.readiness-requirements {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.readiness-requirement {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.02);
+  transition: all 0.2s ease;
+}
+
+.readiness-requirement-ok {
+  border-color: rgba(0, 230, 118, 0.25);
+  background: rgba(0, 230, 118, 0.05);
+}
+
+.readiness-requirement-warning {
+  border-color: rgba(255, 193, 7, 0.25);
+  background: rgba(255, 193, 7, 0.05);
+}
+
+.readiness-requirement-error {
+  border-color: rgba(255, 82, 82, 0.25);
+  background: rgba(255, 82, 82, 0.05);
+}
+
+.readiness-requirement-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: 1;
+}
+
+.readiness-requirement-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+}
+
+.readiness-requirement-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.readiness-requirement-label {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.readiness-requirement-desc {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.readiness-requirement-value {
+  margin-left: auto;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-muted);
+  padding: 0 16px;
+  border-left: 1px solid var(--border);
+}
+
+.readiness-requirement-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.readiness-btn {
+  padding: 8px 12px;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.readiness-btn-install {
+  background: var(--accent);
+  color: var(--bg-app);
+  flex-shrink: 0;
+}
+
+.readiness-btn-install:hover {
+  background: rgba(124, 77, 255, 0.9);
+}
+
+.readiness-btn-install:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.readiness-btn-help {
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  padding: 8px;
+  width: 36px;
+  height: 36px;
+  justify-content: center;
+}
+
+.readiness-btn-help:hover {
+  color: var(--text);
+  border-color: var(--text);
+}
+
+/* Footer */
+.readiness-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+
+.readiness-btn-next {
+  padding: 12px 32px;
+  background: var(--accent);
+  color: var(--bg-app);
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.readiness-btn-next:hover:not(:disabled) {
+  background: rgba(124, 77, 255, 0.9);
+}
+
+.readiness-btn-next:disabled {
+  background: var(--border);
+  color: var(--text-muted);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+  .readiness-wizard-container {
+    padding: 40px 20px;
+    max-width: 100%;
+  }
+
+  .readiness-hero-title {
+    font-size: 28px;
+  }
+
+  .readiness-requirement {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .readiness-requirement-value {
+    display: none;
+  }
+
+  .readiness-requirement-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}

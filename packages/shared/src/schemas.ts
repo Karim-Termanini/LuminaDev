@@ -202,6 +202,7 @@ export const StoreKeySchema = z.enum([
   'on_login_automation',
   'appearance',
   'cloud_oauth_clients',
+  'readiness_wizard_complete',
 ])
 
 export const StoreGetRequestSchema = z.object({
@@ -241,6 +242,10 @@ export const StoreSetRequestSchema = z.discriminatedUnion('key', [
   z.object({
     key: z.literal('cloud_oauth_clients'),
     data: CloudOauthClientsStoreSchema,
+  }),
+  z.object({
+    key: z.literal('readiness_wizard_complete'),
+    data: z.boolean(),
   }),
 ])
 export const ComposeUpRequestSchema = z.object({
