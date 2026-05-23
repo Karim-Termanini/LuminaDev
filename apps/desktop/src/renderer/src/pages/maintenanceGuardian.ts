@@ -117,8 +117,8 @@ export function evaluateGuardian(
   if (total > 0 && ratio < FLEET_MIN_RUNNING_RATIO) fleetDed = 8
 
   let procDed = 0
-  let highCpuProc = topProcesses.find((p) => p.cpuPercent > PROC_CPU_WARN)
-  let highMemProc = topProcesses.find((p) => p.memPercent > PROC_MEM_WARN)
+  const highCpuProc = topProcesses.find((p) => p.cpuPercent > PROC_CPU_WARN)
+  const highMemProc = topProcesses.find((p) => p.memPercent > PROC_MEM_WARN)
   if (highCpuProc || highMemProc) procDed = 12
 
   let fwDed = 0
