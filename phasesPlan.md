@@ -382,14 +382,20 @@ Missing: real dep graph (`removableDeps` always empty), Ruby slow on Fedora.
 
 ---
 
-## Phase 7 — Maintenance 🔄 IN PROGRESS
+## Phase 7 — Maintenance 🔄 ✅ DONE
 
-**Goal:** Must process actual, real-time data for the entire program (no mocks).
+**Goal:** Process actual, real-time data for the entire program (no mocks).
 
-- [ ] **Backend Probes:** Must execute real-time `sysinfo` or `/proc` queries to gather exact memory, CPU, and disk usage (no hardcoded `memPct`/`diskPct`).
-- [ ] **Fleet Scanning:** Must actively query the Docker daemon and local process list to show genuine container/process health rather than static mocks.
-- [ ] **Diagnostics Bundle:** Must package real logs and system metrics from the host machine into the export.
-- [ ] **Data Authenticity:** Complete removal of all mock data and static fallback values in the maintenance layer.
+- [x] **Backend Probes:** Real-time `/proc` queries: CPU %, memory, swap, disk, I/O, network, load, uptime. No hardcoded values.
+- [x] **Fleet Scanning:** Docker daemon (containers + systemd) + process list via `ps`. Real container/process health.
+- [x] **Diagnostics Bundle:** Exports real logs and system metrics to JSON.
+- [x] **Data Authenticity:** Complete removal of mock data. Guardian evaluates:
+  - Host compute (CPU usage)
+  - Memory pressure (RAM %)
+  - Storage pressure (disk %)
+  - Container fleet (running/total)
+  - **Process health** (runaway CPU/memory detection)
+  - Host security (firewall + SSH config)
 
 ---
 
@@ -591,6 +597,92 @@ When user clicks "Install" / "Fix":
 - [ ] **Dashboard - Logs:** Implement a unified log viewer using `xterm.js` that multiplexes stdout/stderr streams from all active background jobs and containers into a single searchable buffer.
 - [ ] **Global Navigation (Chrome) Fixes:** Define the specific Tauri commands (e.g., `open_terminal`, `show_notifications_panel`) that must be bound to the Top Bar buttons (Search, Notification, Terminal, Settings) and Left Sidebar buttons (Docs, Setup Wizard, Local User).
 - [ ] **Bottom Bar:** Completely rip out the "Phase 0 task runner" and replace it with a clean, minimized status bar or remove it entirely if a replacement is unnecessary.
+
+---
+
+---
+
+## 📋 Future Phases — Scope & Dependencies
+
+Based on current app state (Phase 16 + Phase 7 complete), here's what remaining phases need:
+
+### Phase 8 — Settings
+
+**Depends on:** Phase 15 (theme system must be complete first)
+
+**Scope:** Full settings persistence architecture with tabs:
+- General: startup behavior, window size, telemetry
+- Resources: CPU/RAM limits, job execution tuning
+- App Engine: IPC timeouts, thread pools, daemon config
+- Builder: toolchain paths (Cargo, Node, Python), registry mirrors
+- Extension: enable/disable plugins, real-time loading
+- Update: release channel (Stable/Alpha), check-on-startup
+- Beta Features: experimental flags toggle
+- Notification: global mute, severity filters, OS notifications
+- Shortcuts: keybinding UI, custom action mapping
+- Help & About: dynamic version from package.json
+- Date/Time: 12h/24h, timezone
+- Languages: i18n real-time switching
+
+**Implementation:** New `/settings` page (or refactor existing), store in `settings.json`, IPC contract for `dh:settings:*` handlers.
+
+### Phase 15 — Theme Rollout (Prerequisite for Phase 8)
+
+**Current state:** Maintenance + MonitorPage have elevated theme; others inline-only.
+
+**Scope:** Convert 11 remaining pages to elevated theme system:
+- Create `theme-elevated.css` shared utilities
+- Per-page CSS files with imports + class overrides
+- Light/Dark/HighContrast token system
+- Dynamic theme swapping without reload
+
+**Pages to convert:** Docker, GitConfig, Settings, Runtimes, Dashboard, Terminal, Registry, Profiles, Kernels, Logs, Modals.
+
+**Note:** Use new code-in-separate-files rule — no more monolithic refactoring.
+
+### Phase 14 — Flatpak Release Gate
+
+**Current state:** Full host permissions; local build works.
+
+**Scope:**
+- AppStream metadata (`metainfo.xml`): license, summary, screenshots
+- Desktop entry: icon assets, trademark-clean metadata
+- Reproducible build: manifest builds offline consistently
+- Cross-distro smoke: verified on Fedora Silverblue + traditional distros
+
+**Blocker:** Phase 15 (theme) should be done for polished release appearance.
+
+### Phase 9 — Profiles
+
+**Depends on:** Phase 8 (Settings must exist for profile env var storage)
+
+**Scope:** Real profile management (currently static templates only).
+- Data structure: robust JSON with creds, SSH keys, Compose config, env vars
+- Authentication: local user accounts, secure credential storage
+- Switching engine: tear-down + spin-up profile state atomically
+- Per-profile environment variables + Docker/service isolation
+
+**Note:** Profiles feed into Phase 16 installer (compose profile selection). Tight coupling.
+
+### Phase 11 — First-run Wizard (Merged into Phase 16)
+
+**Status:** ✅ Merged into 8-step unified installer (Phase 16). No separate implementation needed.
+
+### Phase 10 — Extensions (Post-Alpha)
+
+**Scope:** Plugin model v0 (signed/allowlisted widgets + optional IPC namespaces).
+- Developer API: versioned, lifecycle hooks
+- Marketplace: browsable community directory (post-v0)
+
+**Dependency:** Stable Phase 0–7 + Phase 15 (theme must be locked) before plugin stability.
+
+### UI/UX & Performance (Ongoing)
+
+**Runtimes page:** >1 minute load time — profile Tauri invokes, implement lazy loading + caching.
+**Dashboard widgets:** Remove mocked JSON, tie to live event emitters.
+**Kernel management:** Config grid for start/stop/link local kernels.
+**Log viewer:** xterm.js multiplexing stdout/stderr from jobs + containers.
+**Navigation polish:** Wire `dh:terminal:openExternal`, notifications, search.
 
 ---
 
