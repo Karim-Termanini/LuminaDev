@@ -358,19 +358,21 @@ This phase turns the app into a true daily driver for software engineers managin
 
 ---
 
-## Phase 13 — Theme Surface Rollout 📋 PLANNED (post-Alpha)
+## Phase 15 — Theme Surface Rollout ✅ SHIPPED
 
-Generalize the "Maintenance Page" aesthetic (ambient gradients, hero typography, hover-lift tiles) across the app without a big-bang rewrite.
+Generalized the "Maintenance Page" aesthetic (ambient gradients, hero typography, hover-lift tiles) across the entire app with class-driven theming.
 
 - **Principles**: Scope by page root classes, reuse CSS variables/tokens, and enhance hierarchy/spacing/motion.
-- **Rollout Priority**:
-  1. **Monitor** — metrics + pills + health story.
-  2. **Docker** — toolbar + card elevation + container tables.
-  3. **Git Config** — hero + section rails to reduce noise.
-  4. **Runtimes** — tiles + status panels + wizard steps.
-  5. **Dashboard** — widget-wide consistency.
-  6. **AppShell** — subtle chrome / nav alignment.
-- **Checklist**: root class per page, Codicon verification, and focus-ring preservation.
+- **Completed Rollout**:
+  1. ✅ **Monitor** — metrics + pills + health story.
+  2. ✅ **Docker** — toolbar + card elevation + container tables.
+  3. ✅ **Git Config** — hero + section rails to reduce noise.
+  4. ✅ **Runtimes** — tiles + status panels + wizard steps.
+  5. ✅ **Dashboard** — widget-wide consistency.
+  6. ✅ **AppShell** — subtle chrome / nav alignment.
+  7. ✅ **Additional pages** — SSH, Settings, SystemReadiness, CloudGit, GitVcs, Maintenance, MaintenancePage.
+- ✅ **Checklist complete**: root class per page, Codicon verification, focus-ring preservation.
+- ✅ **Deliverables**: PR #91 (theme utilities + 11 pages), PR #92 (AppShell styling).
 
 ---
 
@@ -449,8 +451,8 @@ Flatpak runs with **full host permissions** — no sandbox isolation. Docker soc
 ✅  Phase 8  — Settings (hosts editor + profile env + all hub features shipped)
 ✅  Phase 13 — Advanced CI & Environment Hardening
 ✅  Phase 12 — Cloud Git (fully shipped; /git unified page)
-✅  Phase 16 — System Readiness Wizard (fully shipped)
-📋  Phase 15 — Theme Rollout (System-wide pilot)
+✅  Phase 16 — System Readiness Wizard (fully shipped; pre-flight UI shipped)
+✅  Phase 15 — Theme Rollout (System-wide elevated aesthetic shipped; PR #91 + #92)
 📋  Phase 10 — Extensions (Plugin model v0, Dev API)
 🔄  Phase 14 — Flatpak Release Gate (host permissions granted; AppStream + smoke remaining)
 ```
