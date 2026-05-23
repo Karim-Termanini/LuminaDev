@@ -31,10 +31,16 @@ const PRESET_PROFILES: ProfileDef[] = [
   { name: 'empty', title: 'Empty Minimal', description: 'Clean slate alpine image for general scripting.', icon: 'blank', accent: 'var(--text-muted)', status: 'live' },
 ]
 
+interface Toast {
+  type: 'success' | 'error'
+  message: string
+}
+
 export function DashboardMainPage(): ReactElement {
   const [docker, setDocker] = useState<{ ok: true; rows: ContainerRow[] } | { ok: false; error: string } | null>(null)
   const [snap, setSnap] = useState<HostMetricsResponse | null>(null)
-  const [composeMsg, setComposeMsg] = useState<string | null>(null)
+  const [toast, setToast] = useState<Toast | null>(null)
+  const [isSwitching, setIsSwitching] = useState(false)
   const [activeProfile, setActiveProfile] = useState<ComposeProfile | null>(null)
   const [selectedProfileName, setSelectedProfileName] = useState<ComposeProfile | null>(null)
   const [confirmModalOpen, setConfirmModalOpen] = useState(false)
@@ -78,18 +84,21 @@ export function DashboardMainPage(): ReactElement {
   function handleConfirmSwitch(): void {
     if (!selectedProfileName) return
     setConfirmModalOpen(false)
-    setComposeMsg(`Switching to ${selectedProfileName}…`)
+    setIsSwitching(true)
     window.dh.profileSwitch({ from: activeProfile ?? undefined, to: selectedProfileName }).then((r) => {
       if (r.ok) {
-        setComposeMsg(`Profile switched: OK\n${r.log}`)
+        setToast({ type: 'success', message: `Switched to ${selectedProfileName}` })
         void refresh()
+        setTimeout(() => setToast(null), 2000)
       } else {
         const errMsg = r.error ?? r.log ?? 'Unknown error'
-        setComposeMsg(`Switch error\n${humanizeProfileError(errMsg)}`)
+        setToast({ type: 'error', message: humanizeProfileError(errMsg) })
       }
+      setIsSwitching(false)
     }).catch((e) => {
       const errMsg = e instanceof Error ? e.message : String(e)
-      setComposeMsg(`Switch failed\n${errMsg}`)
+      setToast({ type: 'error', message: errMsg })
+      setIsSwitching(false)
     })
   }
 
@@ -110,9 +119,35 @@ export function DashboardMainPage(): ReactElement {
 
   return (
     <div className="dashboard-split-layout">
+      {/* Toast Notification */}
+      {toast && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 24,
+            right: 24,
+            background: toast.type === 'success' ? 'var(--green)' : 'var(--orange)',
+            color: '#fff',
+            padding: '12px 16px',
+            borderRadius: 8,
+            fontSize: 13,
+            fontWeight: 600,
+            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.3)',
+            zIndex: 2000,
+            animation: 'slideInRight 0.3s ease-out',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            maxWidth: 320,
+          }}
+        >
+          <span className={`codicon ${toast.type === 'success' ? 'codicon-check' : 'codicon-error'}`} style={{ fontSize: 16 }} />
+          {toast.message}
+        </div>
+      )}
+
       {/* LEFT: Main View */}
       <div className="dashboard-main-view">
-        {composeMsg ? <pre className="dashboard-compose-log">{composeMsg}</pre> : null}
 
         {selectedProfile ? (
           <>
@@ -128,7 +163,7 @@ export function DashboardMainPage(): ReactElement {
               <button
                 type="button"
                 onClick={() => setConfirmModalOpen(true)}
-                disabled={selectedProfile.status === 'planned'}
+                disabled={selectedProfile.status === 'planned' || isSwitching}
                 style={{
                   padding: '12px 24px',
                   borderRadius: 8,
@@ -137,10 +172,15 @@ export function DashboardMainPage(): ReactElement {
                   color: selectedProfile.status === 'planned' ? 'var(--text-muted)' : '#fff',
                   fontWeight: 600,
                   fontSize: 15,
-                  cursor: selectedProfile.status === 'planned' ? 'default' : 'pointer',
-                  opacity: selectedProfile.status === 'planned' ? 0.5 : 1,
+                  cursor: selectedProfile.status === 'planned' || isSwitching ? 'default' : 'pointer',
+                  opacity: selectedProfile.status === 'planned' || isSwitching ? 0.7 : 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  transition: 'all 0.2s ease',
                 }}
               >
+                {isSwitching && <span className="codicon codicon-loading" style={{ animation: 'spin 1s linear infinite' }} />}
                 {selectedProfile.status === 'planned' ? 'COMING SOON' : activeProfile === selectedProfileName ? 'SWITCH TO THIS' : 'INITIALIZE'}
               </button>
             </div>
