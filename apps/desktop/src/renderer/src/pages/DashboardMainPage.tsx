@@ -100,8 +100,8 @@ export function DashboardMainPage(): ReactElement {
       if (r.ok) {
         setActiveProfile(selectedProfileName)
         setToast({ type: 'success', message: `Switched to ${selectedProfileName}` })
-        void refresh()
         setTimeout(() => setToast(null), 2000)
+        setTimeout(() => void refresh(), 100)
       } else {
         const errMsg = r.error ?? r.log ?? 'Unknown error'
         setToast({ type: 'error', message: humanizeProfileError(errMsg) })
