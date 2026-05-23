@@ -19,41 +19,27 @@ import { MaintenancePage } from './pages/MaintenancePage'
 import { SettingsPage } from './pages/SettingsPage'
 import { SystemReadinessPage } from './pages/SystemReadinessPage'
 import { ReadinessWizardPage } from './pages/ReadinessWizardPage'
-import { WizardFlow } from './wizard/WizardFlow'
-import { WizardStateStoreSchema } from '@linux-dev-home/shared'
 import { syncAppearanceFromStore } from './theme/applyAccent'
 
 export default function App(): ReactElement | null {
   const [ready, setReady] = useState(false)
   const [showReadinessWizard, setShowReadinessWizard] = useState(false)
-  const [showWizard, setShowWizard] = useState(false)
 
   useEffect(() => {
-    void Promise.all([
-      window.dh.storeGet({ key: 'readiness_wizard_complete' }).then((res: unknown) => {
-        const bag = res as { ok?: boolean; data?: unknown }
-        const completed = bag.ok ? bag.data === true : false
-        if (!completed) {
-          setShowReadinessWizard(true)
-          return
-        }
-      }),
-      window.dh.storeGet({ key: 'wizard_state' }).then((res: unknown) => {
-        const bag = res as { ok?: boolean; data?: unknown }
-        const w = bag.ok ? WizardStateStoreSchema.safeParse(bag.data).data : undefined
-        if (!w?.completed || !!w?.showOnStartup) {
-          setShowWizard(true)
-        }
-      }),
-    ]).then(() => {
+    window.dh.storeGet({ key: 'readiness_wizard_complete' }).then((res: unknown) => {
+      const bag = res as { ok?: boolean; data?: unknown }
+      const completed = bag.ok ? bag.data === true : false
+      if (!completed) {
+        setShowReadinessWizard(true)
+      }
       setReady(true)
     })
   }, [])
 
   useEffect(() => {
-    if (!ready || showWizard) return
+    if (!ready || showReadinessWizard) return
     void syncAppearanceFromStore()
-  }, [ready, showWizard])
+  }, [ready, showReadinessWizard])
 
   if (!ready) return null
   if (showReadinessWizard) {
@@ -61,16 +47,6 @@ export default function App(): ReactElement | null {
       <ReadinessWizardPage
         onComplete={() => {
           setShowReadinessWizard(false)
-          setShowWizard(true)
-        }}
-      />
-    )
-  }
-  if (showWizard) {
-    return (
-      <WizardFlow
-        onComplete={() => {
-          setShowWizard(false)
           void syncAppearanceFromStore()
         }}
       />

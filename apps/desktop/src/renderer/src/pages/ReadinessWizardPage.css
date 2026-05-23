@@ -537,6 +537,200 @@
   margin-top: 2px;
 }
 
+/* STEP 6: SSH Key Generation */
+.readiness-step-ssh {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 8px 0;
+}
+
+.readiness-ssh-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0;
+}
+
+.readiness-ssh-subtitle {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.readiness-ssh-success {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px;
+  background: rgba(0, 230, 118, 0.05);
+  border: 1px solid rgba(0, 230, 118, 0.25);
+  border-radius: 8px;
+}
+
+.readiness-ssh-icon {
+  font-size: 32px;
+  color: var(--green);
+}
+
+.readiness-ssh-message {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0;
+}
+
+.readiness-ssh-key {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(124, 77, 255, 0.2);
+  border-radius: 6px;
+  padding: 12px;
+  font-size: 11px;
+  color: var(--green);
+  font-family: 'Monaco', 'Menlo', monospace;
+  margin: 0;
+  word-break: break-all;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.readiness-ssh-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.readiness-ssh-info {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  background: rgba(100, 200, 255, 0.1);
+  border: 1px solid rgba(100, 200, 255, 0.25);
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.readiness-ssh-info .codicon {
+  font-size: 16px;
+  color: var(--accent);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.readiness-ssh-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  background: rgba(255, 82, 82, 0.1);
+  border: 1px solid rgba(255, 82, 82, 0.25);
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--red);
+}
+
+.readiness-ssh-error .codicon {
+  font-size: 16px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.readiness-ssh-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.readiness-ssh-generate-btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 6px;
+  background: var(--accent);
+  color: var(--bg-app);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.readiness-ssh-generate-btn:hover:not(:disabled) {
+  background: rgba(124, 77, 255, 0.9);
+}
+
+.readiness-ssh-generate-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* STEP 7: Starter Profile Selection */
+.readiness-step-profile {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 8px 0;
+}
+
+.readiness-profile-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0;
+}
+
+.readiness-profile-subtitle {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.readiness-profile-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.readiness-profile-option {
+  padding: 16px;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.readiness-profile-option:hover {
+  border-color: var(--accent);
+  background: rgba(124, 77, 255, 0.05);
+}
+
+.readiness-profile-option.active {
+  border-color: var(--accent);
+  background: rgba(124, 77, 255, 0.12);
+  color: var(--accent);
+}
+
+.readiness-profile-icon {
+  font-size: 28px;
+  display: block;
+}
+
+.readiness-profile-label {
+  text-align: center;
+  line-height: 1.3;
+}
+
 /* STEP 5: Configuration */
 .readiness-step-config {
   display: flex;
