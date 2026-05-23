@@ -180,6 +180,110 @@ All five stabilization checklist items `done`. `pnpm smoke` green. See [`docs/ST
 
 ---
 
+## 🏗️ Rust Backend Architecture Standards
+
+**CRITICAL:** `apps/desktop/src-tauri/src/lib.rs` must remain a **thin Tauri entry point only**. All domain logic lives in dedicated modules. Current monolith (200KB+, 10K+ lines) will be refactored into modular structure.
+
+### Module Organization Rules
+
+**lib.rs responsibilities (ONLY):**
+
+- `#[tauri::command]` handler declarations (1 line each)
+- `pub async fn ipc_invoke()` dispatcher (match on channel name)
+- `pub async fn ipc_send()` dispatcher (fire-and-forget)
+- AppState struct definition
+- Module declarations (`mod utils; mod docker_ext; ...`)
+
+**Create a new module when:**
+
+- Logic > 200 lines → extract into module
+- Domain has 5+ related functions → create domain module (e.g., `docker_ext.rs` for all Docker ops)
+- Testability requires isolation → `#[cfg(test)] mod tests { ... }` in module
+- Reusability across multiple handlers → goes in `utils.rs` or domain module
+
+**Module structure pattern:**
+
+```rust
+// module.rs
+pub async fn handler_name(payload: Value, state: &AppState) -> Result<Value> { ... }
+fn helper_private() { ... }  // Private helpers
+
+#[cfg(test)]
+mod tests { ... }
+```
+
+**Dependency flow (one-way, no cycles):**
+
+```
+lib.rs (dispatcher)
+  ↓
+[domain modules: docker_ext, terminal_pty, ssh_ext, git_parser, runtime_installer]
+  ↓
+utils.rs (generic file/system/process helpers)
+```
+
+**Imports in modules:**
+
+- ✅ `use crate::utils::*;` — reference utils only
+- ✅ `use serde_json::*;` — external crates
+- ✅ `use std::*;` — stdlib
+- ❌ NO circular imports (`docker_ext` ↔ `terminal_pty` forbidden; move shared logic to `utils.rs`)
+
+**lib.rs dispatcher pattern (strict):**
+
+```rust
+pub async fn ipc_invoke(channel: &str, payload: Value, state: AppState) -> Result<Value> {
+  match channel {
+    IPC::DOCKER_CONTAINERS => docker_ext::list_containers(payload, &state).await,
+    IPC::SSH_GENERATE => ssh_ext::generate_key(payload, &state).await,
+    _ => Err(format!("Unknown channel: {}", channel)),
+  }
+}
+```
+
+→ **One line per handler.** Handler logic lives in module, not here.
+
+**Red flags (DON'T DO THIS):**
+
+- ❌ Handler > 50 lines in lib.rs → extract to domain module
+- ❌ Module A calls Module B calls Module A → move shared code to utils.rs
+- ❌ Utility function at bottom of lib.rs → goes in utils.rs
+- ❌ Duplicate similar logic in two handlers → factor into utils or domain helper
+
+**Testing:**
+
+- Unit tests: module `#[cfg(test)]` block; run `cargo test --lib <module_name>`
+- Integration tests: `tests/` dir (IPC E2E)
+- Never test lib.rs dispatcher directly; test module functions
+
+**lib.rs Size Limits:**
+
+- < 300 lines: OK for thin dispatcher + AppState
+- 300–500 lines: Extract AppState helpers to `app_state.rs`
+- ≥ 500 lines: Audit for missed module boundaries
+
+### Proposed 6-Module Refactoring (Phase 16 follow-up)
+
+Current monolith → Extract into:
+
+- `utils.rs` — generic file/system/process utilities (no state)
+- `docker_ext.rs` — Docker + Compose orchestration
+- `terminal_pty.rs` — embedded terminal + PTY logic
+- `ssh_ext.rs` — SSH helpers + key generation
+- `git_parser.rs` — Git porcelain parsers (stateless)
+- `runtime_installer.rs` — OS package manager + privilege escalation
+
+**Refactoring order:** Extract in dependency order (utils → git_parser → docker_ext → terminal_pty → ssh_ext → runtime_installer). Per-step: `cargo check` + `cargo test --lib` + smoke-ci gate.
+
+**Verification after refactor:**
+
+- `cargo check` — compiles cleanly
+- `cargo test --lib` — all tests pass
+- `pnpm smoke` — full CI gate passes
+- All IPC contracts unchanged (no Zod schema changes)
+
+---
+
 ## Phase 0 — Foundations ✅ SHIPPED
 
 - [x] Widget registry + `dashboard-layout.json` persisted in app data dir
