@@ -278,42 +278,43 @@ Missing: real dep graph (`removableDeps` always empty), Ruby slow on Fedora.
 
 ---
 
-## Phase 7 — Maintenance 🔄 PARTIAL (`/maintenance` → `partial`)
+## Phase 7 — Maintenance 🔄 IN PROGRESS
 
-- [x] `maintenanceGuardian.ts` — 5 layers (Compute/Memory/Disk/Fleet/Security)
-- [x] `evaluateGuardian()` shared with `GuardianSummaryWidget` (dashboard parity)
-- [x] Health overview + layer tiles + active jobs footer
-- [x] Diagnostics bundle export
-- [x] Docker cleanup + compose health
-- [x] Integrity: in-app host probes via whitelisted `hostExec`
-- [x] **User-defined task checklist** — persisted `maintenance_state.tasks`; **Overview** shows open items + jump to Schedule; **Schedule** tab supports inline title rename (click title).
-- [x] **Git config backup/restore** — **Git Config → Backups**: JSON export (clipboard) + import restores keys via existing preset/set-key flow.
+**Goal:** Must process actual, real-time data for the entire program (no mocks).
+
+- [ ] **Backend Probes:** Must execute real-time `sysinfo` or `/proc` queries to gather exact memory, CPU, and disk usage (no hardcoded `memPct`/`diskPct`).
+- [ ] **Fleet Scanning:** Must actively query the Docker daemon and local process list to show genuine container/process health rather than static mocks.
+- [ ] **Diagnostics Bundle:** Must package real logs and system metrics from the host machine into the export.
+- [ ] **Data Authenticity:** Complete removal of all mock data and static fallback values in the maintenance layer.
 
 ---
 
-## Phase 8 — Settings ✅ DONE
+## Phase 8 — Settings 📋 PLANNED
 
-**Delivered on `/settings` (see [`docs/ROUTE_STATUS.md`](./ROUTE_STATUS.md)):**
+**Goal:** Must implement a fully functional settings architecture with the exact specified tabs. All settings must persist correctly to the file system and immediately affect the app state.
 
-- [x] **Personalization** — accent presets + custom picker; persisted `appearance` store; applied app-wide (CSS variables; sync after wizard).
-- [x] **SSH bookmarks (read-only)** — same store as `/ssh`; summary table + link to manage/connect on SSH page.
-- [x] **Hosts (read-only)** — whitelisted `settings_read_hosts` via `dh:host:exec` (`cat /etc/hosts`, bounded output); UI parses lines into address / host names + filter.
-- [x] **Environment (read-only)** — whitelisted `settings_process_env` (fixed `std::env` key allowlist, no shell); table + search; PATH split into segments; long values collapsible.
-
-**Still planned:**
-
-- [x] **Hosts editor** — textarea edit of `/etc/hosts`, saved via `sudo cp` from temp file. Live in Settings → System.
-- [x] **Profile-scoped env** — read/add/remove `export KEY=VALUE` lines from `~/.profile` with diff preview before apply. Live in Settings → System.
-- [ ] **Broader theme rollout** — Phase 15 scope.
+- [ ] **General:** UI for default startup behavior, window sizes, and telemetry toggles bound to a `settings.json` config store.
+- [ ] **Resources:** Sliders and inputs for defining strict CPU limits and RAM allocations that the engine respects during job execution.
+- [ ] **App Engine:** Advanced settings for configuring IPC timeouts, thread pool sizes, and daemon behaviors.
+- [ ] **Builder:** Paths to local toolchains (Cargo, Node, Python) and default registry mirrors.
+- [ ] **Extension:** A grid UI to enable/disable extensions, with real-time plugin loading/unloading capabilities.
+- [ ] **Update:** Toggles for checking for updates on startup, switching release channels (Stable/Alpha).
+- [ ] **Beta Features:** A dedicated panel for toggling experimental flags stored in `beta_features_state`.
+- [ ] **Notification:** Global muting, severity filters, and OS-native notification toggles.
+- [ ] **Shortcuts:** A full keybinding interceptor UI allowing custom shortcut mapping for all major app actions.
+- [ ] **Help & About:** Real dynamic version injection from `package.json`/Tauri config.
+- [ ] **Date and Time:** Dropdowns for 12h/24h formats and timezone overrides affecting all logs.
+- [ ] **Languages:** Real i18n integration supporting real-time language switching.
 
 ---
 
-## Phase 9 — Profiles ✅ DONE
+## Phase 9 — Profiles 📋 PLANNED
 
-- [x] **CRUD**: add / delete / duplicate / export / import
-- [x] **setActive**: writes `active_profile` as the entry’s `baseTemplate` (`ComposeProfile`); clear via store delete.
-- [x] **On-login automation** — optional post-start hooks: `composeUp` for `active_profile`, refresh dashboard layout via `layoutGet` / `layoutSet`; toggles + store key `on_login_automation`; runner in `AppShell` (after wizard).
-- [x] **Preset alignment**: dashboard preset grid reads the same `active_profile` key as wizard / Profiles.
+**Goal:** Implement a real profile management page with real accounts and the ability to seamlessly switch between profiles. Complete removal of static placeholder profiles.
+
+- [ ] **Data Structure:** Move away from static frontend templates. Profiles must be defined as robust JSON structures containing user credentials, SSH keys, active Compose configurations, and customized environment variables.
+- [ ] **Authentication:** Implementation of local user accounts with secure credential storage.
+- [ ] **Switching Engine:** A context-switching engine that can safely tear down one profile's state (containers, env vars) and spin up another's instantly from the UI.
 
 ---
 
@@ -325,14 +326,13 @@ Missing: real dep graph (`removableDeps` always empty), Ruby slow on Fedora.
 
 ---
 
-## Phase 11 — First-run Wizard ✅ DONE
+## Phase 11 — First-run Wizard 📋 PLANNED
 
-- [x] **7 steps**: Welcome → Environment → Docker check → Git setup → SSH keygen → **Pick starter profile** → All set
-- [x] **Auto-shows** on first launch, skip on each step, "show again" checkbox
-- [x] **Profile-pick step**: nine compose presets; writes `active_profile` when confirmed
-- [x] **Re-entry**: sidebar **Setup Wizard** resets `wizard_state` + reload
-- [x] **Resume logic**: `wizard_state.stepIndex` (0–6) persisted while incomplete; restored on next launch
-- [x] **Rich resume**: `wizard_state` persists Git name/email draft, Flatpak `gitTarget`, `sshPubKey` / `sshKeyGenerated` (refetch via `sshGetPub` when needed), and `pickedStarterProfile`; `WizardFlow` hydrates and re-saves on step or field change.
+**Goal:** Must execute strictly after Phase 16 (System Readiness/Installer) is 100% satisfied. Must be fully functional and avoid any duplicated setup steps.
+
+- [ ] **Flow Control:** Logic to check if Readiness is complete. If yes, proceed to First-run Wizard. 
+- [ ] **Content Scope:** Strictly limited to application-specific onboarding (choosing an initial theme, setting up a Git identity).
+- [ ] **Zero Duplication:** Must not ask for or duplicate any setup steps already handled by the Readiness installer.
 
 ---
 
@@ -358,21 +358,14 @@ This phase turns the app into a true daily driver for software engineers managin
 
 ---
 
-## Phase 15 — Theme Surface Rollout ✅ SHIPPED
+## Phase 15 — Theme Surface Rollout 🔄 IN PROGRESS
 
-Generalized the "Maintenance Page" aesthetic (ambient gradients, hero typography, hover-lift tiles) across the entire app with class-driven theming.
+**Goal:** An actual, comprehensive theme rollout is still required.
 
-- **Principles**: Scope by page root classes, reuse CSS variables/tokens, and enhance hierarchy/spacing/motion.
-- **Completed Rollout**:
-  1. ✅ **Monitor** — metrics + pills + health story.
-  2. ✅ **Docker** — toolbar + card elevation + container tables.
-  3. ✅ **Git Config** — hero + section rails to reduce noise.
-  4. ✅ **Runtimes** — tiles + status panels + wizard steps.
-  5. ✅ **Dashboard** — widget-wide consistency.
-  6. ✅ **AppShell** — subtle chrome / nav alignment.
-  7. ✅ **Additional pages** — SSH, Settings, SystemReadiness, CloudGit, GitVcs, Maintenance, MaintenancePage.
-- ✅ **Checklist complete**: root class per page, Codicon verification, focus-ring preservation.
-- ✅ **Deliverables**: PR #91 (theme utilities + 11 pages), PR #92 (AppShell styling).
+- [ ] **Theme Picker:** A dedicated UI component in the settings to select themes.
+- [ ] **Token System:** Define comprehensive CSS variables for semantic colors (e.g., `--bg-primary`, `--text-secondary`, `--accent`) for Light, Dark, and High Contrast themes.
+- [ ] **Dynamic Swapping:** Ensure changing the theme instantly updates the UI without requiring an app reload.
+- [ ] **Full Coverage:** Everything in the UI must respond correctly to the selected theme (no hardcoded colors escaping the theme tokens).
 
 ---
 
@@ -390,31 +383,13 @@ Flatpak runs with **full host permissions** — no sandbox isolation. Docker soc
 
 ---
 
-## 🏗️ Phase 16 — System Readiness & Pre-Requisites Wizard 📋 PLANNED
+## 🏗️ Phase 16 — System Readiness & Pre-Requisites Wizard (Installer) 📋 PLANNED
 
-**Goal: Ensure the host environment is 100% ready with a premium, automated "Pre-flight" experience.**
+**Goal:** This phase must be executed *during* the installation of the project, acting as an installer itself.
 
-- [ ] **Modern Setup UI (The "Installer" Look):**
-
-  - [ ] **Sidebar Navigation**: Left sidebar showing wizard steps (Welcome, Readiness, Auth, Finish).
-  - [ ] **Hardware Snapshot**: Detailed display of CPU model/cores, RAM (Total/Free), and Disk.
-  - [ ] **Micro-animations**: Smooth status transitions when a requirement changes from `✘` to `✓`.
-
-- [ ] **Deep Readiness Probes:**
-
-  - [ ] **Hardware**: Detect total/free RAM and **Available Disk Space** (Min 10GB recommended).
-  - [ ] **Architecture**: Verify system is `x86_64` (Required for several pre-built runtimes).
-  - [ ] **Virtualization**: Detect BIOS VT-x / AMD-V / KVM status (Critical for containers).
-  - [ ] **Docker Audit**: Check for Daemon status, Version, and `docker` group membership.
-  - [ ] **Network Health**: Ping latency check for GitHub, Docker Hub, and GitLab.
-  - [ ] **System Tools**: Verify presence of `curl`, `tar`, and `unzip` in PATH.
-  - [ ] **Flatpak Sanity**: Verify sandbox overrides (if applicable) for host-bridge access.
-
-- [ ] **Actionable Resolution (The "Magic Fix"):**
-
-  - [ ] **"Fix It" button**: Integrated logic to attempt automated repairs (e.g., starting service, adding user to group).
-  - [ ] **"How?" Links**: Context-aware documentation for manual resolution steps.
-  - [ ] **Next-button Safety**: Enforce critical requirements while allowing "Skip" with warning for non-essentials.
+- [ ] **Pre-flight Stage:** Must run *before* the main app shell loads.
+- [ ] **Probe Matrix:** Execute native probes for missing dependencies (e.g., checking `which docker`, `which git`, virtualization support).
+- [ ] **Auto-Installer Engine:** When "Install" is clicked, run native OS commands (e.g., `apt-get`, `dnf`, `flatpak install`) with proper privilege escalation (sudo/polkit) to automatically resolve missing requirements and display a live progress bar.
 
 ---
 
@@ -434,25 +409,38 @@ Flatpak runs with **full host permissions** — no sandbox isolation. Docker soc
 
 ---
 
+## 🚨 UI/UX & Performance Debt 📋 PLANNED
+
+- [ ] **Runtimes Page Optimization:** Profile the Tauri invoke calls causing the >1 minute load time. Implement lazy loading, caching of local package lists, or asynchronous background fetching.
+- [ ] **Dashboard - Main:** Wire up dynamic widget injection based on the user's active Profile layout configuration so it actually makes sense.
+- [ ] **Dashboard - Widgets:** Remove all mocked JSON files. Tie widgets directly to live system event emitters.
+- [ ] **Dashboard - Kernels:** Build a configuration grid that allows starting, stopping, and linking local development kernels (e.g., Jupyter, PHP-FPM).
+- [ ] **Dashboard - Logs:** Implement a unified log viewer using `xterm.js` that multiplexes stdout/stderr streams from all active background jobs and containers into a single searchable buffer.
+- [ ] **Global Navigation (Chrome) Fixes:** Define the specific Tauri commands (e.g., `open_terminal`, `show_notifications_panel`) that must be bound to the Top Bar buttons (Search, Notification, Terminal, Settings) and Left Sidebar buttons (Docs, Setup Wizard, Local User).
+- [ ] **Bottom Bar:** Completely rip out the "Phase 0 task runner" and replace it with a clean, minimized status bar or remove it entirely if a replacement is unnecessary.
+
+---
+
 ## Execution Order
 
-```
+```text
 ✅  Phase 0  — Foundations
 ✅  Phase 2  — Docker
 ✅  Phase 3  — SSH
 ✅  Phase 4  — Git Environment Manager
 ✅  Phase 5  — Monitor
 ✅  Phase 6  — Runtimes (17 languages)
-✅  Phase 7  — Maintenance / Guardian
+✅  Phase 1  — Dashboard
 ✅  SPRINT   — Flatpak + Tests + Audit + Cross-distro + v0.2.0-alpha (shipped)
-✅  Phase 1  — Dashboard (all 9 presets have full compose stacks)
-✅  Phase 9  — Profiles (incl. on-login automation)
-✅  Phase 11 — Wizard (step + rich field resume in `wizard_state`)
-✅  Phase 8  — Settings (hosts editor + profile env + all hub features shipped)
 ✅  Phase 13 — Advanced CI & Environment Hardening
-✅  Phase 12 — Cloud Git (fully shipped; /git unified page)
-✅  Phase 16 — System Readiness Wizard (fully shipped; pre-flight UI shipped)
-✅  Phase 15 — Theme Rollout (System-wide elevated aesthetic shipped; PR #91 + #92)
+✅  Phase 12 — Cloud Git
+🔄  Phase 7  — Maintenance / Guardian
+🔄  Phase 15 — Theme Rollout
+📋  Phase 8  — Settings
+📋  Phase 9  — Profiles
+📋  Phase 11 — First-run Wizard
+📋  Phase 16 — System Readiness & Pre-Requisites Wizard (Installer)
+📋  UI/UX & Performance Debt
 📋  Phase 10 — Extensions (Plugin model v0, Dev API)
-🔄  Phase 14 — Flatpak Release Gate (host permissions granted; AppStream + smoke remaining)
+🔄  Phase 14 — Flatpak Release Gate
 ```
