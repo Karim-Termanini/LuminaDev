@@ -96,21 +96,22 @@ export function DashboardMainPage(): ReactElement {
     if (!selectedProfileName) return
     setConfirmModalOpen(false)
     setIsSwitching(true)
+    setToast({ type: 'success', message: `Switching to ${selectedProfileName}…` })
     window.dh.profileSwitch({ from: activeProfile ?? undefined, to: selectedProfileName }).then((r) => {
+      setIsSwitching(false)
       if (r.ok) {
         setActiveProfile(selectedProfileName)
         setToast({ type: 'success', message: `Switched to ${selectedProfileName}` })
-        setTimeout(() => setToast(null), 2000)
-        setTimeout(() => void refresh(), 100)
+        void refresh()
+        setTimeout(() => setToast(null), 2500)
       } else {
         const errMsg = r.error ?? r.log ?? 'Unknown error'
         setToast({ type: 'error', message: humanizeProfileError(errMsg) })
       }
-      setIsSwitching(false)
     }).catch((e) => {
+      setIsSwitching(false)
       const errMsg = e instanceof Error ? e.message : String(e)
       setToast({ type: 'error', message: errMsg })
-      setIsSwitching(false)
     })
   }
 
