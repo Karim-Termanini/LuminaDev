@@ -1371,7 +1371,6 @@ async fn ipc_send(channel: String, payload: Value, app: AppHandle, state: State<
 // ─── Git VCS helpers ──────────────────────────────────────────────────────────
 
 /// `git status --porcelain=v1` XY pair is an unmerged / conflicted path.
-
 async fn git_ahead_behind(repo_path: &str) -> (Option<i64>, Option<i64>) {
     let ahead = exec_output_limit(
         "git", &["-C", repo_path, "rev-list", "--count", "@{u}..HEAD"],
