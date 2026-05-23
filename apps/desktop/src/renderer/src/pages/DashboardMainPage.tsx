@@ -9,6 +9,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { humanizeDashboardError } from './dashboardError'
 import { humanizeDockerError } from './dockerError'
+import { humanizeProfileError } from './profileError'
 
 
 import './DashboardPage.css'
@@ -59,15 +60,16 @@ export function DashboardMainPage(): ReactElement {
     return () => clearInterval(id)
   }, [refresh])
 
-  async function initProfile(profile: ComposeProfile): Promise<void> {
-    setComposeMsg(`Starting ${profile}…`)
-    const r = await window.dh.composeUp({ profile })
+  async function switchProfile(toProfile: ComposeProfile): Promise<void> {
+    setComposeMsg(`Switching to ${toProfile}…`)
+    const r = await window.dh.profileSwitch({ from: activeProfile ?? undefined, to: toProfile })
     if (r.ok) {
-      setComposeMsg(`Compose up: OK\n${r.log}`)
+      setComposeMsg(`Profile switched: OK\n${r.log}`)
+      void refresh()
     } else {
-      setComposeMsg(`Compose error\n${humanizeDockerError(r.error || r.log)}`)
+      const errMsg = r.error ?? r.log ?? 'Unknown error'
+      setComposeMsg(`Switch error\n${humanizeProfileError(errMsg)}`)
     }
-    void refresh()
   }
 
   const m = snap?.metrics
@@ -143,7 +145,7 @@ export function DashboardMainPage(): ReactElement {
           accent="var(--accent)"
           description="Dockerized web stack with nginx placeholder and hot-reload friendly layout."
           icon="globe"
-          onInit={() => void initProfile('web-dev')}
+          onInit={() => void switchProfile('web-dev')}
           status="live"
           isActive={activeProfile === 'web-dev'}
         />
@@ -153,7 +155,7 @@ export function DashboardMainPage(): ReactElement {
           accent="var(--green)"
           description="Pandas, NumPy, Matplotlib & Jupyter Lab. Standard analytics stack."
           icon="graph"
-          onInit={() => void initProfile('data-science')}
+          onInit={() => void switchProfile('data-science')}
           status="live"
           isActive={activeProfile === 'data-science'}
         />
@@ -163,7 +165,7 @@ export function DashboardMainPage(): ReactElement {
           accent="var(--blue)"
           description="PyTorch + Jupyter environment. Ready for CUDA workloads (requires host drivers)."
           icon="hubot"
-          onInit={() => void initProfile('ai-ml')}
+          onInit={() => void switchProfile('ai-ml')}
           status="live"
           isActive={activeProfile === 'ai-ml'}
         />
@@ -173,7 +175,7 @@ export function DashboardMainPage(): ReactElement {
           accent="var(--green)"
           description="React Native / Flutter environment stub."
           icon="device-mobile"
-          onInit={() => void initProfile('mobile')}
+          onInit={() => void switchProfile('mobile')}
           status="planned"
           isActive={activeProfile === 'mobile'}
         />
@@ -183,7 +185,7 @@ export function DashboardMainPage(): ReactElement {
           accent="var(--yellow)"
           description="Godot/Unity/Unreal minimal engine stub."
           icon="play-circle"
-          onInit={() => void initProfile('game-dev')}
+          onInit={() => void switchProfile('game-dev')}
           status="planned"
           isActive={activeProfile === 'game-dev'}
         />
@@ -193,7 +195,7 @@ export function DashboardMainPage(): ReactElement {
           accent="var(--purple)"
           description="Local minikube/k3d or Terraform runner stub."
           icon="server-environment"
-          onInit={() => void initProfile('infra')}
+          onInit={() => void switchProfile('infra')}
           status="planned"
           isActive={activeProfile === 'infra'}
         />
@@ -203,7 +205,7 @@ export function DashboardMainPage(): ReactElement {
           accent="var(--cyan)"
           description="Native desktop application build environment."
           icon="window"
-          onInit={() => void initProfile('desktop-gui')}
+          onInit={() => void switchProfile('desktop-gui')}
           status="planned"
           isActive={activeProfile === 'desktop-gui'}
         />
@@ -213,7 +215,7 @@ export function DashboardMainPage(): ReactElement {
           accent="var(--red)"
           description="Jekyll/Hugo/Docusaurus writing environment."
           icon="book"
-          onInit={() => void initProfile('docs')}
+          onInit={() => void switchProfile('docs')}
           status="live"
           isActive={activeProfile === 'docs'}
         />
@@ -223,7 +225,7 @@ export function DashboardMainPage(): ReactElement {
           accent="var(--text-muted)"
           description="Clean slate alpine image for general scripting."
           icon="blank"
-          onInit={() => void initProfile('empty')}
+          onInit={() => void switchProfile('empty')}
           status="live"
           isActive={activeProfile === 'empty'}
         />
