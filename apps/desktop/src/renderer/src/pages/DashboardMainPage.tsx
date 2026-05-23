@@ -98,6 +98,7 @@ export function DashboardMainPage(): ReactElement {
     setIsSwitching(true)
     window.dh.profileSwitch({ from: activeProfile ?? undefined, to: selectedProfileName }).then((r) => {
       if (r.ok) {
+        setActiveProfile(selectedProfileName)
         setToast({ type: 'success', message: `Switched to ${selectedProfileName}` })
         void refresh()
         setTimeout(() => setToast(null), 2000)
