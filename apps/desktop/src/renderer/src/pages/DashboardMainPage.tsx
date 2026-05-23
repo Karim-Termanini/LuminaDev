@@ -74,12 +74,23 @@ export function DashboardMainPage(): ReactElement {
     return () => clearInterval(id)
   }, [refresh])
 
-  // Default to active profile or first preset
+  // Load selected profile from localStorage on mount
   useEffect(() => {
-    if (!selectedProfileName) {
+    const saved = localStorage.getItem('dashboard-selected-profile')
+    if (saved && PRESET_PROFILES.some(p => p.name === saved)) {
+      setSelectedProfileName(saved as ComposeProfile)
+    } else {
       setSelectedProfileName(activeProfile || PRESET_PROFILES[0].name)
     }
-  }, [activeProfile, selectedProfileName])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Save selected profile to localStorage
+  useEffect(() => {
+    if (selectedProfileName) {
+      localStorage.setItem('dashboard-selected-profile', selectedProfileName)
+    }
+  }, [selectedProfileName])
 
   function handleConfirmSwitch(): void {
     if (!selectedProfileName) return
