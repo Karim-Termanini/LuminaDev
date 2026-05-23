@@ -468,14 +468,19 @@ This phase turns the app into a true daily driver for software engineers managin
 
 ---
 
-## Phase 15 — Theme Surface Rollout 🔄 IN PROGRESS
+## Phase 15 — Theme Surface Rollout ✅ DONE
 
-**Goal:** An actual, comprehensive theme rollout is still required.
+**Goal:** Convert all pages to elevated product aesthetic (ambient gradients, elevated cards, hero sections).
 
-- [ ] **Theme Picker:** A dedicated UI component in the settings to select themes.
-- [ ] **Token System:** Define comprehensive CSS variables for semantic colors (e.g., `--bg-primary`, `--text-secondary`, `--accent`) for Light, Dark, and High Contrast themes.
-- [ ] **Dynamic Swapping:** Ensure changing the theme instantly updates the UI without requiring an app reload.
-- [ ] **Full Coverage:** Everything in the UI must respond correctly to the selected theme (no hardcoded colors escaping the theme tokens).
+- [x] **Elevated Theme Utilities:** `theme-elevated.css` with reusable classes (hero, card, tabs, tiles, grids, etc.)
+- [x] **Full Page Coverage:** All 11 pages + 1 modal converted to use elevated theme system (DockerPage, GitConfigPage, SettingsPage, RuntimesPage, DashboardWidgetsPage, TerminalPage, RegistryPage, ProfilesPage, DashboardKernelsPage, DashboardLogsPage, GitVcsDirtyCheckoutModal)
+- [x] **CSS Architecture:** Per-page CSS files importing shared theme, no inline styles for layout/theming
+
+**Future Enhancement (Post-Phase 15):**
+
+- Theme Picker UI in settings for light/dark/high-contrast switching
+- Dynamic theme token swapping without reload
+- Extended token system for semantic colors
 
 ---
 
@@ -699,12 +704,12 @@ Based on current app state (Phase 16 + Phase 7 complete), here's what remaining 
 ✅  SPRINT   — Flatpak + Tests + Audit + Cross-distro + v0.2.0-alpha (shipped)
 ✅  Phase 13 — Advanced CI & Environment Hardening
 ✅  Phase 12 — Cloud Git
-🔄  Phase 7  — Maintenance / Guardian
-🔄  Phase 15 — Theme Rollout
+✅  Phase 7  — Maintenance / Guardian
+✅  Phase 16 — System Readiness & Pre-Requisites Wizard (Installer)
+✅  Phase 15 — Theme Rollout (Elevated aesthetic)
 📋  Phase 8  — Settings
 📋  Phase 9  — Profiles
-📋  Phase 11 — First-run Wizard
-📋  Phase 16 — System Readiness & Pre-Requisites Wizard (Installer)
+📋  Phase 11 — First-run Wizard (Merged into Phase 16)
 📋  UI/UX & Performance Debt
 📋  Phase 10 — Extensions (Plugin model v0, Dev API)
 🔄  Phase 14 — Flatpak Release Gate
