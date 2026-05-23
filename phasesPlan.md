@@ -399,7 +399,7 @@ Missing: real dep graph (`removableDeps` always empty), Ruby slow on Fedora.
 
 ---
 
-## Phase 8 — Settings 📋 PLANNED
+## Phase 8 — Settings 🔄 MVP COMPLETE
 
 **Goal:** Must implement a fully functional settings architecture with the exact specified tabs. All settings must persist correctly to the file system and immediately affect the app state.
 

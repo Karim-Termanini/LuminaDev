@@ -96,10 +96,27 @@ export const ComposeProfileSchema = z.enum([
   'empty',
 ])
 
+/** Per-profile environment variable. */
+export const ProfileEnvVarSchema = z.object({
+  key: z.string().trim().min(1).max(256),
+  value: z.string().max(8192),
+})
+
+/** Stored credential reference (encrypted storage). */
+export const ProfileCredentialSchema = z.object({
+  id: z.string().trim().min(1).max(128),
+  type: z.enum(['api-token', 'password']),
+  label: z.string().trim().min(1).max(256),
+  createdAt: z.string().datetime(),
+})
+
 /** Preserved compose template id for a user-named dashboard profile. */
 export const CustomProfileEntrySchema = z.object({
   name: z.string().trim().min(1).max(128),
   baseTemplate: ComposeProfileSchema,
+  envVars: z.array(ProfileEnvVarSchema).max(100).optional(),
+  sshKeyId: z.string().trim().min(1).max(128).optional(),
+  credentialIds: z.array(z.string().trim().min(1).max(128)).max(50).optional(),
 })
 
 export const CustomProfilesStoreSchema = z.array(CustomProfileEntrySchema).max(50)
@@ -226,6 +243,7 @@ export const StoreKeySchema = z.enum([
   'readiness_wizard_complete',
   'general_settings',
   'update_settings',
+  'profile_credentials',
 ])
 
 export const StoreGetRequestSchema = z.object({
@@ -277,6 +295,10 @@ export const StoreSetRequestSchema = z.discriminatedUnion('key', [
   z.object({
     key: z.literal('update_settings'),
     data: UpdateSettingsSchema,
+  }),
+  z.object({
+    key: z.literal('profile_credentials'),
+    data: z.array(ProfileCredentialSchema).max(200),
   }),
 ])
 export const ComposeUpRequestSchema = z.object({

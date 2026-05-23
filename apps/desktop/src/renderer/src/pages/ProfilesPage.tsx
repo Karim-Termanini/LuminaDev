@@ -10,6 +10,8 @@ import {
 import './ProfilesPage.css'
 import type { ReactElement } from 'react'
 import { useEffect, useMemo, useState } from 'react'
+import { assertProfileSwitchOk } from './profileContract'
+import { humanizeProfileError } from './profileError'
 
 export function ProfilesPage(): ReactElement {
   const [profiles, setProfiles] = useState<CustomProfileEntry[]>([])
@@ -19,6 +21,8 @@ export function ProfilesPage(): ReactElement {
   const [onLogin, setOnLogin] = useState<OnLoginAutomationStore>(() =>
     OnLoginAutomationStoreSchema.parse({}),
   )
+  const [switchingProfileIdx, setSwitchingProfileIdx] = useState<number | null>(null)
+  const [expandedProfileIdx, setExpandedProfileIdx] = useState<number | null>(null)
 
   async function load(): Promise<void> {
     try {
@@ -55,13 +59,27 @@ export function ProfilesPage(): ReactElement {
     }
   }
 
-  async function setActive(p: CustomProfileEntry): Promise<void> {
+  async function switchProfiles(idx: number): Promise<void> {
+    const next = profiles[idx]
+    if (!next) return
+    setSwitchingProfileIdx(idx)
     try {
-      await window.dh.storeSet({ key: 'active_profile', data: p.baseTemplate })
-      setActiveProfile(p.baseTemplate)
-      setStatus(`Active profile set to "${p.name}" (${p.baseTemplate}).`)
+      const envVars = next.envVars || []
+      const result = (await window.dh.profileSwitch({
+        from: activeProfile || undefined,
+        to: next.baseTemplate,
+        envVars: envVars.map(ev => ({ key: ev.key, value: ev.value })),
+      })) as { ok: boolean; error?: string; log?: string }
+      assertProfileSwitchOk(result)
+      await window.dh.storeSet({ key: 'active_profile', data: next.baseTemplate })
+      setActiveProfile(next.baseTemplate)
+      setStatus(`Switched to profile "${next.name}". Logs: ${(result.log || '').substring(0, 100)}...`)
     } catch (e) {
-      setStatus(e instanceof Error ? e.message : String(e))
+      const msg = e instanceof Error ? e.message : String(e)
+      const humanized = msg.split(']')[0].substring(1) || msg
+      setStatus(humanizeProfileError(humanized))
+    } finally {
+      setSwitchingProfileIdx(null)
     }
   }
 
@@ -209,9 +227,11 @@ export function ProfilesPage(): ReactElement {
             highlights the active compose preset only.
           </div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(280px,1fr))', gap: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(320px,1fr))', gap: 10 }}>
             {profiles.map((p, i) => {
               const isActive = activeProfile === p.baseTemplate
+              const isExpanded = expandedProfileIdx === i
+              const envVars = p.envVars || []
               return (
                 <article
                   key={`${p.name}-${i}`}
@@ -233,12 +253,48 @@ export function ProfilesPage(): ReactElement {
                   <div className="mono" style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 3 }}>
                     base: {p.baseTemplate}
                   </div>
+
+                  {isExpanded && (
+                    <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>Environment Variables</div>
+                      {envVars.length === 0 ? (
+                        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>None configured.</div>
+                      ) : (
+                        <div style={{ marginBottom: 8 }}>
+                          {envVars.map((ev, vi) => (
+                            <div key={vi} style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>
+                              <span className="mono">{ev.key}</span> = <span className="mono">{ev.value.substring(0, 40)}{ev.value.length > 40 ? '...' : ''}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {p.credentialIds && p.credentialIds.length > 0 && (
+                        <div style={{ marginBottom: 8 }}>
+                          <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Credentials</div>
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{p.credentialIds.length} credential(s)</div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
                     {!isActive && (
-                      <button type="button" style={{ ...btnSmall, color: 'var(--accent)', borderColor: 'var(--accent)' }} onClick={() => void setActive(p)}>
-                        Set Active
+                      <button
+                        type="button"
+                        style={{ ...btnSmall, color: 'var(--accent)', borderColor: 'var(--accent)' }}
+                        onClick={() => void switchProfiles(i)}
+                        disabled={switchingProfileIdx === i}
+                      >
+                        {switchingProfileIdx === i ? 'Switching...' : 'Switch To'}
                       </button>
                     )}
+                    <button
+                      type="button"
+                      style={btnSmall}
+                      onClick={() => setExpandedProfileIdx(isExpanded ? null : i)}
+                    >
+                      {isExpanded ? 'Collapse' : 'Details'}
+                    </button>
                     <button type="button" style={btnSmall} onClick={() => void duplicateAt(i)}>Duplicate</button>
                     <button type="button" style={btnSmallDanger} onClick={() => void removeAt(i)}>Delete</button>
                   </div>
