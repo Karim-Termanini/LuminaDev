@@ -2235,6 +2235,20 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
          }
       }
     }
+    "dh:fs:exists" => {
+      let path_str = body.get("path").and_then(|v| v.as_str()).unwrap_or_default();
+      if path_str.is_empty() {
+         json!({ "ok": false, "exists": false })
+      } else {
+         let expanded = if path_str.starts_with("~/") {
+            let home = std::env::var("HOME").unwrap_or_else(|_| "/root".to_string());
+            path_str.replacen("~/", &format!("{}/", home), 1)
+         } else {
+            path_str.to_string()
+         };
+         json!({ "ok": true, "exists": std::path::Path::new(&expanded).exists() })
+      }
+    }
     "dh:project:scaffold" => {
       let path_str = body.get("path").and_then(|v| v.as_str()).unwrap_or_default();
       let template = body.get("template").and_then(|v| v.as_str()).unwrap_or_default();

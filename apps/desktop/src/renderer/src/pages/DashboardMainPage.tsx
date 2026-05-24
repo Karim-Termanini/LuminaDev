@@ -152,8 +152,20 @@ export function DashboardMainPage(): ReactElement {
     }
   
     if (selectedProfileName) {
-      window.dh.storeGet({ key: `project_dir_${selectedProfileName}` } as any).then((p: any) => {
-        if (p.ok && p.data && typeof p.data === 'string') setProjectPath(p.data)
+      window.dh.storeGet({ key: `project_dir_${selectedProfileName}` } as any).then(async (p: any) => {
+        if (p.ok && p.data && typeof p.data === 'string') {
+          try {
+            const res = await invoke('ipc_invoke', { channel: 'dh:fs:exists', payload: { path: p.data } }) as any;
+            if (res.ok && res.exists) {
+              setProjectPath(p.data);
+            } else {
+              setProjectPath(null);
+              await window.dh.storeSet({ key: `project_dir_${selectedProfileName}`, data: null } as any);
+            }
+          } catch (e) {
+            setProjectPath(p.data);
+          }
+        }
         else setProjectPath(null)
       }).catch(() => {})
     }
