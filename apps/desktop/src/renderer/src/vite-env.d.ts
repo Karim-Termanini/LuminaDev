@@ -45,6 +45,10 @@ declare global {
       hostExec: (payload: unknown) => Promise<{ ok: boolean; result: unknown; error?: string }>
       composeUp: (payload: { profile: ComposeProfile }) => Promise<{ ok: boolean; log: string; error?: string }>
       composeLogs: (payload: { profile: ComposeProfile }) => Promise<{ ok: boolean; log: string; error?: string }>
+      profileSwitch: (payload: { from?: ComposeProfile; to: ComposeProfile; envVars?: Array<{ key: string; value: string }> }) => Promise<{ ok: boolean; log?: string; error?: string }>
+      profileCredentialsStore: (payload: { id: string; value: string }) => Promise<{ ok: boolean; error?: string }>
+      profileCredentialsList: () => Promise<{ ok: boolean; ids?: string[]; error?: string }>
+      profileCredentialsDelete: (payload: { id: string }) => Promise<{ ok: boolean; error?: string }>
       terminalCreate: (payload: { cols: number; rows: number; cmd?: string; args?: string[]; env?: Record<string, string> }) => Promise<{ ok: boolean; id?: string; error?: string }>
       terminalWrite: (id: string, data: string) => void
       terminalResize: (id: string, cols: number, rows: number) => void

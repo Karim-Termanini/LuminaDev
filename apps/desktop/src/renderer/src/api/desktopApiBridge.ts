@@ -36,9 +36,13 @@ function createTauriDhApi(): DhApi {
     dockerCleanupRun: (payload) => tauriInvoke(IPC.dockerCleanupRun, payload),
     metrics: () => tauriInvoke(IPC.metrics),
     hostExec: (payload) => tauriInvoke(IPC.hostExec, payload),
-    composeUp: (payload) => tauriInvoke(IPC.composeUp, payload),
-    composeLogs: (payload) => tauriInvoke(IPC.composeLogs, payload),
-    terminalCreate: (payload) => tauriInvoke(IPC.terminalCreate, payload),
+    composeUp: (payload: { profile: import('@linux-dev-home/shared').ComposeProfile }) => tauriInvoke(IPC.composeUp, payload),
+    composeLogs: (payload: { profile: import('@linux-dev-home/shared').ComposeProfile }) => tauriInvoke(IPC.composeLogs, payload),
+    profileSwitch: (payload: { from?: import('@linux-dev-home/shared').ComposeProfile; to: import('@linux-dev-home/shared').ComposeProfile; envVars?: Array<{ key: string; value: string }> }) => tauriInvoke(IPC.profileSwitch, payload),
+    profileCredentialsStore: (payload: { id: string; value: string }) => tauriInvoke(IPC.profileCredentialsStore, payload),
+    profileCredentialsList: () => tauriInvoke(IPC.profileCredentialsList),
+    profileCredentialsDelete: (payload: { id: string }) => tauriInvoke(IPC.profileCredentialsDelete, payload),
+    terminalCreate: (payload: { cols: number; rows: number; cmd?: string; args?: string[]; env?: Record<string, string> }) => tauriInvoke(IPC.terminalCreate, payload),
     terminalWrite: (id, data) => {
       void invoke('ipc_send', { channel: IPC.terminalWrite, payload: { id, data } })
     },

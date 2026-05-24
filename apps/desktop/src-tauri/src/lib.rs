@@ -80,6 +80,7 @@ mod runtime_jobs;
 use runtime_jobs::runtime_job_execute;
 mod compose_profiles;
 mod cloud_auth;
+mod profile_credentials;
 mod cloud_git_ipc;
 mod git_vcs_ipc;
 mod git_vcs_repo_state;
@@ -1820,6 +1821,89 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
           Ok((stdout, stderr)) => json!({ "ok": true, "log": format!("{}{}", stdout, stderr) }),
           Err(e) => json!({ "ok": false, "log": "", "error": format!("[DOCKER_COMPOSE_FAILED] {}", e.trim()) }),
         }
+      }
+    },
+    "dh:compose:down" => {
+      let profile = body.get("profile").and_then(|v| v.as_str()).unwrap_or("web-dev");
+      let dir = compose_profiles::compose_profile_workdir(&app, profile);
+      if !dir.is_dir() {
+        json!({ "ok": false, "log": "", "error": format!("[DOCKER_COMPOSE_FAILED] missing compose directory: {} (set LUMINA_DEV_COMPOSE_ROOT or run from a checkout with docker/compose)", dir.display()) })
+      } else {
+        match exec_docker_compose_in_dir(&dir, &["down"], CMD_TIMEOUT_LONG).await {
+          Ok((stdout, stderr)) => json!({ "ok": true, "log": format!("{}{}", stdout, stderr) }),
+          Err(e) => json!({ "ok": false, "log": "", "error": format!("[DOCKER_COMPOSE_FAILED] {}", e.trim()) }),
+        }
+      }
+    },
+    "dh:profile:switch" => {
+      let from_profile = body.get("from").and_then(|v| v.as_str());
+      let to_profile = body.get("to").and_then(|v| v.as_str()).unwrap_or_default();
+      let _env_vars = body.get("envVars").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+
+      if to_profile.is_empty() {
+        return Ok(json!({ "ok": false, "log": "", "error": "[PROFILE_SWITCH_INVALID] 'to' profile required" }));
+      }
+
+      let mut logs = String::new();
+
+      if let Some(from) = from_profile {
+        let from_dir = compose_profiles::compose_profile_workdir(&app, from);
+        if from_dir.is_dir() {
+          match exec_docker_compose_in_dir(&from_dir, &["down"], CMD_TIMEOUT_LONG).await {
+            Ok((stdout, stderr)) => logs.push_str(&format!("Stopped old profile:\n{}{}\n", stdout, stderr)),
+            Err(e) => logs.push_str(&format!("Warning: failed to stop old profile: {}\n", e.trim())),
+          }
+        }
+      }
+
+      let to_dir = compose_profiles::compose_profile_workdir(&app, to_profile);
+      if !to_dir.is_dir() {
+        return Ok(json!({
+          "ok": false,
+          "log": logs,
+          "error": format!("[PROFILE_SWITCH_FAILED] missing compose directory: {} (set LUMINA_DEV_COMPOSE_ROOT or run from a checkout with docker/compose)", to_dir.display())
+        }));
+      }
+
+      match exec_docker_compose_in_dir(&to_dir, &["up", "-d"], CMD_TIMEOUT_LONG).await {
+        Ok((stdout, stderr)) => {
+          logs.push_str(&format!("Started new profile:\n{}{}\n", stdout, stderr));
+          json!({ "ok": true, "log": logs })
+        },
+        Err(e) => {
+          logs.push_str(&format!("Failed to start new profile: {}\n", e.trim()));
+          json!({ "ok": false, "log": logs, "error": format!("[PROFILE_SWITCH_FAILED] {}", e.trim()) })
+        },
+      }
+    },
+    "dh:profile:credentials:store" => {
+      let id = body.get("id").and_then(|v| v.as_str()).unwrap_or_default();
+      let value = body.get("value").and_then(|v| v.as_str()).unwrap_or_default();
+      if id.is_empty() || value.is_empty() {
+        return Ok(json!({ "ok": false, "error": "[PROFILE_CRED_INVALID] 'id' and 'value' required" }));
+      }
+      let store = profile_credentials::app_profile_credential_store(&app);
+      match store.save(id, value) {
+        Ok(_) => json!({ "ok": true }),
+        Err(e) => json!({ "ok": false, "error": e }),
+      }
+    },
+    "dh:profile:credentials:list" => {
+      let store = profile_credentials::app_profile_credential_store(&app);
+      match store.list_ids() {
+        Ok(ids) => json!({ "ok": true, "ids": ids }),
+        Err(e) => json!({ "ok": false, "error": e }),
+      }
+    },
+    "dh:profile:credentials:delete" => {
+      let id = body.get("id").and_then(|v| v.as_str()).unwrap_or_default();
+      if id.is_empty() {
+        return Ok(json!({ "ok": false, "error": "[PROFILE_CRED_INVALID] 'id' required" }));
+      }
+      let store = profile_credentials::app_profile_credential_store(&app);
+      match store.delete(id) {
+        Ok(_) => json!({ "ok": true }),
+        Err(e) => json!({ "ok": false, "error": e }),
       }
     },
     "dh:terminal:openExternal" => {
