@@ -7,5 +7,5 @@ services:
     ports:
       - "18000:8000"
     volumes:
-      - ./:/docs
+      - ${PROJECT_DIR:-~/LuminaProjects/docs/default}:/docs
     restart: unless-stopped

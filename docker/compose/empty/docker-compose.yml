@@ -1,8 +1,8 @@
-# Minimal “empty” preset — same pattern as other profiles for consistent `composeUp`.
+# LUMINA_DEV_COMPOSE_FULL=1 overlay — empty/blank workspace
 name: lumina-empty
 
 services:
-  stub:
+  workspace:
     image: alpine:latest
     command: ["sleep", "infinity"]
     restart: unless-stopped

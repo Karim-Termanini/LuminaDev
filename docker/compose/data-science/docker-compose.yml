@@ -1,8 +1,28 @@
-# Minimal preset stack (reliable everywhere). Replace with Jupyter/DataScience stack when ready.
+# LUMINA_DEV_COMPOSE_FULL=1 overlay — data science stack
 name: lumina-data-science
 
 services:
-  stub:
-    image: alpine:latest
-    command: ["sleep", "infinity"]
+  jupyter:
+    image: jupyter/datascience-notebook:latest
+    ports:
+      - "8888:8888"
+    environment:
+      - JUPYTER_TOKEN=luminadev
+    volumes:
+      - ${PROJECT_DIR:-~/LuminaProjects/data-science/default}:/home/jovyan/work
     restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "54320:5432"
+    environment:
+      - POSTGRES_PASSWORD=luminadev
+      - POSTGRES_DB=datasci
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  notebooks:
+  pg_data:

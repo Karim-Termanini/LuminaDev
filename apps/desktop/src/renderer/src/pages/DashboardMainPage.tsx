@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import {
   type ComposeProfile,
   type ContainerRow,
@@ -5,9 +6,10 @@ import {
   parseStoredActiveProfile,
 } from '@linux-dev-home/shared'
 import type { ReactElement } from 'react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { humanizeProfileError } from './profileError'
+import { invoke } from '@tauri-apps/api/core'
+import { open as openDialog } from '@tauri-apps/plugin-dialog'
 
 import './DashboardPage.css'
 
@@ -53,22 +55,6 @@ function generateEventFeed(profileName: string): Array<{ id: string; icon: strin
       title: e.title,
       time: formatTime(e.timeMs),
     }))
-}
-
-function generateServices(profileName: string): Array<{ id: string; name: string; status: 'running' | 'pending' | 'idle'; uptime: string }> {
-  const servicesByProfile: Record<string, string[]> = {
-    'web-dev': ['Nginx', 'API Server', 'Database'],
-    'data-science': ['Jupyter Lab', 'PostgreSQL', 'Redis'],
-    'ai-ml': ['PyTorch Runtime', 'Jupyter', 'GPU Monitor'],
-    'docs': ['Jekyll', 'Search Index'],
-  }
-  const services = servicesByProfile[profileName] || ['Default Service']
-  return services.map((name, i) => ({
-    id: `${profileName}-svc-${i}`,
-    name,
-    status: i === 0 ? 'running' : i === 1 ? 'pending' : 'idle',
-    uptime: ['4h 32m', '2h 15m', '1h 08m'][i % 3] || '0h',
-  }))
 }
 
 function generateProjects(profileName: string): Array<{ id: string; name: string; profile: string; lastModified: string; color: string; icon: string }> {
@@ -140,9 +126,18 @@ export function DashboardMainPage(): ReactElement {
   const [snap, setSnap] = useState<HostMetricsResponse | null>(null)
   const [toast, setToast] = useState<Toast | null>(null)
   const [isSwitching, setIsSwitching] = useState(false)
+  const [switchingJobId, setSwitchingJobId] = useState<string | null>(null)
+  const [activeJob, setActiveJob] = useState<any | null>(null)
   const [activeProfile, setActiveProfile] = useState<ComposeProfile | null>(null)
   const [selectedProfileName, setSelectedProfileName] = useState<ComposeProfile | null>(null)
   const [confirmModalOpen, setConfirmModalOpen] = useState(false)
+  const [createProjectModalOpen, setCreateProjectModalOpen] = useState(false)
+  const [createProjectName, setCreateProjectName] = useState('')
+  const lastSwitchTimeRef = useRef<number>(0)
+  
+  const [installedEditors, setInstalledEditors] = useState<{name: string, cmd: string}[]>([])
+  const [selectedEditorCmd, setSelectedEditorCmd] = useState<string>('')
+  const [projectPath, setProjectPath] = useState<string | null>(null)
 
   const refresh = useCallback(async () => {
     try {
@@ -191,33 +186,134 @@ export function DashboardMainPage(): ReactElement {
     }
   }, [selectedProfileName])
 
+  // Recover running job on mount
+  useEffect(() => {
+    window.dh.jobsList().then((list: any) => {
+      const running = list.find((x: any) => x.kind === 'profile_switch' && (x.state === 'running' || x.state === 'pending'))
+      if (running) {
+        setSwitchingJobId(running.id)
+        setActiveJob(running)
+        setIsSwitching(true)
+      }
+    }).catch(() => {})
+    
+    // Load editors
+    invoke('ipc_invoke', { channel: 'dh:editor:list' }).then((res: any) => {
+      if (res.ok && res.editors) {
+        setInstalledEditors(res.editors)
+        if (res.editors.length > 0) setSelectedEditorCmd(res.editors[0].cmd)
+      }
+    }).catch(() => {})
+  }, [])
+  
+  // Load project path for selected profile
+  useEffect(() => {
+    if (selectedProfileName) {
+      window.dh.storeGet({ key: `project_dir_${selectedProfileName}` } as any).then((res: any) => {
+         setProjectPath(res.data)
+      }).catch(() => {})
+    }
+  }, [selectedProfileName])
+
+  // Poll for job updates
+  useEffect(() => {
+    if (!switchingJobId) return
+    const id = setInterval(async () => {
+      try {
+        const list = await window.dh.jobsList() as any[]
+        const j = list.find(x => x.id === switchingJobId)
+        if (j) {
+           setActiveJob(j)
+           if (j.state === 'completed') {
+             lastSwitchTimeRef.current = Date.now()
+             window.dh.storeSet({ key: 'active_profile', data: j.runtimeId }).then(() => {
+               setActiveProfile(j.runtimeId as ComposeProfile)
+               setSwitchingJobId(null)
+               setIsSwitching(false)
+               setActiveJob(null)
+               setToast({ type: 'success', message: `Successfully switched to ${j.runtimeId}` })
+               void refresh()
+             })
+           } else if (j.state === 'failed' || j.state === 'cancelled') {
+             setSwitchingJobId(null)
+             setIsSwitching(false)
+             setToast({ type: 'error', message: `Initialization failed.` })
+           }
+        }
+      } catch { /* empty */ }
+    }, 1000)
+    return () => clearInterval(id)
+  }, [switchingJobId, refresh])
+
+  const handleCreateProject = () => {
+     if (!selectedProfileName) return
+     setCreateProjectName('')
+     setCreateProjectModalOpen(true)
+  }
+
+  const submitCreateProject = async () => {
+     if (!selectedProfileName || !createProjectName.trim()) return
+     const name = createProjectName.trim()
+     const path = `~/LuminaProjects/${selectedProfileName}/${name}`
+     const res = await invoke('ipc_invoke', { channel: 'dh:project:ensure_dir', payload: { path } }) as any
+     if (res.ok) {
+        setProjectPath(res.path)
+        await window.dh.storeSet({ key: `project_dir_${selectedProfileName}`, data: res.path } as any)
+        setToast({ type: 'success', message: `Created project: ${name}` })
+        setCreateProjectModalOpen(false)
+     } else {
+        setToast({ type: 'error', message: res.error || 'Failed to create project' })
+     }
+  }
+
+  const handleLinkProject = async () => {
+     if (!selectedProfileName) return
+     try {
+       const selected = await openDialog({
+         directory: true,
+         multiple: false,
+         title: 'Select Workspace Folder'
+       })
+       if (selected && typeof selected === 'string') {
+         setProjectPath(selected)
+         await window.dh.storeSet({ key: `project_dir_${selectedProfileName}`, data: selected } as any)
+         setToast({ type: 'success', message: `Linked workspace folder!` })
+       }
+     } catch { /* empty */ }
+  }
+
+  const handleOpenEditor = async () => {
+     if (!projectPath || !selectedEditorCmd) return
+     const res = await invoke('ipc_invoke', { channel: 'dh:editor:open', payload: { path: projectPath, cmd: selectedEditorCmd } }) as any
+     if (!res.ok) {
+        setToast({ type: 'error', message: res.error || 'Failed to open IDE' })
+     }
+  }
+
   function handleConfirmSwitch(): void {
     if (!selectedProfileName) return
     setConfirmModalOpen(false)
     setIsSwitching(true)
-    setToast({ type: 'success', message: `Switching to ${selectedProfileName}…` })
-    window.dh.profileSwitch({ from: activeProfile ?? undefined, to: selectedProfileName }).then((r) => {
-      setIsSwitching(false)
-      if (r.ok) {
-        window.dh.storeSet({ key: 'active_profile', data: selectedProfileName }).then(() => {
-          setActiveProfile(selectedProfileName)
-          setToast({ type: 'success', message: `Switched to ${selectedProfileName}` })
-          void refresh()
-          setTimeout(() => setToast(null), 2500)
-        }).catch(() => {
-          setActiveProfile(selectedProfileName)
-          setToast({ type: 'success', message: `Switched to ${selectedProfileName}` })
-        })
-      } else {
-        const errMsg = r.error ?? r.log ?? 'Unknown error'
-        setToast({ type: 'error', message: humanizeProfileError(errMsg) })
-      }
+    setToast({ type: 'success', message: `Initializing ${selectedProfileName}…` })
+    window.dh.jobStart({ kind: 'profile_switch', runtimeId: selectedProfileName, method: (activeProfile ?? 'none') as any }).then((r: any) => {
+      setSwitchingJobId(r.id)
     }).catch((e) => {
       setIsSwitching(false)
       const errMsg = e instanceof Error ? e.message : String(e)
       setToast({ type: 'error', message: errMsg })
     })
   }
+  // Auto-sync: If the active profile has no containers left, clear it
+  useEffect(() => {
+    if (isSwitching || !activeProfile || !docker || !docker.ok) return
+    // Wait at least 8 seconds after a profile switch before attempting to clear it
+    if (Date.now() - lastSwitchTimeRef.current < 8000) return
+    const stillAlive = docker.rows.some((c) => c.name.includes(activeProfile))
+    if (!stillAlive) {
+      setActiveProfile(null)
+      window.dh.storeDelete({ key: 'active_profile' }).catch(() => {})
+    }
+  }, [docker, activeProfile, isSwitching])
 
   const selectedProfile = PRESET_PROFILES.find((p) => p.name === selectedProfileName)
   const m = snap?.metrics
@@ -280,37 +376,110 @@ export function DashboardMainPage(): ReactElement {
               <button
                 type="button"
                 onClick={() => setConfirmModalOpen(true)}
-                disabled={selectedProfile.status === 'planned' || isSwitching || activeProfile === selectedProfileName}
+                disabled={selectedProfile.status === 'planned' || isSwitching}
                 style={{
                   padding: '12px 24px',
                   borderRadius: 8,
-                  border: 'none',
                   background: selectedProfile.status === 'planned'
                     ? 'var(--bg-widget)'
                     : activeProfile === selectedProfileName
-                      ? 'var(--green)'
+                      ? 'rgba(0, 230, 118, 0.2)'
                       : selectedProfile.accent,
-                  color: '#fff',
+                  color: activeProfile === selectedProfileName ? '#00e676' : '#fff',
                   fontWeight: 600,
                   fontSize: 15,
-                  cursor: selectedProfile.status === 'planned' || isSwitching || activeProfile === selectedProfileName ? 'default' : 'pointer',
-                  opacity: selectedProfile.status === 'planned' || activeProfile === selectedProfileName ? 0.6 : isSwitching ? 0.8 : 1,
+                  cursor: selectedProfile.status === 'planned' || isSwitching ? 'default' : 'pointer',
+                  opacity: selectedProfile.status === 'planned' ? 0.6 : isSwitching ? 0.8 : 1,
                   display: 'flex',
                   alignItems: 'center',
                   gap: 8,
                   transition: 'all 0.2s ease',
+                  border: activeProfile === selectedProfileName ? '1px solid rgba(0,230,118,0.4)' : '1px solid transparent'
                 }}
               >
                 {isSwitching && <span className="codicon codicon-loading" style={{ animation: 'spin 1s linear infinite' }} />}
                 {selectedProfile.status === 'planned'
                   ? 'COMING SOON'
-                  : activeProfile === selectedProfileName
-                    ? '🟢 CURRENTLY ACTIVE'
-                    : activeProfile
-                      ? 'SWITCH TO THIS'
-                      : 'INITIALIZE'}
+                  : isSwitching && activeJob?.runtimeId === selectedProfileName
+                    ? 'INITIALIZING…'
+                    : activeProfile === selectedProfileName
+                      ? '🟢 RESTART ACTIVE ENVIRONMENT'
+                      : activeProfile
+                        ? 'SWITCH TO THIS'
+                        : 'INITIALIZE'}
               </button>
             </div>
+
+            {/* Project Integration Section */}
+            {selectedProfile.status !== 'planned' && (
+              <div style={{ marginTop: 24, padding: 20, background: 'rgba(255,255,255,0.03)', borderRadius: 12, border: '1px solid rgba(255,255,255,0.05)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                  <h3 style={{ margin: 0, fontSize: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span className="codicon codicon-folder-library" style={{ color: 'var(--accent)' }} />
+                    Workspace
+                  </h3>
+                  {projectPath && (
+                    <span style={{ fontSize: 12, fontFamily: 'monospace', color: 'var(--text-muted)', background: '#000', padding: '4px 8px', borderRadius: 4 }}>
+                      {projectPath}
+                    </span>
+                  )}
+                </div>
+                
+                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                  <button onClick={handleCreateProject} style={{ padding: '8px 16px', borderRadius: 6, border: '1px solid var(--accent)', background: 'transparent', color: 'var(--text)', cursor: 'pointer', transition: 'all 0.2s' }} onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                     <span className="codicon codicon-new-folder" style={{ marginRight: 6, verticalAlign: 'middle' }} /> Create Project
+                  </button>
+                  <button onClick={handleLinkProject} style={{ padding: '8px 16px', borderRadius: 6, border: '1px dashed rgba(255,255,255,0.2)', background: 'transparent', color: 'var(--text)', cursor: 'pointer', transition: 'all 0.2s' }} onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                     <span className="codicon codicon-link" style={{ marginRight: 6, verticalAlign: 'middle' }} /> Link Folder
+                  </button>
+                  <div style={{ flex: 1 }} />
+                  
+                  {projectPath && installedEditors.length > 0 && (
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <select 
+                        value={selectedEditorCmd}
+                        onChange={(e) => setSelectedEditorCmd(e.target.value)}
+                        style={{ padding: '8px 12px', borderRadius: 6, background: '#1e1e24', color: '#fff', border: '1px solid rgba(255,255,255,0.1)', outline: 'none' }}
+                      >
+                        {installedEditors.map(ed => (
+                          <option key={ed.cmd} value={ed.cmd}>{ed.name}</option>
+                        ))}
+                      </select>
+                      <button onClick={handleOpenEditor} style={{ padding: '8px 16px', borderRadius: 6, border: 'none', background: 'var(--accent)', color: '#fff', cursor: 'pointer', fontWeight: 600, transition: 'all 0.2s' }} onMouseEnter={e => e.currentTarget.style.filter = 'brightness(1.1)'} onMouseLeave={e => e.currentTarget.style.filter = 'brightness(1)'}>
+                         Open IDE
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Section 1.5: Initialization Progress */}
+            {activeJob && activeJob.state === 'running' && (
+              <div style={{ marginTop: 32 }}>
+                <div className="dashboard-widget" style={{ border: '1px solid var(--accent)', background: 'rgba(20,20,24,0.8)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                    <h3 className="dashboard-widget-title" style={{ margin: 0, color: 'var(--accent)', display: 'flex', alignItems: 'center' }}>
+                      <span className="codicon codicon-loading" style={{ animation: 'spin 1s linear infinite', marginRight: 8 }} />
+                      Initializing {activeJob.runtimeId}...
+                    </h3>
+                    <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>{activeJob.progress}%</span>
+                  </div>
+                  
+                  <div style={{ height: 4, background: 'rgba(255,255,255,0.1)', borderRadius: 2, marginBottom: 16, overflow: 'hidden' }}>
+                     <div style={{ height: '100%', width: `${activeJob.progress}%`, background: 'var(--accent)', transition: 'width 0.3s ease' }} />
+                  </div>
+
+                  <div className="mono" style={{ background: '#000', padding: 16, borderRadius: 8, height: 160, overflowY: 'auto', fontSize: 12, color: '#aaa', lineHeight: 1.5, display: 'flex', flexDirection: 'column-reverse' }}>
+                    <div>
+                      {activeJob.logTail.map((line: string, i: number) => (
+                        <div key={i}>{line}</div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Section 2: System Metrics (Live) - Moved Up */}
             {activeProfile === selectedProfileName && m && (
@@ -334,13 +503,13 @@ export function DashboardMainPage(): ReactElement {
               </div>
             )}
 
-            {/* Section 4: Active Containers + Services Grid */}
-            <div style={{ marginTop: 32, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
+            {/* Section 4: Active Containers */}
+            <div style={{ marginTop: 32, display: 'grid', gridTemplateColumns: '1fr', gap: 24 }}>
               {/* Active Containers Table */}
               {activeProfile && (
                 <div className="dashboard-widget" style={{ padding: 0, overflow: 'hidden' }}>
                   <div style={{ padding: '24px 24px 16px' }}>
-                    <h3 className="dashboard-widget-title" style={{ margin: 0 }}>Active Containers</h3>
+                    <h3 className="dashboard-widget-title" style={{ margin: 0 }}>Active Containers (Running Services)</h3>
                   </div>
                   {activeContainers.length > 0 ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
@@ -357,7 +526,8 @@ export function DashboardMainPage(): ReactElement {
                           </div>
                           <div className="dashboard-list-content">
                             <span className="dashboard-list-title">{row.name}</span>
-                            <span className="dashboard-list-subtitle">{row.image}</span>
+                            <span className="dashboard-list-subtitle" style={{ color: 'var(--accent)' }}>{row.ports || 'Internal Only'}</span>
+                            <span className="dashboard-list-subtitle" style={{ fontSize: 11, marginTop: 4 }}>{row.image}</span>
                           </div>
                           <span className={`dashboard-list-badge ${row.state === 'running' ? 'badge-running' : 'badge-idle'}`}>
                             {row.state}
@@ -370,31 +540,6 @@ export function DashboardMainPage(): ReactElement {
                       No containers running for this profile.
                     </div>
                   )}
-                </div>
-              )}
-
-              {/* Services Grid */}
-              {selectedProfileName && (
-                <div className="dashboard-widget" style={{ padding: 0, overflow: 'hidden' }}>
-                  <div style={{ padding: '24px 24px 16px' }}>
-                    <h3 className="dashboard-widget-title" style={{ margin: 0 }}>Services</h3>
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-                    {generateServices(selectedProfileName).map((s) => (
-                      <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '16px 24px', borderTop: '1px solid rgba(255,255,255,0.05)', background: 'transparent', transition: 'background 0.2s ease' }} onMouseEnter={(e) => e.currentTarget.style.background='rgba(255,255,255,0.02)'} onMouseLeave={(e) => e.currentTarget.style.background='transparent'}>
-                        <div className="dashboard-list-icon" style={{ background: 'rgba(255,255,255,0.05)' }}>
-                          <span className="codicon codicon-plug" style={{ fontSize: 20, color: 'var(--text-muted)' }} />
-                        </div>
-                        <div className="dashboard-list-content">
-                          <span className="dashboard-list-title">{s.name}</span>
-                          <span className="dashboard-list-subtitle">Uptime: {s.uptime}</span>
-                        </div>
-                        <span className={`dashboard-list-badge ${s.status === 'running' ? 'badge-running' : s.status === 'pending' ? 'badge-pending' : 'badge-idle'}`}>
-                          {s.status}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
                 </div>
               )}
             </div>
@@ -546,6 +691,83 @@ export function DashboardMainPage(): ReactElement {
                 onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = `0 4px 12px ${selectedProfile.accent}40` }}
               >
                 Confirm Switch
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {createProjectModalOpen && selectedProfile && (
+        <div className="fluent-modal-overlay">
+          <div className="fluent-modal-content">
+            <h2 style={{ margin: '0 0 16px 0', fontSize: 24, fontWeight: 700 }}>Create New Project</h2>
+            <p style={{ margin: '0 0 24px', color: 'var(--text-muted)', fontSize: 15, lineHeight: 1.6 }}>
+              Enter a name for your new <strong style={{ color: 'var(--text)' }}>{selectedProfile.title}</strong> project.
+              It will be created in your LuminaProjects workspace.
+            </p>
+            <input
+              type="text"
+              autoFocus
+              value={createProjectName}
+              onChange={(e) => setCreateProjectName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') submitCreateProject() }}
+              placeholder="e.g. my-awesome-app"
+              style={{
+                width: '100%',
+                padding: '12px 16px',
+                borderRadius: 8,
+                border: '1px solid rgba(255,255,255,0.1)',
+                background: 'rgba(0,0,0,0.2)',
+                color: 'var(--text)',
+                fontSize: 16,
+                marginBottom: 32,
+                outline: 'none',
+                boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.1)',
+                transition: 'border-color 0.2s ease',
+              }}
+              onFocus={(e) => { e.currentTarget.style.borderColor = selectedProfile.accent }}
+              onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)' }}
+            />
+            <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 16 }}>
+              <button
+                type="button"
+                onClick={() => setCreateProjectModalOpen(false)}
+                style={{
+                  padding: '10px 24px',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  borderRadius: 6,
+                  background: 'rgba(255,255,255,0.05)',
+                  color: 'var(--text)',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                  fontSize: 14,
+                  transition: 'all 0.2s ease',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.1)' }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)' }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={submitCreateProject}
+                disabled={!createProjectName.trim()}
+                style={{
+                  padding: '10px 24px',
+                  border: 'none',
+                  borderRadius: 6,
+                  background: createProjectName.trim() ? selectedProfile.accent : 'rgba(255,255,255,0.1)',
+                  color: createProjectName.trim() ? '#fff' : 'var(--text-muted)',
+                  cursor: createProjectName.trim() ? 'pointer' : 'not-allowed',
+                  fontWeight: 600,
+                  fontSize: 14,
+                  boxShadow: createProjectName.trim() ? `0 4px 12px ${selectedProfile.accent}40` : 'none',
+                  transition: 'all 0.2s ease',
+                }}
+                onMouseEnter={(e) => { if (createProjectName.trim()) { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = `0 6px 16px ${selectedProfile.accent}60` } }}
+                onMouseLeave={(e) => { if (createProjectName.trim()) { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = `0 4px 12px ${selectedProfile.accent}40` } }}
+              >
+                Create
               </button>
             </div>
           </div>
