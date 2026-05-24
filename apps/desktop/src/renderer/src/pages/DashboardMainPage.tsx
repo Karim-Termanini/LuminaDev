@@ -162,7 +162,7 @@ export function DashboardMainPage(): ReactElement {
               setProjectPath(null);
               await window.dh.storeSet({ key: `project_dir_${selectedProfileName}`, data: null } as any);
             }
-          } catch (e) {
+          } catch {
             setProjectPath(p.data);
           }
         }
