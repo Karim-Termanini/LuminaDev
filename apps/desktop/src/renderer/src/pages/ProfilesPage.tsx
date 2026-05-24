@@ -1,27 +1,21 @@
 import {
   CustomProfilesStoreSchema,
   OnLoginAutomationStoreSchema,
-  type ComposeProfile,
   type CustomProfileEntry,
   type OnLoginAutomationStore,
   parseOnLoginAutomation,
-  parseStoredActiveProfile,
 } from '@linux-dev-home/shared'
 import './ProfilesPage.css'
 import type { ReactElement } from 'react'
 import { useEffect, useMemo, useState } from 'react'
-import { assertProfileSwitchOk } from './profileContract'
-import { humanizeProfileError } from './profileError'
 
 export function ProfilesPage(): ReactElement {
   const [profiles, setProfiles] = useState<CustomProfileEntry[]>([])
-  const [activeProfile, setActiveProfile] = useState<ComposeProfile | null>(null)
   const [importText, setImportText] = useState('')
   const [status, setStatus] = useState<string | null>(null)
   const [onLogin, setOnLogin] = useState<OnLoginAutomationStore>(() =>
     OnLoginAutomationStoreSchema.parse({}),
   )
-  const [switchingProfileIdx, setSwitchingProfileIdx] = useState<number | null>(null)
   const [expandedProfileIdx, setExpandedProfileIdx] = useState<number | null>(null)
   const [editingProfileIdx, setEditingProfileIdx] = useState<number | null>(null)
   const [editingData, setEditingData] = useState<CustomProfileEntry | null>(null)
@@ -43,10 +37,6 @@ export function ProfilesPage(): ReactElement {
       setStatus(e instanceof Error ? e.message : String(e))
     }
     try {
-      const ar = (await window.dh.storeGet({ key: 'active_profile' })) as { ok: boolean; data: unknown }
-      if (ar.ok) setActiveProfile(parseStoredActiveProfile(ar.data))
-    } catch { /* ignore */ }
-    try {
       const ol = (await window.dh.storeGet({ key: 'on_login_automation' })) as { ok: boolean; data: unknown }
       if (ol.ok) setOnLogin(parseOnLoginAutomation(ol.data))
     } catch { /* ignore */ }
@@ -60,40 +50,6 @@ export function ProfilesPage(): ReactElement {
       const res = (await window.dh.storeSet({ key: 'custom_profiles', data: parsed })) as { ok: boolean; error?: string }
       if (res.ok) { setProfiles(parsed); setStatus(msg) }
       else setStatus(res.error || 'Failed to save profiles.')
-    } catch (e) {
-      setStatus(e instanceof Error ? e.message : String(e))
-    }
-  }
-
-  async function switchProfiles(idx: number): Promise<void> {
-    const next = profiles[idx]
-    if (!next) return
-    setSwitchingProfileIdx(idx)
-    try {
-      const envVars = next.envVars || []
-      const result = (await window.dh.profileSwitch({
-        from: activeProfile || undefined,
-        to: next.baseTemplate,
-        envVars: envVars.map(ev => ({ key: ev.key, value: ev.value })),
-      })) as { ok: boolean; error?: string; log?: string }
-      assertProfileSwitchOk(result)
-      await window.dh.storeSet({ key: 'active_profile', data: next.baseTemplate })
-      setActiveProfile(next.baseTemplate)
-      setStatus(`Switched to profile "${next.name}". Logs: ${(result.log || '').substring(0, 100)}...`)
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e)
-      const humanized = msg.split(']')[0].substring(1) || msg
-      setStatus(humanizeProfileError(humanized))
-    } finally {
-      setSwitchingProfileIdx(null)
-    }
-  }
-
-  async function clearActive(): Promise<void> {
-    try {
-      await window.dh.storeDelete({ key: 'active_profile' })
-      setActiveProfile(null)
-      setStatus('Active profile cleared.')
     } catch (e) {
       setStatus(e instanceof Error ? e.message : String(e))
     }
@@ -229,22 +185,21 @@ export function ProfilesPage(): ReactElement {
     <div className="profiles-page elevated-page" style={{ maxWidth: 1040, display: 'flex', flexDirection: 'column', gap: 20 }}>
       <header>
         <div className="mono" style={{ color: 'var(--accent)', fontSize: 12, marginBottom: 8 }}>PROFILES</div>
-        <h1 style={{ margin: 0, fontSize: 28, fontWeight: 700 }}>Profile Manager</h1>
+        <h1 style={{ margin: 0, fontSize: 28, fontWeight: 700 }}>Profile Engine Room</h1>
         <p style={{ color: 'var(--text-muted)', marginTop: 10, maxWidth: 760, lineHeight: 1.5 }}>
-          Manage custom profiles. The active profile is highlighted and shown on the Dashboard.
+          Build, edit, and manage custom profiles. To switch profiles, use the Dashboard command center. Here you can CRUD profiles, set global launch automation, and backup/sync your configuration.
         </p>
-        {activeProfile && (
-          <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4, background: 'rgba(124,77,255,0.15)', color: 'var(--accent)' }}>
-              ACTIVE
-            </span>
-            <span style={{ fontSize: 13 }}>{activeProfile}</span>
-          </div>
-        )}
       </header>
 
+      {status && (
+        <div className={`hp-status-alert ${isOk(status) ? 'success' : 'warning'}`}>
+          <span style={{ fontSize: 16 }}>{isOk(status) ? '✔' : '⚠'}</span>
+          <span>{status}</span>
+        </div>
+      )}
+
       <section style={card}>
-        <div style={{ fontWeight: 600, marginBottom: 8 }}>On launch</div>
+        <div style={{ fontWeight: 600, marginBottom: 8 }}>Global Boot Automation</div>
         <p style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5, maxWidth: 720 }}>
           After the Setup Wizard is dismissed, optionally start your active compose stack or refresh the dashboard
           widget layout from disk. Requires Docker for compose; Flatpak needs socket access.
@@ -273,62 +228,36 @@ export function ProfilesPage(): ReactElement {
         </label>
       </section>
 
-      {status && (
-        <div className={`hp-status-alert ${isOk(status) ? 'success' : 'warning'}`}>
-          <span style={{ fontSize: 16 }}>{isOk(status) ? '✔' : '⚠'}</span>
-          <span>{status}</span>
-        </div>
-      )}
-
       <section style={card}>
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-          <button type="button" style={btn} onClick={() => void load()}>Refresh</button>
-          <button type="button" style={btn} onClick={() => void exportJson()}>Export JSON</button>
-          {activeProfile && (
-            <button type="button" style={btnDanger} onClick={() => void clearActive()}>Clear Active Profile</button>
-          )}
-          <button type="button" style={btnDanger} onClick={() => void save([], 'All profiles cleared.')}>Clear all</button>
-          <span className="mono" style={{ color: 'var(--text-muted)', fontSize: 12 }}>{profiles.length} profiles</span>
-        </div>
-      </section>
-
-      <section style={card}>
-        <div style={{ fontWeight: 600, marginBottom: 10 }}>Custom profiles</div>
+        <div style={{ fontWeight: 600, marginBottom: 10 }}>Profile Builder</div>
         {profiles.length === 0 ? (
           <div style={{ color: 'var(--text-muted)' }}>
-            No custom profiles yet. Import JSON below or pick a preset in the Setup Wizard; the dashboard
-            highlights the active compose preset only.
+            No custom profiles yet. Create one from scratch or import JSON below using the Backup & Sync section.
           </div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(320px,1fr))', gap: 10 }}>
             {profiles.map((p, i) => {
-              const isActive = activeProfile === p.baseTemplate
               const isExpanded = expandedProfileIdx === i
               const envVars = p.envVars || []
               return (
                 <article
                   key={`${p.name}-${i}`}
                   style={{
-                    border: `1px solid ${isActive ? 'var(--accent)' : 'var(--border)'}`,
+                    border: '1px solid var(--border)',
                     borderRadius: 8,
                     padding: 12,
-                    background: isActive ? 'rgba(124,77,255,0.06)' : undefined,
+                    background: 'transparent',
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
-                    {isActive && (
-                      <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 3, background: 'var(--accent)', color: '#fff' }}>
-                        ACTIVE
-                      </span>
-                    )}
-                    <div style={{ fontWeight: 600 }}>{p.name}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    <div style={{ fontWeight: 600, flex: 1 }}>{p.name}</div>
                   </div>
-                  <div className="mono" style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 3 }}>
+                  <div className="mono" style={{ color: 'var(--text-muted)', fontSize: 12, marginBottom: 12 }}>
                     base: {p.baseTemplate}
                   </div>
 
                   {isExpanded && (
-                    <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
+                    <div style={{ marginBottom: 12, paddingBottom: 12, borderBottom: '1px solid var(--border)' }}>
                       <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>Environment Variables</div>
                       {envVars.length === 0 ? (
                         <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>None configured.</div>
@@ -342,25 +271,15 @@ export function ProfilesPage(): ReactElement {
                         </div>
                       )}
                       {p.credentialIds && p.credentialIds.length > 0 && (
-                        <div style={{ marginBottom: 8 }}>
+                        <div>
                           <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Credentials</div>
-                          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{p.credentialIds.length} credential(s)</div>
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{p.credentialIds.length} credential{p.credentialIds.length !== 1 ? 's' : ''}</div>
                         </div>
                       )}
                     </div>
                   )}
 
-                  <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
-                    {!isActive && (
-                      <button
-                        type="button"
-                        style={{ ...btnSmall, color: 'var(--accent)', borderColor: 'var(--accent)' }}
-                        onClick={() => void switchProfiles(i)}
-                        disabled={switchingProfileIdx === i}
-                      >
-                        {switchingProfileIdx === i ? 'Switching...' : 'Switch To'}
-                      </button>
-                    )}
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                     <button
                       type="button"
                       style={btnSmall}
@@ -380,11 +299,19 @@ export function ProfilesPage(): ReactElement {
       </section>
 
       <section style={card}>
-        <div style={{ fontWeight: 600, marginBottom: 8 }}>Import profiles JSON</div>
+        <div style={{ fontWeight: 600, marginBottom: 10 }}>Backup & Sync</div>
+        <p style={{ margin: '0 0 16px', fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+          Export all profiles as JSON for backup and team sharing, or import profiles from a previous export.
+        </p>
+        <div style={{ marginBottom: 16, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button type="button" style={btn} onClick={() => void load()}>Refresh Data</button>
+          <button type="button" style={btn} onClick={() => void exportJson()}>Export as JSON</button>
+          <button type="button" style={btnDanger} onClick={() => void save([], 'All profiles cleared.')}>Clear All</button>
+        </div>
         <textarea
           value={importText}
           onChange={(e) => setImportText(e.target.value)}
-          placeholder='Paste JSON array like [{"name":"My AI","baseTemplate":"ai-ml"}]'
+          placeholder='Paste JSON array like [{"name":"My AI","baseTemplate":"ai-ml","envVars":[]}]'
           style={{
             width: '100%', minHeight: 140, resize: 'vertical',
             background: '#0a0a0a', color: 'var(--text)',
@@ -392,17 +319,20 @@ export function ProfilesPage(): ReactElement {
             padding: 10, fontFamily: 'var(--font-mono)', fontSize: 12,
           }}
         />
-        <div style={{ marginTop: 8 }}>
+        <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
           <button type="button" style={btn} onClick={() => void importJson()}>Import JSON</button>
         </div>
       </section>
 
       {byTemplate.length > 0 && (
         <section style={card}>
-          <div style={{ fontWeight: 600, marginBottom: 8 }}>By base template</div>
+          <div style={{ fontWeight: 600, marginBottom: 8 }}>Profile Coverage</div>
+          <p style={{ margin: '0 0 12px', fontSize: 12, color: 'var(--text-muted)' }}>
+            Number of custom profiles per base template:
+          </p>
           <ul style={{ margin: 0, paddingLeft: 18 }}>
             {byTemplate.map(([k, n]) => (
-              <li key={k} className="mono" style={{ marginBottom: 4 }}>{k}: {n}</li>
+              <li key={k} className="mono" style={{ marginBottom: 4, fontSize: 12 }}>{k}: {n} profile{n !== 1 ? 's' : ''}</li>
             ))}
           </ul>
         </section>
