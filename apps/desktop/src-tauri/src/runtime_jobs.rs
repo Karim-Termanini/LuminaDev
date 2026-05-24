@@ -572,6 +572,44 @@ fi"#;
           }
         }
       }
+      "profile_switch" => {
+        let to_profile = runtime_id.clone();
+        let from_profile = method.clone(); // use 'method' string for from_profile
+
+        let to_dir = compose_profiles::compose_profile_workdir(&app, &to_profile);
+        if !to_dir.is_dir() {
+           Err(format!("[PROFILE_SWITCH_FAILED] missing compose directory: {}", to_dir.display()))
+        } else {
+           if !from_profile.is_empty() && from_profile != "none" {
+             let from_dir = compose_profiles::compose_profile_workdir(&app, &from_profile);
+             if from_dir.is_dir() {
+                logs.push(format!("Stopping old profile: {}...", from_profile));
+                let cmd = format!("cd '{}' && docker compose down", from_dir.display());
+                let _ = runtime_bash_user_step(&cmd, &mut logs, Some(app.clone()), Some(job_id.clone()), 5, 20).await;
+             }
+           }
+           
+           // Fetch project_dir from store.json
+           let mut project_dir = String::new();
+           if let Ok(store_path) = app_file(&app, "store.json") {
+             let store = read_json(&store_path);
+             if let Some(path) = store.get(format!("project_dir_{}", to_profile)).and_then(|v| v.as_str()) {
+                project_dir = path.to_string();
+             }
+           }
+           if project_dir.is_empty() {
+             let home = std::env::var("HOME").unwrap_or_else(|_| "/root".to_string());
+             project_dir = format!("{}/LuminaProjects/{}/default", home, to_profile);
+           }
+           let _ = std::fs::create_dir_all(&project_dir);
+
+           logs.push(format!("Starting new profile: {} (Project: {})...", to_profile, project_dir));
+           let overlay = if compose_profiles::compose_full_overlay_enabled(&to_dir) { "-f docker-compose.yml -f docker-compose.full.yml" } else { "-f docker-compose.yml" };
+           // We do a pull first to show download progress, then up -d
+           let cmd = format!("export PROJECT_DIR='{}' && cd '{}' && docker compose --progress plain {} pull && docker compose {} up -d", project_dir, to_dir.display(), overlay, overlay);
+           runtime_bash_user_step(&cmd, &mut logs, Some(app.clone()), Some(job_id.clone()), 25, 75).await.map_err(|e| e.to_string())
+        }
+      }
       _ => {
         logs.push(format!("Unknown job kind: {}.", kind));
         Ok(())

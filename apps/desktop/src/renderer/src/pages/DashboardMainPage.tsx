@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import {
   type ComposeProfile,
   type ContainerRow,
@@ -5,6 +6,7 @@ import {
   parseStoredActiveProfile,
 } from '@linux-dev-home/shared'
 import type { ReactElement } from 'react'
+import { invoke } from '@tauri-apps/api/core'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { humanizeProfileError } from './profileError'
 
@@ -113,6 +115,13 @@ export function DashboardMainPage(): ReactElement {
   const [selectedProfileName, setSelectedProfileName] = useState<ComposeProfile | null>(null)
   const [confirmModalOpen, setConfirmModalOpen] = useState(false)
 
+  const [projectPath, setProjectPath] = useState<string | null>(null)
+  const [installedEditors, setInstalledEditors] = useState<Array<{ name: string; cmd: string }>>([])
+  const [selectedEditorCmd, setSelectedEditorCmd] = useState<string>('')
+  const [createProjectModalOpen, setCreateProjectModalOpen] = useState(false)
+  const [createProjectName, setCreateProjectName] = useState('')
+
+
   const refresh = useCallback(async () => {
     try {
       const d = (await window.dh.dockerList()) as { ok: true; rows: ContainerRow[] } | { ok: false; error: string }
@@ -134,7 +143,22 @@ export function DashboardMainPage(): ReactElement {
     } catch {
       /* keep last known */
     }
-  }, [])
+  
+    if (selectedProfileName) {
+      window.dh.storeGet({ key: `project_dir_${selectedProfileName}` } as any).then((p: any) => {
+        if (p.ok && p.data && typeof p.data === 'string') setProjectPath(p.data)
+        else setProjectPath(null)
+      }).catch(() => {})
+    }
+    
+    invoke('ipc_invoke', { channel: 'dh:editor:list' }).then((res: any) => {
+      if (res.ok && res.editors) {
+        setInstalledEditors(res.editors)
+        if (res.editors.length > 0) setSelectedEditorCmd(res.editors[0].cmd)
+      }
+    }).catch(() => {})
+
+  }, [selectedProfileName])
 
   useEffect(() => {
     void refresh()
@@ -160,12 +184,53 @@ export function DashboardMainPage(): ReactElement {
     }
   }, [selectedProfileName])
 
+  
+  const handleLinkProject = async () => {
+     if (!selectedProfileName) return
+     try {
+       const selected = await window.dh.selectFolder()
+       if (selected && typeof selected === 'string') {
+         setProjectPath(selected)
+         await window.dh.storeSet({ key: `project_dir_${selectedProfileName}`, data: selected } as any)
+         setToast({ type: 'success', message: `Linked workspace folder!` })
+       }
+     } catch { /* empty */ }
+  }
+
+  const handleOpenEditor = async () => {
+     if (!projectPath || !selectedEditorCmd) return
+     const res = await invoke('ipc_invoke', { channel: 'dh:editor:open', payload: { path: projectPath, cmd: selectedEditorCmd } }) as any
+     if (!res.ok) {
+        setToast({ type: 'error', message: res.error || 'Failed to open IDE' })
+     }
+  }
+
+  const submitCreateProject = async () => {
+     if (!selectedProfileName || !createProjectName.trim()) return
+     const name = createProjectName.trim()
+     const path = `~/LuminaProjects/${selectedProfileName}/${name}`
+     const res = await invoke('ipc_invoke', { channel: 'dh:project:ensure_dir', payload: { path } }) as any
+     if (res.ok) {
+        setProjectPath(res.path)
+        await window.dh.storeSet({ key: `project_dir_${selectedProfileName}`, data: res.path } as any)
+        setToast({ type: 'success', message: `Created project: ${name}` })
+        setCreateProjectModalOpen(false)
+     } else {
+        setToast({ type: 'error', message: res.error || 'Failed to create project' })
+     }
+  }
+
+
   function handleConfirmSwitch(): void {
     if (!selectedProfileName) return
     setConfirmModalOpen(false)
     setIsSwitching(true)
-    setToast({ type: 'success', message: `Switching to ${selectedProfileName}…` })
+    const isRestart = activeProfile === selectedProfileName
+    setToast({ type: 'success', message: isRestart ? `Restarting ${selectedProfileName}…` : `Switching to ${selectedProfileName}…` })
+    
+    // If it's a restart, we switch from activeProfile to activeProfile
     window.dh.profileSwitch({ from: activeProfile ?? undefined, to: selectedProfileName }).then((r) => {
+
       setIsSwitching(false)
       if (r.ok) {
         window.dh.storeSet({ key: 'active_profile', data: selectedProfileName }).then(() => {
@@ -293,6 +358,49 @@ export function DashboardMainPage(): ReactElement {
                   </div>
                 </div>
               </div>
+            )}
+
+            
+            {/* Workspace & Project Management */}
+            {activeProfile === selectedProfileName && (
+               <div style={{ marginTop: 32 }}>
+                 <div className="dashboard-widget">
+                   <h3 className="dashboard-widget-title">Workspace Configuration</h3>
+                   <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                     <div>
+                        <label style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 8, display: 'block' }}>Project Path / Mounted Volume</label>
+                        <div style={{ display: 'flex', gap: 12 }}>
+                          <input 
+                             type="text" 
+                             readOnly 
+                             value={projectPath || 'No project linked.'} 
+                             style={{ flex: 1, padding: '10px 14px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.2)', color: 'var(--text)', fontSize: 13 }} 
+                          />
+                          <button onClick={handleLinkProject} style={{ padding: '0 16px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', color: 'var(--text)', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>Link Existing</button>
+                          <button onClick={() => setCreateProjectModalOpen(true)} style={{ padding: '0 16px', borderRadius: 6, border: 'none', background: selectedProfile.accent, color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>Create New</button>
+                        </div>
+                     </div>
+                     {projectPath && (
+                       <div>
+                         <label style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 8, display: 'block' }}>Open in Editor</label>
+                         <div style={{ display: 'flex', gap: 12 }}>
+                           <select 
+                             value={selectedEditorCmd}
+                             onChange={(e) => setSelectedEditorCmd(e.target.value)}
+                             style={{ padding: '10px 14px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.2)', color: 'var(--text)', fontSize: 13, minWidth: 200 }}
+                           >
+                              {installedEditors.length === 0 && <option value="">No editors found</option>}
+                              {installedEditors.map(ed => (
+                                 <option key={ed.name} value={ed.cmd}>{ed.name}</option>
+                              ))}
+                           </select>
+                           <button onClick={handleOpenEditor} disabled={!selectedEditorCmd} style={{ padding: '0 16px', borderRadius: 6, border: 'none', background: 'var(--green)', color: '#fff', cursor: selectedEditorCmd ? 'pointer' : 'not-allowed', fontSize: 13, fontWeight: 600 }}>Open IDE</button>
+                         </div>
+                       </div>
+                     )}
+                   </div>
+                 </div>
+               </div>
             )}
 
             {/* Section 3: Analytics Grid (Activity + Container Status Side-by-Side) */}
@@ -494,6 +602,82 @@ export function DashboardMainPage(): ReactElement {
                 }}
               >
                 Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {createProjectModalOpen && selectedProfile && (
+        <div className="fluent-modal-overlay">
+          <div className="fluent-modal-content">
+            <h2 style={{ margin: '0 0 16px 0', fontSize: 24, fontWeight: 700 }}>Create New Project</h2>
+            <p style={{ margin: '0 0 24px', color: 'var(--text-muted)', fontSize: 15, lineHeight: 1.6 }}>
+              Enter a name for your new <strong style={{ color: 'var(--text)' }}>{selectedProfile.title}</strong> project.
+              It will be created in your LuminaProjects workspace.
+            </p>
+            <input
+              type="text"
+              autoFocus
+              value={createProjectName}
+              onChange={(e) => setCreateProjectName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') submitCreateProject() }}
+              placeholder="e.g. my-awesome-app"
+              style={{
+                width: '100%',
+                padding: '12px 16px',
+                borderRadius: 8,
+                border: '1px solid rgba(255,255,255,0.1)',
+                background: 'rgba(0,0,0,0.2)',
+                color: 'var(--text)',
+                fontSize: 16,
+                marginBottom: 32,
+                outline: 'none',
+                boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.1)',
+                transition: 'border-color 0.2s ease',
+              }}
+              onFocus={(e) => { e.currentTarget.style.borderColor = selectedProfile.accent }}
+              onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)' }}
+            />
+            <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 16 }}>
+              <button
+                type="button"
+                onClick={() => setCreateProjectModalOpen(false)}
+                style={{
+                  padding: '10px 24px',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  borderRadius: 6,
+                  background: 'rgba(255,255,255,0.05)',
+                  color: 'var(--text)',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                  fontSize: 14,
+                  transition: 'all 0.2s ease',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.1)' }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)' }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={submitCreateProject}
+                disabled={!createProjectName.trim()}
+                style={{
+                  padding: '10px 24px',
+                  border: 'none',
+                  borderRadius: 6,
+                  background: createProjectName.trim() ? selectedProfile.accent : 'rgba(255,255,255,0.1)',
+                  color: createProjectName.trim() ? '#fff' : 'var(--text-muted)',
+                  cursor: createProjectName.trim() ? 'pointer' : 'not-allowed',
+                  fontWeight: 600,
+                  fontSize: 14,
+                  boxShadow: createProjectName.trim() ? `0 4px 12px ${selectedProfile.accent}40` : 'none',
+                  transition: 'all 0.2s ease',
+                }}
+                onMouseEnter={(e) => { if (createProjectName.trim()) { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = `0 6px 16px ${selectedProfile.accent}60` } }}
+                onMouseLeave={(e) => { if (createProjectName.trim()) { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = `0 4px 12px ${selectedProfile.accent}40` } }}
+              >
+                Create
               </button>
             </div>
           </div>

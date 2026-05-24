@@ -1,8 +1,11 @@
-# Minimal preset stack (reliable everywhere). Replace with Hugo/Docusaurus when ready.
+# LUMINA_DEV_COMPOSE_FULL=1 overlay — docs/writing stack
 name: lumina-docs
 
 services:
-  stub:
-    image: alpine:latest
-    command: ["sleep", "infinity"]
+  mkdocs:
+    image: squidfunk/mkdocs-material:latest
+    ports:
+      - "18000:8000"
+    volumes:
+      - ${PROJECT_DIR:-~/LuminaProjects/docs/default}:/docs
     restart: unless-stopped

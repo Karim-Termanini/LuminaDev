@@ -171,7 +171,7 @@ async fn runtime_bash_user_step(
         match res {
           Ok(Some(line)) => {
             if !line.trim().is_empty() {
-              logs.push(format!("OUT: {}", line));
+              logs.push(line.clone());
               line_count += 1;
             }
             if let (Some(ref app_h), Some(ref jid)) = (&app, &job_id) {
@@ -216,7 +216,7 @@ async fn runtime_bash_user_step(
       }
       res = err_reader.next_line() => {
         if let Ok(Some(line)) = res {
-          if !line.trim().is_empty() { logs.push(format!("ERR: {}", line)); }
+          if !line.trim().is_empty() { logs.push(line); }
         }
       }
       _ = tokio::time::sleep_until(deadline) => {
@@ -229,7 +229,7 @@ async fn runtime_bash_user_step(
   match child.wait().await {
     Ok(s) if s.success() => Ok(()),
     Ok(_) => {
-      let tail = logs.iter().rev().find(|l| l.starts_with("ERR:") || l.starts_with("OUT:"))
+      let tail = logs.last()
         .map(|l| l.as_str()).unwrap_or("non-zero exit").to_string();
       Err(format!("[RUNTIME_INSTALL_FAILED] {}", tail.trim()))
     }
@@ -547,7 +547,7 @@ async fn sudo_bash_install_step(cmd: &str, password: Option<&str>, logs: &mut Ve
           Ok(Some(line)) => {
             if line.contains("[sudo] password") { continue; }
             if !line.trim().is_empty() {
-              logs.push(format!("ERR: {}", line));
+              logs.push(line);
             }
           }
           _ => break,
@@ -2130,6 +2130,73 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       let mut jobs = state.jobs.lock().await;
       let _ = cancel_runtime_job(&mut jobs, id.as_str());
       json!({ "ok": true })
+    }
+    "dh:editor:list" => {
+      let cmd = r#"
+        editors="["
+        check_native() {
+           if command -v "$2" >/dev/null 2>&1; then
+             if [ "$editors" != "[" ]; then editors="$editors,"; fi
+             editors="$editors{\"name\":\"$1 (Native)\",\"cmd\":\"$2\"}"
+           fi
+        }
+        check_flatpak() {
+           if command -v flatpak >/dev/null 2>&1; then
+             if flatpak list | grep -iq "$2"; then
+               if [ "$editors" != "[" ]; then editors="$editors,"; fi
+               editors="$editors{\"name\":\"$1 (Flatpak)\",\"cmd\":\"flatpak run $2\"}"
+             fi
+           fi
+        }
+        check_native "VS Code" "code"
+        check_native "Cursor" "cursor"
+        check_native "Neovim" "nvim"
+        check_native "IntelliJ IDEA" "idea"
+        check_native "WebStorm" "webstorm"
+        check_native "Eclipse" "eclipse"
+        check_native "Antigravity" "antigravity"
+        
+        check_flatpak "VS Code" "com.visualstudio.code"
+        check_flatpak "Cursor" "com.cursor.Cursor"
+        check_flatpak "IntelliJ IDEA" "com.jetbrains.IntelliJ-IDEA-Community"
+        editors="$editors]"
+        echo "$editors"
+      "#;
+      let output = exec_output("bash", &["-c", cmd]).await.unwrap_or_else(|_| "[]".to_string());
+      let parsed: Value = serde_json::from_str(&output).unwrap_or(json!([]));
+      json!({ "ok": true, "editors": parsed })
+    }
+    "dh:editor:open" => {
+      let path = body.get("path").and_then(|v| v.as_str()).unwrap_or_default();
+      let cmd = body.get("cmd").and_then(|v| v.as_str()).unwrap_or("code");
+      if path.is_empty() {
+        json!({ "ok": false, "error": "[EDITOR_OPEN_FAILED] Missing path." })
+      } else {
+        // e.g. cmd is "flatpak run com.visualstudio.code" or "code"
+        let full_cmd = format!("{} \"{}\"", cmd, path);
+        let _ = tokio::process::Command::new("sh")
+            .arg("-c")
+            .arg(&full_cmd)
+            .spawn();
+        json!({ "ok": true })
+      }
+    }
+    "dh:project:ensure_dir" => {
+      let path_str = body.get("path").and_then(|v| v.as_str()).unwrap_or_default();
+      if path_str.is_empty() {
+         json!({ "ok": false, "error": "[PROJECT_CREATE_FAILED] Missing path." })
+      } else {
+         let expanded = if path_str.starts_with("~/") {
+            let home = std::env::var("HOME").unwrap_or_else(|_| "/root".to_string());
+            path_str.replacen("~/", &format!("{}/", home), 1)
+         } else {
+            path_str.to_string()
+         };
+         match std::fs::create_dir_all(&expanded) {
+            Ok(_) => json!({ "ok": true, "path": expanded }),
+            Err(e) => json!({ "ok": false, "error": e.to_string() })
+         }
+      }
     }
     "dh:git:recent:list" => match app_file(&app, "git_recent.json") {
       Ok(path) => {
@@ -4364,7 +4431,7 @@ mod tests {
       .await
       .expect("streaming command should succeed");
 
-    let stream_lines = logs.iter().filter(|l| l.contains("OUT: stream-")).count();
+    let stream_lines = logs.iter().filter(|l| l.contains("stream-") && !l.contains("echo")).count();
     assert!(
       stream_lines >= 5,
       "expected at least 5 streamed lines, got {stream_lines}"

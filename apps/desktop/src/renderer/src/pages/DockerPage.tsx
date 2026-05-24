@@ -1,6 +1,7 @@
 import type { ContainerInspectData, ContainerRow, ImageRow, NetworkRow, SessionInfo, VolumeRow } from '@linux-dev-home/shared'
 import type { ReactElement } from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
@@ -61,7 +62,9 @@ const RECOMMENDED_IMAGES = [
 
 
 export function DockerPage(): ReactElement {
-  const [tab, setTab] = useState<TabId>('scheme')
+  const [searchParams] = useSearchParams()
+  const initialTab = (searchParams.get('tab') as TabId) || 'scheme'
+  const [tab, setTab] = useState<TabId>(initialTab)
   const [docker, setDocker] = useState<
     { ok: true; rows: ContainerRow[] } | { ok: false; error: string } | null
   >(null)
