@@ -8,7 +8,7 @@ import {
 } from '@linux-dev-home/shared'
 import './ProfilesPage.css'
 import type { ReactElement } from 'react'
-import { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 
 const BASE_TEMPLATES = [
   'web-dev',
@@ -22,6 +22,18 @@ const BASE_TEMPLATES = [
   'empty',
 ]
 
+const TEMPLATE_ICONS: Record<string, string> = {
+  'web-dev': 'globe',
+  'data-science': 'graph',
+  'ai-ml': 'hubot',
+  'mobile': 'device-mobile',
+  'game-dev': 'play-circle',
+  'infra': 'server-environment',
+  'desktop-gui': 'window',
+  'docs': 'book',
+  'empty': 'blank',
+}
+
 export function ProfilesPage(): ReactElement {
   const [profiles, setProfiles] = useState<CustomProfileEntry[]>([])
   const [importText, setImportText] = useState('')
@@ -29,8 +41,8 @@ export function ProfilesPage(): ReactElement {
   const [onLogin, setOnLogin] = useState<OnLoginAutomationStore>(() =>
     OnLoginAutomationStoreSchema.parse({}),
   )
-  const [expandedProfileIdx, setExpandedProfileIdx] = useState<number | null>(null)
   const [editingProfileIdx, setEditingProfileIdx] = useState<number | null>(null)
+  const [openDropdownIdx, setOpenDropdownIdx] = useState<number | null>(null)
   const [editingData, setEditingData] = useState<CustomProfileEntry | null>(null)
   const [credInputId, setCredInputId] = useState('')
   const [credInputValue, setCredInputValue] = useState('')
@@ -227,8 +239,8 @@ export function ProfilesPage(): ReactElement {
   const isOk = (s: string) => /copied|saved|removed|duplicated|imported|cleared|set to/i.test(s)
 
   return (
-    <div className="profiles-page elevated-page" style={{ maxWidth: 1040, display: 'flex', flexDirection: 'column', gap: 20 }}>
-      <header>
+    <div className="profiles-page elevated-page" style={{ maxWidth: 1320, display: 'flex', flexDirection: 'column', gap: 0 }}>
+      <header style={{ paddingBottom: 24, paddingTop: 0 }}>
         <div className="mono" style={{ color: 'var(--accent)', fontSize: 12, marginBottom: 8 }}>PROFILES</div>
         <h1 style={{ margin: 0, fontSize: 28, fontWeight: 700 }}>Profile Engine Room</h1>
         <p style={{ color: 'var(--text-muted)', marginTop: 10, maxWidth: 760, lineHeight: 1.5 }}>
@@ -237,21 +249,21 @@ export function ProfilesPage(): ReactElement {
       </header>
 
       {status && (
-        <div className={`hp-status-alert ${isOk(status) ? 'success' : 'warning'}`}>
+        <div className={`hp-status-alert ${isOk(status) ? 'success' : 'warning'}`} style={{ marginBottom: 24 }}>
           <span style={{ fontSize: 16 }}>{isOk(status) ? '✔' : '⚠'}</span>
           <span>{status}</span>
         </div>
       )}
 
       {/* Tab Navigation */}
-      <div style={{ display: 'flex', gap: 8, borderBottom: '1px solid var(--border)', paddingBottom: 0 }}>
+      <div style={{ display: 'flex', gap: 8, borderBottom: '1px solid var(--border)', paddingBottom: 0, marginBottom: 24 }}>
         {(['builder', 'automation', 'backup'] as const).map((tab) => (
           <button
             key={tab}
             type="button"
             onClick={() => setActiveTab(tab)}
             style={{
-              padding: '12px 16px',
+              padding: '14px 20px',
               border: 'none',
               background: 'transparent',
               color: activeTab === tab ? 'var(--accent)' : 'var(--text-muted)',
@@ -305,127 +317,242 @@ export function ProfilesPage(): ReactElement {
 
       {/* Tab Content: Profile Builder */}
       {activeTab === 'builder' && (
-      <div>
-        {profiles.length === 0 ? (
-          <div style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 24,
-            padding: '60px 40px',
-            textAlign: 'center',
-            minHeight: 420,
-            borderRadius: 12,
-            background: 'linear-gradient(135deg, rgba(255,255,255,0.02) 0%, rgba(255,255,255,0.01) 100%)',
-            border: '1px solid rgba(255,255,255,0.06)',
-            backdropFilter: 'blur(8px)',
-          }}>
-            <span className="codicon codicon-server-environment" style={{
-              fontSize: 64,
-              color: 'var(--accent)',
-              opacity: 0.8,
-              textShadow: '0 0 30px rgba(124, 77, 255, 0.3)',
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+        {/* Hero Banner */}
+        <div style={{
+          width: 'calc(100% + 40px)',
+          marginLeft: '-20px',
+          marginRight: '-20px',
+          marginBottom: 24,
+          padding: '48px 40px',
+          background: 'linear-gradient(135deg, rgba(13, 115, 119, 0.4) 0%, rgba(20, 255, 236, 0.15) 100%)',
+          border: '1px solid rgba(20, 255, 236, 0.2)',
+          position: 'relative',
+          overflow: 'hidden',
+        }}>
+          <div style={{ position: 'absolute', top: 0, right: 0, width: '40%', height: '100%', opacity: 0.05 }}>
+            <div style={{
+              width: '100%',
+              height: '100%',
+              background: 'radial-gradient(circle at 80% 20%, rgba(20, 255, 236, 0.3) 0%, transparent 70%)',
             }} />
-            <div>
-              <h2 style={{ margin: 0, fontSize: 28, fontWeight: 700, color: 'var(--text)', marginBottom: 8 }}>
-                Build Your First Custom Environment
-              </h2>
-              <p style={{ margin: 0, fontSize: 15, color: 'var(--text-muted)', maxWidth: 520, lineHeight: 1.6 }}>
-                Start by creating a custom profile to tweak environment variables, manage credentials, and shape your perfect workspace.
-              </p>
-            </div>
+          </div>
+          <div style={{ position: 'relative', zIndex: 1 }}>
+            <h2 style={{ margin: 0, fontSize: 32, fontWeight: 800, color: '#fff', marginBottom: 8 }}>
+              Get ready to code in minutes
+            </h2>
+            <p style={{ margin: 0, fontSize: 16, color: 'rgba(255,255,255,0.85)', maxWidth: 580, marginBottom: 20, lineHeight: 1.6 }}>
+              Create and configure custom development environments tailored to your stack. Add environment variables, manage credentials, and build the perfect workspace.
+            </p>
             <button
               type="button"
               style={{
-                ...btn,
-                background: 'var(--accent)',
-                color: '#fff',
+                padding: '10px 24px',
+                borderRadius: 6,
+                border: 'none',
+                background: '#fff',
+                color: '#0d7377',
                 fontWeight: 700,
-                fontSize: 15,
-                padding: '12px 28px',
-                marginTop: 12,
+                fontSize: 14,
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+              }}
+              onMouseEnter={(e) => {
+                const el = e.currentTarget as HTMLElement
+                el.style.boxShadow = '0 8px 24px rgba(20, 255, 236, 0.3)'
+                el.style.transform = 'translateY(-2px)'
+              }}
+              onMouseLeave={(e) => {
+                const el = e.currentTarget as HTMLElement
+                el.style.boxShadow = 'none'
+                el.style.transform = 'translateY(0)'
               }}
               onClick={openCreateModal}
             >
-              + Create Custom Profile
+              + Create Environment
             </button>
           </div>
+        </div>
+
+        {/* Profiles List */}
+        {profiles.length === 0 ? (
+          <div style={{
+            padding: '40px 20px',
+            textAlign: 'center',
+            color: 'var(--text-muted)',
+            fontSize: 14,
+          }}>
+            No custom environments yet. Click the button above to get started.
+          </div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(320px,1fr))', gap: 16 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
             {profiles.map((p, i) => {
-              const isExpanded = expandedProfileIdx === i
-              const envVars = p.envVars || []
+              const envVarCount = (p.envVars || []).length
+              const credCount = (p.credentialIds || []).length
+              const icon = TEMPLATE_ICONS[p.baseTemplate] || 'blank'
+              const isDropdownOpen = openDropdownIdx === i
+
               return (
-                <article
+                <div
                   key={`${p.name}-${i}`}
                   style={{
-                    border: '1px solid rgba(255,255,255,0.06)',
-                    borderRadius: 12,
-                    padding: 16,
-                    background: 'linear-gradient(135deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.01) 100%)',
-                    backdropFilter: 'blur(8px)',
-                    transition: 'all 200ms ease-out',
-                    cursor: 'default',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 16,
+                    padding: '14px 16px',
+                    background: 'var(--bg-widget)',
+                    border: '1px solid var(--border)',
+                    transition: 'all 0.15s ease',
+                    borderTop: i === 0 ? '1px solid var(--border)' : 'none',
                   }}
                   onMouseEnter={(e) => {
                     const el = e.currentTarget as HTMLElement
-                    el.style.borderColor = 'rgba(255,255,255,0.12)'
-                    el.style.background = 'linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.03) 100%)'
-                    el.style.boxShadow = '0 8px 32px rgba(0,0,0,0.2)'
-                    el.style.transform = 'translateY(-2px)'
+                    el.style.borderColor = 'rgba(124, 77, 255, 0.4)'
+                    el.style.background = 'color-mix(in srgb, var(--accent) 3%, var(--bg-widget))'
                   }}
                   onMouseLeave={(e) => {
                     const el = e.currentTarget as HTMLElement
-                    el.style.borderColor = 'rgba(255,255,255,0.06)'
-                    el.style.background = 'linear-gradient(135deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.01) 100%)'
-                    el.style.boxShadow = 'none'
-                    el.style.transform = 'translateY(0)'
+                    el.style.borderColor = 'var(--border)'
+                    el.style.background = 'var(--bg-widget)'
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                    <div style={{ fontWeight: 600, flex: 1 }}>{p.name}</div>
-                  </div>
-                  <div className="mono" style={{ color: 'var(--text-muted)', fontSize: 12, marginBottom: 12 }}>
-                    base: {p.baseTemplate}
+                  {/* Icon Box */}
+                  <div style={{
+                    width: 48,
+                    height: 48,
+                    borderRadius: 8,
+                    background: 'linear-gradient(135deg, rgba(124, 77, 255, 0.15) 0%, rgba(124, 77, 255, 0.05) 100%)',
+                    border: '1px solid rgba(124, 77, 255, 0.2)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                  }}>
+                    <span className={`codicon codicon-${icon}`} style={{ fontSize: 24, color: 'var(--accent)' }} />
                   </div>
 
-                  {isExpanded && (
-                    <div style={{ marginBottom: 12, paddingBottom: 12, borderBottom: '1px solid var(--border)' }}>
-                      <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>Environment Variables</div>
-                      {envVars.length === 0 ? (
-                        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>None configured.</div>
-                      ) : (
-                        <div style={{ marginBottom: 8 }}>
-                          {envVars.map((ev, vi) => (
-                            <div key={vi} style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>
-                              <span className="mono">{ev.key}</span> = <span className="mono">{ev.value.substring(0, 40)}{ev.value.length > 40 ? '...' : ''}</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      {p.credentialIds && p.credentialIds.length > 0 && (
-                        <div>
-                          <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Credentials</div>
-                          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{p.credentialIds.length} credential{p.credentialIds.length !== 1 ? 's' : ''}</div>
+                  {/* Profile Info */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1 }}>
+                    <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text)' }}>
+                      {p.name}
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                      {p.baseTemplate}
+                    </div>
+                  </div>
+
+                  {/* Metadata */}
+                  <div style={{
+                    display: 'flex',
+                    gap: 16,
+                    alignItems: 'center',
+                    fontSize: 12,
+                    color: 'var(--text-muted)',
+                  }}>
+                    <div>Env vars: <strong style={{ color: 'var(--text)' }}>{envVarCount}</strong></div>
+                    <div>Credentials: <strong style={{ color: 'var(--text)' }}>{credCount}</strong></div>
+                  </div>
+
+                  {/* Actions */}
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', position: 'relative' }}>
+                    <button
+                      type="button"
+                      style={{
+                        ...btnSmall,
+                        padding: '6px 12px',
+                        fontSize: 12,
+                      }}
+                      onClick={() => openEditModal(i)}
+                    >
+                      Edit
+                    </button>
+                    <div style={{ position: 'relative' }}>
+                      <button
+                        type="button"
+                        style={{
+                          ...btnSmall,
+                          padding: '6px 10px',
+                          fontSize: 12,
+                        }}
+                        onClick={() => setOpenDropdownIdx(isDropdownOpen ? null : i)}
+                      >
+                        ⋯
+                      </button>
+                      {isDropdownOpen && (
+                        <div style={{
+                          position: 'absolute',
+                          top: '100%',
+                          right: 0,
+                          marginTop: 4,
+                          background: 'var(--bg-widget)',
+                          border: '1px solid var(--border)',
+                          borderRadius: 6,
+                          minWidth: 140,
+                          zIndex: 100,
+                          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
+                        }}>
+                          <button
+                            type="button"
+                            style={{
+                              width: '100%',
+                              padding: '8px 12px',
+                              border: 'none',
+                              background: 'transparent',
+                              color: 'var(--text)',
+                              fontSize: 12,
+                              textAlign: 'left',
+                              cursor: 'pointer',
+                              borderBottom: '1px solid var(--border)',
+                              transition: 'background 0.15s ease',
+                            }}
+                            onMouseEnter={(e) => {
+                              const el = e.currentTarget as HTMLElement
+                              el.style.background = 'rgba(124, 77, 255, 0.1)'
+                            }}
+                            onMouseLeave={(e) => {
+                              const el = e.currentTarget as HTMLElement
+                              el.style.background = 'transparent'
+                            }}
+                            onClick={() => {
+                              void duplicateAt(i)
+                              setOpenDropdownIdx(null)
+                            }}
+                          >
+                            Duplicate
+                          </button>
+                          <button
+                            type="button"
+                            style={{
+                              width: '100%',
+                              padding: '8px 12px',
+                              border: 'none',
+                              background: 'transparent',
+                              color: 'var(--red)',
+                              fontSize: 12,
+                              textAlign: 'left',
+                              cursor: 'pointer',
+                              transition: 'background 0.15s ease',
+                            }}
+                            onMouseEnter={(e) => {
+                              const el = e.currentTarget as HTMLElement
+                              el.style.background = 'rgba(255, 0, 0, 0.1)'
+                            }}
+                            onMouseLeave={(e) => {
+                              const el = e.currentTarget as HTMLElement
+                              el.style.background = 'transparent'
+                            }}
+                            onClick={() => {
+                              void removeAt(i)
+                              setOpenDropdownIdx(null)
+                            }}
+                          >
+                            Delete
+                          </button>
                         </div>
                       )}
                     </div>
-                  )}
-
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                    <button
-                      type="button"
-                      style={btnSmall}
-                      onClick={() => setExpandedProfileIdx(isExpanded ? null : i)}
-                    >
-                      {isExpanded ? 'Collapse' : 'Details'}
-                    </button>
-                    <button type="button" style={btnSmall} onClick={() => openEditModal(i)}>Edit</button>
-                    <button type="button" style={btnSmall} onClick={() => void duplicateAt(i)}>Duplicate</button>
-                    <button type="button" style={btnSmallDanger} onClick={() => void removeAt(i)}>Delete</button>
                   </div>
-                </article>
+                </div>
               )
             })}
           </div>
