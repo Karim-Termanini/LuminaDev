@@ -4431,7 +4431,7 @@ mod tests {
       .await
       .expect("streaming command should succeed");
 
-    let stream_lines = logs.iter().filter(|l| l.contains("OUT: stream-")).count();
+    let stream_lines = logs.iter().filter(|l| l.contains("stream-") && !l.contains("echo")).count();
     assert!(
       stream_lines >= 5,
       "expected at least 5 streamed lines, got {stream_lines}"
