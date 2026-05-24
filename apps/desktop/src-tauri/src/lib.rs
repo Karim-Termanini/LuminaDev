@@ -2178,6 +2178,10 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       if path.is_empty() {
         json!({ "ok": false, "error": "[EDITOR_OPEN_FAILED] Missing path." })
       } else {
+        // Ensure the directory exists before opening the IDE.
+        // This prevents editors from falling back to the app's root directory if the user deleted the folder.
+        let _ = std::fs::create_dir_all(path);
+
         // e.g. cmd is "flatpak run com.visualstudio.code" or "code"
         let full_cmd = format!("{} \"{}\"", cmd, path);
         let _ = tokio::process::Command::new("sh")
