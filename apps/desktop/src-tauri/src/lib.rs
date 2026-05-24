@@ -238,6 +238,27 @@ async fn runtime_bash_user_step(
 }
 
 
+fn get_profile_extra_env(app: &tauri::AppHandle, profile: &str) -> std::collections::HashMap<String, String> {
+    let mut env = std::collections::HashMap::new();
+    if let Ok(store_path) = crate::app_file(app, "store.json") {
+        let store = crate::read_json(&store_path);
+        
+        if let Some(py_ver) = store.get(&format!("python_version_{}", profile)).and_then(|v| v.as_str()) {
+            if !py_ver.is_empty() {
+                let tag = if py_ver == "latest" { "latest".to_string() } else { format!("python-{}", py_ver) };
+                env.insert("PYTHON_IMAGE_TAG".to_string(), tag);
+            }
+        }
+        if let Some(pg_ver) = store.get(&format!("postgres_version_{}", profile)).and_then(|v| v.as_str()) {
+            if !pg_ver.is_empty() {
+                let tag = if pg_ver == "latest" { "latest".to_string() } else { format!("{}-alpine", pg_ver) };
+                env.insert("POSTGRES_IMAGE_TAG".to_string(), tag);
+            }
+        }
+    }
+    env
+}
+
 /// `docker compose` in a fixed directory (avoids `bash -lc "cd … && …"`).
 /// When [`compose_profiles::compose_full_overlay_enabled`] is true, prepends `-f docker-compose.yml -f docker-compose.full.yml`.
 async fn exec_docker_compose_in_dir(
@@ -245,6 +266,7 @@ async fn exec_docker_compose_in_dir(
   compose_subargs: &[&str],
   limit: Duration,
   project_name: Option<&str>,
+  extra_env: Option<std::collections::HashMap<String, String>>,
 ) -> Result<(String, String), String> {
   let mut compose_args: Vec<String> = vec!["compose".into(), "-f".into(), "docker-compose.yml".into()];
   if compose_profiles::compose_full_overlay_enabled(compose_dir) {
@@ -260,6 +282,11 @@ async fn exec_docker_compose_in_dir(
     if let Some(pn) = project_name {
       if !pn.trim().is_empty() {
         cmd.env("COMPOSE_PROJECT_NAME", pn.trim());
+      }
+    }
+    if let Some(env_map) = extra_env {
+      for (k, v) in env_map {
+        cmd.env(k, v);
       }
     }
     let output = cmd
@@ -1811,7 +1838,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       if !dir.is_dir() {
         json!({ "ok": false, "log": "", "error": format!("[DOCKER_COMPOSE_FAILED] missing compose directory: {} (set LUMINA_DEV_COMPOSE_ROOT or run from a checkout with docker/compose)", dir.display()) })
       } else {
-        match exec_docker_compose_in_dir(&dir, &["up", "-d"], CMD_TIMEOUT_LONG, Some(profile)).await {
+        match exec_docker_compose_in_dir(&dir, &["up", "-d"], CMD_TIMEOUT_LONG, Some(profile), Some(get_profile_extra_env(&app, profile))).await {
           Ok((stdout, stderr)) => json!({ "ok": true, "log": format!("{}{}", stdout, stderr) }),
           Err(e) => json!({ "ok": false, "log": "", "error": format!("[DOCKER_COMPOSE_FAILED] {}", e.trim()) }),
         }
@@ -1823,7 +1850,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       if !dir.is_dir() {
         json!({ "ok": false, "log": "", "error": format!("[DOCKER_COMPOSE_FAILED] missing compose directory: {} (set LUMINA_DEV_COMPOSE_ROOT or run from a checkout with docker/compose)", dir.display()) })
       } else {
-        match exec_docker_compose_in_dir(&dir, &["logs", "--tail", "200"], CMD_TIMEOUT_DEFAULT, Some(profile)).await {
+        match exec_docker_compose_in_dir(&dir, &["logs", "--tail", "200"], CMD_TIMEOUT_DEFAULT, Some(profile), Some(get_profile_extra_env(&app, profile))).await {
           Ok((stdout, stderr)) => json!({ "ok": true, "log": format!("{}{}", stdout, stderr) }),
           Err(e) => json!({ "ok": false, "log": "", "error": format!("[DOCKER_COMPOSE_FAILED] {}", e.trim()) }),
         }
@@ -1835,7 +1862,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       if !dir.is_dir() {
         json!({ "ok": false, "log": "", "error": format!("[DOCKER_COMPOSE_FAILED] missing compose directory: {} (set LUMINA_DEV_COMPOSE_ROOT or run from a checkout with docker/compose)", dir.display()) })
       } else {
-        match exec_docker_compose_in_dir(&dir, &["down"], CMD_TIMEOUT_LONG, Some(profile)).await {
+        match exec_docker_compose_in_dir(&dir, &["down"], CMD_TIMEOUT_LONG, Some(profile), Some(get_profile_extra_env(&app, profile))).await {
           Ok((stdout, stderr)) => json!({ "ok": true, "log": format!("{}{}", stdout, stderr) }),
           Err(e) => json!({ "ok": false, "log": "", "error": format!("[DOCKER_COMPOSE_FAILED] {}", e.trim()) }),
         }
@@ -1855,7 +1882,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       if let Some(from) = from_profile {
         let from_dir = compose_profiles::compose_profile_workdir(&app, from);
         if from_dir.is_dir() {
-          match exec_docker_compose_in_dir(&from_dir, &["down"], CMD_TIMEOUT_LONG, Some(from)).await {
+          match exec_docker_compose_in_dir(&from_dir, &["down"], CMD_TIMEOUT_LONG, Some(from), Some(get_profile_extra_env(&app, from))).await {
             Ok((stdout, stderr)) => logs.push_str(&format!("Stopped old profile:\n{}{}\n", stdout, stderr)),
             Err(e) => logs.push_str(&format!("Warning: failed to stop old profile: {}\n", e.trim())),
           }
@@ -1871,7 +1898,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
         }));
       }
 
-      match exec_docker_compose_in_dir(&to_dir, &["up", "-d"], CMD_TIMEOUT_LONG, Some(to_profile)).await {
+      match exec_docker_compose_in_dir(&to_dir, &["up", "-d"], CMD_TIMEOUT_LONG, Some(to_profile), Some(get_profile_extra_env(&app, to_profile))).await {
         Ok((stdout, stderr)) => {
           logs.push_str(&format!("Started new profile:\n{}{}\n", stdout, stderr));
           json!({ "ok": true, "log": logs })
@@ -2230,30 +2257,77 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       }
       
       if template == "data-science" {
+        // Create professional directories
+        let _ = std::fs::create_dir_all(project_dir.join("data/raw"));
+        let _ = std::fs::create_dir_all(project_dir.join("data/processed"));
+        let _ = std::fs::create_dir_all(project_dir.join("notebooks"));
+        let _ = std::fs::create_dir_all(project_dir.join("src"));
+        let _ = std::fs::create_dir_all(project_dir.join("tests"));
+        
+        let _ = std::fs::write(project_dir.join("data/raw/.gitkeep"), "");
+        let _ = std::fs::write(project_dir.join("data/processed/.gitkeep"), "");
+        let _ = std::fs::write(project_dir.join("src/__init__.py"), "");
+        
         // Generate .env
         let env_content = "DATABASE_URL=postgresql://postgres:luminadev@postgres:5432/datasci\n";
         let _ = std::fs::write(project_dir.join(".env"), env_content);
         
+        // Generate .gitignore
+        let gitignore = ".env\n__pycache__/\n*.pyc\ndata/raw/*\n!data/raw/.gitkeep\ndata/processed/*\n!data/processed/.gitkeep\n.ipynb_checkpoints/\n";
+        let _ = std::fs::write(project_dir.join(".gitignore"), gitignore);
+        
+        // Generate README.md
+        let readme = format!("# Data Science Project\n\nGenerated by LuminaDev.\n\n## Structure\n- `data/`: Raw and processed datasets.\n- `notebooks/`: Jupyter notebooks.\n- `src/`: Reusable Python modules.\n- `tests/`: Unit tests.\n");
+        let _ = std::fs::write(project_dir.join("README.md"), readme);
+        
+        // Generate src/db.py
+        let db_py = r#"import os
+from sqlalchemy import create_engine
+
+def get_engine():
+    db_url = os.environ.get('DATABASE_URL')
+    if not db_url:
+        raise ValueError("DATABASE_URL environment variable is not set")
+    return create_engine(db_url)
+"#;
+        let _ = std::fs::write(project_dir.join("src/db.py"), db_py);
+        
+        // Generate src/data_loader.py
+        let data_loader = r#"import pandas as pd
+from .db import get_engine
+
+def load_data_from_db(query: str) -> pd.DataFrame:
+    engine = get_engine()
+    return pd.read_sql(query, engine)
+"#;
+        let _ = std::fs::write(project_dir.join("src/data_loader.py"), data_loader);
+
         // Generate requirements.txt
-        let deps = options.get("dependencies").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+        let deps = options.get("dependencies").and_then(|v| v.as_object()).cloned().unwrap_or_default();
         let mut reqs = String::new();
-        for d in deps {
-          if let Some(s) = d.as_str() {
-            reqs.push_str(s);
-            reqs.push('\n');
+        for (name, version) in deps {
+          let v_str = version.as_str().unwrap_or("latest").trim();
+          if v_str.is_empty() || v_str == "latest" {
+             reqs.push_str(&name);
+          } else {
+             reqs.push_str(&format!("{}=={}", name, v_str));
           }
+          reqs.push('\n');
         }
         let _ = std::fs::write(project_dir.join("requirements.txt"), reqs);
         
         // Generate main.py
         let create_main = options.get("createMainScript").and_then(|v| v.as_bool()).unwrap_or(false);
         if create_main {
-          let main_content = r#"import os
+          let main_content = r#"from src.db import get_engine
 
 def main():
-    db_url = os.environ.get('DATABASE_URL', 'Not set')
-    print("Welcome to LuminaDev Data Science Project!")
-    print(f"Database Connection String: {db_url}")
+    try:
+        engine = get_engine()
+        with engine.connect() as conn:
+            print("Successfully connected to the database!")
+    except Exception as e:
+        print(f"Error connecting to database: {e}")
 
 if __name__ == '__main__':
     main()
@@ -2270,8 +2344,8 @@ if __name__ == '__main__':
    "cell_type": "markdown",
    "metadata": {},
    "source": [
-    "# LuminaDev Data Science Exploration\n",
-    "Welcome to your new Jupyter Notebook! Dependencies have been installed and the PostgreSQL database is ready."
+    "# Data Exploration\n",
+    "Welcome to your LuminaDev Data Science project."
    ]
   },
   {
@@ -2280,35 +2354,25 @@ if __name__ == '__main__':
    "metadata": {},
    "outputs": [],
    "source": [
-    "import os\n",
-    "db_url = os.environ.get('DATABASE_URL')\n",
-    "print(f'Database URL: {db_url}')"
+    "from src.db import get_engine\n",
+    "import pandas as pd\n",
+    "\n",
+    "engine = get_engine()\n",
+    "print('Database connected!')"
    ]
   }
  ],
  "metadata": {
   "kernelspec": {
-   "display_name": "Python 3 (ipykernel)",
+   "display_name": "Python 3",
    "language": "python",
    "name": "python3"
-  },
-  "language_info": {
-   "codemirror_mode": {
-    "name": "ipython",
-    "version": 3
-   },
-   "file_extension": ".py",
-   "mimetype": "text/x-python",
-   "name": "python",
-   "nbconvert_exporter": "python",
-   "pygments_lexer": "ipython3",
-   "version": "3.10.0"
   }
  },
  "nbformat": 4,
  "nbformat_minor": 5
 }"##;
-          let _ = std::fs::write(project_dir.join("exploration.ipynb"), notebook_content);
+          let _ = std::fs::write(project_dir.join("notebooks/01_exploration.ipynb"), notebook_content);
         }
       }
       

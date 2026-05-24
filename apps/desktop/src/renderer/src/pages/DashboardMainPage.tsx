@@ -121,12 +121,13 @@ export function DashboardMainPage(): ReactElement {
   const [createProjectModalOpen, setCreateProjectModalOpen] = useState(false)
   const [createProjectStep, setCreateProjectStep] = useState(1)
   const [createProjectName, setCreateProjectName] = useState('')
-  const [createProjectDeps, setCreateProjectDeps] = useState<string[]>(['pandas', 'numpy'])
+  const [createProjectPythonVer, setCreateProjectPythonVer] = useState('latest')
+  const [createProjectPostgresVer, setCreateProjectPostgresVer] = useState('16')
+  const [createProjectDeps, setCreateProjectDeps] = useState<Record<string, string>>({ pandas: 'latest', numpy: 'latest' })
   const [createProjectAutoInstall, setCreateProjectAutoInstall] = useState(true)
   const [createProjectNotebook, setCreateProjectNotebook] = useState(true)
   const [createProjectMainPy, setCreateProjectMainPy] = useState(false)
   const [isScaffolding, setIsScaffolding] = useState(false)
-
 
   const refresh = useCallback(async () => {
     try {
@@ -236,6 +237,8 @@ export function DashboardMainPage(): ReactElement {
        if (res.ok) {
           setProjectPath(res.path)
           await window.dh.storeSet({ key: `project_dir_${selectedProfileName}`, data: res.path } as any)
+          await window.dh.storeSet({ key: `python_version_${selectedProfileName}`, data: createProjectPythonVer } as any)
+          await window.dh.storeSet({ key: `postgres_version_${selectedProfileName}`, data: createProjectPostgresVer } as any)
           
           if (createProjectAutoInstall) {
             setToast({ type: 'success', message: 'Installing dependencies in background...' })
@@ -431,8 +434,18 @@ export function DashboardMainPage(): ReactElement {
                              value={projectPath || 'No project linked.'} 
                              style={{ flex: 1, padding: '10px 14px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.2)', color: 'var(--text)', fontSize: 13 }} 
                           />
-                          <button onClick={handleLinkProject} style={{ padding: '0 16px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', color: 'var(--text)', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>Link Existing</button>
-                          <button onClick={() => setCreateProjectModalOpen(true)} style={{ padding: '0 16px', borderRadius: 6, border: 'none', background: selectedProfile.accent, color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>Create New</button>
+                          {!projectPath ? (
+                            <>
+                              <button onClick={handleLinkProject} style={{ padding: '0 16px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', color: 'var(--text)', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>Link Existing</button>
+                              <button onClick={() => setCreateProjectModalOpen(true)} style={{ padding: '0 16px', borderRadius: 6, border: 'none', background: selectedProfile.accent, color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>Create New</button>
+                            </>
+                          ) : (
+                            <button onClick={async () => {
+                               setProjectPath(null);
+                               await window.dh.storeSet({ key: `project_dir_${selectedProfileName}`, data: null } as any);
+                               setToast({ type: 'success', message: 'Project unlinked from profile.' });
+                            }} style={{ padding: '0 16px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,0,0,0.1)', color: 'var(--text)', cursor: 'pointer', fontSize: 13, fontWeight: 600, transition: 'background 0.2s' }} onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,0,0,0.2)'} onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,0,0,0.1)'}>Unlink Project</button>
+                          )}
                         </div>
                      </div>
                      {projectPath && (
@@ -739,7 +752,9 @@ export function DashboardMainPage(): ReactElement {
 
                  {createProjectStep === 1 && (
                     <div style={{ animation: 'fade-in 0.3s ease' }}>
-                      <p style={{ margin: '0 0 24px', color: 'var(--text-muted)', fontSize: 15, lineHeight: 1.6 }}>Step 1: Choose a name for your Data Science project.</p>
+                      <p style={{ margin: '0 0 24px', color: 'var(--text-muted)', fontSize: 15, lineHeight: 1.6 }}>Step 1: Project Name & Runtime Environment.</p>
+                      
+                      <strong style={{ display: 'block', marginBottom: 8, fontSize: 13, color: 'var(--text-muted)' }}>Project Name</strong>
                       <input
                         type="text"
                         autoFocus
@@ -748,18 +763,48 @@ export function DashboardMainPage(): ReactElement {
                         onKeyDown={(e) => { if (e.key === 'Enter' && createProjectName.trim()) setCreateProjectStep(2) }}
                         placeholder="e.g. sales-analysis"
                         style={{
-                          width: '100%', padding: '12px 16px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.2)', color: 'var(--text)', fontSize: 16, marginBottom: 32, outline: 'none', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.1)', transition: 'border-color 0.2s ease',
+                          width: '100%', padding: '12px 16px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.2)', color: 'var(--text)', fontSize: 16, marginBottom: 20, outline: 'none', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.1)', transition: 'border-color 0.2s ease',
                         }}
                         onFocus={(e) => { e.currentTarget.style.borderColor = selectedProfile.accent }}
                         onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)' }}
                       />
+
+                      <strong style={{ display: 'block', marginBottom: 8, fontSize: 13, color: 'var(--text-muted)' }}>Python Version</strong>
+                      <select
+                        value={createProjectPythonVer}
+                        onChange={(e) => setCreateProjectPythonVer(e.target.value)}
+                        style={{
+                          width: '100%', padding: '12px 16px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.2)', color: 'var(--text)', fontSize: 16, marginBottom: 32, outline: 'none', appearance: 'none', cursor: 'pointer'
+                        }}
+                      >
+                        <option value="latest">Latest Stable (from Jupyter)</option>
+                        <option value="3.11">Python 3.11</option>
+                        <option value="3.10">Python 3.10</option>
+                        <option value="3.9">Python 3.9</option>
+                        <option value="3.8">Python 3.8</option>
+                      </select>
                     </div>
                  )}
                  {createProjectStep === 2 && (
                     <div style={{ animation: 'fade-in 0.3s ease' }}>
                       <p style={{ margin: '0 0 24px', color: 'var(--text-muted)', fontSize: 15, lineHeight: 1.6 }}>Step 2: Database Configuration.</p>
+                      
+                      <strong style={{ display: 'block', marginBottom: 8, fontSize: 13, color: 'var(--text-muted)' }}>PostgreSQL Engine Version</strong>
+                      <select
+                        value={createProjectPostgresVer}
+                        onChange={(e) => setCreateProjectPostgresVer(e.target.value)}
+                        style={{
+                          width: '100%', padding: '12px 16px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.2)', color: 'var(--text)', fontSize: 16, marginBottom: 20, outline: 'none', appearance: 'none', cursor: 'pointer'
+                        }}
+                      >
+                        <option value="16">PostgreSQL 16 (Recommended)</option>
+                        <option value="15">PostgreSQL 15</option>
+                        <option value="14">PostgreSQL 14</option>
+                        <option value="13">PostgreSQL 13</option>
+                      </select>
+
                       <div style={{ background: 'rgba(0,0,0,0.2)', padding: 16, borderRadius: 8, border: `1px solid ${selectedProfile.accent}50`, marginBottom: 32 }}>
-                        <strong style={{ display: 'block', marginBottom: 8, color: selectedProfile.accent }}>PostgreSQL 16 (Included in Stack)</strong>
+                        <strong style={{ display: 'block', marginBottom: 8, color: selectedProfile.accent }}>Isolated Environment</strong>
                         <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)' }}>A dedicated PostgreSQL database will be isolated for this project automatically. A `.env` file will be generated with the connection string `DATABASE_URL`.</p>
                       </div>
                     </div>
@@ -784,13 +829,26 @@ export function DashboardMainPage(): ReactElement {
                         <strong style={{ display: 'block', marginBottom: 12, fontSize: 12, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--text-muted)' }}>Core Python Libraries</strong>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                           {['pandas', 'numpy', 'matplotlib', 'scikit-learn', 'tensorflow', 'torch', 'seaborn', 'sqlalchemy'].map(dep => (
-                            <label key={dep} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', background: createProjectDeps.includes(dep) ? `${selectedProfile.accent}20` : 'rgba(255,255,255,0.02)', padding: '8px 12px', borderRadius: 6, border: `1px solid ${createProjectDeps.includes(dep) ? selectedProfile.accent : 'rgba(255,255,255,0.05)'}`, transition: 'all 0.2s' }}>
-                              <input type="checkbox" checked={createProjectDeps.includes(dep)} onChange={e => {
-                                if (e.target.checked) setCreateProjectDeps([...createProjectDeps, dep])
-                                else setCreateProjectDeps(createProjectDeps.filter(d => d !== dep))
-                              }} style={{ width: 16, height: 16, accentColor: selectedProfile.accent }} />
-                              <span style={{ fontSize: 14, color: createProjectDeps.includes(dep) ? '#fff' : 'var(--text-muted)' }}>{dep}</span>
-                            </label>
+                            <div key={dep} style={{ display: 'flex', alignItems: 'center', gap: 8, background: Object.keys(createProjectDeps).includes(dep) ? `${selectedProfile.accent}20` : 'rgba(255,255,255,0.02)', padding: '6px 12px', borderRadius: 6, border: `1px solid ${Object.keys(createProjectDeps).includes(dep) ? selectedProfile.accent : 'rgba(255,255,255,0.05)'}`, transition: 'all 0.2s' }}>
+                              <input type="checkbox" checked={Object.keys(createProjectDeps).includes(dep)} onChange={e => {
+                                if (e.target.checked) setCreateProjectDeps({ ...createProjectDeps, [dep]: 'latest' })
+                                else {
+                                  const newDeps = { ...createProjectDeps };
+                                  delete newDeps[dep];
+                                  setCreateProjectDeps(newDeps);
+                                }
+                              }} style={{ width: 16, height: 16, accentColor: selectedProfile.accent, cursor: 'pointer', flexShrink: 0 }} />
+                              <span style={{ fontSize: 14, color: Object.keys(createProjectDeps).includes(dep) ? '#fff' : 'var(--text-muted)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>{dep}</span>
+                              {Object.keys(createProjectDeps).includes(dep) && (
+                                <input
+                                  type="text"
+                                  placeholder="latest"
+                                  value={createProjectDeps[dep] === 'latest' ? '' : createProjectDeps[dep]}
+                                  onChange={(e) => setCreateProjectDeps({ ...createProjectDeps, [dep]: e.target.value })}
+                                  style={{ width: 55, padding: '2px 6px', fontSize: 12, background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', borderRadius: 4, outline: 'none' }}
+                                />
+                              )}
+                            </div>
                           ))}
                         </div>
                       </div>
