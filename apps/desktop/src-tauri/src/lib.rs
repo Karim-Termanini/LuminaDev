@@ -244,6 +244,7 @@ async fn exec_docker_compose_in_dir(
   compose_dir: &Path,
   compose_subargs: &[&str],
   limit: Duration,
+  project_name: Option<&str>,
 ) -> Result<(String, String), String> {
   let mut compose_args: Vec<String> = vec!["compose".into(), "-f".into(), "docker-compose.yml".into()];
   if compose_profiles::compose_full_overlay_enabled(compose_dir) {
@@ -254,9 +255,14 @@ async fn exec_docker_compose_in_dir(
     compose_args.push((*a).to_string());
   }
   let fut = async {
-    let output = Command::new("docker")
-      .current_dir(compose_dir)
-      .args(&compose_args)
+    let mut cmd = Command::new("docker");
+    cmd.current_dir(compose_dir).args(&compose_args);
+    if let Some(pn) = project_name {
+      if !pn.trim().is_empty() {
+        cmd.env("COMPOSE_PROJECT_NAME", pn.trim());
+      }
+    }
+    let output = cmd
       .output()
       .await
       .map_err(|e| format!("[EXEC_ERROR] {}", e))?;
@@ -1805,7 +1811,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       if !dir.is_dir() {
         json!({ "ok": false, "log": "", "error": format!("[DOCKER_COMPOSE_FAILED] missing compose directory: {} (set LUMINA_DEV_COMPOSE_ROOT or run from a checkout with docker/compose)", dir.display()) })
       } else {
-        match exec_docker_compose_in_dir(&dir, &["up", "-d"], CMD_TIMEOUT_LONG).await {
+        match exec_docker_compose_in_dir(&dir, &["up", "-d"], CMD_TIMEOUT_LONG, Some(profile)).await {
           Ok((stdout, stderr)) => json!({ "ok": true, "log": format!("{}{}", stdout, stderr) }),
           Err(e) => json!({ "ok": false, "log": "", "error": format!("[DOCKER_COMPOSE_FAILED] {}", e.trim()) }),
         }
@@ -1817,7 +1823,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       if !dir.is_dir() {
         json!({ "ok": false, "log": "", "error": format!("[DOCKER_COMPOSE_FAILED] missing compose directory: {} (set LUMINA_DEV_COMPOSE_ROOT or run from a checkout with docker/compose)", dir.display()) })
       } else {
-        match exec_docker_compose_in_dir(&dir, &["logs", "--tail", "200"], CMD_TIMEOUT_DEFAULT).await {
+        match exec_docker_compose_in_dir(&dir, &["logs", "--tail", "200"], CMD_TIMEOUT_DEFAULT, Some(profile)).await {
           Ok((stdout, stderr)) => json!({ "ok": true, "log": format!("{}{}", stdout, stderr) }),
           Err(e) => json!({ "ok": false, "log": "", "error": format!("[DOCKER_COMPOSE_FAILED] {}", e.trim()) }),
         }
@@ -1829,7 +1835,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       if !dir.is_dir() {
         json!({ "ok": false, "log": "", "error": format!("[DOCKER_COMPOSE_FAILED] missing compose directory: {} (set LUMINA_DEV_COMPOSE_ROOT or run from a checkout with docker/compose)", dir.display()) })
       } else {
-        match exec_docker_compose_in_dir(&dir, &["down"], CMD_TIMEOUT_LONG).await {
+        match exec_docker_compose_in_dir(&dir, &["down"], CMD_TIMEOUT_LONG, Some(profile)).await {
           Ok((stdout, stderr)) => json!({ "ok": true, "log": format!("{}{}", stdout, stderr) }),
           Err(e) => json!({ "ok": false, "log": "", "error": format!("[DOCKER_COMPOSE_FAILED] {}", e.trim()) }),
         }
@@ -1849,7 +1855,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       if let Some(from) = from_profile {
         let from_dir = compose_profiles::compose_profile_workdir(&app, from);
         if from_dir.is_dir() {
-          match exec_docker_compose_in_dir(&from_dir, &["down"], CMD_TIMEOUT_LONG).await {
+          match exec_docker_compose_in_dir(&from_dir, &["down"], CMD_TIMEOUT_LONG, Some(from)).await {
             Ok((stdout, stderr)) => logs.push_str(&format!("Stopped old profile:\n{}{}\n", stdout, stderr)),
             Err(e) => logs.push_str(&format!("Warning: failed to stop old profile: {}\n", e.trim())),
           }
@@ -1865,7 +1871,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
         }));
       }
 
-      match exec_docker_compose_in_dir(&to_dir, &["up", "-d"], CMD_TIMEOUT_LONG).await {
+      match exec_docker_compose_in_dir(&to_dir, &["up", "-d"], CMD_TIMEOUT_LONG, Some(to_profile)).await {
         Ok((stdout, stderr)) => {
           logs.push_str(&format!("Started new profile:\n{}{}\n", stdout, stderr));
           json!({ "ok": true, "log": logs })
