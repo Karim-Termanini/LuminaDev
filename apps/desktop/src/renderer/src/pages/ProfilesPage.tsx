@@ -1,6 +1,7 @@
 import {
   CustomProfilesStoreSchema,
   OnLoginAutomationStoreSchema,
+  type ComposeProfile,
   type CustomProfileEntry,
   type OnLoginAutomationStore,
   parseOnLoginAutomation,
@@ -8,6 +9,18 @@ import {
 import './ProfilesPage.css'
 import type { ReactElement } from 'react'
 import { useEffect, useMemo, useState } from 'react'
+
+const BASE_TEMPLATES = [
+  'web-dev',
+  'data-science',
+  'ai-ml',
+  'mobile',
+  'game-dev',
+  'infra',
+  'desktop-gui',
+  'docs',
+  'empty',
+]
 
 export function ProfilesPage(): ReactElement {
   const [profiles, setProfiles] = useState<CustomProfileEntry[]>([])
@@ -23,6 +36,9 @@ export function ProfilesPage(): ReactElement {
   const [credInputValue, setCredInputValue] = useState('')
   const [envKeyInput, setEnvKeyInput] = useState('')
   const [envValueInput, setEnvValueInput] = useState('')
+  const [isCreatingProfile, setIsCreatingProfile] = useState(false)
+  const [newProfileName, setNewProfileName] = useState('')
+  const [newProfileTemplate, setNewProfileTemplate] = useState<ComposeProfile>('web-dev')
 
   async function load(): Promise<void> {
     try {
@@ -83,6 +99,34 @@ export function ProfilesPage(): ReactElement {
     if (!p) return
     const next = [...profiles, { ...p, name: `${p.name} Copy` }]
     await save(next, 'Profile duplicated.')
+  }
+
+  function openCreateModal(): void {
+    setIsCreatingProfile(true)
+    setNewProfileName('')
+    setNewProfileTemplate('web-dev')
+  }
+
+  function closeCreateModal(): void {
+    setIsCreatingProfile(false)
+    setNewProfileName('')
+    setNewProfileTemplate('web-dev')
+  }
+
+  async function saveNewProfile(): Promise<void> {
+    if (!newProfileName.trim()) {
+      setStatus('Profile name is required.')
+      return
+    }
+    const newProfile: CustomProfileEntry = {
+      name: newProfileName.trim(),
+      baseTemplate: newProfileTemplate,
+      envVars: [],
+      credentialIds: [],
+    }
+    const next = [...profiles, newProfile]
+    await save(next, `Profile "${newProfileName.trim()}" created.`)
+    closeCreateModal()
   }
 
   function openEditModal(idx: number): void {
@@ -229,10 +273,24 @@ export function ProfilesPage(): ReactElement {
       </section>
 
       <section style={card}>
-        <div style={{ fontWeight: 600, marginBottom: 10 }}>Profile Builder</div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+          <div style={{ fontWeight: 600 }}>Profile Builder</div>
+          <button
+            type="button"
+            style={{
+              ...btn,
+              background: 'var(--accent)',
+              color: '#fff',
+              fontWeight: 700,
+            }}
+            onClick={openCreateModal}
+          >
+            + Create Custom Profile
+          </button>
+        </div>
         {profiles.length === 0 ? (
           <div style={{ color: 'var(--text-muted)' }}>
-            No custom profiles yet. Create one from scratch or import JSON below using the Backup & Sync section.
+            No custom profiles yet. Create one from scratch using the button above, or import JSON below using the Backup & Sync section.
           </div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(320px,1fr))', gap: 10 }}>
@@ -413,6 +471,70 @@ export function ProfilesPage(): ReactElement {
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
               <button type="button" style={btn} onClick={closeEditModal}>Cancel</button>
               <button type="button" style={{ ...btn, background: 'var(--accent)', color: '#fff' }} onClick={() => void saveProfileChanges()}>Save Changes</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create New Profile Modal */}
+      {isCreatingProfile && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ background: 'var(--bg-widget)', border: '1px solid var(--border)', borderRadius: 8, padding: 24, maxWidth: 500, boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
+            <h2 style={{ margin: '0 0 20px 0', fontSize: 20, fontWeight: 700 }}>Create Custom Profile</h2>
+
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ display: 'block', fontSize: 14, fontWeight: 600, marginBottom: 8, color: 'var(--text)' }}>Profile Name</label>
+              <input
+                type="text"
+                value={newProfileName}
+                onChange={(e) => setNewProfileName(e.target.value)}
+                placeholder="e.g., My Custom Backend"
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  background: 'var(--bg-input)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 4,
+                  color: 'var(--text)',
+                  fontSize: 14,
+                  boxSizing: 'border-box',
+                }}
+              />
+            </div>
+
+            <div style={{ marginBottom: 24 }}>
+              <label style={{ display: 'block', fontSize: 14, fontWeight: 600, marginBottom: 8, color: 'var(--text)' }}>Base Template</label>
+              <select
+                value={newProfileTemplate}
+                onChange={(e) => setNewProfileTemplate(e.target.value as ComposeProfile)}
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  background: 'var(--bg-input)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 4,
+                  color: 'var(--text)',
+                  fontSize: 14,
+                  boxSizing: 'border-box',
+                }}
+              >
+                {BASE_TEMPLATES.map((template) => (
+                  <option key={template} value={template} style={{ background: '#1a1a1a', color: 'var(--text)' }}>
+                    {template}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button type="button" style={btn} onClick={closeCreateModal}>Cancel</button>
+              <button
+                type="button"
+                style={{ ...btn, background: 'var(--accent)', color: '#fff' }}
+                onClick={() => void saveNewProfile()}
+              >
+                Save Profile
+              </button>
             </div>
           </div>
         </div>
