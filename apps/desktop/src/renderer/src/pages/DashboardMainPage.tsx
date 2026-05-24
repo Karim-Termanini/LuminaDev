@@ -6,6 +6,7 @@ import {
 } from '@linux-dev-home/shared'
 import type { ReactElement } from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { humanizeProfileError } from './profileError'
 
 import './DashboardPage.css'
@@ -38,10 +39,10 @@ function generateEventFeed(profileName: string): Array<{ id: string; icon: strin
   const now = Date.now()
   const seeds = profileName.split('').map(c => c.charCodeAt(0)).reduce((a, b) => a + b, 0)
   const events = [
-    { icon: 'check', color: 'var(--green)', title: 'Containers initialized', timeMs: now - 30000 },
-    { icon: 'plug', color: 'var(--accent)', title: 'Port 5432 (PostgreSQL) exposed', timeMs: now - 120000 },
-    { icon: 'database', color: 'var(--blue)', title: 'Cache warmed up', timeMs: now - 300000 },
-    { icon: 'server', color: 'var(--accent)', title: 'Profile activated', timeMs: now - 600000 },
+    { icon: 'check', color: 'var(--green)', title: `[${profileName}] Environment successfully initialized and routing active`, timeMs: now - 30000 },
+    { icon: 'plug', color: 'var(--accent)', title: `Port 5432 mapped to localhost:5432 for ${profileName} database access`, timeMs: now - 120000 },
+    { icon: 'database', color: 'var(--blue)', title: `Persistent volumes mounted and cache warmed up successfully`, timeMs: now - 300000 },
+    { icon: 'server', color: 'var(--accent)', title: `Profile '${profileName}' boot sequence completed without errors`, timeMs: now - 600000 },
   ]
   return events
     .sort(() => (seeds % 2) - 0.5)
@@ -68,6 +69,35 @@ function generateServices(profileName: string): Array<{ id: string; name: string
     status: i === 0 ? 'running' : i === 1 ? 'pending' : 'idle',
     uptime: ['4h 32m', '2h 15m', '1h 08m'][i % 3] || '0h',
   }))
+}
+
+function generateProjects(profileName: string): Array<{ id: string; name: string; profile: string; lastModified: string; color: string; icon: string }> {
+  const allProjects = [
+    { id: 'proj-1', name: 'Lumina API Backend', profile: 'web-dev', lastModified: '2 hours ago', color: 'var(--accent)', icon: 'server-process' },
+    { id: 'proj-2', name: 'Frontend Client', profile: 'web-dev', lastModified: '5 hours ago', color: 'var(--blue)', icon: 'browser' },
+    { id: 'proj-3', name: 'ML Data Pipeline', profile: 'data-science', lastModified: '1 day ago', color: 'var(--green)', icon: 'database' },
+    { id: 'proj-4', name: 'Training Models', profile: 'ai-ml', lastModified: '3 days ago', color: 'var(--purple)', icon: 'hubot' },
+    { id: 'proj-5', name: 'Documentation Site', profile: 'docs', lastModified: '1 week ago', color: 'var(--yellow)', icon: 'book' },
+  ]
+  const filtered = allProjects.filter(p => p.profile === profileName)
+  return filtered.length > 0 ? filtered : allProjects.slice(0, 2)
+}
+
+function generateProjectsStats(): Array<{ label: string; value: number; color: string }> {
+  return [
+    { label: 'Web Dev', value: 45, color: 'var(--accent)' },
+    { label: 'Data Science', value: 25, color: 'var(--green)' },
+    { label: 'AI/ML', value: 20, color: 'var(--blue)' },
+    { label: 'Other', value: 10, color: 'var(--text-muted)' },
+  ]
+}
+
+function generateNotifications(): Array<{ id: string; title: string; subtitle: string; time: string; type: 'alert' | 'info' | 'success'; icon: string }> {
+  return [
+    { id: 'notif-1', title: 'System Update Available', subtitle: 'LuminaDev v1.2.4 is ready to install.', time: '10m ago', type: 'alert', icon: 'bell' },
+    { id: 'notif-2', title: 'GitHub PR Merged', subtitle: '#42 Fix memory leak in orchestrator', time: '1h ago', type: 'success', icon: 'git-merge' },
+    { id: 'notif-3', title: 'Docker Engine', subtitle: 'Docker daemon memory usage is high (85%)', time: '3h ago', type: 'alert', icon: 'warning' },
+  ]
 }
 
 function formatTime(ms: number): string {
@@ -105,6 +135,7 @@ interface Toast {
 }
 
 export function DashboardMainPage(): ReactElement {
+  const navigate = useNavigate()
   const [docker, setDocker] = useState<{ ok: true; rows: ContainerRow[] } | { ok: false; error: string } | null>(null)
   const [snap, setSnap] = useState<HostMetricsResponse | null>(null)
   const [toast, setToast] = useState<Toast | null>(null)
@@ -304,36 +335,38 @@ export function DashboardMainPage(): ReactElement {
             )}
 
             {/* Section 4: Active Containers + Services Grid */}
-            <div style={{ marginTop: 32, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+            <div style={{ marginTop: 32, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
               {/* Active Containers Table */}
               {activeProfile && (
-                <div>
-                  <h3 style={{ margin: '0 0 16px', fontSize: 14, fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.05em' }}>
-                    Active Containers
-                  </h3>
+                <div className="dashboard-widget" style={{ padding: 0, overflow: 'hidden' }}>
+                  <div style={{ padding: '24px 24px 16px' }}>
+                    <h3 className="dashboard-widget-title" style={{ margin: 0 }}>Active Containers</h3>
+                  </div>
                   {activeContainers.length > 0 ? (
-                    <div style={{ overflowX: 'auto' }}>
-                      <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
-                        <thead>
-                          <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                            <th style={{ padding: '8px 12px', textAlign: 'left', color: 'var(--text-muted)', fontWeight: 600 }}>Name</th>
-                            <th style={{ padding: '8px 12px', textAlign: 'left', color: 'var(--text-muted)', fontWeight: 600 }}>State</th>
-                            <th style={{ padding: '8px 12px', textAlign: 'left', color: 'var(--text-muted)', fontWeight: 600 }}>Image</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {activeContainers.map((row) => (
-                            <tr key={row.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                              <td style={{ padding: '8px 12px' }}>{row.name}</td>
-                              <td style={{ padding: '8px 12px', color: row.state === 'running' ? 'var(--green)' : 'var(--text-muted)' }}>{row.state}</td>
-                              <td style={{ padding: '8px 12px', color: 'var(--text-muted)', fontSize: 12 }}>{row.image}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                      {activeContainers.map((row) => (
+                        <div 
+                          key={row.id} 
+                          onClick={() => navigate('/docker?tab=containers')}
+                          style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 16, padding: '16px 24px', borderTop: '1px solid rgba(255,255,255,0.05)', background: 'transparent', transition: 'background 0.2s ease' }} 
+                          onMouseEnter={(e) => e.currentTarget.style.background='rgba(255,255,255,0.02)'} 
+                          onMouseLeave={(e) => e.currentTarget.style.background='transparent'}
+                        >
+                          <div className="dashboard-list-icon" style={{ background: 'rgba(255,255,255,0.05)' }}>
+                            <span className="codicon codicon-server" style={{ fontSize: 20, color: 'var(--text-muted)' }} />
+                          </div>
+                          <div className="dashboard-list-content">
+                            <span className="dashboard-list-title">{row.name}</span>
+                            <span className="dashboard-list-subtitle">{row.image}</span>
+                          </div>
+                          <span className={`dashboard-list-badge ${row.state === 'running' ? 'badge-running' : 'badge-idle'}`}>
+                            {row.state}
+                          </span>
+                        </div>
+                      ))}
                     </div>
                   ) : (
-                    <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13, background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)', borderRadius: 8 }}>
+                    <div style={{ padding: '0 24px 24px', color: 'var(--text-muted)', fontSize: 13 }}>
                       No containers running for this profile.
                     </div>
                   )}
@@ -342,30 +375,23 @@ export function DashboardMainPage(): ReactElement {
 
               {/* Services Grid */}
               {selectedProfileName && (
-                <div>
-                  <h3 style={{ margin: '0 0 16px', fontSize: 14, fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.05em' }}>
-                    Services
-                  </h3>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div className="dashboard-widget" style={{ padding: 0, overflow: 'hidden' }}>
+                  <div style={{ padding: '24px 24px 16px' }}>
+                    <h3 className="dashboard-widget-title" style={{ margin: 0 }}>Services</h3>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
                     {generateServices(selectedProfileName).map((s) => (
-                      <div
-                        key={s.id}
-                        style={{
-                          padding: 16,
-                          borderRadius: 8,
-                          background: 'linear-gradient(135deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.01) 100%)',
-                          border: '1px solid rgba(255,255,255,0.06)',
-                          backdropFilter: 'blur(8px)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <div style={{ width: 8, height: 8, borderRadius: '50%', background: s.status === 'running' ? 'var(--green)' : s.status === 'pending' ? 'var(--yellow)' : 'var(--text-muted)' }} />
-                          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{s.name}</span>
+                      <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '16px 24px', borderTop: '1px solid rgba(255,255,255,0.05)', background: 'transparent', transition: 'background 0.2s ease' }} onMouseEnter={(e) => e.currentTarget.style.background='rgba(255,255,255,0.02)'} onMouseLeave={(e) => e.currentTarget.style.background='transparent'}>
+                        <div className="dashboard-list-icon" style={{ background: 'rgba(255,255,255,0.05)' }}>
+                          <span className="codicon codicon-plug" style={{ fontSize: 20, color: 'var(--text-muted)' }} />
                         </div>
-                        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{s.uptime}</span>
+                        <div className="dashboard-list-content">
+                          <span className="dashboard-list-title">{s.name}</span>
+                          <span className="dashboard-list-subtitle">Uptime: {s.uptime}</span>
+                        </div>
+                        <span className={`dashboard-list-badge ${s.status === 'running' ? 'badge-running' : s.status === 'pending' ? 'badge-pending' : 'badge-idle'}`}>
+                          {s.status}
+                        </span>
                       </div>
                     ))}
                   </div>
@@ -373,10 +399,60 @@ export function DashboardMainPage(): ReactElement {
               )}
             </div>
 
-            {/* Section 5: Recent Activity Feed at Bottom */}
+            {/* Section 5: Projects & Notifications */}
             {selectedProfileName && (
-              <div style={{ marginTop: 32 }}>
-                <EventFeed events={generateEventFeed(selectedProfileName)} />
+              <div style={{ marginTop: 32, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(480px, 1fr))', gap: 24 }}>
+                
+                {/* Left Column: Projects Stats & List */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+                  <ResourceDonutChart data={generateProjectsStats()} title="Projects Worked (By Profile)" />
+                  <div className="dashboard-widget" style={{ padding: 0, overflow: 'hidden' }}>
+                    <div style={{ padding: '24px 24px 16px' }}>
+                      <h3 className="dashboard-widget-title" style={{ margin: 0 }}>Recent Projects</h3>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                      {generateProjects(selectedProfileName).map((p) => (
+                        <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '16px 24px', borderTop: '1px solid rgba(255,255,255,0.05)', background: 'transparent', transition: 'background 0.2s ease' }} onMouseEnter={(e) => e.currentTarget.style.background='rgba(255,255,255,0.02)'} onMouseLeave={(e) => e.currentTarget.style.background='transparent'}>
+                          <div className="dashboard-list-icon" style={{ background: 'rgba(255,255,255,0.05)' }}>
+                            <span className={`codicon codicon-${p.icon}`} style={{ fontSize: 20, color: p.color }} />
+                          </div>
+                          <div className="dashboard-list-content">
+                            <span className="dashboard-list-title">{p.name}</span>
+                            <span className="dashboard-list-subtitle">Modified {p.lastModified}</span>
+                          </div>
+                          <span className="dashboard-list-badge" style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-muted)', border: '1px solid rgba(255,255,255,0.1)' }}>
+                            {p.profile}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right Column: Activity & Notifications */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+                  <EventFeed events={generateEventFeed(selectedProfileName)} />
+                  <div className="dashboard-widget">
+                    <h3 className="dashboard-widget-title">Notifications</h3>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                      {generateNotifications().map((n) => (
+                        <div key={n.id} style={{ display: 'flex', gap: 16, alignItems: 'flex-start', padding: '16px', borderRadius: 12, background: 'rgba(20,20,24,0.5)', border: '1px solid rgba(255,255,255,0.04)', transition: 'all 0.2s ease' }} onMouseEnter={(e) => e.currentTarget.style.background='rgba(255,255,255,0.03)'} onMouseLeave={(e) => e.currentTarget.style.background='rgba(20,20,24,0.5)'}>
+                          <div style={{ width: 40, height: 40, borderRadius: '50%', background: n.type === 'alert' ? 'rgba(255,107,107,0.15)' : n.type === 'success' ? 'rgba(0,230,118,0.15)' : 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <span className={`codicon codicon-${n.icon}`} style={{ fontSize: 18, color: n.type === 'alert' ? '#ff6b6b' : n.type === 'success' ? '#00e676' : 'var(--text-muted)' }} />
+                          </div>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                              <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>{n.title}</span>
+                              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{n.time}</span>
+                            </div>
+                            <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4, lineHeight: 1.4 }}>{n.subtitle}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
               </div>
             )}
           </>
@@ -387,8 +463,8 @@ export function DashboardMainPage(): ReactElement {
 
       {/* RIGHT: Profile Sidebar */}
       <div className="dashboard-sidebar">
-        <h3 style={{ margin: '0 0 12px', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)' }}>
-          Profiles
+        <h3 style={{ margin: '0 0 16px', fontSize: 13, fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.05em', paddingLeft: 8 }}>
+          Environments
         </h3>
         <div className="profile-list">
           {PRESET_PROFILES.map((prof) => (
@@ -397,24 +473,9 @@ export function DashboardMainPage(): ReactElement {
               type="button"
               onClick={() => setSelectedProfileName(prof.name)}
               className={`profile-list-item ${selectedProfileName === prof.name ? 'active' : ''}`}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 10,
-                width: '100%',
-                padding: '10px 12px',
-                border: selectedProfileName === prof.name ? `1px solid ${prof.accent}` : '1px solid var(--border)',
-                borderRadius: 6,
-                background: selectedProfileName === prof.name ? `color-mix(in srgb, ${prof.accent} 8%, var(--bg-widget))` : 'transparent',
-                color: 'var(--text)',
-                cursor: 'pointer',
-                fontSize: 13,
-                marginBottom: 8,
-                transition: 'all 0.2s ease',
-              }}
             >
-              <span className={`codicon codicon-${prof.icon}`} style={{ fontSize: 16, color: prof.accent, flexShrink: 0 }} />
-              <span style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <span className={`codicon codicon-${prof.icon}`} style={{ fontSize: 18, color: prof.accent, flexShrink: 0 }} />
+              <span style={{ flex: 1, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: selectedProfileName === prof.name ? 600 : 400 }}>
                 {prof.title}
               </span>
               <span style={{
@@ -422,8 +483,9 @@ export function DashboardMainPage(): ReactElement {
                 width: 8,
                 height: 8,
                 borderRadius: '50%',
-                background: activeProfile === prof.name ? prof.accent : 'var(--border)',
+                background: activeProfile === prof.name ? prof.accent : 'transparent',
                 flexShrink: 0,
+                boxShadow: activeProfile === prof.name ? `0 0 8px ${prof.accent}` : 'none'
               }} />
             </button>
           ))}
@@ -432,49 +494,36 @@ export function DashboardMainPage(): ReactElement {
 
       {/* Confirmation Modal */}
       {confirmModalOpen && selectedProfile && (
-        <div style={{
-          position: 'fixed',
-          inset: 0,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: 'rgba(0, 0, 0, 0.7)',
-          zIndex: 1000,
-        }}>
-          <div style={{
-            background: 'var(--bg-widget)',
-            border: '1px solid var(--border)',
-            borderRadius: 12,
-            padding: 24,
-            maxWidth: 400,
-            boxShadow: '0 20px 60px rgba(0, 0, 0, 0.5)',
-          }}>
-            <h3 style={{ margin: '0 0 12px', fontSize: 18, fontWeight: 700 }}>Switch Profile?</h3>
-            <p style={{ margin: '0 0 20px', color: 'var(--text-muted)', fontSize: 14, lineHeight: 1.5 }}>
+        <div className="fluent-modal-overlay">
+          <div className="fluent-modal-content">
+            <h2 style={{ margin: '0 0 16px 0', fontSize: 24, fontWeight: 700 }}>Switch Environment?</h2>
+            <p style={{ margin: '0 0 32px', color: 'var(--text-muted)', fontSize: 15, lineHeight: 1.6 }}>
               {activeProfile ? (
                 <>
-                  Compose down <strong style={{ color: 'var(--text)' }}>{activeProfile}</strong>, then start{' '}
-                  <strong style={{ color: 'var(--text)' }}>{selectedProfile.title}</strong>?
+                  This will bring down <strong style={{ color: 'var(--text)' }}>{activeProfile}</strong>, and initialize{' '}
+                  <strong style={{ color: 'var(--text)' }}>{selectedProfile.title}</strong> instead. Proceed?
                 </>
               ) : (
-                <>Start <strong style={{ color: 'var(--text)' }}>{selectedProfile.title}</strong>?</>
+                <>Start <strong style={{ color: 'var(--text)' }}>{selectedProfile.title}</strong> now?</>
               )}
             </p>
-            <div style={{ display: 'flex', gap: 12 }}>
+            <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 16 }}>
               <button
                 type="button"
                 onClick={() => setConfirmModalOpen(false)}
                 style={{
-                  flex: 1,
-                  padding: '10px 16px',
-                  border: '1px solid var(--border)',
+                  padding: '10px 24px',
+                  border: '1px solid rgba(255,255,255,0.1)',
                   borderRadius: 6,
-                  background: 'transparent',
+                  background: 'rgba(255,255,255,0.05)',
                   color: 'var(--text)',
                   cursor: 'pointer',
                   fontWeight: 600,
-                  fontSize: 13,
+                  fontSize: 14,
+                  transition: 'all 0.2s ease',
                 }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.1)' }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)' }}
               >
                 Cancel
               </button>
@@ -482,18 +531,21 @@ export function DashboardMainPage(): ReactElement {
                 type="button"
                 onClick={handleConfirmSwitch}
                 style={{
-                  flex: 1,
-                  padding: '10px 16px',
+                  padding: '10px 24px',
                   border: 'none',
                   borderRadius: 6,
                   background: selectedProfile.accent,
                   color: '#fff',
                   cursor: 'pointer',
                   fontWeight: 600,
-                  fontSize: 13,
+                  fontSize: 14,
+                  boxShadow: `0 4px 12px ${selectedProfile.accent}40`,
+                  transition: 'all 0.2s ease',
                 }}
+                onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = `0 6px 16px ${selectedProfile.accent}60` }}
+                onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = `0 4px 12px ${selectedProfile.accent}40` }}
               >
-                Confirm
+                Confirm Switch
               </button>
             </div>
           </div>
@@ -533,7 +585,7 @@ function ActivityChart(props: { data: Array<{ label: string; cpu: number; ram: n
   )
 }
 
-function ResourceDonutChart(props: { data: Array<{ label: string; value: number; color: string }> }): ReactElement {
+function ResourceDonutChart(props: { data: Array<{ label: string; value: number; color: string }>; title?: string }): ReactElement {
   const total = props.data.reduce((sum, d) => sum + d.value, 0)
   const normalized = props.data.map(d => ({ ...d, percent: (d.value / total) * 100 }))
 
@@ -548,7 +600,7 @@ function ResourceDonutChart(props: { data: Array<{ label: string; value: number;
 
   return (
     <div className="dashboard-widget">
-      <h3 className="dashboard-widget-title">Container Status</h3>
+      <h3 className="dashboard-widget-title">{props.title || 'Container Status'}</h3>
       <div style={{ display: 'flex', gap: 32, alignItems: 'center' }}>
         <div style={{
           width: 160,
