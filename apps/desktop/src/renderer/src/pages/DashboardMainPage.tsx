@@ -10,6 +10,74 @@ import { humanizeProfileError } from './profileError'
 
 import './DashboardPage.css'
 
+// Mock data generators
+function generateActivityData(profileName: string): Array<{ label: string; cpu: number; ram: number }> {
+  const seed = profileName.charCodeAt(0) + profileName.charCodeAt(profileName.length - 1)
+  const periods = ['12h ago', '10h ago', '8h ago', '6h ago', 'now']
+  return periods.map((label, i) => ({
+    label,
+    cpu: Math.max(10, Math.min(90, 30 + seed + i * 5 + Math.sin(seed + i) * 20)),
+    ram: Math.max(15, Math.min(85, 40 + seed * 0.5 + i * 3 + Math.cos(seed + i) * 15)),
+  }))
+}
+
+function generateResourceAllocation(profileName: string) {
+  const seed = profileName.charCodeAt(0) % 3
+  const allocations = [
+    { label: 'Running', value: 65, color: 'var(--green)' },
+    { label: 'Exited', value: 20, color: 'var(--text-muted)' },
+    { label: 'Paused', value: 15, color: 'var(--yellow)' },
+  ]
+  return allocations.map((a, i) => ({
+    ...a,
+    value: Math.max(5, a.value + ((seed * i) % 10) - 5),
+  }))
+}
+
+function generateEventFeed(profileName: string): Array<{ id: string; icon: string; color: string; title: string; time: string }> {
+  const now = Date.now()
+  const seeds = profileName.split('').map(c => c.charCodeAt(0)).reduce((a, b) => a + b, 0)
+  const events = [
+    { icon: 'check', color: 'var(--green)', title: 'Containers initialized', timeMs: now - 30000 },
+    { icon: 'plug', color: 'var(--accent)', title: 'Port 5432 (PostgreSQL) exposed', timeMs: now - 120000 },
+    { icon: 'database', color: 'var(--blue)', title: 'Cache warmed up', timeMs: now - 300000 },
+    { icon: 'server', color: 'var(--accent)', title: 'Profile activated', timeMs: now - 600000 },
+  ]
+  return events
+    .sort(() => (seeds % 2) - 0.5)
+    .map((e, i) => ({
+      id: `${profileName}-event-${i}`,
+      icon: e.icon,
+      color: e.color,
+      title: e.title,
+      time: formatTime(e.timeMs),
+    }))
+}
+
+function generateServices(profileName: string): Array<{ id: string; name: string; status: 'running' | 'pending' | 'idle'; uptime: string }> {
+  const servicesByProfile: Record<string, string[]> = {
+    'web-dev': ['Nginx', 'API Server', 'Database'],
+    'data-science': ['Jupyter Lab', 'PostgreSQL', 'Redis'],
+    'ai-ml': ['PyTorch Runtime', 'Jupyter', 'GPU Monitor'],
+    'docs': ['Jekyll', 'Search Index'],
+  }
+  const services = servicesByProfile[profileName] || ['Default Service']
+  return services.map((name, i) => ({
+    id: `${profileName}-svc-${i}`,
+    name,
+    status: i === 0 ? 'running' : i === 1 ? 'pending' : 'idle',
+    uptime: ['4h 32m', '2h 15m', '1h 08m'][i % 3] || '0h',
+  }))
+}
+
+function formatTime(ms: number): string {
+  const ago = (Date.now() - ms) / 1000
+  if (ago < 60) return 'Just now'
+  if (ago < 3600) return `${Math.floor(ago / 60)}m ago`
+  if (ago < 86400) return `${Math.floor(ago / 3600)}h ago`
+  return `${Math.floor(ago / 86400)}d ago`
+}
+
 interface ProfileDef {
   name: ComposeProfile
   title: string
@@ -238,16 +306,30 @@ export function DashboardMainPage(): ReactElement {
               </div>
             )}
 
-            {/* System Metrics Section (if active) */}
-            {activeProfile === selectedProfileName && m && (
+            {/* Analytics Section (if active) */}
+            {activeProfile === selectedProfileName && selectedProfileName && (
               <div style={{ marginTop: 32 }}>
-                <h3 style={{ margin: '0 0 16px', fontSize: 15, fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-muted)' }}>
-                  System Metrics
-                </h3>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
-                  <DashboardMetricBar label="CPU" valueText={`${m.cpuUsagePercent.toFixed(0)}%`} percent={m.cpuUsagePercent} />
-                  <DashboardMetricBar label="RAM" valueText={`${((m.totalMemMb - m.freeMemMb) / 1024).toFixed(1)} / ${(m.totalMemMb / 1024).toFixed(1)} GB`} percent={ramUsedPct} />
-                  <DashboardMetricBar label="Disk" valueText={`${m.diskFreeGb.toFixed(0)} GB free`} percent={diskUsedPct} />
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(480px, 1fr))', gap: 20 }}>
+                  <ActivityChart data={generateActivityData(selectedProfileName)} />
+                  <ResourceDonutChart data={generateResourceAllocation(selectedProfileName)} />
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <EventFeed events={generateEventFeed(selectedProfileName)} />
+                  </div>
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <ServicesGrid services={generateServices(selectedProfileName)} />
+                  </div>
+                  {m && (
+                    <div style={{ gridColumn: '1 / -1' }}>
+                      <div className="dashboard-widget">
+                        <h3 className="dashboard-widget-title">System Metrics (Live)</h3>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
+                          <DashboardMetricBar label="CPU" valueText={`${m.cpuUsagePercent.toFixed(0)}%`} percent={m.cpuUsagePercent} />
+                          <DashboardMetricBar label="RAM" valueText={`${((m.totalMemMb - m.freeMemMb) / 1024).toFixed(1)} / ${(m.totalMemMb / 1024).toFixed(1)} GB`} percent={ramUsedPct} />
+                          <DashboardMetricBar label="Disk" valueText={`${m.diskFreeGb.toFixed(0)} GB free`} percent={diskUsedPct} />
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -371,6 +453,135 @@ export function DashboardMainPage(): ReactElement {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+function ActivityChart(props: { data: Array<{ label: string; cpu: number; ram: number }> }): ReactElement {
+  const maxVal = 100
+  return (
+    <div className="dashboard-widget">
+      <h3 className="dashboard-widget-title">Activity (Last 24h)</h3>
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 16, justifyContent: 'space-around', height: 200, padding: '16px 0' }}>
+        {props.data.map((d, i) => (
+          <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, flex: 1 }}>
+            <div style={{ display: 'flex', gap: 4, height: 140, alignItems: 'flex-end' }}>
+              <div style={{ width: 12, height: `${(d.cpu / maxVal) * 120}px`, background: 'var(--accent)', borderRadius: '4px 4px 0 0', transition: 'height 0.3s ease' }} title={`CPU ${d.cpu.toFixed(0)}%`} />
+              <div style={{ width: 12, height: `${(d.ram / maxVal) * 120}px`, background: 'var(--green)', borderRadius: '4px 4px 0 0', transition: 'height 0.3s ease' }} title={`RAM ${d.ram.toFixed(0)}%`} />
+            </div>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center' }}>{d.label}</span>
+          </div>
+        ))}
+      </div>
+      <div style={{ display: 'flex', gap: 16, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div style={{ width: 10, height: 10, background: 'var(--accent)', borderRadius: 2 }} />
+          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>CPU</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div style={{ width: 10, height: 10, background: 'var(--green)', borderRadius: 2 }} />
+          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>RAM</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ResourceDonutChart(props: { data: Array<{ label: string; value: number; color: string }> }): ReactElement {
+  const total = props.data.reduce((sum, d) => sum + d.value, 0)
+  const normalized = props.data.map(d => ({ ...d, percent: (d.value / total) * 100 }))
+
+  let conic = 'conic-gradient('
+  let angle = 0
+  normalized.forEach((d, i) => {
+    const sliceAngle = (d.percent / 100) * 360
+    conic += `${d.color} ${angle}deg, ${d.color} ${angle + sliceAngle}deg${i < normalized.length - 1 ? ', ' : ''}`
+    angle += sliceAngle
+  })
+  conic += ')'
+
+  return (
+    <div className="dashboard-widget">
+      <h3 className="dashboard-widget-title">Container Status</h3>
+      <div style={{ display: 'flex', gap: 32, alignItems: 'center' }}>
+        <div style={{
+          width: 160,
+          height: 160,
+          borderRadius: '50%',
+          background: conic,
+          boxShadow: 'inset 0 0 0 50px var(--bg-widget)',
+        }} />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {normalized.map((d, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ width: 12, height: 12, background: d.color, borderRadius: '50%' }} />
+              <span style={{ fontSize: 12, color: 'var(--text)' }}>{d.label}</span>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 'auto' }}>{d.percent.toFixed(0)}%</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function EventFeed(props: { events: Array<{ id: string; icon: string; color: string; title: string; time: string }> }): ReactElement {
+  return (
+    <div className="dashboard-widget">
+      <h3 className="dashboard-widget-title">Recent Activity</h3>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {props.events.map((e) => (
+          <div key={e.id} style={{ display: 'flex', gap: 12, alignItems: 'center', padding: '12px', borderRadius: 8, background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)' }}>
+            <div style={{ width: 32, height: 32, borderRadius: '50%', background: e.color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <span className={`codicon codicon-${e.icon}`} style={{ fontSize: 14, color: '#fff' }} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 13, color: 'var(--text)' }}>{e.title}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{e.time}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function ServicesGrid(props: { services: Array<{ id: string; name: string; status: 'running' | 'pending' | 'idle'; uptime: string }> }): ReactElement {
+  const statusColor = (status: string) => {
+    if (status === 'running') return 'var(--green)'
+    if (status === 'pending') return 'var(--yellow)'
+    return 'var(--text-muted)'
+  }
+
+  return (
+    <div className="dashboard-widget">
+      <h3 className="dashboard-widget-title">Services</h3>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12 }}>
+        {props.services.map((s) => (
+          <div
+            key={s.id}
+            style={{
+              padding: 16,
+              borderRadius: 12,
+              background: 'linear-gradient(135deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.01) 100%)',
+              border: '1px solid rgba(255,255,255,0.06)',
+              backdropFilter: 'blur(8px)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 8,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ width: 8, height: 8, borderRadius: '50%', background: statusColor(s.status) }} />
+              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', flex: 1 }}>{s.name}</span>
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+              <div>Status: {s.status}</div>
+              <div>Uptime: {s.uptime}</div>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
