@@ -239,11 +239,11 @@ export function ProfilesPage(): ReactElement {
   const isOk = (s: string) => /copied|saved|removed|duplicated|imported|cleared|set to/i.test(s)
 
   return (
-    <div className="profiles-page elevated-page" style={{ maxWidth: 1320, display: 'flex', flexDirection: 'column', gap: 0 }}>
-      <header style={{ paddingBottom: 24, paddingTop: 0 }}>
+    <div className="profiles-page elevated-page" style={{ display: 'flex', flexDirection: 'column', gap: 0, padding: '0 40px' }}>
+      <header style={{ paddingBottom: 24, paddingTop: 16 }}>
         <div className="mono" style={{ color: 'var(--accent)', fontSize: 12, marginBottom: 8 }}>PROFILES</div>
-        <h1 style={{ margin: 0, fontSize: 28, fontWeight: 700 }}>Profile Engine Room</h1>
-        <p style={{ color: 'var(--text-muted)', marginTop: 10, maxWidth: 760, lineHeight: 1.5 }}>
+        <h1 style={{ margin: 0, fontSize: 32, fontWeight: 700 }}>Profile Engine Room</h1>
+        <p style={{ color: 'var(--text-muted)', marginTop: 10, maxWidth: 760, lineHeight: 1.5, fontSize: 15 }}>
           Build, edit, and manage custom profiles. To switch profiles, use the Dashboard command center. Here you can CRUD profiles, set global launch automation, and backup/sync your configuration.
         </p>
       </header>
@@ -256,26 +256,15 @@ export function ProfilesPage(): ReactElement {
       )}
 
       {/* Tab Navigation */}
-      <div style={{ display: 'flex', gap: 8, borderBottom: '1px solid var(--border)', paddingBottom: 0, marginBottom: 24 }}>
+      <div className="tabs-container">
         {(['builder', 'automation', 'backup'] as const).map((tab) => (
           <button
             key={tab}
             type="button"
+            className={`tab-btn ${activeTab === tab ? 'active' : ''}`}
             onClick={() => setActiveTab(tab)}
-            style={{
-              padding: '14px 20px',
-              border: 'none',
-              background: 'transparent',
-              color: activeTab === tab ? 'var(--accent)' : 'var(--text-muted)',
-              fontSize: 14,
-              fontWeight: activeTab === tab ? 700 : 600,
-              cursor: 'pointer',
-              borderBottom: activeTab === tab ? '2px solid var(--accent)' : 'transparent',
-              transition: 'all 0.2s ease',
-              textTransform: 'capitalize',
-            }}
           >
-            {tab === 'builder' && 'Profile Builder'}
+            {tab === 'builder' && 'Environments'}
             {tab === 'automation' && 'Global Automation'}
             {tab === 'backup' && 'Backup & Sync'}
           </button>
@@ -284,108 +273,81 @@ export function ProfilesPage(): ReactElement {
 
       {/* Tab Content: Global Boot Automation */}
       {activeTab === 'automation' && (
-      <section style={card}>
-        <div style={{ fontWeight: 600, marginBottom: 8 }}>Global Boot Automation</div>
-        <p style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5, maxWidth: 720 }}>
+      <section style={{ padding: '16px 0' }}>
+        <div style={{ fontWeight: 700, marginBottom: 8, fontSize: 20 }}>Global Boot Automation</div>
+        <p style={{ margin: '0 0 24px', fontSize: 14, color: 'var(--text-muted)', lineHeight: 1.6, maxWidth: 800 }}>
           After the Setup Wizard is dismissed, optionally start your active compose stack or refresh the dashboard
           widget layout from disk. Requires Docker for compose; Flatpak needs socket access.
         </p>
-        <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 10, cursor: 'pointer' }}>
-          <input
-            type="checkbox"
-            checked={onLogin.composeUpForActiveProfile}
-            onChange={(e) => void saveOnLogin({ ...onLogin, composeUpForActiveProfile: e.target.checked })}
-            style={{ marginTop: 3 }}
-          />
-          <span style={{ fontSize: 14 }}>
-            <strong>Compose up</strong> for the active profile once per app launch (if an active profile is set).
-          </span>
-        </label>
-        <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer' }}>
-          <input
-            type="checkbox"
-            checked={onLogin.reloadDashboardLayout}
-            onChange={(e) => void saveOnLogin({ ...onLogin, reloadDashboardLayout: e.target.checked })}
-            style={{ marginTop: 3 }}
-          />
-          <span style={{ fontSize: 14 }}>
-            <strong>Refresh dashboard layout</strong> from <span className="mono">layout.json</span> on launch.
-          </span>
-        </label>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <label className="profiles-list-row" style={{ cursor: 'pointer' }}>
+            <div className="row-left">
+              <div className="row-icon-box" style={{ background: 'transparent' }}>
+                <span className="codicon codicon-play" style={{ fontSize: 24, color: 'var(--text)' }} />
+              </div>
+              <div className="row-title-area">
+                <span className="row-title">Compose up on launch</span>
+                <span className="row-subtitle">Automatically start the active profile once per app launch.</span>
+              </div>
+            </div>
+            <div className="row-actions">
+              <div className="fluent-toggle">
+                <input
+                  type="checkbox"
+                  checked={onLogin.composeUpForActiveProfile}
+                  onChange={(e) => void saveOnLogin({ ...onLogin, composeUpForActiveProfile: e.target.checked })}
+                />
+                <span className="fluent-slider"></span>
+              </div>
+            </div>
+          </label>
+
+          <label className="profiles-list-row" style={{ cursor: 'pointer' }}>
+            <div className="row-left">
+              <div className="row-icon-box" style={{ background: 'transparent' }}>
+                <span className="codicon codicon-refresh" style={{ fontSize: 24, color: 'var(--text)' }} />
+              </div>
+              <div className="row-title-area">
+                <span className="row-title">Refresh dashboard layout</span>
+                <span className="row-subtitle">Reload widgets from layout.json on launch.</span>
+              </div>
+            </div>
+            <div className="row-actions">
+              <div className="fluent-toggle">
+                <input
+                  type="checkbox"
+                  checked={onLogin.reloadDashboardLayout}
+                  onChange={(e) => void saveOnLogin({ ...onLogin, reloadDashboardLayout: e.target.checked })}
+                />
+                <span className="fluent-slider"></span>
+              </div>
+            </div>
+          </label>
+        </div>
       </section>
       )}
 
       {/* Tab Content: Profile Builder */}
       {activeTab === 'builder' && (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-        {/* Hero Banner */}
-        <div style={{
-          width: 'calc(100% + 40px)',
-          marginLeft: '-20px',
-          marginRight: '-20px',
-          marginBottom: 24,
-          padding: '48px 40px',
-          background: 'linear-gradient(135deg, rgba(13, 115, 119, 0.4) 0%, rgba(20, 255, 236, 0.15) 100%)',
-          border: '1px solid rgba(20, 255, 236, 0.2)',
-          position: 'relative',
-          overflow: 'hidden',
-        }}>
-          <div style={{ position: 'absolute', top: 0, right: 0, width: '40%', height: '100%', opacity: 0.05 }}>
-            <div style={{
-              width: '100%',
-              height: '100%',
-              background: 'radial-gradient(circle at 80% 20%, rgba(20, 255, 236, 0.3) 0%, transparent 70%)',
-            }} />
-          </div>
-          <div style={{ position: 'relative', zIndex: 1 }}>
-            <h2 style={{ margin: 0, fontSize: 32, fontWeight: 800, color: '#fff', marginBottom: 8 }}>
-              Get ready to code in minutes
-            </h2>
-            <p style={{ margin: 0, fontSize: 16, color: 'rgba(255,255,255,0.85)', maxWidth: 580, marginBottom: 20, lineHeight: 1.6 }}>
-              Create and configure custom development environments tailored to your stack. Add environment variables, manage credentials, and build the perfect workspace.
-            </p>
-            <button
-              type="button"
-              style={{
-                padding: '10px 24px',
-                borderRadius: 6,
-                border: 'none',
-                background: '#fff',
-                color: '#0d7377',
-                fontWeight: 700,
-                fontSize: 14,
-                cursor: 'pointer',
-                transition: 'all 0.2s ease',
-              }}
-              onMouseEnter={(e) => {
-                const el = e.currentTarget as HTMLElement
-                el.style.boxShadow = '0 8px 24px rgba(20, 255, 236, 0.3)'
-                el.style.transform = 'translateY(-2px)'
-              }}
-              onMouseLeave={(e) => {
-                const el = e.currentTarget as HTMLElement
-                el.style.boxShadow = 'none'
-                el.style.transform = 'translateY(0)'
-              }}
-              onClick={openCreateModal}
-            >
-              + Create Environment
-            </button>
-          </div>
+        {/* Dev Home Style Hero Banner */}
+        <div className="dev-home-hero">
+          <h2 className="dev-home-hero-title">Get ready to code in minutes</h2>
+          <p className="dev-home-hero-subtitle">
+            Create and configure custom development environments tailored to your stack. Add environment variables, manage credentials, and build the perfect workspace.
+          </p>
+          <button type="button" className="dev-home-btn" onClick={openCreateModal}>
+            + Create Environment
+          </button>
         </div>
 
-        {/* Profiles List */}
+        {/* Horizontal Lists */}
         {profiles.length === 0 ? (
-          <div style={{
-            padding: '40px 20px',
-            textAlign: 'center',
-            color: 'var(--text-muted)',
-            fontSize: 14,
-          }}>
+          <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 15 }}>
             No custom environments yet. Click the button above to get started.
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+          <div className="profiles-list-container">
             {profiles.map((p, i) => {
               const envVarCount = (p.envVars || []).length
               const credCount = (p.credentialIds || []).length
@@ -393,160 +355,58 @@ export function ProfilesPage(): ReactElement {
               const isDropdownOpen = openDropdownIdx === i
 
               return (
-                <div
-                  key={`${p.name}-${i}`}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 16,
-                    padding: '14px 16px',
-                    background: 'var(--bg-widget)',
-                    border: '1px solid var(--border)',
-                    transition: 'all 0.15s ease',
-                    borderTop: i === 0 ? '1px solid var(--border)' : 'none',
-                  }}
-                  onMouseEnter={(e) => {
-                    const el = e.currentTarget as HTMLElement
-                    el.style.borderColor = 'rgba(124, 77, 255, 0.4)'
-                    el.style.background = 'color-mix(in srgb, var(--accent) 3%, var(--bg-widget))'
-                  }}
-                  onMouseLeave={(e) => {
-                    const el = e.currentTarget as HTMLElement
-                    el.style.borderColor = 'var(--border)'
-                    el.style.background = 'var(--bg-widget)'
-                  }}
-                >
-                  {/* Icon Box */}
-                  <div style={{
-                    width: 48,
-                    height: 48,
-                    borderRadius: 8,
-                    background: 'linear-gradient(135deg, rgba(124, 77, 255, 0.15) 0%, rgba(124, 77, 255, 0.05) 100%)',
-                    border: '1px solid rgba(124, 77, 255, 0.2)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexShrink: 0,
-                  }}>
-                    <span className={`codicon codicon-${icon}`} style={{ fontSize: 24, color: 'var(--accent)' }} />
-                  </div>
-
-                  {/* Profile Info */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1 }}>
-                    <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text)' }}>
-                      {p.name}
+                <div key={`${p.name}-${i}`} className="profiles-list-row">
+                  <div className="row-left">
+                    <div className="row-icon-box">
+                      <span className={`codicon codicon-${icon}`} style={{ fontSize: 24, color: '#fff' }} />
                     </div>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                      {p.baseTemplate}
+                    <div className="row-title-area">
+                      <h3 className="row-title">{p.name}</h3>
+                      <p className="row-subtitle">
+                        <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: 'var(--green)' }} />
+                        {p.baseTemplate}
+                      </p>
                     </div>
                   </div>
 
-                  {/* Metadata */}
-                  <div style={{
-                    display: 'flex',
-                    gap: 16,
-                    alignItems: 'center',
-                    fontSize: 12,
-                    color: 'var(--text-muted)',
-                  }}>
-                    <div>Env vars: <strong style={{ color: 'var(--text)' }}>{envVarCount}</strong></div>
-                    <div>Credentials: <strong style={{ color: 'var(--text)' }}>{credCount}</strong></div>
+                  <div className="row-stats">
+                    <div className="row-stat-item"><span className="codicon codicon-symbol-property" /> Env Vars: {envVarCount}</div>
+                    <div className="row-stat-item"><span className="codicon codicon-key" /> Credentials: {credCount}</div>
                   </div>
 
-                  {/* Actions */}
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', position: 'relative' }}>
-                    <button
-                      type="button"
-                      style={{
-                        ...btnSmall,
-                        padding: '6px 12px',
-                        fontSize: 12,
-                      }}
-                      onClick={() => openEditModal(i)}
-                    >
+                  <div className="row-actions">
+                    <button type="button" className="row-btn" onClick={() => openEditModal(i)}>
                       Edit
                     </button>
                     <div style={{ position: 'relative' }}>
-                      <button
-                        type="button"
-                        style={{
-                          ...btnSmall,
-                          padding: '6px 10px',
-                          fontSize: 12,
-                        }}
-                        onClick={() => setOpenDropdownIdx(isDropdownOpen ? null : i)}
-                      >
-                        ⋯
+                      <button type="button" className="row-btn-icon" onClick={() => setOpenDropdownIdx(isDropdownOpen ? null : i)}>
+                        <span className="codicon codicon-ellipsis" />
                       </button>
                       {isDropdownOpen && (
                         <div style={{
-                          position: 'absolute',
-                          top: '100%',
-                          right: 0,
-                          marginTop: 4,
-                          background: 'var(--bg-widget)',
-                          border: '1px solid var(--border)',
-                          borderRadius: 6,
-                          minWidth: 140,
-                          zIndex: 100,
-                          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
+                          position: 'absolute', top: '100%', right: 0, marginTop: 4,
+                          background: 'rgba(20,20,24,0.95)', border: '1px solid rgba(255,255,255,0.1)',
+                          backdropFilter: 'blur(16px)',
+                          borderRadius: 6, minWidth: 160, zIndex: 100,
+                          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.6)', padding: 4
                         }}>
                           <button
                             type="button"
-                            style={{
-                              width: '100%',
-                              padding: '8px 12px',
-                              border: 'none',
-                              background: 'transparent',
-                              color: 'var(--text)',
-                              fontSize: 12,
-                              textAlign: 'left',
-                              cursor: 'pointer',
-                              borderBottom: '1px solid var(--border)',
-                              transition: 'background 0.15s ease',
-                            }}
-                            onMouseEnter={(e) => {
-                              const el = e.currentTarget as HTMLElement
-                              el.style.background = 'rgba(124, 77, 255, 0.1)'
-                            }}
-                            onMouseLeave={(e) => {
-                              const el = e.currentTarget as HTMLElement
-                              el.style.background = 'transparent'
-                            }}
-                            onClick={() => {
-                              void duplicateAt(i)
-                              setOpenDropdownIdx(null)
-                            }}
+                            style={{ width: '100%', padding: '10px 12px', border: 'none', background: 'transparent', color: 'var(--text)', fontSize: 13, textAlign: 'left', cursor: 'pointer', borderRadius: 4, marginBottom: 2 }}
+                            onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)' }}
+                            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+                            onClick={() => { void duplicateAt(i); setOpenDropdownIdx(null) }}
                           >
-                            Duplicate
+                            <span className="codicon codicon-copy" style={{ marginRight: 8, fontSize: 14 }} /> Duplicate
                           </button>
                           <button
                             type="button"
-                            style={{
-                              width: '100%',
-                              padding: '8px 12px',
-                              border: 'none',
-                              background: 'transparent',
-                              color: 'var(--red)',
-                              fontSize: 12,
-                              textAlign: 'left',
-                              cursor: 'pointer',
-                              transition: 'background 0.15s ease',
-                            }}
-                            onMouseEnter={(e) => {
-                              const el = e.currentTarget as HTMLElement
-                              el.style.background = 'rgba(255, 0, 0, 0.1)'
-                            }}
-                            onMouseLeave={(e) => {
-                              const el = e.currentTarget as HTMLElement
-                              el.style.background = 'transparent'
-                            }}
-                            onClick={() => {
-                              void removeAt(i)
-                              setOpenDropdownIdx(null)
-                            }}
+                            style={{ width: '100%', padding: '10px 12px', border: 'none', background: 'transparent', color: 'var(--red)', fontSize: 13, textAlign: 'left', cursor: 'pointer', borderRadius: 4 }}
+                            onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,0,0,0.1)' }}
+                            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+                            onClick={() => { void removeAt(i); setOpenDropdownIdx(null) }}
                           >
-                            Delete
+                            <span className="codicon codicon-trash" style={{ marginRight: 8, fontSize: 14 }} /> Delete
                           </button>
                         </div>
                       )}
@@ -562,122 +422,138 @@ export function ProfilesPage(): ReactElement {
 
       {/* Tab Content: Backup & Sync */}
       {activeTab === 'backup' && (
-      <section style={card}>
-        <div style={{ fontWeight: 600, marginBottom: 10, fontSize: 16 }}>Backup & Sync</div>
-        <p style={{ margin: '0 0 16px', fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+      <section style={{ padding: '16px 0' }}>
+        <div style={{ fontWeight: 700, marginBottom: 10, fontSize: 20 }}>Backup & Sync</div>
+        <p style={{ margin: '0 0 24px', fontSize: 14, color: 'var(--text-muted)', lineHeight: 1.6, maxWidth: 800 }}>
           Export all profiles as JSON for backup and team sharing, or import profiles from a previous export.
         </p>
-        <div style={{ marginBottom: 16, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <button type="button" style={btn} onClick={() => void load()}>Refresh Data</button>
-          <button type="button" style={btn} onClick={() => void exportJson()}>Export as JSON</button>
-          <button type="button" style={btnDanger} onClick={() => void save([], 'All profiles cleared.')}>Clear All</button>
+        
+        <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
+          <button type="button" style={{...btn, display: 'flex', alignItems: 'center', gap: 8}} onClick={() => void load()}><span className="codicon codicon-refresh"/> Refresh</button>
+          <button type="button" style={{...btn, display: 'flex', alignItems: 'center', gap: 8}} onClick={() => void exportJson()}><span className="codicon codicon-export"/> Export JSON</button>
+          <div style={{ flex: 1 }} />
+          <button type="button" style={{...btnDanger, display: 'flex', alignItems: 'center', gap: 8}} onClick={() => void save([], 'All profiles cleared.')}><span className="codicon codicon-trash"/> Clear All</button>
         </div>
-        <textarea
-          value={importText}
-          onChange={(e) => setImportText(e.target.value)}
-          placeholder='Paste JSON array like [{"name":"My AI","baseTemplate":"ai-ml","envVars":[]}]'
-          style={{
-            width: '100%', minHeight: 140, resize: 'vertical',
-            background: '#0a0a0a', color: 'var(--text)',
-            border: '1px solid var(--border)', borderRadius: 8,
-            padding: 10, fontFamily: 'var(--font-mono)', fontSize: 12,
-          }}
-        />
-        <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
-          <button type="button" style={btn} onClick={() => void importJson()}>Import JSON</button>
+        
+        <div style={{ position: 'relative' }}>
+          <textarea
+            value={importText}
+            onChange={(e) => setImportText(e.target.value)}
+            placeholder='Paste JSON array like [{"name":"My AI","baseTemplate":"ai-ml","envVars":[]}]'
+            style={{
+              width: '100%', minHeight: 240, resize: 'vertical',
+              background: '#0a0a0d', color: 'var(--text)',
+              border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8,
+              padding: 16, fontFamily: 'var(--font-mono)', fontSize: 13,
+              boxShadow: 'inset 0 4px 12px rgba(0,0,0,0.4)'
+            }}
+          />
+        </div>
+
+        <div style={{ marginTop: 16, display: 'flex', gap: 8 }}>
+          <button type="button" style={{...btn, padding: '12px 24px', background: 'var(--accent)', color: '#fff', border: 'none', display: 'flex', alignItems: 'center', gap: 8}} onClick={() => void importJson()}>
+            <span className="codicon codicon-add"/> Import JSON
+          </button>
         </div>
 
         {byTemplate.length > 0 && (
-          <div style={{ marginTop: 20, paddingTop: 20, borderTop: '1px solid var(--border)' }}>
-            <div style={{ fontWeight: 600, marginBottom: 8 }}>Profile Coverage</div>
-            <p style={{ margin: '0 0 12px', fontSize: 12, color: 'var(--text-muted)' }}>
-              Number of custom profiles per base template:
-            </p>
-            <ul style={{ margin: 0, paddingLeft: 18 }}>
+          <div style={{ marginTop: 40, paddingTop: 32, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+            <div style={{ fontWeight: 700, marginBottom: 16, fontSize: 16 }}>Profile Coverage</div>
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
               {byTemplate.map(([k, n]) => (
-                <li key={k} className="mono" style={{ marginBottom: 4, fontSize: 12 }}>{k}: {n} profile{n !== 1 ? 's' : ''}</li>
+                <div key={k} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)', padding: '8px 16px', borderRadius: 20, fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span className={`codicon codicon-${TEMPLATE_ICONS[k] || 'blank'}`} style={{ color: 'var(--text-muted)' }} />
+                  <span style={{ fontWeight: 600 }}>{k}</span>
+                  <span style={{ background: 'rgba(255,255,255,0.1)', padding: '2px 8px', borderRadius: 12, fontSize: 11 }}>{n}</span>
+                </div>
               ))}
-            </ul>
+            </div>
           </div>
         )}
       </section>
       )}
 
       {editingProfileIdx !== null && editingData && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-          <div style={{ background: 'var(--bg-widget)', border: '1px solid var(--border)', borderRadius: 8, padding: 24, maxWidth: 600, maxHeight: '80vh', overflow: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
-            <h2 style={{ margin: '0 0 20px 0', fontSize: 20, fontWeight: 700 }}>Edit Profile: {editingData.name}</h2>
+        <div className="fluent-modal-overlay">
+          <div className="fluent-modal-content wide">
+            <h2 style={{ margin: '0 0 24px 0', fontSize: 24, fontWeight: 700 }}>Edit Environment</h2>
 
-            <div style={{ marginBottom: 20 }}>
-              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Environment Variables</div>
+            <div style={{ marginBottom: 24 }}>
+              <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 12, color: 'var(--text)' }}>Environment Variables</div>
               {(editingData.envVars || []).map((ev, vi) => (
-                <div key={vi} style={{ display: 'flex', gap: 8, marginBottom: 10, alignItems: 'center' }}>
+                <div key={vi} style={{ display: 'flex', gap: 12, marginBottom: 12, alignItems: 'center' }}>
                   <input
                     type="text"
                     value={ev.key}
                     onChange={(e) => updateEnvVar(vi, e.target.value, ev.value)}
                     placeholder="KEY"
-                    style={{ flex: 1, padding: '8px', background: 'var(--bg-input)', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--text)', fontFamily: 'monospace', fontSize: 12 }}
+                    className="fluent-input"
+                    style={{ flex: 1, fontFamily: 'monospace' }}
                   />
                   <input
                     type="text"
                     value={ev.value}
                     onChange={(e) => updateEnvVar(vi, ev.key, e.target.value)}
                     placeholder="value"
-                    style={{ flex: 2, padding: '8px', background: 'var(--bg-input)', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--text)', fontFamily: 'monospace', fontSize: 12 }}
+                    className="fluent-input"
+                    style={{ flex: 2, fontFamily: 'monospace' }}
                   />
-                  <button type="button" style={{ ...btnSmallDanger, padding: '5px 8px' }} onClick={() => removeEnvVar(vi)}>✕</button>
+                  <button type="button" style={{ ...btnSmallDanger, padding: '8px 12px' }} onClick={() => removeEnvVar(vi)}>✕</button>
                 </div>
               ))}
-              <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+              <div style={{ display: 'flex', gap: 12, marginTop: 16 }}>
                 <input
                   type="text"
                   value={envKeyInput}
                   onChange={(e) => setEnvKeyInput(e.target.value)}
                   placeholder="New KEY"
-                  style={{ flex: 1, padding: '8px', background: 'var(--bg-input)', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--text)', fontFamily: 'monospace', fontSize: 12 }}
+                  className="fluent-input"
+                  style={{ flex: 1, fontFamily: 'monospace' }}
                 />
                 <input
                   type="text"
                   value={envValueInput}
                   onChange={(e) => setEnvValueInput(e.target.value)}
                   placeholder="value"
-                  style={{ flex: 2, padding: '8px', background: 'var(--bg-input)', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--text)', fontFamily: 'monospace', fontSize: 12 }}
+                  className="fluent-input"
+                  style={{ flex: 2, fontFamily: 'monospace' }}
                 />
-                <button type="button" style={btnSmall} onClick={() => addEnvVar(envKeyInput, envValueInput)}>Add</button>
+                <button type="button" style={{ ...btn, padding: '0 24px' }} onClick={() => addEnvVar(envKeyInput, envValueInput)}>Add</button>
               </div>
             </div>
 
-            <div style={{ marginBottom: 20 }}>
-              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>Credentials</div>
+            <div style={{ marginBottom: 32 }}>
+              <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 12, color: 'var(--text)' }}>Credentials</div>
               {(editingData.credentialIds || []).map((credId, ci) => (
-                <div key={ci} style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'center' }}>
-                  <span className="mono" style={{ flex: 1, padding: '8px', background: 'var(--bg-input)', borderRadius: 4, fontSize: 12, color: 'var(--text-muted)' }}>{credId}</span>
-                  <button type="button" style={{ ...btnSmallDanger, padding: '5px 8px' }} onClick={() => removeCredential(ci)}>Delete</button>
+                <div key={ci} style={{ display: 'flex', gap: 12, marginBottom: 12, alignItems: 'center' }}>
+                  <span className="mono" style={{ flex: 1, padding: '10px 12px', background: 'rgba(0,0,0,0.2)', borderRadius: 4, fontSize: 13, color: 'var(--text-muted)' }}>{credId}</span>
+                  <button type="button" style={{ ...btnSmallDanger, padding: '8px 16px' }} onClick={() => removeCredential(ci)}>Delete</button>
                 </div>
               ))}
-              <div style={{ display: 'flex', gap: 8 }}>
+              <div style={{ display: 'flex', gap: 12, marginTop: 16 }}>
                 <input
                   type="text"
                   value={credInputId}
                   onChange={(e) => setCredInputId(e.target.value)}
                   placeholder="Credential ID"
-                  style={{ flex: 1, padding: '8px', background: 'var(--bg-input)', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--text)', fontSize: 12 }}
+                  className="fluent-input"
+                  style={{ flex: 1 }}
                 />
                 <input
                   type="password"
                   value={credInputValue}
                   onChange={(e) => setCredInputValue(e.target.value)}
                   placeholder="Secret value"
-                  style={{ flex: 1, padding: '8px', background: 'var(--bg-input)', border: '1px solid var(--border)', borderRadius: 4, color: 'var(--text)', fontSize: 12 }}
+                  className="fluent-input"
+                  style={{ flex: 1 }}
                 />
-                <button type="button" style={btnSmall} onClick={() => addCredential(credInputId, credInputValue)}>Add</button>
+                <button type="button" style={{ ...btn, padding: '0 24px' }} onClick={() => addCredential(credInputId, credInputValue)}>Add</button>
               </div>
             </div>
 
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              <button type="button" style={btn} onClick={closeEditModal}>Cancel</button>
-              <button type="button" style={{ ...btn, background: 'var(--accent)', color: '#fff' }} onClick={() => void saveProfileChanges()}>Save Changes</button>
+            <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', paddingTop: 16, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+              <button type="button" style={{ ...btn, padding: '10px 24px' }} onClick={closeEditModal}>Cancel</button>
+              <button type="button" className="dev-home-btn" style={{ padding: '10px 24px', margin: 0 }} onClick={() => void saveProfileChanges()}>Save Changes</button>
             </div>
           </div>
         </div>
@@ -685,62 +561,47 @@ export function ProfilesPage(): ReactElement {
 
       {/* Create New Profile Modal */}
       {isCreatingProfile && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-          <div style={{ background: 'var(--bg-widget)', border: '1px solid var(--border)', borderRadius: 8, padding: 24, maxWidth: 500, boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
-            <h2 style={{ margin: '0 0 20px 0', fontSize: 20, fontWeight: 700 }}>Create Custom Profile</h2>
+        <div className="fluent-modal-overlay">
+          <div className="fluent-modal-content">
+            <h2 style={{ margin: '0 0 24px 0', fontSize: 24, fontWeight: 700 }}>Create Environment</h2>
 
-            <div style={{ marginBottom: 20 }}>
-              <label style={{ display: 'block', fontSize: 14, fontWeight: 600, marginBottom: 8, color: 'var(--text)' }}>Profile Name</label>
+            <div style={{ marginBottom: 24 }}>
+              <label style={{ display: 'block', fontSize: 14, fontWeight: 600, marginBottom: 8, color: 'var(--text)' }}>Environment Name</label>
               <input
                 type="text"
                 value={newProfileName}
                 onChange={(e) => setNewProfileName(e.target.value)}
                 placeholder="e.g., My Custom Backend"
-                style={{
-                  width: '100%',
-                  padding: '10px',
-                  background: 'var(--bg-input)',
-                  border: '1px solid var(--border)',
-                  borderRadius: 4,
-                  color: 'var(--text)',
-                  fontSize: 14,
-                  boxSizing: 'border-box',
-                }}
+                className="fluent-input"
+                autoFocus
               />
             </div>
 
-            <div style={{ marginBottom: 24 }}>
+            <div style={{ marginBottom: 32 }}>
               <label style={{ display: 'block', fontSize: 14, fontWeight: 600, marginBottom: 8, color: 'var(--text)' }}>Base Template</label>
               <select
                 value={newProfileTemplate}
                 onChange={(e) => setNewProfileTemplate(e.target.value as ComposeProfile)}
-                style={{
-                  width: '100%',
-                  padding: '10px',
-                  background: 'var(--bg-input)',
-                  border: '1px solid var(--border)',
-                  borderRadius: 4,
-                  color: 'var(--text)',
-                  fontSize: 14,
-                  boxSizing: 'border-box',
-                }}
+                className="fluent-input"
+                style={{ appearance: 'none' }}
               >
                 {BASE_TEMPLATES.map((template) => (
-                  <option key={template} value={template} style={{ background: '#1a1a1a', color: 'var(--text)' }}>
+                  <option key={template} value={template} style={{ background: '#18181c', color: 'var(--text)' }}>
                     {template}
                   </option>
                 ))}
               </select>
             </div>
 
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              <button type="button" style={btn} onClick={closeCreateModal}>Cancel</button>
+            <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', paddingTop: 16, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+              <button type="button" style={{ ...btn, padding: '10px 24px' }} onClick={closeCreateModal}>Cancel</button>
               <button
                 type="button"
-                style={{ ...btn, background: 'var(--accent)', color: '#fff' }}
+                className="dev-home-btn"
+                style={{ padding: '10px 24px', margin: 0 }}
                 onClick={() => void saveNewProfile()}
               >
-                Save Profile
+                Create
               </button>
             </div>
           </div>
@@ -750,8 +611,6 @@ export function ProfilesPage(): ReactElement {
   )
 }
 
-const card = { background: 'var(--bg-widget)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: 16 }
-const btn = { border: '1px solid var(--border)', background: 'var(--bg-input)', color: 'var(--text)', borderRadius: 8, padding: '9px 13px', cursor: 'pointer', fontWeight: 600 }
+const btn = { border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', color: 'var(--text)', borderRadius: 6, padding: '8px 16px', cursor: 'pointer', fontWeight: 600, transition: 'all 0.2s ease' }
 const btnDanger = { ...btn, color: 'var(--red)' }
-const btnSmall = { ...btn, padding: '5px 10px', fontSize: 12 }
-const btnSmallDanger = { ...btnSmall, color: 'var(--red)' }
+const btnSmallDanger = { ...btn, color: 'var(--red)', padding: '6px 10px', fontSize: 13 }
