@@ -39,6 +39,7 @@ export function ProfilesPage(): ReactElement {
   const [isCreatingProfile, setIsCreatingProfile] = useState(false)
   const [newProfileName, setNewProfileName] = useState('')
   const [newProfileTemplate, setNewProfileTemplate] = useState<ComposeProfile>('web-dev')
+  const [activeTab, setActiveTab] = useState<'builder' | 'automation' | 'backup'>('builder')
 
   async function load(): Promise<void> {
     try {
@@ -242,6 +243,35 @@ export function ProfilesPage(): ReactElement {
         </div>
       )}
 
+      {/* Tab Navigation */}
+      <div style={{ display: 'flex', gap: 8, borderBottom: '1px solid var(--border)', paddingBottom: 0 }}>
+        {(['builder', 'automation', 'backup'] as const).map((tab) => (
+          <button
+            key={tab}
+            type="button"
+            onClick={() => setActiveTab(tab)}
+            style={{
+              padding: '12px 16px',
+              border: 'none',
+              background: 'transparent',
+              color: activeTab === tab ? 'var(--accent)' : 'var(--text-muted)',
+              fontSize: 14,
+              fontWeight: activeTab === tab ? 700 : 600,
+              cursor: 'pointer',
+              borderBottom: activeTab === tab ? '2px solid var(--accent)' : 'transparent',
+              transition: 'all 0.2s ease',
+              textTransform: 'capitalize',
+            }}
+          >
+            {tab === 'builder' && 'Profile Builder'}
+            {tab === 'automation' && 'Global Automation'}
+            {tab === 'backup' && 'Backup & Sync'}
+          </button>
+        ))}
+      </div>
+
+      {/* Tab Content: Global Boot Automation */}
+      {activeTab === 'automation' && (
       <section style={card}>
         <div style={{ fontWeight: 600, marginBottom: 8 }}>Global Boot Automation</div>
         <p style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5, maxWidth: 720 }}>
@@ -271,29 +301,58 @@ export function ProfilesPage(): ReactElement {
           </span>
         </label>
       </section>
+      )}
 
-      <section style={card}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-          <div style={{ fontWeight: 600 }}>Profile Builder</div>
-          <button
-            type="button"
-            style={{
-              ...btn,
-              background: 'var(--accent)',
-              color: '#fff',
-              fontWeight: 700,
-            }}
-            onClick={openCreateModal}
-          >
-            + Create Custom Profile
-          </button>
-        </div>
+      {/* Tab Content: Profile Builder */}
+      {activeTab === 'builder' && (
+      <div>
         {profiles.length === 0 ? (
-          <div style={{ color: 'var(--text-muted)' }}>
-            No custom profiles yet. Create one from scratch using the button above, or import JSON below using the Backup & Sync section.
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 24,
+            padding: '60px 40px',
+            textAlign: 'center',
+            minHeight: 420,
+            borderRadius: 12,
+            background: 'linear-gradient(135deg, rgba(255,255,255,0.02) 0%, rgba(255,255,255,0.01) 100%)',
+            border: '1px solid rgba(255,255,255,0.06)',
+            backdropFilter: 'blur(8px)',
+          }}>
+            <span className="codicon codicon-server-environment" style={{
+              fontSize: 64,
+              color: 'var(--accent)',
+              opacity: 0.8,
+              textShadow: '0 0 30px rgba(124, 77, 255, 0.3)',
+            }} />
+            <div>
+              <h2 style={{ margin: 0, fontSize: 28, fontWeight: 700, color: 'var(--text)', marginBottom: 8 }}>
+                Build Your First Custom Environment
+              </h2>
+              <p style={{ margin: 0, fontSize: 15, color: 'var(--text-muted)', maxWidth: 520, lineHeight: 1.6 }}>
+                Start by creating a custom profile to tweak environment variables, manage credentials, and shape your perfect workspace.
+              </p>
+            </div>
+            <button
+              type="button"
+              style={{
+                ...btn,
+                background: 'var(--accent)',
+                color: '#fff',
+                fontWeight: 700,
+                fontSize: 15,
+                padding: '12px 28px',
+                marginTop: 12,
+              }}
+              onClick={openCreateModal}
+            >
+              + Create Custom Profile
+            </button>
           </div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(320px,1fr))', gap: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(320px,1fr))', gap: 16 }}>
             {profiles.map((p, i) => {
               const isExpanded = expandedProfileIdx === i
               const envVars = p.envVars || []
@@ -301,10 +360,27 @@ export function ProfilesPage(): ReactElement {
                 <article
                   key={`${p.name}-${i}`}
                   style={{
-                    border: '1px solid var(--border)',
-                    borderRadius: 8,
-                    padding: 12,
-                    background: 'transparent',
+                    border: '1px solid rgba(255,255,255,0.06)',
+                    borderRadius: 12,
+                    padding: 16,
+                    background: 'linear-gradient(135deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.01) 100%)',
+                    backdropFilter: 'blur(8px)',
+                    transition: 'all 200ms ease-out',
+                    cursor: 'default',
+                  }}
+                  onMouseEnter={(e) => {
+                    const el = e.currentTarget as HTMLElement
+                    el.style.borderColor = 'rgba(255,255,255,0.12)'
+                    el.style.background = 'linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.03) 100%)'
+                    el.style.boxShadow = '0 8px 32px rgba(0,0,0,0.2)'
+                    el.style.transform = 'translateY(-2px)'
+                  }}
+                  onMouseLeave={(e) => {
+                    const el = e.currentTarget as HTMLElement
+                    el.style.borderColor = 'rgba(255,255,255,0.06)'
+                    el.style.background = 'linear-gradient(135deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.01) 100%)'
+                    el.style.boxShadow = 'none'
+                    el.style.transform = 'translateY(0)'
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
@@ -354,10 +430,13 @@ export function ProfilesPage(): ReactElement {
             })}
           </div>
         )}
-      </section>
+      </div>
+      )}
 
+      {/* Tab Content: Backup & Sync */}
+      {activeTab === 'backup' && (
       <section style={card}>
-        <div style={{ fontWeight: 600, marginBottom: 10 }}>Backup & Sync</div>
+        <div style={{ fontWeight: 600, marginBottom: 10, fontSize: 16 }}>Backup & Sync</div>
         <p style={{ margin: '0 0 16px', fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5 }}>
           Export all profiles as JSON for backup and team sharing, or import profiles from a previous export.
         </p>
@@ -380,20 +459,21 @@ export function ProfilesPage(): ReactElement {
         <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
           <button type="button" style={btn} onClick={() => void importJson()}>Import JSON</button>
         </div>
-      </section>
 
-      {byTemplate.length > 0 && (
-        <section style={card}>
-          <div style={{ fontWeight: 600, marginBottom: 8 }}>Profile Coverage</div>
-          <p style={{ margin: '0 0 12px', fontSize: 12, color: 'var(--text-muted)' }}>
-            Number of custom profiles per base template:
-          </p>
-          <ul style={{ margin: 0, paddingLeft: 18 }}>
-            {byTemplate.map(([k, n]) => (
-              <li key={k} className="mono" style={{ marginBottom: 4, fontSize: 12 }}>{k}: {n} profile{n !== 1 ? 's' : ''}</li>
-            ))}
-          </ul>
-        </section>
+        {byTemplate.length > 0 && (
+          <div style={{ marginTop: 20, paddingTop: 20, borderTop: '1px solid var(--border)' }}>
+            <div style={{ fontWeight: 600, marginBottom: 8 }}>Profile Coverage</div>
+            <p style={{ margin: '0 0 12px', fontSize: 12, color: 'var(--text-muted)' }}>
+              Number of custom profiles per base template:
+            </p>
+            <ul style={{ margin: 0, paddingLeft: 18 }}>
+              {byTemplate.map(([k, n]) => (
+                <li key={k} className="mono" style={{ marginBottom: 4, fontSize: 12 }}>{k}: {n} profile{n !== 1 ? 's' : ''}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </section>
       )}
 
       {editingProfileIdx !== null && editingData && (
