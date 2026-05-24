@@ -119,7 +119,13 @@ export function DashboardMainPage(): ReactElement {
   const [installedEditors, setInstalledEditors] = useState<Array<{ name: string; cmd: string }>>([])
   const [selectedEditorCmd, setSelectedEditorCmd] = useState<string>('')
   const [createProjectModalOpen, setCreateProjectModalOpen] = useState(false)
+  const [createProjectStep, setCreateProjectStep] = useState(1)
   const [createProjectName, setCreateProjectName] = useState('')
+  const [createProjectDeps, setCreateProjectDeps] = useState<string[]>(['pandas', 'numpy'])
+  const [createProjectAutoInstall, setCreateProjectAutoInstall] = useState(true)
+  const [createProjectNotebook, setCreateProjectNotebook] = useState(true)
+  const [createProjectMainPy, setCreateProjectMainPy] = useState(false)
+  const [isScaffolding, setIsScaffolding] = useState(false)
 
 
   const refresh = useCallback(async () => {
@@ -209,14 +215,63 @@ export function DashboardMainPage(): ReactElement {
      if (!selectedProfileName || !createProjectName.trim()) return
      const name = createProjectName.trim()
      const path = `~/LuminaProjects/${selectedProfileName}/${name}`
-     const res = await invoke('ipc_invoke', { channel: 'dh:project:ensure_dir', payload: { path } }) as any
-     if (res.ok) {
-        setProjectPath(res.path)
-        await window.dh.storeSet({ key: `project_dir_${selectedProfileName}`, data: res.path } as any)
-        setToast({ type: 'success', message: `Created project: ${name}` })
-        setCreateProjectModalOpen(false)
+     
+     setIsScaffolding(true)
+     setToast({ type: 'success', message: `Scaffolding ${name}...` })
+     
+     if (selectedProfileName === 'data-science') {
+       const res = await invoke('ipc_invoke', { 
+         channel: 'dh:project:scaffold', 
+         payload: { 
+           path, 
+           template: 'data-science',
+           options: {
+             dependencies: createProjectDeps,
+             createNotebook: createProjectNotebook,
+             createMainScript: createProjectMainPy,
+           }
+         } 
+       }) as any
+       
+       if (res.ok) {
+          setProjectPath(res.path)
+          await window.dh.storeSet({ key: `project_dir_${selectedProfileName}`, data: res.path } as any)
+          
+          if (createProjectAutoInstall) {
+            setToast({ type: 'success', message: 'Installing dependencies in background...' })
+            // Ensure the containers are running so we can install deps
+            await invoke('ipc_invoke', { channel: 'dh:profile:switch', payload: { to: selectedProfileName } })
+            invoke('ipc_invoke', { channel: 'dh:project:install_deps', payload: { projectName: name } }).then((r: any) => {
+              if (r.ok) setToast({ type: 'success', message: 'Dependencies installed successfully!' })
+              else setToast({ type: 'error', message: 'Failed to install dependencies' })
+            })
+          } else {
+            setToast({ type: 'success', message: `Created project: ${name}` })
+          }
+          
+          setIsScaffolding(false)
+          setCreateProjectModalOpen(false)
+          setCreateProjectStep(1)
+          setCreateProjectName('')
+       } else {
+          setIsScaffolding(false)
+          setToast({ type: 'error', message: res.error || 'Failed to scaffold project' })
+       }
      } else {
-        setToast({ type: 'error', message: res.error || 'Failed to create project' })
+       // Fallback for non-data-science templates
+       const res = await invoke('ipc_invoke', { channel: 'dh:project:ensure_dir', payload: { path } }) as any
+       if (res.ok) {
+          setProjectPath(res.path)
+          await window.dh.storeSet({ key: `project_dir_${selectedProfileName}`, data: res.path } as any)
+          setToast({ type: 'success', message: `Created project: ${name}` })
+          setIsScaffolding(false)
+          setCreateProjectModalOpen(false)
+          setCreateProjectStep(1)
+          setCreateProjectName('')
+       } else {
+          setIsScaffolding(false)
+          setToast({ type: 'error', message: res.error || 'Failed to create project' })
+       }
      }
   }
 
@@ -609,77 +664,193 @@ export function DashboardMainPage(): ReactElement {
       )}
       {createProjectModalOpen && selectedProfile && (
         <div className="fluent-modal-overlay">
-          <div className="fluent-modal-content">
-            <h2 style={{ margin: '0 0 16px 0', fontSize: 24, fontWeight: 700 }}>Create New Project</h2>
-            <p style={{ margin: '0 0 24px', color: 'var(--text-muted)', fontSize: 15, lineHeight: 1.6 }}>
-              Enter a name for your new <strong style={{ color: 'var(--text)' }}>{selectedProfile.title}</strong> project.
-              It will be created in your LuminaProjects workspace.
-            </p>
-            <input
-              type="text"
-              autoFocus
-              value={createProjectName}
-              onChange={(e) => setCreateProjectName(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') submitCreateProject() }}
-              placeholder="e.g. my-awesome-app"
-              style={{
-                width: '100%',
-                padding: '12px 16px',
-                borderRadius: 8,
-                border: '1px solid rgba(255,255,255,0.1)',
-                background: 'rgba(0,0,0,0.2)',
-                color: 'var(--text)',
-                fontSize: 16,
-                marginBottom: 32,
-                outline: 'none',
-                boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.1)',
-                transition: 'border-color 0.2s ease',
-              }}
-              onFocus={(e) => { e.currentTarget.style.borderColor = selectedProfile.accent }}
-              onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)' }}
-            />
-            <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 16 }}>
-              <button
-                type="button"
-                onClick={() => setCreateProjectModalOpen(false)}
-                style={{
-                  padding: '10px 24px',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  borderRadius: 6,
-                  background: 'rgba(255,255,255,0.05)',
-                  color: 'var(--text)',
-                  cursor: 'pointer',
-                  fontWeight: 600,
-                  fontSize: 14,
-                  transition: 'all 0.2s ease',
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.1)' }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)' }}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={submitCreateProject}
-                disabled={!createProjectName.trim()}
-                style={{
-                  padding: '10px 24px',
-                  border: 'none',
-                  borderRadius: 6,
-                  background: createProjectName.trim() ? selectedProfile.accent : 'rgba(255,255,255,0.1)',
-                  color: createProjectName.trim() ? '#fff' : 'var(--text-muted)',
-                  cursor: createProjectName.trim() ? 'pointer' : 'not-allowed',
-                  fontWeight: 600,
-                  fontSize: 14,
-                  boxShadow: createProjectName.trim() ? `0 4px 12px ${selectedProfile.accent}40` : 'none',
-                  transition: 'all 0.2s ease',
-                }}
-                onMouseEnter={(e) => { if (createProjectName.trim()) { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = `0 6px 16px ${selectedProfile.accent}60` } }}
-                onMouseLeave={(e) => { if (createProjectName.trim()) { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = `0 4px 12px ${selectedProfile.accent}40` } }}
-              >
-                Create
-              </button>
-            </div>
+          <div className="fluent-modal-content" style={{ maxWidth: selectedProfile.name === 'data-science' ? 520 : 400 }}>
+            {isScaffolding ? (
+               <div style={{ textAlign: 'center', padding: '40px 0' }}>
+                  <div className="spinner" style={{ borderTopColor: selectedProfile.accent, margin: '0 auto 24px', width: 40, height: 40, border: '3px solid rgba(255,255,255,0.1)', borderTop: `3px solid ${selectedProfile.accent}`, borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                  <h3 style={{ margin: '0 0 8px', fontSize: 20 }}>Scaffolding Project</h3>
+                  <p style={{ color: 'var(--text-muted)' }}>Setting up {createProjectName}, this might take a minute...</p>
+               </div>
+            ) : selectedProfile.name !== 'data-science' ? (
+              <>
+                <h2 style={{ margin: '0 0 16px 0', fontSize: 24, fontWeight: 700 }}>Create New Project</h2>
+                <p style={{ margin: '0 0 24px', color: 'var(--text-muted)', fontSize: 15, lineHeight: 1.6 }}>
+                  Enter a name for your new <strong style={{ color: 'var(--text)' }}>{selectedProfile.title}</strong> project.
+                  It will be created in your LuminaProjects workspace.
+                </p>
+                <input
+                  type="text"
+                  autoFocus
+                  value={createProjectName}
+                  onChange={(e) => setCreateProjectName(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') submitCreateProject() }}
+                  placeholder="e.g. my-awesome-app"
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    borderRadius: 8,
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    background: 'rgba(0,0,0,0.2)',
+                    color: 'var(--text)',
+                    fontSize: 16,
+                    marginBottom: 32,
+                    outline: 'none',
+                    boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.1)',
+                    transition: 'border-color 0.2s ease',
+                  }}
+                  onFocus={(e) => { e.currentTarget.style.borderColor = selectedProfile.accent }}
+                  onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)' }}
+                />
+                <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 16 }}>
+                  <button
+                    type="button"
+                    onClick={() => setCreateProjectModalOpen(false)}
+                    style={{
+                      padding: '10px 24px', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, background: 'rgba(255,255,255,0.05)', color: 'var(--text)', cursor: 'pointer', fontWeight: 600, fontSize: 14, transition: 'all 0.2s ease',
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.1)' }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)' }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={submitCreateProject}
+                    disabled={!createProjectName.trim()}
+                    style={{
+                      padding: '10px 24px', border: 'none', borderRadius: 6, background: createProjectName.trim() ? selectedProfile.accent : 'rgba(255,255,255,0.1)', color: createProjectName.trim() ? '#fff' : 'var(--text-muted)', cursor: createProjectName.trim() ? 'pointer' : 'not-allowed', fontWeight: 600, fontSize: 14, boxShadow: createProjectName.trim() ? `0 4px 12px ${selectedProfile.accent}40` : 'none', transition: 'all 0.2s ease',
+                    }}
+                    onMouseEnter={(e) => { if (createProjectName.trim()) { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = `0 6px 16px ${selectedProfile.accent}60` } }}
+                    onMouseLeave={(e) => { if (createProjectName.trim()) { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = `0 4px 12px ${selectedProfile.accent}40` } }}
+                  >
+                    Create
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                 <h2 style={{ margin: '0 0 16px 0', fontSize: 24, fontWeight: 700 }}>Data Science Setup Wizard</h2>
+                 
+                 <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
+                    {[1, 2, 3].map(step => (
+                      <div key={step} style={{ flex: 1, height: 4, borderRadius: 2, background: step <= createProjectStep ? selectedProfile.accent : 'rgba(255,255,255,0.1)', transition: 'background 0.3s ease' }} />
+                    ))}
+                 </div>
+
+                 {createProjectStep === 1 && (
+                    <div style={{ animation: 'fade-in 0.3s ease' }}>
+                      <p style={{ margin: '0 0 24px', color: 'var(--text-muted)', fontSize: 15, lineHeight: 1.6 }}>Step 1: Choose a name for your Data Science project.</p>
+                      <input
+                        type="text"
+                        autoFocus
+                        value={createProjectName}
+                        onChange={(e) => setCreateProjectName(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter' && createProjectName.trim()) setCreateProjectStep(2) }}
+                        placeholder="e.g. sales-analysis"
+                        style={{
+                          width: '100%', padding: '12px 16px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.2)', color: 'var(--text)', fontSize: 16, marginBottom: 32, outline: 'none', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.1)', transition: 'border-color 0.2s ease',
+                        }}
+                        onFocus={(e) => { e.currentTarget.style.borderColor = selectedProfile.accent }}
+                        onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)' }}
+                      />
+                    </div>
+                 )}
+                 {createProjectStep === 2 && (
+                    <div style={{ animation: 'fade-in 0.3s ease' }}>
+                      <p style={{ margin: '0 0 24px', color: 'var(--text-muted)', fontSize: 15, lineHeight: 1.6 }}>Step 2: Database Configuration.</p>
+                      <div style={{ background: 'rgba(0,0,0,0.2)', padding: 16, borderRadius: 8, border: `1px solid ${selectedProfile.accent}50`, marginBottom: 32 }}>
+                        <strong style={{ display: 'block', marginBottom: 8, color: selectedProfile.accent }}>PostgreSQL 16 (Included in Stack)</strong>
+                        <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)' }}>A dedicated PostgreSQL database will be isolated for this project automatically. A `.env` file will be generated with the connection string `DATABASE_URL`.</p>
+                      </div>
+                    </div>
+                 )}
+                 {createProjectStep === 3 && (
+                    <div style={{ animation: 'fade-in 0.3s ease' }}>
+                      <p style={{ margin: '0 0 24px', color: 'var(--text-muted)', fontSize: 15, lineHeight: 1.6 }}>Step 3: Initial Files & Dependencies.</p>
+                      
+                      <div style={{ marginBottom: 20 }}>
+                        <strong style={{ display: 'block', marginBottom: 12, fontSize: 12, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--text-muted)' }}>Scaffold Files</strong>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12, cursor: 'pointer' }}>
+                          <input type="checkbox" checked={createProjectNotebook} onChange={e => setCreateProjectNotebook(e.target.checked)} style={{ width: 16, height: 16, accentColor: selectedProfile.accent }} />
+                          <span style={{ fontSize: 14 }}>Generate sample <code style={{ background: 'rgba(255,255,255,0.1)', padding: '2px 6px', borderRadius: 4 }}>exploration.ipynb</code></span>
+                        </label>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, cursor: 'pointer' }}>
+                          <input type="checkbox" checked={createProjectMainPy} onChange={e => setCreateProjectMainPy(e.target.checked)} style={{ width: 16, height: 16, accentColor: selectedProfile.accent }} />
+                          <span style={{ fontSize: 14 }}>Generate <code style={{ background: 'rgba(255,255,255,0.1)', padding: '2px 6px', borderRadius: 4 }}>main.py</code> script</span>
+                        </label>
+                      </div>
+
+                      <div style={{ marginBottom: 20 }}>
+                        <strong style={{ display: 'block', marginBottom: 12, fontSize: 12, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--text-muted)' }}>Core Python Libraries</strong>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                          {['pandas', 'numpy', 'matplotlib', 'scikit-learn', 'tensorflow', 'torch', 'seaborn', 'sqlalchemy'].map(dep => (
+                            <label key={dep} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', background: createProjectDeps.includes(dep) ? `${selectedProfile.accent}20` : 'rgba(255,255,255,0.02)', padding: '8px 12px', borderRadius: 6, border: `1px solid ${createProjectDeps.includes(dep) ? selectedProfile.accent : 'rgba(255,255,255,0.05)'}`, transition: 'all 0.2s' }}>
+                              <input type="checkbox" checked={createProjectDeps.includes(dep)} onChange={e => {
+                                if (e.target.checked) setCreateProjectDeps([...createProjectDeps, dep])
+                                else setCreateProjectDeps(createProjectDeps.filter(d => d !== dep))
+                              }} style={{ width: 16, height: 16, accentColor: selectedProfile.accent }} />
+                              <span style={{ fontSize: 14, color: createProjectDeps.includes(dep) ? '#fff' : 'var(--text-muted)' }}>{dep}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div style={{ marginBottom: 8, paddingTop: 16, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}>
+                          <input type="checkbox" checked={createProjectAutoInstall} onChange={e => setCreateProjectAutoInstall(e.target.checked)} style={{ width: 16, height: 16, accentColor: selectedProfile.accent }} />
+                          <span style={{ fontWeight: 600, fontSize: 14, color: '#fff' }}>Auto-install dependencies now</span>
+                        </label>
+                        <p style={{ margin: '6px 0 0 28px', fontSize: 12, color: 'var(--text-muted)' }}>If unchecked, <code style={{ background: 'rgba(255,255,255,0.1)', padding: '1px 4px', borderRadius: 3 }}>requirements.txt</code> will be created but you must run pip install manually.</p>
+                      </div>
+                    </div>
+                 )}
+
+                 <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 20, marginTop: 16 }}>
+                   <button
+                     type="button"
+                     onClick={() => { setCreateProjectModalOpen(false); setCreateProjectStep(1) }}
+                     style={{ padding: '10px 20px', border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontWeight: 600, fontSize: 14 }}
+                     onMouseEnter={(e) => { e.currentTarget.style.color = '#fff' }}
+                     onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-muted)' }}
+                   >
+                     Cancel
+                   </button>
+                   
+                   {createProjectStep > 1 && (
+                     <button
+                       type="button"
+                       onClick={() => setCreateProjectStep(s => s - 1)}
+                       style={{ padding: '10px 24px', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, background: 'rgba(255,255,255,0.05)', color: 'var(--text)', cursor: 'pointer', fontWeight: 600, fontSize: 14, transition: 'all 0.2s ease' }}
+                       onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.1)' }}
+                       onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)' }}
+                     >
+                       Back
+                     </button>
+                   )}
+                   
+                   {createProjectStep < 3 ? (
+                     <button
+                       type="button"
+                       onClick={() => setCreateProjectStep(s => s + 1)}
+                       disabled={createProjectStep === 1 && !createProjectName.trim()}
+                       style={{ padding: '10px 24px', border: 'none', borderRadius: 6, background: (createProjectStep === 1 && !createProjectName.trim()) ? 'rgba(255,255,255,0.1)' : selectedProfile.accent, color: (createProjectStep === 1 && !createProjectName.trim()) ? 'var(--text-muted)' : '#fff', cursor: (createProjectStep === 1 && !createProjectName.trim()) ? 'not-allowed' : 'pointer', fontWeight: 600, fontSize: 14, transition: 'all 0.2s ease' }}
+                     >
+                       Next
+                     </button>
+                   ) : (
+                     <button
+                       type="button"
+                       onClick={submitCreateProject}
+                       style={{ padding: '10px 24px', border: 'none', borderRadius: 6, background: selectedProfile.accent, color: '#fff', cursor: 'pointer', fontWeight: 600, fontSize: 14, boxShadow: `0 4px 12px ${selectedProfile.accent}40`, transition: 'all 0.2s ease' }}
+                       onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = `0 6px 16px ${selectedProfile.accent}60` }}
+                       onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = `0 4px 12px ${selectedProfile.accent}40` }}
+                     >
+                       Scaffold Project
+                     </button>
+                   )}
+                 </div>
+              </>
+            )}
           </div>
         </div>
       )}

@@ -2208,6 +2208,156 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
          }
       }
     }
+    "dh:project:scaffold" => {
+      let path_str = body.get("path").and_then(|v| v.as_str()).unwrap_or_default();
+      let template = body.get("template").and_then(|v| v.as_str()).unwrap_or_default();
+      let options = body.get("options").cloned().unwrap_or_else(|| json!({}));
+      
+      if path_str.is_empty() {
+        return Ok(json!({ "ok": false, "error": "[SCAFFOLD_FAILED] Missing path." }));
+      }
+      
+      let expanded = if path_str.starts_with("~/") {
+        let home = std::env::var("HOME").unwrap_or_else(|_| "/root".to_string());
+        path_str.replacen("~/", &format!("{}/", home), 1)
+      } else {
+        path_str.to_string()
+      };
+      
+      let project_dir = std::path::PathBuf::from(&expanded);
+      if let Err(e) = std::fs::create_dir_all(&project_dir) {
+        return Ok(json!({ "ok": false, "error": format!("[SCAFFOLD_FAILED] Could not create directory: {}", e) }));
+      }
+      
+      if template == "data-science" {
+        // Generate .env
+        let env_content = "DATABASE_URL=postgresql://postgres:luminadev@postgres:5432/datasci\n";
+        let _ = std::fs::write(project_dir.join(".env"), env_content);
+        
+        // Generate requirements.txt
+        let deps = options.get("dependencies").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+        let mut reqs = String::new();
+        for d in deps {
+          if let Some(s) = d.as_str() {
+            reqs.push_str(s);
+            reqs.push('\n');
+          }
+        }
+        let _ = std::fs::write(project_dir.join("requirements.txt"), reqs);
+        
+        // Generate main.py
+        let create_main = options.get("createMainScript").and_then(|v| v.as_bool()).unwrap_or(false);
+        if create_main {
+          let main_content = r#"import os
+
+def main():
+    db_url = os.environ.get('DATABASE_URL', 'Not set')
+    print("Welcome to LuminaDev Data Science Project!")
+    print(f"Database Connection String: {db_url}")
+
+if __name__ == '__main__':
+    main()
+"#;
+          let _ = std::fs::write(project_dir.join("main.py"), main_content);
+        }
+        
+        // Generate exploration.ipynb
+        let create_notebook = options.get("createNotebook").and_then(|v| v.as_bool()).unwrap_or(false);
+        if create_notebook {
+          let notebook_content = r##"{
+ "cells": [
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# LuminaDev Data Science Exploration\n",
+    "Welcome to your new Jupyter Notebook! Dependencies have been installed and the PostgreSQL database is ready."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import os\n",
+    "db_url = os.environ.get('DATABASE_URL')\n",
+    "print(f'Database URL: {db_url}')"
+   ]
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python 3 (ipykernel)",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.10.0"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 5
+}"##;
+          let _ = std::fs::write(project_dir.join("exploration.ipynb"), notebook_content);
+        }
+      }
+      
+      json!({ "ok": true, "path": expanded })
+    }
+    "dh:project:install_deps" => {
+      let project_name = body.get("projectName").and_then(|v| v.as_str()).unwrap_or_default();
+      if project_name.is_empty() {
+        return Ok(json!({ "ok": false, "error": "Missing projectName" }));
+      }
+      
+      // We assume data-science jupyter container name is <projectName>-jupyter-1
+      let container_name = format!("{}-jupyter-1", project_name);
+      
+      let fut = async {
+         // Wait up to 10 seconds for the container to become responsive
+         for _ in 0..10 {
+            let out = tokio::process::Command::new("docker")
+              .args(&["exec", &container_name, "echo", "ready"])
+              .output()
+              .await
+              .unwrap_or_else(|_| std::process::Output { status: std::os::unix::process::ExitStatusExt::from_raw(1), stdout: vec![], stderr: vec![] });
+            if out.status.success() {
+               break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
+         }
+         
+         let output = tokio::process::Command::new("docker")
+            .args(&["exec", "-w", "/home/jovyan/work", &container_name, "pip", "install", "-r", "requirements.txt"])
+            .output()
+            .await
+            .map_err(|e| format!("[PIP_INSTALL_ERROR] {}", e))?;
+            
+         let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+         let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+         if output.status.success() {
+           Ok((stdout, stderr))
+         } else {
+           Err(if stderr.trim().is_empty() { stdout } else { stderr })
+         }
+      };
+      
+      match tokio::time::timeout(std::time::Duration::from_secs(120), fut).await {
+         Ok(Ok((stdout, _))) => json!({ "ok": true, "log": stdout }),
+         Ok(Err(e)) => json!({ "ok": false, "error": e }),
+         Err(_) => json!({ "ok": false, "error": "Timeout installing dependencies" })
+      }
+    }
     "dh:git:recent:list" => match app_file(&app, "git_recent.json") {
       Ok(path) => {
         let value = read_json(&path);
