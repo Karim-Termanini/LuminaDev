@@ -100,10 +100,15 @@ export function DashboardMainPage(): ReactElement {
     window.dh.profileSwitch({ from: activeProfile ?? undefined, to: selectedProfileName }).then((r) => {
       setIsSwitching(false)
       if (r.ok) {
-        setActiveProfile(selectedProfileName)
-        setToast({ type: 'success', message: `Switched to ${selectedProfileName}` })
-        void refresh()
-        setTimeout(() => setToast(null), 2500)
+        window.dh.storeSet({ key: 'active_profile', data: selectedProfileName }).then(() => {
+          setActiveProfile(selectedProfileName)
+          setToast({ type: 'success', message: `Switched to ${selectedProfileName}` })
+          void refresh()
+          setTimeout(() => setToast(null), 2500)
+        }).catch(() => {
+          setActiveProfile(selectedProfileName)
+          setToast({ type: 'success', message: `Switched to ${selectedProfileName}` })
+        })
       } else {
         const errMsg = r.error ?? r.log ?? 'Unknown error'
         setToast({ type: 'error', message: humanizeProfileError(errMsg) })
