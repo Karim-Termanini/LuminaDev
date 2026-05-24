@@ -7,7 +7,8 @@ import {
 } from '@linux-dev-home/shared'
 import type { ReactElement } from 'react'
 import { invoke } from '@tauri-apps/api/core'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { listen } from '@tauri-apps/api/event'
+import { useCallback, useEffect, useMemo, useState, useRef } from 'react'
 import { humanizeProfileError } from './profileError'
 
 import './DashboardPage.css'
@@ -123,11 +124,49 @@ export function DashboardMainPage(): ReactElement {
   const [createProjectName, setCreateProjectName] = useState('')
   const [createProjectPythonVer, setCreateProjectPythonVer] = useState('latest')
   const [createProjectPostgresVer, setCreateProjectPostgresVer] = useState('16')
-  const [createProjectDeps, setCreateProjectDeps] = useState<Record<string, string>>({ pandas: 'latest', numpy: 'latest' })
+  const [createProjectDeps, setCreateProjectDeps] = useState<Record<string, string>>({})
   const [createProjectAutoInstall, setCreateProjectAutoInstall] = useState(true)
   const [createProjectNotebook, setCreateProjectNotebook] = useState(true)
   const [createProjectMainPy, setCreateProjectMainPy] = useState(false)
   const [isScaffolding, setIsScaffolding] = useState(false)
+  const [scaffoldProgress, setScaffoldProgress] = useState(0)
+  const [scaffoldStatusText, setScaffoldStatusText] = useState('Initializing...')
+  const [installLogs, setInstallLogs] = useState<string[]>([])
+  const logsContainerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    let unlisten: () => void;
+    listen<string>('project-install-log', (event) => {
+      setInstallLogs(prev => {
+        const next = [...prev.slice(-49), event.payload]
+        return next
+      })
+    }).then(fn => { unlisten = fn })
+    return () => { if (unlisten) unlisten() }
+  }, [])
+
+  useEffect(() => {
+    let interval: any;
+    if (isScaffolding) {
+      setScaffoldProgress(5)
+      interval = setInterval(() => {
+        setScaffoldProgress(prev => {
+          if (prev >= 90) return prev
+          const increment = Math.max(0.5, (90 - prev) / 10)
+          return prev + increment
+        })
+      }, 800)
+    } else {
+      setScaffoldProgress(100)
+    }
+    return () => { if (interval) clearInterval(interval) }
+  }, [isScaffolding])
+
+  useEffect(() => {
+    if (logsContainerRef.current) {
+      logsContainerRef.current.scrollTop = logsContainerRef.current.scrollHeight
+    }
+  }, [installLogs])
 
   const refresh = useCallback(async () => {
     try {
@@ -230,6 +269,7 @@ export function DashboardMainPage(): ReactElement {
      const path = `~/LuminaProjects/${selectedProfileName}/${name}`
      
      setIsScaffolding(true)
+     setInstallLogs([])
      setToast({ type: 'success', message: `Scaffolding ${name}...` })
      
      if (selectedProfileName === 'data-science') {
@@ -254,20 +294,77 @@ export function DashboardMainPage(): ReactElement {
           
           if (createProjectAutoInstall) {
             setToast({ type: 'success', message: 'Installing dependencies in background...' })
+            setScaffoldStatusText('Starting Docker Environment...')
             // Ensure the containers are running so we can install deps
             await invoke('ipc_invoke', { channel: 'dh:profile:switch', payload: { to: selectedProfileName } })
-            invoke('ipc_invoke', { channel: 'dh:project:install_deps', payload: { projectName: name } }).then((r: any) => {
-              if (r.ok) setToast({ type: 'success', message: 'Dependencies installed successfully!' })
-              else setToast({ type: 'error', message: 'Failed to install dependencies' })
-            })
+            setScaffoldStatusText('Installing Dependencies...')
+            const r: any = await invoke('ipc_invoke', { channel: 'dh:project:install_deps', payload: { projectName: name } })
+            if (r.ok) {
+              setToast({ type: 'success', message: 'Dependencies installed successfully!' })
+              setScaffoldStatusText('Finished!')
+            } else {
+              setToast({ type: 'error', message: 'Failed to install dependencies' })
+              setScaffoldStatusText('Failed.')
+            }
           } else {
             setToast({ type: 'success', message: `Created project: ${name}` })
           }
           
+          setScaffoldProgress(100)
+          setTimeout(() => {
+            setIsScaffolding(false)
+            setCreateProjectModalOpen(false)
+            setCreateProjectStep(1)
+            setCreateProjectName('')
+          }, 600)
+       } else {
           setIsScaffolding(false)
-          setCreateProjectModalOpen(false)
-          setCreateProjectStep(1)
-          setCreateProjectName('')
+          setToast({ type: 'error', message: res.error || 'Failed to scaffold project' })
+       }
+     } else if (selectedProfileName === 'web-dev') {
+       const res = await invoke('ipc_invoke', { 
+         channel: 'dh:project:scaffold', 
+         payload: { 
+           path, 
+           template: 'web-dev',
+           options: {
+             dependencies: createProjectDeps,
+             devDependencies: {}
+           }
+         } 
+       }) as any
+       
+       if (res.ok) {
+          setProjectPath(res.path)
+          await window.dh.storeSet({ key: `project_dir_${selectedProfileName}`, data: res.path } as any)
+          await window.dh.storeSet({ key: `node_version_${selectedProfileName}`, data: createProjectPythonVer } as any) // Reusing the same state variable for now
+          await window.dh.storeSet({ key: `postgres_version_${selectedProfileName}`, data: createProjectPostgresVer } as any)
+          
+          if (createProjectAutoInstall) {
+            setToast({ type: 'success', message: 'Installing dependencies in background...' })
+            setScaffoldStatusText('Starting Docker Environment...')
+            // Ensure the containers are running so we can install deps
+            await invoke('ipc_invoke', { channel: 'dh:profile:switch', payload: { to: selectedProfileName } })
+            setScaffoldStatusText('Installing Dependencies...')
+            const r: any = await invoke('ipc_invoke', { channel: 'dh:project:install_deps', payload: { projectName: name, template: 'web-dev' } })
+            if (r.ok) {
+              setToast({ type: 'success', message: 'Dependencies installed successfully!' })
+              setScaffoldStatusText('Finished!')
+            } else {
+              setToast({ type: 'error', message: 'Failed to install dependencies' })
+              setScaffoldStatusText('Failed.')
+            }
+          } else {
+            setToast({ type: 'success', message: `Created project: ${name}` })
+          }
+          
+          setScaffoldProgress(100)
+          setTimeout(() => {
+            setIsScaffolding(false)
+            setCreateProjectModalOpen(false)
+            setCreateProjectStep(1)
+            setCreateProjectName('')
+          }, 600)
        } else {
           setIsScaffolding(false)
           setToast({ type: 'error', message: res.error || 'Failed to scaffold project' })
@@ -362,8 +459,17 @@ export function DashboardMainPage(): ReactElement {
             maxWidth: 320,
           }}
         >
-          <span className={`codicon ${toast.type === 'success' ? 'codicon-check' : 'codicon-error'}`} style={{ fontSize: 16 }} />
-          {toast.message}
+          <span className={`codicon ${toast.type === 'success' ? 'codicon-check' : 'codicon-error'}`} style={{ fontSize: 16, flexShrink: 0 }} />
+          <span style={{ flex: 1, wordBreak: 'break-word' }}>{toast.message}</span>
+          <button
+            type="button"
+            onClick={() => setToast(null)}
+            style={{ background: 'transparent', border: 'none', color: '#fff', cursor: 'pointer', padding: 4, display: 'flex', opacity: 0.7, flexShrink: 0, marginLeft: 8 }}
+            onMouseEnter={(e) => { e.currentTarget.style.opacity = '1' }}
+            onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.7' }}
+          >
+            <span className="codicon codicon-close" style={{ fontSize: 16 }} />
+          </button>
         </div>
       )}
 
@@ -449,7 +555,16 @@ export function DashboardMainPage(): ReactElement {
                           {!projectPath ? (
                             <>
                               <button onClick={handleLinkProject} style={{ padding: '0 16px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', color: 'var(--text)', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>Link Existing</button>
-                              <button onClick={() => setCreateProjectModalOpen(true)} style={{ padding: '0 16px', borderRadius: 6, border: 'none', background: selectedProfile.accent, color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>Create New</button>
+                              <button onClick={() => {
+                                if (selectedProfile.name === 'data-science') {
+                                  setCreateProjectDeps({ pandas: 'latest', numpy: 'latest' })
+                                } else if (selectedProfile.name === 'web-dev') {
+                                  setCreateProjectDeps({ tailwindcss: 'latest', 'react-router-dom': 'latest' })
+                                } else {
+                                  setCreateProjectDeps({})
+                                }
+                                setCreateProjectModalOpen(true)
+                              }} style={{ padding: '0 16px', borderRadius: 6, border: 'none', background: selectedProfile.accent, color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>Create New</button>
                             </>
                           ) : (
                             <button onClick={async () => {
@@ -692,11 +807,35 @@ export function DashboardMainPage(): ReactElement {
           <div className="fluent-modal-content" style={{ maxWidth: selectedProfile.name === 'data-science' ? 520 : 400 }}>
             {isScaffolding ? (
                <div style={{ textAlign: 'center', padding: '40px 0' }}>
-                  <div className="spinner" style={{ borderTopColor: selectedProfile.accent, margin: '0 auto 24px', width: 40, height: 40, border: '3px solid rgba(255,255,255,0.1)', borderTop: `3px solid ${selectedProfile.accent}`, borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
-                  <h3 style={{ margin: '0 0 8px', fontSize: 20 }}>Scaffolding Project</h3>
-                  <p style={{ color: 'var(--text-muted)' }}>Setting up {createProjectName}, this might take a minute...</p>
+                  <h3 style={{ margin: '0 0 8px', fontSize: 20 }}>{scaffoldStatusText}</h3>
+                  <p style={{ color: 'var(--text-muted)', marginBottom: 24 }}>Setting up {createProjectName}, this might take a minute...</p>
+                  
+                  <div style={{ width: '100%', height: 6, background: 'rgba(255,255,255,0.1)', borderRadius: 3, overflow: 'hidden', marginBottom: 24, boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.2)' }}>
+                    <div style={{ width: `${scaffoldProgress}%`, height: '100%', background: selectedProfile.accent, borderRadius: 3, transition: 'width 0.4s ease-out', boxShadow: `0 0 10px ${selectedProfile.accent}` }} />
+                  </div>
+                  
+                  {installLogs.length > 0 && (
+                    <div style={{ marginTop: 24, textAlign: 'left', background: 'rgba(0,0,0,0.4)', borderRadius: 8, border: '1px solid rgba(255,255,255,0.08)', overflow: 'hidden', boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }}>
+                      {/* Terminal Header */}
+                      <div style={{ background: 'rgba(255,255,255,0.03)', padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 6, borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                        <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#ff5f56' }} />
+                        <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#ffbd2e' }} />
+                        <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#27c93f' }} />
+                        <span style={{ marginLeft: 8, fontSize: 11, color: 'var(--text-muted)', fontFamily: 'sans-serif', letterSpacing: 0.5 }}>Installation Progress</span>
+                      </div>
+                      {/* Terminal Body */}
+                      <div ref={logsContainerRef} style={{ padding: 12, height: 140, overflowY: 'auto', fontFamily: '"Fira Code", monospace, Consolas', fontSize: 12, color: '#a9adc1', lineHeight: 1.5 }}>
+                        {installLogs.map((log, i) => (
+                          <div key={i} style={{ marginBottom: 4, wordBreak: 'break-all' }}>
+                            <span style={{ color: selectedProfile.accent, marginRight: 8 }}>❯</span>
+                            {log}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                </div>
-            ) : selectedProfile.name !== 'data-science' ? (
+            ) : selectedProfile.name !== 'data-science' && selectedProfile.name !== 'web-dev' ? (
               <>
                 <h2 style={{ margin: '0 0 16px 0', fontSize: 24, fontWeight: 700 }}>Create New Project</h2>
                 <p style={{ margin: '0 0 24px', color: 'var(--text-muted)', fontSize: 15, lineHeight: 1.6 }}>
@@ -752,9 +891,9 @@ export function DashboardMainPage(): ReactElement {
                   </button>
                 </div>
               </>
-            ) : (
+            ) : selectedProfileName === 'data-science' || selectedProfileName === 'web-dev' ? (
               <>
-                 <h2 style={{ margin: '0 0 16px 0', fontSize: 24, fontWeight: 700 }}>Data Science Setup Wizard</h2>
+                 <h2 style={{ margin: '0 0 16px 0', fontSize: 24, fontWeight: 700 }}>{selectedProfileName === 'data-science' ? 'Data Science' : 'Web Development'} Setup Wizard</h2>
                  
                  <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
                     {[1, 2, 3].map(step => (
@@ -773,7 +912,7 @@ export function DashboardMainPage(): ReactElement {
                         value={createProjectName}
                         onChange={(e) => setCreateProjectName(e.target.value)}
                         onKeyDown={(e) => { if (e.key === 'Enter' && createProjectName.trim()) setCreateProjectStep(2) }}
-                        placeholder="e.g. sales-analysis"
+                        placeholder={selectedProfileName === 'data-science' ? "e.g. sales-analysis" : "e.g. ecommerce-app"}
                         style={{
                           width: '100%', padding: '12px 16px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.2)', color: 'var(--text)', fontSize: 16, marginBottom: 20, outline: 'none', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.1)', transition: 'border-color 0.2s ease',
                         }}
@@ -781,20 +920,39 @@ export function DashboardMainPage(): ReactElement {
                         onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)' }}
                       />
 
-                      <strong style={{ display: 'block', marginBottom: 8, fontSize: 13, color: 'var(--text-muted)' }}>Python Version</strong>
-                      <select
-                        value={createProjectPythonVer}
-                        onChange={(e) => setCreateProjectPythonVer(e.target.value)}
-                        style={{
-                          width: '100%', padding: '12px 16px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.2)', color: 'var(--text)', fontSize: 16, marginBottom: 32, outline: 'none', appearance: 'none', cursor: 'pointer'
-                        }}
-                      >
-                        <option value="latest">Latest Stable (from Jupyter)</option>
-                        <option value="3.11">Python 3.11</option>
-                        <option value="3.10">Python 3.10</option>
-                        <option value="3.9">Python 3.9</option>
-                        <option value="3.8">Python 3.8</option>
-                      </select>
+                      {selectedProfileName === 'data-science' ? (
+                        <>
+                          <strong style={{ display: 'block', marginBottom: 8, fontSize: 13, color: 'var(--text-muted)' }}>Python Version</strong>
+                          <select
+                            value={createProjectPythonVer}
+                            onChange={(e) => setCreateProjectPythonVer(e.target.value)}
+                            style={{
+                              width: '100%', padding: '12px 16px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.2)', color: 'var(--text)', fontSize: 16, marginBottom: 32, outline: 'none', appearance: 'none', cursor: 'pointer'
+                            }}
+                          >
+                            <option value="latest">Latest Stable (from Jupyter)</option>
+                            <option value="3.11">Python 3.11</option>
+                            <option value="3.10">Python 3.10</option>
+                            <option value="3.9">Python 3.9</option>
+                            <option value="3.8">Python 3.8</option>
+                          </select>
+                        </>
+                      ) : (
+                        <>
+                          <strong style={{ display: 'block', marginBottom: 8, fontSize: 13, color: 'var(--text-muted)' }}>Node.js Version</strong>
+                          <select
+                            value={createProjectPythonVer} // We are reusing the state variable for simplicity
+                            onChange={(e) => setCreateProjectPythonVer(e.target.value)}
+                            style={{
+                              width: '100%', padding: '12px 16px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.2)', color: 'var(--text)', fontSize: 16, marginBottom: 32, outline: 'none', appearance: 'none', cursor: 'pointer'
+                            }}
+                          >
+                            <option value="latest">Latest Stable (22-alpine)</option>
+                            <option value="20">Node.js 20 (LTS)</option>
+                            <option value="18">Node.js 18</option>
+                          </select>
+                        </>
+                      )}
                     </div>
                  )}
                  {createProjectStep === 2 && (
@@ -827,20 +985,34 @@ export function DashboardMainPage(): ReactElement {
                       
                       <div style={{ marginBottom: 20 }}>
                         <strong style={{ display: 'block', marginBottom: 12, fontSize: 12, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--text-muted)' }}>Scaffold Files</strong>
-                        <label style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12, cursor: 'pointer' }}>
-                          <input type="checkbox" checked={createProjectNotebook} onChange={e => setCreateProjectNotebook(e.target.checked)} style={{ width: 16, height: 16, accentColor: selectedProfile.accent }} />
-                          <span style={{ fontSize: 14 }}>Generate sample <code style={{ background: 'rgba(255,255,255,0.1)', padding: '2px 6px', borderRadius: 4 }}>exploration.ipynb</code></span>
-                        </label>
-                        <label style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, cursor: 'pointer' }}>
-                          <input type="checkbox" checked={createProjectMainPy} onChange={e => setCreateProjectMainPy(e.target.checked)} style={{ width: 16, height: 16, accentColor: selectedProfile.accent }} />
-                          <span style={{ fontSize: 14 }}>Generate <code style={{ background: 'rgba(255,255,255,0.1)', padding: '2px 6px', borderRadius: 4 }}>main.py</code> script</span>
-                        </label>
+                        {selectedProfileName === 'data-science' ? (
+                          <>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12, cursor: 'pointer' }}>
+                              <input type="checkbox" checked={createProjectNotebook} onChange={e => setCreateProjectNotebook(e.target.checked)} style={{ width: 16, height: 16, accentColor: selectedProfile.accent }} />
+                              <span style={{ fontSize: 14 }}>Generate sample <code style={{ background: 'rgba(255,255,255,0.1)', padding: '2px 6px', borderRadius: 4 }}>exploration.ipynb</code></span>
+                            </label>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, cursor: 'pointer' }}>
+                              <input type="checkbox" checked={createProjectMainPy} onChange={e => setCreateProjectMainPy(e.target.checked)} style={{ width: 16, height: 16, accentColor: selectedProfile.accent }} />
+                              <span style={{ fontSize: 14 }}>Generate <code style={{ background: 'rgba(255,255,255,0.1)', padding: '2px 6px', borderRadius: 4 }}>main.py</code> script</span>
+                            </label>
+                          </>
+                        ) : (
+                          <>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12, cursor: 'pointer' }}>
+                              <input type="checkbox" checked={true} readOnly style={{ width: 16, height: 16, accentColor: selectedProfile.accent }} />
+                              <span style={{ fontSize: 14 }}>Vite + React Template (TypeScript)</span>
+                            </label>
+                          </>
+                        )}
                       </div>
 
                       <div style={{ marginBottom: 20 }}>
-                        <strong style={{ display: 'block', marginBottom: 12, fontSize: 12, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--text-muted)' }}>Core Python Libraries</strong>
+                        <strong style={{ display: 'block', marginBottom: 12, fontSize: 12, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--text-muted)' }}>Core {selectedProfileName === 'data-science' ? 'Python' : 'NPM'} Libraries</strong>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                          {['pandas', 'numpy', 'matplotlib', 'scikit-learn', 'tensorflow', 'torch', 'seaborn', 'sqlalchemy'].map(dep => (
+                          {(selectedProfileName === 'data-science' ? 
+                            ['pandas', 'numpy', 'matplotlib', 'scikit-learn', 'tensorflow', 'torch', 'seaborn', 'sqlalchemy'] :
+                            ['tailwindcss', 'react-router-dom', 'axios', 'zod', 'framer-motion', 'lucide-react', 'zustand', 'react-query']
+                          ).map(dep => (
                             <div key={dep} style={{ display: 'flex', alignItems: 'center', gap: 8, background: Object.keys(createProjectDeps).includes(dep) ? `${selectedProfile.accent}20` : 'rgba(255,255,255,0.02)', padding: '6px 12px', borderRadius: 6, border: `1px solid ${Object.keys(createProjectDeps).includes(dep) ? selectedProfile.accent : 'rgba(255,255,255,0.05)'}`, transition: 'all 0.2s' }}>
                               <input type="checkbox" checked={Object.keys(createProjectDeps).includes(dep)} onChange={e => {
                                 if (e.target.checked) setCreateProjectDeps({ ...createProjectDeps, [dep]: 'latest' })
@@ -870,7 +1042,7 @@ export function DashboardMainPage(): ReactElement {
                           <input type="checkbox" checked={createProjectAutoInstall} onChange={e => setCreateProjectAutoInstall(e.target.checked)} style={{ width: 16, height: 16, accentColor: selectedProfile.accent }} />
                           <span style={{ fontWeight: 600, fontSize: 14, color: '#fff' }}>Auto-install dependencies now</span>
                         </label>
-                        <p style={{ margin: '6px 0 0 28px', fontSize: 12, color: 'var(--text-muted)' }}>If unchecked, <code style={{ background: 'rgba(255,255,255,0.1)', padding: '1px 4px', borderRadius: 3 }}>requirements.txt</code> will be created but you must run pip install manually.</p>
+                        <p style={{ margin: '6px 0 0 28px', fontSize: 12, color: 'var(--text-muted)' }}>If unchecked, <code style={{ background: 'rgba(255,255,255,0.1)', padding: '1px 4px', borderRadius: 3 }}>{selectedProfileName === 'data-science' ? 'requirements.txt' : 'package.json'}</code> will be created but you must run install manually.</p>
                       </div>
                     </div>
                  )}
@@ -920,7 +1092,7 @@ export function DashboardMainPage(): ReactElement {
                    )}
                  </div>
               </>
-            )}
+            ) : null}
           </div>
         </div>
       )}

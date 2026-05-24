@@ -3,8 +3,25 @@
 name: lumina-web-dev
 
 services:
-  nginx:
-    image: nginx:alpine
+  node:
+    image: node:${NODE_IMAGE_TAG:-20-alpine}
+    working_dir: /app
     ports:
-      - "18080:80"
+      - "3000:3000"
+      - "5173:5173"
+    environment:
+      - NODE_ENV=development
+    volumes:
+      - ${PROJECT_DIR:-~/LuminaProjects/web-dev/default}:/app
+    command: tail -f /dev/null
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:${POSTGRES_IMAGE_TAG:-16-alpine}
+    ports:
+      - "54321:5432"
+    environment:
+      - POSTGRES_PASSWORD=luminadev
+      - POSTGRES_USER=postgres
+      - POSTGRES_DB=webapp
     restart: unless-stopped
