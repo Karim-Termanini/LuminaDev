@@ -249,17 +249,21 @@ export function DashboardMainPage(): ReactElement {
               <button
                 type="button"
                 onClick={() => setConfirmModalOpen(true)}
-                disabled={selectedProfile.status === 'planned' || isSwitching}
+                disabled={selectedProfile.status === 'planned' || isSwitching || activeProfile === selectedProfileName}
                 style={{
                   padding: '12px 24px',
                   borderRadius: 8,
                   border: 'none',
-                  background: selectedProfile.status === 'planned' ? 'var(--bg-widget)' : selectedProfile.accent,
-                  color: selectedProfile.status === 'planned' ? 'var(--text-muted)' : '#fff',
+                  background: selectedProfile.status === 'planned'
+                    ? 'var(--bg-widget)'
+                    : activeProfile === selectedProfileName
+                      ? 'var(--green)'
+                      : selectedProfile.accent,
+                  color: '#fff',
                   fontWeight: 600,
                   fontSize: 15,
-                  cursor: selectedProfile.status === 'planned' || isSwitching ? 'default' : 'pointer',
-                  opacity: selectedProfile.status === 'planned' || isSwitching ? 0.7 : 1,
+                  cursor: selectedProfile.status === 'planned' || isSwitching || activeProfile === selectedProfileName ? 'default' : 'pointer',
+                  opacity: selectedProfile.status === 'planned' || activeProfile === selectedProfileName ? 0.6 : isSwitching ? 0.8 : 1,
                   display: 'flex',
                   alignItems: 'center',
                   gap: 8,
@@ -267,70 +271,112 @@ export function DashboardMainPage(): ReactElement {
                 }}
               >
                 {isSwitching && <span className="codicon codicon-loading" style={{ animation: 'spin 1s linear infinite' }} />}
-                {selectedProfile.status === 'planned' ? 'COMING SOON' : activeProfile === selectedProfileName ? 'SWITCH TO THIS' : 'INITIALIZE'}
+                {selectedProfile.status === 'planned'
+                  ? 'COMING SOON'
+                  : activeProfile === selectedProfileName
+                    ? '🟢 CURRENTLY ACTIVE'
+                    : activeProfile
+                      ? 'SWITCH TO THIS'
+                      : 'INITIALIZE'}
               </button>
             </div>
 
-            {/* Active Containers Section */}
-            {activeProfile && (
+            {/* Section 2: System Metrics (Live) - Moved Up */}
+            {activeProfile === selectedProfileName && m && (
               <div style={{ marginTop: 32 }}>
-                <h3 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-muted)' }}>
-                  Active Containers
-                </h3>
-                {activeContainers.length > 0 ? (
-                  <div style={{ overflowX: 'auto' }}>
-                    <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
-                      <thead>
-                        <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                          <th style={{ padding: '8px 12px', textAlign: 'left', color: 'var(--text-muted)', fontWeight: 600 }}>Name</th>
-                          <th style={{ padding: '8px 12px', textAlign: 'left', color: 'var(--text-muted)', fontWeight: 600 }}>State</th>
-                          <th style={{ padding: '8px 12px', textAlign: 'left', color: 'var(--text-muted)', fontWeight: 600 }}>Image</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {activeContainers.map((row) => (
-                          <tr key={row.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                            <td style={{ padding: '8px 12px' }}>{row.name}</td>
-                            <td style={{ padding: '8px 12px', color: row.state === 'running' ? 'var(--green)' : 'var(--text-muted)' }}>{row.state}</td>
-                            <td style={{ padding: '8px 12px', color: 'var(--text-muted)', fontSize: 12 }}>{row.image}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                <div className="dashboard-widget">
+                  <h3 className="dashboard-widget-title">System Metrics (Live)</h3>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
+                    <DashboardMetricBar label="CPU" valueText={`${m.cpuUsagePercent.toFixed(0)}%`} percent={m.cpuUsagePercent} />
+                    <DashboardMetricBar label="RAM" valueText={`${((m.totalMemMb - m.freeMemMb) / 1024).toFixed(1)} / ${(m.totalMemMb / 1024).toFixed(1)} GB`} percent={ramUsedPct} />
+                    <DashboardMetricBar label="Disk" valueText={`${m.diskFreeGb.toFixed(0)} GB free`} percent={diskUsedPct} />
                   </div>
-                ) : (
-                  <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
-                    No containers running for this profile.
-                  </div>
-                )}
+                </div>
               </div>
             )}
 
-            {/* Analytics Section (if active) */}
+            {/* Section 3: Analytics Grid (Activity + Container Status Side-by-Side) */}
             {activeProfile === selectedProfileName && selectedProfileName && (
-              <div style={{ marginTop: 32 }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(480px, 1fr))', gap: 20 }}>
-                  <ActivityChart data={generateActivityData(selectedProfileName)} />
-                  <ResourceDonutChart data={generateResourceAllocation(selectedProfileName)} />
-                  <div style={{ gridColumn: '1 / -1' }}>
-                    <EventFeed events={generateEventFeed(selectedProfileName)} />
-                  </div>
-                  <div style={{ gridColumn: '1 / -1' }}>
-                    <ServicesGrid services={generateServices(selectedProfileName)} />
-                  </div>
-                  {m && (
-                    <div style={{ gridColumn: '1 / -1' }}>
-                      <div className="dashboard-widget">
-                        <h3 className="dashboard-widget-title">System Metrics (Live)</h3>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
-                          <DashboardMetricBar label="CPU" valueText={`${m.cpuUsagePercent.toFixed(0)}%`} percent={m.cpuUsagePercent} />
-                          <DashboardMetricBar label="RAM" valueText={`${((m.totalMemMb - m.freeMemMb) / 1024).toFixed(1)} / ${(m.totalMemMb / 1024).toFixed(1)} GB`} percent={ramUsedPct} />
-                          <DashboardMetricBar label="Disk" valueText={`${m.diskFreeGb.toFixed(0)} GB free`} percent={diskUsedPct} />
-                        </div>
-                      </div>
+              <div style={{ marginTop: 32, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(480px, 1fr))', gap: 20 }}>
+                <ActivityChart data={generateActivityData(selectedProfileName)} />
+                <ResourceDonutChart data={generateResourceAllocation(selectedProfileName)} />
+              </div>
+            )}
+
+            {/* Section 4: Active Containers + Services Grid */}
+            <div style={{ marginTop: 32, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+              {/* Active Containers Table */}
+              {activeProfile && (
+                <div>
+                  <h3 style={{ margin: '0 0 16px', fontSize: 14, fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.05em' }}>
+                    Active Containers
+                  </h3>
+                  {activeContainers.length > 0 ? (
+                    <div style={{ overflowX: 'auto' }}>
+                      <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
+                        <thead>
+                          <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                            <th style={{ padding: '8px 12px', textAlign: 'left', color: 'var(--text-muted)', fontWeight: 600 }}>Name</th>
+                            <th style={{ padding: '8px 12px', textAlign: 'left', color: 'var(--text-muted)', fontWeight: 600 }}>State</th>
+                            <th style={{ padding: '8px 12px', textAlign: 'left', color: 'var(--text-muted)', fontWeight: 600 }}>Image</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {activeContainers.map((row) => (
+                            <tr key={row.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                              <td style={{ padding: '8px 12px' }}>{row.name}</td>
+                              <td style={{ padding: '8px 12px', color: row.state === 'running' ? 'var(--green)' : 'var(--text-muted)' }}>{row.state}</td>
+                              <td style={{ padding: '8px 12px', color: 'var(--text-muted)', fontSize: 12 }}>{row.image}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13, background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)', borderRadius: 8 }}>
+                      No containers running for this profile.
                     </div>
                   )}
                 </div>
+              )}
+
+              {/* Services Grid */}
+              {selectedProfileName && (
+                <div>
+                  <h3 style={{ margin: '0 0 16px', fontSize: 14, fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.05em' }}>
+                    Services
+                  </h3>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    {generateServices(selectedProfileName).map((s) => (
+                      <div
+                        key={s.id}
+                        style={{
+                          padding: 16,
+                          borderRadius: 8,
+                          background: 'linear-gradient(135deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.01) 100%)',
+                          border: '1px solid rgba(255,255,255,0.06)',
+                          backdropFilter: 'blur(8px)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <div style={{ width: 8, height: 8, borderRadius: '50%', background: s.status === 'running' ? 'var(--green)' : s.status === 'pending' ? 'var(--yellow)' : 'var(--text-muted)' }} />
+                          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{s.name}</span>
+                        </div>
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{s.uptime}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Section 5: Recent Activity Feed at Bottom */}
+            {selectedProfileName && (
+              <div style={{ marginTop: 32 }}>
+                <EventFeed events={generateEventFeed(selectedProfileName)} />
               </div>
             )}
           </>
@@ -538,46 +584,6 @@ function EventFeed(props: { events: Array<{ id: string; icon: string; color: str
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 13, color: 'var(--text)' }}>{e.title}</div>
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{e.time}</div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-function ServicesGrid(props: { services: Array<{ id: string; name: string; status: 'running' | 'pending' | 'idle'; uptime: string }> }): ReactElement {
-  const statusColor = (status: string) => {
-    if (status === 'running') return 'var(--green)'
-    if (status === 'pending') return 'var(--yellow)'
-    return 'var(--text-muted)'
-  }
-
-  return (
-    <div className="dashboard-widget">
-      <h3 className="dashboard-widget-title">Services</h3>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12 }}>
-        {props.services.map((s) => (
-          <div
-            key={s.id}
-            style={{
-              padding: 16,
-              borderRadius: 12,
-              background: 'linear-gradient(135deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.01) 100%)',
-              border: '1px solid rgba(255,255,255,0.06)',
-              backdropFilter: 'blur(8px)',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 8,
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <div style={{ width: 8, height: 8, borderRadius: '50%', background: statusColor(s.status) }} />
-              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', flex: 1 }}>{s.name}</span>
-            </div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-              <div>Status: {s.status}</div>
-              <div>Uptime: {s.uptime}</div>
             </div>
           </div>
         ))}
