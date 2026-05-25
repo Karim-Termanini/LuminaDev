@@ -398,7 +398,7 @@ export function SettingsPage(): ReactElement {
           window.dh.hostExec({ command: 'settings_process_env' }),
           window.dh.storeGet({ key: 'general_settings' }),
           window.dh.storeGet({ key: 'update_settings' }),
-          window.dh.storeGet({ key: 'projects_home_dir' } as any),
+          window.dh.storeGet({ key: 'projects_home_dir' }),
         ])
         if (bm.ok) {
           setBookmarks(parseSshBookmarks(bm.data))
@@ -438,8 +438,9 @@ export function SettingsPage(): ReactElement {
         } else {
           setUpdateSettings({ releaseChannel: 'stable', checkOnStartup: true })
         }
-        if ((phd as any).ok && typeof (phd as any).data === 'string' && (phd as any).data.trim()) {
-          setProjectsHomeDir((phd as any).data.trim())
+        const phdResult = phd as { ok: boolean; data?: unknown }
+        if (phdResult.ok && typeof phdResult.data === 'string' && phdResult.data.trim()) {
+          setProjectsHomeDir(phdResult.data.trim())
         }
       } catch (e) {
         setBookmarks([])
@@ -1259,7 +1260,7 @@ export function SettingsPage(): ReactElement {
                       onClick={() => {
                         setProjectsHomeDirBusy(true)
                         setProjectsHomeDirMsg(null)
-                        void window.dh.storeSet({ key: 'projects_home_dir', data: projectsHomeDir.trim() } as any)
+                        void window.dh.storeSet({ key: 'projects_home_dir', data: projectsHomeDir.trim() })
                           .then(() => { setProjectsHomeDirMsg('Saved.') })
                           .catch((e: unknown) => { setProjectsHomeDirMsg(e instanceof Error ? e.message : 'Save failed.') })
                           .finally(() => {
