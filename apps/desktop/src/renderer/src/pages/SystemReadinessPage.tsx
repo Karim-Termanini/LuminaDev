@@ -208,7 +208,7 @@ export function SystemReadinessPage(): ReactElement {
               padding: '12px 16px',
               borderRadius: 12,
               border: 'none',
-              background: activeCategory === cat.id ? 'rgba(124,77,255,0.1)' : 'transparent',
+              background: activeCategory === cat.id ? 'var(--accent-dim)' : 'transparent',
               color: activeCategory === cat.id ? 'var(--accent)' : 'var(--text-muted)',
               cursor: 'pointer',
               textAlign: 'left',
@@ -255,7 +255,7 @@ export function SystemReadinessPage(): ReactElement {
 function StatCard({ label, value, subValue, status = 'ok' }: { label: string; value: string; subValue: string; status?: 'ok' | 'warning' | 'error' }) {
   const color = status === 'ok' ? 'var(--green)' : status === 'warning' ? 'var(--orange)' : 'var(--red)'
   return (
-    <div style={{ padding: 16, borderRadius: 16, border: '1px solid var(--border)', background: 'rgba(255,255,255,0.03)' }}>
+    <div style={{ padding: 16, borderRadius: 16, border: '1px solid var(--border)', background: 'var(--bg-input)' }}>
       <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>{label}</div>
       <div style={{ fontSize: 18, fontWeight: 700, color }}>{value}</div>
       <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>{subValue}</div>
@@ -268,7 +268,7 @@ function CheckRow({ label, status, desc, onFix, isFixing }: { label: string; sta
     <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: 16, borderRadius: 16, border: '1px solid var(--border)' }}>
       <div style={{ 
         width: 32, height: 32, borderRadius: 16, 
-        background: status ? 'rgba(0,230,118,0.1)' : 'rgba(255,82,82,0.1)',
+        background: status ? 'color-mix(in srgb, var(--green) 12%, transparent)' : 'color-mix(in srgb, var(--red) 12%, transparent)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         color: status ? 'var(--green)' : 'var(--red)'
       }}>
@@ -320,7 +320,7 @@ function ToolBadge({ label, status }: { label: string; status: boolean }) {
       border: '1px solid var(--border)',
       display: 'flex', alignItems: 'center', gap: 10,
       opacity: status ? 1 : 0.5,
-      background: status ? 'rgba(0,230,118,0.05)' : 'transparent'
+      background: status ? 'color-mix(in srgb, var(--green) 6%, transparent)' : 'transparent'
     }}>
       <span className={`codicon codicon-${status ? 'pass' : 'error'}`} style={{ color: status ? 'var(--green)' : 'var(--red)' }} />
       <span className="mono" style={{ fontSize: 13 }}>{label}</span>
