@@ -22,6 +22,7 @@ import { SettingsBetaFeatures } from './SettingsBetaFeatures'
 import { SettingsNotification } from './SettingsNotification'
 import { SettingsShortcuts, buildChord } from './SettingsShortcuts'
 import { SettingsHelpAbout } from './SettingsHelpAbout'
+import { SettingsDateTime } from './SettingsDateTime'
 
 function wrap(ui: React.ReactElement): string {
   return renderToStaticMarkup(<MemoryRouter>{ui}</MemoryRouter>)
@@ -102,5 +103,16 @@ describe('SettingsHelpAbout', () => {
   })
   it('renders GitHub link button', () => {
     expect(wrap(<SettingsHelpAbout />)).toContain('GitHub')
+  })
+})
+
+describe('SettingsDateTime', () => {
+  it('renders 12h/24h toggle', () => {
+    const html = wrap(<SettingsDateTime />)
+    expect(html).toContain('12-hour')
+    expect(html).toContain('24-hour')
+  })
+  it('renders timezone label', () => {
+    expect(wrap(<SettingsDateTime />)).toContain('Timezone')
   })
 })
