@@ -332,10 +332,10 @@ export function CloudGitPage(): ReactElement {
         <div
           style={{
             padding: '12px 16px',
-            background: 'rgba(255,82,82,0.1)',
-            border: '1px solid rgba(255,82,82,0.3)',
+            background: 'color-mix(in srgb, var(--red) 10%, transparent)',
+            border: '1px solid color-mix(in srgb, var(--red) 30%, transparent)',
             borderRadius: 8,
-            color: '#ff8a80',
+            color: 'var(--red)',
             marginBottom: 20,
             fontSize: 13,
           }}
@@ -610,11 +610,63 @@ export function CloudGitPage(): ReactElement {
                   </p>
                 )}
                 {!showPatForm ? (
+                  activeTab === 'gitlab' ? (
+                    // GitLab uses PAT only — show form directly
+                    <div style={{ maxWidth: 420 }}>
+                      <input
+                        type="password"
+                        placeholder="Paste personal access token"
+                        value={patToken}
+                        onChange={(e) => setPatToken(e.target.value)}
+                        className="hp-input"
+                        style={{ width: '100%', marginBottom: 4, boxSizing: 'border-box' }}
+                      />
+                      <p className="hp-muted" style={{ fontSize: 11, margin: '0 0 10px' }}>
+                        Required scopes: {PROVIDER_META['gitlab'].scopes.join(', ')}
+                      </p>
+                      <div
+                        style={{
+                          fontSize: 11,
+                          padding: '6px 10px',
+                          background: 'color-mix(in srgb, var(--orange) 10%, transparent)',
+                          border: '1px solid color-mix(in srgb, var(--orange) 20%, transparent)',
+                          borderRadius: 6,
+                          color: 'var(--orange)',
+                          marginBottom: 10,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 6,
+                        }}
+                      >
+                        <span className="codicon codicon-info" style={{ fontSize: 13 }} />
+                        <span>Ensure the 'api' scope is enabled to create and manage Merge Requests.</span>
+                      </div>
+                      <div style={{ display: 'flex', gap: 10 }}>
+                        <button
+                          type="button"
+                          disabled={connecting || !patToken.trim()}
+                          onClick={() => void submitPat()}
+                          style={{
+                            padding: '10px 18px',
+                            borderRadius: 10,
+                            border: 'none',
+                            background: 'var(--cg-accent)',
+                            color: '#1a0b05',
+                            fontWeight: 650,
+                            fontSize: 13,
+                            cursor: connecting ? 'wait' : 'pointer',
+                          }}
+                        >
+                          {connecting ? 'Verifying…' : 'Verify & save'}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
                   <>
                     <button
                       type="button"
                       disabled={connecting}
-                      onClick={() => void startDeviceFlow('github')}
+                      onClick={() => void startDeviceFlow(activeTab)}
                       style={{
                         padding: '12px 22px',
                         borderRadius: 10,
@@ -627,7 +679,7 @@ export function CloudGitPage(): ReactElement {
                         display: 'inline-flex',
                       }}
                     >
-                      Connect {meta.label}
+                      {connecting ? 'Connecting…' : `Connect ${meta.label}`}
                     </button>
                     <button
                       type="button"
@@ -643,13 +695,14 @@ export function CloudGitPage(): ReactElement {
                         textDecoration: 'underline',
                       }}
                       onClick={() => {
-                        setPatProvider('github')
+                        setPatProvider(activeTab)
                         setPatError(null)
                       }}
                     >
                       Use a personal access token instead
                     </button>
                   </>
+                  )
                 ) : (
                   <div style={{ maxWidth: 420 }}>
                     <input
@@ -682,7 +735,7 @@ export function CloudGitPage(): ReactElement {
                         <span>Ensure the 'api' scope is enabled to create and manage Merge Requests.</span>
                       </div>
                     )}
-                    {patError ? <p style={{ color: '#ff8a80', fontSize: 12, margin: '0 0 10px' }}>{patError}</p> : null}
+                    {patError ? <p style={{ color: 'var(--red)', fontSize: 12, margin: '0 0 10px' }}>{patError}</p> : null}
                     <div style={{ display: 'flex', gap: 10 }}>
                       <button
                         type="button"
