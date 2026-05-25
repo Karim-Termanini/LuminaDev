@@ -79,6 +79,7 @@ declare global {
       storeGet: (payload: import('@linux-dev-home/shared').StoreGetRequest) => Promise<{ ok: boolean; data: unknown; error?: string }>
       storeSet: (payload: import('@linux-dev-home/shared').StoreSetRequest) => Promise<{ ok: boolean; error?: string }>
       storeDelete: (payload: { key: 'active_profile' }) => Promise<{ ok: boolean; error?: string }>
+      appInfo: () => Promise<{ ok: boolean; version: string; buildDate: string; rustVersion: string; platform: string; error?: string }>
       jobStart: (payload: {
         kind: string
         durationMs?: number
