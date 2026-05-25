@@ -8,7 +8,7 @@ import {
 } from '@linux-dev-home/shared'
 import './ProfilesPage.css'
 import type { ReactElement } from 'react'
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 
 const BASE_TEMPLATES = [
   'web-dev',
@@ -55,7 +55,30 @@ export function ProfilesPage(): ReactElement {
   const [activeProfileTemplate, setActiveProfileTemplate] = useState<string | null>(null)
   const [projectPaths, setProjectPaths] = useState<Record<string, string | null>>({})
 
-  async function load(): Promise<void> {
+  const loadExtras = useCallback(async (loadedProfiles: CustomProfileEntry[]): Promise<void> => {
+    // Load active profile template
+    try {
+      const ap = (await window.dh.storeGet({ key: 'active_profile' })) as { ok: boolean; data?: unknown }
+      if (ap.ok && typeof ap.data === 'string') setActiveProfileTemplate(ap.data)
+    } catch { /* ignore */ }
+
+    // Load linked project paths per profile
+    const paths: Record<string, string | null> = {}
+    const storeGetAny = window.dh.storeGet as (req: { key: string }) => Promise<{ ok: boolean; data?: unknown }>
+    await Promise.all(
+      loadedProfiles.map(async (p) => {
+        try {
+          const res = await storeGetAny({ key: `project_dir_${p.baseTemplate}` })
+          paths[p.baseTemplate] = (res.ok && typeof res.data === 'string') ? res.data : null
+        } catch {
+          paths[p.baseTemplate] = null
+        }
+      })
+    )
+    setProjectPaths(paths)
+  }, []) // stable: only calls window.dh + setState setters
+
+  const load = useCallback(async (): Promise<void> => {
     try {
       const res = (await window.dh.storeGet({ key: 'custom_profiles' })) as { ok: boolean; data: unknown; error?: string }
       if (res.ok && res.data) {
@@ -72,32 +95,9 @@ export function ProfilesPage(): ReactElement {
       const ol = (await window.dh.storeGet({ key: 'on_login_automation' })) as { ok: boolean; data: unknown }
       if (ol.ok) setOnLogin(parseOnLoginAutomation(ol.data))
     } catch { /* ignore */ }
-  }
+  }, [loadExtras])
 
-  useEffect(() => { void load() }, []) // eslint-disable-line react-hooks/exhaustive-deps
-
-  async function loadExtras(loadedProfiles: CustomProfileEntry[]): Promise<void> {
-    // Load active profile template
-    try {
-      const ap = (await window.dh.storeGet({ key: 'active_profile' })) as { ok: boolean; data?: unknown }
-      if (ap.ok && typeof ap.data === 'string') setActiveProfileTemplate(ap.data)
-    } catch { /* ignore */ }
-
-    // Load linked project paths per profile
-    const paths: Record<string, string | null> = {}
-    await Promise.all(
-      loadedProfiles.map(async (p) => {
-        try {
-          const storeGetAny = window.dh.storeGet as (req: { key: string }) => Promise<{ ok: boolean; data?: unknown }>
-          const res = await storeGetAny({ key: `project_dir_${p.baseTemplate}` })
-          paths[p.baseTemplate] = (res.ok && typeof res.data === 'string') ? res.data : null
-        } catch {
-          paths[p.baseTemplate] = null
-        }
-      })
-    )
-    setProjectPaths(paths)
-  }
+  useEffect(() => { void load() }, [load])
 
   async function save(next: CustomProfileEntry[], msg: string): Promise<void> {
     try {
