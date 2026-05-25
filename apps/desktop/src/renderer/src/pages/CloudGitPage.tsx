@@ -353,7 +353,7 @@ export function CloudGitPage(): ReactElement {
           overflow: 'hidden',
           border: '1px solid var(--border)',
           marginBottom: 20,
-          background: 'var(--bg-panel)',
+          background: 'var(--bg-widget)',
         }}
       >
         {(['github', 'gitlab'] as const).map((p) => {
@@ -375,8 +375,9 @@ export function CloudGitPage(): ReactElement {
               }}
               style={{
                 flex: 1,
-                padding: '16px 18px',
+                padding: '14px 18px',
                 border: 'none',
+                borderBottom: active ? `3px solid ${t.accent}` : '3px solid transparent',
                 cursor: deviceFlow !== null && p !== deviceFlow.provider ? 'not-allowed' : 'pointer',
                 opacity: deviceFlow !== null && p !== deviceFlow.provider ? 0.45 : 1,
                 fontSize: 15,
@@ -385,14 +386,13 @@ export function CloudGitPage(): ReactElement {
                 alignItems: 'center',
                 justifyContent: 'center',
                 gap: 10,
-                background: active ? t.surfaceDeep : 'transparent',
-                color: active ? t.accent : 'var(--text-muted)',
-                boxShadow: active ? `inset 0 -3px 0 ${t.accent}` : undefined,
-                transition: 'background 0.15s ease, color 0.15s ease',
+                background: active ? `color-mix(in srgb, ${t.accent} 10%, var(--bg-widget))` : 'transparent',
+                color: active ? t.accent : 'var(--text)',
+                transition: 'background 0.15s ease, color 0.15s ease, border-color 0.15s ease',
               }}
             >
               {m.tabEmoji ? <span aria-hidden>{m.tabEmoji}</span> : null}
-              <span className={`codicon codicon-${m.icon}`} style={{ fontSize: 20, opacity: active ? 1 : 0.75 }} aria-hidden />
+              <span className={`codicon codicon-${m.icon}`} style={{ fontSize: 20, opacity: active ? 1 : 0.7 }} aria-hidden />
               <span>{m.label}</span>
             </button>
           )
