@@ -1433,6 +1433,13 @@ async fn git_ahead_behind(repo_path: &str) -> (Option<i64>, Option<i64>) {
 async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, state: State<'_, AppState>) -> Result<Value, String> {
   let body = payload.unwrap_or_else(|| json!({}));
   let res = match channel.as_str() {
+        "dh:app:info" => json!({
+          "ok": true,
+          "version": env!("CARGO_PKG_VERSION"),
+          "buildDate": env!("BUILD_DATE"),
+          "rustVersion": env!("RUSTC_VERSION"),
+          "platform": std::env::consts::OS,
+        }),
     "dh:session:info" => {
       let flatpak_id = std::env::var("FLATPAK_ID").ok();
       let kind = if flatpak_id.is_some() { "flatpak" } else { "native" };
