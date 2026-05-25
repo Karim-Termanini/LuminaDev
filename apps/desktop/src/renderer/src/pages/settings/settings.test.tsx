@@ -20,6 +20,7 @@ import { SettingsAppEngine } from './SettingsAppEngine'
 import { SettingsBuilder } from './SettingsBuilder'
 import { SettingsBetaFeatures } from './SettingsBetaFeatures'
 import { SettingsNotification } from './SettingsNotification'
+import { SettingsShortcuts, buildChord } from './SettingsShortcuts'
 
 function wrap(ui: React.ReactElement): string {
   return renderToStaticMarkup(<MemoryRouter>{ui}</MemoryRouter>)
@@ -71,5 +72,25 @@ describe('SettingsNotification', () => {
   })
   it('OS native notifications toggle is disabled', () => {
     expect(wrap(<SettingsNotification />)).toContain('disabled')
+  })
+})
+
+describe('buildChord', () => {
+  it('builds ctrl+shift+x', () => {
+    expect(buildChord({ ctrlKey: true, shiftKey: true, altKey: false, metaKey: false, key: 'x' })).toBe('Ctrl+Shift+X')
+  })
+  it('builds alt+1', () => {
+    expect(buildChord({ ctrlKey: false, shiftKey: false, altKey: true, metaKey: false, key: '1' })).toBe('Alt+1')
+  })
+  it('ignores bare modifier press', () => {
+    expect(buildChord({ ctrlKey: true, shiftKey: false, altKey: false, metaKey: false, key: 'Control' })).toBe(null)
+  })
+})
+
+describe('SettingsShortcuts', () => {
+  it('renders table columns', () => {
+    const html = wrap(<SettingsShortcuts />)
+    expect(html).toContain('Action')
+    expect(html).toContain('Binding')
   })
 })
