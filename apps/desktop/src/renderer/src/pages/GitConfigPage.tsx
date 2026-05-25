@@ -113,10 +113,9 @@ function validateIdentity(name: string, email: string, branch: string): string[]
 }
 
 const GLASS_CARD = {
-  background: 'rgba(30, 30, 30, 0.4)',
-  backdropFilter: 'blur(12px)',
-  border: '1px solid rgba(255, 255, 255, 0.05)',
-  boxShadow: '0 8px 32px rgba(0,0,0,0.2)'
+  background: 'var(--bg-widget)',
+  border: '1px solid var(--border)',
+  boxShadow: '0 4px 16px rgba(0,0,0,0.12)'
 } as const
 
 
@@ -223,9 +222,8 @@ function ScoreCard({ title, score, subtitle }: { title: string; score: number; s
       flex: '1 1 200px', 
       textAlign: 'center', 
       padding: '24px 16px',
-      background: 'rgba(30, 30, 30, 0.4)',
-      backdropFilter: 'blur(8px)',
-      border: `1px solid rgba(255, 255, 255, 0.05)`,
+      background: 'var(--bg-widget)',
+      border: '1px solid var(--border)',
       transition: 'transform 0.2s, border-color 0.2s',
       position: 'relative',
       overflow: 'hidden'
@@ -236,7 +234,7 @@ function ScoreCard({ title, score, subtitle }: { title: string; score: number; s
     }}
     onMouseLeave={(e) => {
       e.currentTarget.style.transform = 'translateY(0)'
-      e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.05)'
+      e.currentTarget.style.borderColor = 'var(--border)'
     }}>
       <div style={{ 
         position: 'absolute', 
@@ -247,11 +245,11 @@ function ScoreCard({ title, score, subtitle }: { title: string; score: number; s
         opacity: 0.15 
       }} />
       <div style={{ fontSize: 42, fontWeight: 900, color, letterSpacing: -2, marginBottom: 4 }}>{score}%</div>
-      <div style={{ fontWeight: 700, fontSize: 14, color: '#f1f1f1', marginBottom: 4 }}>{title}</div>
+      <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text)', marginBottom: 4 }}>{title}</div>
       <div className="hp-muted" style={{ fontSize: 11, fontWeight: 500 }}>{subtitle}</div>
       <div style={{ 
         height: 4, 
-        background: 'rgba(255,255,255,0.05)', 
+        background: 'var(--border)', 
         borderRadius: 2, 
         marginTop: 16,
         overflow: 'hidden'
@@ -636,9 +634,9 @@ function IdentitySection({ cfg, busy, onSave }: {
               style={{ 
                 padding: '10px 20px', 
                 borderRadius: 10,
-                background: profileLabel === l ? 'var(--accent)' : 'rgba(255,255,255,0.03)',
-                color: profileLabel === l ? '#000' : 'var(--text)',
-                border: '1px solid rgba(255,255,255,0.08)',
+                background: profileLabel === l ? 'var(--accent)' : 'var(--bg-input)',
+                color: profileLabel === l ? '#fff' : 'var(--text)',
+                border: '1px solid var(--border)',
                 fontWeight: 700
               }}
               onClick={() => setProfileLabel(l)}
@@ -657,11 +655,11 @@ function IdentitySection({ cfg, busy, onSave }: {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
           <div>
             <label style={{ fontSize: 11, fontWeight: 800, display: 'block', marginBottom: 8, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Full Name</label>
-            <input className="hp-input" style={{ width: '100%', padding: '12px 14px', background: 'rgba(0,0,0,0.2)' }} value={name} onChange={(e) => setName(e.target.value)} placeholder="Jane Doe" disabled={busy} />
+            <input className="hp-input" style={{ width: '100%', padding: '12px 14px', background: 'var(--bg-input)' }} value={name} onChange={(e) => setName(e.target.value)} placeholder="Jane Doe" disabled={busy} />
           </div>
           <div>
             <label style={{ fontSize: 11, fontWeight: 800, display: 'block', marginBottom: 8, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Email Address</label>
-            <input className="hp-input" style={{ width: '100%', padding: '12px 14px', background: 'rgba(0,0,0,0.2)' }} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="jane@example.com" disabled={busy} type="email" />
+            <input className="hp-input" style={{ width: '100%', padding: '12px 14px', background: 'var(--bg-input)' }} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="jane@example.com" disabled={busy} type="email" />
           </div>
         </div>
       </div>
@@ -681,7 +679,7 @@ function IdentitySection({ cfg, busy, onSave }: {
                 </button>
               ))}
             </div>
-            <input className="hp-input" style={{ width: '100%', padding: '12px 14px', background: 'rgba(0,0,0,0.2)' }} value={branch} onChange={(e) => setBranch(e.target.value)} placeholder="main" disabled={busy} />
+            <input className="hp-input" style={{ width: '100%', padding: '12px 14px', background: 'var(--bg-input)' }} value={branch} onChange={(e) => setBranch(e.target.value)} placeholder="main" disabled={busy} />
           </div>
           <div>
             <label style={{ fontSize: 11, fontWeight: 800, display: 'block', marginBottom: 8, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Default Editor</label>
@@ -692,7 +690,7 @@ function IdentitySection({ cfg, busy, onSave }: {
                 </button>
               ))}
             </div>
-            <input className="hp-input" style={{ width: '100%', padding: '12px 14px', background: 'rgba(0,0,0,0.2)' }} value={editor} onChange={(e) => setEditor(e.target.value)} placeholder="code --wait" disabled={busy} />
+            <input className="hp-input" style={{ width: '100%', padding: '12px 14px', background: 'var(--bg-input)' }} value={editor} onChange={(e) => setEditor(e.target.value)} placeholder="code --wait" disabled={busy} />
           </div>
         </div>
       </div>
@@ -845,14 +843,14 @@ function BehaviorSection({ cfg, busy, onSetKey, onApplyPreset }: {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 16 }}>
           {PRESETS.map((p) => (
             <div key={p.label} className="hp-card" style={{ 
-              background: 'rgba(255,255,255,0.02)', 
+              background: 'var(--bg-widget)', 
               padding: '16px', 
               cursor: 'pointer',
-              border: '1px solid rgba(255,255,255,0.05)',
+              border: '1px solid var(--border)',
               transition: 'all 0.2s'
             }}
             onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--accent)'}
-            onMouseLeave={e => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.05)'}>
+            onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}>
               <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 6, color: 'var(--accent)' }}>{p.label}</div>
               <div className="hp-muted" style={{ fontSize: 12, marginBottom: 16, lineHeight: 1.4 }}>{p.description}</div>
               <button
@@ -1011,7 +1009,7 @@ function InspectorSection({ rows, loading }: { rows: ConfigRow[]; loading: boole
             <span className="codicon codicon-search" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
             <input
               className="hp-input"
-              style={{ width: '100%', paddingLeft: 40, background: 'rgba(0,0,0,0.2)' }}
+              style={{ width: '100%', paddingLeft: 40, background: 'var(--bg-input)' }}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search keys or values…"
@@ -1047,10 +1045,10 @@ function InspectorSection({ rows, loading }: { rows: ConfigRow[]; loading: boole
             {rows.length === 0 ? 'No global config entries found.' : 'No entries match your search criteria.'}
           </div>
         ) : (
-          <div className="hp-table-wrap" style={{ borderRadius: 8, border: '1px solid rgba(255,255,255,0.05)', background: 'rgba(0,0,0,0.1)' }}>
+          <div className="hp-table-wrap" style={{ borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-widget)' }}>
             <table className="hp-table">
               <thead>
-                <tr className="hp-table-head" style={{ background: 'rgba(255,255,255,0.02)' }}>
+                <tr className="hp-table-head" style={{ background: 'var(--bg-input)' }}>
                   <th className="hp-table-sort" style={{ width: '30%', padding: '12px 16px', fontWeight: 700 }} onClick={() => handleSort('key')}>
                     Key {sortKey === 'key' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
                   </th>
@@ -1071,15 +1069,15 @@ function InspectorSection({ rows, loading }: { rows: ConfigRow[]; loading: boole
                   }
                   return (
                     <tr key={r.key} className="hp-table-row" style={{ 
-                      background: risk ? 'rgba(239,68,68,0.04)' : i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)',
-                      borderTop: '1px solid rgba(255,255,255,0.03)'
+                      background: risk ? 'color-mix(in srgb, var(--red) 6%, transparent)' : i % 2 === 0 ? 'transparent' : 'var(--bg-input)',
+                      borderTop: '1px solid var(--border)'
                     }}>
                       <td className="mono" style={{ padding: '12px 16px', fontSize: 12, color: 'var(--blue)' }}>{r.key}</td>
                       <td className="mono" style={{ padding: '12px 16px', fontSize: 12 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                           {cellValue(r)}
                           {sensitive && !showSensitiveValues && (
-                            <button type="button" className="hp-btn" style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, background: 'rgba(255,255,255,0.05)' }} onClick={() => toggleReveal(r.key)}>
+                            <button type="button" className="hp-btn" style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, background: 'var(--bg-input)' }} onClick={() => toggleReveal(r.key)}>
                               {revealed.has(r.key) ? 'Hide' : 'Reveal'}
                             </button>
                           )}
@@ -1092,7 +1090,7 @@ function InspectorSection({ rows, loading }: { rows: ConfigRow[]; loading: boole
                       </td>
                       <td style={{ padding: '12px 16px' }}>
                         {risk ? (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#ef4444' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--red)' }}>
                             <span className="codicon codicon-warning" style={{ fontSize: 14 }} />
                             <span title={risk} style={{ fontSize: 11, fontWeight: 700, cursor: 'help' }}>RISK</span>
                           </div>
@@ -1126,14 +1124,13 @@ function DiagnosticsSection({ cfg, busy, onSetKey }: {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div className="hp-card" style={{ 
         borderLeft: `6px solid ${scoreColor(total)}`,
-        background: 'linear-gradient(90deg, rgba(30, 30, 30, 0.6) 0%, rgba(20, 20, 20, 0.4) 100%)',
-        backdropFilter: 'blur(12px)',
+        background: 'var(--bg-widget)',
         padding: '32px 24px'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
           <div style={{ position: 'relative' }}>
             <svg width="80" height="80" viewBox="0 0 100 100">
-              <circle cx="50" cy="50" r="45" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="8" />
+              <circle cx="50" cy="50" r="45" fill="none" stroke="var(--border)" strokeWidth="8" />
               <circle cx="50" cy="50" r="45" fill="none" stroke={scoreColor(total)} strokeWidth="8" 
                 strokeDasharray={`${total * 2.82} 282.6`} strokeLinecap="round" transform="rotate(-90 50 50)" 
                 style={{ transition: 'stroke-dasharray 1s ease' }} />
@@ -1230,13 +1227,12 @@ function BackupsSection({ rows, onApplyPreset }: {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div className="hp-card" style={{ 
-        background: 'rgba(30, 30, 30, 0.4)',
-        backdropFilter: 'blur(8px)',
-        border: '1px solid rgba(255, 255, 255, 0.05)',
+        background: 'var(--bg-widget)',
+        border: '1px solid var(--border)',
         padding: '24px'
       }}>
         <div className="hp-section-title" style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 18, marginBottom: 20 }}>
-          <div style={{ width: 32, height: 32, borderRadius: 8, background: 'rgba(124, 77, 255, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--accent-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <span className="codicon codicon-cloud-download" style={{ color: 'var(--accent)' }} />
           </div>
           Export Settings
