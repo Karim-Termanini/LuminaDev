@@ -74,7 +74,7 @@ export function ProfilesPage(): ReactElement {
     } catch { /* ignore */ }
   }
 
-  useEffect(() => { void load() }, [])
+  useEffect(() => { void load() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function loadExtras(loadedProfiles: CustomProfileEntry[]): Promise<void> {
     // Load active profile template
@@ -88,7 +88,7 @@ export function ProfilesPage(): ReactElement {
     await Promise.all(
       loadedProfiles.map(async (p) => {
         try {
-          const res = (await window.dh.storeGet({ key: `project_dir_${p.baseTemplate}` } as any)) as { ok: boolean; data?: unknown }
+          const res = (await window.dh.storeGet({ key: `project_dir_${p.baseTemplate}` as string })) as { ok: boolean; data?: unknown }
           paths[p.baseTemplate] = (res.ok && typeof res.data === 'string') ? res.data : null
         } catch {
           paths[p.baseTemplate] = null
