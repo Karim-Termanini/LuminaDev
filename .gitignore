@@ -10,10 +10,12 @@ release
 *.tsbuildinfo
 .vscode/*
 !.vscode/extensions.json
+!.vscode/settings.json
 coverage
 .turbo
 pack-staging
 flatpak-build-dir
+flatpak-build-tauri
 .flatpak-builder
 apps/desktop/src-tauri/target
 apps/desktop/src-tauri/gen
