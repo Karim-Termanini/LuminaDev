@@ -64,12 +64,13 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
   const [currentStep, setCurrentStep] = useState(1)
   const [categories, setCategories] = useState<RequirementCategory[]>([])
   const [loading, setLoading] = useState(true)
+  const [recheckLoading, setRecheckLoading] = useState(false)
   const [installing, setInstalling] = useState<string | null>(null)
   const [progress, setProgress] = useState<InstallProgress | null>(null)
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
   const [gitName, setGitName] = useState('')
   const [gitEmail, setGitEmail] = useState('')
-  const [installPath, setInstallPath] = useState('/home')
+  const [projectsDir, setProjectsDir] = useState('~/LuminaProjects')
   const [installationTasks, setInstallationTasks] = useState<InstallationTask[]>([])
   const [installationStatus, setInstallationStatus] = useState<'not-started' | 'running' | 'complete' | 'error'>('not-started')
   const [installationError, setInstallationError] = useState<string | null>(null)
@@ -112,73 +113,71 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
   }, [currentStep, runProbes])
 
   useEffect(() => {
-    if (currentStep === 6 && installationStatus === 'not-started') {
-      void runInstallation()
+    if (currentStep === 8 && installationStatus === 'not-started') {
+      void runFinalization()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentStep])
 
-  const runInstallation = async () => {
+  const runFinalization = async () => {
     setInstallationStatus('running')
     setInstallationError(null)
 
-    const tasks: InstallationTask[] = [
-      { id: 'validate', label: 'Validating system configuration...', status: 'pending', progress: 0 },
-      { id: 'download', label: 'Downloading LuminaDev components...', status: 'pending', progress: 0 },
-      { id: 'extract', label: 'Extracting files...', status: 'pending', progress: 0 },
-      { id: 'config', label: 'Configuring application...', status: 'pending', progress: 0 },
-      { id: 'finalize', label: 'Finalizing setup...', status: 'pending', progress: 0 },
+    type FinalizationTask = { id: string; label: string; status: 'pending' | 'running' | 'complete'; progress: number }
+    const tasks: FinalizationTask[] = [
+      { id: 'git', label: 'Saving Git identity...', status: 'pending', progress: 0 },
+      { id: 'theme', label: 'Applying theme preference...', status: 'pending', progress: 0 },
+      { id: 'profile', label: 'Saving starter profile...', status: 'pending', progress: 0 },
+      { id: 'projects-dir', label: 'Configuring projects directory...', status: 'pending', progress: 0 },
+      { id: 'complete', label: 'Finalizing setup...', status: 'pending', progress: 0 },
     ]
-
     setInstallationTasks(tasks)
 
+    const setTask = (idx: number, patch: Partial<FinalizationTask>) => {
+      tasks[idx] = { ...tasks[idx], ...patch }
+      setInstallationTasks([...tasks])
+    }
+
     try {
-      for (let i = 0; i < tasks.length; i++) {
-        const task = tasks[i]
-        task.status = 'running'
-        setInstallationTasks([...tasks])
-
-        await simulateTaskProgress(task, tasks)
-
-        task.status = 'complete'
-        task.progress = 100
-        setInstallationTasks([...tasks])
-
-        await new Promise((r) => setTimeout(r, 300))
+      // Task 1: Save Git identity
+      setTask(0, { status: 'running', progress: 10 })
+      if (gitName.trim()) {
+        await window.dh.gitConfigSetKey({ key: 'user.name', value: gitName.trim() })
       }
+      if (gitEmail.trim()) {
+        await window.dh.gitConfigSetKey({ key: 'user.email', value: gitEmail.trim() })
+      }
+      setTask(0, { status: 'complete', progress: 100 })
+
+      // Task 2: Apply theme
+      setTask(1, { status: 'running', progress: 10 })
+      await window.dh.storeSet({ key: 'appearance', data: { theme } })
+      setTask(1, { status: 'complete', progress: 100 })
+
+      // Task 3: Save starter profile
+      setTask(2, { status: 'running', progress: 10 })
+      if (pickedProfile) {
+        await window.dh.storeSet({ key: 'onboarding_profile', data: pickedProfile })
+      }
+      setTask(2, { status: 'complete', progress: 100 })
+
+      // Task 4: Save projects directory
+      setTask(3, { status: 'running', progress: 10 })
+      await window.dh.storeSet({ key: 'projects_home_dir', data: projectsDir })
+      setTask(3, { status: 'complete', progress: 100 })
+
+      // Task 5: Mark wizard complete
+      setTask(4, { status: 'running', progress: 10 })
+      await window.dh.storeSet({ key: 'readiness_wizard_complete', data: true })
+      setTask(4, { status: 'complete', progress: 100 })
 
       setInstallationStatus('complete')
-      await window.dh.storeSet({
-        key: 'readiness_wizard_complete',
-        data: true,
-      })
-
-      await new Promise((r) => setTimeout(r, 1000))
+      await new Promise((r) => setTimeout(r, 800))
       onComplete()
     } catch (e) {
       setInstallationStatus('error')
       setInstallationError(e instanceof Error ? e.message : String(e))
     }
-  }
-
-  const simulateTaskProgress = async (task: InstallationTask, tasks: InstallationTask[]) => {
-    const duration = 2000 + Math.random() * 1000
-    const startTime = Date.now()
-
-    return new Promise<void>((resolve) => {
-      const interval = setInterval(() => {
-        const elapsed = Date.now() - startTime
-        const progress = Math.min((elapsed / duration) * 100, 95)
-
-        task.progress = progress
-        setInstallationTasks([...tasks])
-
-        if (elapsed >= duration) {
-          clearInterval(interval)
-          resolve()
-        }
-      }, 100)
-    })
   }
 
   const buildCategories = (report: {
@@ -383,6 +382,8 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
     setInstallationStatus('not-started')
     setInstallationError(null)
     setInstallationTasks([])
+    // Immediately re-trigger finalization
+    void runFinalization()
   }
 
   const handleGenerateSshKey = async () => {
@@ -549,45 +550,71 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
                 </div>
               )}
 
-              {!loading && !allCriticalMet && (
-                <div className="readiness-prereqs-notice">
-                  <span className="codicon codicon-info" />
-                  <div>
-                    <strong>Fix all critical requirements to continue.</strong> Click "Fix It" on any red items to install
-                    automatically.
-                  </div>
+              {!loading && (
+                <div style={{ display: 'flex', gap: 12, marginTop: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <button
+                    className="readiness-btn readiness-btn-install"
+                    onClick={() => {
+                      setRecheckLoading(true)
+                      void runProbes().finally(() => setRecheckLoading(false))
+                    }}
+                    disabled={recheckLoading}
+                    title="Re-run all system probes"
+                  >
+                    {recheckLoading ? (
+                      <><span className="codicon codicon-loading codicon-modifier-spin" /> Checking...</>
+                    ) : (
+                      <><span className="codicon codicon-refresh" /> Recheck All</>
+                    )}
+                  </button>
+                  {!allCriticalMet && (
+                    <div className="readiness-prereqs-notice" style={{ margin: 0 }}>
+                      <span className="codicon codicon-warning" />
+                      <div>
+                        <strong>Fix all critical requirements to continue.</strong> Click "Fix It" on any red items to install automatically, then press Recheck All.
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
           )}
 
-          {/* STEP 4: Install Location */}
+          {/* STEP 4: Projects Home Directory */}
           {currentStep === 4 && (
             <div className="readiness-step-location">
-              <h2 className="readiness-location-title">Installation Location</h2>
-              <p className="readiness-location-subtitle">Choose where to store your LuminaDev working directory</p>
+              <h2 className="readiness-location-title">Projects Home Directory</h2>
+              <p className="readiness-location-subtitle">Choose where LuminaDev stores your development projects</p>
 
               <div className="readiness-location-section">
-                <label className="readiness-location-label">Install Path</label>
+                <label className="readiness-location-label">Projects Directory</label>
                 <div className="readiness-location-input-group">
                   <input
                     type="text"
                     className="readiness-location-input"
-                    value={installPath}
-                    onChange={(e) => setInstallPath(e.target.value)}
-                    placeholder="/home/user/luminadev"
+                    value={projectsDir}
+                    onChange={(e) => setProjectsDir(e.target.value)}
+                    placeholder="~/LuminaProjects"
                   />
-                  <button className="readiness-location-browse">
+                  <button
+                    className="readiness-location-browse"
+                    title="Browse for folder"
+                    onClick={() => {
+                      void window.dh.selectFolder().then((p) => {
+                        if (p) setProjectsDir(p)
+                      })
+                    }}
+                  >
                     <span className="codicon codicon-folder-open" />
                   </button>
                 </div>
-                <p className="readiness-location-hint">This is where LuminaDev will store configurations and working data</p>
+                <p className="readiness-location-hint">Each new project will be created inside this folder (e.g. ~/LuminaProjects/data-science/my-project)</p>
               </div>
 
               <div className="readiness-location-info">
                 <span className="codicon codicon-info" />
                 <div>
-                  <strong>Recommended:</strong> Use a path on a fast SSD with at least 20GB of free space
+                  <strong>Recommended:</strong> Use a path on a fast SSD with at least 20GB of free space. You can change this later in Settings.
                 </div>
               </div>
             </div>

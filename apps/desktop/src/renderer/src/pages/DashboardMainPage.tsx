@@ -129,6 +129,7 @@ export function DashboardMainPage(): ReactElement {
   const [createProjectNotebook, setCreateProjectNotebook] = useState(true)
   const [createProjectMainPy, setCreateProjectMainPy] = useState(false)
   const [isScaffolding, setIsScaffolding] = useState(false)
+  const [projectsHomeDir, setProjectsHomeDir] = useState('~/LuminaProjects')
   const [scaffoldProgress, setScaffoldProgress] = useState(0)
   const [scaffoldStatusText, setScaffoldStatusText] = useState('Initializing...')
   const [installLogs, setInstallLogs] = useState<string[]>([])
@@ -189,6 +190,12 @@ export function DashboardMainPage(): ReactElement {
     } catch {
       /* keep last known */
     }
+    try {
+      const phd = (await window.dh.storeGet({ key: 'projects_home_dir' } as any)) as { ok: boolean; data?: unknown }
+      if (phd.ok && typeof phd.data === 'string' && phd.data.trim()) {
+        setProjectsHomeDir(phd.data.trim())
+      }
+    } catch { /* keep default */ }
   
     if (selectedProfileName) {
       window.dh.storeGet({ key: `project_dir_${selectedProfileName}` } as any).then(async (p: any) => {
@@ -266,7 +273,7 @@ export function DashboardMainPage(): ReactElement {
   const submitCreateProject = async () => {
      if (!selectedProfileName || !createProjectName.trim()) return
      const name = createProjectName.trim()
-     const path = `~/LuminaProjects/${selectedProfileName}/${name}`
+     const path = `${projectsHomeDir}/${selectedProfileName}/${name}`
      
      setIsScaffolding(true)
      setInstallLogs([])
@@ -840,7 +847,7 @@ export function DashboardMainPage(): ReactElement {
                 <h2 style={{ margin: '0 0 16px 0', fontSize: 24, fontWeight: 700 }}>Create New Project</h2>
                 <p style={{ margin: '0 0 24px', color: 'var(--text-muted)', fontSize: 15, lineHeight: 1.6 }}>
                   Enter a name for your new <strong style={{ color: 'var(--text)' }}>{selectedProfile.title}</strong> project.
-                  It will be created in your LuminaProjects workspace.
+                  It will be created in <span className="mono" style={{ color: 'var(--accent)' }}>{projectsHomeDir}</span>.
                 </p>
                 <input
                   type="text"

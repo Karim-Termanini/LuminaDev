@@ -502,47 +502,47 @@ Flatpak runs with **full host permissions** — no sandbox isolation. Docker soc
 
 ---
 
-## 🏗️ Phase 16 — System Readiness & Pre-Requisites Wizard (Installer) 📋 PLANNED
+## ✅ Phase 16 — System Readiness & Pre-Requisites Wizard (Installer) ✅ DONE
 
 **Goal:** Implement strict blocking "WinBoat" setup wizard philosophy. First window user sees on app launch. Main app shell **does not load** until all critical requirements pass.
 
 ### Pre-flight Flow (The "Installer" Window)
 
-- [ ] **First-Run Detection:** On app launch, check `readiness_wizard_complete` in store. If missing/false, show full-screen blocker before AppShell loads.
-- [ ] **Modal/Window:** Dedicated installer window (like Windows Boot Camp setup). Cannot be skipped or closed (X button disabled).
-- [ ] **Modern UI:** Premium, centered layout with hero header, requirement cards with status indicators, action buttons, and disabled "Next" button until all critical ✓.
+- [x] **First-Run Detection:** On app launch, check `readiness_wizard_complete` in store. If missing/false, show full-screen blocker before AppShell loads.
+- [x] **Modal/Window:** Dedicated installer window (like Windows Boot Camp setup). Cannot be skipped or closed (X button disabled).
+- [x] **Modern UI:** Premium, centered layout with hero header, requirement cards with status indicators, action buttons, and disabled "Next" button until all critical ✓.
 
 ### Comprehensive Probe Matrix
 
 Probe for **everything** required to run app. No shortcuts.
 
 **Hardware/System:**
-- [ ] RAM ≥ 4GB (warn if <4GB)
-- [ ] CPU Cores ≥ 2 (warn if <2)
-- [ ] Virtualization (KVM/VT-x/AMD-V enabled — critical for containers)
-- [ ] Architecture: x86_64 required
+- [x] RAM ≥ 4GB (warn if <4GB)
+- [x] CPU Cores ≥ 2 (warn if <2)
+- [x] Virtualization (KVM/VT-x/AMD-V enabled — critical for containers)
+- [x] Architecture: x86_64 required
 
 **Core Tools (Critical):**
-- [ ] Docker installed + version ≥ 20.10
-- [ ] Docker Compose v2 (via `docker compose` command, not `docker-compose`)
-- [ ] Git installed
-- [ ] SSH available (local daemon running or `ssh` command available)
-- [ ] Curl, Tar, Unzip in PATH
+- [x] Docker installed + version ≥ 20.10
+- [x] Docker Compose v2 (via `docker compose` command, not `docker-compose`)
+- [x] Git installed
+- [x] SSH available (local daemon running or `ssh` command available)
+- [x] Curl, Tar, Unzip in PATH
 
 **System State:**
-- [ ] Docker daemon running (not just installed)
-- [ ] User in `docker` group (can run `docker ps` without sudo)
-- [ ] `/var/run/docker.sock` readable
-- [ ] Flatpak sandbox overrides (if running in Flatpak): `/var/run/docker.sock` accessible, session-bus available
+- [x] Docker daemon running (not just installed)
+- [x] User in `docker` group (can run `docker ps` without sudo)
+- [x] `/var/run/docker.sock` readable
+- [x] Flatpak sandbox overrides (if running in Flatpak): `/var/run/docker.sock` accessible, session-bus available
 
 ### Active "Fix It" Buttons (Not Just "How?")
 
 **Philosophy:** Direct action, not documentation.
 
-- [ ] **One-Click Install:** Each missing dependency has an "Install" button (not "How?").
-- [ ] **Command Execution:** Button triggers native OS package manager (apt, dnf, pacman, etc.) detection.
-- [ ] **Privilege Escalation:** Uses `pkexec` (Polkit) to prompt for password securely. No forced terminal or manual CLI.
-- [ ] **Special Cases:**
+- [x] **One-Click Install:** Each missing dependency has an "Install" button (not "How?").
+- [x] **Command Execution:** Button triggers native OS package manager (apt, dnf, pacman, etc.) detection.
+- [x] **Privilege Escalation:** Uses `pkexec` (Polkit) to prompt for password securely. No forced terminal or manual CLI.
+- [x] **Special Cases:**
   - Docker group: `usermod -aG docker $USER` + advise user to log out/in or `newgrp docker`.
   - Docker daemon: `systemctl start docker` (user-privileged).
   - SSH daemon: `systemctl start ssh` or `systemctl start sshd` (distro-dependent).
@@ -551,20 +551,20 @@ Probe for **everything** required to run app. No shortcuts.
 
 When user clicks "Install" / "Fix":
 
-- [ ] **Progress Screen:** Transition to modern progress modal (not terminal output).
-- [ ] **Live Status:** Clear text: "Installing Docker..." → "Adding user to docker group..." → "Starting Docker daemon...".
-- [ ] **Smooth Progress Bar:** Animated bar for each step (or spinner if no ETA).
-- [ ] **Non-Blocking Output:** Show brief, human-readable logs (not raw terminal noise).
-- [ ] **Auto-Recheck:** After install completes, re-probe that dependency. Update status card in real-time (✓ or ✘).
+- [x] **Progress Screen:** Transition to modern progress modal (not terminal output).
+- [x] **Live Status:** Clear text: "Installing Docker..." → "Adding user to docker group..." → "Starting Docker daemon...".
+- [x] **Smooth Progress Bar:** Animated bar for each step (or spinner if no ETA).
+- [x] **Non-Blocking Output:** Show brief, human-readable logs (not raw terminal noise).
+- [x] **Auto-Recheck:** After install completes, re-probe that dependency. Update status card in real-time (✓ or ✘).
 
 ### Strict Blocking: Disabled "Next" Button
 
-- [ ] **"Next" Button Logic:** Disabled (grayed out, no hover, `cursor: not-allowed`) if ANY critical requirement shows red ✘.
-- [ ] **No Bypass:** User cannot:
+- [x] **"Next" Button Logic:** Disabled (grayed out, no hover, `cursor: not-allowed`) if ANY critical requirement shows red ✘.
+- [x] **No Bypass:** User cannot:
   - Skip the screen.
   - Close the window (X disabled).
   - Proceed without all critical ✓.
-- [ ] **Visual Feedback:** Disabled state obvious. Hover shows tooltip: "Install missing requirements to continue."
+- [x] **Visual Feedback:** Disabled state obvious. Hover shows tooltip: "Install missing requirements to continue."
 
 ### Success Criteria
 
@@ -576,8 +576,9 @@ When user clicks "Install" / "Fix":
 
 ### Recovery & Re-Entry
 
-- [ ] **Reset Option:** Settings → "Run Setup Wizard Again" button clears `readiness_wizard_complete`, forces re-entry on next launch.
-- [ ] **Manual Probe:** If user manually fixes deps (e.g., `sudo apt install docker.io`), "Recheck" button in UI re-runs probes without restart.
+- [x] **Reset Option:** Settings → "Run Setup Wizard Again" button clears `readiness_wizard_complete`, forces re-entry on next launch.
+- [x] **Manual Probe:** If user manually fixes deps (e.g., `sudo apt install docker.io`), "Recheck" button in UI re-runs probes without restart.
+- [x] **Projects Home Directory:** Step 4 lets user configure where all projects are scaffolded. Editable anytime in Settings → General.
 
 ---
 
