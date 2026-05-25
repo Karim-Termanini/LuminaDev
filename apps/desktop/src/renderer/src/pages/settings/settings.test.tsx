@@ -21,6 +21,7 @@ import { SettingsBuilder } from './SettingsBuilder'
 import { SettingsBetaFeatures } from './SettingsBetaFeatures'
 import { SettingsNotification } from './SettingsNotification'
 import { SettingsShortcuts, buildChord } from './SettingsShortcuts'
+import { SettingsHelpAbout } from './SettingsHelpAbout'
 
 function wrap(ui: React.ReactElement): string {
   return renderToStaticMarkup(<MemoryRouter>{ui}</MemoryRouter>)
@@ -92,5 +93,14 @@ describe('SettingsShortcuts', () => {
     const html = wrap(<SettingsShortcuts />)
     expect(html).toContain('Action')
     expect(html).toContain('Binding')
+  })
+})
+
+describe('SettingsHelpAbout', () => {
+  it('renders LuminaDev name', () => {
+    expect(wrap(<SettingsHelpAbout />)).toContain('LuminaDev')
+  })
+  it('renders GitHub link button', () => {
+    expect(wrap(<SettingsHelpAbout />)).toContain('GitHub')
   })
 })
