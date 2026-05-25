@@ -56,7 +56,7 @@
   gap: 8px;
   flex-wrap: wrap;
   padding: 12px;
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--bg-input);
   border: 1px solid var(--border);
   border-radius: 8px;
   margin-bottom: 16px;
@@ -80,15 +80,15 @@
 
 .git-config-tab:hover {
   border-color: var(--accent);
-  background: rgba(124, 77, 255, 0.05);
+  background: var(--accent-dim);
   color: var(--text);
 }
 
 .git-config-tab-active {
   border-color: var(--accent);
-  background: rgba(124, 77, 255, 0.15);
+  background: var(--accent-dim);
   color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  box-shadow: 0 0 0 1px var(--accent);
 }
 
 /* Content area */
@@ -155,7 +155,7 @@
 
 .git-config-form-input:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px rgba(124, 77, 255, 0.2);
+  box-shadow: 0 0 0 2px var(--accent-dim);
 }
 
 .git-config-form-hint {
@@ -166,8 +166,8 @@
 
 /* Cards and containers */
 .git-config-card {
-  background: rgba(0, 0, 0, 0.2);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
   border-radius: 8px;
   padding: 12px;
   margin-bottom: 12px;
@@ -196,8 +196,8 @@
 
 .git-config-list-item {
   padding: 8px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--border);
+  background: var(--bg-input);
   border-radius: 6px;
   font-size: 12px;
   color: var(--text);
@@ -210,7 +210,7 @@
 
 .git-config-list-item:hover {
   border-color: var(--accent);
-  background: rgba(124, 77, 255, 0.1);
+  background: var(--accent-dim);
 }
 
 .git-config-list-item-key {
@@ -247,7 +247,7 @@
 
 .git-config-actions button:hover {
   border-color: var(--accent);
-  background: rgba(124, 77, 255, 0.1);
+  background: var(--accent-dim);
   color: var(--accent);
 }
 
@@ -257,7 +257,7 @@
 }
 
 .git-config-actions button.danger:hover {
-  background: rgba(248, 81, 73, 0.1);
+  background: color-mix(in srgb, var(--red) 15%, transparent);
 }
 
 /* Table styling */
@@ -265,7 +265,7 @@
   overflow-x: auto;
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: rgba(0, 0, 0, 0.1);
+  background: var(--bg-widget);
   margin-top: 12px;
 }
 
@@ -276,7 +276,7 @@
 }
 
 .git-config-table thead {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--bg-input);
   border-bottom: 1px solid var(--border);
 }
 
@@ -292,14 +292,14 @@
 
 .git-config-table td {
   padding: 8px 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+  border-bottom: 1px solid var(--border);
   color: var(--text);
   font-family: var(--font-mono);
   font-size: 11px;
 }
 
 .git-config-table tbody tr:hover {
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--bg-input);
 }
 
 /* Modal */
@@ -363,7 +363,7 @@
 
 .git-config-page .hp-btn:hover:not(:disabled) {
   border-color: var(--accent);
-  background: rgba(124, 77, 255, 0.1);
+  background: var(--accent-dim);
   color: var(--accent);
   transform: translateY(-1px);
 }
@@ -386,7 +386,7 @@
 }
 
 .git-config-page .hp-btn-danger {
-  background: rgba(248, 81, 73, 0.1);
+  background: color-mix(in srgb, var(--red) 12%, transparent);
   border-color: var(--red);
   color: var(--red);
 }
@@ -444,7 +444,7 @@
   display: inline-block;
   width: 14px;
   height: 14px;
-  border: 2px solid rgba(124, 77, 255, 0.3);
+  border: 2px solid var(--accent-dim);
   border-top-color: var(--accent);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
