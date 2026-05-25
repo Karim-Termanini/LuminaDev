@@ -231,6 +231,51 @@ export const UpdateSettingsSchema = z.object({
 })
 export type UpdateSettings = z.infer<typeof UpdateSettingsSchema>
 
+export const ResourcesSettingsSchema = z.object({
+  cpuLimitPercent: z.number().int().min(10).max(100),
+  ramLimitMb: z.number().int().min(512).max(32768),
+})
+export type ResourcesSettings = z.infer<typeof ResourcesSettingsSchema>
+
+export const AppEngineSettingsSchema = z.object({
+  ipcTimeoutMs: z.number().int().min(1000).max(120000),
+  threadPoolSize: z.number().int().min(1).max(32),
+  daemonAutoRestart: z.boolean(),
+})
+export type AppEngineSettings = z.infer<typeof AppEngineSettingsSchema>
+
+export const BuilderSettingsSchema = z.object({
+  cargoPath: z.string().max(4096),
+  nodePath: z.string().max(4096),
+  pythonPath: z.string().max(4096),
+  registryMirror: z.string().max(2048),
+})
+export type BuilderSettings = z.infer<typeof BuilderSettingsSchema>
+
+export const BetaFeaturesStateSchema = z.record(z.string(), z.boolean())
+export type BetaFeaturesState = z.infer<typeof BetaFeaturesStateSchema>
+
+export const NotificationSettingsSchema = z.object({
+  globalMute: z.boolean(),
+  minSeverity: z.enum(['info', 'warn', 'error']),
+  osNotifications: z.literal(false),
+})
+export type NotificationSettings = z.infer<typeof NotificationSettingsSchema>
+
+export const ShortcutsSettingsSchema = z.record(z.string(), z.string())
+export type ShortcutsSettings = z.infer<typeof ShortcutsSettingsSchema>
+
+export const DateTimeSettingsSchema = z.object({
+  format: z.enum(['12h', '24h']),
+  timezone: z.string().max(64),
+})
+export type DateTimeSettings = z.infer<typeof DateTimeSettingsSchema>
+
+export const LanguageSettingsSchema = z.object({
+  locale: z.literal('en-US'),
+})
+export type LanguageSettings = z.infer<typeof LanguageSettingsSchema>
+
 /** Keys with typed payloads persisted under userData (`store_<key>.json`). */
 export const StoreKeySchema = z.enum([
   'custom_profiles',
@@ -247,6 +292,14 @@ export const StoreKeySchema = z.enum([
   'profile_credentials',
   'onboarding_profile',
   'projects_home_dir',
+  'resources_settings',
+  'app_engine_settings',
+  'builder_settings',
+  'beta_features_state',
+  'notification_settings',
+  'shortcuts_settings',
+  'datetime_settings',
+  'language_settings',
 ])
 
 export const StoreGetRequestSchema = z.object({
@@ -310,6 +363,38 @@ export const StoreSetRequestSchema = z.discriminatedUnion('key', [
   z.object({
     key: z.literal('projects_home_dir'),
     data: z.string().min(1).max(4096),
+  }),
+  z.object({
+    key: z.literal('resources_settings'),
+    data: ResourcesSettingsSchema,
+  }),
+  z.object({
+    key: z.literal('app_engine_settings'),
+    data: AppEngineSettingsSchema,
+  }),
+  z.object({
+    key: z.literal('builder_settings'),
+    data: BuilderSettingsSchema,
+  }),
+  z.object({
+    key: z.literal('beta_features_state'),
+    data: BetaFeaturesStateSchema,
+  }),
+  z.object({
+    key: z.literal('notification_settings'),
+    data: NotificationSettingsSchema,
+  }),
+  z.object({
+    key: z.literal('shortcuts_settings'),
+    data: ShortcutsSettingsSchema,
+  }),
+  z.object({
+    key: z.literal('datetime_settings'),
+    data: DateTimeSettingsSchema,
+  }),
+  z.object({
+    key: z.literal('language_settings'),
+    data: LanguageSettingsSchema,
   }),
 ])
 export const ComposeUpRequestSchema = z.object({
