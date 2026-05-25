@@ -165,10 +165,11 @@ describe('schemas', () => {
     ).toThrow()
   })
 
-  it('parses active_profile store set with compose enum only', () => {
+  it('parses active_profile store set with any valid string', () => {
     const v = StoreSetRequestSchema.parse({ key: 'active_profile', data: 'web-dev' })
     expect(v).toEqual({ key: 'active_profile', data: 'web-dev' })
-    expect(() => StoreSetRequestSchema.parse({ key: 'active_profile', data: 'not-a-profile' as never })).toThrow()
+    const v2 = StoreSetRequestSchema.parse({ key: 'active_profile', data: 'Custom Profile Name' })
+    expect(v2).toEqual({ key: 'active_profile', data: 'Custom Profile Name' })
   })
 
   it('parses wizard_state with optional stepIndex', () => {
@@ -195,11 +196,11 @@ describe('schemas', () => {
     expect(v.pickedStarterProfile).toBe('web-dev')
   })
 
-  it('parseStoredActiveProfile accepts canonical and legacy ids', () => {
+  it('parseStoredActiveProfile accepts canonical, legacy, and custom ids', () => {
     expect(parseStoredActiveProfile('empty')).toBe('empty')
     expect(parseStoredActiveProfile('minimal')).toBe('empty')
     expect(parseStoredActiveProfile('desktop-qt')).toBe('desktop-gui')
-    expect(parseStoredActiveProfile('typo')).toBe(null)
+    expect(parseStoredActiveProfile('typo')).toBe('typo')
     expect(parseStoredActiveProfile(null)).toBe(null)
   })
 

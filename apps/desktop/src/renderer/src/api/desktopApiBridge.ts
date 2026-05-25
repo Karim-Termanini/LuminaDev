@@ -114,6 +114,7 @@ function createTauriDhApi(): DhApi {
     storeGet: (payload) => tauriInvoke(IPC.storeGet, payload),
     storeSet: (payload) => tauriInvoke(IPC.storeSet, payload),
     storeDelete: (payload) => tauriInvoke(IPC.storeDelete, payload),
+    appInfo: () => tauriInvoke(IPC.appInfo),
     jobStart: (payload) => tauriInvoke(IPC.jobStart, payload),
     jobsList: () => tauriInvoke(IPC.jobsList),
     jobCancel: (payload) => tauriInvoke(IPC.jobCancel, payload),

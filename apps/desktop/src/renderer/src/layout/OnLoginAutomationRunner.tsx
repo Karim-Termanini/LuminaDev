@@ -1,4 +1,4 @@
-import { parseOnLoginAutomation, parseStoredActiveProfile } from '@linux-dev-home/shared'
+import { parseOnLoginAutomation, parseStoredActiveProfile, type ComposeProfile } from '@linux-dev-home/shared'
 import { useEffect } from 'react'
 
 import { LAYOUT_RELOAD_EVENT } from './layoutReloadEvent'
@@ -27,7 +27,7 @@ export function OnLoginAutomationRunner(): null {
           const apBag = ap as { ok?: boolean; data?: unknown }
           const profile = apBag.ok ? parseStoredActiveProfile(apBag.data) : null
           if (profile) {
-            await window.dh.composeUp({ profile })
+            await window.dh.composeUp({ profile: profile as ComposeProfile })
           }
         }
 

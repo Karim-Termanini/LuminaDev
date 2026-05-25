@@ -4,6 +4,7 @@ import {
   type ContainerRow,
   type HostMetricsResponse,
   parseStoredActiveProfile,
+  type CustomProfileEntry,
 } from '@linux-dev-home/shared'
 import type { ReactElement } from 'react'
 import { invoke } from '@tauri-apps/api/core'
@@ -48,8 +49,9 @@ function generateEventFeed(profileName: string): Array<{ id: string; icon: strin
   ]
   return events
     .sort(() => (seeds % 2) - 0.5)
+    .slice(0, 3)
     .map((e, i) => ({
-      id: `${profileName}-event-${i}`,
+      id: `${i}`,
       icon: e.icon,
       color: e.color,
       title: e.title,
@@ -57,16 +59,14 @@ function generateEventFeed(profileName: string): Array<{ id: string; icon: strin
     }))
 }
 
-function generateServices(profileName: string): Array<{ id: string; name: string; status: 'running' | 'pending' | 'idle'; uptime: string }> {
-  const servicesByProfile: Record<string, string[]> = {
-    'web-dev': ['Nginx', 'API Server', 'Database'],
-    'data-science': ['Jupyter Lab', 'PostgreSQL', 'Redis'],
-    'ai-ml': ['PyTorch Runtime', 'Jupyter', 'GPU Monitor'],
-    'docs': ['Jekyll', 'Search Index'],
-  }
-  const services = servicesByProfile[profileName] || ['Default Service']
+function generateServices(profileName: string): Array<{ name: string; status: 'running' | 'pending' | 'idle'; uptime: string }> {
+  const seed = profileName.charCodeAt(0) % 3
+  const services = seed === 0 
+    ? ['nginx', 'postgres', 'redis'] 
+    : seed === 1 
+      ? ['jupyter', 'pandas-runner'] 
+      : ['node-server', 'mongodb']
   return services.map((name, i) => ({
-    id: `${profileName}-svc-${i}`,
     name,
     status: i === 0 ? 'running' : i === 1 ? 'pending' : 'idle',
     uptime: ['4h 32m', '2h 15m', '1h 08m'][i % 3] || '0h',
@@ -82,12 +82,14 @@ function formatTime(ms: number): string {
 }
 
 interface ProfileDef {
-  name: ComposeProfile
+  name: string
   title: string
   description: string
   icon: string
   accent: string
   status: 'live' | 'planned'
+  isCustom?: boolean
+  baseTemplate?: ComposeProfile
 }
 
 const PRESET_PROFILES: ProfileDef[] = [
@@ -112,8 +114,9 @@ export function DashboardMainPage(): ReactElement {
   const [snap, setSnap] = useState<HostMetricsResponse | null>(null)
   const [toast, setToast] = useState<Toast | null>(null)
   const [isSwitching, setIsSwitching] = useState(false)
-  const [activeProfile, setActiveProfile] = useState<ComposeProfile | null>(null)
-  const [selectedProfileName, setSelectedProfileName] = useState<ComposeProfile | null>(null)
+  const [activeProfile, setActiveProfile] = useState<string | null>(null)
+  const [selectedProfileName, setSelectedProfileName] = useState<string | null>(null)
+  const [customProfiles, setCustomProfiles] = useState<CustomProfileEntry[]>([])
   const [confirmModalOpen, setConfirmModalOpen] = useState(false)
 
   const [projectPath, setProjectPath] = useState<string | null>(null)
@@ -169,6 +172,23 @@ export function DashboardMainPage(): ReactElement {
     }
   }, [installLogs])
 
+  const allProfiles = useMemo(() => {
+    const customDefs = customProfiles.map((p) => {
+      const preset = PRESET_PROFILES.find((pr) => pr.name === p.baseTemplate)
+      return {
+        name: p.name,
+        title: p.name,
+        description: `Custom environment based on ${preset?.title || p.baseTemplate}.`,
+        icon: preset?.icon || 'blank',
+        accent: preset?.accent || 'var(--text-muted)',
+        status: 'live' as const,
+        isCustom: true,
+        baseTemplate: p.baseTemplate,
+      }
+    })
+    return [...customDefs, ...PRESET_PROFILES]
+  }, [customProfiles])
+
   const refresh = useCallback(async () => {
     try {
       const d = (await window.dh.dockerList()) as { ok: true; rows: ContainerRow[] } | { ok: false; error: string }
@@ -187,6 +207,14 @@ export function DashboardMainPage(): ReactElement {
     try {
       const ap = (await window.dh.storeGet({ key: 'active_profile' })) as { ok: boolean; data?: unknown }
       setActiveProfile(ap.ok ? parseStoredActiveProfile(ap.data) : null)
+    } catch {
+      /* keep last known */
+    }
+    try {
+      const cp = (await window.dh.storeGet({ key: 'custom_profiles' })) as { ok: boolean; data?: unknown }
+      if (cp.ok && Array.isArray(cp.data)) {
+        setCustomProfiles(cp.data as CustomProfileEntry[])
+      }
     } catch {
       /* keep last known */
     }
@@ -234,13 +262,12 @@ export function DashboardMainPage(): ReactElement {
   // Load selected profile from localStorage on mount
   useEffect(() => {
     const saved = localStorage.getItem('dashboard-selected-profile')
-    if (saved && PRESET_PROFILES.some(p => p.name === saved)) {
-      setSelectedProfileName(saved as ComposeProfile)
+    if (saved && allProfiles.some(p => p.name === saved)) {
+      setSelectedProfileName(saved)
     } else {
-      setSelectedProfileName(activeProfile || PRESET_PROFILES[0].name)
+      setSelectedProfileName(activeProfile || (allProfiles[0]?.name || null))
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [allProfiles, activeProfile])
 
   // Save selected profile to localStorage
   useEffect(() => {
@@ -274,12 +301,13 @@ export function DashboardMainPage(): ReactElement {
      if (!selectedProfileName || !createProjectName.trim()) return
      const name = createProjectName.trim()
      const path = `${projectsHomeDir}/${selectedProfileName}/${name}`
+     const targetTemplate = selectedProfile.baseTemplate || selectedProfile.name
      
      setIsScaffolding(true)
      setInstallLogs([])
      setToast({ type: 'success', message: `Scaffolding ${name}...` })
      
-     if (selectedProfileName === 'data-science') {
+     if (targetTemplate === 'data-science') {
        const res = await invoke('ipc_invoke', { 
          channel: 'dh:project:scaffold', 
          payload: { 
@@ -305,7 +333,7 @@ export function DashboardMainPage(): ReactElement {
             // Ensure the containers are running so we can install deps
             await invoke('ipc_invoke', { channel: 'dh:profile:switch', payload: { to: selectedProfileName } })
             setScaffoldStatusText('Installing Dependencies...')
-            const r: any = await invoke('ipc_invoke', { channel: 'dh:project:install_deps', payload: { projectName: name } })
+            const r: any = await invoke('ipc_invoke', { channel: 'dh:project:install_deps', payload: { projectName: name, profileName: selectedProfileName } })
             if (r.ok) {
               setToast({ type: 'success', message: 'Dependencies installed successfully!' })
               setScaffoldStatusText('Finished!')
@@ -328,7 +356,7 @@ export function DashboardMainPage(): ReactElement {
           setIsScaffolding(false)
           setToast({ type: 'error', message: res.error || 'Failed to scaffold project' })
        }
-     } else if (selectedProfileName === 'web-dev') {
+     } else if (targetTemplate === 'web-dev') {
        const res = await invoke('ipc_invoke', { 
          channel: 'dh:project:scaffold', 
          payload: { 
@@ -353,7 +381,7 @@ export function DashboardMainPage(): ReactElement {
             // Ensure the containers are running so we can install deps
             await invoke('ipc_invoke', { channel: 'dh:profile:switch', payload: { to: selectedProfileName } })
             setScaffoldStatusText('Installing Dependencies...')
-            const r: any = await invoke('ipc_invoke', { channel: 'dh:project:install_deps', payload: { projectName: name, template: 'web-dev' } })
+            const r: any = await invoke('ipc_invoke', { channel: 'dh:project:install_deps', payload: { projectName: name, template: 'web-dev', profileName: selectedProfileName } })
             if (r.ok) {
               setToast({ type: 'success', message: 'Dependencies installed successfully!' })
               setScaffoldStatusText('Finished!')
@@ -403,7 +431,7 @@ export function DashboardMainPage(): ReactElement {
     setToast({ type: 'success', message: isRestart ? `Restarting ${selectedProfileName}…` : `Switching to ${selectedProfileName}…` })
     
     // If it's a restart, we switch from activeProfile to activeProfile
-    window.dh.profileSwitch({ from: activeProfile ?? undefined, to: selectedProfileName }).then((r) => {
+    window.dh.profileSwitch({ from: (activeProfile as ComposeProfile) ?? undefined, to: selectedProfileName as ComposeProfile }).then((r) => {
 
       setIsSwitching(false)
       if (r.ok) {
@@ -427,7 +455,7 @@ export function DashboardMainPage(): ReactElement {
     })
   }
 
-  const selectedProfile = PRESET_PROFILES.find((p) => p.name === selectedProfileName)
+  const selectedProfile = allProfiles.find((p) => p.name === selectedProfileName) || allProfiles[0]
   const m = snap?.metrics
   const ramUsedPct = useMemo(() => {
     if (!m || m.totalMemMb <= 0) return 0
@@ -439,7 +467,8 @@ export function DashboardMainPage(): ReactElement {
   }, [m])
   const activeContainers = useMemo(() => {
     if (!docker || !docker.ok || !selectedProfileName) return []
-    return docker.rows.filter((c) => c.name.includes(selectedProfileName))
+    const search = selectedProfileName.toLowerCase().replace(/[^a-z0-9_-]/g, '')
+    return docker.rows.filter((c) => c.name.toLowerCase().includes(search))
   }, [docker, selectedProfileName])
 
   return (
@@ -659,7 +688,7 @@ export function DashboardMainPage(): ReactElement {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                     {generateServices(selectedProfileName).map((s) => (
                       <div
-                        key={s.id}
+                        key={s.name}
                         style={{
                           padding: 16,
                           borderRadius: 8,
@@ -701,7 +730,7 @@ export function DashboardMainPage(): ReactElement {
           Profiles
         </h3>
         <div className="profile-list">
-          {PRESET_PROFILES.map((prof) => (
+          {allProfiles.map((prof) => (
             <button
               key={prof.name}
               type="button"

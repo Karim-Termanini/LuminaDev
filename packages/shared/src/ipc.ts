@@ -308,6 +308,7 @@ export const IPC = {
   cloudGitCreatePr: 'dh:cloud:git:create-pr',
   cloudGitGetPrChecks: 'dh:cloud:git:get-pr-checks',
   cloudGitMergePr: 'dh:cloud:git:merge-pr',
+  appInfo: 'dh:app:info',
 } as const
 
 export type DockerActionPayload = { id: string; action: DockerContainerAction }

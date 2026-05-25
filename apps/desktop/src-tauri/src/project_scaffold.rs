@@ -268,10 +268,28 @@ pub async fn handle_project_install_deps(body: Value, app: AppHandle) -> Value {
       return json!({ "ok": false, "error": "Missing projectName" });
     }
     
-    let (container_name, work_dir, install_cmd, install_args) = if template == "web-dev" {
-       (format!("{}-node-1", template), "/app", "npm", vec!["install"])
+    let profile_name_arg = body.get("profileName").and_then(|v| v.as_str()).unwrap_or("");
+    let container_prefix = if !profile_name_arg.is_empty() {
+        profile_name_arg.to_string()
     } else {
-       (format!("{}-jupyter-1", template), "/home/jovyan/work", "pip", vec!["install", "-r", "requirements.txt"])
+        let mut p_name = String::new();
+        if let Ok(store_path) = crate::app_file(&app, "store.json") {
+            let store = crate::read_json(&store_path);
+            if let Some(act) = store.get("active_profile").and_then(|v| v.as_str()) {
+                p_name = act.to_string();
+            }
+        }
+        if p_name.is_empty() {
+            template.to_string()
+        } else {
+            p_name
+        }
+    };
+
+    let (container_name, work_dir, install_cmd, install_args) = if template == "web-dev" {
+       (format!("{}-node-1", container_prefix), "/app", "npm", vec!["install"])
+    } else {
+       (format!("{}-jupyter-1", container_prefix), "/home/jovyan/work", "pip", vec!["install", "-r", "requirements.txt"])
     };
     
     let fut = async {
