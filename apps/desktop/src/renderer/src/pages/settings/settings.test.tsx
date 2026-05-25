@@ -23,6 +23,7 @@ import { SettingsNotification } from './SettingsNotification'
 import { SettingsShortcuts, buildChord } from './SettingsShortcuts'
 import { SettingsHelpAbout } from './SettingsHelpAbout'
 import { SettingsDateTime } from './SettingsDateTime'
+import { SettingsLanguages } from './SettingsLanguages'
 
 function wrap(ui: React.ReactElement): string {
   return renderToStaticMarkup(<MemoryRouter>{ui}</MemoryRouter>)
@@ -114,5 +115,14 @@ describe('SettingsDateTime', () => {
   })
   it('renders timezone label', () => {
     expect(wrap(<SettingsDateTime />)).toContain('Timezone')
+  })
+})
+
+describe('SettingsLanguages', () => {
+  it('renders English and native options', () => {
+    const html = wrap(<SettingsLanguages />)
+    expect(html).toContain('English')
+    expect(html).toContain('Español')
+    expect(html).toContain('日本語')
   })
 })
