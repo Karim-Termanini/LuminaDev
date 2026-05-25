@@ -119,10 +119,10 @@ describe('SettingsDateTime', () => {
 })
 
 describe('SettingsLanguages', () => {
-  it('renders English and native options', () => {
+  it('renders English and placeholder options', () => {
     const html = wrap(<SettingsLanguages />)
     expect(html).toContain('English')
     expect(html).toContain('Español')
-    expect(html).toContain('日本語')
+    expect(html).toContain('Français')
   })
 })
