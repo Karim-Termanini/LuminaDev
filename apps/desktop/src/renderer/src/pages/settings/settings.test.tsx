@@ -15,6 +15,7 @@ const mockDh = {
 ;(globalThis as any).window = { dh: mockDh }
 
 import { SettingsShell } from './SettingsShell'
+import { SettingsResources } from './SettingsResources'
 
 function wrap(ui: React.ReactElement): string {
   return renderToStaticMarkup(<MemoryRouter>{ui}</MemoryRouter>)
@@ -28,5 +29,14 @@ describe('SettingsShell', () => {
     expect(html).toContain('Shortcuts')
     expect(html).toContain('Help &amp; About')
     expect(html).toContain('Languages')
+  })
+})
+
+describe('SettingsResources', () => {
+  it('renders CPU slider label', () => {
+    expect(wrap(<SettingsResources />)).toContain('CPU limit')
+  })
+  it('renders RAM label', () => {
+    expect(wrap(<SettingsResources />)).toContain('RAM allocation')
   })
 })
