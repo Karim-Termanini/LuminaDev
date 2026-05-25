@@ -88,7 +88,8 @@ export function ProfilesPage(): ReactElement {
     await Promise.all(
       loadedProfiles.map(async (p) => {
         try {
-          const res = (await window.dh.storeGet({ key: `project_dir_${p.baseTemplate}` as string })) as { ok: boolean; data?: unknown }
+          const storeGetAny = window.dh.storeGet as (req: { key: string }) => Promise<{ ok: boolean; data?: unknown }>
+          const res = await storeGetAny({ key: `project_dir_${p.baseTemplate}` })
           paths[p.baseTemplate] = (res.ok && typeof res.data === 'string') ? res.data : null
         } catch {
           paths[p.baseTemplate] = null
