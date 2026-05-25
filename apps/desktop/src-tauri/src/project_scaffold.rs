@@ -156,6 +156,7 @@ if __name__ == '__main__':
 }"##;
         let _ = std::fs::write(project_dir.join("notebooks/01_exploration.ipynb"), notebook_content);
       }
+      scaffold_editor_configs(&project_dir, "data-science", "");
     } else if template == "web-dev" {
       // Create professional directories
       let _ = std::fs::create_dir_all(project_dir.join("src/components"));
@@ -253,6 +254,7 @@ export default defineConfig({
 })
 "#;
       let _ = std::fs::write(project_dir.join("vite.config.ts"), vite_config);
+      scaffold_editor_configs(&project_dir, "web-dev", "");
     }
     
     json!({ "ok": true, "path": expanded })
@@ -328,9 +330,166 @@ pub async fn handle_project_install_deps(body: Value, app: AppHandle) -> Value {
        }
     };
     
-    match tokio::time::timeout(std::time::Duration::from_secs(120), fut).await {
-       Ok(Ok((stdout, _))) => json!({ "ok": true, "log": stdout }),
-       Ok(Err(e)) => json!({ "ok": false, "error": e }),
-       Err(_) => json!({ "ok": false, "error": "Timeout installing dependencies" })
+        match tokio::time::timeout(std::time::Duration::from_secs(120), fut).await {
+        Ok(Ok((stdout, _))) => json!({ "ok": true, "log": stdout }),
+        Ok(Err(e)) => json!({ "ok": false, "error": e }),
+        Err(_) => json!({ "ok": false, "error": "Timeout installing dependencies" })
+     }
+}
+
+pub fn detect_template(project_dir: &std::path::Path) -> String {
+    if project_dir.join("package.json").exists() {
+        "web-dev".to_string()
+    } else {
+        "data-science".to_string()
+    }
+}
+
+pub fn scaffold_editor_configs(project_dir: &std::path::Path, template: &str, editor_cmd: &str) {
+    // 1. VS Code / Cursor: Always write/ensure .vscode/extensions.json
+    let vscode_dir = project_dir.join(".vscode");
+    let _ = std::fs::create_dir_all(&vscode_dir);
+    let vscode_content = if template == "data-science" {
+        r#"{
+  "recommendations": [
+    "ms-python.python",
+    "ms-toolsai.jupyter"
+  ]
+}"#
+    } else {
+        r#"{
+  "recommendations": [
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+    "ms-vscode.vscode-typescript-next"
+  ]
+}"#
+    };
+    let _ = std::fs::write(vscode_dir.join("extensions.json"), vscode_content);
+
+    // 2. IntelliJ IDEA: If the editor cmd is idea or webstorm or eclipse
+    if editor_cmd.contains("idea") || editor_cmd.contains("webstorm") || editor_cmd.contains("eclipse") {
+        let idea_dir = project_dir.join(".idea");
+        let _ = std::fs::create_dir_all(&idea_dir);
+        
+        let modules_content = r#"<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectModuleManager">
+    <modules>
+      <module fileurl="file://$PROJECT_DIR$/.idea/project.iml" filepath="$PROJECT_DIR$/.idea/project.iml" />
+    </modules>
+  </component>
+</project>"#;
+        let _ = std::fs::write(idea_dir.join("modules.xml"), modules_content);
+
+        let iml_content = if template == "data-science" {
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<module type="PYTHON_MODULE" version="4">
+  <component name="NewModuleRootManager">
+    <content url="file://$MODULE_DIR$/.." />
+    <orderEntry type="inheritedJdk" />
+    <orderEntry type="sourceFolder" forTests="false" />
+  </component>
+</module>"#
+        } else {
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<module type="WEB_MODULE" version="4">
+  <component name="NewModuleRootManager">
+    <content url="file://$MODULE_DIR$/.." />
+    <orderEntry type="inheritedJdk" />
+    <orderEntry type="sourceFolder" forTests="false" />
+  </component>
+</module>"#
+        };
+        let _ = std::fs::write(idea_dir.join("project.iml"), iml_content);
+
+        if template == "data-science" {
+            let misc_content = r#"<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectRootManager" version="2" project-jdk-name="Python 3" project-jdk-type="Python SDK" />
+</project>"#;
+            let _ = std::fs::write(idea_dir.join("misc.xml"), misc_content);
+        }
+    }
+
+    // 3. Neovim / Pyright
+    if template == "data-science" {
+        let pyright_content = r#"{
+  "include": ["src", "tests", "main.py"],
+  "exclude": ["**/node_modules", "**/__pycache__"]
+}"#;
+        let _ = std::fs::write(project_dir.join("pyrightconfig.json"), pyright_content);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    #[test]
+    fn test_scaffold_editor_configs_vscode_data_science() {
+        let base_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("target")
+            .join("test_scaffold_vscode_ds");
+        let _ = std::fs::remove_dir_all(&base_dir);
+        let _ = std::fs::create_dir_all(&base_dir);
+
+        scaffold_editor_configs(&base_dir, "data-science", "code");
+
+        let ext_file = base_dir.join(".vscode").join("extensions.json");
+        assert!(ext_file.exists());
+
+        let content = std::fs::read_to_string(ext_file).unwrap();
+        assert!(content.contains("ms-python.python"));
+        assert!(content.contains("ms-toolsai.jupyter"));
+
+        let pyright_file = base_dir.join("pyrightconfig.json");
+        assert!(pyright_file.exists());
+
+        let _ = std::fs::remove_dir_all(&base_dir);
+    }
+
+    #[test]
+    fn test_scaffold_editor_configs_intellij_web_dev() {
+        let base_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("target")
+            .join("test_scaffold_idea_web");
+        let _ = std::fs::remove_dir_all(&base_dir);
+        let _ = std::fs::create_dir_all(&base_dir);
+
+        scaffold_editor_configs(&base_dir, "web-dev", "idea");
+
+        let ext_file = base_dir.join(".vscode").join("extensions.json");
+        assert!(ext_file.exists());
+
+        let content = std::fs::read_to_string(ext_file).unwrap();
+        assert!(content.contains("esbenp.prettier-vscode"));
+
+        let idea_modules = base_dir.join(".idea").join("modules.xml");
+        let idea_iml = base_dir.join(".idea").join("project.iml");
+        assert!(idea_modules.exists());
+        assert!(idea_iml.exists());
+
+        let iml_content = std::fs::read_to_string(idea_iml).unwrap();
+        assert!(iml_content.contains("WEB_MODULE"));
+
+        let _ = std::fs::remove_dir_all(&base_dir);
+    }
+
+    #[test]
+    fn test_detect_template() {
+        let base_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("target")
+            .join("test_detect_template");
+        let _ = std::fs::remove_dir_all(&base_dir);
+        let _ = std::fs::create_dir_all(&base_dir);
+
+        assert_eq!(detect_template(&base_dir), "data-science");
+
+        let _ = std::fs::write(base_dir.join("package.json"), "{}");
+        assert_eq!(detect_template(&base_dir), "web-dev");
+
+        let _ = std::fs::remove_dir_all(&base_dir);
     }
 }

@@ -2212,14 +2212,26 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       json!({ "ok": true, "editors": parsed })
     }
     "dh:editor:open" => {
-      let path = body.get("path").and_then(|v| v.as_str()).unwrap_or_default();
+      let path_raw = body.get("path").and_then(|v| v.as_str()).unwrap_or_default();
       let cmd = body.get("cmd").and_then(|v| v.as_str()).unwrap_or("code");
-      if path.is_empty() {
+      if path_raw.is_empty() {
         json!({ "ok": false, "error": "[EDITOR_OPEN_FAILED] Missing path." })
       } else {
+        let path = if path_raw.starts_with("~/") {
+          let home = std::env::var("HOME").unwrap_or_else(|_| "/root".to_string());
+          path_raw.replacen("~/", &format!("{}/", home), 1)
+        } else {
+          path_raw.to_string()
+        };
+
         // Ensure the directory exists before opening the IDE.
         // This prevents editors from falling back to the app's root directory if the user deleted the folder.
-        let _ = std::fs::create_dir_all(path);
+        let path_buf = std::path::PathBuf::from(&path);
+        let _ = std::fs::create_dir_all(&path_buf);
+
+        // Dynamically detect template and write editor-specific configurations
+        let detected_template = crate::project_scaffold::detect_template(&path_buf);
+        crate::project_scaffold::scaffold_editor_configs(&path_buf, &detected_template, cmd);
 
         // e.g. cmd is "flatpak run com.visualstudio.code" or "code"
         let full_cmd = format!("{} \"{}\"", cmd, path);
