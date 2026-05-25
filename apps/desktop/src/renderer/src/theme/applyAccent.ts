@@ -5,12 +5,14 @@ export const DEFAULT_ACCENT_HEX = '#7c4dff'
 
 const HEX = /^#[0-9A-Fa-f]{6}$/
 
-/** Read `appearance` from the app store and apply `--accent` / `--accent-dim` (or clear to defaults). */
+/** Read `appearance` from the app store and apply `--accent` / `--accent-dim` and `data-theme` attribute. */
 export async function syncAppearanceFromStore(): Promise<void> {
   const res = await window.dh.storeGet({ key: 'appearance' })
   const bag = res as { ok?: boolean; data?: unknown }
   if (!bag.ok) return
-  applyAppearanceAccent(parseAppearance(bag.data).accent)
+  const appearance = parseAppearance(bag.data)
+  applyAppearanceAccent(appearance.accent)
+  applyTheme(appearance.theme)
 }
 
 /** Apply or clear `--accent` / `--accent-dim` on the document root (falls back to global.css when cleared). */
@@ -26,4 +28,13 @@ export function applyAppearanceAccent(hex: string | undefined): void {
   const b = Number.parseInt(hex.slice(5, 7), 16)
   root.style.setProperty('--accent', hex)
   root.style.setProperty('--accent-dim', `rgba(${r},${g},${b},0.35)`)
+}
+
+/** Set or remove `data-theme` on `<html>` to switch between dark (default) and light tokens. */
+export function applyTheme(theme: 'dark' | 'light' | undefined): void {
+  if (theme === 'light') {
+    document.documentElement.dataset['theme'] = 'light'
+  } else {
+    delete document.documentElement.dataset['theme']
+  }
 }

@@ -22,6 +22,24 @@
   --top-height: 48px;
 }
 
+/* Light theme overrides — applied via document.documentElement.dataset.theme = 'light' */
+[data-theme="light"] {
+  --bg-app: #f0f2f5;
+  --bg-panel: #ffffff;
+  --bg-widget: #ffffff;
+  --bg-input: #e8eaed;
+  --border: #c4c7cc;
+  --text: #0d0d0f;
+  --text-muted: #52576b;
+  --accent: #5b21b6;
+  --accent-dim: rgba(91, 33, 182, 0.14);
+  --orange: #b45309;
+  --blue: #1d4ed8;
+  --green: #15803d;
+  --red: #dc2626;
+  --yellow: #92400e;
+}
+
 * {
   box-sizing: border-box;
 }

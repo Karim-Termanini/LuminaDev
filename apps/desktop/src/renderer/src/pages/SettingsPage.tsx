@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom'
 import type { ConnectedAccount, SshBookmark } from '@linux-dev-home/shared'
 import { parseAppearance, parseSshBookmarks } from '@linux-dev-home/shared'
 
-import { applyAppearanceAccent, DEFAULT_ACCENT_HEX } from '../theme/applyAccent'
+import { applyAppearanceAccent, applyTheme, DEFAULT_ACCENT_HEX } from '../theme/applyAccent'
 import { assertSettingsOk } from './settingsContract'
 import './SettingsPage.css'
 
@@ -335,6 +335,7 @@ export function SettingsPage(): ReactElement {
   const [accentDraft, setAccentDraft] = useState(DEFAULT_ACCENT_HEX)
   const [accentBusy, setAccentBusy] = useState(false)
   const [accentMsg, setAccentMsg] = useState<string | null>(null)
+  const [themeMode, setThemeMode] = useState<'dark' | 'light'>('dark')
 
   const [hostsPreview, setHostsPreview] = useState<string | null>(null)
   const [hostsErr, setHostsErr] = useState<string | null>(null)
@@ -398,7 +399,7 @@ export function SettingsPage(): ReactElement {
           window.dh.hostExec({ command: 'settings_process_env' }),
           window.dh.storeGet({ key: 'general_settings' }),
           window.dh.storeGet({ key: 'update_settings' }),
-          window.dh.storeGet({ key: 'projects_home_dir' } as any),
+          window.dh.storeGet({ key: 'projects_home_dir' }),
         ])
         if (bm.ok) {
           setBookmarks(parseSshBookmarks(bm.data))
@@ -407,8 +408,9 @@ export function SettingsPage(): ReactElement {
           setLoadError(bm.error ?? 'Could not read ssh_bookmarks.')
         }
         if (ap.ok) {
-          const hex = parseAppearance(ap.data).accent
-          setAccentDraft(hex ?? DEFAULT_ACCENT_HEX)
+          const parsed = parseAppearance(ap.data)
+          setAccentDraft(parsed.accent ?? DEFAULT_ACCENT_HEX)
+          setThemeMode(parsed.theme ?? 'dark')
         } else {
           setAccentDraft(DEFAULT_ACCENT_HEX)
         }
@@ -438,8 +440,9 @@ export function SettingsPage(): ReactElement {
         } else {
           setUpdateSettings({ releaseChannel: 'stable', checkOnStartup: true })
         }
-        if ((phd as any).ok && typeof (phd as any).data === 'string' && (phd as any).data.trim()) {
-          setProjectsHomeDir((phd as any).data.trim())
+        const phdResult = phd as { ok: boolean; data?: unknown }
+        if (phdResult.ok && typeof phdResult.data === 'string' && phdResult.data.trim()) {
+          setProjectsHomeDir(phdResult.data.trim())
         }
       } catch (e) {
         setBookmarks([])
@@ -622,13 +625,14 @@ export function SettingsPage(): ReactElement {
     try {
       const res = await window.dh.storeSet({
         key: 'appearance',
-        data: { accent: accentDraft },
+        data: { accent: accentDraft, theme: themeMode },
       })
       if (!res.ok) {
         setAccentMsg(res.error ?? 'Could not save appearance.')
         return
       }
       applyAppearanceAccent(accentDraft)
+      applyTheme(themeMode)
       setAccentMsg('Accent saved.')
     } catch (e) {
       setAccentMsg(e instanceof Error ? e.message : 'Save failed.')
@@ -641,13 +645,14 @@ export function SettingsPage(): ReactElement {
     setAccentBusy(true)
     setAccentMsg(null)
     try {
-      const res = await window.dh.storeSet({ key: 'appearance', data: {} })
+      const res = await window.dh.storeSet({ key: 'appearance', data: { theme: themeMode } })
       if (!res.ok) {
         setAccentMsg(res.error ?? 'Could not reset appearance.')
         return
       }
       setAccentDraft(DEFAULT_ACCENT_HEX)
       applyAppearanceAccent(undefined)
+      applyTheme(themeMode)
       setAccentMsg('Restored default accent.')
     } catch (e) {
       setAccentMsg(e instanceof Error ? e.message : 'Reset failed.')
@@ -754,6 +759,33 @@ export function SettingsPage(): ReactElement {
 
             {navId === 'personalization' ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+                {/* Theme toggle */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '14px 0', borderBottom: '1px solid var(--border)' }}>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>Color theme</div>
+                    <p className="hp-muted" style={{ margin: 0, maxWidth: 360 }}>Choose between a dark or light interface.</p>
+                  </div>
+                  <div style={{ display: 'flex', gap: 10 }}>
+                    {(['dark', 'light'] as const).map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => { setThemeMode(t); applyTheme(t) }}
+                        style={{
+                          padding: '8px 20px', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: 13,
+                          border: themeMode === t ? '2px solid var(--accent)' : '1px solid var(--border)',
+                          background: themeMode === t ? 'var(--accent-dim)' : 'var(--bg-input)',
+                          color: themeMode === t ? 'var(--accent)' : 'var(--text)',
+                          transition: 'all 0.15s ease',
+                        }}
+                      >
+                        <span className={`codicon codicon-${t === 'dark' ? 'moon' : 'sun'}`} style={{ marginRight: 6 }} aria-hidden />
+                        {t === 'dark' ? 'Dark' : 'Light'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 <div
                   style={{
                     display: 'flex',
@@ -1259,7 +1291,7 @@ export function SettingsPage(): ReactElement {
                       onClick={() => {
                         setProjectsHomeDirBusy(true)
                         setProjectsHomeDirMsg(null)
-                        void window.dh.storeSet({ key: 'projects_home_dir', data: projectsHomeDir.trim() } as any)
+                        void window.dh.storeSet({ key: 'projects_home_dir', data: projectsHomeDir.trim() })
                           .then(() => { setProjectsHomeDirMsg('Saved.') })
                           .catch((e: unknown) => { setProjectsHomeDirMsg(e instanceof Error ? e.message : 'Save failed.') })
                           .finally(() => {

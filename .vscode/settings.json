@@ -1,0 +1,19 @@
+{
+  "files.watcherExclude": {
+    "**/flatpak-build-tauri/**": true,
+    "**/flatpak-build-dir/**": true,
+    "**/.flatpak-builder/**": true,
+    "**/apps/desktop/src-tauri/target/**": true
+  },
+  "files.exclude": {
+    "**/flatpak-build-tauri": true,
+    "**/flatpak-build-dir": true,
+    "**/.flatpak-builder": true
+  },
+  "search.exclude": {
+    "**/flatpak-build-tauri/**": true,
+    "**/flatpak-build-dir/**": true,
+    "**/.flatpak-builder/**": true,
+    "**/apps/desktop/src-tauri/target/**": true
+  }
+}

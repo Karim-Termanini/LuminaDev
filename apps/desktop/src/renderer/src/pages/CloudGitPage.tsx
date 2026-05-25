@@ -332,10 +332,10 @@ export function CloudGitPage(): ReactElement {
         <div
           style={{
             padding: '12px 16px',
-            background: 'rgba(255,82,82,0.1)',
-            border: '1px solid rgba(255,82,82,0.3)',
+            background: 'color-mix(in srgb, var(--red) 10%, transparent)',
+            border: '1px solid color-mix(in srgb, var(--red) 30%, transparent)',
             borderRadius: 8,
-            color: '#ff8a80',
+            color: 'var(--red)',
             marginBottom: 20,
             fontSize: 13,
           }}
@@ -349,11 +349,12 @@ export function CloudGitPage(): ReactElement {
         aria-label="Git host"
         style={{
           display: 'flex',
-          borderRadius: 14,
-          overflow: 'hidden',
+          gap: 8,
+          padding: 6,
+          borderRadius: 16,
+          marginBottom: 24,
+          background: 'var(--bg-widget)',
           border: '1px solid var(--border)',
-          marginBottom: 20,
-          background: 'var(--bg-panel)',
         }}
       >
         {(['github', 'gitlab'] as const).map((p) => {
@@ -375,24 +376,32 @@ export function CloudGitPage(): ReactElement {
               }}
               style={{
                 flex: 1,
-                padding: '16px 18px',
-                border: 'none',
+                minHeight: 52,
+                padding: '10px 18px',
+                borderRadius: 11,
+                outline: 'none',
                 cursor: deviceFlow !== null && p !== deviceFlow.provider ? 'not-allowed' : 'pointer',
-                opacity: deviceFlow !== null && p !== deviceFlow.provider ? 0.45 : 1,
+                opacity: deviceFlow !== null && p !== deviceFlow.provider ? 0.4 : 1,
                 fontSize: 15,
                 fontWeight: 700,
+                fontFamily: 'var(--font-ui)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 gap: 10,
-                background: active ? t.surfaceDeep : 'transparent',
-                color: active ? t.accent : 'var(--text-muted)',
-                boxShadow: active ? `inset 0 -3px 0 ${t.accent}` : undefined,
-                transition: 'background 0.15s ease, color 0.15s ease',
+                border: active
+                  ? `1px solid color-mix(in srgb, ${t.accent} 45%, var(--border))`
+                  : '1px solid transparent',
+                background: active
+                  ? `color-mix(in srgb, ${t.accent} 14%, var(--bg-panel))`
+                  : 'transparent',
+                color: active ? t.accent : 'var(--text)',
+                boxShadow: active ? `0 2px 12px color-mix(in srgb, ${t.accent} 20%, transparent)` : 'none',
+                transition: 'all 0.18s ease',
               }}
             >
-              {m.tabEmoji ? <span aria-hidden>{m.tabEmoji}</span> : null}
-              <span className={`codicon codicon-${m.icon}`} style={{ fontSize: 20, opacity: active ? 1 : 0.75 }} aria-hidden />
+              <span aria-hidden style={{ fontSize: 18 }}>{m.tabEmoji}</span>
+              <span className={`codicon codicon-${m.icon}`} style={{ fontSize: 19 }} aria-hidden />
               <span>{m.label}</span>
             </button>
           )
@@ -442,7 +451,7 @@ export function CloudGitPage(): ReactElement {
               <button
                 type="button"
                 onClick={() => {
-                  void navigator.clipboard.writeText(deviceFlow.user_code).catch(() => {})
+                  void navigator.clipboard.writeText(deviceFlow.user_code).catch(() => { })
                   void window.dh.openExternal(deviceFlow.verification_uri).catch(() => {
                     setError(
                       `Could not open the browser automatically. Open ${deviceFlow.verification_uri} manually and paste the code above.`,
@@ -510,219 +519,272 @@ export function CloudGitPage(): ReactElement {
                 Account & security
               </div>
               <section
-            aria-labelledby={`cloud-git-hero-${activeTab}`}
-            style={{
-              borderRadius: 18,
-              padding: '28px 26px',
-              marginBottom: 0,
-              border: `1px solid var(--cg-accent-muted)`,
-              background: `linear-gradient(145deg, var(--cg-surface) 0%, var(--bg-widget) 50%, var(--cg-surface-deep) 100%)`,
-              boxShadow: '0 18px 48px rgba(0,0,0,0.22)',
-            }}
-          >
-            {account ? (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 22, alignItems: 'center' }}>
-                {account.avatar_url ? (
-                  <img
-                    src={account.avatar_url}
-                    alt=""
-                    style={{
-                      width: 80,
-                      height: 80,
-                      borderRadius: '50%',
-                      objectFit: 'cover',
-                      border: `3px solid var(--cg-accent-muted)`,
-                      boxShadow: `0 0 0 4px var(--cg-surface-deep)`,
-                    }}
-                  />
-                ) : (
-                  <span
-                    className="codicon codicon-account"
-                    style={{ fontSize: 72, color: 'var(--cg-accent)', opacity: 0.5 }}
-                    aria-hidden
-                  />
-                )}
-                <div style={{ flex: '1 1 220px', minWidth: 0 }}>
-                  <h2 id={`cloud-git-hero-${activeTab}`} style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>
-                    {account.username}
-                  </h2>
-                  <p style={{ margin: '10px 0 0', fontSize: 14, color: 'var(--text-muted)', lineHeight: 1.5 }}>
-                    <span
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 6,
-                        padding: '4px 12px',
-                        borderRadius: 999,
-                        background: 'var(--cg-surface-deep)',
-                        border: `1px solid var(--cg-accent-muted)`,
-                        color: 'var(--cg-accent)',
-                        fontWeight: 650,
-                        fontSize: 12,
-                        letterSpacing: '0.03em',
-                      }}
-                    >
-                      <span
+                aria-labelledby={`cloud-git-hero-${activeTab}`}
+                style={{
+                  borderRadius: 18,
+                  padding: '28px 26px',
+                  marginBottom: 0,
+                  border: `1px solid var(--cg-accent-muted)`,
+                  background: `linear-gradient(145deg, var(--cg-surface) 0%, var(--bg-widget) 50%, var(--cg-surface-deep) 100%)`,
+                  boxShadow: '0 18px 48px rgba(0,0,0,0.22)',
+                }}
+              >
+                {account ? (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 22, alignItems: 'center' }}>
+                    {account.avatar_url ? (
+                      <img
+                        src={account.avatar_url}
+                        alt=""
                         style={{
-                          width: 7,
-                          height: 7,
+                          width: 80,
+                          height: 80,
                           borderRadius: '50%',
-                          background: 'var(--cg-accent)',
-                          boxShadow: '0 0 8px var(--cg-accent)',
+                          objectFit: 'cover',
+                          border: `3px solid var(--cg-accent-muted)`,
+                          boxShadow: `0 0 0 4px var(--cg-surface-deep)`,
                         }}
+                      />
+                    ) : (
+                      <span
+                        className="codicon codicon-account"
+                        style={{ fontSize: 72, color: 'var(--cg-accent)', opacity: 0.5 }}
                         aria-hidden
                       />
-                      Connected · HTTPS ready
-                    </span>
-                    <span className="hp-muted" style={{ display: 'block', marginTop: 10, fontSize: 12 }}>
-                      Linked {account.connected_at.slice(0, 10)} · token stored locally for Git over HTTPS
-                    </span>
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => void disconnect(activeTab)}
-                  className="hp-btn"
-                  style={{
-                    marginLeft: 'auto',
-                    borderColor: 'var(--cg-accent-muted)',
-                    color: 'var(--text)',
-                  }}
-                >
-                  Disconnect {meta.label}
-                </button>
-              </div>
-            ) : (
-              <div>
-                <h2 id={`cloud-git-hero-${activeTab}`} style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>
-                  Connect {meta.label}
-                </h2>
-                {activeTab === 'gitlab' ? (
-                  <p className="hp-muted" style={{ margin: '12px 0 20px', fontSize: 14, lineHeight: 1.55, maxWidth: 520 }}>
-                    Paste a <strong>personal access token</strong> from GitLab (Preferences → Access Tokens, or the same
-                    path on your self-managed instance). Include the <strong>api</strong> scope so merge requests and API
-                    actions work. Credentials stay on this machine and power HTTPS remotes on the Git VCS page.
-                  </p>
-                ) : (
-                  <p className="hp-muted" style={{ margin: '12px 0 20px', fontSize: 14, lineHeight: 1.55, maxWidth: 520 }}>
-                    Sign in with device flow (browser) or paste a personal access token. Credentials stay on this machine
-                    and power HTTPS remotes on the Git VCS page.
-                  </p>
-                )}
-                {!showPatForm ? (
-                  <>
-                    <button
-                      type="button"
-                      disabled={connecting}
-                      onClick={() => void startDeviceFlow('github')}
-                      style={{
-                        padding: '12px 22px',
-                        borderRadius: 10,
-                        border: 'none',
-                        background: 'var(--cg-accent)',
-                        color: '#0d1117',
-                        fontWeight: 700,
-                        fontSize: 14,
-                        cursor: connecting ? 'wait' : 'pointer',
-                        display: 'inline-flex',
-                      }}
-                    >
-                      Connect {meta.label}
-                    </button>
-                    <button
-                      type="button"
-                      style={{
-                        display: 'block',
-                        marginTop: 14,
-                        background: 'none',
-                        border: 'none',
-                        color: 'var(--text-muted)',
-                        cursor: 'pointer',
-                        fontSize: 13,
-                        padding: 0,
-                        textDecoration: 'underline',
-                      }}
-                      onClick={() => {
-                        setPatProvider('github')
-                        setPatError(null)
-                      }}
-                    >
-                      Use a personal access token instead
-                    </button>
-                  </>
-                ) : (
-                  <div style={{ maxWidth: 420 }}>
-                    <input
-                      type="password"
-                      placeholder="Paste personal access token"
-                      value={patToken}
-                      onChange={(e) => setPatToken(e.target.value)}
-                      className="hp-input"
-                      style={{ width: '100%', marginBottom: 4, boxSizing: 'border-box' }}
-                    />
-                    <p className="hp-muted" style={{ fontSize: 11, margin: '0 0 10px' }}>
-                      Required scopes: {PROVIDER_META[activeTab].scopes.join(', ')}
-                    </p>
-                    {activeTab === 'gitlab' && (
-                      <div
-                        style={{
-                          fontSize: 11,
-                          padding: '6px 10px',
-                          background: 'rgba(255,160,0,0.1)',
-                          border: '1px solid rgba(255,160,0,0.2)',
-                          borderRadius: 6,
-                          color: '#ffb74d',
-                          marginBottom: 10,
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 6,
-                        }}
-                      >
-                        <span className="codicon codicon-info" style={{ fontSize: 13 }} />
-                        <span>Ensure the 'api' scope is enabled to create and manage Merge Requests.</span>
-                      </div>
                     )}
-                    {patError ? <p style={{ color: '#ff8a80', fontSize: 12, margin: '0 0 10px' }}>{patError}</p> : null}
-                    <div style={{ display: 'flex', gap: 10 }}>
-                      <button
-                        type="button"
-                        disabled={connecting || !patToken.trim()}
-                        onClick={() => void submitPat()}
-                        style={{
-                          padding: '10px 18px',
-                          borderRadius: 10,
-                          border: 'none',
-                          background: 'var(--cg-accent)',
-                          color: activeTab === 'github' ? '#0d1117' : '#1a0b05',
-                          fontWeight: 650,
-                          fontSize: 13,
-                          cursor: connecting ? 'wait' : 'pointer',
-                        }}
-                      >
-                        Verify & save
-                      </button>
-                      {patProvider !== null ? (
-                        <button
-                          type="button"
-                          className="hp-btn"
-                          onClick={() => {
-                            setPatProvider(null)
-                            setPatToken('')
-                            setPatError(null)
+                    <div style={{ flex: '1 1 220px', minWidth: 0 }}>
+                      <h2 id={`cloud-git-hero-${activeTab}`} style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>
+                        {account.username}
+                      </h2>
+                      <p style={{ margin: '10px 0 0', fontSize: 14, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                        <span
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            padding: '4px 12px',
+                            borderRadius: 999,
+                            background: 'var(--cg-surface-deep)',
+                            border: `1px solid var(--cg-accent-muted)`,
+                            color: 'var(--cg-accent)',
+                            fontWeight: 650,
+                            fontSize: 12,
+                            letterSpacing: '0.03em',
                           }}
                         >
-                          Cancel
-                        </button>
-                      ) : null}
+                          <span
+                            style={{
+                              width: 7,
+                              height: 7,
+                              borderRadius: '50%',
+                              background: 'var(--cg-accent)',
+                              boxShadow: '0 0 8px var(--cg-accent)',
+                            }}
+                            aria-hidden
+                          />
+                          Connected · HTTPS ready
+                        </span>
+                        <span className="hp-muted" style={{ display: 'block', marginTop: 10, fontSize: 12 }}>
+                          Linked {account.connected_at.slice(0, 10)} · token stored locally for Git over HTTPS
+                        </span>
+                      </p>
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => void disconnect(activeTab)}
+                      className="hp-btn"
+                      style={{
+                        marginLeft: 'auto',
+                        borderColor: 'var(--cg-accent-muted)',
+                        color: 'var(--text)',
+                      }}
+                    >
+                      Disconnect {meta.label}
+                    </button>
+                  </div>
+                ) : (
+                  <div>
+                    <h2 id={`cloud-git-hero-${activeTab}`} style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>
+                      Connect {meta.label}
+                    </h2>
+                    {activeTab === 'gitlab' ? (
+                      <p className="hp-muted" style={{ margin: '12px 0 20px', fontSize: 14, lineHeight: 1.55, maxWidth: 520 }}>
+                        Paste a <strong>personal access token</strong> from GitLab (Preferences → Access Tokens, or the same
+                        path on your self-managed instance). Include the <strong>api</strong> scope so merge requests and API
+                        actions work. Credentials stay on this machine and power HTTPS remotes on the Git VCS page.
+                      </p>
+                    ) : (
+                      <p className="hp-muted" style={{ margin: '12px 0 20px', fontSize: 14, lineHeight: 1.55, maxWidth: 520 }}>
+                        Sign in with device flow (browser) or paste a personal access token. Credentials stay on this machine
+                        and power HTTPS remotes on the Git VCS page.
+                      </p>
+                    )}
+                    {!showPatForm ? (
+                      activeTab === 'gitlab' ? (
+                        // GitLab uses PAT only — show form directly
+                        <div style={{ maxWidth: 420 }}>
+                          <input
+                            type="password"
+                            placeholder="Paste personal access token"
+                            value={patToken}
+                            onChange={(e) => setPatToken(e.target.value)}
+                            className="hp-input"
+                            style={{ width: '100%', marginBottom: 4, boxSizing: 'border-box' }}
+                          />
+                          <p className="hp-muted" style={{ fontSize: 11, margin: '0 0 10px' }}>
+                            Required scopes: {PROVIDER_META['gitlab'].scopes.join(', ')}
+                          </p>
+                          <div
+                            style={{
+                              fontSize: 11,
+                              padding: '6px 10px',
+                              background: 'color-mix(in srgb, var(--orange) 10%, transparent)',
+                              border: '1px solid color-mix(in srgb, var(--orange) 20%, transparent)',
+                              borderRadius: 6,
+                              color: 'var(--orange)',
+                              marginBottom: 10,
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 6,
+                            }}
+                          >
+                            <span className="codicon codicon-info" style={{ fontSize: 13 }} />
+                            <span>Ensure the 'api' scope is enabled to create and manage Merge Requests.</span>
+                          </div>
+                          <div style={{ display: 'flex', gap: 10 }}>
+                            <button
+                              type="button"
+                              disabled={connecting || !patToken.trim()}
+                              onClick={() => void submitPat()}
+                              style={{
+                                padding: '10px 18px',
+                                borderRadius: 10,
+                                border: 'none',
+                                background: 'var(--cg-accent)',
+                                color: '#1a0b05',
+                                fontWeight: 650,
+                                fontSize: 13,
+                                cursor: connecting ? 'wait' : 'pointer',
+                              }}
+                            >
+                              {connecting ? 'Verifying…' : 'Verify & save'}
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            disabled={connecting}
+                            onClick={() => void startDeviceFlow(activeTab)}
+                            style={{
+                              padding: '12px 22px',
+                              borderRadius: 10,
+                              border: 'none',
+                              background: 'var(--cg-accent)',
+                              color: '#0d1117',
+                              fontWeight: 700,
+                              fontSize: 14,
+                              cursor: connecting ? 'wait' : 'pointer',
+                              display: 'inline-flex',
+                            }}
+                          >
+                            {connecting ? 'Connecting…' : `Connect ${meta.label}`}
+                          </button>
+                          <button
+                            type="button"
+                            style={{
+                              display: 'block',
+                              marginTop: 14,
+                              background: 'none',
+                              border: 'none',
+                              color: 'var(--text-muted)',
+                              cursor: 'pointer',
+                              fontSize: 13,
+                              padding: 0,
+                              textDecoration: 'underline',
+                            }}
+                            onClick={() => {
+                              setPatProvider(activeTab)
+                              setPatError(null)
+                            }}
+                          >
+                            Use a personal access token instead
+                          </button>
+                        </>
+                      )
+                    ) : (
+                      <div style={{ maxWidth: 420 }}>
+                        <input
+                          type="password"
+                          placeholder="Paste personal access token"
+                          value={patToken}
+                          onChange={(e) => setPatToken(e.target.value)}
+                          className="hp-input"
+                          style={{ width: '100%', marginBottom: 4, boxSizing: 'border-box' }}
+                        />
+                        <p className="hp-muted" style={{ fontSize: 11, margin: '0 0 10px' }}>
+                          Required scopes: {PROVIDER_META[activeTab].scopes.join(', ')}
+                        </p>
+                        {activeTab === 'gitlab' && (
+                          <div
+                            style={{
+                              fontSize: 11,
+                              padding: '6px 10px',
+                              background: 'rgba(255,160,0,0.1)',
+                              border: '1px solid rgba(255,160,0,0.2)',
+                              borderRadius: 6,
+                              color: '#ffb74d',
+                              marginBottom: 10,
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 6,
+                            }}
+                          >
+                            <span className="codicon codicon-info" style={{ fontSize: 13 }} />
+                            <span>Ensure the 'api' scope is enabled to create and manage Merge Requests.</span>
+                          </div>
+                        )}
+                        {patError ? <p style={{ color: 'var(--red)', fontSize: 12, margin: '0 0 10px' }}>{patError}</p> : null}
+                        <div style={{ display: 'flex', gap: 10 }}>
+                          <button
+                            type="button"
+                            disabled={connecting || !patToken.trim()}
+                            onClick={() => void submitPat()}
+                            style={{
+                              padding: '10px 18px',
+                              borderRadius: 10,
+                              border: 'none',
+                              background: 'var(--cg-accent)',
+                              color: activeTab === 'github' ? '#0d1117' : '#1a0b05',
+                              fontWeight: 650,
+                              fontSize: 13,
+                              cursor: connecting ? 'wait' : 'pointer',
+                            }}
+                          >
+                            Verify & save
+                          </button>
+                          {patProvider !== null ? (
+                            <button
+                              type="button"
+                              className="hp-btn"
+                              onClick={() => {
+                                setPatProvider(null)
+                                setPatToken('')
+                                setPatError(null)
+                              }}
+                            >
+                              Cancel
+                            </button>
+                          ) : null}
+                        </div>
+                      </div>
+                    )}
+                    <p className="hp-muted" style={{ margin: '18px 0 0', fontSize: 12, lineHeight: 1.5 }}>
+                      Scopes: {meta.scopes.join(', ')}
+                    </p>
                   </div>
                 )}
-                <p className="hp-muted" style={{ margin: '18px 0 0', fontSize: 12, lineHeight: 1.5 }}>
-                  Scopes: {meta.scopes.join(', ')}
-                </p>
-              </div>
-            )}
-          </section>
+              </section>
             </div>
             <CloudGitActivityPanel provider={activeTab} label={meta.label} />
           </div>
