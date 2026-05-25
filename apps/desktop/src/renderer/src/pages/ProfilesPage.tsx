@@ -52,6 +52,8 @@ export function ProfilesPage(): ReactElement {
   const [newProfileName, setNewProfileName] = useState('')
   const [newProfileTemplate, setNewProfileTemplate] = useState<ComposeProfile>('web-dev')
   const [activeTab, setActiveTab] = useState<'builder' | 'automation' | 'backup'>('builder')
+  const [activeProfileTemplate, setActiveProfileTemplate] = useState<string | null>(null)
+  const [projectPaths, setProjectPaths] = useState<Record<string, string | null>>({})
 
   async function load(): Promise<void> {
     try {
@@ -59,6 +61,7 @@ export function ProfilesPage(): ReactElement {
       if (res.ok && res.data) {
         const parsed = CustomProfilesStoreSchema.parse(res.data)
         setProfiles(parsed)
+        void loadExtras(parsed)
       } else if (!res.ok) {
         setStatus(res.error || 'Failed to load profiles.')
       }
@@ -73,12 +76,48 @@ export function ProfilesPage(): ReactElement {
 
   useEffect(() => { void load() }, [])
 
+  async function loadExtras(loadedProfiles: CustomProfileEntry[]): Promise<void> {
+    // Load active profile template
+    try {
+      const ap = (await window.dh.storeGet({ key: 'active_profile' })) as { ok: boolean; data?: unknown }
+      if (ap.ok && typeof ap.data === 'string') setActiveProfileTemplate(ap.data)
+    } catch { /* ignore */ }
+
+    // Load linked project paths per profile
+    const paths: Record<string, string | null> = {}
+    await Promise.all(
+      loadedProfiles.map(async (p) => {
+        try {
+          const res = (await window.dh.storeGet({ key: `project_dir_${p.baseTemplate}` } as any)) as { ok: boolean; data?: unknown }
+          paths[p.baseTemplate] = (res.ok && typeof res.data === 'string') ? res.data : null
+        } catch {
+          paths[p.baseTemplate] = null
+        }
+      })
+    )
+    setProjectPaths(paths)
+  }
+
   async function save(next: CustomProfileEntry[], msg: string): Promise<void> {
     try {
       const parsed = CustomProfilesStoreSchema.parse(next)
       const res = (await window.dh.storeSet({ key: 'custom_profiles', data: parsed })) as { ok: boolean; error?: string }
-      if (res.ok) { setProfiles(parsed); setStatus(msg) }
+      if (res.ok) { setProfiles(parsed); setStatus(msg); void loadExtras(parsed) }
       else setStatus(res.error || 'Failed to save profiles.')
+    } catch (e) {
+      setStatus(e instanceof Error ? e.message : String(e))
+    }
+  }
+
+  async function setAsActive(template: ComposeProfile): Promise<void> {
+    try {
+      const res = (await window.dh.storeSet({ key: 'active_profile', data: template })) as { ok: boolean; error?: string }
+      if (res.ok) {
+        setActiveProfileTemplate(template)
+        setStatus(`"${template}" set as active profile.`)
+      } else {
+        setStatus(res.error || 'Failed to set active profile.')
+      }
     } catch (e) {
       setStatus(e instanceof Error ? e.message : String(e))
     }
@@ -361,11 +400,24 @@ export function ProfilesPage(): ReactElement {
                       <span className={`codicon codicon-${icon}`} style={{ fontSize: 24, color: '#fff' }} />
                     </div>
                     <div className="row-title-area">
-                      <h3 className="row-title">{p.name}</h3>
+                      <h3 className="row-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        {p.name}
+                        {activeProfileTemplate === p.baseTemplate && (
+                          <span style={{ fontSize: 11, fontWeight: 700, background: 'color-mix(in srgb, var(--green) 20%, transparent)', color: 'var(--green)', border: '1px solid color-mix(in srgb, var(--green) 40%, transparent)', borderRadius: 20, padding: '2px 8px', letterSpacing: '0.04em' }}>ACTIVE</span>
+                        )}
+                      </h3>
                       <p className="row-subtitle">
                         <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: 'var(--green)' }} />
                         {p.baseTemplate}
                       </p>
+                      {projectPaths[p.baseTemplate] ? (
+                        <p className="row-subtitle mono" style={{ fontSize: 11, marginTop: 2, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 260 }}>
+                          <span className="codicon codicon-folder" style={{ marginRight: 4 }} />
+                          {projectPaths[p.baseTemplate]}
+                        </p>
+                      ) : (
+                        <p className="row-subtitle" style={{ fontSize: 11, marginTop: 2, color: 'var(--text-muted)', fontStyle: 'italic' }}>No project linked</p>
+                      )}
                     </div>
                   </div>
 
@@ -375,6 +427,11 @@ export function ProfilesPage(): ReactElement {
                   </div>
 
                   <div className="row-actions">
+                    {activeProfileTemplate !== p.baseTemplate && (
+                      <button type="button" className="row-btn" title="Set as active profile in Dashboard" onClick={() => void setAsActive(p.baseTemplate)}>
+                        <span className="codicon codicon-check" style={{ marginRight: 4 }} />Set Active
+                      </button>
+                    )}
                     <button type="button" className="row-btn" onClick={() => openEditModal(i)}>
                       Edit
                     </button>
@@ -477,6 +534,19 @@ export function ProfilesPage(): ReactElement {
         <div className="fluent-modal-overlay">
           <div className="fluent-modal-content wide">
             <h2 style={{ margin: '0 0 24px 0', fontSize: 24, fontWeight: 700 }}>Edit Environment</h2>
+
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 8, color: 'var(--text)' }}>SSH Key</div>
+              <input
+                type="text"
+                value={editingData.sshKeyId ?? ''}
+                onChange={(e) => setEditingData({ ...editingData, sshKeyId: e.target.value || undefined })}
+                placeholder="e.g. host  (leave empty to use system default)"
+                className="fluent-input"
+                style={{ fontFamily: 'monospace', width: '100%' }}
+              />
+              <p style={{ margin: '6px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>Enter <code style={{ background: 'rgba(255,255,255,0.07)', padding: '1px 5px', borderRadius: 4 }}>host</code> to use your machine&apos;s default SSH key, or a specific key ID.</p>
+            </div>
 
             <div style={{ marginBottom: 24 }}>
               <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 12, color: 'var(--text)' }}>Environment Variables</div>
