@@ -426,6 +426,8 @@ Missing: real dep graph (`removableDeps` always empty), Ruby slow on Fedora.
 - [ ] **Authentication:** Implementation of local user accounts with secure credential storage.
 - [x] **Switching Engine:** A context-switching engine that safely tears down one profile's state and spins up another's instantly from the UI (`profileSwitch` IPC).
 - [x] **Workspace Context Binding:** Fluent Design UI modal to create/link projects and dynamically bind `${PROJECT_DIR}` to containers on restart.
+- [x] **Project Scaffolding Engine:** Advanced `npm`/`pip` dependency installer, dynamic `package.json`/`requirements.txt` generation, and real-time terminal UI progress streaming. Web-Dev and Data-Science are fully functional.
+- [ ] **Expanded Environments:** (Future Work) Add robust scaffolding templates and UI generation wizards for Mobile, Game Dev, Infra, AI/ML, etc.
 - [x] **IDE Integration:** Dynamic editor detection (Native & Flatpak) and `ipc_invoke` routing for launching VS Code, Cursor, Neovim directly into the active container workspace.
 
 ---

@@ -13,6 +13,7 @@ use tokio::process::Command;
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
+mod project_scaffold;
 mod utils;
 use utils::{
   app_file,
@@ -238,12 +239,46 @@ async fn runtime_bash_user_step(
 }
 
 
+fn get_profile_extra_env(app: &tauri::AppHandle, profile: &str) -> std::collections::HashMap<String, String> {
+    let mut env = std::collections::HashMap::new();
+    if let Ok(store_path) = crate::app_file(app, "store.json") {
+        let store = crate::read_json(&store_path);
+        
+        if let Some(py_ver) = store.get(format!("python_version_{}", profile)).and_then(|v| v.as_str()) {
+            if !py_ver.is_empty() {
+                let tag = if py_ver == "latest" { "latest".to_string() } else { format!("python-{}", py_ver) };
+                env.insert("PYTHON_IMAGE_TAG".to_string(), tag);
+            }
+        }
+        if let Some(pg_ver) = store.get(format!("postgres_version_{}", profile)).and_then(|v| v.as_str()) {
+            if !pg_ver.is_empty() {
+                let tag = if pg_ver == "latest" { "latest".to_string() } else { format!("{}-alpine", pg_ver) };
+                env.insert("POSTGRES_IMAGE_TAG".to_string(), tag);
+            }
+        }
+        if let Some(node_ver) = store.get(format!("node_version_{}", profile)).and_then(|v| v.as_str()) {
+            if !node_ver.is_empty() {
+                let tag = if node_ver == "latest" { "alpine".to_string() } else { format!("{}-alpine", node_ver) };
+                env.insert("NODE_IMAGE_TAG".to_string(), tag);
+            }
+        }
+        if let Some(proj_dir) = store.get(format!("project_dir_{}", profile)).and_then(|v| v.as_str()) {
+            if !proj_dir.is_empty() {
+                env.insert("PROJECT_DIR".to_string(), proj_dir.to_string());
+            }
+        }
+    }
+    env
+}
+
 /// `docker compose` in a fixed directory (avoids `bash -lc "cd … && …"`).
 /// When [`compose_profiles::compose_full_overlay_enabled`] is true, prepends `-f docker-compose.yml -f docker-compose.full.yml`.
 async fn exec_docker_compose_in_dir(
   compose_dir: &Path,
   compose_subargs: &[&str],
   limit: Duration,
+  project_name: Option<&str>,
+  extra_env: Option<std::collections::HashMap<String, String>>,
 ) -> Result<(String, String), String> {
   let mut compose_args: Vec<String> = vec!["compose".into(), "-f".into(), "docker-compose.yml".into()];
   if compose_profiles::compose_full_overlay_enabled(compose_dir) {
@@ -254,9 +289,19 @@ async fn exec_docker_compose_in_dir(
     compose_args.push((*a).to_string());
   }
   let fut = async {
-    let output = Command::new("docker")
-      .current_dir(compose_dir)
-      .args(&compose_args)
+    let mut cmd = Command::new("docker");
+    cmd.current_dir(compose_dir).args(&compose_args);
+    if let Some(pn) = project_name {
+      if !pn.trim().is_empty() {
+        cmd.env("COMPOSE_PROJECT_NAME", pn.trim());
+      }
+    }
+    if let Some(env_map) = extra_env {
+      for (k, v) in env_map {
+        cmd.env(k, v);
+      }
+    }
+    let output = cmd
       .output()
       .await
       .map_err(|e| format!("[EXEC_ERROR] {}", e))?;
@@ -1805,7 +1850,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       if !dir.is_dir() {
         json!({ "ok": false, "log": "", "error": format!("[DOCKER_COMPOSE_FAILED] missing compose directory: {} (set LUMINA_DEV_COMPOSE_ROOT or run from a checkout with docker/compose)", dir.display()) })
       } else {
-        match exec_docker_compose_in_dir(&dir, &["up", "-d"], CMD_TIMEOUT_LONG).await {
+        match exec_docker_compose_in_dir(&dir, &["up", "-d"], CMD_TIMEOUT_LONG, Some(profile), Some(get_profile_extra_env(&app, profile))).await {
           Ok((stdout, stderr)) => json!({ "ok": true, "log": format!("{}{}", stdout, stderr) }),
           Err(e) => json!({ "ok": false, "log": "", "error": format!("[DOCKER_COMPOSE_FAILED] {}", e.trim()) }),
         }
@@ -1817,7 +1862,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       if !dir.is_dir() {
         json!({ "ok": false, "log": "", "error": format!("[DOCKER_COMPOSE_FAILED] missing compose directory: {} (set LUMINA_DEV_COMPOSE_ROOT or run from a checkout with docker/compose)", dir.display()) })
       } else {
-        match exec_docker_compose_in_dir(&dir, &["logs", "--tail", "200"], CMD_TIMEOUT_DEFAULT).await {
+        match exec_docker_compose_in_dir(&dir, &["logs", "--tail", "200"], CMD_TIMEOUT_DEFAULT, Some(profile), Some(get_profile_extra_env(&app, profile))).await {
           Ok((stdout, stderr)) => json!({ "ok": true, "log": format!("{}{}", stdout, stderr) }),
           Err(e) => json!({ "ok": false, "log": "", "error": format!("[DOCKER_COMPOSE_FAILED] {}", e.trim()) }),
         }
@@ -1829,7 +1874,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       if !dir.is_dir() {
         json!({ "ok": false, "log": "", "error": format!("[DOCKER_COMPOSE_FAILED] missing compose directory: {} (set LUMINA_DEV_COMPOSE_ROOT or run from a checkout with docker/compose)", dir.display()) })
       } else {
-        match exec_docker_compose_in_dir(&dir, &["down"], CMD_TIMEOUT_LONG).await {
+        match exec_docker_compose_in_dir(&dir, &["down"], CMD_TIMEOUT_LONG, Some(profile), Some(get_profile_extra_env(&app, profile))).await {
           Ok((stdout, stderr)) => json!({ "ok": true, "log": format!("{}{}", stdout, stderr) }),
           Err(e) => json!({ "ok": false, "log": "", "error": format!("[DOCKER_COMPOSE_FAILED] {}", e.trim()) }),
         }
@@ -1849,7 +1894,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       if let Some(from) = from_profile {
         let from_dir = compose_profiles::compose_profile_workdir(&app, from);
         if from_dir.is_dir() {
-          match exec_docker_compose_in_dir(&from_dir, &["down"], CMD_TIMEOUT_LONG).await {
+          match exec_docker_compose_in_dir(&from_dir, &["down"], CMD_TIMEOUT_LONG, Some(from), Some(get_profile_extra_env(&app, from))).await {
             Ok((stdout, stderr)) => logs.push_str(&format!("Stopped old profile:\n{}{}\n", stdout, stderr)),
             Err(e) => logs.push_str(&format!("Warning: failed to stop old profile: {}\n", e.trim())),
           }
@@ -1865,7 +1910,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
         }));
       }
 
-      match exec_docker_compose_in_dir(&to_dir, &["up", "-d"], CMD_TIMEOUT_LONG).await {
+      match exec_docker_compose_in_dir(&to_dir, &["up", "-d"], CMD_TIMEOUT_LONG, Some(to_profile), Some(get_profile_extra_env(&app, to_profile))).await {
         Ok((stdout, stderr)) => {
           logs.push_str(&format!("Started new profile:\n{}{}\n", stdout, stderr));
           json!({ "ok": true, "log": logs })
@@ -2172,6 +2217,10 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       if path.is_empty() {
         json!({ "ok": false, "error": "[EDITOR_OPEN_FAILED] Missing path." })
       } else {
+        // Ensure the directory exists before opening the IDE.
+        // This prevents editors from falling back to the app's root directory if the user deleted the folder.
+        let _ = std::fs::create_dir_all(path);
+
         // e.g. cmd is "flatpak run com.visualstudio.code" or "code"
         let full_cmd = format!("{} \"{}\"", cmd, path);
         let _ = tokio::process::Command::new("sh")
@@ -2197,6 +2246,26 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
             Err(e) => json!({ "ok": false, "error": e.to_string() })
          }
       }
+    }
+    "dh:fs:exists" => {
+      let path_str = body.get("path").and_then(|v| v.as_str()).unwrap_or_default();
+      if path_str.is_empty() {
+         json!({ "ok": false, "exists": false })
+      } else {
+         let expanded = if path_str.starts_with("~/") {
+            let home = std::env::var("HOME").unwrap_or_else(|_| "/root".to_string());
+            path_str.replacen("~/", &format!("{}/", home), 1)
+         } else {
+            path_str.to_string()
+         };
+         json!({ "ok": true, "exists": std::path::Path::new(&expanded).exists() })
+      }
+    }
+    "dh:project:scaffold" => {
+       crate::project_scaffold::handle_project_scaffold(body).await
+    }
+    "dh:project:install_deps" => {
+       crate::project_scaffold::handle_project_install_deps(body, app.clone()).await
     }
     "dh:git:recent:list" => match app_file(&app, "git_recent.json") {
       Ok(path) => {
