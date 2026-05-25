@@ -319,6 +319,8 @@ export function SettingsPage(): ReactElement {
   const [generalSettings, setGeneralSettings] = useState<{ startupBehavior?: string; windowSize?: { width: number; height: number }; telemetry?: boolean }>({})
   const [generalMsg, setGeneralMsg] = useState<string | null>(null)
   const [generalBusy, setGeneralBusy] = useState(false)
+  const [wizardResetMsg, setWizardResetMsg] = useState<string | null>(null)
+  const [wizardResetBusy, setWizardResetBusy] = useState(false)
 
   // Update settings
   const [updateSettings, setUpdateSettings] = useState<{ releaseChannel: string; checkOnStartup: boolean; lastChecked?: number }>({ releaseChannel: 'stable', checkOnStartup: true })
@@ -1210,6 +1212,35 @@ export function SettingsPage(): ReactElement {
                     {generalBusy ? 'Saving…' : 'Save'}
                   </button>
                   {generalMsg ? <p style={{ margin: '8px 0 0', fontSize: 12, color: generalMsg === 'Saved.' ? 'var(--green)' : 'var(--red)' }}>{generalMsg}</p> : null}
+                </div>
+
+                {/* Danger Zone */}
+                <div style={{ paddingTop: 16, borderTop: '1px solid var(--border)', marginTop: 8 }}>
+                  <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 6, color: 'var(--red)' }}>Danger Zone</div>
+                  <p className="hp-muted" style={{ margin: '0 0 12px', fontSize: 13 }}>
+                    Reset the setup wizard so it runs again on next app launch. Useful if you changed your system configuration or want to reconfigure Git identity and profile preferences.
+                  </p>
+                  <button
+                    type="button"
+                    className="hp-btn"
+                    style={{ fontSize: 13, padding: '8px 16px', borderColor: 'var(--red)', color: 'var(--red)' }}
+                    disabled={wizardResetBusy}
+                    onClick={() => {
+                      setWizardResetBusy(true)
+                      setWizardResetMsg(null)
+                      void window.dh.storeSet({ key: 'readiness_wizard_complete', data: false }).then(() => {
+                        setWizardResetMsg('Setup wizard will run on next launch.')
+                      }).catch((e: unknown) => {
+                        setWizardResetMsg(e instanceof Error ? e.message : 'Failed to reset wizard.')
+                      }).finally(() => {
+                        setWizardResetBusy(false)
+                      })
+                    }}
+                  >
+                    <span className="codicon codicon-refresh" aria-hidden />
+                    {wizardResetBusy ? 'Resetting…' : 'Run Setup Wizard Again'}
+                  </button>
+                  {wizardResetMsg ? <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>{wizardResetMsg}</p> : null}
                 </div>
               </div>
             ) : null}

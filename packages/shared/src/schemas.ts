@@ -200,6 +200,7 @@ export const AppearanceStoreSchema = z.object({
     .string()
     .regex(/^#[0-9A-Fa-f]{6}$/, 'Expected #RRGGBB')
     .optional(),
+  theme: z.enum(['dark', 'light']).optional(),
 })
 
 /** Optional OAuth app client IDs for GitHub/GitLab device flow (public IDs; local store only). */
@@ -244,6 +245,8 @@ export const StoreKeySchema = z.enum([
   'general_settings',
   'update_settings',
   'profile_credentials',
+  'onboarding_profile',
+  'projects_home_dir',
 ])
 
 export const StoreGetRequestSchema = z.object({
@@ -299,6 +302,14 @@ export const StoreSetRequestSchema = z.discriminatedUnion('key', [
   z.object({
     key: z.literal('profile_credentials'),
     data: z.array(ProfileCredentialSchema).max(200),
+  }),
+  z.object({
+    key: z.literal('onboarding_profile'),
+    data: ComposeProfileSchema,
+  }),
+  z.object({
+    key: z.literal('projects_home_dir'),
+    data: z.string().min(1).max(4096),
   }),
 ])
 export const ComposeUpRequestSchema = z.object({
