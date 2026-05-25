@@ -84,8 +84,8 @@
   gap: 8px;
   padding: 10px 14px;
   border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--border);
+  background: var(--bg-input);
   color: var(--text-muted);
   font-size: 13px;
   font-weight: 500;
@@ -95,41 +95,32 @@
 }
 
 .elevated-tab:hover {
-  border-color: rgba(124, 77, 255, 0.45);
-  background: rgba(124, 77, 255, 0.1);
+  border-color: var(--accent);
+  background: var(--accent-dim);
   color: var(--text);
   transform: translateY(-1px);
 }
 
 .elevated-tab-active {
   border-color: var(--accent);
-  background: rgba(124, 77, 255, 0.2);
+  background: var(--accent-dim);
   color: var(--text);
-  box-shadow: 0 8px 24px rgba(124, 77, 255, 0.2);
+  box-shadow: 0 4px 12px var(--accent-dim);
 }
 
 /* Card Elevation */
 .elevated-card {
-  background: linear-gradient(
-    135deg,
-    rgba(255, 255, 255, 0.03) 0%,
-    rgba(255, 255, 255, 0.01) 100%
-  );
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow:
-    0 8px 32px rgba(0, 0, 0, 0.3),
-    inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(10px);
+  background: var(--bg-widget);
+  border: 1px solid var(--border);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
   border-radius: 12px;
   padding: 16px;
   transition: all 200ms ease-out;
 }
 
 .elevated-card:hover {
-  border-color: rgba(255, 255, 255, 0.12);
-  box-shadow:
-    0 12px 48px rgba(0, 0, 0, 0.4),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  border-color: var(--accent);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
   transform: translateY(-2px);
 }
 
@@ -137,26 +128,17 @@
 .elevated-metric-card {
   display: flex;
   flex-direction: column;
-  background: linear-gradient(
-    135deg,
-    rgba(255, 255, 255, 0.03) 0%,
-    rgba(255, 255, 255, 0.01) 100%
-  );
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow:
-    0 8px 32px rgba(0, 0, 0, 0.3),
-    inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(10px);
+  background: var(--bg-widget);
+  border: 1px solid var(--border);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
   border-radius: 12px;
   padding: 20px;
   transition: all 200ms ease-out;
 }
 
 .elevated-metric-card:hover {
-  border-color: rgba(255, 255, 255, 0.12);
-  box-shadow:
-    0 12px 48px rgba(0, 0, 0, 0.4),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  border-color: var(--accent);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
   transform: translateY(-2px);
 }
 
@@ -198,17 +180,17 @@
   display: flex;
   gap: 12px;
   padding: 12px;
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--bg-input);
   border-left: 3px solid var(--accent);
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  border-right: 1px solid rgba(255, 255, 255, 0.08);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
   border-radius: 4px;
   transition: all 150ms ease-out;
 }
 
 .elevated-tile:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--bg-widget);
   transform: translateX(2px);
 }
 
@@ -270,8 +252,8 @@
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  background: rgba(124, 77, 255, 0.15);
-  border: 1px solid rgba(124, 77, 255, 0.3);
+  background: var(--accent-dim);
+  border: 1px solid var(--accent);
   border-radius: 6px;
   font-size: 12px;
   font-weight: 500;
@@ -280,7 +262,7 @@
 }
 
 .elevated-kpi-pill:hover {
-  background: rgba(124, 77, 255, 0.25);
+  background: var(--accent-dim);
   border-color: var(--accent);
 }
 
@@ -329,7 +311,7 @@
 .elevated-chart-container {
   position: relative;
   padding: 12px;
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--bg-input);
   border: 1px solid var(--border);
   border-radius: 8px;
   min-height: 240px;
@@ -339,7 +321,7 @@
 .elevated-table-wrap {
   position: relative;
   overflow-x: auto;
-  background: rgba(0, 0, 0, 0.1);
+  background: var(--bg-widget);
   border: 1px solid var(--border);
   border-radius: 8px;
 }
@@ -351,7 +333,7 @@
 }
 
 .elevated-table thead {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--bg-input);
   border-bottom: 1px solid var(--border);
 }
 
@@ -367,12 +349,12 @@
 
 .elevated-table td {
   padding: 8px 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+  border-bottom: 1px solid var(--border);
   color: var(--text);
 }
 
 .elevated-table tbody tr:hover {
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--bg-input);
 }
 
 /* Button Overrides (Scoped under .elevated-page) */
@@ -393,7 +375,7 @@
 
 .elevated-page .hp-btn:hover:not(:disabled) {
   border-color: var(--accent);
-  background: rgba(124, 77, 255, 0.1);
+  background: var(--accent-dim);
   color: var(--accent);
   transform: translateY(-1px);
 }
@@ -420,7 +402,7 @@
 }
 
 .elevated-page .hp-btn-danger {
-  background: rgba(248, 81, 73, 0.1);
+  background: color-mix(in srgb, var(--red) 12%, transparent);
   border-color: var(--red);
   color: var(--red);
 }
@@ -454,7 +436,7 @@
 
 .elevated-page .hp-input:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px rgba(124, 77, 255, 0.2);
+  box-shadow: 0 0 0 2px var(--accent-dim);
 }
 
 /* Status Alerts */
