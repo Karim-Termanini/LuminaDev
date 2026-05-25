@@ -244,25 +244,25 @@ fn get_profile_extra_env(app: &tauri::AppHandle, profile: &str) -> std::collecti
     if let Ok(store_path) = crate::app_file(app, "store.json") {
         let store = crate::read_json(&store_path);
         
-        if let Some(py_ver) = store.get(&format!("python_version_{}", profile)).and_then(|v| v.as_str()) {
+        if let Some(py_ver) = store.get(format!("python_version_{}", profile)).and_then(|v| v.as_str()) {
             if !py_ver.is_empty() {
                 let tag = if py_ver == "latest" { "latest".to_string() } else { format!("python-{}", py_ver) };
                 env.insert("PYTHON_IMAGE_TAG".to_string(), tag);
             }
         }
-        if let Some(pg_ver) = store.get(&format!("postgres_version_{}", profile)).and_then(|v| v.as_str()) {
+        if let Some(pg_ver) = store.get(format!("postgres_version_{}", profile)).and_then(|v| v.as_str()) {
             if !pg_ver.is_empty() {
                 let tag = if pg_ver == "latest" { "latest".to_string() } else { format!("{}-alpine", pg_ver) };
                 env.insert("POSTGRES_IMAGE_TAG".to_string(), tag);
             }
         }
-        if let Some(node_ver) = store.get(&format!("node_version_{}", profile)).and_then(|v| v.as_str()) {
+        if let Some(node_ver) = store.get(format!("node_version_{}", profile)).and_then(|v| v.as_str()) {
             if !node_ver.is_empty() {
                 let tag = if node_ver == "latest" { "alpine".to_string() } else { format!("{}-alpine", node_ver) };
                 env.insert("NODE_IMAGE_TAG".to_string(), tag);
             }
         }
-        if let Some(proj_dir) = store.get(&format!("project_dir_{}", profile)).and_then(|v| v.as_str()) {
+        if let Some(proj_dir) = store.get(format!("project_dir_{}", profile)).and_then(|v| v.as_str()) {
             if !proj_dir.is_empty() {
                 env.insert("PROJECT_DIR".to_string(), proj_dir.to_string());
             }
