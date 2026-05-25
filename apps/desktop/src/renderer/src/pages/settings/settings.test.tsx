@@ -17,6 +17,7 @@ const mockDh = {
 import { SettingsShell } from './SettingsShell'
 import { SettingsResources } from './SettingsResources'
 import { SettingsAppEngine } from './SettingsAppEngine'
+import { SettingsBuilder } from './SettingsBuilder'
 
 function wrap(ui: React.ReactElement): string {
   return renderToStaticMarkup(<MemoryRouter>{ui}</MemoryRouter>)
@@ -45,5 +46,11 @@ describe('SettingsResources', () => {
 describe('SettingsAppEngine', () => {
   it('renders IPC timeout label', () => {
     expect(wrap(<SettingsAppEngine />)).toContain('IPC timeout')
+  })
+})
+
+describe('SettingsBuilder', () => {
+  it('renders Cargo path label', () => {
+    expect(wrap(<SettingsBuilder />)).toContain('Cargo path')
   })
 })
