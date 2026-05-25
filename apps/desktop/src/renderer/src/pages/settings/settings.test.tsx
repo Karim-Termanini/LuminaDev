@@ -19,6 +19,7 @@ import { SettingsResources } from './SettingsResources'
 import { SettingsAppEngine } from './SettingsAppEngine'
 import { SettingsBuilder } from './SettingsBuilder'
 import { SettingsBetaFeatures } from './SettingsBetaFeatures'
+import { SettingsNotification } from './SettingsNotification'
 
 function wrap(ui: React.ReactElement): string {
   return renderToStaticMarkup(<MemoryRouter>{ui}</MemoryRouter>)
@@ -61,5 +62,14 @@ describe('SettingsBetaFeatures', () => {
     const html = wrap(<SettingsBetaFeatures />)
     expect(html).toContain('Terminal multiplexer')
     expect(html).toContain('commit suggestions')
+  })
+})
+
+describe('SettingsNotification', () => {
+  it('renders global mute label', () => {
+    expect(wrap(<SettingsNotification />)).toContain('Global mute')
+  })
+  it('OS native notifications toggle is disabled', () => {
+    expect(wrap(<SettingsNotification />)).toContain('disabled')
   })
 })
