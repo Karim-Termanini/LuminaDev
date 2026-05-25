@@ -44,6 +44,12 @@ apps/desktop/src/renderer/src/pages/SettingsPage.css
 
 Each tab component is self-contained: owns its state, loads its store key on mount, saves on button press (or immediately for toggles).
 
+## Tab URL Sync
+
+`SettingsShell` syncs the active tab to the URL query string (`?tab=<id>`) using `useSearchParams`. This matches the pattern in `CloudGitPage` and enables deep-linking from error messages or notifications (e.g. a notification banner linking directly to `/settings?tab=notification`). On mount, the shell reads `?tab` from the URL and sets the initial active tab; on tab change it calls `setSearchParams({ tab: id })`.
+
+---
+
 ---
 
 ## Nav Rail
@@ -68,6 +74,22 @@ The existing `NAV` array in `SettingsPage.tsx` is moved into `SettingsShell.tsx`
 | `help-about` | Help & About | `info` | |
 | `datetime` | Date & Time | `clock` | |
 | `languages` | Languages | `globe` | |
+
+---
+
+## StoreKeySchema — shared package prerequisite
+
+All 8 new store keys must be added to `StoreKeySchema` in `packages/shared/src/schemas.ts` **before** any tab component is written. Failure to do so causes the Rust store handler to reject `storeSet` calls with an unknown-key error (this has happened before with `projects_home_dir`).
+
+Add to the `StoreKeySchema` union:
+
+```typescript
+'resources_settings' | 'app_engine_settings' | 'builder_settings' |
+'beta_features_state' | 'notification_settings' | 'shortcuts_settings' |
+'datetime_settings' | 'language_settings'
+```
+
+This is step 0 of the implementation plan.
 
 ---
 
@@ -114,9 +136,10 @@ One new Rust match arm in `lib.rs` (or a small `app_info.rs` module if preferred
 }
 ```
 
-`build.rs` sets `BUILD_DATE` and `RUSTC_VERSION` using only stdlib — no new crates:
-- `BUILD_DATE`: format `SystemTime::now()` as `YYYY-MM-DD` via `std::time`
-- `RUSTC_VERSION`: run `std::process::Command::new("rustc").arg("--version")` and capture stdout
+`build.rs` sets `BUILD_DATE` and `RUSTC_VERSION`:
+
+- `BUILD_DATE`: use `chrono` (already in the dependency tree) — `chrono::Utc::now().format("%Y-%m-%d")`. stdlib `SystemTime` has no date formatting.
+- `RUSTC_VERSION`: run `std::process::Command::new("rustc").arg("--version")` and capture stdout (stdlib only, no crate needed)
 
 No new Tauri command — goes through existing `ipc_invoke` dispatcher.
 
@@ -162,7 +185,7 @@ Toggle rows auto-save immediately on toggle (no Save button). Read on mount from
 ### Notification
 - Global mute: toggle row — mutes all in-app toasts
 - Minimum severity: select — Info / Warnings & above / Errors only
-- OS native notifications: toggle — calls `window.__TAURI__.notification` when enabled
+- OS native notifications: `disabled` toggle with tooltip `"Requires Tauri notification plugin (Phase 10)"` — renders visually but cannot be toggled; value always saved as `false`
 - Save button → `notification_settings`
 
 ### Shortcuts
@@ -196,9 +219,12 @@ Static layout, no save button:
 - Save → `datetime_settings`, side-effect: sets `document.documentElement.dataset.timeformat`
 
 ### Languages
-- Locale dropdown: en-US (English), fr-FR (Français), de-DE (Deutsch), es-ES (Español), ar-SA (العربية), zh-CN (中文)
-- Note shown: "Full translations coming in a future release. Selecting a non-English locale sets the document language attribute."
-- Save → `language_settings`, side-effect: sets `document.documentElement.lang`
+
+- Single enabled option: en-US (English) — selected and non-interactive
+- Five disabled options shown for future visibility: fr-FR, de-DE, es-ES, ar-SA, zh-CN — rendered in the dropdown but `disabled`
+- Banner note: "Additional languages coming in a future release."
+- Save → `language_settings` (always writes `{ locale: 'en-US' }`), side-effect: sets `document.documentElement.lang`
+- Rationale: showing a broken locale picker (user selects Arabic, sees English) is worse UX than a clear "coming soon" state.
 
 ---
 
