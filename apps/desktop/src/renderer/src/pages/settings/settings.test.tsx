@@ -18,6 +18,7 @@ import { SettingsShell } from './SettingsShell'
 import { SettingsResources } from './SettingsResources'
 import { SettingsAppEngine } from './SettingsAppEngine'
 import { SettingsBuilder } from './SettingsBuilder'
+import { SettingsBetaFeatures } from './SettingsBetaFeatures'
 
 function wrap(ui: React.ReactElement): string {
   return renderToStaticMarkup(<MemoryRouter>{ui}</MemoryRouter>)
@@ -52,5 +53,13 @@ describe('SettingsAppEngine', () => {
 describe('SettingsBuilder', () => {
   it('renders Cargo path label', () => {
     expect(wrap(<SettingsBuilder />)).toContain('Cargo path')
+  })
+})
+
+describe('SettingsBetaFeatures', () => {
+  it('renders flag labels', () => {
+    const html = wrap(<SettingsBetaFeatures />)
+    expect(html).toContain('Terminal multiplexer')
+    expect(html).toContain('commit suggestions')
   })
 })
