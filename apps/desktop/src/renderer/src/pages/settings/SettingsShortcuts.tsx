@@ -5,6 +5,7 @@ import { assertSettingsOk } from '../settingsContract'
 
 const MODIFIER_KEYS = new Set(['Control', 'Shift', 'Alt', 'Meta', 'OS'])
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function buildChord(e: { ctrlKey: boolean; shiftKey: boolean; altKey: boolean; metaKey: boolean; key: string }): string | null {
   if (MODIFIER_KEYS.has(e.key)) return null
   const parts: string[] = []
@@ -50,7 +51,7 @@ export function SettingsShortcuts(): ReactElement {
         return
       }
       const chord = buildChord(e)
-      if (chord) {
+      if (chord && recording) {
         setBindings((p) => ({ ...p, [recording]: chord }))
         setRecording(null)
       }
