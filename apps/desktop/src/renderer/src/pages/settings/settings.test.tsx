@@ -16,6 +16,7 @@ const mockDh = {
 
 import { SettingsShell } from './SettingsShell'
 import { SettingsResources } from './SettingsResources'
+import { SettingsAppEngine } from './SettingsAppEngine'
 
 function wrap(ui: React.ReactElement): string {
   return renderToStaticMarkup(<MemoryRouter>{ui}</MemoryRouter>)
@@ -38,5 +39,11 @@ describe('SettingsResources', () => {
   })
   it('renders RAM label', () => {
     expect(wrap(<SettingsResources />)).toContain('RAM allocation')
+  })
+})
+
+describe('SettingsAppEngine', () => {
+  it('renders IPC timeout label', () => {
+    expect(wrap(<SettingsAppEngine />)).toContain('IPC timeout')
   })
 })
