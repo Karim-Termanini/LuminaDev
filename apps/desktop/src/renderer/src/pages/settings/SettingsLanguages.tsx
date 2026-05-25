@@ -57,7 +57,7 @@ export function SettingsLanguages(): ReactElement {
         <label style={{ display: 'block', fontWeight: 600, fontSize: 14, marginBottom: 8 }}>
           Display language
         </label>
-        <select className="hp-input" style={{ fontSize: 13, width: 240 }} value="en-US" disabled={false} readOnly>
+        <select className="hp-input" style={{ fontSize: 13, width: 240 }} value="en-US" disabled={false}>
           <option value="en-US">English (en-US)</option>
           {FUTURE_LOCALES.map((l) => (
             <option key={l.locale} value={l.locale} disabled>
