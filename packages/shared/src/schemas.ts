@@ -325,8 +325,8 @@ export const StoreSetRequestSchema = z.discriminatedUnion('key', [
   }),
   z.object({
     key: z.literal('active_profile'),
-    // Stores the ComposeProfile id of the active preset environment.
-    data: ComposeProfileSchema,
+    // Stores the ComposeProfile id or custom profile name of the active environment.
+    data: z.string().trim().min(1).max(128),
   }),
   z.object({
     key: z.literal('on_login_automation'),
@@ -605,14 +605,13 @@ export function parseAppearance(data: unknown): AppearanceStore {
   return r.success ? r.data : {}
 }
 
-/** Normalize a persisted `active_profile` value: canonical enum or legacy aliases → ComposeProfile | null. */
-export function parseStoredActiveProfile(data: unknown): ComposeProfile | null {
+/** Normalize a persisted `active_profile` value: canonical enum, legacy aliases, or custom profile name → string | null. */
+export function parseStoredActiveProfile(data: unknown): string | null {
   if (typeof data !== 'string') return null
   const val = data.trim()
   if (val === 'minimal') return 'empty'
   if (val === 'desktop-qt') return 'desktop-gui'
-  const parsed = ComposeProfileSchema.safeParse(val)
-  return parsed.success ? parsed.data : null
+  return val.length > 0 ? val : null
 }
 
 // --- Git VCS ---

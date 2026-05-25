@@ -239,32 +239,77 @@ async fn runtime_bash_user_step(
 }
 
 
+fn resolve_profile_template(app: &tauri::AppHandle, profile: &str) -> String {
+    let profile = profile.trim();
+    if let Ok(store_path) = crate::app_file(app, "store.json") {
+        let store = crate::read_json(&store_path);
+        if let Some(custom_profiles) = store.get("custom_profiles").and_then(|v| v.as_array()) {
+            for p in custom_profiles {
+                if let Some(name) = p.get("name").and_then(|v| v.as_str()) {
+                    if name == profile {
+                        if let Some(base) = p.get("baseTemplate").and_then(|v| v.as_str()) {
+                            return base.to_string();
+                        }
+                    }
+                }
+            }
+        }
+    }
+    profile.to_string()
+}
+
 fn get_profile_extra_env(app: &tauri::AppHandle, profile: &str) -> std::collections::HashMap<String, String> {
     let mut env = std::collections::HashMap::new();
+    let template = resolve_profile_template(app, profile);
+    
     if let Ok(store_path) = crate::app_file(app, "store.json") {
         let store = crate::read_json(&store_path);
         
-        if let Some(py_ver) = store.get(format!("python_version_{}", profile)).and_then(|v| v.as_str()) {
+        let ref_profile = &template;
+        if let Some(py_ver) = store.get(format!("python_version_{}", ref_profile)).and_then(|v| v.as_str()) {
             if !py_ver.is_empty() {
                 let tag = if py_ver == "latest" { "latest".to_string() } else { format!("python-{}", py_ver) };
                 env.insert("PYTHON_IMAGE_TAG".to_string(), tag);
             }
         }
-        if let Some(pg_ver) = store.get(format!("postgres_version_{}", profile)).and_then(|v| v.as_str()) {
+        if let Some(pg_ver) = store.get(format!("postgres_version_{}", ref_profile)).and_then(|v| v.as_str()) {
             if !pg_ver.is_empty() {
                 let tag = if pg_ver == "latest" { "latest".to_string() } else { format!("{}-alpine", pg_ver) };
                 env.insert("POSTGRES_IMAGE_TAG".to_string(), tag);
             }
         }
-        if let Some(node_ver) = store.get(format!("node_version_{}", profile)).and_then(|v| v.as_str()) {
+        if let Some(node_ver) = store.get(format!("node_version_{}", ref_profile)).and_then(|v| v.as_str()) {
             if !node_ver.is_empty() {
                 let tag = if node_ver == "latest" { "alpine".to_string() } else { format!("{}-alpine", node_ver) };
                 env.insert("NODE_IMAGE_TAG".to_string(), tag);
             }
         }
-        if let Some(proj_dir) = store.get(format!("project_dir_{}", profile)).and_then(|v| v.as_str()) {
-            if !proj_dir.is_empty() {
-                env.insert("PROJECT_DIR".to_string(), proj_dir.to_string());
+        
+        let proj_dir = store.get(format!("project_dir_{}", profile))
+            .or_else(|| store.get(format!("project_dir_{}", ref_profile)))
+            .and_then(|v| v.as_str());
+        if let Some(dir_str) = proj_dir {
+            if !dir_str.is_empty() {
+                env.insert("PROJECT_DIR".to_string(), dir_str.to_string());
+            }
+        }
+
+        // Load custom profile specific env vars
+        if let Some(custom_profiles) = store.get("custom_profiles").and_then(|v| v.as_array()) {
+            for p in custom_profiles {
+                if let Some(name) = p.get("name").and_then(|v| v.as_str()) {
+                    if name == profile {
+                        if let Some(env_vars) = p.get("envVars").and_then(|v| v.as_array()) {
+                            for ev in env_vars {
+                                if let (Some(k), Some(v)) = (ev.get("key").and_then(|x| x.as_str()), ev.get("value").and_then(|x| x.as_str())) {
+                                    if !k.trim().is_empty() {
+                                        env.insert(k.trim().to_string(), v.to_string());
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -1853,7 +1898,8 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
     },
     "dh:compose:up" => {
       let profile = body.get("profile").and_then(|v| v.as_str()).unwrap_or("web-dev");
-      let dir = compose_profiles::compose_profile_workdir(&app, profile);
+      let template = resolve_profile_template(&app, profile);
+      let dir = compose_profiles::compose_profile_workdir(&app, &template);
       if !dir.is_dir() {
         json!({ "ok": false, "log": "", "error": format!("[DOCKER_COMPOSE_FAILED] missing compose directory: {} (set LUMINA_DEV_COMPOSE_ROOT or run from a checkout with docker/compose)", dir.display()) })
       } else {
@@ -1865,7 +1911,8 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
     },
     "dh:compose:logs" => {
       let profile = body.get("profile").and_then(|v| v.as_str()).unwrap_or("web-dev");
-      let dir = compose_profiles::compose_profile_workdir(&app, profile);
+      let template = resolve_profile_template(&app, profile);
+      let dir = compose_profiles::compose_profile_workdir(&app, &template);
       if !dir.is_dir() {
         json!({ "ok": false, "log": "", "error": format!("[DOCKER_COMPOSE_FAILED] missing compose directory: {} (set LUMINA_DEV_COMPOSE_ROOT or run from a checkout with docker/compose)", dir.display()) })
       } else {
@@ -1877,7 +1924,8 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
     },
     "dh:compose:down" => {
       let profile = body.get("profile").and_then(|v| v.as_str()).unwrap_or("web-dev");
-      let dir = compose_profiles::compose_profile_workdir(&app, profile);
+      let template = resolve_profile_template(&app, profile);
+      let dir = compose_profiles::compose_profile_workdir(&app, &template);
       if !dir.is_dir() {
         json!({ "ok": false, "log": "", "error": format!("[DOCKER_COMPOSE_FAILED] missing compose directory: {} (set LUMINA_DEV_COMPOSE_ROOT or run from a checkout with docker/compose)", dir.display()) })
       } else {
@@ -1899,16 +1947,20 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       let mut logs = String::new();
 
       if let Some(from) = from_profile {
-        let from_dir = compose_profiles::compose_profile_workdir(&app, from);
+        let from_template = resolve_profile_template(&app, from);
+        let from_dir = compose_profiles::compose_profile_workdir(&app, &from_template);
         if from_dir.is_dir() {
           match exec_docker_compose_in_dir(&from_dir, &["down"], CMD_TIMEOUT_LONG, Some(from), Some(get_profile_extra_env(&app, from))).await {
             Ok((stdout, stderr)) => logs.push_str(&format!("Stopped old profile:\n{}{}\n", stdout, stderr)),
             Err(e) => logs.push_str(&format!("Warning: failed to stop old profile: {}\n", e.trim())),
           }
+          // Give Docker daemon enough time to release ports and teardown networks
+          tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
         }
       }
 
-      let to_dir = compose_profiles::compose_profile_workdir(&app, to_profile);
+      let to_template = resolve_profile_template(&app, to_profile);
+      let to_dir = compose_profiles::compose_profile_workdir(&app, &to_template);
       if !to_dir.is_dir() {
         return Ok(json!({
           "ok": false,
