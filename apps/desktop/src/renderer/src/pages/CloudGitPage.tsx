@@ -349,11 +349,12 @@ export function CloudGitPage(): ReactElement {
         aria-label="Git host"
         style={{
           display: 'flex',
-          borderRadius: 14,
-          overflow: 'hidden',
-          border: '1px solid var(--border)',
-          marginBottom: 20,
+          gap: 8,
+          padding: 6,
+          borderRadius: 16,
+          marginBottom: 24,
           background: 'var(--bg-widget)',
+          border: '1px solid var(--border)',
         }}
       >
         {(['github', 'gitlab'] as const).map((p) => {
@@ -375,24 +376,32 @@ export function CloudGitPage(): ReactElement {
               }}
               style={{
                 flex: 1,
-                padding: '14px 18px',
-                border: 'none',
-                borderBottom: active ? `3px solid ${t.accent}` : '3px solid transparent',
+                minHeight: 52,
+                padding: '10px 18px',
+                borderRadius: 11,
+                outline: 'none',
                 cursor: deviceFlow !== null && p !== deviceFlow.provider ? 'not-allowed' : 'pointer',
-                opacity: deviceFlow !== null && p !== deviceFlow.provider ? 0.45 : 1,
+                opacity: deviceFlow !== null && p !== deviceFlow.provider ? 0.4 : 1,
                 fontSize: 15,
                 fontWeight: 700,
+                fontFamily: 'var(--font-ui)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 gap: 10,
-                background: active ? `color-mix(in srgb, ${t.accent} 10%, var(--bg-widget))` : 'transparent',
+                border: active
+                  ? `1px solid color-mix(in srgb, ${t.accent} 45%, var(--border))`
+                  : '1px solid transparent',
+                background: active
+                  ? `color-mix(in srgb, ${t.accent} 14%, var(--bg-panel))`
+                  : 'transparent',
                 color: active ? t.accent : 'var(--text)',
-                transition: 'background 0.15s ease, color 0.15s ease, border-color 0.15s ease',
+                boxShadow: active ? `0 2px 12px color-mix(in srgb, ${t.accent} 20%, transparent)` : 'none',
+                transition: 'all 0.18s ease',
               }}
             >
-              {m.tabEmoji ? <span aria-hidden>{m.tabEmoji}</span> : null}
-              <span className={`codicon codicon-${m.icon}`} style={{ fontSize: 20, opacity: active ? 1 : 0.7 }} aria-hidden />
+              <span aria-hidden style={{ fontSize: 18 }}>{m.tabEmoji}</span>
+              <span className={`codicon codicon-${m.icon}`} style={{ fontSize: 19 }} aria-hidden />
               <span>{m.label}</span>
             </button>
           )
