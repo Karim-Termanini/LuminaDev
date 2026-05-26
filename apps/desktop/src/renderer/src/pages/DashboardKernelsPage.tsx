@@ -6,6 +6,29 @@ import type { HostSecuritySnapshot } from '@linux-dev-home/shared'
 const UNITS = ['docker', 'ssh', 'nginx'] as const
 const REFRESH_MS = 30_000
 
+function statusColor(s?: string): string {
+  if (s === 'active') return 'var(--green)'
+  if (s === 'failed') return 'var(--red)'
+  if (s === 'inactive') return 'var(--yellow)'
+  return 'var(--text-muted)'
+}
+
+function unitIcon(u: string): string {
+  if (u === 'docker') return 'codicon-package'
+  if (u === 'ssh') return 'codicon-key'
+  if (u === 'nginx') return 'codicon-server'
+  return 'codicon-circle'
+}
+
+function securityOk(label: string, value: string): boolean {
+  if (label === 'Firewall') return value === 'active'
+  if (label === 'SELinux / AppArmor') return value === 'enabled' || value === 'enforcing'
+  if (label === 'SSH Root Login') return value === 'no'
+  if (label === 'SSH Password Auth') return value === 'no'
+  if (label === 'Failed Auth (24h)') return value === '0'
+  return false
+}
+
 export function DashboardKernelsPage(): ReactElement {
   const [gpu, setGpu] = useState<string | null>(null)
   const [units, setUnits] = useState<Record<string, string>>({})
@@ -22,7 +45,7 @@ export function DashboardKernelsPage(): ReactElement {
       ])
       if (gpuRes.status === 'fulfilled') {
         const g = gpuRes.value
-        setGpu(g.ok && typeof g.result === 'string' ? g.result : 'GPU: unavailable')
+        setGpu(g.ok && typeof g.result === 'string' ? g.result : 'Unavailable')
       }
       if (secRes.status === 'fulfilled' && secRes.value.ok) {
         setSecurity(secRes.value.snapshot)
@@ -52,84 +75,126 @@ export function DashboardKernelsPage(): ReactElement {
     return () => clearInterval(id)
   }, [refresh])
 
+  const securityItems = security ? [
+    { label: 'Firewall', value: security.firewall },
+    { label: 'SELinux / AppArmor', value: security.selinux },
+    { label: 'SSH Root Login', value: security.sshPermitRootLogin },
+    { label: 'SSH Password Auth', value: security.sshPasswordAuth },
+    { label: 'Failed Auth (24h)', value: String(security.failedAuth24h) },
+  ] : []
+
   return (
-    <div className="kernels-page elevated-page" style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 980, paddingInline: 12 }}>
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 12 }}>
+    <div className="kernels-page elevated-page">
+
+      {/* ── Hero ── */}
+      <div className="kernels-hero">
         <div>
-          <div className="mono" style={{ color: 'var(--accent)', fontSize: 12, marginBottom: 8 }}>DASHBOARD.KERNELS</div>
-          <h1 style={{ margin: 0, fontSize: 28, fontWeight: 700 }}>Kernels & Toolchains</h1>
-          <p style={{ color: 'var(--text-muted)', fontSize: 14, marginTop: 8 }}>
-            GPU probe, service states, and security audit. Refreshes every 30 seconds.
+          <div className="kernels-hero-eyebrow">Dashboard · Kernels</div>
+          <h1 className="kernels-hero-title">Kernels &amp; Toolchains</h1>
+          <p className="kernels-hero-subtitle">
+            GPU probe, service states &amp; security audit — refreshes every 30s.
           </p>
         </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div className="kernels-hero-actions">
           {lastRefreshed && (
-            <span className="mono" style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+            <span className="kernels-last-updated">
               Updated {lastRefreshed.toLocaleTimeString()}
             </span>
           )}
           <button type="button" onClick={() => void refresh()} className="hp-btn" disabled={busy}>
-            {busy ? 'Refreshing…' : 'Refresh now'}
+            <span className={`codicon ${busy ? 'codicon-loading codicon-modifier-spin' : 'codicon-refresh'}`} />
+            {busy ? 'Refreshing…' : 'Refresh'}
           </button>
         </div>
-      </header>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
-        <div style={tile}>
-          <div className="mono" style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>GPU</div>
-          <div style={{ fontSize: 13, fontWeight: 600 }}>{gpu ?? '…'}</div>
-        </div>
-        {UNITS.map((u) => (
-          <div key={u} style={tile}>
-            <div className="mono" style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>{u}</div>
-            <div style={{ fontWeight: 700, color: colorFor(units[u]) }}>{units[u] ?? '…'}</div>
-          </div>
-        ))}
       </div>
 
-      {security && (
-        <section style={card}>
-          <div style={{ fontWeight: 600, marginBottom: 12 }}>Security Audit</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 10 }}>
-            <SecurityItem label="Firewall" value={security.firewall} ok={security.firewall === 'active'} />
-            <SecurityItem label="SELinux / AppArmor" value={security.selinux} ok={security.selinux === 'enabled' || security.selinux === 'enforcing'} />
-            <SecurityItem label="SSH Root Login" value={security.sshPermitRootLogin} ok={security.sshPermitRootLogin === 'no'} />
-            <SecurityItem label="SSH Password Auth" value={security.sshPasswordAuth} ok={security.sshPasswordAuth === 'no'} />
-            <SecurityItem
-              label="Failed Auth (24h)"
-              value={String(security.failedAuth24h)}
-              ok={security.failedAuth24h === 0}
-            />
+      {/* ── Services ── */}
+      <div>
+        <div className="kernels-section-label">System Services</div>
+        <div className="kernels-services-grid">
+          {/* GPU card */}
+          <div
+            className="kernels-service-card"
+            style={{ '--card-accent': 'linear-gradient(90deg, var(--accent), transparent)' } as React.CSSProperties}
+          >
+            <div className="kernels-service-card-header">
+              <div className="kernels-service-icon">
+                <span className="codicon codicon-circuit-board" />
+              </div>
+              <span className="kernels-status-dot" style={{
+                background: gpu && !gpu.includes('unavail') ? 'var(--green)' : 'var(--text-muted)'
+              }} />
+            </div>
+            <div>
+              <div className="kernels-service-name">GPU</div>
+              <div className="kernels-service-value">{gpu ?? '…'}</div>
+            </div>
           </div>
+
+          {/* systemd unit cards */}
+          {UNITS.map((u) => {
+            const status = units[u]
+            const color = statusColor(status)
+            return (
+              <div
+                key={u}
+                className="kernels-service-card"
+                style={{ '--card-accent': `linear-gradient(90deg, ${color}, transparent)` } as React.CSSProperties}
+              >
+                <div className="kernels-service-card-header">
+                  <div className="kernels-service-icon">
+                    <span className={`codicon ${unitIcon(u)}`} />
+                  </div>
+                  <span className="kernels-status-dot" style={{ background: color }} />
+                </div>
+                <div>
+                  <div className="kernels-service-name">{u}</div>
+                  <div className="kernels-service-value" style={{ color }}>
+                    {status ?? '…'}
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* ── Security Audit ── */}
+      {security && (
+        <div>
+          <div className="kernels-section-label">Security Audit</div>
+          <div className="kernels-security-grid">
+            {securityItems.map(({ label, value }) => {
+              const ok = securityOk(label, value)
+              return (
+                <div key={label} className="kernels-security-item">
+                  <div className="kernels-security-label">{label}</div>
+                  <div
+                    className="kernels-security-value"
+                    style={{ color: ok ? 'var(--green)' : 'var(--orange)' }}
+                  >
+                    {value.toUpperCase()}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
           {(security.riskyOpenPorts?.length ?? 0) > 0 && (
-            <div style={{ marginTop: 14, padding: '10px 12px', background: 'rgba(239,68,68,0.08)', borderRadius: 8, border: '1px solid rgba(239,68,68,0.2)' }}>
-              <span style={{ fontSize: 13, color: 'var(--red)', fontWeight: 700 }}>⚠ Risky open ports: </span>
-              <span className="mono" style={{ fontSize: 12 }}>{security.riskyOpenPorts.join(', ')}</span>
+            <div className="kernels-risky-ports" style={{ marginTop: 14 }}>
+              <span className="codicon codicon-warning" style={{ color: 'var(--red)', fontSize: 18 }} />
+              <div>
+                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--red)' }}>
+                  Risky open ports:&nbsp;
+                </span>
+                <span className="mono" style={{ fontSize: 12, color: 'var(--text)' }}>
+                  {security.riskyOpenPorts.join(', ')}
+                </span>
+              </div>
             </div>
           )}
-        </section>
+        </div>
       )}
     </div>
   )
 }
-
-function SecurityItem({ label, value, ok }: { label: string; value: string; ok: boolean }): ReactElement {
-  return (
-    <div style={tile}>
-      <div className="mono" style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>{label}</div>
-      <div style={{ fontWeight: 700, fontSize: 13, color: ok ? 'var(--green)' : 'var(--orange)' }}>
-        {value.toUpperCase()}
-      </div>
-    </div>
-  )
-}
-
-function colorFor(s?: string): string {
-  if (s === 'active') return 'var(--green)'
-  if (s === 'failed') return 'var(--red)'
-  if (s === 'inactive') return 'var(--yellow)'
-  return 'var(--text-muted)'
-}
-
-const card = { background: 'var(--bg-widget)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: 16 }
-const tile = { ...card, padding: 12 }

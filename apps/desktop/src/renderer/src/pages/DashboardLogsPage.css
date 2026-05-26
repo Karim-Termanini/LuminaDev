@@ -1,87 +1,274 @@
-/* Dashboard Logs Page — Elevated theme */
+/* Dashboard Logs Page — Premium Glassmorphic */
 @import '../theme/theme-elevated.css';
 
 .logs-page {
-  /* Inherits .elevated-page */
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  max-width: 1100px;
+  padding-inline: 4px;
 }
 
-.logs-hero {
-  margin-bottom: 16px;
+/* ── Hero ── */
+.logs-hero-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--accent);
+  margin-bottom: 8px;
 }
 
 .logs-hero-title {
-  margin: 0 0 8px;
+  margin: 0 0 6px;
   font-size: 28px;
-  font-weight: 700;
+  font-weight: 800;
   color: var(--text);
+  line-height: 1.1;
 }
 
 .logs-hero-subtitle {
   margin: 0;
   font-size: 14px;
   color: var(--text-muted);
-}
-
-.logs-toolbar {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  align-items: center;
-  margin-bottom: 16px;
-}
-
-.logs-filter-input {
-  background: var(--bg-input);
-  border: 1px solid var(--border);
-  color: var(--text);
-  border-radius: 6px;
-  padding: 8px 12px;
-  font-size: 12px;
-  outline: none;
-  transition: border-color 0.2s;
-  flex: 1;
-  min-width: 200px;
-}
-
-.logs-filter-input:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px rgba(124, 77, 255, 0.2);
-}
-
-.logs-container {
-  background: var(--bg-widget);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 12px;
-  min-height: 300px;
-  max-height: 500px;
-  overflow-y: auto;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--text-muted);
   line-height: 1.5;
+}
+
+/* ── Live Job Banners ── */
+.logs-live-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 18px;
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  border-radius: 12px;
+  animation: logs-fade-in 0.3s ease;
+}
+
+@keyframes logs-fade-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.logs-live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+  animation: logs-pulse 1.5s infinite;
+}
+
+@keyframes logs-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.5; transform: scale(0.8); }
+}
+
+/* ── Glass Panel ── */
+.logs-glass-panel {
+  background: color-mix(in srgb, var(--bg-widget) 80%, transparent);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.logs-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 40%, transparent);
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.logs-panel-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.logs-panel-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ── Terminal Output ── */
+.logs-terminal {
+  margin: 0;
+  padding: 16px 20px;
+  background: color-mix(in srgb, #000000 40%, transparent);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  color: #c8c8c8;
+  max-height: 340px;
+  overflow-y: auto;
   white-space: pre-wrap;
   word-break: break-word;
 }
 
-.logs-page .hp-btn {
-  padding: 8px 14px;
-  font-size: 12px;
-  border: 1px solid var(--border);
+.logs-terminal::-webkit-scrollbar {
+  width: 6px;
+}
+.logs-terminal::-webkit-scrollbar-track {
   background: transparent;
+}
+.logs-terminal::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--border) 60%, transparent);
+  border-radius: 3px;
+}
+
+/* ── Job Rows ── */
+.logs-jobs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.logs-job-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 20px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 30%, transparent);
+  transition: background 0.15s ease;
+}
+
+.logs-job-row:last-child {
+  border-bottom: none;
+}
+
+.logs-job-row:hover {
+  background: color-mix(in srgb, var(--bg-input) 40%, transparent);
+}
+
+.logs-job-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.logs-job-kind {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  min-width: 160px;
+}
+
+.logs-job-state-badge {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-family: var(--font-mono);
+}
+
+.logs-job-progress {
+  flex: 1;
+  height: 4px;
+  background: color-mix(in srgb, var(--border) 60%, transparent);
+  border-radius: 2px;
+  overflow: hidden;
+  max-width: 160px;
+}
+
+.logs-job-progress-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width 0.5s ease;
+}
+
+.logs-job-log-tail {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.logs-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 40px 24px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* ── Select & Buttons ── */
+.logs-select {
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg-input) 90%, transparent);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.logs-select:focus {
+  border-color: var(--accent);
+}
+
+.logs-page .hp-btn {
+  padding: 7px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg-input) 90%, transparent);
   color: var(--text);
   cursor: pointer;
-  border-radius: 6px;
-  transition: all 100ms ease-out;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .logs-page .hp-btn:hover:not(:disabled) {
   border-color: var(--accent);
-  background: rgba(124, 77, 255, 0.1);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
   color: var(--accent);
 }
 
 .logs-page .hp-btn:disabled {
-  opacity: 0.5;
+  opacity: 0.4;
   cursor: not-allowed;
+}
+
+/* ── Light theme ── */
+[data-theme="light"] .logs-glass-panel {
+  background: rgba(255, 255, 255, 0.88);
+  border-color: rgba(196, 199, 204, 0.6);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+[data-theme="light"] .logs-terminal {
+  background: rgba(15, 20, 30, 0.92);
+  color: #d4d4d4;
+}
+
+[data-theme="light"] .logs-job-row:hover {
+  background: rgba(0, 0, 0, 0.03);
 }
