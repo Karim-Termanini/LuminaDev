@@ -61,7 +61,7 @@ declare global {
       gitConfigSet: (payload: { name: string; email: string; defaultBranch?: string; defaultEditor?: string; target: 'sandbox'|'host' }) => Promise<{ ok: boolean; error?: string }>
       gitConfigSetKey: (payload: { key: string; value?: string }) => Promise<{ ok: boolean; error?: string }>
       gitConfigList: (payload: { target: 'sandbox'|'host' }) => Promise<{ ok: boolean; rows: Array<{ key: string; value: string }>; error?: string }>
-      sshGenerate: (payload: { target: 'sandbox'|'host'; email?: string }) => Promise<{ ok: boolean; error?: string }>
+      sshGenerate: (payload: { target: 'sandbox'|'host'; email?: string; keyName?: string }) => Promise<{ ok: boolean; keyName?: string; error?: string }>
       sshGetPub: (payload: { target: 'sandbox'|'host' }) => Promise<{ ok: boolean; pub: string; fingerprint: string; error?: string }>
       sshTestGithub: (payload: { target: 'sandbox'|'host' }) => Promise<{ ok: boolean; output: string; code: number | null; error?: string }>
       selectFolder: () => Promise<string | null>

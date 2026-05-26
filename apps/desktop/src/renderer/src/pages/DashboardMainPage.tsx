@@ -17,6 +17,19 @@ import { AddWidgetModal } from '../dashboard/AddWidgetModal'
 
 import './DashboardPage.css'
 
+// Module-level switch state survives navigation (component unmount/remount)
+const _sw = { active: false, step: '', progress: 0, targetProfile: '' }
+let _swListeners: Array<() => void> = []
+function _swNotify() { _swListeners.forEach(fn => fn()) }
+function _swSet(patch: Partial<typeof _sw>) {
+  Object.assign(_sw, patch)
+  _swNotify()
+}
+function _swSubscribe(fn: () => void) {
+  _swListeners.push(fn)
+  return () => { _swListeners = _swListeners.filter(l => l !== fn) }
+}
+
 // Mock data generators
 function generateActivityData(profileName: string): Array<{ label: string; cpu: number; ram: number }> {
   const seed = profileName.charCodeAt(0) + profileName.charCodeAt(profileName.length - 1)
@@ -117,11 +130,12 @@ export function DashboardMainPage(): ReactElement {
   const [snap, setSnap] = useState<HostMetricsResponse | null>(null)
   const [toast, setToast] = useState<Toast | null>(null)
   const [profileLayout, setProfileLayout] = useState<DashboardLayoutFile | null>(null)
-  const [isSwitching, setIsSwitching] = useState(false)
+  const [swState, setSwState] = useState({ active: _sw.active, step: _sw.step, progress: _sw.progress, targetProfile: _sw.targetProfile })
   const [activeProfile, setActiveProfile] = useState<string | null>(null)
   const [selectedProfileName, setSelectedProfileName] = useState<string | null>(null)
   const [customProfiles, setCustomProfiles] = useState<CustomProfileEntry[]>([])
   const [confirmModalOpen, setConfirmModalOpen] = useState(false)
+  const profileSelectionInitialized = useRef(false)
   const [pickerOpen, setPickerOpen] = useState(false)
 
   const [projectPath, setProjectPath] = useState<string | null>(null)
@@ -143,6 +157,7 @@ export function DashboardMainPage(): ReactElement {
   const [installLogs, setInstallLogs] = useState<string[]>([])
   const logsContainerRef = useRef<HTMLDivElement>(null)
   const [mobileSubTemplate, setMobileSubTemplate] = useState<'react-native' | 'flutter'>('react-native')
+  const [suggestedPorts, setSuggestedPorts] = useState<Record<string, number>>({})
 
   useEffect(() => {
     let unlisten: () => void;
@@ -154,6 +169,28 @@ export function DashboardMainPage(): ReactElement {
     }).then(fn => { unlisten = fn })
     return () => { if (unlisten) unlisten() }
   }, [])
+
+  useEffect(() => {
+    // Sync from module singleton on mount (survives navigation)
+    const unsub = _swSubscribe(() => setSwState({ ..._sw }))
+    setSwState({ ..._sw })
+
+    let unlisten: () => void;
+    listen<{ step: string; progress: number }>('profile-switch-progress', (event) => {
+      _swSet({ step: event.payload.step, progress: event.payload.progress })
+    }).then(fn => { unlisten = fn })
+    return () => { unsub(); if (unlisten) unlisten() }
+  }, [])
+
+  // Slow ticker: while switch active and progress stuck between 65-95, nudge +0.3% every 800ms
+  useEffect(() => {
+    if (!swState.active || swState.progress >= 95 || swState.progress < 60) return
+    const t = setInterval(() => {
+      if (_sw.progress >= 95 || !_sw.active) { clearInterval(t); return }
+      _swSet({ progress: Math.min(95, _sw.progress + 0.4) })
+    }, 800)
+    return () => clearInterval(t)
+  }, [swState.active, swState.progress >= 60])
 
   useEffect(() => {
     let interval: any;
@@ -187,12 +224,14 @@ export function DashboardMainPage(): ReactElement {
         description: `Custom environment based on ${preset?.title || p.baseTemplate}.`,
         icon: preset?.icon || 'blank',
         accent: preset?.accent || 'var(--text-muted)',
-        status: 'live' as const,
+        status: 'live' as ProfileDef['status'],
         isCustom: true,
         baseTemplate: p.baseTemplate,
       }
     })
-    return [...customDefs, ...PRESET_PROFILES]
+    if (customDefs.length > 0) return customDefs
+    // Fallback until the user creates and switches to a real profile
+    return [{ name: 'empty', title: 'Empty Minimal', description: 'Create a profile in the Profiles page to get started.', icon: 'blank', accent: 'var(--text-muted)', status: 'live' as ProfileDef['status'], isCustom: false, baseTemplate: 'empty' }]
   }, [customProfiles])
 
   const refresh = useCallback(async () => {
@@ -210,16 +249,30 @@ export function DashboardMainPage(): ReactElement {
     } catch {
       // silently fail, keep last metrics
     }
+    let customProfilesList: CustomProfileEntry[] = []
     try {
-      const ap = (await window.dh.storeGet({ key: 'active_profile' })) as { ok: boolean; data?: unknown }
-      setActiveProfile(ap.ok ? parseStoredActiveProfile(ap.data) : null)
+      const cp = (await window.dh.storeGet({ key: 'custom_profiles' })) as { ok: boolean; data?: unknown }
+      if (cp.ok && Array.isArray(cp.data)) {
+        customProfilesList = cp.data as CustomProfileEntry[]
+        setCustomProfiles(customProfilesList)
+      }
     } catch {
       /* keep last known */
     }
     try {
-      const cp = (await window.dh.storeGet({ key: 'custom_profiles' })) as { ok: boolean; data?: unknown }
-      if (cp.ok && Array.isArray(cp.data)) {
-        setCustomProfiles(cp.data as CustomProfileEntry[])
+      const ap = (await window.dh.storeGet({ key: 'active_profile' })) as { ok: boolean; data?: unknown }
+      const parsed = ap.ok ? parseStoredActiveProfile(ap.data) : null
+      if (parsed !== null) {
+        const exists = customProfilesList.some((p) => p.name === parsed)
+        if (exists) {
+          setActiveProfile(parsed)
+        } else {
+          // Profile was deleted, clear it from store & state
+          await window.dh.storeDelete({ key: 'active_profile' })
+          setActiveProfile(null)
+        }
+      } else {
+        setActiveProfile(null)
       }
     } catch {
       /* keep last known */
@@ -265,13 +318,15 @@ export function DashboardMainPage(): ReactElement {
     return () => clearInterval(id)
   }, [refresh])
 
-  // Load selected profile from localStorage on mount
+  // Set initial selected profile once — runs when profiles first load, never again
   useEffect(() => {
+    if (profileSelectionInitialized.current || allProfiles.length === 0) return
+    profileSelectionInitialized.current = true
     const saved = localStorage.getItem('dashboard-selected-profile')
     if (saved && allProfiles.some(p => p.name === saved)) {
       setSelectedProfileName(saved)
     } else {
-      setSelectedProfileName(activeProfile || (allProfiles[0]?.name || null))
+      setSelectedProfileName(activeProfile || allProfiles[0]?.name || null)
     }
   }, [allProfiles, activeProfile])
 
@@ -481,14 +536,13 @@ export function DashboardMainPage(): ReactElement {
   function handleConfirmSwitch(): void {
     if (!selectedProfileName) return
     setConfirmModalOpen(false)
-    setIsSwitching(true)
+    _swSet({ active: true, step: 'Starting...', progress: 0, targetProfile: selectedProfileName ?? '' })
     const isRestart = activeProfile === selectedProfileName
     setToast({ type: 'success', message: isRestart ? `Restarting ${selectedProfileName}…` : `Switching to ${selectedProfileName}…` })
-    
-    // If it's a restart, we switch from activeProfile to activeProfile
+
     window.dh.profileSwitch({ from: (activeProfile as ComposeProfile) ?? undefined, to: selectedProfileName as ComposeProfile }).then((r) => {
 
-      setIsSwitching(false)
+      _swSet({ active: false, step: '', progress: 0, targetProfile: '' })
       if (r.ok) {
         window.dh.storeSet({ key: 'active_profile', data: selectedProfileName }).then(() => {
           setActiveProfile(selectedProfileName)
@@ -504,13 +558,20 @@ export function DashboardMainPage(): ReactElement {
         setToast({ type: 'error', message: humanizeProfileError(errMsg) })
       }
     }).catch((e) => {
-      setIsSwitching(false)
+      _swSet({ active: false, step: '', progress: 0, targetProfile: '' })
       const errMsg = e instanceof Error ? e.message : String(e)
       setToast({ type: 'error', message: errMsg })
     })
   }
 
-  const selectedProfile = allProfiles.find((p) => p.name === selectedProfileName) || allProfiles[0]
+  const selectedProfile = allProfiles.find((p) => p.name === selectedProfileName) ?? allProfiles[0]
+
+  // Keep selectedProfileName in sync with what's actually displayed (guards against stale localStorage names)
+  useEffect(() => {
+    if (selectedProfile && selectedProfileName !== selectedProfile.name) {
+      setSelectedProfileName(selectedProfile.name)
+    }
+  }, [selectedProfile?.name, selectedProfileName])
   const m = snap?.metrics
   const ramUsedPct = useMemo(() => {
     if (!m || m.totalMemMb <= 0) return 0
@@ -581,7 +642,7 @@ export function DashboardMainPage(): ReactElement {
               <button
                 type="button"
                 onClick={() => setConfirmModalOpen(true)}
-                disabled={selectedProfile.status === 'planned' || isSwitching || activeProfile === selectedProfileName}
+                disabled={selectedProfile.status === 'planned' || (swState.active && swState.targetProfile === selectedProfileName) || activeProfile === selectedProfileName}
                 style={{
                   padding: '12px 24px',
                   borderRadius: 8,
@@ -594,15 +655,15 @@ export function DashboardMainPage(): ReactElement {
                   color: '#fff',
                   fontWeight: 600,
                   fontSize: 15,
-                  cursor: selectedProfile.status === 'planned' || isSwitching || activeProfile === selectedProfileName ? 'default' : 'pointer',
-                  opacity: selectedProfile.status === 'planned' || activeProfile === selectedProfileName ? 0.6 : isSwitching ? 0.8 : 1,
+                  cursor: selectedProfile.status === 'planned' || (swState.active && swState.targetProfile === selectedProfileName) || activeProfile === selectedProfileName ? 'default' : 'pointer',
+                  opacity: selectedProfile.status === 'planned' || activeProfile === selectedProfileName ? 0.6 : (swState.active && swState.targetProfile === selectedProfileName) ? 0.8 : 1,
                   display: 'flex',
                   alignItems: 'center',
                   gap: 8,
                   transition: 'all 0.2s ease',
                 }}
               >
-                {isSwitching && <span className="codicon codicon-loading" style={{ animation: 'spin 1s linear infinite' }} />}
+                {swState.active && swState.targetProfile === selectedProfileName && <span className="codicon codicon-loading" style={{ animation: 'spin 1s linear infinite' }} />}
                 {selectedProfile.status === 'planned'
                   ? 'COMING SOON'
                   : activeProfile === selectedProfileName
@@ -612,6 +673,18 @@ export function DashboardMainPage(): ReactElement {
                       : 'INITIALIZE'}
               </button>
             </div>
+
+            {swState.active && swState.targetProfile === selectedProfileName && (
+              <div style={{ marginTop: 20, padding: '16px 20px', borderRadius: 10, background: 'rgba(0,0,0,0.35)', border: `1px solid ${selectedProfile.accent}44` }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: selectedProfile.accent }}>{swState.step || 'Starting...'}</span>
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{Math.round(swState.progress)}%</span>
+                </div>
+                <div style={{ width: '100%', height: 4, background: 'rgba(255,255,255,0.08)', borderRadius: 2, overflow: 'hidden' }}>
+                  <div style={{ width: `${swState.progress}%`, height: '100%', background: selectedProfile.accent, borderRadius: 2, transition: 'width 0.4s ease-out', boxShadow: `0 0 8px ${selectedProfile.accent}80` }} />
+                </div>
+              </div>
+            )}
 
             {/* Section 2: System Metrics (Live) - Moved Up */}
             {activeProfile === selectedProfileName && m && (
@@ -696,6 +769,10 @@ export function DashboardMainPage(): ReactElement {
                                   setCreateProjectDeps({})
                                 }
                                 setCreateProjectModalOpen(true)
+                                const tmpl = selectedProfile.baseTemplate || selectedProfile.name
+                                invoke('ipc_invoke', { channel: 'dh:ports:suggest', payload: { template: tmpl, profile: selectedProfileName, subTemplate: mobileSubTemplate } }).then((r: any) => {
+                                  if (r.ok && r.ports) setSuggestedPorts(r.ports)
+                                }).catch(() => {})
                               }} style={{ padding: '0 16px', borderRadius: 6, border: 'none', background: selectedProfile.accent, color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>Create New</button>
                             </>
                           ) : (
@@ -816,7 +893,13 @@ export function DashboardMainPage(): ReactElement {
             )}
           </>
         ) : (
-          <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>Select a profile from the right panel.</div>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 16, textAlign: 'center', color: 'var(--text-muted)' }}>
+            <span className="codicon codicon-person-add" style={{ fontSize: 48, opacity: 0.3 }} />
+            <div>
+              <p style={{ margin: '0 0 4px', fontSize: 17, fontWeight: 600, color: 'var(--text)' }}>No profiles yet</p>
+              <p style={{ margin: 0, fontSize: 14 }}>Create a profile in the <strong>Profiles</strong> page to get started.</p>
+            </div>
+          </div>
         )}
       </div>
 
@@ -826,6 +909,11 @@ export function DashboardMainPage(): ReactElement {
           Profiles
         </h3>
         <div className="profile-list">
+          {allProfiles.length === 0 && (
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0, lineHeight: 1.5 }}>
+              No profiles yet. Go to <strong>Profiles</strong> to create one.
+            </p>
+          )}
           {allProfiles.map((prof) => (
             <button
               key={prof.name}
@@ -1027,10 +1115,21 @@ export function DashboardMainPage(): ReactElement {
                     </div>
                   </div>
                 )}
+                {Object.keys(suggestedPorts).length > 0 && (
+                  <div style={{ marginBottom: 20, padding: '12px 14px', borderRadius: 8, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 8 }}>Services & Ports</div>
+                    {Object.entries(suggestedPorts).map(([svc, port]) => (
+                      <div key={svc} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                        <span style={{ fontSize: 13, color: 'var(--text-muted)', textTransform: 'capitalize' }}>{svc.replace('_', ' ')}</span>
+                        <span style={{ fontSize: 13, fontFamily: 'monospace', color: selectedProfile.accent }}>:{port}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 16 }}>
                   <button
                     type="button"
-                    onClick={() => setCreateProjectModalOpen(false)}
+                    onClick={() => { setCreateProjectModalOpen(false); setSuggestedPorts({}) }}
                     style={{
                       padding: '10px 24px', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, background: 'rgba(255,255,255,0.05)', color: 'var(--text)', cursor: 'pointer', fontWeight: 600, fontSize: 14, transition: 'all 0.2s ease',
                     }}

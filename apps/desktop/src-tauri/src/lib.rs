@@ -258,6 +258,15 @@ fn resolve_profile_template(app: &tauri::AppHandle, profile: &str) -> String {
     profile.to_string()
 }
 
+fn find_free_port(preferred: u16) -> u16 {
+    for port in preferred..preferred.saturating_add(200) {
+        if std::net::TcpListener::bind(("127.0.0.1", port)).is_ok() {
+            return port;
+        }
+    }
+    preferred
+}
+
 fn get_profile_extra_env(app: &tauri::AppHandle, profile: &str) -> std::collections::HashMap<String, String> {
     let mut env = std::collections::HashMap::new();
     let template = resolve_profile_template(app, profile);
@@ -291,6 +300,22 @@ fn get_profile_extra_env(app: &tauri::AppHandle, profile: &str) -> std::collecti
         if let Some(dir_str) = proj_dir {
             if !dir_str.is_empty() {
                 env.insert("PROJECT_DIR".to_string(), dir_str.to_string());
+            }
+        }
+
+        // Pass stored per-profile port assignments to compose
+        for (env_key, store_prefix) in &[
+            ("JUPYTER_PORT", "jupyter_port"),
+            ("POSTGRES_PORT", "postgres_port"),
+            ("NODE_PORT", "node_port"),
+            ("NODE_HMR_PORT", "node_hmr_port"),
+            ("APPIUM_PORT", "appium_port"),
+            ("JSON_SERVER_PORT", "json_server_port"),
+            ("OLLAMA_PORT", "ollama_port"),
+        ] {
+            let store_key = format!("{}_{}", store_prefix, profile);
+            if let Some(val) = store.get(&store_key).and_then(|v| v.as_u64()) {
+                env.insert(env_key.to_string(), val.to_string());
             }
         }
 
@@ -1935,6 +1960,48 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
         }
       }
     },
+    "dh:ports:suggest" => {
+      let template = body.get("template").and_then(|v| v.as_str()).unwrap_or_default();
+      let profile = body.get("profile").and_then(|v| v.as_str()).unwrap_or_default();
+      let sub_template = body.get("subTemplate").and_then(|v| v.as_str()).unwrap_or("react-native");
+
+      // Return existing stored ports if profile already has them, otherwise find free ones
+      let mut ports = serde_json::Map::new();
+      let existing: std::collections::HashMap<String, u64> = if let Ok(store_path) = crate::app_file(&app, "store.json") {
+        let store = crate::read_json(&store_path);
+        let mut m = std::collections::HashMap::new();
+        for key in &["jupyter_port", "postgres_port", "node_port", "node_hmr_port", "appium_port", "json_server_port", "ollama_port"] {
+          if let Some(v) = store.get(format!("{}_{}", key, profile)).and_then(|v| v.as_u64()) {
+            m.insert(key.to_string(), v);
+          }
+        }
+        m
+      } else {
+        std::collections::HashMap::new()
+      };
+
+      match template {
+        "data-science" => {
+          ports.insert("jupyter".into(), (*existing.get("jupyter_port").unwrap_or(&(find_free_port(8888) as u64))).into());
+          ports.insert("postgres".into(), (*existing.get("postgres_port").unwrap_or(&(find_free_port(54320) as u64))).into());
+        }
+        "web-dev" => {
+          ports.insert("node".into(), (*existing.get("node_port").unwrap_or(&(find_free_port(3000) as u64))).into());
+          ports.insert("node_hmr".into(), (*existing.get("node_hmr_port").unwrap_or(&(find_free_port(5173) as u64))).into());
+          ports.insert("postgres".into(), (*existing.get("postgres_port").unwrap_or(&(find_free_port(54321) as u64))).into());
+        }
+        "mobile" if sub_template == "react-native" => {
+          ports.insert("appium".into(), (*existing.get("appium_port").unwrap_or(&(find_free_port(4723) as u64))).into());
+          ports.insert("json_server".into(), (*existing.get("json_server_port").unwrap_or(&(find_free_port(3001) as u64))).into());
+        }
+        "ai-ml" => {
+          ports.insert("jupyter".into(), (*existing.get("jupyter_port").unwrap_or(&(find_free_port(8888) as u64))).into());
+          ports.insert("ollama".into(), (*existing.get("ollama_port").unwrap_or(&(find_free_port(11434) as u64))).into());
+        }
+        _ => {}
+      }
+      json!({ "ok": true, "ports": ports })
+    },
     "dh:profile:switch" => {
       let from_profile = body.get("from").and_then(|v| v.as_str());
       let to_profile = body.get("to").and_then(|v| v.as_str()).unwrap_or_default();
@@ -1944,6 +2011,11 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
         return Ok(json!({ "ok": false, "log": "", "error": "[PROFILE_SWITCH_INVALID] 'to' profile required" }));
       }
 
+      let emit_step = |step: &str, progress: u8| {
+        let _ = app.emit("profile-switch-progress", serde_json::json!({ "step": step, "progress": progress }));
+      };
+
+      emit_step("Checking Docker...", 5);
       match exec_output_limit("docker", &["info", "--format", "{{.ServerVersion}}"], CMD_TIMEOUT_SHORT).await {
         Err(_) => return Ok(json!({ "ok": false, "log": "", "error": "[DOCKER_UNAVAILABLE] Docker daemon is not reachable" })),
         Ok(ref out) if out.trim().is_empty() => return Ok(json!({ "ok": false, "log": "", "error": "[DOCKER_UNAVAILABLE] Docker daemon is not reachable" })),
@@ -1952,15 +2024,44 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
 
       let mut logs = String::new();
 
+      // Stop containers from other profiles (docker stop — preserves containers, just pauses them)
+      emit_step("Pausing other profiles...", 20);
+      if let Ok(ps_out) = exec_output_limit(
+        "docker",
+        &["ps", "--filter", "label=com.docker.compose.project",
+          "--format", "{{.ID}}\t{{.Label \"com.docker.compose.project\"}}"],
+        CMD_TIMEOUT_SHORT,
+      ).await {
+        let ids_to_stop: Vec<String> = ps_out.lines()
+          .filter_map(|line| {
+            let mut parts = line.splitn(2, '\t');
+            let id = parts.next()?.trim().to_string();
+            let project = parts.next()?.trim().to_string();
+            if project != to_profile { Some(id) } else { None }
+          })
+          .collect();
+        if !ids_to_stop.is_empty() {
+          let mut stop_args = vec!["stop".to_string()];
+          stop_args.extend(ids_to_stop);
+          let stop_refs: Vec<&str> = stop_args.iter().map(|s| s.as_str()).collect();
+          match exec_output_limit("docker", &stop_refs, CMD_TIMEOUT_DEFAULT).await {
+            Ok(out) => logs.push_str(&format!("Paused other profile containers:\n{}\n", out.trim())),
+            Err(e) => logs.push_str(&format!("Warning: could not pause other containers: {}\n", e.trim())),
+          }
+          tokio::time::sleep(std::time::Duration::from_millis(800)).await;
+        }
+      }
+
+      // Stop from profile (docker compose stop — preserves containers)
       if let Some(from) = from_profile {
+        emit_step(&format!("Stopping {}...", from), 35);
         let from_template = resolve_profile_template(&app, from);
         let from_dir = compose_profiles::compose_profile_workdir(&app, &from_template);
         if from_dir.is_dir() {
-          match exec_docker_compose_in_dir(&from_dir, &["down"], CMD_TIMEOUT_DEFAULT, Some(from), Some(get_profile_extra_env(&app, from))).await {
+          match exec_docker_compose_in_dir(&from_dir, &["stop"], CMD_TIMEOUT_DEFAULT, Some(from), Some(get_profile_extra_env(&app, from))).await {
             Ok((stdout, stderr)) => logs.push_str(&format!("Stopped old profile:\n{}{}\n", stdout, stderr)),
             Err(e) => logs.push_str(&format!("Warning: failed to stop old profile: {}\n", e.trim())),
           }
-          tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
         }
       }
 
@@ -1974,9 +2075,43 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
         }));
       }
 
+      // Auto-assign unique ports for this profile on first switch
+      emit_step("Assigning ports...", 50);
+      if let Ok(store_path) = crate::app_file(&app, "store.json") {
+        let mut store = crate::read_json(&store_path);
+        let mut changed = false;
+        let port_specs: &[(&str, u16)] = match to_template.as_str() {
+          "data-science" => &[("jupyter_port", 8888), ("postgres_port", 54320)],
+          "web-dev"      => &[("node_port", 3000), ("node_hmr_port", 5173), ("postgres_port", 54321)],
+          _              => &[],
+        };
+        for (store_key_suffix, preferred) in port_specs {
+          let store_key = format!("{}_{}", store_key_suffix, to_profile);
+          if store.get(&store_key).is_none() {
+            let free = find_free_port(*preferred);
+            store[&store_key] = serde_json::json!(free);
+            changed = true;
+          }
+        }
+        if changed {
+          let _ = std::fs::write(&store_path, serde_json::to_string_pretty(&store).unwrap_or_default());
+        }
+      }
+
+      emit_step(&format!("Starting {}...", to_profile), 65);
       match exec_docker_compose_in_dir(&to_dir, &["up", "-d"], CMD_TIMEOUT_DEFAULT, Some(to_profile), Some(get_profile_extra_env(&app, to_profile))).await {
         Ok((stdout, stderr)) => {
           logs.push_str(&format!("Started new profile:\n{}{}\n", stdout, stderr));
+          // Persist active profile so the frontend refresh reads it correctly on reload
+          if let Ok(store_path) = crate::app_file(&app, "store.json") {
+            let mut store = crate::read_json(&store_path);
+            if !store.is_object() { store = serde_json::json!({}); }
+            if let Some(map) = store.as_object_mut() {
+              map.insert("active_profile".to_string(), serde_json::json!(to_profile));
+            }
+            let _ = std::fs::write(&store_path, serde_json::to_string_pretty(&store).unwrap_or_default());
+          }
+          emit_step("Done", 100);
           json!({ "ok": true, "log": logs })
         },
         Err(e) => {
@@ -3015,12 +3150,14 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
 
     "dh:ssh:generate" => {
       let email = body.get("email").and_then(|v| v.as_str()).unwrap_or("lumina@local");
+      let key_name = body.get("keyName").and_then(|v| v.as_str()).unwrap_or("id_ed25519");
+      let safe_name: String = key_name.chars().map(|c| if c.is_alphanumeric() || c == '_' || c == '-' { c } else { '_' }).collect();
       let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
       let ssh_dir = format!("{}/.ssh", home);
-      let key_path = format!("{}/id_ed25519", ssh_dir);
+      let key_path = format!("{}/{}", ssh_dir, safe_name);
       let _ = std::fs::create_dir_all(&ssh_dir);
       match exec_output("ssh-keygen", &["-t", "ed25519", "-C", email, "-f", &key_path, "-N", ""]).await {
-        Ok(_) => json!({ "ok": true }),
+        Ok(_) => json!({ "ok": true, "keyName": safe_name }),
         Err(e) => json!({ "ok": false, "error": format!("[SSH_GENERATE_FAILED] {}", e.trim()) }),
       }
     }

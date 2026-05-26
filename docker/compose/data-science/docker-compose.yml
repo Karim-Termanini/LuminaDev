@@ -5,7 +5,7 @@ services:
   jupyter:
     image: jupyter/datascience-notebook:${PYTHON_IMAGE_TAG:-latest}
     ports:
-      - "8888:8888"
+      - "${JUPYTER_PORT:-8888}:8888"
     environment:
       - JUPYTER_TOKEN=luminadev
     volumes:
@@ -15,7 +15,7 @@ services:
   postgres:
     image: postgres:${POSTGRES_IMAGE_TAG:-16-alpine}
     ports:
-      - "54320:5432"
+      - "${POSTGRES_PORT:-54320}:5432"
     environment:
       - POSTGRES_PASSWORD=luminadev
       - POSTGRES_DB=datasci

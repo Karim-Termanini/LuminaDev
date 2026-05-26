@@ -5,6 +5,27 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 const profiles = ComposeProfileSchema.options
 
+function stateColor(s: string): string {
+  if (s === 'running') return 'var(--accent)'
+  if (s === 'completed') return 'var(--green)'
+  if (s === 'failed') return 'var(--red)'
+  return 'var(--text-muted)'
+}
+
+function stateBg(s: string): string {
+  if (s === 'running') return 'rgba(124, 77, 255, 0.12)'
+  if (s === 'completed') return 'rgba(0, 230, 118, 0.12)'
+  if (s === 'failed') return 'rgba(248, 81, 73, 0.12)'
+  return 'rgba(128, 128, 128, 0.12)'
+}
+
+function stateBorder(s: string): string {
+  if (s === 'running') return 'rgba(124, 77, 255, 0.35)'
+  if (s === 'completed') return 'rgba(0, 230, 118, 0.35)'
+  if (s === 'failed') return 'rgba(248, 81, 73, 0.35)'
+  return 'rgba(128, 128, 128, 0.3)'
+}
+
 export function DashboardLogsPage(): ReactElement {
   const [profile, setProfile] = useState<(typeof profiles)[number]>('web-dev')
   const [composeLog, setComposeLog] = useState('')
@@ -29,14 +50,10 @@ export function DashboardLogsPage(): ReactElement {
     try {
       const list = (await window.dh.jobsList()) as JobSummary[]
       setJobs(Array.isArray(list) ? list : [])
-    } catch {
-      setJobs([])
-    }
+    } catch { setJobs([]) }
   }, [])
 
-  useEffect(() => {
-    void loadComposeLog(profile)
-  }, [profile, loadComposeLog])
+  useEffect(() => { void loadComposeLog(profile) }, [profile, loadComposeLog])
 
   useEffect(() => {
     void refreshJobs()
@@ -44,96 +61,153 @@ export function DashboardLogsPage(): ReactElement {
     return () => clearInterval(id)
   }, [refreshJobs])
 
-  const stateColor = (s: string) => s === 'running' ? 'var(--accent)' : s === 'completed' ? 'var(--green)' : s === 'failed' ? 'var(--red)' : 'var(--text-muted)'
-  const runningJobs = jobs.filter(j => j.state === 'running')
-  const doneJobs = jobs.filter(j => j.state !== 'running').slice(-10)
+  const runningJobs = jobs.filter((j) => j.state === 'running')
+  const doneJobs = jobs.filter((j) => j.state !== 'running').slice(-12)
+  const allJobsDisplay = [...runningJobs, ...doneJobs]
 
   return (
-    <div className="logs-page elevated-page" style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 1100, paddingInline: 12 }}>
-      <header>
-        <div className="mono" style={{ color: 'var(--accent)', fontSize: 12, marginBottom: 8 }}>DASHBOARD.LOGS</div>
-        <h1 style={{ margin: 0, fontSize: 28, fontWeight: 700 }}>Logs</h1>
-        <p style={{ color: 'var(--text-muted)', fontSize: 14, marginTop: 8 }}>
-          Compose stack output and background job history. Jobs refresh every 2 seconds. Compose logs load on profile select.
-        </p>
-      </header>
+    <div className="elevated-page logs-page">
+      {/* ── Hero ── */}
+      <div className="logs-hero-section">
+        <div>
+          <div className="logs-eyebrow">
+            <span className="codicon codicon-output" />
+            Dashboard · Logs
+          </div>
+          <h1 className="logs-title">Logs &amp; Activity</h1>
+          <p className="logs-subtitle">
+            Compose stack output and background job history. Jobs refresh every 2 seconds.
+          </p>
+        </div>
+      </div>
 
-      {runningJobs.length > 0 && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          {runningJobs.map(j => (
-            <div key={j.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px', background: 'rgba(124,77,255,0.1)', border: '1px solid var(--accent)', borderRadius: 8 }}>
-              <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--accent)', animation: 'pulse 1.5s infinite' }} />
-              <span style={{ fontSize: 13, fontWeight: 600 }}>{j.kind.replace('_', ' ')}</span>
-              <div style={{ width: 80, height: 6, background: 'var(--border)', borderRadius: 3, overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: `${j.progress}%`, background: 'var(--accent)', transition: 'width 0.5s' }} />
+      {/* ── Dashboard Grid ── */}
+      <div className="logs-dashboard-grid">
+        {/* Left Column: Compose Terminal */}
+        <div className="logs-main-col">
+          <div className="logs-card-container">
+            <div className="logs-card-header">
+              <div className="logs-card-header-title">
+                <span className="codicon codicon-terminal" style={{ color: 'var(--accent)' }} />
+                Compose Output
               </div>
-              <span className="mono" style={{ fontSize: 11, color: 'var(--text-muted)' }}>{j.progress}%</span>
+              <div className="logs-controls">
+                <span className="logs-select-label">Profile:</span>
+                <div className="logs-select-wrapper">
+                  <select
+                    className="logs-select"
+                    value={profile}
+                    onChange={(e) => setProfile(e.target.value as (typeof profiles)[number])}
+                  >
+                    {profiles.map((p) => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                  <span className="codicon codicon-chevron-down logs-select-arrow" />
+                </div>
+                <button
+                  type="button"
+                  className="logs-btn"
+                  onClick={() => void loadComposeLog(profile)}
+                  disabled={composeBusy}
+                >
+                  <span className={`codicon ${composeBusy ? 'codicon-loading codicon-modifier-spin' : 'codicon-refresh'}`} />
+                  {composeBusy ? 'Loading…' : 'Refresh'}
+                </button>
+              </div>
             </div>
-          ))}
-        </div>
-      )}
-
-      <section style={card}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 10 }}>
-          <div style={{ fontWeight: 600 }}>Compose Output</div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <label className="mono" style={{ fontSize: 12, color: 'var(--text-muted)' }}>Profile:</label>
-            <select
-              value={profile}
-              onChange={(e) => setProfile(e.target.value as (typeof profiles)[number])}
-              style={input}
-            >
-              {profiles.map((p) => <option key={p} value={p}>{p}</option>)}
-            </select>
-            <button type="button" className="hp-btn" onClick={() => void loadComposeLog(profile)} disabled={composeBusy}>
-              {composeBusy ? 'Loading…' : 'Refresh'}
-            </button>
+            <pre ref={logRef} className="logs-terminal">{composeLog || 'Fetching logs...'}</pre>
           </div>
         </div>
-        <pre ref={logRef} className="mono" style={pre}>{composeLog || 'Fetching…'}</pre>
-      </section>
 
-      <section style={card}>
-        <div style={{ fontWeight: 600, marginBottom: 12 }}>
-          Background Jobs
-          <span className="mono" style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 8 }}>
-            {runningJobs.length > 0 ? `${runningJobs.length} running` : 'idle'}
-          </span>
-        </div>
-        {jobs.length === 0 ? (
-          <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>No jobs yet. Install a runtime or run a compose profile to see activity here.</div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {[...runningJobs, ...doneJobs].map(j => (
-              <div key={j.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 12px', background: '#0f0f0f', borderRadius: 8, border: '1px solid var(--border)' }}>
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: stateColor(j.state), flexShrink: 0 }} />
-                <span className="mono" style={{ fontSize: 12, minWidth: 140 }}>{j.kind}</span>
-                <span style={{ fontSize: 12, color: stateColor(j.state), minWidth: 80 }}>{j.state}</span>
-                {j.state === 'running' && (
-                  <div style={{ flex: 1, height: 4, background: 'var(--border)', borderRadius: 2, overflow: 'hidden' }}>
-                    <div style={{ height: '100%', width: `${j.progress}%`, background: 'var(--accent)', transition: 'width 0.5s' }} />
+        {/* Right Column: Job History & Progress */}
+        <div className="logs-side-col">
+          {/* Running Job Banners */}
+          {runningJobs.length > 0 && (
+            <div className="logs-active-jobs-group">
+              <div className="logs-section-subtitle">Active Processes</div>
+              {runningJobs.map((j) => (
+                <div key={j.id} className="logs-running-banner">
+                  <div className="logs-banner-top">
+                    <span className="logs-pulse-dot" />
+                    <span className="logs-job-name">{j.kind.replace(/_/g, ' ')}</span>
+                    <span className="logs-job-pct">{j.progress}%</span>
                   </div>
-                )}
-                {j.logTail.length > 0 && (
-                  <span className="mono" style={{ fontSize: 11, color: 'var(--text-muted)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {j.logTail[j.logTail.length - 1]}
-                  </span>
-                )}
+                  <div className="logs-progress-track">
+                    <div className="logs-progress-fill" style={{ width: `${j.progress}%` }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Background Jobs Card */}
+          <div className="logs-card-container">
+            <div className="logs-card-header">
+              <div className="logs-card-header-title">
+                <span className="codicon codicon-run-all" style={{ color: 'var(--accent)' }} />
+                Job History
               </div>
-            ))}
+              <span
+                className="logs-status-badge"
+                style={{
+                  color: runningJobs.length > 0 ? 'var(--accent)' : 'var(--text-muted)',
+                  background: runningJobs.length > 0 ? 'rgba(124, 77, 255, 0.12)' : 'rgba(128, 128, 128, 0.12)',
+                  border: `1px solid ${runningJobs.length > 0 ? 'rgba(124, 77, 255, 0.35)' : 'rgba(128, 128, 128, 0.3)'}`,
+                }}
+              >
+                {runningJobs.length > 0 ? `${runningJobs.length} active` : 'idle'}
+              </span>
+            </div>
+
+            {allJobsDisplay.length === 0 ? (
+              <div className="logs-empty-state">
+                <span className="codicon codicon-history" style={{ fontSize: 32, color: 'var(--text-muted)' }} />
+                <p className="logs-empty-title">No jobs recorded</p>
+                <p className="logs-empty-desc">
+                  Install a runtime or switch compose profiles to initiate tasks.
+                </p>
+              </div>
+            ) : (
+              <div className="logs-jobs-list">
+                {allJobsDisplay.map((j, i) => (
+                  <div
+                    key={j.id}
+                    className="logs-job-row"
+                    style={{ borderBottom: i < allJobsDisplay.length - 1 ? '1px solid var(--border)' : 'none' }}
+                  >
+                    <div className="logs-job-row-top">
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span
+                          className="logs-job-dot"
+                          style={{
+                            background: stateColor(j.state),
+                            boxShadow: j.state === 'running' ? `0 0 6px ${stateColor(j.state)}` : 'none',
+                          }}
+                        />
+                        <span className="logs-job-kind">{j.kind.replace(/_/g, ' ')}</span>
+                      </div>
+                      <span
+                        className="logs-state-pill"
+                        style={{
+                          color: stateColor(j.state),
+                          background: stateBg(j.state),
+                          border: `1px solid ${stateBorder(j.state)}`,
+                        }}
+                      >
+                        {j.state}
+                      </span>
+                    </div>
+                    {j.logTail.length > 0 && (
+                      <div className="logs-job-tail-snippet">
+                        {j.logTail[j.logTail.length - 1]}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-        )}
-      </section>
+        </div>
+      </div>
     </div>
   )
-}
-
-const card = { background: 'var(--bg-widget)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: 16 }
-const input = {
-  border: '1px solid var(--border)', background: 'var(--bg-input)', color: 'var(--text)',
-  borderRadius: 6, padding: '6px 10px', appearance: 'none' as const, WebkitAppearance: 'none' as const,
-}
-const pre = {
-  margin: 0, padding: 12, background: '#0a0a0a', border: '1px solid var(--border)',
-  borderRadius: 8, maxHeight: 340, overflow: 'auto' as const, whiteSpace: 'pre-wrap' as const, fontSize: 12,
 }
