@@ -464,6 +464,105 @@ const styles = StyleSheet.create({
     Ok(())
 }
 
+pub fn scaffold_mobile_flutter(
+    project_dir: &std::path::Path,
+    env_vars: &[(&str, &str)],
+) -> Result<(), String> {
+    let w = |path: &str, content: &str| {
+        if let Some(parent) = std::path::Path::new(path).parent() {
+            let _ = std::fs::create_dir_all(project_dir.join(parent));
+        }
+        std::fs::write(project_dir.join(path), content)
+            .map_err(|e| format!("[SCAFFOLD_FAILED] write {path}: {e}"))
+    };
+
+    w("pubspec.yaml", r#"name: lumina_mobile_app
+description: LuminaDev Flutter project
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+  flutter: '>=3.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  http: ^1.1.0
+  provider: ^6.1.0
+  go_router: ^12.0.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
+"#)?;
+
+    w("lib/main.dart", r#"import 'package:flutter/material.dart';
+
+void main() {
+  runApp(const LuminaApp());
+}
+
+class LuminaApp extends StatelessWidget {
+  const LuminaApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'LuminaDev Flutter App',
+      theme: ThemeData(colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple)),
+      home: const Scaffold(
+        body: Center(
+          child: Text('LuminaDev Flutter App', style: TextStyle(fontSize: 24)),
+        ),
+      ),
+    );
+  }
+}
+"#)?;
+
+    w("test/widget_test.dart", r#"import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:lumina_mobile_app/main.dart';
+
+void main() {
+  testWidgets('App smoke test', (WidgetTester tester) async {
+    await tester.pumpWidget(const LuminaApp());
+    expect(find.text('LuminaDev Flutter App'), findsOneWidget);
+  });
+}
+"#)?;
+
+    let mut env_content = String::new();
+    for (k, v) in env_vars {
+        env_content.push_str(&format!("{k}={v}\n"));
+    }
+    w(".env", &env_content)?;
+
+    w(".gitignore", ".dart_tool/\n.flutter-plugins\n.flutter-plugins-dependencies\nbuild/\n.env\n")?;
+
+    w("docker-compose.yml", r#"services:
+  flutter-dev:
+    image: cirrusci/flutter:stable
+    working_dir: /app
+    volumes:
+      - .:/app
+      - /tmp/.X11-unix:/tmp/.X11-unix
+    command: flutter pub get
+    environment:
+      - DISPLAY=${DISPLAY}
+"#)?;
+
+    w("analysis_options.yaml", r#"include: package:flutter_lints/flutter.yaml
+"#)?;
+
+    Ok(())
+}
+
 pub fn detect_template(project_dir: &std::path::Path) -> String {
     if project_dir.join("package.json").exists() {
         "web-dev".to_string()
@@ -616,6 +715,17 @@ mod tests {
         assert!(dir.path().join(".gitignore").exists());
         assert!(dir.path().join("android").is_dir());
         assert!(dir.path().join("ios").is_dir());
+    }
+
+    #[test]
+    fn scaffold_flutter_creates_expected_files() {
+        let dir = tempfile::TempDir::new().unwrap();
+        scaffold_mobile_flutter(dir.path(), &[]).unwrap();
+        assert!(dir.path().join("pubspec.yaml").exists());
+        assert!(dir.path().join("lib/main.dart").exists());
+        assert!(dir.path().join("test/widget_test.dart").exists());
+        assert!(dir.path().join(".env").exists());
+        assert!(dir.path().join("docker-compose.yml").exists());
     }
 
     #[test]
