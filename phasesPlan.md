@@ -418,12 +418,12 @@ Missing: real dep graph (`removableDeps` always empty), Ruby slow on Fedora.
 
 ---
 
-## Phase 9 — Profiles 🔄 PARTIAL (`/profiles` engine room)
+## Phase 9 — Profiles ✅ DONE (`/profiles` engine room)
 
 **Goal:** Implement a real profile management page with real accounts and the ability to seamlessly switch between profiles. Complete removal of static placeholder profiles.
 
-- [ ] **Data Structure:** Move away from static frontend templates. Profiles must be defined as robust JSON structures containing user credentials, SSH keys, active Compose configurations, and customized environment variables.
-- [ ] **Authentication:** Implementation of local user accounts with secure credential storage.
+- [x] **Data Structure:** Move away from static frontend templates. Profiles must be defined as robust JSON structures containing user credentials, SSH keys, active Compose configurations, and customized environment variables.
+- [x] **Authentication:** Implementation of local user accounts with secure credential storage (AES-256-GCM).
 - [x] **Switching Engine:** A context-switching engine that safely tears down one profile's state and spins up another's instantly from the UI (`profileSwitch` IPC).
 - [x] **Workspace Context Binding:** Fluent Design UI modal to create/link projects and dynamically bind `${PROJECT_DIR}` to containers on restart.
 - [x] **Project Scaffolding Engine:** Advanced `npm`/`pip` dependency installer, dynamic `package.json`/`requirements.txt` generation, and real-time terminal UI progress streaming. Web-Dev and Data-Science are fully functional.
@@ -444,7 +444,7 @@ Missing: real dep graph (`removableDeps` always empty), Ruby slow on Fedora.
 
 **Goal:** Must execute strictly after Phase 16 (System Readiness/Installer) is 100% satisfied. Must be fully functional and avoid any duplicated setup steps.
 
-- [ ] **Flow Control:** Logic to check if Readiness is complete. If yes, proceed to First-run Wizard. 
+- [ ] **Flow Control:** Logic to check if Readiness is complete. If yes, proceed to First-run Wizard.
 - [ ] **Content Scope:** Strictly limited to application-specific onboarding (choosing an initial theme, setting up a Git identity).
 - [ ] **Zero Duplication:** Must not ask for or duplicate any setup steps already handled by the Readiness installer.
 
@@ -456,11 +456,11 @@ This phase turns the app into a true daily driver for software engineers managin
 
 - **Authentication** ✅: Encrypted store for tokens; device flow + PAT; optional OAuth client IDs via **Cloud Git → Advanced** / env / compile-time; dashboard **Cloud Git** link widget (`link.cloud-git`). Device-flow failure now maps to `[CLOUD_AUTH_DEVICE_POLL_REJECTED]` with actionable guidance.
 - **Interactive Version Control (Smart Workflow)** ✅:
-    - **Smart Push/Sync**: Fetch-before-push; `behind > 0` blocks push with notice; protected-branch failures → `[GIT_VCS_PROTECTED_BRANCH]` + Cloud Git link; **Copy raw error** on panel.
-    - **Branch rename after protected-branch push**: Suggests a new branch name, creates + pushes it, then opens PR/MR wizard automatically.
-    - **Integrate Bar**: Guided UI for Merge, Rebase, and Stash (fast-forward defaults).
-    - **Conflict Resolution Studio**: 3-way merge view (Local / Incoming / Result) with Accept Current, Accept Incoming, Accept Both. No manual text editing required.
-    - **State Management**: Automatic handling of `MERGING` / `REBASING` states with Continue or Abort actions.
+  - **Smart Push/Sync**: Fetch-before-push; `behind > 0` blocks push with notice; protected-branch failures → `[GIT_VCS_PROTECTED_BRANCH]` + Cloud Git link; **Copy raw error** on panel.
+  - **Branch rename after protected-branch push**: Suggests a new branch name, creates + pushes it, then opens PR/MR wizard automatically.
+  - **Integrate Bar**: Guided UI for Merge, Rebase, and Stash (fast-forward defaults).
+  - **Conflict Resolution Studio**: 3-way merge view (Local / Incoming / Result) with Accept Current, Accept Incoming, Accept Both. No manual text editing required.
+  - **State Management**: Automatic handling of `MERGING` / `REBASING` states with Continue or Abort actions.
 - **Cloud Dashboards (API Integration)** ✅:
   - **PR/MR Wizard**: Create PRs/MRs directly from the app. Auto-fills title from branch name, visual branch picker, opens after protected-branch bypass flow. GitLab merge button removed from CI panel (policy always blocks it); "View on GitLab" link used instead.
   - **CI/CD Pipelines**: `GitVcsCiChecks` + `gitVcsRepoPipelines` — real-time status (GitHub Actions + GitLab CI) with 30s polling. GitHub-only server-side merge button.
@@ -468,7 +468,7 @@ This phase turns the app into a true daily driver for software engineers managin
   - **Releases & Tags**: Latest releases per provider via `CloudGitActivityPanel`.
 - **Dashboard Widgets** ✅:
   - `live.git-recents`: Recent local repos — branch, dirty files, ahead/behind counts.
-  - `live.cloud-notifications` *(new)*: Failed pipelines + open issues from all connected GitHub/GitLab accounts. Registered in widget registry + `DashboardWidgetDeck`.
+  - `live.cloud-notifications` _(new)_: Failed pipelines + open issues from all connected GitHub/GitLab accounts. Registered in widget registry + `DashboardWidgetDeck`.
 
 ---
 
@@ -517,12 +517,14 @@ Flatpak runs with **full host permissions** — no sandbox isolation. Docker soc
 Probe for **everything** required to run app. No shortcuts.
 
 **Hardware/System:**
+
 - [x] RAM ≥ 4GB (warn if <4GB)
 - [x] CPU Cores ≥ 2 (warn if <2)
 - [x] Virtualization (KVM/VT-x/AMD-V enabled — critical for containers)
 - [x] Architecture: x86_64 required
 
 **Core Tools (Critical):**
+
 - [x] Docker installed + version ≥ 20.10
 - [x] Docker Compose v2 (via `docker compose` command, not `docker-compose`)
 - [x] Git installed
@@ -530,6 +532,7 @@ Probe for **everything** required to run app. No shortcuts.
 - [x] Curl, Tar, Unzip in PATH
 
 **System State:**
+
 - [x] Docker daemon running (not just installed)
 - [x] User in `docker` group (can run `docker ps` without sudo)
 - [x] `/var/run/docker.sock` readable
@@ -621,6 +624,7 @@ Based on current app state (Phase 16 + Phase 7 complete), here's what remaining 
 **Depends on:** Phase 15 (theme system must be complete first)
 
 **Scope:** Full settings persistence architecture with tabs:
+
 - General: startup behavior, window size, telemetry
 - Resources: CPU/RAM limits, job execution tuning
 - App Engine: IPC timeouts, thread pools, daemon config
@@ -641,6 +645,7 @@ Based on current app state (Phase 16 + Phase 7 complete), here's what remaining 
 **Current state:** Maintenance + MonitorPage have elevated theme; others inline-only.
 
 **Scope:** Convert 11 remaining pages to elevated theme system:
+
 - Create `theme-elevated.css` shared utilities
 - Per-page CSS files with imports + class overrides
 - Light/Dark/HighContrast token system
@@ -655,6 +660,7 @@ Based on current app state (Phase 16 + Phase 7 complete), here's what remaining 
 **Current state:** Full host permissions; local build works.
 
 **Scope:**
+
 - AppStream metadata (`metainfo.xml`): license, summary, screenshots
 - Desktop entry: icon assets, trademark-clean metadata
 - Reproducible build: manifest builds offline consistently
@@ -667,6 +673,7 @@ Based on current app state (Phase 16 + Phase 7 complete), here's what remaining 
 **Depends on:** Phase 8 (Settings must exist for profile env var storage)
 
 **Scope:** Real profile management (currently static templates only).
+
 - Data structure: robust JSON with creds, SSH keys, Compose config, env vars
 - Authentication: local user accounts, secure credential storage
 - Switching engine: tear-down + spin-up profile state atomically
@@ -681,6 +688,7 @@ Based on current app state (Phase 16 + Phase 7 complete), here's what remaining 
 ### Phase 10 — Extensions (Post-Alpha)
 
 **Scope:** Plugin model v0 (signed/allowlisted widgets + optional IPC namespaces).
+
 - Developer API: versioned, lifecycle hooks
 - Marketplace: browsable community directory (post-v0)
 
@@ -713,7 +721,7 @@ Based on current app state (Phase 16 + Phase 7 complete), here's what remaining 
 ✅  Phase 16 — System Readiness & Pre-Requisites Wizard (Installer)
 ✅  Phase 15 — Theme Rollout (Elevated aesthetic)
 📋  Phase 8  — Settings
-🔄  Phase 9  — Profiles
+✅  Phase 9  — Profiles
 📋  Phase 11 — First-run Wizard (Merged into Phase 16)
 📋  UI/UX & Performance Debt
 📋  Phase 10 — Extensions (Plugin model v0, Dev API)
