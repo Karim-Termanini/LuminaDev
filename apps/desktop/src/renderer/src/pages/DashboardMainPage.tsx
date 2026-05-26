@@ -636,7 +636,7 @@ export function DashboardMainPage(): ReactElement {
         id: j.id,
         icon,
         color,
-        title: `Task runner: ${j.kind} (${j.state})`,
+        title: `Job: ${j.kind} (${j.state})`,
         time: j.state === 'running' 
           ? `Progress: ${j.progress}% — ${j.logTail[j.logTail.length - 1] || 'Running'}`
           : j.logTail[j.logTail.length - 1] || 'Completed successfully'

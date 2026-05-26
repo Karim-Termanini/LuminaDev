@@ -617,7 +617,7 @@ When user clicks "Install" / "Fix":
 - [ ] **Dashboard - Kernels:** Build a configuration grid that allows starting, stopping, and linking local development kernels (e.g., Jupyter, PHP-FPM).
 - [ ] **Dashboard - Logs:** Implement a unified log viewer using `xterm.js` that multiplexes stdout/stderr streams from all active background jobs and containers into a single searchable buffer.
 - [ ] **Global Navigation (Chrome) Fixes:** Define the specific Tauri commands (e.g., `open_terminal`, `show_notifications_panel`) that must be bound to the Top Bar buttons (Search, Notification, Terminal, Settings) and Left Sidebar buttons (Docs, Setup Wizard, Local User).
-- [ ] **Bottom Bar:** Completely rip out the "Phase 0 task runner" and replace it with a clean, minimized status bar or remove it entirely if a replacement is unnecessary.
+- [x] **Bottom Bar:** Completely rip out the "Phase 0 task runner" and replace it with a clean, minimized status bar or remove it entirely if a replacement is unnecessary. ✅ FIXED
 
 ---
 

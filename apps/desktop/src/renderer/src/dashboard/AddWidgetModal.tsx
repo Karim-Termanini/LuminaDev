@@ -71,7 +71,7 @@ export function AddWidgetModal(props: {
           </button>
         </div>
         <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>
-          Built-in widgets (Phase 0 registry). Layout is stored under your app user data directory.
+          Built-in widgets registry. Layout is stored under your app user data directory.
         </p>
         <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
           {WIDGET_DEFINITIONS.map((w) => {

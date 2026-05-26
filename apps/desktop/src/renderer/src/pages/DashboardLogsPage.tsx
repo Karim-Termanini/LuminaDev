@@ -132,6 +132,7 @@ export function DashboardLogsPage(): ReactElement {
   const terminalRef = useRef<Terminal | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  const activeRef = useRef(false)
 
   const writeLogs = useCallback((text: string, filter: string) => {
     const term = terminalRef.current
@@ -331,11 +332,17 @@ export function DashboardLogsPage(): ReactElement {
   }, [loadSourceLogs])
 
   useEffect(() => {
+    activeRef.current = jobs.some(j => j.state === 'running') || containers.some(c => c.state === 'running')
+  }, [jobs, containers])
+
+  useEffect(() => {
     void refreshJobs()
     void refreshContainers()
     const id = setInterval(() => {
-      void refreshJobs()
-      void refreshContainers()
+      if (activeRef.current) {
+        void refreshJobs()
+        void refreshContainers()
+      }
     }, 2000)
     return () => clearInterval(id)
   }, [refreshJobs, refreshContainers])

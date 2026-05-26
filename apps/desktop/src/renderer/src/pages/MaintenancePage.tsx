@@ -801,7 +801,7 @@ export function MaintenancePage(): ReactElement {
       <section className="hp-card" id="maintenance-job-runner">
         <div className="hp-section-title">Job Runner (active tasks)</div>
         <p className="hp-muted" style={{ fontSize: 12, marginTop: 4, marginBottom: 10 }}>
-          Long-running work from the Phase 0 job runner (install runtimes, etc.). Polls with the maintenance page refresh.
+          Long-running work from the background job runner (install runtimes, etc.). Polls with the maintenance page refresh.
         </p>
         <div className="hp-table-wrap" style={{ borderRadius: 10, border: '1px solid var(--border)' }}>
           <table className="hp-table">

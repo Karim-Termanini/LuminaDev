@@ -29,23 +29,30 @@ export function ActiveJobsStrip(): ReactElement {
 
   return (
     <div
+      className="mono"
       style={{
         flexShrink: 0,
         borderTop: '1px solid var(--border)',
-        padding: '8px 24px',
-        background: 'var(--bg-panel)',
-        fontSize: 12,
+        padding: '0 16px',
+        background: 'rgba(0,0,0,0.3)',
+        fontSize: 10,
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
         boxSizing: 'border-box',
-        height: 38,
+        height: 26,
+        color: 'var(--text-muted)',
+        letterSpacing: '0.02em',
       }}
     >
       {/* Left: System Status Indicator */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--green)', boxShadow: '0 0 6px var(--green)' }} />
-        <span style={{ fontWeight: 600, color: 'var(--text-muted)' }}>System Status: Nominal</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--green)', boxShadow: '0 0 4px var(--green)' }} />
+          <span style={{ fontWeight: 500 }}>LuminaDev Engine: Connected</span>
+        </div>
+        <div style={{ width: 1, height: 12, background: 'var(--border)' }} />
+        <span>v0.2.0-alpha</span>
       </div>
 
       {/* Right: Active Task Progress */}
@@ -54,10 +61,10 @@ export function ActiveJobsStrip(): ReactElement {
           const firstActive = active[0]
           return (
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <span className="mono" style={{ fontSize: 11, color: 'var(--text)' }}>
-                Running task: {firstActive.kind.replace(/_/g, ' ')} ({Math.min(100, Math.max(0, firstActive.progress ?? 0))}%)
+              <span style={{ color: 'var(--text)' }}>
+                {active.length > 1 ? `[${active.length} Jobs]` : ''} {firstActive.kind.replace(/_/g, ' ')} ({Math.min(100, Math.max(0, firstActive.progress ?? 0))}%)
               </span>
-              <div style={{ width: 120, height: 6, background: 'rgba(255,255,255,0.06)', borderRadius: 3, overflow: 'hidden' }}>
+              <div style={{ width: 80, height: 4, background: 'rgba(255,255,255,0.06)', borderRadius: 2, overflow: 'hidden' }}>
                 <div style={{ width: `${Math.min(100, Math.max(0, firstActive.progress ?? 0))}%`, height: '100%', background: 'var(--accent)', transition: 'width 0.2s ease' }} />
               </div>
               <button
@@ -68,22 +75,23 @@ export function ActiveJobsStrip(): ReactElement {
                   background: 'none',
                   color: 'var(--orange)',
                   cursor: 'pointer',
-                  fontSize: 11,
+                  fontSize: 10,
                   fontWeight: 600,
-                  padding: 0,
+                  padding: '2px 6px',
+                  borderRadius: 4,
                   display: 'flex',
                   alignItems: 'center',
                   gap: 4,
                 }}
               >
-                <span className="codicon codicon-close" style={{ fontSize: 11 }} />
-                Cancel
+                <span className="codicon codicon-close" style={{ fontSize: 10 }} />
+                STOP
               </button>
             </div>
           )
         })()
       ) : (
-        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>No active tasks</span>
+        <span>Ready.</span>
       )}
     </div>
   )

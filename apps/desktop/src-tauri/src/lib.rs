@@ -4657,6 +4657,57 @@ mod tests {
       assert!(big.len() > 512 * 1024);
   }
 
+  #[test]
+  fn store_keys_allow_cloud_oauth_clients() {
+      assert!(is_allowed_store_key("cloud_oauth_clients"));
+  }
+
+  #[test]
+  fn store_keys_allow_active_profile() {
+      assert!(is_allowed_store_key("active_profile"));
+  }
+
+  #[test]
+  fn store_keys_allow_custom_profiles() {
+      assert!(is_allowed_store_key("custom_profiles"));
+  }
+
+  #[test]
+  fn store_keys_allow_dynamic_prefixes() {
+      assert!(is_allowed_store_key("project_dir_web-dev"));
+      assert!(is_allowed_store_key("python_version_data-science"));
+      assert!(is_allowed_store_key("postgres_version_ai-ml"));
+      assert!(is_allowed_store_key("node_version_mobile"));
+  }
+
+  #[test]
+  fn store_keys_reject_unknown_keys() {
+      assert!(!is_allowed_store_key("foo"));
+      assert!(!is_allowed_store_key("secret_data"));
+      assert!(!is_allowed_store_key(""));
+  }
+
+  #[test]
+  fn store_keys_reject_unknown_dynamic_prefixes() {
+      assert!(!is_allowed_store_key("unknown_prefix_web-dev"));
+      assert!(!is_allowed_store_key("secret_project_dir_web-dev"));
+  }
+
+  #[test]
+  fn store_keys_allow_all_configured_static_keys() {
+      for key in &[
+          "custom_profiles", "wizard_state", "ssh_bookmarks", "maintenance_state",
+          "active_profile", "on_login_automation", "appearance", "cloud_oauth_clients",
+          "readiness_wizard_complete", "general_settings", "update_settings",
+          "profile_credentials", "onboarding_profile", "projects_home_dir",
+          "resources_settings", "app_engine_settings", "builder_settings",
+          "beta_features_state", "notification_settings", "shortcuts_settings",
+          "datetime_settings", "language_settings",
+      ] {
+          assert!(is_allowed_store_key(key), "expected key '{}' to be allowed", key);
+      }
+  }
+
 }
 
 #[cfg(test)]
