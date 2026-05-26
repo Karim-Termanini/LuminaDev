@@ -5,8 +5,8 @@ import { Terminal } from '@xterm/xterm'
 import '@xterm/xterm/css/xterm.css'
 import { TERMINAL_OPEN_EXTERNAL_HINT, TERMINAL_PTY_HINT } from './environmentHints'
 import { humanizeTerminalError } from './terminalError'
-import './TerminalPage.css'
 import { useBetaFlags } from '../hooks/useBetaFlags'
+import './TerminalPage.css'
 
 export function TerminalPage(): ReactElement {
   const betaFlags = useBetaFlags()
@@ -23,6 +23,7 @@ export function TerminalPage(): ReactElement {
   const [fullEnv, setFullEnv] = useState<Record<string, string>>({})
   const [showAllEnv, setShowAllEnv] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const enableMultiplexer = betaFlags.enable_experimental_terminal_multiplexer ?? false
 
   useEffect(() => {
     const el = wrapRef.current
@@ -129,34 +130,34 @@ export function TerminalPage(): ReactElement {
 
   return (
     <div className="terminal-page elevated-page" style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 420 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-        <h1 style={{ margin: 0 }}>Embedded terminal</h1>
-        <div style={{ display: 'flex', gap: 8 }}>
-          {betaFlags['enable_experimental_terminal_multiplexer'] && (
-            <button
-              className={`hp-btn ${splitPane ? 'hp-btn-primary' : ''}`}
-              onClick={() => setSplitPane((v) => !v)}
-              title="Toggle split pane (experimental)"
-            >
-              <span className="codicon codicon-split-horizontal" aria-hidden /> Split
-            </button>
-          )}
-          <button
-            className={`hp-btn ${showConfig ? 'hp-btn-primary' : ''}`}
-            onClick={() => setShowConfig(!showConfig)}
-            title="Configure terminal session"
-          >
-            <span className="codicon codicon-settings" aria-hidden /> Configuration
-          </button>
-          <button
-            className="hp-btn hp-btn-primary"
-            onClick={() => void window.dh.openExternalTerminal()}
-            title="Open your system's native terminal"
-          >
-            <span className="codicon codicon-terminal" aria-hidden /> Open External Terminal
-          </button>
-        </div>
-      </div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+            <h1 style={{ margin: 0 }}>Embedded terminal</h1>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {enableMultiplexer && (
+                <button
+                  className={`hp-btn ${splitPane ? 'hp-btn-primary' : ''}`}
+                  onClick={() => setSplitPane((v) => !v)}
+                  title="Toggle split pane (experimental)"
+                >
+                  <span className="codicon codicon-split-horizontal" aria-hidden /> Split
+                </button>
+              )}
+              <button
+                className={`hp-btn ${showConfig ? 'hp-btn-primary' : ''}`}
+                onClick={() => setShowConfig(!showConfig)}
+                title="Configure terminal session"
+              >
+                <span className="codicon codicon-settings" aria-hidden /> Configuration
+              </button>
+              <button
+                className="hp-btn hp-btn-primary"
+                onClick={() => void window.dh.openExternalTerminal()}
+                title="Open your system's native terminal"
+              >
+                <span className="codicon codicon-terminal" aria-hidden /> Open External Terminal
+              </button>
+            </div>
+          </div>
 
       {showConfig && (
         <div className="hp-card" style={{ marginBottom: 16, display: 'grid', gridTemplateColumns: 'minmax(280px, 1fr) 2fr', gap: 20 }}>

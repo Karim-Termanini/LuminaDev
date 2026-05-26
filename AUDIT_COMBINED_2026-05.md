@@ -165,3 +165,32 @@ Missing features	4	2 (update:check handler, DashboardWidgets)	2 (checkOnStartup 
 Minor debt	6	6 (all CodeRabbit items applied)	0	—
 Total	38	26 confirmed fixed	12 confirmed open	8 false claims
 The application has crossed from "significant audit exposure" into "known technical debt with honest disclosure in most visible cases." The remaining P0 items are small in scope but high in user-trust impact; the P1–P3 items are accurately characterised as future-phase work in most places where the UI already shows them.
+
+
+5. Priority Recommendations
+🔴 Critical
+1. Refactor lib.rs — At 4,507 lines, it violates your own architecture standard by 15×. Extract Docker (remaining handlers), SSH, Monitor/Security, Editor ops into domain modules. Target: < 500 lines.
+2. Split cloud_auth.rs — 2,650 lines is a secondary monolith. Extract device flow, PAT auth, token refresh into separate files.
+🟠 High
+3. Wire resources_settings to job runner — CPU/RAM sliders exist but don't constrain anything. Either implement enforcement or add a clear disclaimer in the UI (one already exists in SettingsResources.tsx:39 but the actual enforcement is what's missing).
+4. Fix metainfo.xml — Wrong version (0.1.0 → v0.2.0-alpha), wrong URL (points to personal repo), still mentions Electron. Add screenshots. This blocks Flathub submission.
+5. Wire checkOnStartup — The setting saves to store but App.tsx never reads it. Add startup code to read update_settings.checkOnStartup and conditionally fire dh:app:update:check.
+🟡 Medium
+6. Expand i18n coverage — Framework exists. Extend translations.ts and add t() calls to all pages.
+7. Split DashboardMainPage.tsx (1,718 lines) and RuntimesPage.tsx (1,118 lines) — Both exceed maintainable size.
+8. Remove or identify canonical Flatpak manifest — 3 manifests exist with different runtimes (GNOME 49 vs Freedesktop 24.08). Add a README comment.
+9. Add runtime version detection for remaining 14 runtimes — Only Node/Go/Python fetch real versions.
+🟢 Low
+10. Replace date CLI in build.rs with Rust chrono crate.
+11. Remove or deprecate walkthrough.md — Outdated, missing 4 major phases.
+12. Fix Bottom Bar — Still shows "Phase 0 task runner" per phasesPlan.md UI/UX debt list.
+6. Conclusion
+The prior audit reports (audit_report.md and AUDIT_2026-05.md) cannot be trusted as accurate references. Between them, they contain 22 factual errors (14 in the Arabic report, 8 in the English report) — including claims that dh:store:set has no allowlist, that settings are entirely write-only, that no i18n infrastructure exists, and wrong line counts. The user has also fixed ~10 genuine issues since those audits were written.
+The project's actual health is better than the audits portrayed:
+- The lib.rs monolith is partially refactored (22 extracted modules exist)
+- 7 of 10 settings are properly wired to runtime behavior
+- Shortcuts, notifications, beta flags, i18n, and IPC timeouts all work end-to-end
+- All 9 dashboard profiles are live
+- GPU detection no longer fabricates data
+- PR_BODY.md and thoghts.md have been cleaned up
+Remaining top priorities: lib.rs extraction (4,507→500 lines), cloud_auth.rs extraction (2,650 lines), metainfo.xml fix for Flathub, and resources_settings enforcement. The app is structurally sound but its two monolithic Rust files are a maintenance debt that compounds with every new feature.

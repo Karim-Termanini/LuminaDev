@@ -175,6 +175,28 @@ fn read_cloud_oauth_store_overrides(app: &AppHandle) -> (Option<String>, Option<
   (gh, gl)
 }
 
+fn get_resource_limits(app: &tauri::AppHandle) -> (usize, usize, u64) {
+  let mut cpu_limit = 80;
+  let mut ram_limit_mb = 4096;
+  if let Ok(store_path) = app_file(app, "store.json") {
+    let store = read_json(&store_path);
+    if let Some(res) = store.get("resources_settings") {
+      if let Some(cpu) = res.get("cpuLimitPercent").and_then(|v| v.as_u64()) {
+        cpu_limit = cpu;
+      }
+      if let Some(ram) = res.get("ramLimitMb").and_then(|v| v.as_u64()) {
+        ram_limit_mb = ram;
+      }
+    }
+  }
+  let cores = std::thread::available_parallelism()
+    .map(|n| n.get())
+    .unwrap_or(4);
+  let limit_cores = ((cores as f64) * (cpu_limit as f64 / 100.0)).round() as usize;
+  let limit_cores = std::cmp::max(1, limit_cores);
+  (limit_cores, cores, ram_limit_mb)
+}
+
 /// Run a bootstrap script without elevation (writes under $HOME only).
 // Streaming user-shell install step — identical progress logic to sudo_bash_install_step
 // but runs as the user (no sudo/pkexec). Streams stdout+stderr live so the UI
@@ -187,13 +209,34 @@ async fn runtime_bash_user_step(
   base_progress: u32,
   step_weight: u32,
 ) -> Result<(), String> {
-  logs.push(format!("RUNNING (user shell, no sudo): {}", cmd));
-
-  let mut child = Command::new("bash")
+  let mut cmd_builder = Command::new("nice");
+  cmd_builder
+    .arg("-n")
+    .arg("19")
+    .arg("bash")
     .arg("-c")
     .arg(cmd)
     .env_remove("npm_config_prefix")
-    .env_remove("NPM_CONFIG_PREFIX")
+    .env_remove("NPM_CONFIG_PREFIX");
+
+  if let Some(ref app_h) = app {
+    let (limit_cores, cores, ram_limit_mb) = get_resource_limits(app_h);
+    logs.push(format!(
+      "[RESOURCE_ENFORCEMENT] Constraints: CPU Cores = {}/{} (nice 19), RAM limit = {} MB",
+      limit_cores, cores, ram_limit_mb
+    ));
+    cmd_builder
+      .env("CARGO_BUILD_JOBS", limit_cores.to_string())
+      .env("MAKEFLAGS", format!("-j{}", limit_cores))
+      .env("MISE_JOBS", limit_cores.to_string())
+      .env("NODE_OPTIONS", format!("--max-old-space-size={}", ram_limit_mb))
+      .env("GOMEMLIMIT", format!("{}MiB", ram_limit_mb))
+      .env("_JAVA_OPTIONS", format!("-Xmx{}m", ram_limit_mb));
+  }
+
+  logs.push(format!("RUNNING (user shell, no sudo): {}", cmd));
+
+  let mut child = cmd_builder
     .stdin(Stdio::null())
     .stdout(Stdio::piped())
     .stderr(Stdio::piped())
@@ -509,29 +552,87 @@ pub(crate) async fn sudo_bash_install_step(cmd: &str, password: Option<&str>, lo
     SpawnMode::Pkexec
   };
 
+  let mut limit_cores = 0;
+  let mut cores = 0;
+  let mut ram_limit_mb = 0;
+  let has_limits = if let Some(ref app_h) = app {
+    let (l_cores, c, r_limit) = get_resource_limits(app_h);
+    limit_cores = l_cores;
+    cores = c;
+    ram_limit_mb = r_limit;
+    true
+  } else {
+    false
+  };
+
+  if has_limits {
+    logs.push(format!(
+      "[RESOURCE_ENFORCEMENT] Constraints: CPU Cores = {}/{} (nice 19), RAM limit = {} MB",
+      limit_cores, cores, ram_limit_mb
+    ));
+  }
+
   let mut child = match mode {
-    SpawnMode::Pkexec => Command::new("pkexec")
-      .args(["bash", "-c", cmd])
-      .stdin(Stdio::null())
-      .stdout(Stdio::piped())
-      .stderr(Stdio::piped())
-      .spawn()
-      .map_err(|e| format!("[ELEVATED_CMD_FAILED] pkexec spawn: {}", e))?,
-    SpawnMode::SudoPwless => Command::new("sudo")
-      .args(["bash", "-c", cmd])
-      .stdin(Stdio::null())
-      .stdout(Stdio::piped())
-      .stderr(Stdio::piped())
-      .spawn()
-      .map_err(|e| format!("[ELEVATED_CMD_FAILED] sudo spawn: {}", e))?,
+    SpawnMode::Pkexec => {
+      let mut cmd_builder = Command::new("pkexec");
+      cmd_builder.args(["nice", "-n", "19", "bash", "-c", cmd]);
+      if has_limits {
+        cmd_builder
+          .env("CARGO_BUILD_JOBS", limit_cores.to_string())
+          .env("MAKEFLAGS", format!("-j{}", limit_cores))
+          .env("MISE_JOBS", limit_cores.to_string())
+          .env("NODE_OPTIONS", format!("--max-old-space-size={}", ram_limit_mb))
+          .env("GOMEMLIMIT", format!("{}MiB", ram_limit_mb))
+          .env("_JAVA_OPTIONS", format!("-Xmx{}m", ram_limit_mb));
+      }
+      cmd_builder
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("[ELEVATED_CMD_FAILED] pkexec spawn: {}", e))?
+    }
+    SpawnMode::SudoPwless => {
+      let mut cmd_builder = Command::new("sudo");
+      cmd_builder.args(["nice", "-n", "19", "bash", "-c", cmd]);
+      if has_limits {
+        cmd_builder
+          .env("CARGO_BUILD_JOBS", limit_cores.to_string())
+          .env("MAKEFLAGS", format!("-j{}", limit_cores))
+          .env("MISE_JOBS", limit_cores.to_string())
+          .env("NODE_OPTIONS", format!("--max-old-space-size={}", ram_limit_mb))
+          .env("GOMEMLIMIT", format!("{}MiB", ram_limit_mb))
+          .env("_JAVA_OPTIONS", format!("-Xmx{}m", ram_limit_mb));
+      }
+      cmd_builder
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("[ELEVATED_CMD_FAILED] sudo spawn: {}", e))?
+    }
     SpawnMode::SudoStdin(pw) => {
-      let mut c = Command::new("sudo")
+      let mut cmd_builder = Command::new("sudo");
+      cmd_builder
         .arg("-S")
         .arg("-p")
         .arg("")
+        .arg("nice")
+        .arg("-n")
+        .arg("19")
         .arg("bash")
         .arg("-c")
-        .arg(cmd)
+        .arg(cmd);
+      if has_limits {
+        cmd_builder
+          .env("CARGO_BUILD_JOBS", limit_cores.to_string())
+          .env("MAKEFLAGS", format!("-j{}", limit_cores))
+          .env("MISE_JOBS", limit_cores.to_string())
+          .env("NODE_OPTIONS", format!("--max-old-space-size={}", ram_limit_mb))
+          .env("GOMEMLIMIT", format!("{}MiB", ram_limit_mb))
+          .env("_JAVA_OPTIONS", format!("-Xmx{}m", ram_limit_mb));
+      }
+      let mut c = cmd_builder
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
