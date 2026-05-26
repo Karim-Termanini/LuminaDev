@@ -19,11 +19,8 @@ export function AddWidgetModal(props: {
       version: 1,
       placements: [...props.layout.placements, { instanceId, widgetTypeId: typeId }],
     }
-    void (async () => {
-      await window.dh.layoutSet(next)
-      props.onSaved(next)
-      props.onClose()
-    })()
+    props.onSaved(next)
+    props.onClose()
   }
 
   const used = new Set(props.layout.placements.map((p) => p.widgetTypeId))

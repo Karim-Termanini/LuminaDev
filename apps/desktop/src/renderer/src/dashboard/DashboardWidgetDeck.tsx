@@ -10,6 +10,7 @@ export function DashboardWidgetDeck(props: {
   layout: DashboardLayoutFile
   onRemove: (instanceId: string) => void
   onReorder?: (fromInstanceId: string, toInstanceId: string) => void
+  onAdd?: () => void
   /** `comfortable` = shell rail under top bar (larger type + min card width). */
   density?: 'compact' | 'comfortable'
   heading?: string
@@ -24,14 +25,38 @@ export function DashboardWidgetDeck(props: {
         style={{
           display: 'flex',
           justifyContent: 'space-between',
-          alignItems: 'baseline',
+          alignItems: 'center',
           marginBottom: comfortable ? 14 : 12,
         }}
       >
-        <h2 style={{ margin: 0, fontSize: comfortable ? 18 : 16, fontWeight: 700 }}>{heading}</h2>
-        <span className="mono" style={{ fontSize: comfortable ? 12 : 11, color: 'var(--text-muted)' }}>
-          {props.layout.placements.length} / 24
-        </span>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
+          <h2 style={{ margin: 0, fontSize: comfortable ? 18 : 16, fontWeight: 700 }}>{heading}</h2>
+          <span className="mono" style={{ fontSize: comfortable ? 12 : 11, color: 'var(--text-muted)' }}>
+            {props.layout.placements.length} / 24
+          </span>
+        </div>
+        {props.onAdd && (
+          <button
+            type="button"
+            onClick={props.onAdd}
+            style={{
+              padding: '6px 12px',
+              borderRadius: 6,
+              border: '1px solid var(--accent)',
+              background: 'rgba(var(--accent-rgb), 0.1)',
+              color: 'var(--accent)',
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4,
+            }}
+          >
+            <span className="codicon codicon-add" style={{ fontSize: 12 }} />
+            Add Widget
+          </button>
+        )}
       </div>
       <div
         style={{

@@ -6,6 +6,7 @@ import {
   parseStoredActiveProfile,
   type CustomProfileEntry,
   type DashboardLayoutFile,
+  type JobSummary,
 } from '@linux-dev-home/shared'
 import type { ReactElement } from 'react'
 import { invoke } from '@tauri-apps/api/core'
@@ -30,72 +31,7 @@ function _swSubscribe(fn: () => void) {
   return () => { _swListeners = _swListeners.filter(l => l !== fn) }
 }
 
-// Mock data generators
-function generateActivityData(profileName: string): Array<{ label: string; cpu: number; ram: number }> {
-  const seed = profileName.charCodeAt(0) + profileName.charCodeAt(profileName.length - 1)
-  const periods = ['12h ago', '10h ago', '8h ago', '6h ago', 'now']
-  return periods.map((label, i) => ({
-    label,
-    cpu: Math.max(10, Math.min(90, 30 + seed + i * 5 + Math.sin(seed + i) * 20)),
-    ram: Math.max(15, Math.min(85, 40 + seed * 0.5 + i * 3 + Math.cos(seed + i) * 15)),
-  }))
-}
 
-function generateResourceAllocation(profileName: string) {
-  const seed = profileName.charCodeAt(0) % 3
-  const allocations = [
-    { label: 'Running', value: 65, color: 'var(--green)' },
-    { label: 'Exited', value: 20, color: 'var(--text-muted)' },
-    { label: 'Paused', value: 15, color: 'var(--yellow)' },
-  ]
-  return allocations.map((a, i) => ({
-    ...a,
-    value: Math.max(5, a.value + ((seed * i) % 10) - 5),
-  }))
-}
-
-function generateEventFeed(profileName: string): Array<{ id: string; icon: string; color: string; title: string; time: string }> {
-  const now = Date.now()
-  const seeds = profileName.split('').map(c => c.charCodeAt(0)).reduce((a, b) => a + b, 0)
-  const events = [
-    { icon: 'check', color: 'var(--green)', title: 'Containers initialized', timeMs: now - 30000 },
-    { icon: 'plug', color: 'var(--accent)', title: 'Port 5432 (PostgreSQL) exposed', timeMs: now - 120000 },
-    { icon: 'database', color: 'var(--blue)', title: 'Cache warmed up', timeMs: now - 300000 },
-    { icon: 'server', color: 'var(--accent)', title: 'Profile activated', timeMs: now - 600000 },
-  ]
-  return events
-    .sort(() => (seeds % 2) - 0.5)
-    .slice(0, 3)
-    .map((e, i) => ({
-      id: `${i}`,
-      icon: e.icon,
-      color: e.color,
-      title: e.title,
-      time: formatTime(e.timeMs),
-    }))
-}
-
-function generateServices(profileName: string): Array<{ name: string; status: 'running' | 'pending' | 'idle'; uptime: string }> {
-  const seed = profileName.charCodeAt(0) % 3
-  const services = seed === 0 
-    ? ['nginx', 'postgres', 'redis'] 
-    : seed === 1 
-      ? ['jupyter', 'pandas-runner'] 
-      : ['node-server', 'mongodb']
-  return services.map((name, i) => ({
-    name,
-    status: i === 0 ? 'running' : i === 1 ? 'pending' : 'idle',
-    uptime: ['4h 32m', '2h 15m', '1h 08m'][i % 3] || '0h',
-  }))
-}
-
-function formatTime(ms: number): string {
-  const ago = (Date.now() - ms) / 1000
-  if (ago < 60) return 'Just now'
-  if (ago < 3600) return `${Math.floor(ago / 60)}m ago`
-  if (ago < 86400) return `${Math.floor(ago / 3600)}h ago`
-  return `${Math.floor(ago / 86400)}d ago`
-}
 
 interface ProfileDef {
   name: string
@@ -128,6 +64,10 @@ interface Toast {
 export function DashboardMainPage(): ReactElement {
   const [docker, setDocker] = useState<{ ok: true; rows: ContainerRow[] } | { ok: false; error: string } | null>(null)
   const [snap, setSnap] = useState<HostMetricsResponse | null>(null)
+  const [metricsHistory, setMetricsHistory] = useState<Array<{ cpu: number; ram: number }>>(() =>
+    Array.from({ length: 15 }, () => ({ cpu: 0, ram: 0 }))
+  )
+  const [jobs, setJobs] = useState<JobSummary[]>([])
   const [toast, setToast] = useState<Toast | null>(null)
   const [profileLayout, setProfileLayout] = useState<DashboardLayoutFile | null>(null)
   const [swState, setSwState] = useState({ active: _sw.active, step: _sw.step, progress: _sw.progress, targetProfile: _sw.targetProfile })
@@ -182,15 +122,16 @@ export function DashboardMainPage(): ReactElement {
     return () => { unsub(); if (unlisten) unlisten() }
   }, [])
 
-  // Slow ticker: while switch active and progress stuck between 65-95, nudge +0.3% every 800ms
+  // Slow ticker: while switch active and progress stuck between 65-95, nudge +0.4% every 800ms
+  const shouldNudge = swState.active && swState.progress >= 60 && swState.progress < 95
   useEffect(() => {
-    if (!swState.active || swState.progress >= 95 || swState.progress < 60) return
+    if (!shouldNudge) return
     const t = setInterval(() => {
       if (_sw.progress >= 95 || !_sw.active) { clearInterval(t); return }
       _swSet({ progress: Math.min(95, _sw.progress + 0.4) })
     }, 800)
     return () => clearInterval(t)
-  }, [swState.active, swState.progress >= 60])
+  }, [shouldNudge])
 
   useEffect(() => {
     let interval: any;
@@ -243,11 +184,25 @@ export function DashboardMainPage(): ReactElement {
     }
     try {
       const m = (await window.dh.metrics()) as HostMetricsResponse & { ok: boolean; error?: string }
-      if (m.ok) {
+      if (m.ok && m.metrics) {
         setSnap(m)
+        const ramPct = m.metrics.totalMemMb > 0 ? ((m.metrics.totalMemMb - m.metrics.freeMemMb) / m.metrics.totalMemMb) * 100 : 0
+        setMetricsHistory(prev => {
+          const next = [...prev, { cpu: m.metrics.cpuUsagePercent, ram: ramPct }]
+          if (next.length > 15) {
+            return next.slice(next.length - 15)
+          }
+          return next
+        })
       }
     } catch {
       // silently fail, keep last metrics
+    }
+    try {
+      const list = (await window.dh.jobsList()) as JobSummary[]
+      setJobs(Array.isArray(list) ? list : [])
+    } catch {
+      setJobs([])
     }
     let customProfilesList: CustomProfileEntry[] = []
     try {
@@ -340,7 +295,7 @@ export function DashboardMainPage(): ReactElement {
   // Fetch layout for selected profile
   useEffect(() => {
     if (selectedProfileName) {
-      window.dh.layoutGet().then((res) => {
+      window.dh.layoutGet({ profile: selectedProfileName }).then((res) => {
         if (res.ok && res.layout) {
           setProfileLayout(res.layout)
         } else {
@@ -571,7 +526,7 @@ export function DashboardMainPage(): ReactElement {
     if (selectedProfile && selectedProfileName !== selectedProfile.name) {
       setSelectedProfileName(selectedProfile.name)
     }
-  }, [selectedProfile?.name, selectedProfileName])
+  }, [selectedProfile, selectedProfileName])
   const m = snap?.metrics
   const ramUsedPct = useMemo(() => {
     if (!m || m.totalMemMb <= 0) return 0
@@ -586,6 +541,106 @@ export function DashboardMainPage(): ReactElement {
     const search = selectedProfileName.toLowerCase().replace(/[^a-z0-9_-]/g, '')
     return docker.rows.filter((c) => c.name.toLowerCase().includes(search))
   }, [docker, selectedProfileName])
+
+  const activityData = useMemo(() => {
+    return metricsHistory.map((item, idx) => ({
+      label: idx === metricsHistory.length - 1 ? 'now' : `${(metricsHistory.length - 1 - idx) * 4}s ago`,
+      cpu: item.cpu,
+      ram: item.ram,
+    }))
+  }, [metricsHistory])
+
+  const resourceAllocation = useMemo(() => {
+    if (activeContainers.length === 0) {
+      return [
+        { label: 'Running', value: 0, color: 'var(--green)' },
+        { label: 'Exited', value: 0, color: 'var(--text-muted)' },
+        { label: 'Paused', value: 0, color: 'var(--yellow)' },
+      ]
+    }
+    let running = 0
+    let exited = 0
+    let paused = 0
+    for (const c of activeContainers) {
+      const state = c.state.toLowerCase()
+      if (state.includes('running') || state.includes('up')) {
+        running++
+      } else if (state.includes('paused')) {
+        paused++
+      } else {
+        exited++
+      }
+    }
+    return [
+      { label: 'Running', value: running, color: 'var(--green)' },
+      { label: 'Exited', value: exited, color: 'var(--text-muted)' },
+      { label: 'Paused', value: paused, color: 'var(--yellow)' },
+    ]
+  }, [activeContainers])
+
+  const liveEvents = useMemo(() => {
+    if (jobs.length === 0) {
+      return [
+        {
+          id: 'no-jobs',
+          icon: 'info',
+          color: 'rgba(255,255,255,0.1)',
+          title: 'No background tasks have been executed yet.',
+          time: 'Activity feed will show active jobs and installations.'
+        }
+      ]
+    }
+    return jobs.map((j) => {
+      let icon = 'server'
+      let color = 'var(--accent)'
+      if (j.state === 'running') {
+        icon = 'play'
+        color = 'var(--yellow)'
+      } else if (j.state === 'failed') {
+        icon = 'error'
+        color = 'var(--orange)'
+      } else if (j.state === 'completed') {
+        icon = 'check'
+        color = 'var(--green)'
+      }
+      return {
+        id: j.id,
+        icon,
+        color,
+        title: `Task runner: ${j.kind} (${j.state})`,
+        time: j.state === 'running' 
+          ? `Progress: ${j.progress}% — ${j.logTail[j.logTail.length - 1] || 'Running'}`
+          : j.logTail[j.logTail.length - 1] || 'Completed successfully'
+      }
+    })
+  }, [jobs])
+
+  const liveServices = useMemo(() => {
+    if (activeContainers.length === 0) {
+      return []
+    }
+    return activeContainers.map((c) => {
+      const nameParts = c.name.split(/[_-]/)
+      let displayName = c.name
+      if (nameParts.length > 1) {
+        displayName = nameParts[nameParts.length - 2] || c.name
+      }
+      
+      let status: 'running' | 'pending' | 'idle' = 'idle'
+      const state = c.state.toLowerCase()
+      if (state.includes('running') || state.includes('up')) {
+        status = 'running'
+      } else if (state.includes('restarting') || state.includes('pending')) {
+        status = 'pending'
+      }
+      
+      return {
+        name: displayName,
+        status,
+        uptime: c.status || 'Stopped'
+      }
+    })
+  }, [activeContainers])
 
   return (
     <div className="dashboard-split-layout">
@@ -726,6 +781,7 @@ export function DashboardMainPage(): ReactElement {
                   }}
                   density="comfortable"
                   heading="Profile Pinned Widgets"
+                  onAdd={() => setPickerOpen(true)}
                 />
                 <AddWidgetModal
                   open={pickerOpen}
@@ -810,8 +866,8 @@ export function DashboardMainPage(): ReactElement {
             {/* Section 3: Analytics Grid (Activity + Container Status Side-by-Side) */}
             {activeProfile === selectedProfileName && selectedProfileName && (
               <div style={{ marginTop: 32, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(480px, 1fr))', gap: 20 }}>
-                <ActivityChart data={generateActivityData(selectedProfileName)} />
-                <ResourceDonutChart data={generateResourceAllocation(selectedProfileName)} />
+                <ActivityChart data={activityData} />
+                <ResourceDonutChart data={resourceAllocation} />
               </div>
             )}
 
@@ -859,27 +915,33 @@ export function DashboardMainPage(): ReactElement {
                     Services
                   </h3>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                    {generateServices(selectedProfileName).map((s) => (
-                      <div
-                        key={s.name}
-                        style={{
-                          padding: 16,
-                          borderRadius: 8,
-                          background: 'linear-gradient(135deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.01) 100%)',
-                          border: '1px solid rgba(255,255,255,0.06)',
-                          backdropFilter: 'blur(8px)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <div style={{ width: 8, height: 8, borderRadius: '50%', background: s.status === 'running' ? 'var(--green)' : s.status === 'pending' ? 'var(--yellow)' : 'var(--text-muted)' }} />
-                          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{s.name}</span>
+                    {liveServices.length > 0 ? (
+                      liveServices.map((s) => (
+                        <div
+                          key={s.name}
+                          style={{
+                            padding: 16,
+                            borderRadius: 8,
+                            background: 'linear-gradient(135deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.01) 100%)',
+                            border: '1px solid rgba(255,255,255,0.06)',
+                            backdropFilter: 'blur(8px)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <div style={{ width: 8, height: 8, borderRadius: '50%', background: s.status === 'running' ? 'var(--green)' : s.status === 'pending' ? 'var(--yellow)' : 'var(--text-muted)' }} />
+                            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{s.name}</span>
+                          </div>
+                          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{s.uptime}</span>
                         </div>
-                        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{s.uptime}</span>
+                      ))
+                    ) : (
+                      <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13, background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)', borderRadius: 8 }}>
+                        No services running for this profile.
                       </div>
-                    ))}
+                    )}
                   </div>
                 </div>
               )}
@@ -888,7 +950,7 @@ export function DashboardMainPage(): ReactElement {
             {/* Section 5: Recent Activity Feed at Bottom */}
             {selectedProfileName && (
               <div style={{ marginTop: 32 }}>
-                <EventFeed events={generateEventFeed(selectedProfileName)} />
+                <EventFeed events={liveEvents} />
               </div>
             )}
           </>
@@ -1364,20 +1426,29 @@ export function DashboardMainPage(): ReactElement {
 function ActivityChart(props: { data: Array<{ label: string; cpu: number; ram: number }> }): ReactElement {
   const maxVal = 100
   return (
-    <div className="dashboard-widget">
+    <div className="dashboard-widget" style={{ display: 'flex', flexDirection: 'column' }}>
       <h3 className="dashboard-widget-title">Activity (Last 24h)</h3>
-      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 16, justifyContent: 'space-around', height: 200, padding: '16px 0' }}>
+      <div style={{
+        display: 'flex',
+        alignItems: 'flex-end',
+        justifyContent: 'space-between',
+        height: 200,
+        padding: '16px 0',
+        overflow: 'hidden'
+      }}>
         {props.data.map((d, i) => (
-          <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, flex: 1 }}>
-            <div style={{ display: 'flex', gap: 4, height: 140, alignItems: 'flex-end' }}>
-              <div style={{ width: 12, height: `${(d.cpu / maxVal) * 120}px`, background: 'var(--accent)', borderRadius: '4px 4px 0 0', transition: 'height 0.3s ease' }} title={`CPU ${d.cpu.toFixed(0)}%`} />
-              <div style={{ width: 12, height: `${(d.ram / maxVal) * 120}px`, background: 'var(--green)', borderRadius: '4px 4px 0 0', transition: 'height 0.3s ease' }} title={`RAM ${d.ram.toFixed(0)}%`} />
+          <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, flex: 1 }}>
+            <div style={{ display: 'flex', gap: 2, height: 140, alignItems: 'flex-end' }}>
+              <div style={{ width: 8, height: `${Math.max(2, (d.cpu / maxVal) * 120)}px`, background: 'var(--accent)', borderRadius: '2px 2px 0 0', transition: 'height 0.3s ease' }} title={`CPU ${d.cpu.toFixed(0)}%`} />
+              <div style={{ width: 8, height: `${Math.max(2, (d.ram / maxVal) * 120)}px`, background: 'var(--green)', borderRadius: '2px 2px 0 0', transition: 'height 0.3s ease' }} title={`RAM ${d.ram.toFixed(0)}%`} />
             </div>
-            <span style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center' }}>{d.label}</span>
+            <span style={{ fontSize: 10, color: 'var(--text-muted)', textAlign: 'center', whiteSpace: 'nowrap' }}>
+              {(i === 0 || i === Math.floor(props.data.length / 2) || i === props.data.length - 1) ? d.label : '\u00A0'}
+            </span>
           </div>
         ))}
       </div>
-      <div style={{ display: 'flex', gap: 16, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
+      <div style={{ display: 'flex', gap: 16, paddingTop: 12, borderTop: '1px solid var(--border)', marginTop: 'auto' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <div style={{ width: 10, height: 10, background: 'var(--accent)', borderRadius: 2 }} />
           <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>CPU</span>
@@ -1393,33 +1464,49 @@ function ActivityChart(props: { data: Array<{ label: string; cpu: number; ram: n
 
 function ResourceDonutChart(props: { data: Array<{ label: string; value: number; color: string }> }): ReactElement {
   const total = props.data.reduce((sum, d) => sum + d.value, 0)
-  const normalized = props.data.map(d => ({ ...d, percent: (d.value / total) * 100 }))
+  const normalized = total > 0
+    ? props.data.map(d => ({ ...d, percent: (d.value / total) * 100 }))
+    : props.data.map(d => ({ ...d, percent: 0 }))
 
-  let conic = 'conic-gradient('
-  let angle = 0
-  normalized.forEach((d, i) => {
-    const sliceAngle = (d.percent / 100) * 360
-    conic += `${d.color} ${angle}deg, ${d.color} ${angle + sliceAngle}deg${i < normalized.length - 1 ? ', ' : ''}`
-    angle += sliceAngle
-  })
-  conic += ')'
+  let conic = ''
+  if (total === 0) {
+    conic = 'var(--border)'
+  } else {
+    conic = 'conic-gradient('
+    let angle = 0
+    normalized.forEach((d, i) => {
+      const sliceAngle = (d.percent / 100) * 360
+      conic += `${d.color} ${angle}deg, ${d.color} ${angle + sliceAngle}deg${i < normalized.length - 1 ? ', ' : ''}`
+      angle += sliceAngle
+    })
+    conic += ')'
+  }
 
   return (
-    <div className="dashboard-widget">
+    <div className="dashboard-widget" style={{ display: 'flex', flexDirection: 'column' }}>
       <h3 className="dashboard-widget-title">Container Status</h3>
-      <div style={{ display: 'flex', gap: 32, alignItems: 'center' }}>
+      <div style={{ display: 'flex', gap: 24, alignItems: 'center', flexWrap: 'wrap', flex: 1 }}>
         <div style={{
-          width: 160,
-          height: 160,
+          position: 'relative',
+          width: 120,
+          height: 120,
           borderRadius: '50%',
           background: conic,
-          boxShadow: 'inset 0 0 0 50px var(--bg-widget)',
-        }} />
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          flexShrink: 0,
+        }}>
+          {/* Inner donut cutout */}
+          <div style={{
+            position: 'absolute',
+            inset: 28,
+            borderRadius: '50%',
+            background: 'var(--bg-widget)',
+          }} />
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, flex: 1, minWidth: 140 }}>
           {normalized.map((d, i) => (
             <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{ width: 12, height: 12, background: d.color, borderRadius: '50%' }} />
-              <span style={{ fontSize: 12, color: 'var(--text)' }}>{d.label}</span>
+              <div style={{ width: 12, height: 12, background: d.color, borderRadius: '50%', flexShrink: 0 }} />
+              <span style={{ fontSize: 12, color: 'var(--text)', whiteSpace: 'nowrap' }}>{d.label}</span>
               <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 'auto' }}>{d.percent.toFixed(0)}%</span>
             </div>
           ))}

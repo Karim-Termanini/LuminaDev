@@ -74,8 +74,8 @@ declare global {
       onTerminalExit: (handler: (msg: { id: string }) => void) => () => void
       openExternal: (url: string) => Promise<unknown>
       sessionInfo: () => Promise<unknown>
-      layoutGet: () => Promise<{ ok: boolean; layout: DashboardLayoutFile; error?: string }>
-      layoutSet: (layout: unknown) => Promise<{ ok: boolean; error?: string }>
+      layoutGet: (payload?: { profile?: string | null }) => Promise<{ ok: boolean; layout: DashboardLayoutFile; error?: string }>
+      layoutSet: (payload: { layout: unknown; profile?: string | null } | unknown) => Promise<{ ok: boolean; error?: string }>
       storeGet: (payload: import('@linux-dev-home/shared').StoreGetRequest) => Promise<{ ok: boolean; data: unknown; error?: string }>
       storeSet: (payload: import('@linux-dev-home/shared').StoreSetRequest) => Promise<{ ok: boolean; error?: string }>
       storeDelete: (payload: { key: 'active_profile' }) => Promise<{ ok: boolean; error?: string }>

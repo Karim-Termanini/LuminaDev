@@ -1572,16 +1572,57 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
     },
     "dh:layout:get" => match app_file(&app, "layout.json") {
       Ok(path) => {
-        let layout = read_json(&path);
-        json!({ "ok": true, "layout": if layout == json!({}) { json!({ "version": 1, "placements": [] }) } else { layout } })
+        let layout_data = read_json(&path);
+        let profile = body.get("profile").and_then(|v| v.as_str()).unwrap_or("default");
+        let profile_layout = if let Some(profiles) = layout_data.get("profiles") {
+          if let Some(p_layout) = profiles.get(profile) {
+            p_layout.clone()
+          } else {
+            json!({ "version": 1, "placements": [] })
+          }
+        } else if layout_data.get("placements").is_some() {
+          layout_data.clone()
+        } else {
+          json!({ "version": 1, "placements": [] })
+        };
+        json!({ "ok": true, "layout": profile_layout })
       }
       Err(e) => json!({ "ok": false, "error": e }),
     },
     "dh:layout:set" => match app_file(&app, "layout.json") {
-      Ok(path) => match write_json(&path, &body) {
-        Ok(_) => json!({ "ok": true }),
-        Err(e) => json!({ "ok": false, "error": e }),
-      },
+      Ok(path) => {
+        let mut layout_data = read_json(&path);
+        if !layout_data.is_object() || layout_data == json!({}) {
+          layout_data = json!({ "profiles": {} });
+        } else if layout_data.get("profiles").is_none() && layout_data.get("placements").is_some() {
+          let old_layout = layout_data.clone();
+          layout_data = json!({
+            "profiles": {
+              "default": old_layout
+            }
+          });
+        }
+        let profile = body.get("profile").and_then(|v| v.as_str());
+        let layout = body.get("layout");
+        if let (Some(prof), Some(lay)) = (profile, layout) {
+          if let Some(profiles_map) = layout_data.get_mut("profiles") {
+            if let Some(obj) = profiles_map.as_object_mut() {
+              obj.insert(prof.to_string(), lay.clone());
+            }
+          }
+        } else {
+          let prof = "default";
+          if let Some(profiles_map) = layout_data.get_mut("profiles") {
+            if let Some(obj) = profiles_map.as_object_mut() {
+              obj.insert(prof.to_string(), body.clone());
+            }
+          }
+        }
+        match write_json(&path, &layout_data) {
+          Ok(_) => json!({ "ok": true }),
+          Err(e) => json!({ "ok": false, "error": e }),
+        }
+      }
       Err(e) => json!({ "ok": false, "error": e }),
     },
 
@@ -3199,234 +3240,243 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
         ("lua",     "Lua",     "export PATH=\"$HOME/.local/bin:$PATH\"; ([ -x \"$HOME/.local/bin/mise\" ] && eval \"$($HOME/.local/bin/mise activate bash)\" >/dev/null 2>&1 || true); lua -v 2>&1 || lua5.4 -v 2>&1 || lua5.3 -v 2>&1"),
         ("lisp",    "SBCL",    "sbcl --version"),
       ];
-      let mut runtimes: Vec<Value> = Vec::new();
-      for (id, name, shell_cmd) in checks {
-        match exec_result_limit("bash", &["-lc", shell_cmd], CMD_TIMEOUT_SHORT).await {
-          Ok((stdout, stderr)) => {
-            let version = lumina_probe_meaningful_line(&stdout, &stderr);
-            if version.is_empty() {
-              runtimes.push(json!({ "id": id, "name": name, "installed": false }));
-            } else {
-              let mut detected_path: Option<String> = None;
-              let mut all_versions: Vec<Value> = Vec::new();
-              match *id {
-                "node" => {
-                  if let Ok(p) = exec_output_limit("bash", &["-lc", "command -v node || true"], CMD_TIMEOUT_SHORT).await {
-                    let p = p.trim();
-                    if !p.is_empty() {
-                      detected_path = Some(p.to_string());
+      
+      let mut tasks = Vec::new();
+      for &(id, name, shell_cmd) in checks {
+        let id = id.to_string();
+        let name = name.to_string();
+        let shell_cmd = shell_cmd.to_string();
+        tasks.push(tokio::spawn(async move {
+          match exec_result_limit("bash", &["-lc", &shell_cmd], CMD_TIMEOUT_SHORT).await {
+            Ok((stdout, stderr)) => {
+              let version = lumina_probe_meaningful_line(&stdout, &stderr);
+              if version.is_empty() {
+                json!({ "id": id, "name": name, "installed": false })
+              } else {
+                let mut detected_path: Option<String> = None;
+                let mut all_versions: Vec<Value> = Vec::new();
+                match id.as_str() {
+                  "node" => {
+                    if let Ok(p) = exec_output_limit("bash", &["-lc", "command -v node || true"], CMD_TIMEOUT_SHORT).await {
+                      let p = p.trim();
+                      if !p.is_empty() {
+                        detected_path = Some(p.to_string());
+                      }
                     }
-                  }
-                  if let Ok(raw) = exec_output_limit(
-                    "bash",
-                    &["-lc", "if [ -d \"$HOME/.nvm/versions/node\" ]; then for d in \"$HOME/.nvm/versions/node\"/*; do [ -d \"$d\" ] || continue; b=$(basename \"$d\"); printf '%s\\t%s\\n' \"$b\" \"$d/bin/node\"; done; fi"],
-                    CMD_TIMEOUT_SHORT,
-                  ).await {
-                    for line in raw.lines() {
-                      let mut parts = line.splitn(2, '\t');
-                      let v = parts.next().unwrap_or("").trim();
-                      let p = parts.next().unwrap_or("").trim();
-                      if !v.is_empty() && !p.is_empty() {
-                        all_versions.push(json!({ "version": v, "path": p }));
+                    if let Ok(raw) = exec_output_limit(
+                      "bash",
+                      &["-lc", "if [ -d \"$HOME/.nvm/versions/node\" ]; then for d in \"$HOME/.nvm/versions/node\"/*; do [ -d \"$d\" ] || continue; b=$(basename \"$d\"); printf '%s\\t%s\\n' \"$b\" \"$d/bin/node\"; done; fi"],
+                      CMD_TIMEOUT_SHORT,
+                    ).await {
+                      for line in raw.lines() {
+                        let mut parts = line.splitn(2, '\t');
+                        let v = parts.next().unwrap_or("").trim();
+                        let p = parts.next().unwrap_or("").trim();
+                        if !v.is_empty() && !p.is_empty() {
+                          all_versions.push(json!({ "version": v, "path": p }));
+                        }
                       }
                     }
                   }
-                }
-                "python" => {
-                  if let Ok(p) = exec_output_limit("bash", &["-lc", "command -v python3 || command -v python || true"], CMD_TIMEOUT_SHORT).await {
-                    let p = p.trim();
-                    if !p.is_empty() {
-                      detected_path = Some(p.to_string());
+                  "python" => {
+                    if let Ok(p) = exec_output_limit("bash", &["-lc", "command -v python3 || command -v python || true"], CMD_TIMEOUT_SHORT).await {
+                      let p = p.trim();
+                      if !p.is_empty() {
+                        detected_path = Some(p.to_string());
+                      }
                     }
-                  }
-                  if let Ok(raw) = exec_output_limit(
-                    "bash",
-                    &["-lc", "if [ -d \"$HOME/.pyenv/versions\" ]; then for d in \"$HOME/.pyenv/versions\"/*; do [ -d \"$d\" ] || continue; b=$(basename \"$d\"); printf '%s\\t%s\\n' \"$b\" \"$d/bin/python\"; done; fi"],
-                    CMD_TIMEOUT_SHORT,
-                  ).await {
-                    for line in raw.lines() {
-                      let mut parts = line.splitn(2, '\t');
-                      let v = parts.next().unwrap_or("").trim();
-                      let p = parts.next().unwrap_or("").trim();
-                      if !v.is_empty() && !p.is_empty() {
-                        all_versions.push(json!({ "version": v, "path": p }));
+                    if let Ok(raw) = exec_output_limit(
+                      "bash",
+                      &["-lc", "if [ -d \"$HOME/.pyenv/versions\" ]; then for d in \"$HOME/.pyenv/versions\"/*; do [ -d \"$d\" ] || continue; b=$(basename \"$d\"); printf '%s\\t%s\\n' \"$b\" \"$d/bin/python\"; done; fi"],
+                      CMD_TIMEOUT_SHORT,
+                    ).await {
+                      for line in raw.lines() {
+                        let mut parts = line.splitn(2, '\t');
+                        let v = parts.next().unwrap_or("").trim();
+                        let p = parts.next().unwrap_or("").trim();
+                        if !v.is_empty() && !p.is_empty() {
+                          all_versions.push(json!({ "version": v, "path": p }));
+                        }
                       }
                     }
                   }
-                }
-                "java" => {
-                  if let Ok(p) = exec_output_limit(
-                    "bash",
-                    &["-lc", "if [ -x \"$HOME/.local/share/lumina/java/current/bin/java\" ]; then echo \"$HOME/.local/share/lumina/java/current/bin/java\"; else command -v java || true; fi"],
-                    CMD_TIMEOUT_SHORT,
-                  ).await {
-                    let p = p.trim();
-                    if !p.is_empty() {
-                      detected_path = Some(p.to_string());
+                  "java" => {
+                    if let Ok(p) = exec_output_limit(
+                      "bash",
+                      &["-lc", "if [ -x \"$HOME/.local/share/lumina/java/current/bin/java\" ]; then echo \"$HOME/.local/share/lumina/java/current/bin/java\"; else command -v java || true; fi"],
+                      CMD_TIMEOUT_SHORT,
+                    ).await {
+                      let p = p.trim();
+                      if !p.is_empty() {
+                        detected_path = Some(p.to_string());
+                      }
                     }
-                  }
-                  if let Ok(raw) = exec_output_limit(
-                    "bash",
-                    &["-lc", "if [ -d \"$HOME/.local/share/lumina/java\" ]; then for d in \"$HOME/.local/share/lumina/java\"/jdk-*; do [ -d \"$d\" ] || continue; b=$(basename \"$d\" | sed 's/^jdk-//'); printf '%s\\t%s\\n' \"$b\" \"$d/bin/java\"; done; fi"],
-                    CMD_TIMEOUT_SHORT,
-                  ).await {
-                    for line in raw.lines() {
-                      let mut parts = line.splitn(2, '\t');
-                      let v = parts.next().unwrap_or("").trim();
-                      let p = parts.next().unwrap_or("").trim();
-                      if !v.is_empty() && !p.is_empty() {
-                        all_versions.push(json!({ "version": v, "path": p }));
+                    if let Ok(raw) = exec_output_limit(
+                      "bash",
+                      &["-lc", "if [ -d \"$HOME/.local/share/lumina/java\" ]; then for d in \"$HOME/.local/share/lumina/java\"/jdk-*; do [ -d \"$d\" ] || continue; b=$(basename \"$d\" | sed 's/^jdk-//'); printf '%s\\t%s\\n' \"$b\" \"$d/bin/java\"; done; fi"],
+                      CMD_TIMEOUT_SHORT,
+                    ).await {
+                      for line in raw.lines() {
+                        let mut parts = line.splitn(2, '\t');
+                        let v = parts.next().unwrap_or("").trim();
+                        let p = parts.next().unwrap_or("").trim();
+                        if !v.is_empty() && !p.is_empty() {
+                          all_versions.push(json!({ "version": v, "path": p }));
+                        }
                       }
                     }
                   }
-                }
-                "go" => {
-                  if let Ok(p) = exec_output_limit(
-                    "bash",
-                    &["-lc", "if [ -x \"$HOME/.local/share/lumina/go/current/bin/go\" ]; then echo \"$HOME/.local/share/lumina/go/current/bin/go\"; elif [ -x \"$HOME/.local/share/lumina/go/bin/go\" ]; then echo \"$HOME/.local/share/lumina/go/bin/go\"; else command -v go || true; fi"],
-                    CMD_TIMEOUT_SHORT,
-                  ).await {
-                    let p = p.trim();
-                    if !p.is_empty() {
-                      detected_path = Some(p.to_string());
+                  "go" => {
+                    if let Ok(p) = exec_output_limit(
+                      "bash",
+                      &["-lc", "if [ -x \"$HOME/.local/share/lumina/go/current/bin/go\" ]; then echo \"$HOME/.local/share/lumina/go/current/bin/go\"; elif [ -x \"$HOME/.local/share/lumina/go/bin/go\" ]; then echo \"$HOME/.local/share/lumina/go/bin/go\"; else command -v go || true; fi"],
+                      CMD_TIMEOUT_SHORT,
+                    ).await {
+                      let p = p.trim();
+                      if !p.is_empty() {
+                        detected_path = Some(p.to_string());
+                      }
                     }
-                  }
-                  if let Ok(raw) = exec_output_limit(
-                    "bash",
-                    &["-lc", "if [ -d \"$HOME/.local/share/lumina/go\" ]; then for d in \"$HOME/.local/share/lumina/go\"/*; do [ -d \"$d\" ] || continue; b=$(basename \"$d\"); [ \"$b\" = \"current\" ] && continue; [ -x \"$d/bin/go\" ] || continue; ver=$($d/bin/go version 2>/dev/null | awk '{print $3}' | sed 's/^go//'); printf '%s\\t%s\\n' \"$ver\" \"$d/bin/go\"; done; fi"],
-                    CMD_TIMEOUT_SHORT,
-                  ).await {
-                    for line in raw.lines() {
-                      let mut parts = line.splitn(2, '\t');
-                      let v = parts.next().unwrap_or("").trim().trim_start_matches("go");
-                      let p = parts.next().unwrap_or("").trim();
-                      if !v.is_empty() && !p.is_empty() {
-                        all_versions.push(json!({ "version": v, "path": p }));
+                    if let Ok(raw) = exec_output_limit(
+                      "bash",
+                      &["-lc", "if [ -d \"$HOME/.local/share/lumina/go\" ]; then for d in \"$HOME/.local/share/lumina/go\"/*; do [ -d \"$d\" ] || continue; b=$(basename \"$d\"); [ \"$b\" = \"current\" ] && continue; [ -x \"$d/bin/go\" ] || continue; ver=$($d/bin/go version 2>/dev/null | awk '{print $3}' | sed 's/^go//'); printf '%s\\t%s\\n' \"$ver\" \"$d/bin/go\"; done; fi"],
+                      CMD_TIMEOUT_SHORT,
+                    ).await {
+                      for line in raw.lines() {
+                        let mut parts = line.splitn(2, '\t');
+                        let v = parts.next().unwrap_or("").trim().trim_start_matches("go");
+                        let p = parts.next().unwrap_or("").trim();
+                        if !v.is_empty() && !p.is_empty() {
+                          all_versions.push(json!({ "version": v, "path": p }));
+                        }
                       }
                     }
                   }
-                }
-                "zig" => {
-                  if let Ok(p) = exec_output_limit(
-                    "bash",
-                    &["-lc", "if [ -x \"$HOME/.local/share/lumina/zig/current/zig\" ]; then echo \"$HOME/.local/share/lumina/zig/current/zig\"; else command -v zig || true; fi"],
-                    CMD_TIMEOUT_SHORT,
-                  ).await {
-                    let p = p.trim();
-                    if !p.is_empty() { detected_path = Some(p.to_string()); }
-                  }
-                  if let Ok(raw) = exec_output_limit(
-                    "bash",
-                    &["-lc", "if [ -d \"$HOME/.local/share/lumina/zig\" ]; then for d in \"$HOME/.local/share/lumina/zig\"/*; do [ -d \"$d\" ] || continue; b=$(basename \"$d\"); [ \"$b\" = \"current\" ] && continue; [ -x \"$d/zig\" ] || continue; ver=$(\"$d/zig\" version 2>/dev/null | awk '{{print $1}}'); printf '%s\\t%s\\n' \"$ver\" \"$d/zig\"; done; fi"],
-                    CMD_TIMEOUT_SHORT,
-                  ).await {
-                    for line in raw.lines() {
-                      let mut parts = line.splitn(2, '\t');
-                      let v = parts.next().unwrap_or("").trim();
-                      let p = parts.next().unwrap_or("").trim();
-                      if !v.is_empty() && !p.is_empty() {
-                        all_versions.push(json!({ "version": v, "path": p }));
+                  "zig" => {
+                    if let Ok(p) = exec_output_limit(
+                      "bash",
+                      &["-lc", "if [ -x \"$HOME/.local/share/lumina/zig/current/zig\" ]; then echo \"$HOME/.local/share/lumina/zig/current/zig\"; else command -v zig || true; fi"],
+                      CMD_TIMEOUT_SHORT,
+                    ).await {
+                      let p = p.trim();
+                      if !p.is_empty() { detected_path = Some(p.to_string()); }
+                    }
+                    if let Ok(raw) = exec_output_limit(
+                      "bash",
+                      &["-lc", "if [ -d \"$HOME/.local/share/lumina/zig\" ]; then for d in \"$HOME/.local/share/lumina/zig\"/*; do [ -d \"$d\" ] || continue; b=$(basename \"$d\"); [ \"$b\" = \"current\" ] && continue; [ -x \"$d/zig\" ] || continue; ver=$(\"$d/zig\" version 2>/dev/null | awk '{{print $1}}'); printf '%s\\t%s\\n' \"$ver\" \"$d/zig\"; done; fi"],
+                      CMD_TIMEOUT_SHORT,
+                    ).await {
+                      for line in raw.lines() {
+                        let mut parts = line.splitn(2, '\t');
+                        let v = parts.next().unwrap_or("").trim();
+                        let p = parts.next().unwrap_or("").trim();
+                        if !v.is_empty() && !p.is_empty() {
+                          all_versions.push(json!({ "version": v, "path": p }));
+                        }
                       }
                     }
                   }
-                }
-                "bun" => {
-                  // Bun installs a single binary to ~/.bun/bin/bun; version already known
-                  let bun_bin = format!("{}/.bun/bin/bun", std::env::var("HOME").unwrap_or_default());
-                  if std::path::Path::new(&bun_bin).exists() {
-                    let v = version.trim().to_string();
-                    let display_ver = if v.is_empty() { "installed".to_string() } else { v };
-                    all_versions.push(json!({ "version": display_ver, "path": bun_bin }));
-                  }
-                }
-                "rust" => {
-                  if let Ok(p) = exec_output_limit(
-                    "bash",
-                    &["-lc", "unset RUSTUP_TOOLCHAIN; ([ -x \"$HOME/.cargo/bin/rustup\" ] && \"$HOME/.cargo/bin/rustup\" which rustc 2>/dev/null) || command -v rustc || true"],
-                    CMD_TIMEOUT_SHORT,
-                  ).await {
-                    let p = p.trim();
-                    if !p.is_empty() { detected_path = Some(p.to_string()); }
-                  }
-                  if let Ok(raw) = exec_output_limit(
-                    "bash",
-                    &["-lc", "unset RUSTUP_TOOLCHAIN; [ -x \"$HOME/.cargo/bin/rustup\" ] && \"$HOME/.cargo/bin/rustup\" toolchain list 2>/dev/null || true"],
-                    CMD_TIMEOUT_SHORT,
-                  ).await {
-                    let home = std::env::var("HOME").unwrap_or_default();
-                    for line in raw.lines() {
-                      let tc = line.split_whitespace().next().unwrap_or("").trim();
-                      if tc.is_empty() { continue; }
-                      let rustc_bin = format!("{}/.rustup/toolchains/{}/bin/rustc", home, tc);
-                      let path_to_use = if std::path::Path::new(&rustc_bin).exists() { rustc_bin }
-                        else { format!("{}/.cargo/bin/rustc", home) };
-                      all_versions.push(json!({ "version": tc, "path": path_to_use }));
+                  "bun" => {
+                    let bun_bin = format!("{}/.bun/bin/bun", std::env::var("HOME").unwrap_or_default());
+                    if std::path::Path::new(&bun_bin).exists() {
+                      let v = version.trim().to_string();
+                      let display_ver = if v.is_empty() { "installed".to_string() } else { v };
+                      all_versions.push(json!({ "version": display_ver, "path": bun_bin }));
                     }
                   }
-                }
-                "dart" => {
-                  // Check lumina dir and ~/.dart/dart-sdk (tarball install)
-                  if let Ok(raw) = exec_output_limit(
-                    "bash",
-                    &["-lc", r#"FOUND=false; LDIR="$HOME/.local/share/lumina/dart"; if [ -d "$LDIR" ]; then for d in "$LDIR"/*; do [ -d "$d" ] || continue; b=$(basename "$d"); [ "$b" = "current" ] && continue; [ -x "$d/bin/dart" ] || continue; ver=$("$d/bin/dart" --version 2>&1 | awk '{print $4}'); printf '%s\t%s\n' "${ver:-$b}" "$d/bin/dart"; FOUND=true; done; fi; if ! $FOUND && [ -x "$HOME/.dart/dart-sdk/bin/dart" ]; then ver=$("$HOME/.dart/dart-sdk/bin/dart" --version 2>&1 | awk '{print $4}'); printf '%s\t%s\n' "${ver:-dart}" "$HOME/.dart/dart-sdk/bin/dart"; fi"#],
-                    CMD_TIMEOUT_SHORT,
-                  ).await {
-                    for line in raw.lines() {
-                      let mut parts = line.splitn(2, '\t');
-                      let v = parts.next().unwrap_or("").trim();
-                      let p = parts.next().unwrap_or("").trim();
-                      if !v.is_empty() && !p.is_empty() {
-                        all_versions.push(json!({ "version": v, "path": p }));
+                  "rust" => {
+                    if let Ok(p) = exec_output_limit(
+                      "bash",
+                      &["-lc", "unset RUSTUP_TOOLCHAIN; ([ -x \"$HOME/.cargo/bin/rustup\" ] && \"$HOME/.cargo/bin/rustup\" which rustc 2>/dev/null) || command -v rustc || true"],
+                      CMD_TIMEOUT_SHORT,
+                    ).await {
+                      let p = p.trim();
+                      if !p.is_empty() { detected_path = Some(p.to_string()); }
+                    }
+                    if let Ok(raw) = exec_output_limit(
+                      "bash",
+                      &["-lc", "unset RUSTUP_TOOLCHAIN; [ -x \"$HOME/.cargo/bin/rustup\" ] && \"$HOME/.cargo/bin/rustup\" toolchain list 2>/dev/null || true"],
+                      CMD_TIMEOUT_SHORT,
+                    ).await {
+                      let home = std::env::var("HOME").unwrap_or_default();
+                      for line in raw.lines() {
+                        let tc = line.split_whitespace().next().unwrap_or("").trim();
+                        if tc.is_empty() { continue; }
+                        let rustc_bin = format!("{}/.rustup/toolchains/{}/bin/rustc", home, tc);
+                        let path_to_use = if std::path::Path::new(&rustc_bin).exists() { rustc_bin }
+                          else { format!("{}/.cargo/bin/rustc", home) };
+                        all_versions.push(json!({ "version": tc, "path": path_to_use }));
                       }
                     }
                   }
-                }
-                "flutter" => {
-                  // Read version file (never run flutter binary — it grabs a startup lock)
-                  if let Ok(raw) = exec_output_limit(
-                    "bash",
-                    &["-lc", r#"FOUND=false; LDIR="$HOME/.local/share/lumina/flutter"; if [ -d "$LDIR" ]; then for d in "$LDIR"/*; do [ -d "$d" ] || continue; b=$(basename "$d"); [ "$b" = "current" ] && continue; [ -x "$d/bin/flutter" ] || continue; ver=$(cat "$d/version" 2>/dev/null | head -1); printf '%s\t%s\n' "${ver:-$b}" "$d/bin/flutter"; FOUND=true; done; fi; if ! $FOUND; then for sd in "$HOME/.flutter-sdk" "$HOME/flutter"; do [ -x "$sd/bin/flutter" ] || continue; ver=$(cat "$sd/version" 2>/dev/null | head -1); printf '%s\t%s\n' "${ver:-stable}" "$sd/bin/flutter"; FOUND=true; break; done; fi; if ! $FOUND && command -v snap >/dev/null 2>&1; then snap list flutter 2>/dev/null | awk 'NR>1{print $2"\t/snap/flutter/current/bin/flutter"}'; fi"#],
-                    CMD_TIMEOUT_SHORT,
-                  ).await {
-                    for line in raw.lines() {
-                      let mut parts = line.splitn(2, '\t');
-                      let v = parts.next().unwrap_or("").trim();
-                      let p = parts.next().unwrap_or("").trim();
-                      if !v.is_empty() && !p.is_empty() {
-                        all_versions.push(json!({ "version": v, "path": p }));
+                  "dart" => {
+                    if let Ok(raw) = exec_output_limit(
+                      "bash",
+                      &["-lc", r#"FOUND=false; LDIR="$HOME/.local/share/lumina/dart"; if [ -d "$LDIR" ]; then for d in "$LDIR"/*; do [ -d "$d" ] || continue; b=$(basename "$d"); [ "$b" = "current" ] && continue; [ -x "$d/bin/dart" ] || continue; ver=$("$d/bin/dart" --version 2>&1 | awk '{print $4}'); printf '%s\t%s\n' "${ver:-$b}" "$d/bin/dart"; FOUND=true; done; fi; if ! $FOUND && [ -x "$HOME/.dart/dart-sdk/bin/dart" ]; then ver=$("$HOME/.dart/dart-sdk/bin/dart" --version 2>&1 | awk '{print $4}'); printf '%s\t%s\n' "${ver:-dart}" "$HOME/.dart/dart-sdk/bin/dart"; fi"#],
+                      CMD_TIMEOUT_SHORT,
+                    ).await {
+                      for line in raw.lines() {
+                        let mut parts = line.splitn(2, '\t');
+                        let v = parts.next().unwrap_or("").trim();
+                        let p = parts.next().unwrap_or("").trim();
+                        if !v.is_empty() && !p.is_empty() {
+                          all_versions.push(json!({ "version": v, "path": p }));
+                        }
                       }
                     }
                   }
-                }
-                "julia" => {
-                  // List juliaup toolchains
-                  if let Ok(raw) = exec_output_limit(
-                    "bash",
-                    &["-lc", "export PATH=\"$HOME/.juliaup/bin:$PATH\"; juliaup list 2>/dev/null | tail -n +2 || true"],
-                    CMD_TIMEOUT_SHORT,
-                  ).await {
-                    for line in raw.lines().filter(|l| !l.trim().is_empty()) {
-                      let parts: Vec<&str> = line.split_whitespace().collect();
-                      let tag = parts.first().copied().unwrap_or("").trim_start_matches('*').trim();
-                      if tag.is_empty() { continue; }
-                      let julia_bin = format!("{}/.juliaup/bin/julia", std::env::var("HOME").unwrap_or_default());
-                      all_versions.push(json!({ "version": tag, "path": julia_bin }));
+                  "flutter" => {
+                    if let Ok(raw) = exec_output_limit(
+                      "bash",
+                      &["-lc", r#"FOUND=false; LDIR="$HOME/.local/share/lumina/flutter"; if [ -d "$LDIR" ]; then for d in "$LDIR"/*; do [ -d "$d" ] || continue; b=$(basename "$d"); [ "$b" = "current" ] && continue; [ -x "$d/bin/flutter" ] || continue; ver=$(cat "$d/version" 2>/dev/null | head -1); printf '%s\t%s\n' "${ver:-$b}" "$d/bin/flutter"; FOUND=true; done; fi; if ! $FOUND; then for sd in "$HOME/.flutter-sdk" "$HOME/flutter"; do [ -x "$sd/bin/flutter" ] || continue; ver=$(cat "$sd/version" 2>/dev/null | head -1); printf '%s\t%s\n' "${ver:-stable}" "$sd/bin/flutter"; FOUND=true; break; done; fi; if ! $FOUND && command -v snap >/dev/null 2>&1; then snap list flutter 2>/dev/null | awk 'NR>1{print $2"\t/snap/flutter/current/bin/flutter"}'; fi"#],
+                      CMD_TIMEOUT_SHORT,
+                    ).await {
+                      for line in raw.lines() {
+                        let mut parts = line.splitn(2, '\t');
+                        let v = parts.next().unwrap_or("").trim();
+                        let p = parts.next().unwrap_or("").trim();
+                        if !v.is_empty() && !p.is_empty() {
+                          all_versions.push(json!({ "version": v, "path": p }));
+                        }
+                      }
                     }
                   }
+                  "julia" => {
+                    if let Ok(raw) = exec_output_limit(
+                      "bash",
+                      &["-lc", "export PATH=\"$HOME/.juliaup/bin:$PATH\"; juliaup list 2>/dev/null | tail -n +2 || true"],
+                      CMD_TIMEOUT_SHORT,
+                    ).await {
+                      for line in raw.lines().filter(|l| !l.trim().is_empty()) {
+                        let parts: Vec<&str> = line.split_whitespace().collect();
+                        let tag = parts.first().copied().unwrap_or("").trim_start_matches('*').trim();
+                        if tag.is_empty() { continue; }
+                        let julia_bin = format!("{}/.juliaup/bin/julia", std::env::var("HOME").unwrap_or_default());
+                        all_versions.push(json!({ "version": tag, "path": julia_bin }));
+                      }
+                    }
+                  }
+                  _ => {}
                 }
-                _ => {}
+                json!({
+                  "id": id,
+                  "name": name,
+                  "installed": true,
+                  "version": version,
+                  "path": detected_path,
+                  "allVersions": all_versions
+                })
               }
-              runtimes.push(json!({
-                "id": id,
-                "name": name,
-                "installed": true,
-                "version": version,
-                "path": detected_path,
-                "allVersions": all_versions
-              }));
             }
+            Err(_) => json!({ "id": id, "name": name, "installed": false }),
           }
-          Err(_) => runtimes.push(json!({ "id": id, "name": name, "installed": false })),
+        }));
+      }
+      
+      let mut runtimes = Vec::new();
+      for t in tasks {
+        if let Ok(val) = t.await {
+          runtimes.push(val);
         }
       }
       json!({ "ok": true, "runtimes": runtimes })

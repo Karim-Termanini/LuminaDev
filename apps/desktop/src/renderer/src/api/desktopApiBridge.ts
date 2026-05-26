@@ -109,8 +109,8 @@ function createTauriDhApi(): DhApi {
       return { ok: true }
     },
     sessionInfo: () => tauriInvoke(IPC.sessionInfo),
-    layoutGet: () => tauriInvoke(IPC.layoutGet),
-    layoutSet: (layout) => tauriInvoke(IPC.layoutSet, layout),
+    layoutGet: (payload) => tauriInvoke(IPC.layoutGet, payload),
+    layoutSet: (payload) => tauriInvoke(IPC.layoutSet, payload),
     storeGet: (payload) => tauriInvoke(IPC.storeGet, payload),
     storeSet: (payload) => tauriInvoke(IPC.storeSet, payload),
     storeDelete: (payload) => tauriInvoke(IPC.storeDelete, payload),
