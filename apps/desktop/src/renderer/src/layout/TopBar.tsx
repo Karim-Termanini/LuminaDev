@@ -50,7 +50,6 @@ export function TopBar(): ReactElement {
         {onDashboard ? (
           <>
             <DashTab to="/dashboard" end label="Main" />
-            <DashTab to="/dashboard/widgets" label="Widget" />
             <DashTab to="/dashboard/kernels" label="Kernels" />
             <DashTab to="/dashboard/logs" label="Logs" />
           </>
