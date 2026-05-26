@@ -143,6 +143,7 @@ export function DashboardMainPage(): ReactElement {
   const [installLogs, setInstallLogs] = useState<string[]>([])
   const logsContainerRef = useRef<HTMLDivElement>(null)
   const [mobileSubTemplate, setMobileSubTemplate] = useState<'react-native' | 'flutter'>('react-native')
+  const [suggestedPorts, setSuggestedPorts] = useState<Record<string, number>>({})
 
   useEffect(() => {
     let unlisten: () => void;
@@ -696,6 +697,10 @@ export function DashboardMainPage(): ReactElement {
                                   setCreateProjectDeps({})
                                 }
                                 setCreateProjectModalOpen(true)
+                                const tmpl = selectedProfile.baseTemplate || selectedProfile.name
+                                invoke('ipc_invoke', { channel: 'dh:ports:suggest', payload: { template: tmpl, profile: selectedProfileName, subTemplate: mobileSubTemplate } }).then((r: any) => {
+                                  if (r.ok && r.ports) setSuggestedPorts(r.ports)
+                                }).catch(() => {})
                               }} style={{ padding: '0 16px', borderRadius: 6, border: 'none', background: selectedProfile.accent, color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>Create New</button>
                             </>
                           ) : (
@@ -1027,10 +1032,21 @@ export function DashboardMainPage(): ReactElement {
                     </div>
                   </div>
                 )}
+                {Object.keys(suggestedPorts).length > 0 && (
+                  <div style={{ marginBottom: 20, padding: '12px 14px', borderRadius: 8, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 8 }}>Services & Ports</div>
+                    {Object.entries(suggestedPorts).map(([svc, port]) => (
+                      <div key={svc} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                        <span style={{ fontSize: 13, color: 'var(--text-muted)', textTransform: 'capitalize' }}>{svc.replace('_', ' ')}</span>
+                        <span style={{ fontSize: 13, fontFamily: 'monospace', color: selectedProfile.accent }}>:{port}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 16 }}>
                   <button
                     type="button"
-                    onClick={() => setCreateProjectModalOpen(false)}
+                    onClick={() => { setCreateProjectModalOpen(false); setSuggestedPorts({}) }}
                     style={{
                       padding: '10px 24px', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, background: 'rgba(255,255,255,0.05)', color: 'var(--text)', cursor: 'pointer', fontWeight: 600, fontSize: 14, transition: 'all 0.2s ease',
                     }}
