@@ -6,18 +6,13 @@ import type { HostSecuritySnapshot } from '@linux-dev-home/shared'
 const UNITS = ['docker', 'ssh', 'nginx'] as const
 const REFRESH_MS = 30_000
 
+type Status = 'active' | 'inactive' | 'failed' | 'unknown'
+
 function statusColor(s?: string): string {
   if (s === 'active') return 'var(--green)'
   if (s === 'failed') return 'var(--red)'
   if (s === 'inactive') return 'var(--yellow)'
   return 'var(--text-muted)'
-}
-
-function statusVariant(s?: string): 'ok' | 'error' | 'warning' | '' {
-  if (s === 'active') return 'ok'
-  if (s === 'failed') return 'error'
-  if (s === 'inactive') return 'warning'
-  return ''
 }
 
 function unitIcon(u: string): string {
@@ -29,10 +24,10 @@ function unitIcon(u: string): string {
 
 function secOk(label: string, value: string): boolean {
   if (label === 'Firewall') return value === 'active'
-  if (label === 'SELinux / AppArmor') return value === 'enabled' || value === 'enforcing'
+  if (label === 'SELinux') return value === 'enabled' || value === 'enforcing'
   if (label === 'SSH Root Login') return value === 'no'
   if (label === 'SSH Password Auth') return value === 'no'
-  if (label === 'Failed Auth') return value === '0'
+  if (label === 'Failed Auth (24h)') return value === '0'
   return false
 }
 
@@ -84,75 +79,84 @@ export function DashboardKernelsPage(): ReactElement {
   const secItems = security
     ? [
         { label: 'Firewall', value: security.firewall, icon: 'codicon-shield' },
-        { label: 'SELinux / AppArmor', value: security.selinux, icon: 'codicon-lock' },
-        { label: 'SSH Root Login', value: security.sshPermitRootLogin, icon: 'codicon-key' },
+        { label: 'SELinux', value: security.selinux, icon: 'codicon-lock' },
+        { label: 'SSH Root Login', value: security.sshPermitRootLogin, icon: 'codicon-terminal' },
         { label: 'SSH Password Auth', value: security.sshPasswordAuth, icon: 'codicon-key' },
-        { label: 'Failed Auth', value: String(security.failedAuth24h), icon: 'codicon-warning' },
+        { label: 'Failed Auth (24h)', value: String(security.failedAuth24h), icon: 'codicon-warning' },
       ]
     : []
 
   return (
-    <div className="elevated-page kernels-page">
+    <div className="kernels-page">
 
       {/* ── Hero ── */}
-      <div className="elevated-hero">
-        <div className="elevated-hero-eyebrow">
+      <div className="kernels-hero">
+        <div className="kernels-eyebrow">
           <span className="codicon codicon-circuit-board" />
           Dashboard · Kernels
         </div>
-        <h1 className="elevated-hero-title">Kernels &amp; Toolchains</h1>
-        <p className="elevated-hero-subtitle">
-          GPU probe, service states &amp; security audit — live refresh every 30s.
+        <h1 className="kernels-title">Kernels &amp; Toolchains</h1>
+        <p className="kernels-subtitle">
+          GPU probe, service states &amp; security audit — refreshes every 30s.
         </p>
       </div>
 
       {/* ── Toolbar ── */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, justifyContent: 'flex-end' }}>
+      <div className="kernels-toolbar">
         {lastRefreshed && (
-          <span className="mono" style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+          <span className="kernels-updated">
             Updated {lastRefreshed.toLocaleTimeString()}
           </span>
         )}
-        <button type="button" className="hp-btn" onClick={() => void refresh()} disabled={busy}>
+        <button
+          type="button"
+          className="kernels-btn"
+          onClick={() => void refresh()}
+          disabled={busy}
+        >
           <span className={`codicon ${busy ? 'codicon-loading codicon-modifier-spin' : 'codicon-refresh'}`} />
-          {busy ? 'Refreshing…' : 'Refresh'}
+          {busy ? 'Refreshing…' : 'Refresh now'}
         </button>
       </div>
 
-      {/* ── Services Grid ── */}
+      {/* ── Services ── */}
       <div>
-        <div className="elevated-section-title" style={{ marginTop: 0 }}>System Services</div>
+        <div className="kernels-section-label">System Services</div>
         <div className="kernels-services-grid">
-
-          {/* GPU tile */}
-          <div className={`elevated-tile ${gpu && !gpu.toLowerCase().includes('unavail') ? 'ok' : ''}`}>
-            <div className="elevated-tile-icon">
-              <span className="codicon codicon-circuit-board" />
+          {/* GPU */}
+          <div className="kernels-service-card">
+            <div className="kernels-service-header">
+              <div className="kernels-service-icon-wrap">
+                <span className="codicon codicon-circuit-board" />
+              </div>
+              <div
+                className="kernels-status-dot"
+                style={{ background: gpu && !gpu.toLowerCase().includes('unavail') ? 'var(--green)' : 'var(--text-muted)' }}
+              />
             </div>
-            <div className="elevated-tile-content">
-              <div className="elevated-tile-title">GPU</div>
-              <div className="elevated-tile-detail">{gpu ?? '…'}</div>
-            </div>
+            <div className="kernels-service-name">GPU</div>
+            <div className="kernels-service-value">{gpu ?? '…'}</div>
           </div>
 
-          {/* systemd units */}
           {UNITS.map((u) => {
-            const v = statusVariant(units[u])
+            const val = units[u] as Status | undefined
+            const color = statusColor(val)
             return (
-              <div key={u} className={`elevated-tile ${v}`}>
-                <div className="elevated-tile-icon">
-                  <span className={`codicon ${unitIcon(u)}`} />
-                </div>
-                <div className="elevated-tile-content">
-                  <div className="elevated-tile-title" style={{ textTransform: 'capitalize' }}>{u}</div>
-                  <div className="elevated-tile-detail" style={{ color: statusColor(units[u]), fontWeight: 700 }}>
-                    {units[u] ?? '…'}
+              <div
+                key={u}
+                className="kernels-service-card"
+                style={{ borderLeftColor: color }}
+              >
+                <div className="kernels-service-header">
+                  <div className="kernels-service-icon-wrap">
+                    <span className={`codicon ${unitIcon(u)}`} />
                   </div>
+                  <div className="kernels-status-dot" style={{ background: color }} />
                 </div>
-                <div
-                  className="kernels-status-dot"
-                  style={{ background: statusColor(units[u]) }}
-                />
+                <div className="kernels-service-name">{u}</div>
+                <div className="kernels-service-value" style={{ color }}>
+                  {val ?? '…'}
+                </div>
               </div>
             )
           })}
@@ -162,37 +166,28 @@ export function DashboardKernelsPage(): ReactElement {
       {/* ── Security Audit ── */}
       {security && (
         <div>
-          <div className="elevated-section-title">Security Audit</div>
-          <div className="elevated-card" style={{ padding: 0, overflow: 'hidden' }}>
+          <div className="kernels-section-label">Security Audit</div>
+          <div className="kernels-audit-card">
             {secItems.map(({ label, value, icon }, i) => {
               const ok = secOk(label, value)
               return (
                 <div
                   key={label}
-                  className="kernels-sec-row"
-                  style={{
-                    borderBottom: i < secItems.length - 1
-                      ? '1px solid var(--border)'
-                      : 'none',
-                  }}
+                  className="kernels-audit-row"
+                  style={{ borderBottom: i < secItems.length - 1 ? '1px solid var(--border)' : 'none' }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1 }}>
-                    <span
-                      className={`codicon ${icon}`}
-                      style={{ fontSize: 15, color: 'var(--text-muted)' }}
-                    />
-                    <span style={{ fontSize: 13, color: 'var(--text)' }}>{label}</span>
+                  <div className="kernels-audit-label">
+                    <span className={`codicon ${icon}`} style={{ fontSize: 14, color: 'var(--text-muted)' }} />
+                    <span>{label}</span>
                   </div>
                   <div
-                    className="kernels-sec-badge"
+                    className="kernels-audit-badge"
                     style={{
                       color: ok ? 'var(--green)' : 'var(--orange)',
                       background: ok
-                        ? 'color-mix(in srgb, var(--green) 10%, transparent)'
-                        : 'color-mix(in srgb, var(--orange) 10%, transparent)',
-                      border: `1px solid ${ok
-                        ? 'color-mix(in srgb, var(--green) 30%, transparent)'
-                        : 'color-mix(in srgb, var(--orange) 30%, transparent)'}`,
+                        ? 'rgba(0, 230, 118, 0.1)'
+                        : 'rgba(255, 140, 66, 0.1)',
+                      border: `1px solid ${ok ? 'rgba(0, 230, 118, 0.3)' : 'rgba(255, 140, 66, 0.3)'}`,
                     }}
                   >
                     <span className={`codicon ${ok ? 'codicon-check' : 'codicon-warning'}`} />
@@ -204,11 +199,11 @@ export function DashboardKernelsPage(): ReactElement {
           </div>
 
           {(security.riskyOpenPorts?.length ?? 0) > 0 && (
-            <div className="elevated-page hp-status-alert error" style={{ marginTop: 12 }}>
-              <span className="codicon codicon-warning" style={{ fontSize: 18 }} />
+            <div className="kernels-risky-alert">
+              <span className="codicon codicon-warning" style={{ fontSize: 18, color: 'var(--red)' }} />
               <div>
-                <strong>Risky open ports detected:</strong>{' '}
-                <span className="mono">{security.riskyOpenPorts.join(', ')}</span>
+                <span style={{ fontWeight: 700, color: 'var(--red)' }}>Risky open ports: </span>
+                <span className="mono" style={{ fontSize: 12 }}>{security.riskyOpenPorts.join(', ')}</span>
               </div>
             </div>
           )}

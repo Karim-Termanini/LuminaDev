@@ -1,11 +1,99 @@
-/* Dashboard Logs Page — uses theme-elevated.css design system */
-@import '../theme/theme-elevated.css';
+/* ─────────────────────────────────────────────
+   DashboardLogsPage — self-contained styles
+   Explicit colors only, no background-clip tricks.
+───────────────────────────────────────────── */
 
 .logs-page {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
   max-width: 1060px;
+  padding: 0;
 }
 
-/* Card header bar */
+/* ── Hero ── */
+.logs-hero { display: flex; flex-direction: column; gap: 6px; }
+
+.logs-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.logs-title {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--text);
+  line-height: 1.15;
+}
+
+.logs-subtitle {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+/* ── Running Job Banner ── */
+.logs-running-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 18px;
+  background: rgba(124, 77, 255, 0.07);
+  border: 1px solid rgba(124, 77, 255, 0.25);
+  border-radius: 10px;
+  animation: logs-slide-in 0.25s ease;
+}
+
+@keyframes logs-slide-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.logs-pulse-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+  animation: logs-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes logs-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.3; }
+}
+
+/* ── Progress Bar ── */
+.logs-progress-track {
+  height: 5px;
+  background: var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.logs-progress-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 3px;
+  transition: width 0.5s ease;
+}
+
+/* ── Card ── */
+.logs-card {
+  background: var(--bg-widget);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
 .logs-card-header {
   display: flex;
   justify-content: space-between;
@@ -16,15 +104,24 @@
   flex-wrap: wrap;
 }
 
-/* Dark terminal block */
+.logs-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+/* ── Terminal Output ── */
 .logs-terminal {
   margin: 0;
   padding: 16px 20px;
-  background: color-mix(in srgb, #000000 55%, var(--bg-app));
+  background: #0d1117;
   font-family: var(--font-mono);
   font-size: 12px;
   line-height: 1.65;
-  color: #c8d3d5;
+  color: #c9d1d9;
   max-height: 320px;
   overflow-y: auto;
   white-space: pre-wrap;
@@ -33,12 +130,49 @@
 
 .logs-terminal::-webkit-scrollbar { width: 5px; }
 .logs-terminal::-webkit-scrollbar-track { background: transparent; }
-.logs-terminal::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
-  border-radius: 3px;
+.logs-terminal::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+
+/* ── Select & Button ── */
+.logs-select {
+  border: 1px solid var(--border);
+  background: var(--bg-input);
+  color: var(--text);
+  border-radius: 7px;
+  padding: 5px 10px;
+  font-size: 12px;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.2s;
+  appearance: none;
+  -webkit-appearance: none;
 }
 
-/* Job rows */
+.logs-select:focus { border-color: var(--accent); }
+
+.logs-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 13px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  background: var(--bg-input);
+  color: var(--text);
+  border-radius: 7px;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s, color 0.2s;
+}
+
+.logs-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: rgba(124, 77, 255, 0.08);
+  color: var(--accent);
+}
+
+.logs-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ── Job Row ── */
 .logs-job-row {
   display: flex;
   align-items: center;
@@ -47,9 +181,7 @@
   transition: background 0.15s ease;
 }
 
-.logs-job-row:hover {
-  background: color-mix(in srgb, var(--bg-input) 50%, transparent);
-}
+.logs-job-row:hover { background: var(--bg-input); }
 
 .logs-job-dot {
   width: 8px;
@@ -58,45 +190,38 @@
   flex-shrink: 0;
 }
 
-/* Empty state */
-.logs-empty-state {
+/* ── Empty State ── */
+.logs-empty {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 10px;
   padding: 48px 24px;
-  color: var(--text-muted);
   text-align: center;
 }
 
-/* Live pulse dot on running job banner */
-.logs-live-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--accent);
-  flex-shrink: 0;
-  animation: logs-pulse 1.5s ease-in-out infinite;
+/* ── Light Theme ── */
+[data-theme="light"] .logs-card {
+  background: #ffffff;
+  border-color: rgba(196, 199, 204, 0.7);
 }
 
-@keyframes logs-pulse {
-  0%, 100% { opacity: 1; }
-  50%       { opacity: 0.35; }
+[data-theme="light"] .logs-card-header {
+  border-bottom-color: rgba(196, 199, 204, 0.5);
 }
 
-/* select inside card header */
-.logs-page .hp-input {
-  appearance: none;
-  -webkit-appearance: none;
-  cursor: pointer;
-}
-
-/* Light theme */
 [data-theme="light"] .logs-terminal {
-  background: rgb(18 24 32 / 90%);
-  color: #d0dde5;
+  background: #0d1117;
+  color: #c9d1d9;
 }
 
 [data-theme="light"] .logs-job-row:hover {
-  background: rgba(0, 0, 0, 0.03);
+  background: rgba(0, 0, 0, 0.025);
+}
+
+[data-theme="light"] .logs-select,
+[data-theme="light"] .logs-btn {
+  background: #f3f4f6;
+  border-color: #e5e7eb;
+  color: #111827;
 }
