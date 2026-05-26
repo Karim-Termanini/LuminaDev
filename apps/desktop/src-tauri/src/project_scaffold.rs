@@ -255,8 +255,24 @@ export default defineConfig({
 "#;
       let _ = std::fs::write(project_dir.join("vite.config.ts"), vite_config);
       scaffold_editor_configs(&project_dir, "web-dev", "");
+    } else if template == "mobile" {
+      let sub = body.get("subTemplate").and_then(|v| v.as_str()).unwrap_or("react-native");
+      let env_pairs: Vec<(&str, &str)> = vec![];
+      let result = if sub == "flutter" {
+        scaffold_mobile_flutter(&project_dir, &env_pairs)
+      } else {
+        scaffold_mobile_react_native(&project_dir, &env_pairs)
+      };
+      if let Err(e) = result {
+        return json!({ "ok": false, "error": e });
+      }
+    } else if template == "ai-ml" {
+      let env_pairs: Vec<(&str, &str)> = vec![];
+      if let Err(e) = scaffold_ai_ml(&project_dir, &env_pairs) {
+        return json!({ "ok": false, "error": e });
+      }
     }
-    
+
     json!({ "ok": true, "path": expanded })
 }
 
@@ -939,5 +955,43 @@ mod tests {
         let reqs = std::fs::read_to_string(dir.path().join("requirements.txt")).unwrap();
         assert!(reqs.contains("torch"));
         assert!(reqs.contains("langchain"));
+    }
+
+    #[tokio::test]
+    async fn handle_scaffold_mobile_rn_dispatches() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let body = serde_json::json!({
+            "path": dir.path().to_str().unwrap(),
+            "template": "mobile",
+            "subTemplate": "react-native"
+        });
+        let result = handle_project_scaffold(body).await;
+        assert_eq!(result["ok"], true);
+        assert!(dir.path().join("package.json").exists());
+    }
+
+    #[tokio::test]
+    async fn handle_scaffold_mobile_flutter_dispatches() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let body = serde_json::json!({
+            "path": dir.path().to_str().unwrap(),
+            "template": "mobile",
+            "subTemplate": "flutter"
+        });
+        let result = handle_project_scaffold(body).await;
+        assert_eq!(result["ok"], true);
+        assert!(dir.path().join("pubspec.yaml").exists());
+    }
+
+    #[tokio::test]
+    async fn handle_scaffold_ai_ml_dispatches() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let body = serde_json::json!({
+            "path": dir.path().to_str().unwrap(),
+            "template": "ai-ml"
+        });
+        let result = handle_project_scaffold(body).await;
+        assert_eq!(result["ok"], true);
+        assert!(dir.path().join("requirements.txt").exists());
     }
 }
