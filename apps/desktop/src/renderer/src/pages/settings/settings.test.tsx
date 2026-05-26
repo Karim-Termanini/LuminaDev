@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
+import { I18nProvider } from '../../i18n/I18nContext'
 
 // Mock window.dh for all tab tests (renderToStaticMarkup is server-side; effects don't run)
 const mockDh = {
@@ -26,7 +27,7 @@ import { SettingsDateTime } from './SettingsDateTime'
 import { SettingsLanguages } from './SettingsLanguages'
 
 function wrap(ui: React.ReactElement): string {
-  return renderToStaticMarkup(<MemoryRouter>{ui}</MemoryRouter>)
+  return renderToStaticMarkup(<I18nProvider><MemoryRouter>{ui}</MemoryRouter></I18nProvider>)
 }
 
 describe('SettingsShell', () => {

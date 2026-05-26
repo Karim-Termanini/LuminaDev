@@ -1,16 +1,35 @@
 use std::time::Duration;
 use tokio::process::Command;
 
+use std::sync::atomic::{AtomicU64, Ordering};
+
 /// Default wall-clock bound for host `exec_output` / `exec_result` (prevents hung IPC).
-pub(crate) const CMD_TIMEOUT_DEFAULT: Duration = Duration::from_secs(180);
+static IPC_TIMEOUT_MS: AtomicU64 = AtomicU64::new(30_000);
+
+pub(crate) fn set_global_ipc_timeout(ms: u64) {
+  IPC_TIMEOUT_MS.store(ms, Ordering::Relaxed);
+}
+
+pub(crate) fn get_global_ipc_timeout() -> Duration {
+  Duration::from_millis(IPC_TIMEOUT_MS.load(Ordering::Relaxed))
+}
+
 /// Short probe (sudo -n, quick shell checks, `ssh -T` smoke test).
-pub(crate) const CMD_TIMEOUT_SHORT: Duration = Duration::from_secs(30);
+pub(crate) fn cmd_timeout_short() -> Duration {
+    get_global_ipc_timeout()
+}
 /// Remote SSH ops (list dir, key install) — network-bound.
-pub(crate) const CMD_TIMEOUT_SSH: Duration = Duration::from_secs(120);
+pub(crate) fn cmd_timeout_ssh() -> Duration {
+    Duration::from_secs(120).max(get_global_ipc_timeout())
+}
 /// `git clone`, `docker pull`, `docker compose` (in-profile dir), and similar long host work.
-pub(crate) const CMD_TIMEOUT_LONG: Duration = Duration::from_secs(900);
+pub(crate) fn cmd_timeout_long() -> Duration {
+    Duration::from_secs(900).max(get_global_ipc_timeout())
+}
 /// Single `sudo bash -c` step during Docker engine install.
-pub(crate) const CMD_TIMEOUT_INSTALL_STEP: Duration = Duration::from_secs(900);
+pub(crate) fn cmd_timeout_install_step() -> Duration {
+    Duration::from_secs(900).max(get_global_ipc_timeout())
+}
 
 fn running_in_flatpak() -> bool {
   std::env::var("FLATPAK_ID")
@@ -49,7 +68,7 @@ pub(crate) async fn exec_output_limit(cmd: &str, args: &[&str], limit: Duration)
 }
 
 pub(crate) async fn exec_output(cmd: &str, args: &[&str]) -> Result<String, String> {
-  exec_output_limit(cmd, args, CMD_TIMEOUT_DEFAULT).await
+  exec_output_limit(cmd, args, get_global_ipc_timeout()).await
 }
 
 pub(crate) async fn exec_result_limit(
@@ -76,8 +95,12 @@ pub(crate) async fn exec_result_limit(
   }
 }
 
-pub(crate) async fn exec_result(cmd: &str, args: &[&str]) -> Result<(String, String), String> {
-  exec_result_limit(cmd, args, CMD_TIMEOUT_DEFAULT).await
+pub(crate) async fn exec_result(
+  cmd: &str,
+  args: &[&str],
+) -> Result<(String, String), String> {
+  let limit = get_global_ipc_timeout();
+  exec_result_limit(cmd, args, limit).await
 }
 
 /// Like `exec_output_limit` but injects additional environment variables.
@@ -132,7 +155,7 @@ pub(crate) async fn read_proc_text(path: &str) -> String {
     }
   }
   if running_in_flatpak() {
-    return exec_output_limit("cat", &[path], CMD_TIMEOUT_SHORT)
+    return exec_output_limit("cat", &[path], cmd_timeout_short())
       .await
       .unwrap_or_default();
   }

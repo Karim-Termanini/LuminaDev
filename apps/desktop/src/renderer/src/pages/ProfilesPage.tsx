@@ -483,7 +483,7 @@ export function ProfilesPage(): ReactElement {
                       }}
                     >
                       <span className="codicon codicon-layers" style={{ marginRight: 4 }} />
-                      {(p.composeVariant ?? 'stub') === 'stub' ? 'STUB' : 'FULL'}
+                      {(p.composeVariant ?? 'stub') === 'stub' ? 'LITE' : 'FULL'}
                     </button>
                     {activeProfileTemplate !== p.baseTemplate && (
                       <button type="button" className="row-btn" title="Set as active profile in Dashboard" onClick={() => void setAsActive(p.baseTemplate)}>

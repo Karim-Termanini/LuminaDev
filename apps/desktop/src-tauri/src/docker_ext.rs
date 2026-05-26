@@ -142,9 +142,9 @@ pub(crate) async fn docker_install_invoke(body: &Value) -> Value {
         .collect::<Vec<String>>()
     })
     .unwrap_or_default();
-  let docker_installed = exec_output_limit("docker", &["--version"], CMD_TIMEOUT_SHORT).await.is_ok();
-  let compose_installed = exec_output_limit("docker", &["compose", "version"], CMD_TIMEOUT_SHORT).await.is_ok();
-  let buildx_installed = exec_output_limit("docker", &["buildx", "version"], CMD_TIMEOUT_SHORT).await.is_ok();
+  let docker_installed = exec_output_limit("docker", &["--version"], cmd_timeout_short()).await.is_ok();
+  let compose_installed = exec_output_limit("docker", &["compose", "version"], cmd_timeout_short()).await.is_ok();
+  let buildx_installed = exec_output_limit("docker", &["buildx", "version"], cmd_timeout_short()).await.is_ok();
 
   let mut effective_components = requested_components;
   if effective_components.is_empty() {

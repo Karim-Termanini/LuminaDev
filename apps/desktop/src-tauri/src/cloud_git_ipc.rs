@@ -2,7 +2,7 @@ use serde_json::{json, Value};
 use tauri::AppHandle;
 
 use crate::cloud_auth::{self, CredentialStore, ParsedRemoteRepo};
-use crate::host_exec::{exec_output_limit, CMD_TIMEOUT_SHORT};
+use crate::host_exec::{exec_output_limit, cmd_timeout_short};
 
 pub async fn invoke(app: &AppHandle, channel: &str, body: &Value) -> Value {
     match channel {
@@ -158,7 +158,7 @@ async fn pipelines(app: &AppHandle, body: &Value) -> Value {
         let url_out = match exec_output_limit(
             "git",
             &["-C", rp, "remote", "get-url", remote_name],
-            CMD_TIMEOUT_SHORT,
+            cmd_timeout_short(),
         )
         .await
         {
@@ -314,7 +314,7 @@ async fn create_pr(app: &AppHandle, body: &Value) -> Value {
         Some(p) => p,
         None => return json!({ "ok": false, "error": "[CLOUD_GIT_CREATE_PR] repoPath is required." }),
     };
-    let remote_url = match exec_output_limit("git", &["-C", rp, "remote", "get-url", remote_name], CMD_TIMEOUT_SHORT).await {
+    let remote_url = match exec_output_limit("git", &["-C", rp, "remote", "get-url", remote_name], cmd_timeout_short()).await {
         Ok(u) => u,
         Err(e) => return json!({ "ok": false, "error": format!("[CLOUD_GIT_SCOPE] Could not read remote: {}", e.trim()) }),
     };
@@ -365,7 +365,7 @@ async fn get_pr_checks(app: &AppHandle, body: &Value) -> Value {
         None => return json!({ "ok": false, "error": "[CLOUD_GIT_GET_PR_CHECKS] repoPath is required." }),
     };
 
-    let remote_url = match exec_output_limit("git", &["-C", rp, "remote", "get-url", remote_name], CMD_TIMEOUT_SHORT).await {
+    let remote_url = match exec_output_limit("git", &["-C", rp, "remote", "get-url", remote_name], cmd_timeout_short()).await {
         Ok(u) => u,
         Err(e) => return json!({ "ok": false, "error": format!("[CLOUD_GIT_SCOPE] Could not read remote: {}", e.trim()) }),
     };
@@ -531,7 +531,7 @@ async fn merge_pr(app: &AppHandle, body: &Value) -> Value {
     let remote_url = match exec_output_limit(
         "git",
         &["-C", rp, "remote", "get-url", remote_name],
-        CMD_TIMEOUT_SHORT,
+        cmd_timeout_short(),
     )
     .await
     {

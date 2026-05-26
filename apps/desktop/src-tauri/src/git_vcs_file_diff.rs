@@ -1,6 +1,6 @@
 //! Unstaged merge-aware `git diff` for the Git VCS IPC surface (`dh:git:vcs:diff`).
 
-use crate::host_exec::{exec_output_limit, CMD_TIMEOUT_SHORT};
+use crate::host_exec::{exec_output_limit, cmd_timeout_short};
 
 async fn diff_raw(repo_path: &str, file_path: &str, staged: bool) -> String {
     let diff_args: Vec<&str> = if staged {
@@ -8,10 +8,10 @@ async fn diff_raw(repo_path: &str, file_path: &str, staged: bool) -> String {
     } else {
         vec!["-C", repo_path, "diff", "--", file_path]
     };
-    match exec_output_limit("git", &diff_args, CMD_TIMEOUT_SHORT).await {
+    match exec_output_limit("git", &diff_args, cmd_timeout_short()).await {
         Err(_) => {
             let untracked_args = vec!["-C", repo_path, "diff", "--no-index", "/dev/null", file_path];
-            exec_output_limit("git", &untracked_args, CMD_TIMEOUT_SHORT)
+            exec_output_limit("git", &untracked_args, cmd_timeout_short())
                 .await
                 .unwrap_or_default()
         }
@@ -25,7 +25,7 @@ async fn diff_maybe_merge(repo_path: &str, file_path: &str, raw: String) -> Stri
         let unmerged = exec_output_limit(
             "git",
             &["-C", repo_path, "ls-files", "-u", "--", file_path],
-            CMD_TIMEOUT_SHORT,
+            cmd_timeout_short(),
         )
         .await
         .map(|s| !s.trim().is_empty())
@@ -34,7 +34,7 @@ async fn diff_maybe_merge(repo_path: &str, file_path: &str, raw: String) -> Stri
             if let Ok(cc) = exec_output_limit(
                 "git",
                 &["-C", repo_path, "diff", "--cc", "--", file_path],
-                CMD_TIMEOUT_SHORT,
+                cmd_timeout_short(),
             )
             .await
             {
@@ -45,7 +45,7 @@ async fn diff_maybe_merge(repo_path: &str, file_path: &str, raw: String) -> Stri
             if let Ok(ours) = exec_output_limit(
                 "git",
                 &["-C", repo_path, "diff", ":2", "--", file_path],
-                CMD_TIMEOUT_SHORT,
+                cmd_timeout_short(),
             )
             .await
             {

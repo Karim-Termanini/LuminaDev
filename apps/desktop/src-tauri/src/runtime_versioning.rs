@@ -1,4 +1,4 @@
-use crate::host_exec::{CMD_TIMEOUT_SHORT, exec_output_limit};
+use crate::host_exec::{cmd_timeout_short, exec_output_limit};
 
 /// First whitespace-delimited token (e.g. "v22.0.0 (LTS: Foo)" → "v22.0.0").
 pub(crate) fn lumina_first_version_token(raw: &str) -> Option<String> {
@@ -46,7 +46,7 @@ pub(crate) async fn runtime_dnf_repoquery_versions(package: &str, limit: usize) 
     "command -v dnf >/dev/null 2>&1 && dnf -q repoquery '{}' --qf '%{{version}}\\n' 2>/dev/null | sort -Vu | tail -n {}",
     safe_pkg, limit
   );
-  exec_output_limit("bash", &["-lc", &cmd], CMD_TIMEOUT_SHORT)
+  exec_output_limit("bash", &["-lc", &cmd], cmd_timeout_short())
     .await
     .unwrap_or_default()
     .lines()

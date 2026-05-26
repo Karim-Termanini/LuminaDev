@@ -20,6 +20,8 @@ import { SettingsPage } from './pages/SettingsPage'
 import { SystemReadinessPage } from './pages/SystemReadinessPage'
 import { ReadinessWizardPage } from './pages/ReadinessWizardPage'
 import { syncAppearanceFromStore } from './theme/applyAccent'
+import { I18nProvider } from './i18n/I18nContext'
+import { NotificationProvider } from './layout/NotificationProvider'
 
 export default function App(): ReactElement | null {
   const [ready, setReady] = useState(false)
@@ -44,41 +46,49 @@ export default function App(): ReactElement | null {
   if (!ready) return null
   if (showReadinessWizard) {
     return (
-      <ReadinessWizardPage
-        onComplete={() => {
-          setShowReadinessWizard(false)
-          void syncAppearanceFromStore()
-        }}
-      />
+      <I18nProvider>
+        <NotificationProvider>
+          <ReadinessWizardPage
+            onComplete={() => {
+              setShowReadinessWizard(false)
+              void syncAppearanceFromStore()
+            }}
+          />
+        </NotificationProvider>
+      </I18nProvider>
     )
   }
 
   return (
-    <AppShell>
-      <Routes>
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
-        <Route path="/dashboard" element={<DashboardLayout />}>
-          <Route index element={<DashboardMainPage />} />
-          <Route path="kernels" element={<DashboardKernelsPage />} />
-          <Route path="logs" element={<DashboardLogsPage />} />
-          <Route path="widgets" element={<DashboardWidgetsPage />} />
-        </Route>
-        <Route path="/system" element={<MonitorPage />} />
-        <Route path="/docker" element={<DockerPage />} />
-        <Route path="/ssh" element={<SshPage />} />
-        <Route path="/git" element={<DeveloperGitPage />} />
-        {/* Legacy redirects */}
-        <Route path="/git-config" element={<Navigate to="/git?tab=config" replace />} />
-        <Route path="/git-vcs" element={<Navigate to="/git?tab=vcs" replace />} />
-        <Route path="/cloud-git" element={<Navigate to="/git?tab=cloud" replace />} />
-        <Route path="/registry" element={<Navigate to="/git?tab=vcs" replace />} />
-        <Route path="/profiles" element={<ProfilesPage />} />
-        <Route path="/terminal" element={<TerminalPage />} />
-        <Route path="/runtimes" element={<RuntimesPage />} />
-        <Route path="/maintenance" element={<MaintenancePage />} />
-        <Route path="/settings" element={<SettingsPage />} />
-        <Route path="/system-readiness" element={<SystemReadinessPage />} />
-      </Routes>
-    </AppShell>
+    <I18nProvider>
+      <NotificationProvider>
+        <AppShell>
+          <Routes>
+            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/dashboard" element={<DashboardLayout />}>
+              <Route index element={<DashboardMainPage />} />
+              <Route path="kernels" element={<DashboardKernelsPage />} />
+              <Route path="logs" element={<DashboardLogsPage />} />
+              <Route path="widgets" element={<DashboardWidgetsPage />} />
+            </Route>
+            <Route path="/system" element={<MonitorPage />} />
+            <Route path="/docker" element={<DockerPage />} />
+            <Route path="/ssh" element={<SshPage />} />
+            <Route path="/git" element={<DeveloperGitPage />} />
+            {/* Legacy redirects */}
+            <Route path="/git-config" element={<Navigate to="/git?tab=config" replace />} />
+            <Route path="/git-vcs" element={<Navigate to="/git?tab=vcs" replace />} />
+            <Route path="/cloud-git" element={<Navigate to="/git?tab=cloud" replace />} />
+            <Route path="/registry" element={<Navigate to="/git?tab=vcs" replace />} />
+            <Route path="/profiles" element={<ProfilesPage />} />
+            <Route path="/terminal" element={<TerminalPage />} />
+            <Route path="/runtimes" element={<RuntimesPage />} />
+            <Route path="/maintenance" element={<MaintenancePage />} />
+            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/system-readiness" element={<SystemReadinessPage />} />
+          </Routes>
+        </AppShell>
+      </NotificationProvider>
+    </I18nProvider>
   )
 }

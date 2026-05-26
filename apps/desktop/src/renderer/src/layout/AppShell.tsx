@@ -52,12 +52,19 @@ export function AppShell({ children }: { children: ReactNode }): ReactElement {
       go_git: '/git',
     }
     let bindings: Record<string, string> = {}
-    void window.dh.storeGet({ key: 'shortcuts_settings' }).then((res: unknown) => {
-      const bag = res as { ok?: boolean; data?: unknown }
-      if (bag.ok && bag.data && typeof bag.data === 'object') {
-        bindings = bag.data as Record<string, string>
-      }
-    })
+
+    const refreshBindings = (): void => {
+      void window.dh.storeGet({ key: 'shortcuts_settings' }).then((res: unknown) => {
+        const bag = res as { ok?: boolean; data?: unknown }
+        if (bag.ok && bag.data && typeof bag.data === 'object') {
+          bindings = bag.data as Record<string, string>
+        }
+      })
+    }
+
+    refreshBindings()
+    const onShortcutsUpdated = (): void => refreshBindings()
+
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
       const parts: string[] = []
@@ -78,7 +85,11 @@ export function AppShell({ children }: { children: ReactNode }): ReactElement {
       }
     }
     document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
+    window.addEventListener('dh:shortcuts:updated', onShortcutsUpdated as EventListener)
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      window.removeEventListener('dh:shortcuts:updated', onShortcutsUpdated as EventListener)
+    }
   }, [navigate])
 
   return (

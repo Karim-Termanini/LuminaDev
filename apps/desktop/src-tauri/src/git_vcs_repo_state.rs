@@ -1,13 +1,13 @@
 //! Merge / rebase operation detection for `dh:git:vcs:status` (Smart-Flow backbone).
 
-use crate::host_exec::{exec_output_limit, CMD_TIMEOUT_SHORT};
+use crate::host_exec::{exec_output_limit, cmd_timeout_short};
 
 /// One of `none`, `merging`, `rebasing` — matches JSON on the status IPC payload.
 pub async fn git_operation_state(repo_path: &str) -> &'static str {
     if exec_output_limit(
         "git",
         &["-C", repo_path, "rev-parse", "-q", "--verify", "MERGE_HEAD"],
-        CMD_TIMEOUT_SHORT,
+        cmd_timeout_short(),
     )
     .await
     .is_ok()
@@ -17,7 +17,7 @@ pub async fn git_operation_state(repo_path: &str) -> &'static str {
     if exec_output_limit(
         "git",
         &["-C", repo_path, "rev-parse", "-q", "--verify", "REBASE_HEAD"],
-        CMD_TIMEOUT_SHORT,
+        cmd_timeout_short(),
     )
     .await
     .is_ok()
@@ -37,7 +37,7 @@ pub async fn unmerged_path_count(repo_path: &str) -> u32 {
             "--name-only",
             "--diff-filter=U",
         ],
-        CMD_TIMEOUT_SHORT,
+        cmd_timeout_short(),
     )
     .await
     .unwrap_or_default();

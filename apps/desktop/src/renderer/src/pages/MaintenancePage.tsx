@@ -26,7 +26,7 @@ type ServiceState = Record<string, 'active' | 'inactive' | 'unknown'>
 type CleanupPreview = { containers: number; images: number; volumes: number; networks: number } | null
 type TabId = (typeof TABS)[number]
 type DiagnosticCheck = { id: string; label: string; ok: boolean; details: string }
-type PerfSnapshot = { startupMs: number; rssMb: number; heapUsedMb: number; heapTotalMb: number; uptimeSec: number }
+type PerfSnapshot = { rssMb: number; uptimeSec: number }
 
 type RunbookOp = (typeof OPS_RUNBOOK)[number]
 
@@ -443,9 +443,9 @@ export function MaintenancePage(): ReactElement {
       checks.push({
         id: 'perf',
         label: 'Performance baseline',
-        ok: Boolean(snap && snap.rssMb < 900 && snap.startupMs < 120000),
+        ok: Boolean(snap && snap.rssMb < 900),
         details: snap
-          ? `startup=${snap.startupMs}ms rss=${snap.rssMb}MB heap=${snap.heapUsedMb}/${snap.heapTotalMb}MB uptime=${snap.uptimeSec}s`
+          ? `rss=${snap.rssMb}MB uptime=${snap.uptimeSec}s`
           : perf.error || 'Perf snapshot unavailable',
       })
 

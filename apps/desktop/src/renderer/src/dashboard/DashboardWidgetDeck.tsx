@@ -192,13 +192,6 @@ function WidgetTile(props: {
         </p>
       )
       break
-    case 'custom.placeholder':
-      body = (
-        <p style={{ margin: 0, fontSize: fs(13), color: 'var(--text-muted)', lineHeight: c ? 1.55 : 1.45 }}>
-          Placeholder for Phase 1 custom profiles and user-defined widget packs.
-        </p>
-      )
-      break
     default:
       body = (
         <p style={{ margin: 0, fontSize: fs(13), color: 'var(--orange)' }}>

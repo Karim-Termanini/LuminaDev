@@ -4,7 +4,7 @@ use tauri::{AppHandle, Manager};
 
 use crate::cloud_auth::{self, CredentialStore};
 use crate::host_exec::{
-    exec_output_limit, exec_output_with_env, CMD_TIMEOUT_LONG, CMD_TIMEOUT_SHORT,
+    exec_output_limit, exec_output_with_env, cmd_timeout_long, cmd_timeout_short,
 };
 
 #[derive(Clone, Copy)]
@@ -60,7 +60,7 @@ pub async fn git_network_with_auth(
     let remote_url = exec_output_limit(
         "git",
         &["-C", repo_path, "remote", "get-url", remote_for_url],
-        CMD_TIMEOUT_SHORT,
+        cmd_timeout_short(),
     )
     .await
     .unwrap_or_default();
@@ -120,17 +120,17 @@ pub async fn git_network_with_auth(
         }
         let script_str = script_path.to_string_lossy().to_string();
         let env = [("GIT_ASKPASS", script_str.as_str()), ("GIT_TERMINAL_PROMPT", "0")];
-        let result = exec_output_with_env("git", &args_refs, &env, CMD_TIMEOUT_LONG).await;
+        let result = exec_output_with_env("git", &args_refs, &env, cmd_timeout_long()).await;
         let _ = std::fs::remove_file(&script_path);
         match result {
             Ok(output) => Ok(output),
             Err(e) if e.contains("no upstream branch") && matches!(op, GitNetworkOp::Push { .. }) => {
                 // Smart Retry: If push fails for no upstream, try to set it automatically
-                let current_branch = exec_output_limit("git", &["-C", repo_path, "rev-parse", "--abbrev-ref", "HEAD"], CMD_TIMEOUT_SHORT).await.unwrap_or_default().trim().to_string();
+                let current_branch = exec_output_limit("git", &["-C", repo_path, "rev-parse", "--abbrev-ref", "HEAD"], cmd_timeout_short()).await.unwrap_or_default().trim().to_string();
                 if !current_branch.is_empty() && current_branch != "HEAD" {
                     let remote = match &op { GitNetworkOp::Push { remote, .. } => remote.unwrap_or("origin"), _ => "origin" };
                     let retry_args = ["-C", repo_path, "push", "--set-upstream", remote, &current_branch];
-                    exec_output_with_env("git", &retry_args, &env, CMD_TIMEOUT_LONG).await
+                    exec_output_with_env("git", &retry_args, &env, cmd_timeout_long()).await
                         .map_err(|e2| git_network_classify_error(&op, &e2, true))
                 } else {
                     Err(git_network_classify_error(&op, &e, true))
@@ -139,14 +139,14 @@ pub async fn git_network_with_auth(
             Err(e) => Err(git_network_classify_error(&op, &e, true))
         }
     } else {
-        match exec_output_limit("git", &args_refs, CMD_TIMEOUT_LONG).await {
+        match exec_output_limit("git", &args_refs, cmd_timeout_long()).await {
             Ok(output) => Ok(output),
             Err(e) if e.contains("no upstream branch") && matches!(op, GitNetworkOp::Push { .. }) => {
-                let current_branch = exec_output_limit("git", &["-C", repo_path, "rev-parse", "--abbrev-ref", "HEAD"], CMD_TIMEOUT_SHORT).await.unwrap_or_default().trim().to_string();
+                let current_branch = exec_output_limit("git", &["-C", repo_path, "rev-parse", "--abbrev-ref", "HEAD"], cmd_timeout_short()).await.unwrap_or_default().trim().to_string();
                 if !current_branch.is_empty() && current_branch != "HEAD" {
                     let remote = match &op { GitNetworkOp::Push { remote, .. } => remote.unwrap_or("origin"), _ => "origin" };
                     let retry_args = ["-C", repo_path, "push", "--set-upstream", remote, &current_branch];
-                    exec_output_limit("git", &retry_args, CMD_TIMEOUT_LONG).await
+                    exec_output_limit("git", &retry_args, cmd_timeout_long()).await
                         .map_err(|e2| git_network_classify_error(&op, &e2, false))
                 } else {
                     Err(git_network_classify_error(&op, &e, false))
