@@ -1944,17 +1944,22 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
         return Ok(json!({ "ok": false, "log": "", "error": "[PROFILE_SWITCH_INVALID] 'to' profile required" }));
       }
 
+      match exec_output_limit("docker", &["info", "--format", "{{.ServerVersion}}"], CMD_TIMEOUT_SHORT).await {
+        Err(_) => return Ok(json!({ "ok": false, "log": "", "error": "[DOCKER_UNAVAILABLE] Docker daemon is not reachable" })),
+        Ok(ref out) if out.trim().is_empty() => return Ok(json!({ "ok": false, "log": "", "error": "[DOCKER_UNAVAILABLE] Docker daemon is not reachable" })),
+        Ok(_) => {}
+      }
+
       let mut logs = String::new();
 
       if let Some(from) = from_profile {
         let from_template = resolve_profile_template(&app, from);
         let from_dir = compose_profiles::compose_profile_workdir(&app, &from_template);
         if from_dir.is_dir() {
-          match exec_docker_compose_in_dir(&from_dir, &["down"], CMD_TIMEOUT_LONG, Some(from), Some(get_profile_extra_env(&app, from))).await {
+          match exec_docker_compose_in_dir(&from_dir, &["down"], CMD_TIMEOUT_DEFAULT, Some(from), Some(get_profile_extra_env(&app, from))).await {
             Ok((stdout, stderr)) => logs.push_str(&format!("Stopped old profile:\n{}{}\n", stdout, stderr)),
             Err(e) => logs.push_str(&format!("Warning: failed to stop old profile: {}\n", e.trim())),
           }
-          // Give Docker daemon enough time to release ports and teardown networks
           tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
         }
       }
@@ -1969,7 +1974,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
         }));
       }
 
-      match exec_docker_compose_in_dir(&to_dir, &["up", "-d"], CMD_TIMEOUT_LONG, Some(to_profile), Some(get_profile_extra_env(&app, to_profile))).await {
+      match exec_docker_compose_in_dir(&to_dir, &["up", "-d"], CMD_TIMEOUT_DEFAULT, Some(to_profile), Some(get_profile_extra_env(&app, to_profile))).await {
         Ok((stdout, stderr)) => {
           logs.push_str(&format!("Started new profile:\n{}{}\n", stdout, stderr));
           json!({ "ok": true, "log": logs })

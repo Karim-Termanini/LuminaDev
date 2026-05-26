@@ -7,7 +7,6 @@ import { DashboardKernelsPage } from './pages/DashboardKernelsPage'
 import { DashboardLayout } from './pages/DashboardLayout'
 import { DashboardLogsPage } from './pages/DashboardLogsPage'
 import { DashboardMainPage } from './pages/DashboardMainPage'
-import { DashboardWidgetsPage } from './pages/DashboardWidgetsPage'
 import { DockerPage } from './pages/DockerPage'
 import { DeveloperGitPage } from './pages/DeveloperGitPage'
 import { ProfilesPage } from './pages/ProfilesPage'
@@ -59,7 +58,6 @@ export default function App(): ReactElement | null {
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="/dashboard" element={<DashboardLayout />}>
           <Route index element={<DashboardMainPage />} />
-          <Route path="widgets" element={<DashboardWidgetsPage />} />
           <Route path="kernels" element={<DashboardKernelsPage />} />
           <Route path="logs" element={<DashboardLogsPage />} />
         </Route>

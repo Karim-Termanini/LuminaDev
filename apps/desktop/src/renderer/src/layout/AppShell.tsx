@@ -1,5 +1,6 @@
 import type { ReactElement, ReactNode } from 'react'
-import { NavLink } from 'react-router-dom'
+import { NavLink, useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
 
 import { ActiveJobsStrip } from './ActiveJobsStrip'
 import { EnvironmentBanner } from './EnvironmentBanner'
@@ -31,6 +32,18 @@ const statusStyles: Record<RouteStatus, { label: string; color: string; bg: stri
   stub: { label: 'STUB', color: '#ff8a80', bg: 'rgba(255, 82, 82, 0.1)', border: 'rgba(255, 82, 82, 0.25)' },
 }
 export function AppShell({ children }: { children: ReactNode }): ReactElement {
+  const navigate = useNavigate()
+  const [profileName, setProfileName] = useState<string>('Local user')
+
+  useEffect(() => {
+    void window.dh.storeGet({ key: 'active_profile' }).then((res: unknown) => {
+      const bag = res as { ok?: boolean; data?: unknown }
+      if (bag.ok && typeof bag.data === 'string' && bag.data.trim()) {
+        setProfileName(bag.data)
+      }
+    })
+  }, [])
+
   return (
     <div className="app-shell">
       <aside className="app-shell-nav">
@@ -83,11 +96,20 @@ export function AppShell({ children }: { children: ReactNode }): ReactElement {
             <span className="codicon codicon-wand" aria-hidden />
             Setup Wizard
           </a>
-          <div className="app-shell-profile-section">
-            <span className="codicon codicon-account app-shell-profile-icon" aria-hidden />
+          <div
+            className="app-shell-profile-section"
+            onClick={() => navigate('/profiles')}
+            role="button"
+            tabIndex={0}
+            aria-label="Switch profile"
+            onKeyDown={(e) => { if (e.key === 'Enter') navigate('/profiles') }}
+          >
+            <div className="app-shell-profile-avatar">
+              <span className="codicon codicon-account" aria-hidden />
+            </div>
             <div className="app-shell-profile-info">
-              <div className="app-shell-profile-name">Local user</div>
-              <div className="app-shell-profile-session">Developer</div>
+              <div className="app-shell-profile-name">{profileName}</div>
+              <div className="app-shell-profile-session">Switch Profile ›</div>
             </div>
           </div>
         </div>

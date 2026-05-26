@@ -198,7 +198,6 @@ describe('headless-e2e: page-specific rendering', () => {
     // Rather than trying to import all pages (which have complex Tauri/shared dependencies),
     // verify the test structure is sound and page names are valid
     const criticalPages = [
-      'DashboardWidgetsPage',
       'DashboardKernelsPage',
       'DashboardLogsPage',
       'DockerPage',
