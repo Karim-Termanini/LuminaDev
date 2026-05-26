@@ -16,6 +16,7 @@ import { useNavigate } from 'react-router-dom'
 import { humanizeProfileError } from './profileError'
 import { DashboardWidgetDeck } from '../dashboard/DashboardWidgetDeck'
 import { AddWidgetModal } from '../dashboard/AddWidgetModal'
+import { useBetaFlags } from '../hooks/useBetaFlags'
 
 import './DashboardPage.css'
 
@@ -64,6 +65,7 @@ interface Toast {
 
 export function DashboardMainPage(): ReactElement {
   const navigate = useNavigate()
+  const betaFlags = useBetaFlags()
   const [docker, setDocker] = useState<{ ok: true; rows: ContainerRow[] } | { ok: false; error: string } | null>(null)
   const [snap, setSnap] = useState<HostMetricsResponse | null>(null)
   const [metricsHistory, setMetricsHistory] = useState<Array<{ cpu: number; ram: number }>>(() =>
@@ -693,7 +695,7 @@ export function DashboardMainPage(): ReactElement {
             </div>
 
             {/* Initialize Button */}
-            <div style={{ marginTop: 24 }}>
+            <div style={{ marginTop: 24, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
               <button
                 type="button"
                 onClick={() => setConfirmModalOpen(true)}
@@ -727,6 +729,12 @@ export function DashboardMainPage(): ReactElement {
                       ? 'SWITCH TO THIS'
                       : 'INITIALIZE'}
               </button>
+              {betaFlags['enable_profile_auto_switch'] && (
+                <div title="Profile auto-switch is enabled — switching project directory will activate the matching profile" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 10px', borderRadius: 20, background: 'rgba(124, 77, 255, 0.12)', border: '1px solid rgba(124, 77, 255, 0.3)', fontSize: 11, color: 'var(--accent)', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                  <span className="codicon codicon-sync" style={{ fontSize: 11 }} />
+                  Auto-switch on
+                </div>
+              )}
             </div>
 
             {swState.active && swState.targetProfile === selectedProfileName && (

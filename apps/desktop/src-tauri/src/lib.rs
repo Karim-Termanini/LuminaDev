@@ -921,7 +921,12 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       match app_file(&app, "store.json") {
         Ok(path) => {
           let mut store = read_json(&path);
-          let value = body.get("value").cloned().unwrap_or(Value::Null);
+          // Accept both 'value' and 'data' to resolve contract mismatch
+          let value = body.get("value")
+            .or_else(|| body.get("data"))
+            .cloned()
+            .unwrap_or(Value::Null);
+            
           if !store.is_object() {
             store = json!({});
           }
@@ -1029,8 +1034,6 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
         "snapshot": {
           "startupMs": app_uptime_ms,
           "rssMb": rss_mb,
-          "heapUsedMb": rss_mb / 2, // Best-effort estimate for system-bound binaries
-          "heapTotalMb": rss_mb,
           "uptimeSec": host_uptime_sec
         }
       })

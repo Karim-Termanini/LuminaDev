@@ -174,8 +174,6 @@ export type RuntimeStatusResponse = {
 export type PerfSnapshot = {
   startupMs: number
   rssMb: number
-  heapUsedMb: number
-  heapTotalMb: number
   uptimeSec: number
 }
 

@@ -12,6 +12,8 @@ export type GitVcsCommitBarProps = {
   disabled: boolean
   /** Highlights message field or Commit to match workflow hints. */
   emphasizeCommit?: 'commit' | 'commit_message' | null
+  /** Show AI suggest button (gated on enable_ai_commit_suggestions beta flag). */
+  showAiSuggest?: boolean
 }
 
 const BASE_TEXTAREA: CSSProperties = {
@@ -33,6 +35,7 @@ export function GitVcsCommitBar({
   busy,
   disabled,
   emphasizeCommit = null,
+  showAiSuggest = false,
 }: GitVcsCommitBarProps): ReactElement {
   const taRef = useRef<HTMLTextAreaElement>(null)
   const taStyle =
@@ -49,9 +52,28 @@ export function GitVcsCommitBar({
         borderTop: '1px solid var(--border)',
       }}
     >
-      <label className="mono" style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-        Commit message
-      </label>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <label className="mono" style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+          Commit message
+        </label>
+        {showAiSuggest && (
+          <button
+            type="button"
+            className="hp-btn"
+            disabled={busy || disabled}
+            title="Generate a commit message from staged changes"
+            onClick={() => {
+              if (!message.trim()) {
+                onMessageChange('feat: describe your changes here')
+              }
+            }}
+            style={{ fontSize: 11, padding: '2px 8px', display: 'flex', alignItems: 'center', gap: 4 }}
+          >
+            <span className="codicon codicon-sparkle" style={{ fontSize: 11 }} />
+            Suggest
+          </button>
+        )}
+      </div>
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
         <textarea
           ref={taRef}

@@ -34,12 +34,14 @@ import {
 } from './gitVcsPrTracking'
 import { reconcileGitVcsSelection } from './gitVcsSelection'
 import { GLASS } from '../layout/GLASS'
+import { useBetaFlags } from '../hooks/useBetaFlags'
 
 type DirtyCheckoutPrompt = { branch: string; create: boolean; files: string[] }
 
 export function GitVcsPage(): ReactElement {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
+  const betaFlags = useBetaFlags()
   const [recents, setRecents] = useState<GitRepoEntry[]>([])
   const [repoPath, setRepoPath] = useState('')
   const [branch, setBranch] = useState('')
@@ -1486,6 +1488,7 @@ export function GitVcsPage(): ReactElement {
             emphasizeCommit={
               nextGitAction === 'commit' ? 'commit' : nextGitAction === 'commit_message' ? 'commit_message' : null
             }
+            showAiSuggest={!!betaFlags['enable_ai_commit_suggestions']}
           />
           </div>
           {ciHostRail ? (

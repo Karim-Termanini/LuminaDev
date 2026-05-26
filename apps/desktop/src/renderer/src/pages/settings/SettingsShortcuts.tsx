@@ -41,7 +41,7 @@ export function SettingsShortcuts(): ReactElement {
 
   useEffect(() => {
     void window.dh.storeGet({ key: 'shortcuts_settings' }).then((res) => {
-      if (res.ok && res.data && typeof res.data === 'object') {
+      if (res.ok && res.data && typeof res.data === 'object' && Object.keys(res.data).length > 0) {
         setBindings((prev) => ({ ...prev, ...(res.data as ShortcutsSettings) }))
       }
     })
@@ -51,6 +51,7 @@ export function SettingsShortcuts(): ReactElement {
     if (!recording) return
     function onKey(e: KeyboardEvent): void {
       e.preventDefault()
+      e.stopPropagation()
       if (e.key === 'Escape') {
         setRecording(null)
         return
@@ -61,15 +62,17 @@ export function SettingsShortcuts(): ReactElement {
         setRecording(null)
       }
     }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
   }, [recording])
 
   async function save(): Promise<void> {
     setBusy(true)
     setMsg(null)
     try {
+      // Ensure we are sending the full current bindings object
       assertSettingsOk(await window.dh.storeSet({ key: 'shortcuts_settings', data: bindings }))
+      // Dispatches a native window event that AppShell is listening for
       window.dispatchEvent(new CustomEvent('dh:shortcuts:updated'))
       setMsg('Saved. Shortcuts are active immediately.')
       setTimeout(() => setMsg(null), 3000)

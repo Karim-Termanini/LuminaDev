@@ -6,14 +6,17 @@ import '@xterm/xterm/css/xterm.css'
 import { TERMINAL_OPEN_EXTERNAL_HINT, TERMINAL_PTY_HINT } from './environmentHints'
 import { humanizeTerminalError } from './terminalError'
 import './TerminalPage.css'
+import { useBetaFlags } from '../hooks/useBetaFlags'
 
 export function TerminalPage(): ReactElement {
+  const betaFlags = useBetaFlags()
   const wrapRef = useRef<HTMLDivElement | null>(null)
   const sessionRef = useRef<string | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [fallbackHint, setFallbackHint] = useState(false)
   const [sessionKey, setSessionKey] = useState(0)
   const [showConfig, setShowConfig] = useState(false)
+  const [splitPane, setSplitPane] = useState(false)
   const [envVars, setEnvVars] = useState<string>('')
   const [activeEnv, setActiveEnv] = useState<Record<string, string>>({})
   const [shellCmd, setShellCmd] = useState<string>('/bin/bash')
@@ -129,6 +132,15 @@ export function TerminalPage(): ReactElement {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
         <h1 style={{ margin: 0 }}>Embedded terminal</h1>
         <div style={{ display: 'flex', gap: 8 }}>
+          {betaFlags['enable_experimental_terminal_multiplexer'] && (
+            <button
+              className={`hp-btn ${splitPane ? 'hp-btn-primary' : ''}`}
+              onClick={() => setSplitPane((v) => !v)}
+              title="Toggle split pane (experimental)"
+            >
+              <span className="codicon codicon-split-horizontal" aria-hidden /> Split
+            </button>
+          )}
           <button
             className={`hp-btn ${showConfig ? 'hp-btn-primary' : ''}`}
             onClick={() => setShowConfig(!showConfig)}
@@ -242,22 +254,32 @@ export function TerminalPage(): ReactElement {
           {fallbackHint ? ` ${TERMINAL_PTY_HINT} ${TERMINAL_OPEN_EXTERNAL_HINT}` : ''}
         </div>
       ) : null}
-      <div
-        ref={wrapRef}
-        onClick={() => {
-          const xtermScreen = wrapRef.current?.querySelector('.xterm-helper-textarea') as HTMLTextAreaElement | null
-          xtermScreen?.focus()
-        }}
-        style={{
-          flex: 1,
-          minHeight: 360,
-          border: '1px solid var(--border)',
-          borderRadius: 'var(--radius)',
-          overflow: 'hidden',
-          background: '#0d0d0d',
-          padding: '16px',
-        }}
-      />
+      <div style={{ display: 'flex', gap: 8, flex: 1, minHeight: 0 }}>
+        <div
+          ref={wrapRef}
+          onClick={() => {
+            const xtermScreen = wrapRef.current?.querySelector('.xterm-helper-textarea') as HTMLTextAreaElement | null
+            xtermScreen?.focus()
+          }}
+          style={{
+            flex: 1,
+            minHeight: 360,
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--radius)',
+            overflow: 'hidden',
+            background: '#0d0d0d',
+            padding: '16px',
+          }}
+        />
+        {splitPane && (
+          <div style={{ flex: 1, minHeight: 360, border: '1px solid var(--border)', borderRadius: 'var(--radius)', overflow: 'hidden', background: '#0d0d0d', padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 8 }}>
+            <span className="codicon codicon-split-horizontal" style={{ fontSize: 32, color: 'var(--text-muted)', opacity: 0.4 }} />
+            <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)', textAlign: 'center' }}>
+              Multi-pane sessions are in development.<br />This pane will host a second independent shell.
+            </p>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
