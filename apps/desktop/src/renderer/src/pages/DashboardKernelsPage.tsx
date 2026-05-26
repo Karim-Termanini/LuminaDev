@@ -1,7 +1,7 @@
 import './DashboardKernelsPage.css'
 import type { ReactElement } from 'react'
 import { useCallback, useEffect, useState } from 'react'
-import type { HostSecuritySnapshot } from '@linux-dev-home/shared'
+import type { HostSecuritySnapshot, RuntimeStatus, HostPortRow } from '@linux-dev-home/shared'
 
 const UNITS = ['docker', 'ssh', 'nginx'] as const
 const REFRESH_MS = 30_000
@@ -35,15 +35,19 @@ export function DashboardKernelsPage(): ReactElement {
   const [gpu, setGpu] = useState<string | null>(null)
   const [units, setUnits] = useState<Record<string, string>>({})
   const [security, setSecurity] = useState<HostSecuritySnapshot | null>(null)
+  const [runtimes, setRuntimes] = useState<RuntimeStatus[]>([])
+  const [ports, setPorts] = useState<HostPortRow[]>([])
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null)
   const [busy, setBusy] = useState(false)
 
   const refresh = useCallback(async () => {
     setBusy(true)
     try {
-      const [gpuRes, secRes] = await Promise.allSettled([
+      const [gpuRes, secRes, rtRes, portsRes] = await Promise.allSettled([
         window.dh.hostExec({ command: 'nvidia_smi_short' }),
         window.dh.monitorSecurity(),
+        window.dh.runtimeStatus(),
+        window.dh.getHostPorts(),
       ])
       if (gpuRes.status === 'fulfilled') {
         const g = gpuRes.value
@@ -51,6 +55,12 @@ export function DashboardKernelsPage(): ReactElement {
       }
       if (secRes.status === 'fulfilled' && secRes.value.ok) {
         setSecurity(secRes.value.snapshot)
+      }
+      if (rtRes.status === 'fulfilled' && rtRes.value && rtRes.value.runtimes) {
+        setRuntimes(rtRes.value.runtimes)
+      }
+      if (portsRes.status === 'fulfilled' && Array.isArray(portsRes.value)) {
+        setPorts(portsRes.value)
       }
       const nextUnits: Record<string, string> = {}
       await Promise.all(
@@ -150,6 +160,43 @@ export function DashboardKernelsPage(): ReactElement {
             </div>
           </div>
 
+          {/* Development Kernels & Toolchains */}
+          <div className="kernels-card-container">
+            <div className="kernels-card-header-title">
+              <span className="codicon codicon-terminal" style={{ color: 'var(--accent)' }} />
+              Development Kernels &amp; Toolchains
+            </div>
+            {runtimes.length > 0 ? (
+              <div className="kernels-audit-list">
+                {runtimes.map((r, i) => (
+                  <div
+                    key={r.id}
+                    className="kernels-audit-row"
+                    style={{ borderBottom: i < runtimes.length - 1 ? '1px solid var(--border)' : 'none' }}
+                  >
+                    <div className="kernels-audit-label">
+                      <span className={`codicon ${r.installed ? 'codicon-check-all' : 'codicon-close'}`} style={{ fontSize: 14, color: r.installed ? 'var(--green)' : 'var(--text-muted)' }} />
+                      <span style={{ fontWeight: 600 }}>{r.name}</span>
+                      {r.version && <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 6 }}>({r.version})</span>}
+                    </div>
+                    <div
+                      className="kernels-audit-badge"
+                      style={{
+                        color: r.installed ? 'var(--green)' : 'var(--text-muted)',
+                        background: r.installed ? 'rgba(63, 185, 80, 0.08)' : 'rgba(255, 255, 255, 0.03)',
+                        border: `1px solid ${r.installed ? 'rgba(63, 185, 80, 0.2)' : 'rgba(255, 255, 255, 0.08)'}`,
+                      }}
+                    >
+                      {r.installed ? 'ACTIVE' : 'NOT INSTALLED'}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>Loading runtime states...</div>
+            )}
+          </div>
+
           {/* Security Section */}
           {security && (
             <div className="kernels-card-container">
@@ -206,6 +253,63 @@ export function DashboardKernelsPage(): ReactElement {
                 <span className="kernels-gpu-value">{gpu || 'Detecting GPU...'}</span>
               </div>
             </div>
+          </div>
+
+          {/* Port Link Controls */}
+          <div className="kernels-card-container">
+            <div className="kernels-card-header-title">
+              <span className="codicon codicon-link-external" style={{ color: 'var(--accent)' }} />
+              Active Port Bindings
+            </div>
+            {ports.length > 0 ? (
+              <div className="kernels-audit-list" style={{ maxHeight: 200, overflowY: 'auto' }}>
+                {ports.map((p, i) => (
+                  <div
+                    key={`${p.protocol}-${p.port}`}
+                    className="kernels-audit-row"
+                    style={{ borderBottom: i < ports.length - 1 ? '1px solid var(--border)' : 'none' }}
+                  >
+                    <div className="kernels-audit-label">
+                      <span className="codicon codicon-radio-tower" style={{ fontSize: 14, color: 'var(--accent)' }} />
+                      <span className="mono" style={{ fontWeight: 600 }}>:{p.port}</span>
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 6 }}>({p.service})</span>
+                    </div>
+                    {p.protocol === 'tcp' ? (
+                      <a
+                        href={`http://localhost:${p.port}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="kernels-audit-badge"
+                        style={{
+                          color: 'var(--accent)',
+                          background: 'rgba(124, 77, 255, 0.08)',
+                          border: '1px solid rgba(124, 77, 255, 0.2)',
+                          cursor: 'pointer',
+                          textDecoration: 'none',
+                        }}
+                      >
+                        OPEN LINK
+                      </a>
+                    ) : (
+                      <div
+                        className="kernels-audit-badge"
+                        style={{
+                          color: 'var(--text-muted)',
+                          background: 'rgba(255, 255, 255, 0.03)',
+                          border: '1px solid rgba(255, 255, 255, 0.08)',
+                        }}
+                      >
+                        UDP
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)' }}>
+                No active local ports listening.
+              </p>
+            )}
           </div>
 
           {/* Risky Ports Warnings */}
