@@ -135,6 +135,7 @@ export function DashboardMainPage(): ReactElement {
   const [selectedProfileName, setSelectedProfileName] = useState<string | null>(null)
   const [customProfiles, setCustomProfiles] = useState<CustomProfileEntry[]>([])
   const [confirmModalOpen, setConfirmModalOpen] = useState(false)
+  const profileSelectionInitialized = useRef(false)
   const [pickerOpen, setPickerOpen] = useState(false)
 
   const [projectPath, setProjectPath] = useState<string | null>(null)
@@ -305,13 +306,15 @@ export function DashboardMainPage(): ReactElement {
     return () => clearInterval(id)
   }, [refresh])
 
-  // Load selected profile from localStorage on mount
+  // Set initial selected profile once — runs when profiles first load, never again
   useEffect(() => {
+    if (profileSelectionInitialized.current || allProfiles.length === 0) return
+    profileSelectionInitialized.current = true
     const saved = localStorage.getItem('dashboard-selected-profile')
     if (saved && allProfiles.some(p => p.name === saved)) {
       setSelectedProfileName(saved)
     } else {
-      setSelectedProfileName(activeProfile || (allProfiles[0]?.name || null))
+      setSelectedProfileName(activeProfile || allProfiles[0]?.name || null)
     }
   }, [allProfiles, activeProfile])
 
