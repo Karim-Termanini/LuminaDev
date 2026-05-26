@@ -196,6 +196,13 @@ export function ProfilesPage(): ReactElement {
     const profile = profiles[idx]
     if (profile) {
       await invoke('ipc_invoke', { channel: 'dh:compose:down', payload: { profile: profile.name } }).catch(() => {})
+      try {
+        const ap = (await window.dh.storeGet({ key: 'active_profile' })) as { ok: boolean; data?: unknown }
+        if (ap.ok && ap.data === profile.name) {
+          await window.dh.storeDelete({ key: 'active_profile' })
+          setActiveProfileTemplate(null)
+        }
+      } catch { /* ignore */ }
     }
     const next = profiles.filter((_, i) => i !== idx)
     await save(next, 'Profile removed.')

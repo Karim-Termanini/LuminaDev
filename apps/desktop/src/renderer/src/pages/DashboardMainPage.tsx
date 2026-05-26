@@ -249,18 +249,30 @@ export function DashboardMainPage(): ReactElement {
     } catch {
       // silently fail, keep last metrics
     }
+    let customProfilesList: CustomProfileEntry[] = []
     try {
-      const ap = (await window.dh.storeGet({ key: 'active_profile' })) as { ok: boolean; data?: unknown }
-      const parsed = ap.ok ? parseStoredActiveProfile(ap.data) : null
-      if (parsed !== null) setActiveProfile(parsed)
-      // If null, keep last known — store may lag behind component state
+      const cp = (await window.dh.storeGet({ key: 'custom_profiles' })) as { ok: boolean; data?: unknown }
+      if (cp.ok && Array.isArray(cp.data)) {
+        customProfilesList = cp.data as CustomProfileEntry[]
+        setCustomProfiles(customProfilesList)
+      }
     } catch {
       /* keep last known */
     }
     try {
-      const cp = (await window.dh.storeGet({ key: 'custom_profiles' })) as { ok: boolean; data?: unknown }
-      if (cp.ok && Array.isArray(cp.data)) {
-        setCustomProfiles(cp.data as CustomProfileEntry[])
+      const ap = (await window.dh.storeGet({ key: 'active_profile' })) as { ok: boolean; data?: unknown }
+      const parsed = ap.ok ? parseStoredActiveProfile(ap.data) : null
+      if (parsed !== null) {
+        const exists = customProfilesList.some((p) => p.name === parsed)
+        if (exists) {
+          setActiveProfile(parsed)
+        } else {
+          // Profile was deleted, clear it from store & state
+          await window.dh.storeDelete({ key: 'active_profile' })
+          setActiveProfile(null)
+        }
+      } else {
+        setActiveProfile(null)
       }
     } catch {
       /* keep last known */
