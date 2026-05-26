@@ -248,7 +248,9 @@ export function DashboardMainPage(): ReactElement {
     }
     try {
       const ap = (await window.dh.storeGet({ key: 'active_profile' })) as { ok: boolean; data?: unknown }
-      setActiveProfile(ap.ok ? parseStoredActiveProfile(ap.data) : null)
+      const parsed = ap.ok ? parseStoredActiveProfile(ap.data) : null
+      if (parsed !== null) setActiveProfile(parsed)
+      // If null, keep last known — store may lag behind component state
     } catch {
       /* keep last known */
     }

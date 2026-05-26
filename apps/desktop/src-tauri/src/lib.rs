@@ -2102,6 +2102,15 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
       match exec_docker_compose_in_dir(&to_dir, &["up", "-d"], CMD_TIMEOUT_DEFAULT, Some(to_profile), Some(get_profile_extra_env(&app, to_profile))).await {
         Ok((stdout, stderr)) => {
           logs.push_str(&format!("Started new profile:\n{}{}\n", stdout, stderr));
+          // Persist active profile so the frontend refresh reads it correctly on reload
+          if let Ok(store_path) = crate::app_file(&app, "store.json") {
+            let mut store = crate::read_json(&store_path);
+            if !store.is_object() { store = serde_json::json!({}); }
+            if let Some(map) = store.as_object_mut() {
+              map.insert("active_profile".to_string(), serde_json::json!(to_profile));
+            }
+            let _ = std::fs::write(&store_path, serde_json::to_string_pretty(&store).unwrap_or_default());
+          }
           emit_step("Done", 100);
           json!({ "ok": true, "log": logs })
         },
