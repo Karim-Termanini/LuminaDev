@@ -418,16 +418,16 @@ Missing: real dep graph (`removableDeps` always empty), Ruby slow on Fedora.
 
 ---
 
-## Phase 9 — Profiles ✅ DONE (`/profiles` engine room)
+## Phase 9 — Profiles 🔄 PARTIAL (`/profiles` engine room)
 
 **Goal:** Implement a real profile management page with real accounts and the ability to seamlessly switch between profiles. Complete removal of static placeholder profiles.
 
-- [x] **Data Structure:** Move away from static frontend templates. Profiles must be defined as robust JSON structures containing user credentials, SSH keys, active Compose configurations, and customized environment variables.
-- [x] **Authentication:** Implementation of local user accounts with secure credential storage (AES-256-GCM).
+- [x] **Data Structure:** Profiles are robust JSON with `name`, `baseTemplate`, `description`, `tags`, `composeVariant`, `envVars`, `sshKeyId`, `credentialIds`. Stored encrypted; UI has full CRUD wizard with chip tags and stack toggle.
+- [x] **Authentication:** Profile switching = user context switching. Credentials stored AES-256-GCM encrypted in `profile_credentials.enc`. No separate login flow needed.
 - [x] **Switching Engine:** A context-switching engine that safely tears down one profile's state and spins up another's instantly from the UI (`profileSwitch` IPC).
 - [x] **Workspace Context Binding:** Fluent Design UI modal to create/link projects and dynamically bind `${PROJECT_DIR}` to containers on restart.
 - [x] **Project Scaffolding Engine:** Advanced `npm`/`pip` dependency installer, dynamic `package.json`/`requirements.txt` generation, and real-time terminal UI progress streaming. Web-Dev and Data-Science are fully functional.
-- [ ] **Expanded Environments:** (Future Work) Add robust scaffolding templates and UI generation wizards for Mobile, Game Dev, Infra, AI/ML, etc.
+- [ ] **Expanded Environments:** (Future Work) Add robust scaffolding templates and UI generation wizards for Mobile and AI/ML.
 - [x] **IDE Integration:** Dynamic editor detection (Native & Flatpak) and `ipc_invoke` routing for launching VS Code, Cursor, Neovim directly into the active container workspace.
 
 ---
@@ -721,7 +721,7 @@ Based on current app state (Phase 16 + Phase 7 complete), here's what remaining 
 ✅  Phase 16 — System Readiness & Pre-Requisites Wizard (Installer)
 ✅  Phase 15 — Theme Rollout (Elevated aesthetic)
 📋  Phase 8  — Settings
-✅  Phase 9  — Profiles
+🔄  Phase 9  — Profiles
 📋  Phase 11 — First-run Wizard (Merged into Phase 16)
 📋  UI/UX & Performance Debt
 📋  Phase 10 — Extensions (Plugin model v0, Dev API)

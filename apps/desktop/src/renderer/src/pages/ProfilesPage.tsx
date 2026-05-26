@@ -1405,6 +1405,24 @@ export function ProfilesPage(): ReactElement {
                         <span style={{ fontFamily: 'monospace' }}>{wizardData.sshKeyId || 'system default'}</span>
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: 8 }}>
+                        <span style={{ fontWeight: 600 }}>Compose Stack:</span>
+                        <span style={{ textTransform: 'uppercase', fontSize: 12, fontWeight: 700, color: (wizardData.composeVariant ?? 'stub') === 'full' ? 'var(--accent)' : 'var(--text-muted)' }}>
+                          {wizardData.composeVariant ?? 'stub'}
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: 8 }}>
+                        <span style={{ fontWeight: 600 }}>Description:</span>
+                        <span style={{ color: wizardData.description ? 'var(--text)' : 'var(--text-muted)', fontStyle: wizardData.description ? 'normal' : 'italic', maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {wizardData.description || 'none'}
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: 8 }}>
+                        <span style={{ fontWeight: 600 }}>Tags:</span>
+                        <span style={{ color: (wizardData.tags ?? []).length > 0 ? 'var(--text)' : 'var(--text-muted)', fontStyle: (wizardData.tags ?? []).length > 0 ? 'normal' : 'italic' }}>
+                          {(wizardData.tags ?? []).length > 0 ? (wizardData.tags ?? []).join(', ') : 'none'}
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: 8 }}>
                         <span style={{ fontWeight: 600 }}>Environment Variables:</span>
                         <span>{(wizardData.envVars || []).length} variable(s)</span>
                       </div>
