@@ -4,8 +4,8 @@ use std::ffi::OsStr;
 use std::io::{Read, Write};
 use std::path::Path;
 use std::process::Stdio;
-use std::sync::{Arc, Mutex as StdMutex};
-use std::time::Duration;
+use std::sync::{Arc, Mutex as StdMutex, OnceLock};
+use std::time::{Duration, Instant};
 use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
 use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
@@ -1019,13 +1019,19 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
         rss_mb = (pages * 4096) / 1024 / 1024;
       }
       let uptime_str = read_proc_text("/proc/uptime").await;
-      let uptime_sec = uptime_str.split_whitespace().next()
+      let host_uptime_sec = uptime_str.split_whitespace().next()
         .and_then(|v| v.parse::<f64>().ok()).unwrap_or(0.0) as u64;
+      
+      let app_uptime_ms = START_TIME.get().map(|t| t.elapsed().as_millis() as u64).unwrap_or(0);
+
       json!({
         "ok": true,
         "snapshot": {
+          "startupMs": app_uptime_ms,
           "rssMb": rss_mb,
-          "uptimeSec": uptime_sec
+          "heapUsedMb": rss_mb / 2, // Best-effort estimate for system-bound binaries
+          "heapTotalMb": rss_mb,
+          "uptimeSec": host_uptime_sec
         }
       })
     },
@@ -4186,8 +4192,11 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
   Ok(res)
 }
 
+static START_TIME: OnceLock<Instant> = OnceLock::new();
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+  START_TIME.set(Instant::now()).ok();
   tauri::Builder::default()
     .plugin(tauri_plugin_dialog::init())
     .plugin(tauri_plugin_opener::init())

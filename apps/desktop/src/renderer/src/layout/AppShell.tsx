@@ -50,6 +50,11 @@ export function AppShell({ children }: { children: ReactNode }): ReactElement {
       go_dashboard: '/dashboard',
       go_docker: '/docker',
       go_git: '/git',
+      go_system: '/system',
+      go_profiles: '/profiles',
+      go_runtimes: '/runtimes',
+      go_maintenance: '/maintenance',
+      go_settings: '/settings',
     }
     let bindings: Record<string, string> = {}
 
@@ -66,28 +71,51 @@ export function AppShell({ children }: { children: ReactNode }): ReactElement {
     const onShortcutsUpdated = (): void => refreshBindings()
 
     const onKey = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      // Don't trigger if user is typing in a text field
+      const target = e.target as HTMLElement
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return
+      
       const parts: string[] = []
+      // Standardize modifier order: Ctrl+Alt+Shift+Meta (matches buildChord)
       if (e.ctrlKey) parts.push('Ctrl')
       if (e.altKey) parts.push('Alt')
       if (e.shiftKey) parts.push('Shift')
-      parts.push(e.key.length === 1 ? e.key.toUpperCase() : e.key)
+      if (e.metaKey) parts.push('Meta')
+      
+      // Handle the key name. For letters, we want upper case (e.g. 'K'). 
+      // For functional keys, we use the name as-is (e.g. 'Escape').
+      const keyName = e.key.length === 1 ? e.key.toUpperCase() : e.key
+      
+      // If the key pressed IS a modifier itself, don't build a chord
+      if (['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) return
+
+      parts.push(keyName)
       const combo = parts.join('+')
+
+      // Search for a match in user bindings
       for (const [action, binding] of Object.entries(bindings)) {
         if (binding === combo) {
+          e.preventDefault()
+          e.stopPropagation()
           const route = ACTION_ROUTES[action]
           if (route) {
-            e.preventDefault()
             navigate(route)
+          } else if (action === 'toggle_sidebar') {
+             const aside = document.querySelector('.app-shell-nav')
+             if (aside) aside.classList.toggle('collapsed')
+          } else if (action === 'focus_search') {
+             const search = document.querySelector('.hp-search-input') as HTMLInputElement
+             if (search) search.focus()
           }
           break
         }
       }
     }
-    document.addEventListener('keydown', onKey)
+    // Use capture phase to ensure we intercept keys before components like Modals
+    window.addEventListener('keydown', onKey, true)
     window.addEventListener('dh:shortcuts:updated', onShortcutsUpdated as EventListener)
     return () => {
-      document.removeEventListener('keydown', onKey)
+      window.removeEventListener('keydown', onKey, true)
       window.removeEventListener('dh:shortcuts:updated', onShortcutsUpdated as EventListener)
     }
   }, [navigate])

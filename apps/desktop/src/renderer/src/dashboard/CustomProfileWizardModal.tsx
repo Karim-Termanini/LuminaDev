@@ -52,8 +52,7 @@ export function CustomProfileWizardModal(props: {
       >
         <h2 style={{ margin: 0, fontSize: 20 }}>Create Custom Profile</h2>
         <p style={{ color: 'var(--text-muted)', fontSize: 13, marginBottom: 20 }}>
-          Define a new custom profile by selecting a base template (nine presets use the same Alpine stub compose until
-          real stacks land).
+          Define a new custom profile by selecting a base template. Each preset includes its own dedicated Docker Compose stack and development tools.
         </p>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>

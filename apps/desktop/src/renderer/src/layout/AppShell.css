@@ -13,6 +13,44 @@
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
+  transition: width 0.2s ease-in-out;
+}
+
+.app-shell-nav.collapsed {
+  width: 60px;
+}
+
+.app-shell-nav.collapsed .app-shell-header-title,
+.app-shell-nav.collapsed .app-shell-header-subtitle,
+.app-shell-nav.collapsed .app-shell-nav-item-label,
+.app-shell-nav.collapsed .app-shell-nav-item-status,
+.app-shell-nav.collapsed .app-shell-footer-link {
+  display: none;
+}
+
+.app-shell-nav.collapsed .app-shell-nav-item {
+  justify-content: center;
+  padding: 10px 0;
+  border-left-width: 4px;
+}
+
+.app-shell-nav.collapsed .app-shell-header {
+  padding: 18px 0 12px;
+  text-align: center;
+}
+
+.app-shell-nav.collapsed .app-shell-footer {
+  padding: 12px 0;
+  align-items: center;
+}
+
+.app-shell-nav.collapsed .app-shell-profile-info {
+  display: none;
+}
+
+.app-shell-nav.collapsed .app-shell-profile-section {
+  justify-content: center;
+  padding: 10px 0;
 }
 
 .app-shell-header {

@@ -91,6 +91,7 @@ export function TopBar(): ReactElement {
         value={q}
         onChange={(e) => setQ(e.target.value)}
         placeholder="Search workstation..."
+        className="hp-search-input"
         style={{
           width: 220,
           background: 'var(--bg-input)',

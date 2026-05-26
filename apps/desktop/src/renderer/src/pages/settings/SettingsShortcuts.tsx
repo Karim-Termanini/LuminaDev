@@ -22,8 +22,13 @@ const DEFAULT_ACTIONS: ReadonlyArray<{ key: string; label: string; defaultBindin
   { key: 'toggle_sidebar', label: 'Toggle sidebar', defaultBinding: 'Ctrl+B' },
   { key: 'focus_search', label: 'Focus search', defaultBinding: 'Ctrl+K' },
   { key: 'go_dashboard', label: 'Go to Dashboard', defaultBinding: 'Alt+1' },
-  { key: 'go_docker', label: 'Go to Docker', defaultBinding: 'Alt+2' },
-  { key: 'go_git', label: 'Go to Git', defaultBinding: 'Alt+3' },
+  { key: 'go_system', label: 'Go to Monitor', defaultBinding: 'Alt+2' },
+  { key: 'go_docker', label: 'Go to Docker', defaultBinding: 'Alt+3' },
+  { key: 'go_git', label: 'Go to Git', defaultBinding: 'Alt+4' },
+  { key: 'go_profiles', label: 'Go to Profiles', defaultBinding: 'Alt+5' },
+  { key: 'go_runtimes', label: 'Go to Runtimes', defaultBinding: 'Alt+6' },
+  { key: 'go_maintenance', label: 'Go to Maintenance', defaultBinding: 'Alt+7' },
+  { key: 'go_settings', label: 'Go to Settings', defaultBinding: 'Ctrl+,' },
 ]
 
 export function SettingsShortcuts(): ReactElement {
@@ -66,7 +71,7 @@ export function SettingsShortcuts(): ReactElement {
     try {
       assertSettingsOk(await window.dh.storeSet({ key: 'shortcuts_settings', data: bindings }))
       window.dispatchEvent(new CustomEvent('dh:shortcuts:updated'))
-      setMsg('Saved. Shortcuts are loaded globally on save.')
+      setMsg('Saved. Shortcuts are active immediately.')
       setTimeout(() => setMsg(null), 3000)
     } catch (e) {
       setMsg(e instanceof Error ? e.message : 'Save failed.')
@@ -77,12 +82,8 @@ export function SettingsShortcuts(): ReactElement {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: 'rgba(255, 193, 7, 0.08)', border: '1px solid rgba(255, 193, 7, 0.25)', borderRadius: 6, fontSize: 12, color: 'var(--yellow, #ffc107)' }}>
-        <span className="codicon codicon-beaker" />
-        Keybindings are saved and loaded globally on save. More actions will be wired in a future release.
-      </div>
       <p className="hp-muted" style={{ margin: 0, fontSize: 13 }}>
-        Click "Record" then press a key combination. Escape cancels. Changes apply on save.
+        Click "Record" then press a key combination. Escape cancels. Changes apply globally on save.
       </p>
       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
         <thead>
