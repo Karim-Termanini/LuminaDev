@@ -70,6 +70,7 @@ export function ProfilesPage(): ReactElement {
 
   // Env bulk input
   const [envBulkInput, setEnvBulkInput] = useState('')
+  const [tagInput, setTagInput] = useState('')
 
   const detectLocalSshKey = useCallback(async () => {
     setDetectingSsh(true)
@@ -209,9 +210,13 @@ export function ProfilesPage(): ReactElement {
     setEnvMode('beginner')
     setCredMode('beginner')
     setEnvBulkInput('')
+    setTagInput('')
     setWizardData({
       name: '',
       baseTemplate: 'web-dev',
+      description: '',
+      tags: [],
+      composeVariant: 'stub',
       envVars: [],
       credentialIds: [],
     })
@@ -226,6 +231,7 @@ export function ProfilesPage(): ReactElement {
     setEnvMode('beginner')
     setCredMode('beginner')
     setEnvBulkInput('')
+    setTagInput('')
     setWizardData({ ...p })
     setCredInputId('')
     setCredInputValue('')
@@ -631,6 +637,106 @@ export function ProfilesPage(): ReactElement {
                           Base template cannot be changed after creation to preserve workspace mappings.
                         </p>
                       )}
+                    </div>
+
+                    {/* Description */}
+                    <div style={{ marginBottom: 20 }}>
+                      <label style={{ display: 'block', fontSize: 14, fontWeight: 600, marginBottom: 8 }}>
+                        Description <span style={{ fontWeight: 400, color: 'var(--text-muted)', fontSize: 12 }}>(optional)</span>
+                      </label>
+                      <textarea
+                        value={wizardData.description ?? ''}
+                        onChange={(e) => setWizardData({ ...wizardData, description: e.target.value || undefined })}
+                        placeholder="e.g. My frontend workspace for project X"
+                        className="fluent-input"
+                        style={{ width: '100%', minHeight: 72, resize: 'vertical', fontFamily: 'inherit' }}
+                      />
+                    </div>
+
+                    {/* Tags */}
+                    <div style={{ marginBottom: 20 }}>
+                      <label style={{ display: 'block', fontSize: 14, fontWeight: 600, marginBottom: 8 }}>
+                        Tags <span style={{ fontWeight: 400, color: 'var(--text-muted)', fontSize: 12 }}>(optional, press Enter)</span>
+                      </label>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+                        {(wizardData.tags ?? []).map((tag, ti) => (
+                          <span
+                            key={tag}
+                            style={{
+                              display: 'inline-flex', alignItems: 'center', gap: 4,
+                              background: 'rgba(124,77,255,0.12)', border: '1px solid rgba(124,77,255,0.3)',
+                              color: 'var(--text)', borderRadius: 20, padding: '2px 10px', fontSize: 12,
+                            }}
+                          >
+                            {tag}
+                            <button
+                              type="button"
+                              onClick={() => setWizardData({ ...wizardData, tags: (wizardData.tags ?? []).filter((_, i) => i !== ti) })}
+                              style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 0, fontSize: 12, lineHeight: 1 }}
+                              aria-label="Remove tag"
+                              title="Remove tag"
+                            >✕</button>
+                          </span>
+                        ))}
+                      </div>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <input
+                          type="text"
+                          value={tagInput}
+                          onChange={(e) => setTagInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && tagInput.trim()) {
+                              e.preventDefault()
+                              const current = wizardData.tags ?? []
+                              if (current.length < 10 && !current.includes(tagInput.trim())) {
+                                setWizardData({ ...wizardData, tags: [...current, tagInput.trim()] })
+                              }
+                              setTagInput('')
+                            }
+                          }}
+                          placeholder="e.g. frontend, react, work"
+                          className="fluent-input"
+                          style={{ flex: 1 }}
+                        />
+                        <button
+                          type="button"
+                          style={{ ...btn, padding: '0 16px' }}
+                          onClick={() => {
+                            if (!tagInput.trim()) return
+                            const current = wizardData.tags ?? []
+                            if (current.length < 10 && !current.includes(tagInput.trim())) {
+                              setWizardData({ ...wizardData, tags: [...current, tagInput.trim()] })
+                            }
+                            setTagInput('')
+                          }}
+                        >Add</button>
+                      </div>
+                    </div>
+
+                    {/* Compose Variant */}
+                    <div style={{ marginBottom: 20 }}>
+                      <label style={{ display: 'block', fontSize: 14, fontWeight: 600, marginBottom: 8 }}>Compose Stack</label>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        {(['stub', 'full'] as const).map((v) => (
+                          <button
+                            key={v}
+                            type="button"
+                            onClick={() => setWizardData({ ...wizardData, composeVariant: v })}
+                            style={{
+                              padding: '8px 20px', borderRadius: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600,
+                              border: '1px solid',
+                              borderColor: (wizardData.composeVariant ?? 'stub') === v ? 'var(--accent)' : 'rgba(255,255,255,0.1)',
+                              background: (wizardData.composeVariant ?? 'stub') === v ? 'rgba(124,77,255,0.15)' : 'rgba(255,255,255,0.04)',
+                              color: (wizardData.composeVariant ?? 'stub') === v ? 'var(--accent)' : 'var(--text-muted)',
+                            }}
+                          >
+                            {v === 'stub' ? 'Stub (lightweight)' : 'Full (all services)'}
+                          </button>
+                        ))}
+                      </div>
+                      <p style={{ margin: '6px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>
+                        Stub runs a minimal Alpine container. Full starts the complete stack (nginx, postgres, etc).
+                      </p>
                     </div>
                   </div>
                 )}
