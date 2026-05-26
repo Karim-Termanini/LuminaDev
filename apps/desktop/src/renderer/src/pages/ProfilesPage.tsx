@@ -9,6 +9,7 @@ import {
 import './ProfilesPage.css'
 import type { ReactElement } from 'react'
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { invoke } from '@tauri-apps/api/core'
 
 const BASE_TEMPLATES = [
   'web-dev',
@@ -192,6 +193,10 @@ export function ProfilesPage(): ReactElement {
   }
 
   async function removeAt(idx: number): Promise<void> {
+    const profile = profiles[idx]
+    if (profile) {
+      await invoke('ipc_invoke', { channel: 'dh:compose:down', payload: { profile: profile.name } }).catch(() => {})
+    }
     const next = profiles.filter((_, i) => i !== idx)
     await save(next, 'Profile removed.')
   }

@@ -1952,6 +1952,35 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
 
       let mut logs = String::new();
 
+      // Stop all running compose-managed containers that don't belong to the target profile.
+      // This catches orphaned containers from deleted profiles or profiles switched away from
+      // without a proper `from` being passed.
+      if let Ok(ps_out) = exec_output_limit(
+        "docker",
+        &["ps", "--filter", "label=com.docker.compose.project",
+          "--format", "{{.ID}}\t{{.Label \"com.docker.compose.project\"}}"],
+        CMD_TIMEOUT_SHORT,
+      ).await {
+        let ids_to_stop: Vec<String> = ps_out.lines()
+          .filter_map(|line| {
+            let mut parts = line.splitn(2, '\t');
+            let id = parts.next()?.trim().to_string();
+            let project = parts.next()?.trim().to_string();
+            if project != to_profile { Some(id) } else { None }
+          })
+          .collect();
+        if !ids_to_stop.is_empty() {
+          let mut stop_args = vec!["stop".to_string()];
+          stop_args.extend(ids_to_stop);
+          let stop_refs: Vec<&str> = stop_args.iter().map(|s| s.as_str()).collect();
+          match exec_output_limit("docker", &stop_refs, CMD_TIMEOUT_DEFAULT).await {
+            Ok(out) => logs.push_str(&format!("Stopped other profile containers:\n{}\n", out.trim())),
+            Err(e) => logs.push_str(&format!("Warning: could not stop other containers: {}\n", e.trim())),
+          }
+          tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
+        }
+      }
+
       if let Some(from) = from_profile {
         let from_template = resolve_profile_template(&app, from);
         let from_dir = compose_profiles::compose_profile_workdir(&app, &from_template);
@@ -1960,7 +1989,6 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
             Ok((stdout, stderr)) => logs.push_str(&format!("Stopped old profile:\n{}{}\n", stdout, stderr)),
             Err(e) => logs.push_str(&format!("Warning: failed to stop old profile: {}\n", e.trim())),
           }
-          tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
         }
       }
 
