@@ -5,6 +5,7 @@ import type { HostSecuritySnapshot, RuntimeStatus, HostPortRow } from '@linux-de
 
 const UNITS = ['docker', 'ssh', 'nginx'] as const
 const REFRESH_MS = 30_000
+const HTTP_PORTS = new Set([80, 443, 3000, 3001, 4200, 5000, 5173, 8000, 8080, 8443, 9000])
 
 type Status = 'active' | 'inactive' | 'failed' | 'unknown'
 
@@ -39,6 +40,7 @@ export function DashboardKernelsPage(): ReactElement {
   const [ports, setPorts] = useState<HostPortRow[]>([])
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null)
   const [busy, setBusy] = useState(false)
+  const [runtimesLoaded, setRuntimesLoaded] = useState(false)
 
   const refresh = useCallback(async () => {
     setBusy(true)
@@ -51,7 +53,7 @@ export function DashboardKernelsPage(): ReactElement {
       ])
       if (gpuRes.status === 'fulfilled') {
         const g = gpuRes.value
-        setGpu(g.ok && typeof g.result === 'string' ? g.result : 'Intel Integrated Graphics')
+        setGpu(g.ok && typeof g.result === 'string' ? g.result : null)
       }
       if (secRes.status === 'fulfilled' && secRes.value.ok) {
         setSecurity(secRes.value.snapshot)
@@ -59,6 +61,7 @@ export function DashboardKernelsPage(): ReactElement {
       if (rtRes.status === 'fulfilled' && rtRes.value && rtRes.value.runtimes) {
         setRuntimes(rtRes.value.runtimes)
       }
+      setRuntimesLoaded(true)
       if (portsRes.status === 'fulfilled' && Array.isArray(portsRes.value)) {
         setPorts(portsRes.value)
       }
@@ -193,7 +196,9 @@ export function DashboardKernelsPage(): ReactElement {
                 ))}
               </div>
             ) : (
-              <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>Loading runtime states...</div>
+              <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>
+                {runtimesLoaded ? 'No runtimes detected.' : 'Loading runtime states...'}
+              </div>
             )}
           </div>
 
@@ -274,7 +279,7 @@ export function DashboardKernelsPage(): ReactElement {
                       <span className="mono" style={{ fontWeight: 600 }}>:{p.port}</span>
                       <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 6 }}>({p.service})</span>
                     </div>
-                    {p.protocol === 'tcp' ? (
+                    {p.protocol === 'tcp' && HTTP_PORTS.has(p.port) ? (
                       <a
                         href={`http://localhost:${p.port}`}
                         target="_blank"
@@ -299,7 +304,7 @@ export function DashboardKernelsPage(): ReactElement {
                           border: '1px solid rgba(255, 255, 255, 0.08)',
                         }}
                       >
-                        UDP
+                        {p.protocol.toUpperCase()}
                       </div>
                     )}
                   </div>

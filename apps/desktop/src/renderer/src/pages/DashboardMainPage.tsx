@@ -12,6 +12,7 @@ import type { ReactElement } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { useCallback, useEffect, useMemo, useState, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { humanizeProfileError } from './profileError'
 import { DashboardWidgetDeck } from '../dashboard/DashboardWidgetDeck'
 import { AddWidgetModal } from '../dashboard/AddWidgetModal'
@@ -62,6 +63,7 @@ interface Toast {
 }
 
 export function DashboardMainPage(): ReactElement {
+  const navigate = useNavigate()
   const [docker, setDocker] = useState<{ ok: true; rows: ContainerRow[] } | { ok: false; error: string } | null>(null)
   const [snap, setSnap] = useState<HostMetricsResponse | null>(null)
   const [metricsHistory, setMetricsHistory] = useState<Array<{ cpu: number; ram: number }>>(() =>
@@ -99,6 +101,14 @@ export function DashboardMainPage(): ReactElement {
   const [mobileSubTemplate, setMobileSubTemplate] = useState<'react-native' | 'flutter'>('react-native')
   const [suggestedPorts, setSuggestedPorts] = useState<Record<string, number>>({})
 
+  type GitStatusData = {
+    branch: string; ahead: number; behind: number
+    staged: Array<{ status: string; path: string }>
+    unstaged: Array<{ status: string; path: string }>
+    conflictFileCount: number
+  }
+  const [gitStatus, setGitStatus] = useState<GitStatusData | null>(null)
+
   useEffect(() => {
     let unlisten: () => void;
     listen<string>('project-install-log', (event) => {
@@ -122,7 +132,7 @@ export function DashboardMainPage(): ReactElement {
     return () => { unsub(); if (unlisten) unlisten() }
   }, [])
 
-  // Slow ticker: while switch active and progress stuck between 65-95, nudge +0.4% every 800ms
+  // Slow ticker: while switch active and progress stuck between 60-95, nudge +0.4% every 800ms
   const shouldNudge = swState.active && swState.progress >= 60 && swState.progress < 95
   useEffect(() => {
     if (!shouldNudge) return
@@ -155,6 +165,23 @@ export function DashboardMainPage(): ReactElement {
       logsContainerRef.current.scrollTop = logsContainerRef.current.scrollHeight
     }
   }, [installLogs])
+
+  useEffect(() => {
+    if (!projectPath) { setGitStatus(null); return }
+    const fetchGit = async () => {
+      try {
+        const gs = await invoke('ipc_invoke', { channel: 'dh:git:vcs:status', payload: { repoPath: projectPath } }) as any
+        if (gs.ok) {
+          setGitStatus({ branch: gs.branch ?? 'unknown', ahead: gs.ahead ?? 0, behind: gs.behind ?? 0, staged: gs.staged ?? [], unstaged: gs.unstaged ?? [], conflictFileCount: gs.conflictFileCount ?? 0 })
+        } else {
+          setGitStatus(null)
+        }
+      } catch { setGitStatus(null) }
+    }
+    void fetchGit()
+    const id = setInterval(() => void fetchGit(), 10000)
+    return () => clearInterval(id)
+  }, [projectPath])
 
   const allProfiles = useMemo(() => {
     const customDefs = customProfiles.map((p) => {
@@ -615,33 +642,6 @@ export function DashboardMainPage(): ReactElement {
     })
   }, [jobs])
 
-  const liveServices = useMemo(() => {
-    if (activeContainers.length === 0) {
-      return []
-    }
-    return activeContainers.map((c) => {
-      const nameParts = c.name.split(/[_-]/)
-      let displayName = c.name
-      if (nameParts.length > 1) {
-        displayName = nameParts[nameParts.length - 2] || c.name
-      }
-      
-      let status: 'running' | 'pending' | 'idle' = 'idle'
-      const state = c.state.toLowerCase()
-      if (state.includes('running') || state.includes('up')) {
-        status = 'running'
-      } else if (state.includes('restarting') || state.includes('pending')) {
-        status = 'pending'
-      }
-      
-      return {
-        name: displayName,
-        status,
-        uptime: c.status || 'Stopped'
-      }
-    })
-  }, [activeContainers])
-
   return (
     <div className="dashboard-split-layout">
       {/* Toast Notification */}
@@ -738,6 +738,45 @@ export function DashboardMainPage(): ReactElement {
                 <div style={{ width: '100%', height: 4, background: 'rgba(255,255,255,0.08)', borderRadius: 2, overflow: 'hidden' }}>
                   <div style={{ width: `${swState.progress}%`, height: '100%', background: selectedProfile.accent, borderRadius: 2, transition: 'width 0.4s ease-out', boxShadow: `0 0 8px ${selectedProfile.accent}80` }} />
                 </div>
+              </div>
+            )}
+
+            {/* Project Health Bar */}
+            {activeProfile === selectedProfileName && (
+              <div style={{ marginTop: 24, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {([
+                  {
+                    label: 'Git',
+                    status: gitStatus
+                      ? gitStatus.conflictFileCount > 0 ? 'error'
+                        : gitStatus.staged.length + gitStatus.unstaged.length > 0 ? 'warn' : 'ok'
+                      : 'unknown',
+                  },
+                  {
+                    label: 'Services',
+                    status: activeContainers.length === 0 ? 'unknown'
+                      : activeContainers.some(c => c.state.toLowerCase().includes('running') || c.state.toLowerCase().includes('up')) ? 'ok' : 'warn',
+                  },
+                  {
+                    label: 'Storage',
+                    status: m ? (diskUsedPct > 85 ? 'error' : diskUsedPct > 70 ? 'warn' : 'ok') : 'unknown',
+                  },
+                  { label: 'Build', status: 'unknown' as const },
+                  { label: 'Deps', status: 'unknown' as const },
+                  { label: 'Env', status: projectPath ? 'ok' as const : 'unknown' as const },
+                ] as Array<{ label: string; status: 'ok' | 'warn' | 'error' | 'unknown' }>).map((chip) => {
+                  const colorMap = { ok: 'var(--green)', warn: 'var(--yellow)', error: 'var(--red)', unknown: 'var(--text-muted)' }
+                  const bgMap = { ok: 'rgba(0,230,118,0.1)', warn: 'rgba(255,193,7,0.1)', error: 'rgba(255,82,82,0.1)', unknown: 'rgba(255,255,255,0.04)' }
+                  const borderMap = { ok: 'rgba(0,230,118,0.25)', warn: 'rgba(255,193,7,0.25)', error: 'rgba(255,82,82,0.25)', unknown: 'rgba(255,255,255,0.08)' }
+                  const c = colorMap[chip.status]; const bg = bgMap[chip.status]; const border = borderMap[chip.status]
+                  return (
+                    <div key={chip.label} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 20, background: bg, border: `1px solid ${border}`, fontSize: 12 }}>
+                      <div style={{ width: 6, height: 6, borderRadius: '50%', background: c, flexShrink: 0 }} />
+                      <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>{chip.label}</span>
+                      <span style={{ color: c, fontWeight: 700, fontSize: 11 }}>{chip.status.toUpperCase()}</span>
+                    </div>
+                  )
+                })}
               </div>
             )}
 
@@ -863,6 +902,100 @@ export function DashboardMainPage(): ReactElement {
                </div>
             )}
 
+            {/* Git Status Panel */}
+            {activeProfile === selectedProfileName && projectPath && (
+              <div style={{ marginTop: 32 }}>
+                <div className="dashboard-widget">
+                  <h3 className="dashboard-widget-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span className="codicon codicon-git-branch" aria-hidden />
+                    Git Status
+                    {gitStatus && (
+                      <span className="mono" style={{ marginLeft: 4, fontSize: 12, color: 'var(--accent)', fontWeight: 400 }}>
+                        {gitStatus.branch}
+                      </span>
+                    )}
+                  </h3>
+                  {gitStatus ? (
+                    <>
+                      <div style={{ display: 'flex', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-muted)' }}>
+                          <span className="codicon codicon-arrow-up" style={{ color: 'var(--green)', fontSize: 12 }} aria-hidden />
+                          {gitStatus.ahead} ahead
+                        </span>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-muted)' }}>
+                          <span className="codicon codicon-arrow-down" style={{ color: 'var(--yellow)', fontSize: 12 }} aria-hidden />
+                          {gitStatus.behind} behind
+                        </span>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-muted)' }}>
+                          <span className="codicon codicon-edit" style={{ color: 'var(--accent)', fontSize: 12 }} aria-hidden />
+                          {gitStatus.staged.length + gitStatus.unstaged.length} changed
+                          {gitStatus.staged.length > 0 && <span style={{ color: 'var(--green)', fontSize: 11 }}>({gitStatus.staged.length} staged)</span>}
+                        </span>
+                        {gitStatus.conflictFileCount > 0 && (
+                          <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+                            <span className="codicon codicon-warning" style={{ color: 'var(--red)', fontSize: 12 }} aria-hidden />
+                            <span style={{ color: 'var(--red)' }}>{gitStatus.conflictFileCount} conflicts</span>
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        <button type="button" onClick={() => navigate('/git')} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', color: 'var(--text)', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+                          <span className="codicon codicon-git-commit" style={{ fontSize: 13 }} aria-hidden />Commit
+                        </button>
+                        <button type="button" onClick={() => navigate('/git')} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', color: 'var(--text)', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+                          <span className="codicon codicon-cloud-upload" style={{ fontSize: 13 }} aria-hidden />Push
+                        </button>
+                        <button type="button" onClick={() => navigate('/git')} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', color: 'var(--text)', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+                          <span className="codicon codicon-cloud-download" style={{ fontSize: 13 }} aria-hidden />Pull
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)' }}>Not a git repository, or git not available in this environment.</p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Active Jobs Panel */}
+            {activeProfile === selectedProfileName && jobs.some(j => j.state === 'running') && (
+              <div style={{ marginTop: 32 }}>
+                <div className="dashboard-widget">
+                  <h3 className="dashboard-widget-title">Active Jobs</h3>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                    {jobs.filter(j => j.state === 'running').map((j) => {
+                      const pct = Math.min(100, Math.max(0, j.progress ?? 0))
+                      return (
+                        <div key={j.id} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                              <span style={{ fontSize: 13, fontWeight: 600 }}>{j.kind}</span>
+                              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{pct}%</span>
+                            </div>
+                            <div style={{ height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
+                              <div style={{ width: `${pct}%`, height: '100%', background: selectedProfile.accent, borderRadius: 2, transition: 'width 0.4s ease-out' }} />
+                            </div>
+                            {j.logTail && j.logTail.length > 0 && (
+                              <div style={{ marginTop: 4, fontSize: 11, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {j.logTail[j.logTail.length - 1]}
+                              </div>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => void window.dh.jobCancel({ id: j.id })}
+                            style={{ padding: '5px 10px', borderRadius: 4, border: '1px solid rgba(255,82,82,0.3)', background: 'rgba(255,82,82,0.08)', color: '#ff5252', cursor: 'pointer', fontSize: 11, fontWeight: 600, flexShrink: 0 }}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Section 3: Analytics Grid (Activity + Container Status Side-by-Side) */}
             {activeProfile === selectedProfileName && selectedProfileName && (
               <div style={{ marginTop: 32, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(480px, 1fr))', gap: 20 }}>
@@ -908,35 +1041,51 @@ export function DashboardMainPage(): ReactElement {
                 </div>
               )}
 
-              {/* Services Grid */}
+              {/* Running Services */}
               {selectedProfileName && (
                 <div>
                   <h3 style={{ margin: '0 0 16px', fontSize: 14, fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.05em' }}>
-                    Services
+                    Running Services
                   </h3>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                    {liveServices.length > 0 ? (
-                      liveServices.map((s) => (
-                        <div
-                          key={s.name}
-                          style={{
-                            padding: 16,
-                            borderRadius: 8,
-                            background: 'linear-gradient(135deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.01) 100%)',
-                            border: '1px solid rgba(255,255,255,0.06)',
-                            backdropFilter: 'blur(8px)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                          }}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <div style={{ width: 8, height: 8, borderRadius: '50%', background: s.status === 'running' ? 'var(--green)' : s.status === 'pending' ? 'var(--yellow)' : 'var(--text-muted)' }} />
-                            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{s.name}</span>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {activeContainers.length > 0 ? (
+                      activeContainers.map((c) => {
+                        const isRunning = c.state.toLowerCase().includes('running') || c.state.toLowerCase().includes('up')
+                        const isPending = c.state.toLowerCase().includes('restarting')
+                        const dotColor = isRunning ? 'var(--green)' : isPending ? 'var(--yellow)' : 'var(--text-muted)'
+                        const portMatches = [...c.ports.matchAll(/(\d+)->(\d+)\/(\w+)/g)]
+                        return (
+                          <div key={c.id} style={{ padding: '12px 14px', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: portMatches.length > 0 ? 8 : 0 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <div style={{ width: 8, height: 8, borderRadius: '50%', background: dotColor, flexShrink: 0 }} />
+                                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{c.name}</span>
+                              </div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{c.status}</span>
+                                <button type="button" onClick={() => navigate('/docker')} title="View in Docker" style={{ padding: '3px 8px', borderRadius: 4, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.04)', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 11 }}>
+                                  <span className="codicon codicon-link-external" aria-hidden />
+                                </button>
+                              </div>
+                            </div>
+                            {portMatches.length > 0 && (
+                              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', paddingLeft: 16 }}>
+                                {portMatches.map((m, i) => {
+                                  const hostPort = parseInt(m[1], 10)
+                                  const HTTP_PORTS = new Set([80, 443, 3000, 3001, 4200, 5000, 5173, 8000, 8080, 8443, 9000])
+                                  return (
+                                    <span key={i} style={{ fontSize: 11, color: 'var(--accent)', background: 'rgba(var(--accent-rgb, 100,149,237), 0.1)', padding: '2px 7px', borderRadius: 4, fontFamily: 'monospace' }}>
+                                      {HTTP_PORTS.has(hostPort) ? (
+                                        <a href={`http://localhost:${hostPort}`} target="_blank" rel="noreferrer" style={{ color: 'inherit', textDecoration: 'none' }}>:{hostPort}</a>
+                                      ) : `${m[3].toUpperCase()}:${hostPort}`}
+                                    </span>
+                                  )
+                                })}
+                              </div>
+                            )}
                           </div>
-                          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{s.uptime}</span>
-                        </div>
-                      ))
+                        )
+                      })
                     ) : (
                       <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13, background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)', borderRadius: 8 }}>
                         No services running for this profile.

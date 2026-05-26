@@ -412,7 +412,8 @@ export function DashboardLogsPage(): ReactElement {
                       if (val === 'unified') {
                         setActiveSource({ type: 'unified', label: 'Unified Log Feed' })
                       } else {
-                        const [type, id] = val.split(':')
+                        const [type, ...rest] = val.split(':')
+                        const id = rest.join(':')
                         if (type === 'compose') {
                           setActiveSource({ type: 'compose', id, label: `Compose: ${id}` })
                         } else if (type === 'container') {
@@ -459,7 +460,7 @@ export function DashboardLogsPage(): ReactElement {
                 </button>
               </div>
             </div>
-            <div style={{ position: 'relative', width: '100%', height: 480, background: '#1e1e1e', borderRadius: 8, padding: 8, overflow: 'hidden', border: '1px solid var(--border)' }}>
+            <div style={{ position: 'relative', width: '100%', height: 480, background: 'var(--bg-terminal, #1e1e1e)', borderRadius: 8, padding: 8, overflow: 'hidden', border: '1px solid var(--border)' }}>
               <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
             </div>
           </div>
@@ -554,7 +555,7 @@ export function DashboardLogsPage(): ReactElement {
                           {j.state}
                         </span>
                       </div>
-                      {j.logTail.length > 0 && (
+                      {j.logTail && j.logTail.length > 0 && (
                         <div className="logs-job-tail-snippet">
                           {j.logTail[j.logTail.length - 1]}
                         </div>

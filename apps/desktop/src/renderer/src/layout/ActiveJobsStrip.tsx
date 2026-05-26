@@ -55,10 +55,10 @@ export function ActiveJobsStrip(): ReactElement {
           return (
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <span className="mono" style={{ fontSize: 11, color: 'var(--text)' }}>
-                Running task: {firstActive.kind.replace(/_/g, ' ')} ({firstActive.progress}%)
+                Running task: {firstActive.kind.replace(/_/g, ' ')} ({Math.min(100, Math.max(0, firstActive.progress ?? 0))}%)
               </span>
               <div style={{ width: 120, height: 6, background: 'rgba(255,255,255,0.06)', borderRadius: 3, overflow: 'hidden' }}>
-                <div style={{ width: `${firstActive.progress}%`, height: '100%', background: 'var(--accent)', transition: 'width 0.2s ease' }} />
+                <div style={{ width: `${Math.min(100, Math.max(0, firstActive.progress ?? 0))}%`, height: '100%', background: 'var(--accent)', transition: 'width 0.2s ease' }} />
               </div>
               <button
                 type="button"

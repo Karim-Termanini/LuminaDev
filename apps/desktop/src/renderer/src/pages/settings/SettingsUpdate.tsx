@@ -34,6 +34,10 @@ export function SettingsUpdate(): ReactElement {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: 'rgba(255, 193, 7, 0.08)', border: '1px solid rgba(255, 193, 7, 0.25)', borderRadius: 6, fontSize: 12, color: 'var(--yellow, #ffc107)' }}>
+        <span className="codicon codicon-beaker" />
+        Update checks are not yet active — no updater plugin is wired. Settings are saved for a future release.
+      </div>
       <div style={{ paddingTop: 8 }}>
         <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 10 }}>Release channel</div>
         <select value={settings.releaseChannel} onChange={(e) => setSettings((p) => ({ ...p, releaseChannel: e.target.value }))} className="hp-input" style={{ fontSize: 13 }}>

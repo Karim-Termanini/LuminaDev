@@ -50,6 +50,10 @@ export function SettingsLanguages(): ReactElement {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: 'rgba(255, 193, 7, 0.08)', border: '1px solid rgba(255, 193, 7, 0.25)', borderRadius: 6, fontSize: 12, color: 'var(--yellow, #ffc107)' }}>
+        <span className="codicon codicon-beaker" />
+        Only English (en-US) is available. Full i18n is not yet wired — coming in a future release.
+      </div>
       <p className="hp-muted" style={{ margin: 0, fontSize: 13 }}>
         Additional languages coming in a future release.
       </p>

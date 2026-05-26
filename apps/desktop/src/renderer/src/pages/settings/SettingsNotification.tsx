@@ -45,6 +45,10 @@ export function SettingsNotification(): ReactElement {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: 'rgba(255, 193, 7, 0.08)', border: '1px solid rgba(255, 193, 7, 0.25)', borderRadius: 6, fontSize: 12, color: 'var(--yellow, #ffc107)', marginBottom: 8 }}>
+        <span className="codicon codicon-beaker" />
+        Notification filters are saved but not yet wired to the toast system — coming in a future release.
+      </div>
       {[
         { key: 'globalMute' as const, label: 'Global mute', description: 'Suppress all in-app toast notifications.' },
       ].map((row) => (

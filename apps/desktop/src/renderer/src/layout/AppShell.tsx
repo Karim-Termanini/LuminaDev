@@ -44,6 +44,43 @@ export function AppShell({ children }: { children: ReactNode }): ReactElement {
     })
   }, [])
 
+  useEffect(() => {
+    const ACTION_ROUTES: Record<string, string> = {
+      open_terminal: '/terminal',
+      go_dashboard: '/dashboard',
+      go_docker: '/docker',
+      go_git: '/git',
+    }
+    let bindings: Record<string, string> = {}
+    void window.dh.storeGet({ key: 'shortcuts_settings' }).then((res: unknown) => {
+      const bag = res as { ok?: boolean; data?: unknown }
+      if (bag.ok && bag.data && typeof bag.data === 'object') {
+        bindings = bag.data as Record<string, string>
+      }
+    })
+    const onKey = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      const parts: string[] = []
+      if (e.ctrlKey) parts.push('Ctrl')
+      if (e.altKey) parts.push('Alt')
+      if (e.shiftKey) parts.push('Shift')
+      parts.push(e.key.length === 1 ? e.key.toUpperCase() : e.key)
+      const combo = parts.join('+')
+      for (const [action, binding] of Object.entries(bindings)) {
+        if (binding === combo) {
+          const route = ACTION_ROUTES[action]
+          if (route) {
+            e.preventDefault()
+            navigate(route)
+          }
+          break
+        }
+      }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [navigate])
+
   return (
     <div className="app-shell">
       <aside className="app-shell-nav">

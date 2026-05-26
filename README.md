@@ -83,7 +83,7 @@ Documentation audit record: [docs/DOCS_AUDIT_2026-04.md](docs/DOCS_AUDIT_2026-04
 
 ## 🌳 Monorepo Layout
 
-- `apps/desktop` — Tauri + React UI (Electron stack kept under `dev:electron` / `build:electron` until removed)
+- `apps/desktop` — Tauri + React UI (Rust backend, WebKit renderer; Electron removed in v0.2.0-alpha)
 - `packages/shared` — Shared types, IPC channel names, Zod schemas
 - `docker/compose/*` — Bundled `docker compose` profiles
 - `flatpak/` — Flatpak manifest template + notes

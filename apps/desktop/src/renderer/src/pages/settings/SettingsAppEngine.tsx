@@ -34,6 +34,10 @@ export function SettingsAppEngine(): ReactElement {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: 'rgba(255, 193, 7, 0.08)', border: '1px solid rgba(255, 193, 7, 0.25)', borderRadius: 6, fontSize: 12, color: 'var(--yellow, #ffc107)' }}>
+        <span className="codicon codicon-beaker" />
+        Settings are saved but not yet enforced at runtime — coming in a future release.
+      </div>
       <p className="hp-muted" style={{ margin: 0, fontSize: 13 }}>Daemon behaviors take effect on next app launch.</p>
       <div>
         <label style={{ display: 'block', fontWeight: 600, fontSize: 14, marginBottom: 8 }}>IPC timeout (ms)</label>

@@ -37,6 +37,15 @@ export function TopBar(): ReactElement {
   }, [pathname])
 
   useEffect(() => {
+    if (!showNotifications) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setShowNotifications(false)
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [showNotifications])
+
+  useEffect(() => {
     const fetchJobs = async () => {
       try {
         const res = await window.dh.jobsList()
@@ -96,6 +105,8 @@ export function TopBar(): ReactElement {
         <button
           type="button"
           aria-label="Notifications"
+          aria-expanded={showNotifications}
+          aria-haspopup="dialog"
           style={{
             ...btnIcon,
             color: showNotifications || jobs.some(j => j.state === 'running') ? 'var(--accent)' : 'var(--text-muted)',
@@ -119,7 +130,10 @@ export function TopBar(): ReactElement {
         </button>
 
         {showNotifications && (
-          <div style={{
+          <div
+            role="dialog"
+            aria-labelledby="notifications-title"
+            style={{
             position: 'absolute',
             right: 0,
             top: '100%',
@@ -133,7 +147,7 @@ export function TopBar(): ReactElement {
             padding: 12,
           }}>
             <div style={{ fontWeight: 600, borderBottom: '1px solid var(--border)', paddingBottom: 8, marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span>Recent Activity &amp; Jobs</span>
+              <span id="notifications-title">Recent Activity &amp; Jobs</span>
               <button
                 type="button"
                 onClick={() => setShowNotifications(false)}
@@ -161,7 +175,7 @@ export function TopBar(): ReactElement {
                     </div>
                     {j.state === 'running' && (
                       <div style={{ width: '100%', height: 4, background: 'rgba(255,255,255,0.06)', borderRadius: 2, overflow: 'hidden', marginTop: 4 }}>
-                        <div style={{ width: `${j.progress}%`, height: '100%', background: 'var(--accent)' }} />
+                        <div style={{ width: `${Math.min(100, Math.max(0, j.progress ?? 0))}%`, height: '100%', background: 'var(--accent)' }} />
                       </div>
                     )}
                   </div>
