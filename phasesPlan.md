@@ -418,7 +418,7 @@ Missing: real dep graph (`removableDeps` always empty), Ruby slow on Fedora.
 
 ---
 
-## Phase 9 — Profiles 🔄 PARTIAL (`/profiles` engine room)
+## Phase 9 — Profiles ✅ DONE (`/profiles` engine room)
 
 **Goal:** Implement a real profile management page with real accounts and the ability to seamlessly switch between profiles. Complete removal of static placeholder profiles.
 
@@ -427,7 +427,7 @@ Missing: real dep graph (`removableDeps` always empty), Ruby slow on Fedora.
 - [x] **Switching Engine:** A context-switching engine that safely tears down one profile's state and spins up another's instantly from the UI (`profileSwitch` IPC).
 - [x] **Workspace Context Binding:** Fluent Design UI modal to create/link projects and dynamically bind `${PROJECT_DIR}` to containers on restart.
 - [x] **Project Scaffolding Engine:** Advanced `npm`/`pip` dependency installer, dynamic `package.json`/`requirements.txt` generation, and real-time terminal UI progress streaming. Web-Dev and Data-Science are fully functional.
-- [ ] **Expanded Environments:** (Future Work) Add robust scaffolding templates and UI generation wizards for Mobile and AI/ML.
+- [x] **Expanded Environments:** Mobile scaffold (React Native + Flutter sub-templates via `scaffold_mobile_react_native` / `scaffold_mobile_flutter`) and AI/ML scaffold (`scaffold_ai_ml`: venv, Jupyter, Ollama, LangChain skeleton) fully implemented in `project_scaffold.rs`. DashboardMainPage create-project modal wired with mobile sub-template picker and `dh:project:scaffold` IPC calls for both mobile and ai-ml templates.
 - [x] **IDE Integration:** Dynamic editor detection (Native & Flatpak) and `ipc_invoke` routing for launching VS Code, Cursor, Neovim directly into the active container workspace.
 
 ---
@@ -721,7 +721,7 @@ Based on current app state (Phase 16 + Phase 7 complete), here's what remaining 
 ✅  Phase 16 — System Readiness & Pre-Requisites Wizard (Installer)
 ✅  Phase 15 — Theme Rollout (Elevated aesthetic)
 📋  Phase 8  — Settings
-🔄  Phase 9  — Profiles
+✅  Phase 9  — Profiles
 📋  Phase 11 — First-run Wizard (Merged into Phase 16)
 📋  UI/UX & Performance Debt
 📋  Phase 10 — Extensions (Plugin model v0, Dev API)
