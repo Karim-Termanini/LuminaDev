@@ -867,7 +867,13 @@ export function DashboardMainPage(): ReactElement {
             )}
           </>
         ) : (
-          <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>Select a profile from the right panel.</div>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 16, textAlign: 'center', color: 'var(--text-muted)' }}>
+            <span className="codicon codicon-person-add" style={{ fontSize: 48, opacity: 0.3 }} />
+            <div>
+              <p style={{ margin: '0 0 4px', fontSize: 17, fontWeight: 600, color: 'var(--text)' }}>No profiles yet</p>
+              <p style={{ margin: 0, fontSize: 14 }}>Create a profile in the <strong>Profiles</strong> page to get started.</p>
+            </div>
+          </div>
         )}
       </div>
 
