@@ -1,23 +1,36 @@
 /* ─────────────────────────────────────────────
-   DashboardLogsPage — self-contained styles
-   Explicit colors only, no background-clip tricks.
+   DashboardLogsPage — MS Dev Home Style CSS
+   Fully responsive, 2-column dashboard layout.
+   Uses system variables for dark/light themes.
 ───────────────────────────────────────────── */
 
-.logs-page {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-  max-width: 1060px;
-  padding: 0;
+@import '../theme/theme-elevated.css';
+
+/* Override the standard grid wrapper to stretch to full width */
+.elevated-page.logs-page {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 24px !important;
+  width: 100% !important;
+  max-width: 1400px !important;
+  margin: 0 auto !important;
+  padding: 24px !important;
+  box-sizing: border-box !important;
 }
 
 /* ── Hero ── */
-.logs-hero { display: flex; flex-direction: column; gap: 6px; }
+.logs-hero-section {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+}
 
 .logs-eyebrow {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.1em;
@@ -26,7 +39,7 @@
 }
 
 .logs-title {
-  margin: 0;
+  margin: 6px 0 0 0;
   font-size: 28px;
   font-weight: 800;
   color: var(--text);
@@ -34,112 +47,99 @@
 }
 
 .logs-subtitle {
-  margin: 0;
+  margin: 6px 0 0 0;
   font-size: 14px;
   color: var(--text-muted);
   line-height: 1.5;
 }
 
-/* ── Running Job Banner ── */
-.logs-running-banner {
+/* ── Dashboard Grid ── */
+.logs-dashboard-grid {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr;
+  gap: 20px;
+  width: 100%;
+}
+
+@media (max-width: 1024px) {
+  .logs-dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.logs-main-col,
+.logs-side-col {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 18px;
-  background: rgba(124, 77, 255, 0.07);
-  border: 1px solid rgba(124, 77, 255, 0.25);
-  border-radius: 10px;
-  animation: logs-slide-in 0.25s ease;
+  flex-direction: column;
+  gap: 20px;
 }
 
-@keyframes logs-slide-in {
-  from { opacity: 0; transform: translateY(-6px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-.logs-pulse-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--accent);
-  flex-shrink: 0;
-  animation: logs-pulse 1.5s ease-in-out infinite;
-}
-
-@keyframes logs-pulse {
-  0%, 100% { opacity: 1; }
-  50%       { opacity: 0.3; }
-}
-
-/* ── Progress Bar ── */
-.logs-progress-track {
-  height: 5px;
-  background: var(--border);
-  border-radius: 3px;
+/* ── Card Container (Acrylic Glassmorphism) ── */
+.logs-card-container {
+  background: color-mix(in srgb, var(--bg-widget) 75%, transparent);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
   overflow: hidden;
+  transition: all 0.2s ease;
 }
 
-.logs-progress-fill {
-  height: 100%;
-  background: var(--accent);
-  border-radius: 3px;
-  transition: width 0.5s ease;
-}
-
-/* ── Card ── */
-.logs-card {
-  background: var(--bg-widget);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  overflow: hidden;
+.logs-card-container:hover {
+  border-color: color-mix(in srgb, var(--border) 90%, transparent);
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.16);
 }
 
 .logs-card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 14px 18px;
+  padding: 16px 20px;
   border-bottom: 1px solid var(--border);
   gap: 12px;
   flex-wrap: wrap;
 }
 
-.logs-card-title {
+.logs-card-header-title {
   display: flex;
   align-items: center;
   gap: 8px;
   font-size: 14px;
   font-weight: 700;
   color: var(--text);
+  letter-spacing: 0.02em;
 }
 
-/* ── Terminal Output ── */
-.logs-terminal {
-  margin: 0;
-  padding: 16px 20px;
-  background: #0d1117;
+/* ── Controls & Select ── */
+.logs-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.logs-select-label {
   font-family: var(--font-mono);
-  font-size: 12px;
-  line-height: 1.65;
-  color: #c9d1d9;
-  max-height: 320px;
-  overflow-y: auto;
-  white-space: pre-wrap;
-  word-break: break-word;
+  font-size: 11px;
+  color: var(--text-muted);
 }
 
-.logs-terminal::-webkit-scrollbar { width: 5px; }
-.logs-terminal::-webkit-scrollbar-track { background: transparent; }
-.logs-terminal::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+.logs-select-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
 
-/* ── Select & Button ── */
 .logs-select {
   border: 1px solid var(--border);
   background: var(--bg-input);
   color: var(--text);
-  border-radius: 7px;
-  padding: 5px 10px;
+  border-radius: 6px;
+  padding: 6px 30px 6px 12px;
   font-size: 12px;
+  font-weight: 600;
   outline: none;
   cursor: pointer;
   transition: border-color 0.2s;
@@ -147,21 +147,31 @@
   -webkit-appearance: none;
 }
 
-.logs-select:focus { border-color: var(--accent); }
+.logs-select:focus {
+  border-color: var(--accent);
+}
+
+.logs-select-arrow {
+  position: absolute;
+  right: 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
 
 .logs-btn {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 13px;
+  padding: 6px 14px;
   font-size: 12px;
   font-weight: 600;
   border: 1px solid var(--border);
   background: var(--bg-input);
   color: var(--text);
-  border-radius: 7px;
+  border-radius: 6px;
   cursor: pointer;
-  transition: border-color 0.2s, background 0.2s, color 0.2s;
+  transition: all 0.2s ease;
 }
 
 .logs-btn:hover:not(:disabled) {
@@ -170,44 +180,230 @@
   color: var(--accent);
 }
 
-.logs-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.logs-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
 
-/* ── Job Row ── */
-.logs-job-row {
+/* ── Terminal Block ── */
+.logs-terminal {
+  margin: 0;
+  padding: 20px;
+  background: #090b0f;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.7;
+  color: #c5cdd8;
+  height: 480px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  border-top: none;
+}
+
+.logs-terminal::-webkit-scrollbar {
+  width: 6px;
+}
+.logs-terminal::-webkit-scrollbar-track {
+  background: transparent;
+}
+.logs-terminal::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+}
+.logs-terminal::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* ── Running Job Banner ── */
+.logs-active-jobs-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.logs-section-subtitle {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+.logs-running-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 18px;
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
+  border-radius: 10px;
+  animation: logs-slide-in 0.2s ease;
+}
+
+@keyframes logs-slide-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.logs-banner-top {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 12px 18px;
+  gap: 10px;
+}
+
+.logs-pulse-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 6px var(--accent);
+  animation: logs-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes logs-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.3; transform: scale(0.9); }
+}
+
+.logs-job-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  flex: 1;
+}
+
+.logs-job-pct {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+/* ── Progress Bar ── */
+.logs-progress-track {
+  height: 6px;
+  background: color-mix(in srgb, var(--border) 60%, transparent);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.logs-progress-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 3px;
+  box-shadow: 0 0 4px var(--accent);
+  transition: width 0.4s ease;
+}
+
+/* ── Job History List ── */
+.logs-status-badge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 3px 10px;
+  border-radius: 12px;
+}
+
+.logs-jobs-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.logs-job-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 20px;
   transition: background 0.15s ease;
 }
 
-.logs-job-row:hover { background: var(--bg-input); }
+.logs-job-row:hover {
+  background: var(--bg-input);
+}
+
+.logs-job-row-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
 
 .logs-job-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  flex-shrink: 0;
+}
+
+.logs-job-kind {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.logs-state-pill {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 8px;
+  border-radius: 12px;
+}
+
+.logs-job-tail-snippet {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding-left: 16px;
+  border-left: 2px solid var(--border);
 }
 
 /* ── Empty State ── */
-.logs-empty {
+.logs-empty-state {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
-  padding: 48px 24px;
+  gap: 8px;
+  padding: 40px 20px;
   text-align: center;
 }
 
-/* ── Light Theme ── */
-[data-theme="light"] .logs-card {
-  background: #ffffff;
-  border-color: rgba(196, 199, 204, 0.7);
+.logs-empty-title {
+  margin: 8px 0 0 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.logs-empty-desc {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  max-width: 220px;
+  line-height: 1.4;
+}
+
+/* ── Light Theme Overrides ── */
+[data-theme="light"] .logs-card-container {
+  background: rgba(255, 255, 255, 0.75);
+  border-color: rgba(196, 199, 204, 0.45);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
 }
 
 [data-theme="light"] .logs-card-header {
-  border-bottom-color: rgba(196, 199, 204, 0.5);
+  border-bottom-color: rgba(196, 199, 204, 0.45);
+}
+
+[data-theme="light"] .logs-select,
+[data-theme="light"] .logs-btn {
+  background: #ffffff;
+  border-color: rgba(196, 199, 204, 0.6);
+  color: #111827;
 }
 
 [data-theme="light"] .logs-terminal {
@@ -216,12 +412,5 @@
 }
 
 [data-theme="light"] .logs-job-row:hover {
-  background: rgba(0, 0, 0, 0.025);
-}
-
-[data-theme="light"] .logs-select,
-[data-theme="light"] .logs-btn {
-  background: #f3f4f6;
-  border-color: #e5e7eb;
-  color: #111827;
+  background: rgba(0, 0, 0, 0.02);
 }
