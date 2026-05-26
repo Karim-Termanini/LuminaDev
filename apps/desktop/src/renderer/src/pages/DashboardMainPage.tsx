@@ -552,7 +552,14 @@ export function DashboardMainPage(): ReactElement {
     })
   }
 
-  const selectedProfile = allProfiles.find((p) => p.name === selectedProfileName) || allProfiles[0]
+  const selectedProfile = allProfiles.find((p) => p.name === selectedProfileName) ?? allProfiles[0]
+
+  // Keep selectedProfileName in sync with what's actually displayed (guards against stale localStorage names)
+  useEffect(() => {
+    if (selectedProfile && selectedProfileName !== selectedProfile.name) {
+      setSelectedProfileName(selectedProfile.name)
+    }
+  }, [selectedProfile?.name, selectedProfileName])
   const m = snap?.metrics
   const ramUsedPct = useMemo(() => {
     if (!m || m.totalMemMb <= 0) return 0
