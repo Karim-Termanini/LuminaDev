@@ -5,12 +5,15 @@ import {
   type HostMetricsResponse,
   parseStoredActiveProfile,
   type CustomProfileEntry,
+  type DashboardLayoutFile,
 } from '@linux-dev-home/shared'
 import type { ReactElement } from 'react'
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { useCallback, useEffect, useMemo, useState, useRef } from 'react'
 import { humanizeProfileError } from './profileError'
+import { DashboardWidgetDeck } from '../dashboard/DashboardWidgetDeck'
+import { AddWidgetModal } from '../dashboard/AddWidgetModal'
 
 import './DashboardPage.css'
 
@@ -113,11 +116,13 @@ export function DashboardMainPage(): ReactElement {
   const [docker, setDocker] = useState<{ ok: true; rows: ContainerRow[] } | { ok: false; error: string } | null>(null)
   const [snap, setSnap] = useState<HostMetricsResponse | null>(null)
   const [toast, setToast] = useState<Toast | null>(null)
+  const [profileLayout, setProfileLayout] = useState<DashboardLayoutFile | null>(null)
   const [isSwitching, setIsSwitching] = useState(false)
   const [activeProfile, setActiveProfile] = useState<string | null>(null)
   const [selectedProfileName, setSelectedProfileName] = useState<string | null>(null)
   const [customProfiles, setCustomProfiles] = useState<CustomProfileEntry[]>([])
   const [confirmModalOpen, setConfirmModalOpen] = useState(false)
+  const [pickerOpen, setPickerOpen] = useState(false)
 
   const [projectPath, setProjectPath] = useState<string | null>(null)
   const [installedEditors, setInstalledEditors] = useState<Array<{ name: string; cmd: string }>>([])
@@ -137,6 +142,7 @@ export function DashboardMainPage(): ReactElement {
   const [scaffoldStatusText, setScaffoldStatusText] = useState('Initializing...')
   const [installLogs, setInstallLogs] = useState<string[]>([])
   const logsContainerRef = useRef<HTMLDivElement>(null)
+  const [mobileSubTemplate, setMobileSubTemplate] = useState<'react-native' | 'flutter'>('react-native')
 
   useEffect(() => {
     let unlisten: () => void;
@@ -276,6 +282,21 @@ export function DashboardMainPage(): ReactElement {
     }
   }, [selectedProfileName])
 
+  // Fetch layout for selected profile
+  useEffect(() => {
+    if (selectedProfileName) {
+      window.dh.layoutGet({ profile: selectedProfileName }).then((res) => {
+        if (res.ok && res.layout) {
+          setProfileLayout(res.layout)
+        } else {
+          setProfileLayout({ version: 1, placements: [] })
+        }
+      }).catch(() => {
+        setProfileLayout({ version: 1, placements: [] })
+      })
+    }
+  }, [selectedProfileName])
+
   
   const handleLinkProject = async () => {
      if (!selectedProfileName) return
@@ -404,20 +425,54 @@ export function DashboardMainPage(): ReactElement {
           setIsScaffolding(false)
           setToast({ type: 'error', message: res.error || 'Failed to scaffold project' })
        }
+     } else if (targetTemplate === 'mobile') {
+       const res = await invoke('ipc_invoke', {
+         channel: 'dh:project:scaffold',
+         payload: { path, template: 'mobile', subTemplate: mobileSubTemplate }
+       }) as any
+       if (res.ok) {
+         setProjectPath(res.path)
+         await window.dh.storeSet({ key: `project_dir_${selectedProfileName}`, data: res.path } as any)
+         setToast({ type: 'success', message: `Created project: ${name}` })
+         setIsScaffolding(false)
+         setCreateProjectModalOpen(false)
+         setCreateProjectStep(1)
+         setCreateProjectName('')
+         setMobileSubTemplate('react-native')
+       } else {
+         setIsScaffolding(false)
+         setToast({ type: 'error', message: res.error || 'Failed to scaffold mobile project' })
+       }
+     } else if (targetTemplate === 'ai-ml') {
+       const res = await invoke('ipc_invoke', {
+         channel: 'dh:project:scaffold',
+         payload: { path, template: 'ai-ml' }
+       }) as any
+       if (res.ok) {
+         setProjectPath(res.path)
+         await window.dh.storeSet({ key: `project_dir_${selectedProfileName}`, data: res.path } as any)
+         setToast({ type: 'success', message: `Created project: ${name}` })
+         setIsScaffolding(false)
+         setCreateProjectModalOpen(false)
+         setCreateProjectStep(1)
+         setCreateProjectName('')
+       } else {
+         setIsScaffolding(false)
+         setToast({ type: 'error', message: res.error || 'Failed to scaffold AI/ML project' })
+       }
      } else {
-       // Fallback for non-data-science templates
        const res = await invoke('ipc_invoke', { channel: 'dh:project:ensure_dir', payload: { path } }) as any
        if (res.ok) {
-          setProjectPath(res.path)
-          await window.dh.storeSet({ key: `project_dir_${selectedProfileName}`, data: res.path } as any)
-          setToast({ type: 'success', message: `Created project: ${name}` })
-          setIsScaffolding(false)
-          setCreateProjectModalOpen(false)
-          setCreateProjectStep(1)
-          setCreateProjectName('')
+         setProjectPath(res.path)
+         await window.dh.storeSet({ key: `project_dir_${selectedProfileName}`, data: res.path } as any)
+         setToast({ type: 'success', message: `Created project: ${name}` })
+         setIsScaffolding(false)
+         setCreateProjectModalOpen(false)
+         setCreateProjectStep(1)
+         setCreateProjectName('')
        } else {
-          setIsScaffolding(false)
-          setToast({ type: 'error', message: res.error || 'Failed to create project' })
+         setIsScaffolding(false)
+         setToast({ type: 'error', message: res.error || 'Failed to create project' })
        }
      }
   }
@@ -569,6 +624,50 @@ export function DashboardMainPage(): ReactElement {
                     <DashboardMetricBar label="Disk" valueText={`${m.diskFreeGb.toFixed(0)} GB free`} percent={diskUsedPct} />
                   </div>
                 </div>
+              </div>
+            )}
+            {activeProfile === selectedProfileName && profileLayout && (
+              <div style={{ marginTop: 32 }}>
+                <DashboardWidgetDeck
+                  layout={profileLayout}
+                  onRemove={async (instanceId) => {
+                    const next = {
+                      ...profileLayout,
+                      placements: profileLayout.placements.filter((p) => p.instanceId !== instanceId)
+                    }
+                    const res = await window.dh.layoutSet({ profile: selectedProfileName, layout: next })
+                    if (res.ok) {
+                      setProfileLayout(next)
+                    }
+                  }}
+                  onReorder={async (fromId, toId) => {
+                    const fromIdx = profileLayout.placements.findIndex((p) => p.instanceId === fromId)
+                    const toIdx = profileLayout.placements.findIndex((p) => p.instanceId === toId)
+                    if (fromIdx === -1 || toIdx === -1) return
+                    const nextPlacements = [...profileLayout.placements]
+                    const [moved] = nextPlacements.splice(fromIdx, 1)
+                    nextPlacements.splice(toIdx, 0, moved)
+                    const next = { ...profileLayout, placements: nextPlacements }
+                    const res = await window.dh.layoutSet({ profile: selectedProfileName, layout: next })
+                    if (res.ok) {
+                      setProfileLayout(next)
+                    }
+                  }}
+                  onAddClick={() => setPickerOpen(true)}
+                  density="comfortable"
+                  heading="Profile Pinned Widgets"
+                />
+                <AddWidgetModal
+                  open={pickerOpen}
+                  layout={profileLayout}
+                  onClose={() => setPickerOpen(false)}
+                  onSaved={async (next) => {
+                    const res = await window.dh.layoutSet({ profile: selectedProfileName, layout: next })
+                    if (res.ok) {
+                      setProfileLayout(next)
+                    }
+                  }}
+                />
               </div>
             )}
 
@@ -893,7 +992,7 @@ export function DashboardMainPage(): ReactElement {
                     background: 'rgba(0,0,0,0.2)',
                     color: 'var(--text)',
                     fontSize: 16,
-                    marginBottom: 32,
+                    marginBottom: 20,
                     outline: 'none',
                     boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.1)',
                     transition: 'border-color 0.2s ease',
@@ -901,6 +1000,36 @@ export function DashboardMainPage(): ReactElement {
                   onFocus={(e) => { e.currentTarget.style.borderColor = selectedProfile.accent }}
                   onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)' }}
                 />
+                {(selectedProfile?.baseTemplate || selectedProfile?.name) === 'mobile' && (
+                  <div style={{ marginBottom: 20 }}>
+                    <label style={{ display: 'block', fontSize: 13, color: 'var(--text-muted)', marginBottom: 8, fontWeight: 600, letterSpacing: 0.5, textTransform: 'uppercase' }}>
+                      Mobile Framework
+                    </label>
+                    <div style={{ display: 'flex', gap: 10 }}>
+                      {(['react-native', 'flutter'] as const).map((fw) => (
+                        <button
+                          key={fw}
+                          type="button"
+                          onClick={() => setMobileSubTemplate(fw)}
+                          style={{
+                            flex: 1,
+                            padding: '10px 16px',
+                            borderRadius: 8,
+                            border: `1px solid ${mobileSubTemplate === fw ? selectedProfile.accent : 'rgba(255,255,255,0.1)'}`,
+                            background: mobileSubTemplate === fw ? `${selectedProfile.accent}22` : 'rgba(0,0,0,0.2)',
+                            color: mobileSubTemplate === fw ? selectedProfile.accent : 'var(--text-muted)',
+                            cursor: 'pointer',
+                            fontWeight: 600,
+                            fontSize: 14,
+                            transition: 'all 0.2s ease',
+                          }}
+                        >
+                          {fw === 'react-native' ? '⚛ React Native' : '💙 Flutter'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 16 }}>
                   <button
                     type="button"
