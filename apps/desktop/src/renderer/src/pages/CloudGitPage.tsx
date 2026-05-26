@@ -53,6 +53,7 @@ export function CloudGitPage(): ReactElement {
   const [deviceFlow, setDeviceFlow] = useState<DeviceFlowState | null>(null)
   const [patProvider, setPatProvider] = useState<Provider | null>(null)
   const [patToken, setPatToken] = useState('')
+  const [patHost, setPatHost] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [oauthSetupNotice, setOauthSetupNotice] = useState<string | null>(null)
@@ -223,10 +224,12 @@ export function CloudGitPage(): ReactElement {
       const res = await window.dh.cloudAuthConnectPat({
         provider,
         token: patToken.trim(),
+        host: patHost.trim() || undefined,
       })
       assertCloudAuthOk(res)
       setPatProvider(null)
       setPatToken('')
+      setPatHost('')
       setOauthSetupNotice(null)
       await refreshStatus()
     } catch (e) {
@@ -623,6 +626,14 @@ export function CloudGitPage(): ReactElement {
                         // GitLab uses PAT only — show form directly
                         <div style={{ maxWidth: 420 }}>
                           <input
+                            type="text"
+                            placeholder="Custom Host URL (optional, e.g. gitlab.company.com)"
+                            value={patHost}
+                            onChange={(e) => setPatHost(e.target.value)}
+                            className="hp-input"
+                            style={{ width: '100%', marginBottom: 10, boxSizing: 'border-box' }}
+                          />
+                          <input
                             type="password"
                             placeholder="Paste personal access token"
                             value={patToken}
@@ -715,6 +726,14 @@ export function CloudGitPage(): ReactElement {
                     ) : (
                       <div style={{ maxWidth: 420 }}>
                         <input
+                          type="text"
+                          placeholder={`Custom Host URL (optional, e.g. ${activeTab}.company.com)`}
+                          value={patHost}
+                          onChange={(e) => setPatHost(e.target.value)}
+                          className="hp-input"
+                          style={{ width: '100%', marginBottom: 10, boxSizing: 'border-box' }}
+                        />
+                        <input
                           type="password"
                           placeholder="Paste personal access token"
                           value={patToken}
@@ -786,7 +805,11 @@ export function CloudGitPage(): ReactElement {
                 )}
               </section>
             </div>
-            <CloudGitActivityPanel provider={activeTab} label={meta.label} />
+            <CloudGitActivityPanel
+              provider={activeTab}
+              label={meta.label}
+              repoPath={searchParams.get('repoPath') ?? undefined}
+            />
           </div>
         )}
       </div>

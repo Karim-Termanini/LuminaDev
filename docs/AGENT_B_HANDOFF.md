@@ -44,6 +44,6 @@ This document summarizes the role and responsibilities of Agent B for the Lumina
 | Checklist + Manual | `docs/STABILIZATION_CHECKLIST.md` |
 | Docker Page | `apps/desktop/src/renderer/src/pages/DockerPage.tsx` |
 | Docker UI Errors | `apps/desktop/src/renderer/src/pages/dockerError.ts` + `dockerError.test.ts` |
-| Local Flatpak | `flatpak/README.md` + `flatpak/io.github.karimodora.LinuxDevHome.tauri.yml` |
+| Local Flatpak | `flatpak/README.md` + `flatpak/io.github.karimodora.LinuxDevHome.yml` |
 | Privilege Boundaries | `docs/PRIVILEGE_BOUNDARY_MATRIX.md`, `docs/DOCKER_FLATPAK.md` |
 | Quality Gate | `CLAUDE.md` + `phasesPlan.md` (Quality Gate section) |

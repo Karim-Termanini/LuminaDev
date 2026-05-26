@@ -1719,15 +1719,15 @@ export function DockerPage(): ReactElement {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                   <h3 style={{ margin: 0, fontSize: 16 }}>Authentication Required</h3>
                   <p style={{ margin: 0, fontSize: 14, color: 'var(--text-muted)' }}>
-                    Installation requires root privileges. Please enter your <strong>sudo</strong> password to proceed.
+                    Installation requires root privileges. Enter your <strong>sudo</strong> password to proceed, or leave it blank to authenticate securely via your system's graphical dialog (Polkit / pkexec).
                     This password is only used to run the installation commands and is not stored.
                   </p>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    <label style={{ fontSize: 12, fontWeight: 600 }}>Sudo Password</label>
+                    <label style={{ fontSize: 12, fontWeight: 600 }}>Sudo Password (Optional)</label>
                     <input 
                       type="password" 
                       className="hp-input" 
-                      placeholder="••••••••" 
+                      placeholder="Sudo password (optional, leave blank for Polkit)" 
                       value={sudoPassword} 
                       onChange={e => setSudoPassword(e.target.value)} 
                       autoFocus
@@ -1808,7 +1808,7 @@ export function DockerPage(): ReactElement {
               {installStep === 2 && (
                 <>
                   <button className="hp-btn" onClick={() => setInstallStep(1)}>{'<'}- Back</button>
-                  <button className="hp-btn hp-btn-primary" disabled={!sudoPassword} onClick={() => void runInstallation()}>Install Now</button>
+                  <button className="hp-btn hp-btn-primary" onClick={() => void runInstallation()}>Install Now</button>
                 </>
               )}
               {(installStep === 3 && !installBusy) && (

@@ -1,75 +1,37 @@
 # Flatpak
 
-**Tauri (current app):** [`io.github.karimodora.LinuxDevHome.tauri.yml`](io.github.karimodora.LinuxDevHome.tauri.yml) — `org.gnome.Platform` **49** + `cargo build --release` for `lumina-dev`, installs as `linux-dev-home`. Build locally with `flatpak-builder` (not in GitHub Actions yet; add a workflow job later for CI smoke only).
+This directory contains the canonical Flatpak manifest for packaging and distributing **Linux Dev Home** (a Tauri application).
 
-**Legacy Electron manifests** (historical; still usable if you maintain an Electron pack path):
+## Canonical Manifest
 
-| Manifest | Use |
-|----------|-----|
-| [`io.github.karimodora.LinuxDevHome.yml`](io.github.karimodora.LinuxDevHome.yml) | **Network build**; `flatpak-builder` passes `--share=network`. |
-| [`io.github.karimodora.LinuxDevHome.offline.yml`](io.github.karimodora.LinuxDevHome.offline.yml) | **Offline build**; requires [`generated-sources.json`](generated-sources.json). |
+*   **[`io.github.karimodora.LinuxDevHome.yml`](io.github.karimodora.LinuxDevHome.yml)** — The authoritative manifest mapping to `org.gnome.Platform` branch `49` (which includes WebKitGTK and GTK runtimes required by Tauri). 
 
-## Regenerate Node sources (offline manifest)
+All legacy Electron manifests and pre-migration scripts have been removed to avoid confusion.
 
-After changing **pnpm** dependencies or `pnpm-lock.yaml`:
+## Build and Install
 
-```bash
-chmod +x flatpak/generate-node-sources.sh
-./flatpak/generate-node-sources.sh
-```
-
-Commit the updated `flatpak/generated-sources.json` (or vendor it only in your Flathub submission repo).
-
-## Build and install
+To build the Flatpak locally using `flatpak-builder`, execute the following:
 
 ```bash
-# Tauri (recommended)
 flatpak-builder --user --install --force-clean flatpak-build-tauri \
-  flatpak/io.github.karimodora.LinuxDevHome.tauri.yml \
-  --install-deps-from=flathub
-
-# Electron legacy — network
-flatpak-builder --user --install --force-clean flatpak-build-dir \
   flatpak/io.github.karimodora.LinuxDevHome.yml \
   --install-deps-from=flathub
-
-# Electron legacy — offline (install Flathub runtimes first)
-flatpak-builder --user --install --force-clean flatpak-build-dir-offline \
-  flatpak/io.github.karimodora.LinuxDevHome.offline.yml \
-  --install-deps-from=flathub
 ```
 
-Run: `flatpak run io.github.karimodora.LinuxDevHome`
+Run the built application:
 
-See [../docs/DOCKER_FLATPAK.md](../docs/DOCKER_FLATPAK.md), [../docs/INSTALL_TEST.md](../docs/INSTALL_TEST.md), [../docs/FLATHUB_CHECKLIST.md](../docs/FLATHUB_CHECKLIST.md).
+```bash
+flatpak run io.github.karimodora.LinuxDevHome
+```
+
+For permissions and configuration troubleshooting, refer to [../docs/DOCKER_FLATPAK.md](../docs/DOCKER_FLATPAK.md) and [../docs/FLATHUB_CHECKLIST.md](../docs/FLATHUB_CHECKLIST.md).
 
 ## Troubleshooting
 
-### `Error opening cache: opening repo: opendir(objects): No such file or directory`
-
-Usually a **broken Flatpak user repo or builder cache**, or a **manifest/runtime mismatch** (e.g. EOL GNOME 46, or an SDK extension branch the runtime does not declare — do **not** add `//24.08` on extensions unless that branch is listed for your chosen `org.gnome.Sdk`).
-
-Try in order:
-
+### `Error opening cache: opening repo`
+If you encounter local database or cache issues, run:
 ```bash
 flatpak repair --user
 rm -rf ~/.cache/flatpak-builder
 rm -rf flatpak-build-tauri .flatpak-builder
 ```
-
-Then rebuild. If `FLATPAK_USER_DIR` is set to a custom path, ensure that directory exists and is writable, or unset it for the build.
-
-### `The state dir … is not on the same filesystem as the target dir`
-
-`flatpak-builder` wants its **cache/state** (default: `.flatpak-builder` under the directory you run from) on the **same filesystem** as the **build directory** (e.g. `flatpak-build-tauri`). Fix by:
-
-- building from the repo with **both** dirs on the same disk, or  
-- passing `--state-dir` on the same filesystem as your `--repo` / build dir (see `flatpak-builder --help`).
-
-### `Unknown extension 'org.freedesktop.Sdk.Extension.rust-stable//…' in runtime`
-
-The **`//branch` on `sdk-extensions` must match extensions your `org.gnome.Sdk` actually exposes**. Wrong pins produce this error. The Tauri manifest uses **GNOME Platform 49** and **unpinned** `rust-stable` / `node20` so Flatpak resolves the correct pair.
-
-### Old GNOME runtimes (46–48) end-of-life
-
-Use a **currently supported** `org.gnome.Platform` branch (see Flathub / `flatpak remote-info`). This repo tracks that in [`io.github.karimodora.LinuxDevHome.tauri.yml`](io.github.karimodora.LinuxDevHome.tauri.yml).

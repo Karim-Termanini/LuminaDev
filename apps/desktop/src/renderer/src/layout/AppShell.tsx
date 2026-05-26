@@ -25,7 +25,6 @@ const DEFAULT_SHORTCUTS: Record<string, string> = {
   go_settings: 'Ctrl+,',
 }
 
-/** Keep in sync with `docs/ROUTE_STATUS.md` (nav pill is operator-facing, not marketing). */
 const nav = [
   { to: '/dashboard', label: 'Dashboard', icon: 'dashboard', status: 'live' as RouteStatus },
   { to: '/system', label: 'Monitor', icon: 'pulse', status: 'live' as RouteStatus },
@@ -62,6 +61,8 @@ export function AppShell({ children }: { children: ReactNode }): ReactElement {
       }
     })
   }, [])
+
+
 
   useEffect(() => {
     const ACTION_ROUTES: Record<string, string> = {
@@ -229,18 +230,19 @@ function ShortcutVisualizer() {
   const [combo, setCombo] = useState<string | null>(null)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  useEffect(() => {
-    const handler = (e: any) => {
-      setCombo(e.detail)
-      if (timer.current) clearTimeout(timer.current)
-      timer.current = setTimeout(() => setCombo(null), 1500)
-    }
-    window.addEventListener('dh:shortcut:debug', handler)
-    return () => {
-      window.removeEventListener('dh:shortcut:debug', handler)
-      if (timer.current) clearTimeout(timer.current)
-    }
-  }, [])
+   useEffect(() => {
+     const handler = (e: Event) => {
+       const customEvent = e as CustomEvent<string>;
+       setCombo(customEvent.detail);
+       if (timer.current) clearTimeout(timer.current)
+       timer.current = setTimeout(() => setCombo(null), 1500)
+     }
+     window.addEventListener('dh:shortcut:debug', handler)
+     return () => {
+       window.removeEventListener('dh:shortcut:debug', handler)
+       if (timer.current) clearTimeout(timer.current)
+     }
+   }, [])
 
   if (!combo) return null
 

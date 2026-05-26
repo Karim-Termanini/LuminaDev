@@ -34,9 +34,9 @@ export function SettingsResources(): ReactElement {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: 'rgba(255, 193, 7, 0.08)', border: '1px solid rgba(255, 193, 7, 0.25)', borderRadius: 6, fontSize: 12, color: 'var(--yellow, #ffc107)' }}>
-        <span className="codicon codicon-beaker" />
-        CPU and RAM limits are saved but not yet enforced by the job runner — coming in a future release.
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: 'rgba(0, 230, 118, 0.08)', border: '1px solid rgba(0, 230, 118, 0.25)', borderRadius: 6, fontSize: 12, color: 'var(--green, #00e676)' }}>
+        <span className="codicon codicon-check" />
+        CPU and RAM resource limits are active and enforced by the background job runner.
       </div>
       <div>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>

@@ -34,7 +34,15 @@ const WEB: Record<
   },
 }
 
-export function CloudGitActivityPanel({ provider, label }: { provider: Provider; label: string }): ReactElement {
+export function CloudGitActivityPanel({
+  provider,
+  label,
+  repoPath,
+}: {
+  provider: Provider
+  label: string
+  repoPath?: string
+}): ReactElement {
   const urls = WEB[provider]
   const [prLimit, setPrLimit] = useState(12)
   const [reviewLimit, setReviewLimit] = useState(12)
@@ -67,6 +75,8 @@ export function CloudGitActivityPanel({ provider, label }: { provider: Provider;
       .catch(() => setRecents([]))
   }, [])
 
+  const resolvedRepoPath = repoPath ?? recents[0]?.path ?? undefined
+
   useEffect(() => {
     setPrLimit(12)
     setReviewLimit(12)
@@ -80,7 +90,7 @@ export function CloudGitActivityPanel({ provider, label }: { provider: Provider;
     setPrLoading(true)
     setError(null)
     void window.dh
-      .cloudGitPrs({ provider, limit: prLimit })
+      .cloudGitPrs({ provider, limit: prLimit, repoPath: resolvedRepoPath })
       .then((res) => {
         if (cancelled) return
         if (res.ok && Array.isArray(res.prs)) {
@@ -102,14 +112,14 @@ export function CloudGitActivityPanel({ provider, label }: { provider: Provider;
     return () => {
       cancelled = true
     }
-  }, [provider, prLimit])
+  }, [provider, prLimit, resolvedRepoPath])
 
   useEffect(() => {
     let cancelled = false
     setReviewLoading(true)
     setReviewError(null)
     void window.dh
-      .cloudGitReviewRequests({ provider, limit: reviewLimit })
+      .cloudGitReviewRequests({ provider, limit: reviewLimit, repoPath: resolvedRepoPath })
       .then((res) => {
         if (cancelled) return
         if (res.ok && Array.isArray(res.reviewRequests)) {
@@ -131,14 +141,14 @@ export function CloudGitActivityPanel({ provider, label }: { provider: Provider;
     return () => {
       cancelled = true
     }
-  }, [provider, reviewLimit])
+  }, [provider, reviewLimit, resolvedRepoPath])
 
   useEffect(() => {
     let cancelled = false
     setCiLoading(true)
     setPipelineError(null)
     void window.dh
-      .cloudGitPipelines({ provider, limit: pipelineLimit })
+      .cloudGitPipelines({ provider, limit: pipelineLimit, repoPath: resolvedRepoPath })
       .then((res) => {
         if (cancelled) return
         if (res.ok && Array.isArray(res.pipelines)) {
@@ -160,14 +170,14 @@ export function CloudGitActivityPanel({ provider, label }: { provider: Provider;
     return () => {
       cancelled = true
     }
-  }, [provider, pipelineLimit])
+  }, [provider, pipelineLimit, resolvedRepoPath])
 
   useEffect(() => {
     let cancelled = false
     setIssueLoading(true)
     setIssueError(null)
     void window.dh
-      .cloudGitIssues({ provider, limit: issueLimit })
+      .cloudGitIssues({ provider, limit: issueLimit, repoPath: resolvedRepoPath })
       .then((res) => {
         if (cancelled) return
         if (res.ok && Array.isArray(res.issues)) {
@@ -189,14 +199,14 @@ export function CloudGitActivityPanel({ provider, label }: { provider: Provider;
     return () => {
       cancelled = true
     }
-  }, [provider, issueLimit])
+  }, [provider, issueLimit, resolvedRepoPath])
 
   useEffect(() => {
     let cancelled = false
     setReleaseLoading(true)
     setReleaseError(null)
     void window.dh
-      .cloudGitReleases({ provider, limit: releaseLimit })
+      .cloudGitReleases({ provider, limit: releaseLimit, repoPath: resolvedRepoPath })
       .then((res) => {
         if (cancelled) return
         if (res.ok && Array.isArray(res.releases)) {
@@ -218,7 +228,7 @@ export function CloudGitActivityPanel({ provider, label }: { provider: Provider;
     return () => {
       cancelled = true
     }
-  }, [provider, releaseLimit])
+  }, [provider, releaseLimit, resolvedRepoPath])
 
   const needsReconnect = (raw: string | null): boolean =>
     !!raw &&

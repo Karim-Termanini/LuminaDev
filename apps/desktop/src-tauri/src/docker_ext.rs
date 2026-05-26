@@ -124,14 +124,6 @@ pub(crate) async fn docker_install_invoke(body: &Value) -> Value {
     });
   }
   let password = body.get("password").and_then(|v| v.as_str());
-  let pw_nonempty = password.map(|p| !p.is_empty()).unwrap_or(false);
-  if !pw_nonempty && !sudo_passwordless_ok().await {
-    return json!({
-      "ok": false,
-      "log": Vec::<String>::new(),
-      "error": "[DOCKER_INSTALL_FAILED] sudo needs a password or passwordless sudo. Enter the sudo password in the installer UI, or configure NOPASSWD for this user."
-    });
-  }
 
   let requested_components: Vec<String> = body
     .get("components")

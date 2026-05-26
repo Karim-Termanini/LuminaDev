@@ -5,6 +5,20 @@ use crate::cloud_auth::types::{
     CloudPullRequestEntry, CloudReleaseEntry, DeviceAuthChallenge, PollResult, StoredCredential,
 };
 
+fn github_api_base(hostname: &str) -> String {
+    let h = hostname.trim();
+    if h.is_empty() || h.eq_ignore_ascii_case("github.com") {
+        "https://api.github.com".to_string()
+    } else {
+        if h.starts_with("http://") || h.starts_with("https://") {
+            let base = h.trim_end_matches('/');
+            format!("{}/api/v3", base)
+        } else {
+            format!("https://{}/api/v3", h)
+        }
+    }
+}
+
 pub struct GitHubProvider;
 
 impl GitHubProvider {
@@ -50,7 +64,7 @@ impl GitHubProvider {
             .await
             .map_err(|e| format!("[CLOUD_AUTH_NETWORK] GitHub poll parse: {}", e))?;
         if let Some(token) = body["access_token"].as_str() {
-            let profile = Self::validate_pat(token).await?;
+            let profile = Self::validate_pat(token, None).await?;
             return Ok(PollResult::Complete {
                 token: token.to_string(),
                 username: profile.username,
@@ -85,10 +99,13 @@ impl GitHubProvider {
         }
     }
 
-    pub async fn validate_pat(token: &str) -> Result<StoredCredential, String> {
+    pub async fn validate_pat(token: &str, web_origin: Option<&str>) -> Result<StoredCredential, String> {
         let client = reqwest::Client::new();
+        let hostname = web_origin.unwrap_or("github.com");
+        let api_base = github_api_base(hostname);
+        let url = format!("{}/user", api_base);
         let resp = client
-            .get("https://api.github.com/user")
+            .get(&url)
             .header("Authorization", format!("Bearer {}", token))
             .header("User-Agent", "LuminaDev/0.2.0")
             .header("Accept", "application/vnd.github+json")
@@ -113,6 +130,7 @@ impl GitHubProvider {
             username: body["login"].as_str().unwrap_or("unknown").to_string(),
             avatar_url: body["avatar_url"].as_str().unwrap_or("").to_string(),
             connected_at: helpers::chrono_now(),
+            web_origin: Some(hostname.to_string()),
         })
     }
 
@@ -123,10 +141,13 @@ impl GitHubProvider {
     pub async fn list_open_pull_requests(
         token: &str,
         limit: usize,
+        hostname: &str,
     ) -> Result<Vec<CloudPullRequestEntry>, String> {
         let client = reqwest::Client::new();
+        let api_base = github_api_base(hostname);
+        let url = format!("{}/search/issues", api_base);
         let resp = client
-            .get("https://api.github.com/search/issues")
+            .get(&url)
             .header("Authorization", format!("Bearer {}", token))
             .header("User-Agent", "LuminaDev/0.2.0")
             .header("Accept", "application/vnd.github+json")
@@ -152,6 +173,7 @@ impl GitHubProvider {
             .json()
             .await
             .map_err(|e| format!("[CLOUD_GIT_NETWORK] GitHub PR parse: {}", e))?;
+        let prefix = format!("{}/repos/", api_base);
         let items = body["items"]
             .as_array()
             .cloned()
@@ -160,7 +182,7 @@ impl GitHubProvider {
             .map(|it| {
                 let repo_url = it["repository_url"].as_str().unwrap_or("");
                 let repo = repo_url
-                    .trim_start_matches("https://api.github.com/repos/")
+                    .trim_start_matches(&prefix)
                     .to_string();
                 CloudPullRequestEntry {
                     id: it["id"].as_i64().unwrap_or_default().to_string(),
@@ -180,6 +202,7 @@ impl GitHubProvider {
         token: &str,
         login: &str,
         limit: usize,
+        hostname: &str,
     ) -> Result<Vec<CloudPullRequestEntry>, String> {
         let login = login.trim();
         if login.is_empty() {
@@ -187,8 +210,10 @@ impl GitHubProvider {
         }
         let q = format!("is:pr is:open review-requested:{}", login);
         let client = reqwest::Client::new();
+        let api_base = github_api_base(hostname);
+        let url = format!("{}/search/issues", api_base);
         let resp = client
-            .get("https://api.github.com/search/issues")
+            .get(&url)
             .header("Authorization", format!("Bearer {}", token))
             .header("User-Agent", "LuminaDev/0.2.0")
             .header("Accept", "application/vnd.github+json")
@@ -214,6 +239,7 @@ impl GitHubProvider {
             .json()
             .await
             .map_err(|e| format!("[CLOUD_GIT_NETWORK] GitHub review requests parse: {}", e))?;
+        let prefix = format!("{}/repos/", api_base);
         let items = body["items"]
             .as_array()
             .cloned()
@@ -222,7 +248,7 @@ impl GitHubProvider {
             .map(|it| {
                 let repo_url = it["repository_url"].as_str().unwrap_or("");
                 let repo = repo_url
-                    .trim_start_matches("https://api.github.com/repos/")
+                    .trim_start_matches(&prefix)
                     .to_string();
                 CloudPullRequestEntry {
                     id: it["id"].as_i64().unwrap_or_default().to_string(),
@@ -241,10 +267,13 @@ impl GitHubProvider {
     pub async fn list_recent_pipelines(
         token: &str,
         limit: usize,
+        hostname: &str,
     ) -> Result<Vec<CloudPipelineEntry>, String> {
         let client = reqwest::Client::new();
+        let api_base = github_api_base(hostname);
+        let url = format!("{}/user/repos", api_base);
         let repos_resp = client
-            .get("https://api.github.com/user/repos")
+            .get(&url)
             .header("Authorization", format!("Bearer {}", token))
             .header("User-Agent", "LuminaDev/0.2.0")
             .header("Accept", "application/vnd.github+json")
@@ -277,11 +306,9 @@ impl GitHubProvider {
             if full_name.is_empty() {
                 continue;
             }
+            let runs_url = format!("{}/repos/{}/actions/runs", api_base, full_name);
             let runs_resp = client
-                .get(format!(
-                    "https://api.github.com/repos/{}/actions/runs",
-                    full_name
-                ))
+                .get(&runs_url)
                 .header("Authorization", format!("Bearer {}", token))
                 .header("User-Agent", "LuminaDev/0.2.0")
                 .header("Accept", "application/vnd.github+json")
@@ -516,10 +543,13 @@ impl GitHubProvider {
     pub async fn list_assigned_issues(
         token: &str,
         limit: usize,
+        hostname: &str,
     ) -> Result<Vec<CloudIssueEntry>, String> {
         let client = reqwest::Client::new();
+        let api_base = github_api_base(hostname);
+        let url = format!("{}/search/issues", api_base);
         let resp = client
-            .get("https://api.github.com/search/issues")
+            .get(&url)
             .header("Authorization", format!("Bearer {}", token))
             .header("User-Agent", "LuminaDev/0.2.0")
             .header("Accept", "application/vnd.github+json")
@@ -545,6 +575,7 @@ impl GitHubProvider {
             .json()
             .await
             .map_err(|e| format!("[CLOUD_GIT_NETWORK] GitHub issues parse: {}", e))?;
+        let prefix = format!("{}/repos/", api_base);
         let items = body["items"]
             .as_array()
             .cloned()
@@ -553,7 +584,7 @@ impl GitHubProvider {
             .map(|it| {
                 let repo_url = it["repository_url"].as_str().unwrap_or("");
                 let repo = repo_url
-                    .trim_start_matches("https://api.github.com/repos/")
+                    .trim_start_matches(&prefix)
                     .to_string();
                 CloudIssueEntry {
                     id: it["id"].as_i64().unwrap_or_default().to_string(),
@@ -572,10 +603,13 @@ impl GitHubProvider {
     pub async fn list_recent_releases(
         token: &str,
         limit: usize,
+        hostname: &str,
     ) -> Result<Vec<CloudReleaseEntry>, String> {
         let client = reqwest::Client::new();
+        let api_base = github_api_base(hostname);
+        let url = format!("{}/user/repos", api_base);
         let repos_resp = client
-            .get("https://api.github.com/user/repos")
+            .get(&url)
             .header("Authorization", format!("Bearer {}", token))
             .header("User-Agent", "LuminaDev/0.2.0")
             .header("Accept", "application/vnd.github+json")
@@ -607,11 +641,9 @@ impl GitHubProvider {
             if full_name.is_empty() {
                 continue;
             }
+            let rel_url = format!("{}/repos/{}/releases/latest", api_base, full_name);
             let rel_resp = client
-                .get(format!(
-                    "https://api.github.com/repos/{}/releases/latest",
-                    full_name
-                ))
+                .get(&rel_url)
                 .header("Authorization", format!("Bearer {}", token))
                 .header("User-Agent", "LuminaDev/0.2.0")
                 .header("Accept", "application/vnd.github+json")
@@ -652,17 +684,20 @@ impl GitHubProvider {
         Ok(out)
     }
 
-    pub async fn create_pull_request(
-        token: &str,
-        owner: &str,
-        repo: &str,
-        title: &str,
-        body: &str,
-        head: &str,
-        base: &str,
-    ) -> Result<String, String> {
+     #[allow(clippy::too_many_arguments)]
+     pub async fn create_pull_request(
+         token: &str,
+         hostname: &str,
+         owner: &str,
+         repo: &str,
+         title: &str,
+         body: &str,
+         head: &str,
+         base: &str,
+     ) -> Result<String, String> {
         let client = reqwest::Client::new();
-        let url = format!("https://api.github.com/repos/{}/{}/pulls", owner, repo);
+        let api_base = github_api_base(hostname);
+        let url = format!("{}/repos/{}/{}/pulls", api_base, owner, repo);
         let payload = serde_json::json!({ "title": title, "body": body, "head": head, "base": base });
         let resp = client
             .post(&url)

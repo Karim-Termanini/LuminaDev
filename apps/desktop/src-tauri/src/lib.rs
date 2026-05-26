@@ -192,8 +192,7 @@ fn get_resource_limits(app: &tauri::AppHandle) -> (usize, usize, u64) {
   let cores = std::thread::available_parallelism()
     .map(|n| n.get())
     .unwrap_or(4);
-  let limit_cores = ((cores as f64) * (cpu_limit as f64 / 100.0)).round() as usize;
-  let limit_cores = std::cmp::max(1, limit_cores);
+  let limit_cores = utils::calculate_limit_cores(cores, cpu_limit);
   (limit_cores, cores, ram_limit_mb)
 }
 
@@ -1681,6 +1680,17 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
         Err(e) => json!({ "ok": false, "error": e }),
       }
     },
+    "dh:profile:credentials:get" => {
+      let id = body.get("id").and_then(|v| v.as_str()).unwrap_or_default();
+      if id.is_empty() {
+        return Ok(json!({ "ok": false, "error": "[PROFILE_CRED_INVALID] 'id' required" }));
+      }
+      let store = profile_credentials::app_profile_credential_store(&app);
+      match store.load(id) {
+        Ok(val) => json!({ "ok": true, "value": val }),
+        Err(e) => json!({ "ok": false, "error": e }),
+      }
+    },
     "dh:terminal:openExternal" => {
       let launched = exec_output_limit(
         "bash",
@@ -2235,6 +2245,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
                     username: username.clone(),
                     avatar_url: avatar_url.clone(),
                     connected_at: cloud_auth::chrono_now(),
+                    web_origin: None,
                 };
                 match store.save(provider, &cred) {
                     Ok(_) => json!({ "ok": true, "status": "complete", "username": username, "avatar_url": avatar_url }),
@@ -2248,10 +2259,11 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
     "dh:cloud:auth:connect-pat" => {
         let provider = body.get("provider").and_then(|v| v.as_str()).unwrap_or("");
         let token = body.get("token").and_then(|v| v.as_str()).unwrap_or("");
+        let host = body.get("host").and_then(|v| v.as_str()).map(str::trim).filter(|s| !s.is_empty());
         let store = cloud_auth::app_encrypted_credential_store(&app);
         let validate_result = match provider {
-            "github" => cloud_auth::GitHubProvider::validate_pat(token).await,
-            "gitlab" => cloud_auth::GitLabProvider::validate_pat(token).await,
+            "github" => cloud_auth::GitHubProvider::validate_pat(token, host).await,
+            "gitlab" => cloud_auth::GitLabProvider::validate_pat(token, host).await,
             _ => Err("[CLOUD_AUTH_NETWORK] Unknown provider".to_string()),
         };
         match validate_result {
@@ -4268,7 +4280,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
             Ok(res) => {
               if let Ok(json_val) = res.json::<serde_json::Value>().await {
                 if let Some(tag) = json_val.get("tag_name").and_then(|v| v.as_str()) {
-                  let current_version = "v0.2.0-alpha";
+                  let current_version = concat!("v", env!("CARGO_PKG_VERSION"));
                   let update_available = tag != current_version;
                   json!({
                     "ok": true,
@@ -4296,6 +4308,43 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
   Ok(res)
 }
 
+async fn startup_update_check(app: AppHandle) {
+  if let Ok(store_path) = app_file(&app, "store.json") {
+    if let Ok(client) = reqwest::Client::builder()
+      .user_agent("LuminaDev-Updater")
+      .build()
+    {
+      let tag = match client
+        .get("https://api.github.com/repos/Karim-Termanini/LuminaDev/releases/latest")
+        .send()
+        .await
+      {
+        Ok(r) => match r.json::<Value>().await {
+          Ok(v) => v.get("tag_name").and_then(|t| t.as_str()).map(|s| s.to_string()),
+          Err(_) => None,
+        },
+        Err(_) => None,
+      };
+      let mut store = read_json(&store_path);
+      if !store.is_object() {
+        store = json!({});
+      }
+      {
+        let map = store.as_object_mut().unwrap();
+        if !map.contains_key("update_settings") {
+          map.insert("update_settings".to_string(), json!({}));
+        }
+      }
+      let update = store.get_mut("update_settings").unwrap();
+      update["lastChecked"] = json!(now_ms());
+      if let Some(v) = tag {
+        update["latestVersion"] = json!(v);
+      }
+      let _ = utils::write_json(&store_path, &store);
+    }
+  }
+}
+
 static START_TIME: OnceLock<Instant> = OnceLock::new();
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -4312,6 +4361,14 @@ pub fn run() {
         if let Some(engine) = store.get("app_engine_settings") {
           if let Some(ms) = engine.get("ipcTimeoutMs").and_then(|v| v.as_u64()) {
             set_global_ipc_timeout(ms);
+          }
+        }
+        if let Some(update) = store.get("update_settings") {
+          if update.get("checkOnStartup").and_then(|v| v.as_bool()) == Some(true) {
+            let h = handle.clone();
+            tauri::async_runtime::spawn(async move {
+              startup_update_check(h).await;
+            });
           }
         }
       }

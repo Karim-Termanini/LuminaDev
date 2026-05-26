@@ -23,7 +23,7 @@ export function SettingsAppEngine(): ReactElement {
     setMsg(null)
     try {
       assertSettingsOk(await window.dh.storeSet({ key: 'app_engine_settings', data: settings }))
-      setMsg('Saved. Daemon behaviors take effect on next app launch.')
+      setMsg('Saved. Settings will take effect on next app launch.')
       setTimeout(() => setMsg(null), 4000)
     } catch (e) {
       setMsg(e instanceof Error ? e.message : 'Save failed.')
@@ -34,7 +34,7 @@ export function SettingsAppEngine(): ReactElement {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      <p className="hp-muted" style={{ margin: 0, fontSize: 13 }}>Daemon behaviors and IPC timeouts take effect immediately when saved.</p>
+      <p className="hp-muted" style={{ margin: 0, fontSize: 13 }}>Settings will take effect on the next application launch.</p>
       <div>
         <label style={{ display: 'block', fontWeight: 600, fontSize: 14, marginBottom: 8 }}>IPC timeout (ms)</label>
         <input type="number" className="hp-input" style={{ fontSize: 13, width: 160 }}

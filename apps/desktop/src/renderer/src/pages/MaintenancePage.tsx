@@ -1,4 +1,4 @@
-import { ComposeProfileSchema, type ComposeProfile, type ContainerRow, type HostMetricsResponse, type HostSecuritySnapshot, type JobSummary, type MaintenanceProfileHealth, type MaintenanceStateStore, type MaintenanceTask, type TopProcessRow } from '@linux-dev-home/shared'
+import { ComposeProfileSchema, type ComposeProfile, type ContainerRow, type HostMetricsResponse, type HostSecuritySnapshot, type JobSummary, type MaintenanceProfileHealth, type MaintenanceStateStore, type MaintenanceTask, type TopProcessRow, type PerfSnapshot } from '@linux-dev-home/shared'
 import type { ReactElement } from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { humanizeDashboardError } from './dashboardError'
@@ -26,7 +26,6 @@ type ServiceState = Record<string, 'active' | 'inactive' | 'unknown'>
 type CleanupPreview = { containers: number; images: number; volumes: number; networks: number } | null
 type TabId = (typeof TABS)[number]
 type DiagnosticCheck = { id: string; label: string; ok: boolean; details: string }
-type PerfSnapshot = { rssMb: number; uptimeSec: number }
 
 type RunbookOp = (typeof OPS_RUNBOOK)[number]
 

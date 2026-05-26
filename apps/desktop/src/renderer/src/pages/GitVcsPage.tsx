@@ -93,7 +93,6 @@ export function GitVcsPage(): ReactElement {
 
   const handleResolveRemoteConflicts = async (targetBase: string, remoteForHost?: string) => {
     const remoteName = remoteForHost ?? activeFetchRemoteName
-    console.log('[GitVcs] ResolveRemoteConflicts triggered for base:', targetBase, 'remote:', remoteName)
     setBusy(true)
     try {
       // Ensure we have the latest remote info before showing the wizard

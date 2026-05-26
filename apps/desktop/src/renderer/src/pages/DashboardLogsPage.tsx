@@ -264,7 +264,7 @@ export function DashboardLogsPage(): ReactElement {
         rawText = `=== Background Job: ${job.kind} (${job.state}) ===\r\n` +
           `Progress: ${job.progress}%\r\n\r\n` +
           `--- Logs ---\r\n` +
-          job.logTail.join('\r\n')
+          (job.logTail || []).join('\r\n')
       } else {
         rawText = `Job with ID ${activeSource.id} not found.`
       }

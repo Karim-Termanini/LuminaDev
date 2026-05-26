@@ -27,6 +27,7 @@ pub struct StoredCredential {
     pub username: String,
     pub avatar_url: String,
     pub connected_at: String,
+    pub web_origin: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -35,6 +36,7 @@ pub struct ConnectedAccount {
     pub username: String,
     pub avatar_url: String,
     pub connected_at: String,
+    pub web_origin: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]

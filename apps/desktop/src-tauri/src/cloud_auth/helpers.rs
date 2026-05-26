@@ -1,4 +1,4 @@
-use crate::cloud_auth::types::{DeviceAuthChallenge, StoredCredential};
+use crate::cloud_auth::types::DeviceAuthChallenge;
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager};
 

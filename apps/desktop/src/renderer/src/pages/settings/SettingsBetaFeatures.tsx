@@ -65,6 +65,10 @@ export const SettingsBetaFeatures: React.FC = () => {
 
   return (
     <div className="hp-settings-page">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: 'rgba(234, 88, 12, 0.08)', border: '1px solid rgba(234, 88, 12, 0.25)', borderRadius: 6, fontSize: 12, color: 'var(--orange, #ea580c)', marginBottom: 16 }}>
+        <span className="codicon codicon-warning" />
+        Beta feature selections are saved locally. Enable them only for local experimentation.
+      </div>
       {error && (
         <div className="hp-status-alert error" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: 'rgba(248, 81, 73, 0.1)', border: '1px solid var(--red)', borderRadius: 6, fontSize: 13, color: 'var(--red)', marginBottom: 16 }}>
           <span className="codicon codicon-error" />

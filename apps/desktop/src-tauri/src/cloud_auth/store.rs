@@ -112,6 +112,7 @@ impl CredentialStore for EncryptedFileStore {
                             username: cred.username,
                             avatar_url: cred.avatar_url,
                             connected_at: cred.connected_at,
+                            web_origin: cred.web_origin,
                         });
                     }
                 }
@@ -138,6 +139,7 @@ mod tests {
             username: format!("user_{}", provider),
             avatar_url: format!("https://example.com/{}.png", provider),
             connected_at: "2026-05-02T12:00:00Z".to_string(),
+            web_origin: None,
         }
     }
 
