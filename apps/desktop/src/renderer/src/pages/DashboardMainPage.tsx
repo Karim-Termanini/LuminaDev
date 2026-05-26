@@ -223,12 +223,12 @@ export function DashboardMainPage(): ReactElement {
         description: `Custom environment based on ${preset?.title || p.baseTemplate}.`,
         icon: preset?.icon || 'blank',
         accent: preset?.accent || 'var(--text-muted)',
-        status: 'live' as const,
+        status: 'live' as ProfileDef['status'],
         isCustom: true,
         baseTemplate: p.baseTemplate,
       }
     })
-    return [...customDefs, ...PRESET_PROFILES]
+    return customDefs
   }, [customProfiles])
 
   const refresh = useCallback(async () => {
@@ -652,7 +652,7 @@ export function DashboardMainPage(): ReactElement {
               <div style={{ marginTop: 20, padding: '16px 20px', borderRadius: 10, background: 'rgba(0,0,0,0.35)', border: `1px solid ${selectedProfile.accent}44` }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                   <span style={{ fontSize: 13, fontWeight: 600, color: selectedProfile.accent }}>{swState.step || 'Starting...'}</span>
-                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{swState.progress}%</span>
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{Math.round(swState.progress)}%</span>
                 </div>
                 <div style={{ width: '100%', height: 4, background: 'rgba(255,255,255,0.08)', borderRadius: 2, overflow: 'hidden' }}>
                   <div style={{ width: `${swState.progress}%`, height: '100%', background: selectedProfile.accent, borderRadius: 2, transition: 'width 0.4s ease-out', boxShadow: `0 0 8px ${selectedProfile.accent}80` }} />
@@ -877,6 +877,11 @@ export function DashboardMainPage(): ReactElement {
           Profiles
         </h3>
         <div className="profile-list">
+          {allProfiles.length === 0 && (
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0, lineHeight: 1.5 }}>
+              No profiles yet. Go to <strong>Profiles</strong> to create one.
+            </p>
+          )}
           {allProfiles.map((prof) => (
             <button
               key={prof.name}
