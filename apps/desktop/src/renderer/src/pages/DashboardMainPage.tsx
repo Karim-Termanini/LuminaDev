@@ -118,6 +118,8 @@ export function DashboardMainPage(): ReactElement {
   const [toast, setToast] = useState<Toast | null>(null)
   const [profileLayout, setProfileLayout] = useState<DashboardLayoutFile | null>(null)
   const [isSwitching, setIsSwitching] = useState(false)
+  const [switchStep, setSwitchStep] = useState('')
+  const [switchProgress, setSwitchProgress] = useState(0)
   const [activeProfile, setActiveProfile] = useState<string | null>(null)
   const [selectedProfileName, setSelectedProfileName] = useState<string | null>(null)
   const [customProfiles, setCustomProfiles] = useState<CustomProfileEntry[]>([])
@@ -152,6 +154,15 @@ export function DashboardMainPage(): ReactElement {
         const next = [...prev.slice(-49), event.payload]
         return next
       })
+    }).then(fn => { unlisten = fn })
+    return () => { if (unlisten) unlisten() }
+  }, [])
+
+  useEffect(() => {
+    let unlisten: () => void;
+    listen<{ step: string; progress: number }>('profile-switch-progress', (event) => {
+      setSwitchStep(event.payload.step)
+      setSwitchProgress(event.payload.progress)
     }).then(fn => { unlisten = fn })
     return () => { if (unlisten) unlisten() }
   }, [])
@@ -483,13 +494,16 @@ export function DashboardMainPage(): ReactElement {
     if (!selectedProfileName) return
     setConfirmModalOpen(false)
     setIsSwitching(true)
+    setSwitchStep('Starting...')
+    setSwitchProgress(0)
     const isRestart = activeProfile === selectedProfileName
     setToast({ type: 'success', message: isRestart ? `Restarting ${selectedProfileName}…` : `Switching to ${selectedProfileName}…` })
-    
-    // If it's a restart, we switch from activeProfile to activeProfile
+
     window.dh.profileSwitch({ from: (activeProfile as ComposeProfile) ?? undefined, to: selectedProfileName as ComposeProfile }).then((r) => {
 
       setIsSwitching(false)
+      setSwitchStep('')
+      setSwitchProgress(0)
       if (r.ok) {
         window.dh.storeSet({ key: 'active_profile', data: selectedProfileName }).then(() => {
           setActiveProfile(selectedProfileName)
@@ -506,6 +520,8 @@ export function DashboardMainPage(): ReactElement {
       }
     }).catch((e) => {
       setIsSwitching(false)
+      setSwitchStep('')
+      setSwitchProgress(0)
       const errMsg = e instanceof Error ? e.message : String(e)
       setToast({ type: 'error', message: errMsg })
     })
@@ -613,6 +629,18 @@ export function DashboardMainPage(): ReactElement {
                       : 'INITIALIZE'}
               </button>
             </div>
+
+            {isSwitching && (
+              <div style={{ marginTop: 20, padding: '16px 20px', borderRadius: 10, background: 'rgba(0,0,0,0.35)', border: `1px solid ${selectedProfile.accent}44` }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: selectedProfile.accent }}>{switchStep || 'Starting...'}</span>
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{switchProgress}%</span>
+                </div>
+                <div style={{ width: '100%', height: 4, background: 'rgba(255,255,255,0.08)', borderRadius: 2, overflow: 'hidden' }}>
+                  <div style={{ width: `${switchProgress}%`, height: '100%', background: selectedProfile.accent, borderRadius: 2, transition: 'width 0.4s ease-out', boxShadow: `0 0 8px ${selectedProfile.accent}80` }} />
+                </div>
+              </div>
+            )}
 
             {/* Section 2: System Metrics (Live) - Moved Up */}
             {activeProfile === selectedProfileName && m && (

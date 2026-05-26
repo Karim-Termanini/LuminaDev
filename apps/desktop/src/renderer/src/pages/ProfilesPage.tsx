@@ -817,10 +817,26 @@ export function ProfilesPage(): ReactElement {
                           style={{ fontFamily: 'monospace', width: '100%' }}
                         />
                         {wizardData.sshKeyId && profiles.find((p, idx) => p.sshKeyId === wizardData.sshKeyId && idx !== editingProfileIdx) && (
-                          <p style={{ margin: '6px 0 0', fontSize: 12, color: 'var(--yellow)', display: 'flex', alignItems: 'center', gap: 4 }}>
-                            <span className="codicon codicon-warning" />
-                            Warning: This SSH key ID is already in use by profile: "{profiles.find((p, idx) => p.sshKeyId === wizardData.sshKeyId && idx !== editingProfileIdx)?.name}"
-                          </p>
+                          <div style={{ marginTop: 8, padding: '10px 12px', borderRadius: 8, background: 'rgba(255,180,0,0.08)', border: '1px solid rgba(255,180,0,0.25)' }}>
+                            <p style={{ margin: '0 0 8px', fontSize: 12, color: 'var(--yellow)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                              <span className="codicon codicon-warning" />
+                              This SSH key is already used by profile "{profiles.find((p, idx) => p.sshKeyId === wizardData.sshKeyId && idx !== editingProfileIdx)?.name}". Each profile should have its own key.
+                            </p>
+                            <button
+                              type="button"
+                              className="dev-home-btn"
+                              style={{ fontSize: 12, padding: '6px 12px', margin: 0 }}
+                              onClick={async () => {
+                                const safeName = `id_ed25519_${wizardData.name.trim().replace(/[^a-z0-9]/gi, '_').toLowerCase() || 'profile'}`;
+                                const res = await window.dh.sshGenerate({ target: 'host', keyName: safeName });
+                                if (res.ok && res.keyName) {
+                                  setWizardData({ ...wizardData, sshKeyId: res.keyName });
+                                }
+                              }}
+                            >
+                              Generate fresh key for this profile
+                            </button>
+                          </div>
                         )}
                       </div>
 
