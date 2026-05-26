@@ -228,7 +228,9 @@ export function DashboardMainPage(): ReactElement {
         baseTemplate: p.baseTemplate,
       }
     })
-    return customDefs
+    if (customDefs.length > 0) return customDefs
+    // Fallback until the user creates and switches to a real profile
+    return [{ name: 'empty', title: 'Empty Minimal', description: 'Create a profile in the Profiles page to get started.', icon: 'blank', accent: 'var(--text-muted)', status: 'live' as ProfileDef['status'], isCustom: false, baseTemplate: 'empty' }]
   }, [customProfiles])
 
   const refresh = useCallback(async () => {
