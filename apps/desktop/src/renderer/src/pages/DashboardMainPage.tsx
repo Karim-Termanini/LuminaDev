@@ -285,7 +285,7 @@ export function DashboardMainPage(): ReactElement {
   // Fetch layout for selected profile
   useEffect(() => {
     if (selectedProfileName) {
-      window.dh.layoutGet({ profile: selectedProfileName }).then((res) => {
+      window.dh.layoutGet().then((res) => {
         if (res.ok && res.layout) {
           setProfileLayout(res.layout)
         } else {
@@ -630,17 +630,16 @@ export function DashboardMainPage(): ReactElement {
               <div style={{ marginTop: 32 }}>
                 <DashboardWidgetDeck
                   layout={profileLayout}
-                  onRemove={async (instanceId) => {
+                  onRemove={(instanceId) => {
                     const next = {
                       ...profileLayout,
                       placements: profileLayout.placements.filter((p) => p.instanceId !== instanceId)
                     }
-                    const res = await window.dh.layoutSet({ profile: selectedProfileName, layout: next })
-                    if (res.ok) {
-                      setProfileLayout(next)
-                    }
+                    window.dh.layoutSet({ profile: selectedProfileName, layout: next }).then((res) => {
+                      if (res.ok) setProfileLayout(next)
+                    })
                   }}
-                  onReorder={async (fromId, toId) => {
+                  onReorder={(fromId, toId) => {
                     const fromIdx = profileLayout.placements.findIndex((p) => p.instanceId === fromId)
                     const toIdx = profileLayout.placements.findIndex((p) => p.instanceId === toId)
                     if (fromIdx === -1 || toIdx === -1) return
@@ -648,12 +647,10 @@ export function DashboardMainPage(): ReactElement {
                     const [moved] = nextPlacements.splice(fromIdx, 1)
                     nextPlacements.splice(toIdx, 0, moved)
                     const next = { ...profileLayout, placements: nextPlacements }
-                    const res = await window.dh.layoutSet({ profile: selectedProfileName, layout: next })
-                    if (res.ok) {
-                      setProfileLayout(next)
-                    }
+                    window.dh.layoutSet({ profile: selectedProfileName, layout: next }).then((res) => {
+                      if (res.ok) setProfileLayout(next)
+                    })
                   }}
-                  onAddClick={() => setPickerOpen(true)}
                   density="comfortable"
                   heading="Profile Pinned Widgets"
                 />
