@@ -432,6 +432,23 @@ export function ProfilesPage(): ReactElement {
                       ) : (
                         <p className="row-subtitle" style={{ fontSize: 11, marginTop: 2, color: 'var(--text-muted)', fontStyle: 'italic' }}>No project linked</p>
                       )}
+                      {/* Description */}
+                      {p.description && (
+                        <p className="row-subtitle" style={{ fontSize: 12, marginTop: 2, color: 'var(--text-muted)', fontStyle: 'italic', maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {p.description}
+                        </p>
+                      )}
+                      {/* Tags */}
+                      {(p.tags ?? []).length > 0 && (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
+                          {(p.tags ?? []).map((tag) => (
+                            <span key={tag} style={{
+                              fontSize: 10, padding: '1px 7px', borderRadius: 12, fontWeight: 600,
+                              background: 'rgba(124,77,255,0.1)', border: '1px solid rgba(124,77,255,0.2)', color: 'var(--text-muted)',
+                            }}>{tag}</span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -441,6 +458,21 @@ export function ProfilesPage(): ReactElement {
                   </div>
 
                   <div className="row-actions">
+                    {/* Compose variant toggle */}
+                    <button
+                      type="button"
+                      className="row-btn"
+                      title={`Switch to ${(p.composeVariant ?? 'stub') === 'stub' ? 'full' : 'stub'} compose stack`}
+                      onClick={() => {
+                        const next = profiles.map((prof, pi) =>
+                          pi === i ? { ...prof, composeVariant: ((prof.composeVariant ?? 'stub') === 'stub' ? 'full' : 'stub') as 'stub' | 'full' } : prof
+                        )
+                        void save(next, `"${p.name}" switched to ${(p.composeVariant ?? 'stub') === 'stub' ? 'full' : 'stub'} stack.`)
+                      }}
+                    >
+                      <span className="codicon codicon-layers" style={{ marginRight: 4 }} />
+                      {(p.composeVariant ?? 'stub') === 'stub' ? 'STUB' : 'FULL'}
+                    </button>
                     {activeProfileTemplate !== p.baseTemplate && (
                       <button type="button" className="row-btn" title="Set as active profile in Dashboard" onClick={() => void setAsActive(p.baseTemplate)}>
                         <span className="codicon codicon-check" style={{ marginRight: 4 }} />Set Active
