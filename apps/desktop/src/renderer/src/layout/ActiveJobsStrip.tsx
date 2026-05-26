@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from 'react'
 
 export function ActiveJobsStrip(): ReactElement {
   const [jobs, setJobs] = useState<JobSummary[]>([])
-  const [busy, setBusy] = useState(false)
 
   const refresh = useCallback(async () => {
     try {
@@ -20,16 +19,6 @@ export function ActiveJobsStrip(): ReactElement {
     const id = setInterval(() => void refresh(), 2000)
     return () => clearInterval(id)
   }, [refresh])
-
-  async function startDemo(): Promise<void> {
-    setBusy(true)
-    try {
-      await window.dh.jobStart({ kind: 'demo_countdown', durationMs: 5000 })
-      await refresh()
-    } finally {
-      setBusy(false)
-    }
-  }
 
   async function cancelJob(jobId: string): Promise<void> {
     await window.dh.jobCancel({ id: jobId })

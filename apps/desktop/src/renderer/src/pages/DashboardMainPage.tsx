@@ -122,15 +122,16 @@ export function DashboardMainPage(): ReactElement {
     return () => { unsub(); if (unlisten) unlisten() }
   }, [])
 
-  // Slow ticker: while switch active and progress stuck between 65-95, nudge +0.3% every 800ms
+  // Slow ticker: while switch active and progress stuck between 65-95, nudge +0.4% every 800ms
+  const shouldNudge = swState.active && swState.progress >= 60 && swState.progress < 95
   useEffect(() => {
-    if (!swState.active || swState.progress >= 95 || swState.progress < 60) return
+    if (!shouldNudge) return
     const t = setInterval(() => {
       if (_sw.progress >= 95 || !_sw.active) { clearInterval(t); return }
       _swSet({ progress: Math.min(95, _sw.progress + 0.4) })
     }, 800)
     return () => clearInterval(t)
-  }, [swState.active, swState.progress >= 60])
+  }, [shouldNudge])
 
   useEffect(() => {
     let interval: any;
@@ -525,7 +526,7 @@ export function DashboardMainPage(): ReactElement {
     if (selectedProfile && selectedProfileName !== selectedProfile.name) {
       setSelectedProfileName(selectedProfile.name)
     }
-  }, [selectedProfile?.name, selectedProfileName])
+  }, [selectedProfile, selectedProfileName])
   const m = snap?.metrics
   const ramUsedPct = useMemo(() => {
     if (!m || m.totalMemMb <= 0) return 0
