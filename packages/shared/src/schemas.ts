@@ -114,6 +114,9 @@ export const ProfileCredentialSchema = z.object({
 export const CustomProfileEntrySchema = z.object({
   name: z.string().trim().min(1).max(128),
   baseTemplate: ComposeProfileSchema,
+  description: z.string().max(500).optional(),
+  tags: z.array(z.string().trim().min(1).max(32)).max(10).optional(),
+  composeVariant: z.enum(['stub', 'full']).optional(),
   envVars: z.array(ProfileEnvVarSchema).max(100).optional(),
   sshKeyId: z.string().trim().min(1).max(128).optional(),
   credentialIds: z.array(z.string().trim().min(1).max(128)).max(50).optional(),
