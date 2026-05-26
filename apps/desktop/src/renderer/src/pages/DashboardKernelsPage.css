@@ -1,159 +1,18 @@
-/* Dashboard Kernels Page — Premium Glassmorphic */
+/* Dashboard Kernels Page — uses theme-elevated.css design system */
 @import '../theme/theme-elevated.css';
 
 .kernels-page {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-  max-width: 1040px;
-  padding-inline: 4px;
+  max-width: 920px;
 }
 
-/* ── Hero ── */
-.kernels-hero {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 16px;
-  flex-wrap: wrap;
-}
-
-.kernels-hero-eyebrow {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  color: var(--accent);
-  margin-bottom: 8px;
-}
-
-.kernels-hero-title {
-  margin: 0 0 6px;
-  font-size: 28px;
-  font-weight: 800;
-  color: var(--text);
-  line-height: 1.1;
-}
-
-.kernels-hero-subtitle {
-  margin: 0;
-  font-size: 14px;
-  color: var(--text-muted);
-  line-height: 1.5;
-}
-
-.kernels-hero-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-shrink: 0;
-}
-
-.kernels-last-updated {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--text-muted);
-  white-space: nowrap;
-}
-
-/* ── Section Label ── */
-.kernels-section-label {
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--text-muted);
-  margin-bottom: 12px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.kernels-section-label::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: color-mix(in srgb, var(--border) 60%, transparent);
-}
-
-/* ── Service Cards Grid ── */
+/* Services grid matching elevated-tile layout */
 .kernels-services-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 14px;
-}
-
-.kernels-service-card {
-  background: color-mix(in srgb, var(--bg-widget) 80%, transparent);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  border: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
-  border-radius: 14px;
-  padding: 18px 20px;
-  display: flex;
-  flex-direction: column;
   gap: 10px;
-  transition: all 0.2s ease;
-  position: relative;
-  overflow: hidden;
 }
 
-.kernels-service-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: var(--card-accent, transparent);
-  border-radius: 14px 14px 0 0;
-}
-
-.kernels-service-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-  border-color: color-mix(in srgb, var(--border) 80%, transparent);
-}
-
-.kernels-service-card-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.kernels-service-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 18px;
-  background: color-mix(in srgb, var(--bg-input) 80%, transparent);
-  border: 1px solid color-mix(in srgb, var(--border) 40%, transparent);
-  color: var(--text-muted);
-  flex-shrink: 0;
-}
-
-.kernels-service-name {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--text-muted);
-}
-
-.kernels-service-value {
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--text);
-  line-height: 1.2;
-  word-break: break-word;
-}
-
+/* Status dot on service tiles */
 .kernels-status-dot {
   width: 8px;
   height: 8px;
@@ -161,97 +20,35 @@
   flex-shrink: 0;
 }
 
-/* ── Security Section ── */
-.kernels-security-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 12px;
-}
-
-.kernels-security-item {
-  background: color-mix(in srgb, var(--bg-widget) 80%, transparent);
-  backdrop-filter: blur(12px);
-  border: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
-  border-radius: 12px;
-  padding: 14px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  transition: all 0.2s ease;
-}
-
-.kernels-security-item:hover {
-  border-color: color-mix(in srgb, var(--border) 90%, transparent);
-}
-
-.kernels-security-label {
-  font-size: 11px;
-  color: var(--text-muted);
-  font-weight: 600;
-}
-
-.kernels-security-value {
-  font-size: 14px;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-/* ── Risky Ports Warning ── */
-.kernels-risky-ports {
+/* Security audit row inside elevated-card */
+.kernels-sec-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  justify-content: space-between;
   padding: 14px 18px;
-  background: color-mix(in srgb, var(--red) 8%, transparent);
-  border: 1px solid color-mix(in srgb, var(--red) 25%, transparent);
-  border-radius: 12px;
+  gap: 12px;
+  transition: background 0.15s ease;
 }
 
-/* ── Buttons ── */
-.kernels-page .hp-btn {
-  padding: 8px 16px;
-  font-size: 12px;
-  font-weight: 600;
-  border: 1px solid var(--border);
-  background: color-mix(in srgb, var(--bg-input) 90%, transparent);
-  color: var(--text);
-  cursor: pointer;
-  border-radius: 8px;
-  transition: all 0.2s ease;
-  display: flex;
+.kernels-sec-row:hover {
+  background: color-mix(in srgb, var(--bg-input) 50%, transparent);
+}
+
+/* Badge for security status */
+.kernels-sec-badge {
+  display: inline-flex;
   align-items: center;
   gap: 6px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  font-family: var(--font-mono);
+  white-space: nowrap;
 }
 
-.kernels-page .hp-btn:hover:not(:disabled) {
-  border-color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 10%, transparent);
-  color: var(--accent);
-}
-
-.kernels-page .hp-btn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-/* ── Light theme ── */
-[data-theme="light"] .kernels-service-card,
-[data-theme="light"] .kernels-security-item {
-  background: rgba(255, 255, 255, 0.88);
-  border-color: rgba(196, 199, 204, 0.6);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-}
-
-[data-theme="light"] .kernels-service-card:hover,
-[data-theme="light"] .kernels-security-item:hover {
-  background: #ffffff;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.07);
-}
-
-@media (max-width: 700px) {
-  .kernels-services-grid,
-  .kernels-security-grid {
-    grid-template-columns: 1fr 1fr;
-  }
+/* Light theme */
+[data-theme="light"] .kernels-sec-row:hover {
+  background: rgba(0, 0, 0, 0.025);
 }
