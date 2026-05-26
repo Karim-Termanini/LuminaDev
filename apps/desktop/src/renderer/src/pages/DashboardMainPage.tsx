@@ -17,6 +17,19 @@ import { AddWidgetModal } from '../dashboard/AddWidgetModal'
 
 import './DashboardPage.css'
 
+// Module-level switch state survives navigation (component unmount/remount)
+const _sw = { active: false, step: '', progress: 0, targetProfile: '' }
+let _swListeners: Array<() => void> = []
+function _swNotify() { _swListeners.forEach(fn => fn()) }
+function _swSet(patch: Partial<typeof _sw>) {
+  Object.assign(_sw, patch)
+  _swNotify()
+}
+function _swSubscribe(fn: () => void) {
+  _swListeners.push(fn)
+  return () => { _swListeners = _swListeners.filter(l => l !== fn) }
+}
+
 // Mock data generators
 function generateActivityData(profileName: string): Array<{ label: string; cpu: number; ram: number }> {
   const seed = profileName.charCodeAt(0) + profileName.charCodeAt(profileName.length - 1)
@@ -117,9 +130,7 @@ export function DashboardMainPage(): ReactElement {
   const [snap, setSnap] = useState<HostMetricsResponse | null>(null)
   const [toast, setToast] = useState<Toast | null>(null)
   const [profileLayout, setProfileLayout] = useState<DashboardLayoutFile | null>(null)
-  const [isSwitching, setIsSwitching] = useState(false)
-  const [switchStep, setSwitchStep] = useState('')
-  const [switchProgress, setSwitchProgress] = useState(0)
+  const [swState, setSwState] = useState({ active: _sw.active, step: _sw.step, progress: _sw.progress, targetProfile: _sw.targetProfile })
   const [activeProfile, setActiveProfile] = useState<string | null>(null)
   const [selectedProfileName, setSelectedProfileName] = useState<string | null>(null)
   const [customProfiles, setCustomProfiles] = useState<CustomProfileEntry[]>([])
@@ -159,13 +170,26 @@ export function DashboardMainPage(): ReactElement {
   }, [])
 
   useEffect(() => {
+    // Sync from module singleton on mount (survives navigation)
+    const unsub = _swSubscribe(() => setSwState({ ..._sw }))
+    setSwState({ ..._sw })
+
     let unlisten: () => void;
     listen<{ step: string; progress: number }>('profile-switch-progress', (event) => {
-      setSwitchStep(event.payload.step)
-      setSwitchProgress(event.payload.progress)
+      _swSet({ step: event.payload.step, progress: event.payload.progress })
     }).then(fn => { unlisten = fn })
-    return () => { if (unlisten) unlisten() }
+    return () => { unsub(); if (unlisten) unlisten() }
   }, [])
+
+  // Slow ticker: while switch active and progress stuck between 65-95, nudge +0.3% every 800ms
+  useEffect(() => {
+    if (!swState.active || swState.progress >= 95 || swState.progress < 60) return
+    const t = setInterval(() => {
+      if (_sw.progress >= 95 || !_sw.active) { clearInterval(t); return }
+      _swSet({ progress: Math.min(95, _sw.progress + 0.4) })
+    }, 800)
+    return () => clearInterval(t)
+  }, [swState.active, swState.progress >= 60])
 
   useEffect(() => {
     let interval: any;
@@ -493,17 +517,13 @@ export function DashboardMainPage(): ReactElement {
   function handleConfirmSwitch(): void {
     if (!selectedProfileName) return
     setConfirmModalOpen(false)
-    setIsSwitching(true)
-    setSwitchStep('Starting...')
-    setSwitchProgress(0)
+    _swSet({ active: true, step: 'Starting...', progress: 0, targetProfile: selectedProfileName ?? '' })
     const isRestart = activeProfile === selectedProfileName
     setToast({ type: 'success', message: isRestart ? `Restarting ${selectedProfileName}…` : `Switching to ${selectedProfileName}…` })
 
     window.dh.profileSwitch({ from: (activeProfile as ComposeProfile) ?? undefined, to: selectedProfileName as ComposeProfile }).then((r) => {
 
-      setIsSwitching(false)
-      setSwitchStep('')
-      setSwitchProgress(0)
+      _swSet({ active: false, step: '', progress: 0, targetProfile: '' })
       if (r.ok) {
         window.dh.storeSet({ key: 'active_profile', data: selectedProfileName }).then(() => {
           setActiveProfile(selectedProfileName)
@@ -519,9 +539,7 @@ export function DashboardMainPage(): ReactElement {
         setToast({ type: 'error', message: humanizeProfileError(errMsg) })
       }
     }).catch((e) => {
-      setIsSwitching(false)
-      setSwitchStep('')
-      setSwitchProgress(0)
+      _swSet({ active: false, step: '', progress: 0, targetProfile: '' })
       const errMsg = e instanceof Error ? e.message : String(e)
       setToast({ type: 'error', message: errMsg })
     })
@@ -598,7 +616,7 @@ export function DashboardMainPage(): ReactElement {
               <button
                 type="button"
                 onClick={() => setConfirmModalOpen(true)}
-                disabled={selectedProfile.status === 'planned' || isSwitching || activeProfile === selectedProfileName}
+                disabled={selectedProfile.status === 'planned' || (swState.active && swState.targetProfile === selectedProfileName) || activeProfile === selectedProfileName}
                 style={{
                   padding: '12px 24px',
                   borderRadius: 8,
@@ -611,15 +629,15 @@ export function DashboardMainPage(): ReactElement {
                   color: '#fff',
                   fontWeight: 600,
                   fontSize: 15,
-                  cursor: selectedProfile.status === 'planned' || isSwitching || activeProfile === selectedProfileName ? 'default' : 'pointer',
-                  opacity: selectedProfile.status === 'planned' || activeProfile === selectedProfileName ? 0.6 : isSwitching ? 0.8 : 1,
+                  cursor: selectedProfile.status === 'planned' || (swState.active && swState.targetProfile === selectedProfileName) || activeProfile === selectedProfileName ? 'default' : 'pointer',
+                  opacity: selectedProfile.status === 'planned' || activeProfile === selectedProfileName ? 0.6 : (swState.active && swState.targetProfile === selectedProfileName) ? 0.8 : 1,
                   display: 'flex',
                   alignItems: 'center',
                   gap: 8,
                   transition: 'all 0.2s ease',
                 }}
               >
-                {isSwitching && <span className="codicon codicon-loading" style={{ animation: 'spin 1s linear infinite' }} />}
+                {swState.active && swState.targetProfile === selectedProfileName && <span className="codicon codicon-loading" style={{ animation: 'spin 1s linear infinite' }} />}
                 {selectedProfile.status === 'planned'
                   ? 'COMING SOON'
                   : activeProfile === selectedProfileName
@@ -630,14 +648,14 @@ export function DashboardMainPage(): ReactElement {
               </button>
             </div>
 
-            {isSwitching && (
+            {swState.active && swState.targetProfile === selectedProfileName && (
               <div style={{ marginTop: 20, padding: '16px 20px', borderRadius: 10, background: 'rgba(0,0,0,0.35)', border: `1px solid ${selectedProfile.accent}44` }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: selectedProfile.accent }}>{switchStep || 'Starting...'}</span>
-                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{switchProgress}%</span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: selectedProfile.accent }}>{swState.step || 'Starting...'}</span>
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{swState.progress}%</span>
                 </div>
                 <div style={{ width: '100%', height: 4, background: 'rgba(255,255,255,0.08)', borderRadius: 2, overflow: 'hidden' }}>
-                  <div style={{ width: `${switchProgress}%`, height: '100%', background: selectedProfile.accent, borderRadius: 2, transition: 'width 0.4s ease-out', boxShadow: `0 0 8px ${selectedProfile.accent}80` }} />
+                  <div style={{ width: `${swState.progress}%`, height: '100%', background: selectedProfile.accent, borderRadius: 2, transition: 'width 0.4s ease-out', boxShadow: `0 0 8px ${selectedProfile.accent}80` }} />
                 </div>
               </div>
             )}
