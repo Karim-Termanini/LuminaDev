@@ -659,19 +659,19 @@ export function DockerPage(): ReactElement {
   return (
     <div className="docker-page elevated-page">
       <div className="docker-hero">
-        <div className="docker-hero-eyebrow">Docker.Surface</div>
-        <h1 className="docker-hero-title">Docker</h1>
+        <div className="docker-hero-eyebrow">{t('page.label')}</div>
+        <h1 className="docker-hero-title">{t('page.title')}</h1>
         <p className="docker-hero-subtitle">
-          Full Docker surface from one click UI: containers, images, volumes, networks, and cleanup.
+          {t('page.desc')}
         </p>
       </div>
 
       <div className="docker-toolbar">
         <button type="button" className="hp-btn" onClick={() => void refreshAll()} disabled={busy || refreshing}>
-          {refreshing ? 'Refreshing…' : 'Refresh'}
+          {refreshing ? t('toolbar.refreshing') : t('toolbar.refresh')}
         </button>
         <button type="button" className="hp-btn" style={btnWarn} onClick={() => void runPrune()} disabled={busy}>
-          Cleanup unused (prune)
+          {t('toolbar.pruneAll')}
         </button>
         <button
           type="button"
@@ -685,7 +685,7 @@ export function DockerPage(): ReactElement {
             setShowInstallModal(true)
           }}
         >
-          Install / Setup
+          {t('toolbar.installSetup')}
         </button>
         <span className="docker-toolbar-stats">
           {docker?.ok
