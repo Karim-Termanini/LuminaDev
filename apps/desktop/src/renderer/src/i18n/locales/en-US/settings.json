@@ -4,7 +4,7 @@
   "languages.displayLanguage": "Display language",
   "languages.english": "English",
   "languages.german": "German",
-  "languages.arabic": "Arabic (Beta)",
+  "languages.arabic": "Arabic",
   "languages.restartNote": "Language change takes effect immediately.",
   "accounts.description": "GitHub supports device flow or a PAT; GitLab uses a personal access token only. Manage accounts on the Cloud Git page.",
   "accounts.loading": "Loading\u2026",
