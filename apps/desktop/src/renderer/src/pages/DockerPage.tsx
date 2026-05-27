@@ -1021,7 +1021,7 @@ export function DockerPage(): ReactElement {
                         setPullImage(img)
                         void pullCustomImage(img)
                       }} disabled={busy}>
-                      {t('action.download')}
+                      {t('create.pullImage')}
                     </button>
                   </div>
                 ))}
