@@ -1,28 +1,26 @@
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::ffi::OsStr;
-use std::io::{Read, Write};
 use std::path::Path;
 use std::process::Stdio;
-use std::sync::{Arc, Mutex as StdMutex, OnceLock};
-use std::time::{Duration, Instant};
-use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
+use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
 use tokio::process::Command;
-use tokio::sync::Mutex;
 use uuid::Uuid;
 
 mod project_scaffold;
+mod state;
+mod executor;
 mod utils;
 use utils::{
   app_file,
-  docker_prune_preview_payload,
+  find_free_port,
+  is_allowed_store_key,
   is_physical_disk_name,
   now_ms,
   parse_git_remote_fetch_lines,
   parse_porcelain_v1,
-  parse_size_mb,
   read_json,
   sanitize_docker_name,
   shell_quote_value,
@@ -45,7 +43,6 @@ use host_exec::{
   cmd_timeout_ssh,
   exec_output,
   exec_output_limit,
-  exec_result,
   exec_result_limit,
   read_proc_text,
 };
@@ -85,6 +82,10 @@ mod runtime_verify;
 use runtime_verify::runtime_append_verify;
 mod runtime_jobs;
 use runtime_jobs::runtime_job_execute;
+mod terminal_pty;
+mod docker_engine;
+mod compose_engine;
+mod profile_engine;
 mod compose_profiles;
 mod cloud_auth;
 mod profile_credentials;
@@ -97,66 +98,7 @@ use git_vcs_network::{git_network_with_auth, GitNetworkOp};
 mod readiness;
 mod readiness_ipc;
 mod docker_ext;
-use docker_ext::{
-  docker_inspect_invoke,
-  docker_install_invoke,
-  docker_reconfigure_invoke,
-  docker_remap_port_invoke,
-};
 use cloud_auth::CredentialStore;
-
-struct TerminalSession {
-  master: Arc<StdMutex<Box<dyn MasterPty + Send>>>,
-  child: Arc<StdMutex<Box<dyn Child + Send + Sync>>>,
-  writer: Arc<StdMutex<Box<dyn Write + Send>>>,
-}
-
-#[derive(Default)]
-struct AppState {
-  terminals: Mutex<HashMap<String, TerminalSession>>,
-  jobs: Mutex<Vec<Value>>,
-  // (rx_bytes, tx_bytes, instant) for net delta
-  net_prev: Mutex<Option<(u64, u64, std::time::Instant)>>,
-  // (read_kb, write_kb, instant) for disk I/O delta
-  disk_prev: Mutex<Option<(u64, u64, std::time::Instant)>>,
-  // (total_ticks, idle_ticks, instant) for CPU delta
-  cpu_prev: Mutex<Option<(u64, u64, std::time::Instant)>>,
-}
-
-fn is_allowed_store_key(key: &str) -> bool {
-  const ALLOWED_KEYS: &[&str] = &[
-    "custom_profiles",
-    "wizard_state",
-    "ssh_bookmarks",
-    "maintenance_state",
-    "active_profile",
-    "on_login_automation",
-    "appearance",
-    "cloud_oauth_clients",
-    "readiness_wizard_complete",
-    "general_settings",
-    "update_settings",
-    "profile_credentials",
-    "onboarding_profile",
-    "projects_home_dir",
-    "resources_settings",
-    "app_engine_settings",
-    "builder_settings",
-    "beta_features_state",
-    "notification_settings",
-    "shortcuts_settings",
-    "datetime_settings",
-    "language_settings",
-  ];
-  const DYNAMIC_PREFIXES: &[&str] = &[
-    "project_dir_",
-    "python_version_",
-    "postgres_version_",
-    "node_version_",
-  ];
-  ALLOWED_KEYS.contains(&key) || DYNAMIC_PREFIXES.iter().any(|prefix| key.starts_with(prefix))
-}
-
 
 fn read_cloud_oauth_store_overrides(app: &AppHandle) -> (Option<String>, Option<String>) {
   let Ok(path) = app_file(app, "store.json") else {
@@ -178,331 +120,6 @@ fn read_cloud_oauth_store_overrides(app: &AppHandle) -> (Option<String>, Option<
     .filter(|s| !s.is_empty());
   (gh, gl)
 }
-
-fn get_resource_limits(app: &tauri::AppHandle) -> (usize, usize, u64) {
-  let mut cpu_limit = 80;
-  let mut ram_limit_mb = 4096;
-  if let Ok(store_path) = app_file(app, "store.json") {
-    let store = read_json(&store_path);
-    if let Some(res) = store.get("resources_settings") {
-      if let Some(cpu) = res.get("cpuLimitPercent").and_then(|v| v.as_u64()) {
-        cpu_limit = cpu;
-      }
-      if let Some(ram) = res.get("ramLimitMb").and_then(|v| v.as_u64()) {
-        ram_limit_mb = ram;
-      }
-    }
-  }
-  let cores = std::thread::available_parallelism()
-    .map(|n| n.get())
-    .unwrap_or(4);
-  let limit_cores = utils::calculate_limit_cores(cores, cpu_limit);
-  (limit_cores, cores, ram_limit_mb)
-}
-
-/// Run a bootstrap script without elevation (writes under $HOME only).
-// Streaming user-shell install step — identical progress logic to sudo_bash_install_step
-// but runs as the user (no sudo/pkexec). Streams stdout+stderr live so the UI
-// shows real output while the installer is running.
-async fn runtime_bash_user_step(
-  cmd: &str,
-  logs: &mut Vec<String>,
-  app: Option<tauri::AppHandle>,
-  job_id: Option<String>,
-  base_progress: u32,
-  step_weight: u32,
-) -> Result<(), String> {
-  let mut cmd_builder = Command::new("nice");
-  cmd_builder
-    .arg("-n")
-    .arg("19")
-    .arg("bash")
-    .arg("-c")
-    .env_remove("npm_config_prefix")
-    .env_remove("NPM_CONFIG_PREFIX");
-
-  let mut prefixed_cmd;
-  if let Some(ref app_h) = app {
-    let (limit_cores, cores, ram_limit_mb) = get_resource_limits(app_h);
-    logs.push(format!(
-      "[RESOURCE_ENFORCEMENT] Constraints: CPU Cores = {}/{} (nice 19, CARGO_BUILD_JOBS, MAKEFLAGS), RAM limit = {} MB (ulimit -v + runtime env vars), max processes = 512 (ulimit -u)",
-      limit_cores, cores, ram_limit_mb
-    ));
-    prefixed_cmd = format!(
-      "ulimit -v {} 2>/dev/null; ulimit -u 512 2>/dev/null; ",
-      ram_limit_mb.saturating_mul(1024)
-    );
-    prefixed_cmd.push_str(cmd);
-    cmd_builder
-      .env("CARGO_BUILD_JOBS", limit_cores.to_string())
-      .env("MAKEFLAGS", format!("-j{}", limit_cores))
-      .env("MISE_JOBS", limit_cores.to_string())
-      .env("NODE_OPTIONS", format!("--max-old-space-size={}", ram_limit_mb))
-      .env("GOMEMLIMIT", format!("{}MiB", ram_limit_mb))
-      .env("_JAVA_OPTIONS", format!("-Xmx{}m", ram_limit_mb));
-    cmd_builder.arg(prefixed_cmd.as_str());
-  } else {
-    cmd_builder.arg(cmd);
-  }
-
-  logs.push(format!("RUNNING (user shell, no sudo): {}", cmd));
-
-  let mut child = cmd_builder
-    .stdin(Stdio::null())
-    .stdout(Stdio::piped())
-    .stderr(Stdio::piped())
-    .spawn()
-    .map_err(|e| format!("[RUNTIME_INSTALL_FAILED] spawn: {}", e))?;
-
-  let stdout = child.stdout.take().unwrap();
-  let stderr = child.stderr.take().unwrap();
-  let mut out_reader = tokio::io::BufReader::new(stdout).lines();
-  let mut err_reader = tokio::io::BufReader::new(stderr).lines();
-
-  let mut line_count: u32 = 0;
-  let mut last_explicit_bonus: u32 = 0;
-  let deadline = tokio::time::Instant::now() + cmd_timeout_install_step();
-
-  loop {
-    tokio::select! {
-      res = out_reader.next_line() => {
-        match res {
-          Ok(Some(line)) => {
-            if !line.trim().is_empty() {
-              logs.push(line.clone());
-              line_count += 1;
-            }
-            if let (Some(ref app_h), Some(ref jid)) = (&app, &job_id) {
-              let mut bonus = last_explicit_bonus;
-              if line.contains('%') {
-                if let Some(p_str) = line.split('%').next().and_then(|s| s.split_whitespace().last()) {
-                  if let Ok(p) = p_str.parse::<u32>() {
-                    let explicit = (p * step_weight) / 100;
-                    if explicit > bonus { bonus = explicit; last_explicit_bonus = explicit; }
-                  }
-                }
-              } else if line.contains('/') && (line.contains('(') || line.contains('[')) {
-                if let Some(idx) = line.find('/') {
-                  let before = &line[..idx];
-                  let after  = &line[idx+1..];
-                  let start = before.rfind(|c: char| !c.is_ascii_digit()).map(|i| i+1).unwrap_or(0);
-                  let end   = after.find(|c: char| !c.is_ascii_digit()).unwrap_or(after.len());
-                  let cur   = line[start..idx].trim().parse::<u32>().unwrap_or(0);
-                  let total = line[idx+1..idx+1+end].trim().parse::<u32>().unwrap_or(1);
-                  if let Some(explicit) = (cur * step_weight).checked_div(total) {
-                    if explicit > bonus { bonus = explicit; last_explicit_bonus = explicit; }
-                  }
-                }
-              } else {
-                let heuristic = (line_count * step_weight)
-                  .checked_div(60)
-                  .unwrap_or(0)
-                  .min(step_weight.saturating_sub(2));
-                if heuristic > bonus { bonus = heuristic; }
-              }
-              let prog = (base_progress + bonus).min(base_progress + step_weight.saturating_sub(1));
-              let st = app_h.state::<AppState>();
-              let mut jobs = st.jobs.lock().await;
-              if let Some(j) = jobs.iter_mut().find(|j| j.get("id").and_then(|v| v.as_str()) == Some(jid.as_str())) {
-                let cur_prog = j["progress"].as_u64().unwrap_or(0) as u32;
-                if prog > cur_prog { j["progress"] = json!(prog); }
-              }
-            }
-          }
-          _ => break,
-        }
-      }
-      res = err_reader.next_line() => {
-        if let Ok(Some(line)) = res {
-          if !line.trim().is_empty() { logs.push(line); }
-        }
-      }
-      _ = tokio::time::sleep_until(deadline) => {
-        let _ = child.kill().await;
-        return Err("[RUNTIME_INSTALL_FAILED] [HOST_COMMAND_TIMEOUT] bash -c <runtime-user-step>".to_string());
-      }
-    }
-  }
-
-  match child.wait().await {
-    Ok(s) if s.success() => Ok(()),
-    Ok(_) => {
-      let tail = logs.last()
-        .map(|l| l.as_str()).unwrap_or("non-zero exit").to_string();
-      Err(format!("[RUNTIME_INSTALL_FAILED] {}", tail.trim()))
-    }
-    Err(e) => Err(format!("[RUNTIME_INSTALL_FAILED] wait: {}", e)),
-  }
-}
-
-
-fn resolve_profile_template(app: &tauri::AppHandle, profile: &str) -> String {
-    let profile = profile.trim();
-    if let Ok(store_path) = crate::app_file(app, "store.json") {
-        let store = crate::read_json(&store_path);
-        if let Some(custom_profiles) = store.get("custom_profiles").and_then(|v| v.as_array()) {
-            for p in custom_profiles {
-                if let Some(name) = p.get("name").and_then(|v| v.as_str()) {
-                    if name == profile {
-                        if let Some(base) = p.get("baseTemplate").and_then(|v| v.as_str()) {
-                            return base.to_string();
-                        }
-                    }
-                }
-            }
-        }
-    }
-    profile.to_string()
-}
-
-fn find_free_port(preferred: u16) -> u16 {
-    for port in preferred..preferred.saturating_add(200) {
-        if std::net::TcpListener::bind(("127.0.0.1", port)).is_ok() {
-            return port;
-        }
-    }
-    preferred
-}
-
-fn get_profile_extra_env(app: &tauri::AppHandle, profile: &str) -> std::collections::HashMap<String, String> {
-    let mut env = std::collections::HashMap::new();
-    let template = resolve_profile_template(app, profile);
-    
-    if let Ok(store_path) = crate::app_file(app, "store.json") {
-        let store = crate::read_json(&store_path);
-        
-        let ref_profile = &template;
-        if let Some(py_ver) = store.get(format!("python_version_{}", ref_profile)).and_then(|v| v.as_str()) {
-            if !py_ver.is_empty() {
-                let tag = if py_ver == "latest" { "latest".to_string() } else { format!("python-{}", py_ver) };
-                env.insert("PYTHON_IMAGE_TAG".to_string(), tag);
-            }
-        }
-        if let Some(pg_ver) = store.get(format!("postgres_version_{}", ref_profile)).and_then(|v| v.as_str()) {
-            if !pg_ver.is_empty() {
-                let tag = if pg_ver == "latest" { "latest".to_string() } else { format!("{}-alpine", pg_ver) };
-                env.insert("POSTGRES_IMAGE_TAG".to_string(), tag);
-            }
-        }
-        if let Some(node_ver) = store.get(format!("node_version_{}", ref_profile)).and_then(|v| v.as_str()) {
-            if !node_ver.is_empty() {
-                let tag = if node_ver == "latest" { "alpine".to_string() } else { format!("{}-alpine", node_ver) };
-                env.insert("NODE_IMAGE_TAG".to_string(), tag);
-            }
-        }
-        
-        let proj_dir = store.get(format!("project_dir_{}", profile))
-            .or_else(|| store.get(format!("project_dir_{}", ref_profile)))
-            .and_then(|v| v.as_str());
-        if let Some(dir_str) = proj_dir {
-            if !dir_str.is_empty() {
-                env.insert("PROJECT_DIR".to_string(), dir_str.to_string());
-            }
-        }
-
-        // Pass stored per-profile port assignments to compose
-        for (env_key, store_prefix) in &[
-            ("JUPYTER_PORT", "jupyter_port"),
-            ("POSTGRES_PORT", "postgres_port"),
-            ("NODE_PORT", "node_port"),
-            ("NODE_HMR_PORT", "node_hmr_port"),
-            ("APPIUM_PORT", "appium_port"),
-            ("JSON_SERVER_PORT", "json_server_port"),
-            ("OLLAMA_PORT", "ollama_port"),
-        ] {
-            let store_key = format!("{}_{}", store_prefix, profile);
-            if let Some(val) = store.get(&store_key).and_then(|v| v.as_u64()) {
-                env.insert(env_key.to_string(), val.to_string());
-            }
-        }
-
-        // Load custom profile specific env vars
-        if let Some(custom_profiles) = store.get("custom_profiles").and_then(|v| v.as_array()) {
-            for p in custom_profiles {
-                if let Some(name) = p.get("name").and_then(|v| v.as_str()) {
-                    if name == profile {
-                        if let Some(env_vars) = p.get("envVars").and_then(|v| v.as_array()) {
-                            for ev in env_vars {
-                                if let (Some(k), Some(v)) = (ev.get("key").and_then(|x| x.as_str()), ev.get("value").and_then(|x| x.as_str())) {
-                                    if !k.trim().is_empty() {
-                                        env.insert(k.trim().to_string(), v.to_string());
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-    env
-}
-
-/// `docker compose` in a fixed directory (avoids `bash -lc "cd … && …"`).
-/// When [`compose_profiles::compose_full_overlay_enabled`] is true, prepends `-f docker-compose.yml -f docker-compose.full.yml`.
-async fn exec_docker_compose_in_dir(
-  compose_dir: &Path,
-  compose_subargs: &[&str],
-  limit: Duration,
-  project_name: Option<&str>,
-  extra_env: Option<std::collections::HashMap<String, String>>,
-) -> Result<(String, String), String> {
-  let mut compose_args: Vec<String> = vec!["compose".into(), "-f".into(), "docker-compose.yml".into()];
-  if compose_profiles::compose_full_overlay_enabled(compose_dir) {
-    compose_args.push("-f".into());
-    compose_args.push("docker-compose.full.yml".into());
-  }
-  for a in compose_subargs {
-    compose_args.push((*a).to_string());
-  }
-  let fut = async {
-    let mut cmd = Command::new("docker");
-    cmd.current_dir(compose_dir).args(&compose_args);
-    if let Some(pn) = project_name {
-      let trimmed = pn.trim();
-      if !trimmed.is_empty() {
-        // Docker Compose requires lowercase alphanumeric, hyphens, underscores
-        let sanitized = trimmed
-          .to_lowercase()
-          .chars()
-          .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '-' })
-          .collect::<String>();
-        cmd.env("COMPOSE_PROJECT_NAME", sanitized);
-      }
-    }
-    if let Some(env_map) = extra_env {
-      for (k, v) in env_map {
-        cmd.env(k, v);
-      }
-    }
-    let output = cmd
-      .output()
-      .await
-      .map_err(|e| format!("[EXEC_ERROR] {}", e))?;
-    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-    if output.status.success() {
-      Ok((stdout, stderr))
-    } else {
-      Err(if stderr.trim().is_empty() { stdout } else { stderr })
-    }
-  };
-  match tokio::time::timeout(limit, fut).await {
-    Ok(inner) => inner,
-    Err(_) => Err(format!(
-      "[HOST_COMMAND_TIMEOUT] docker {}",
-      compose_args.join(" ")
-    )),
-  }
-}
-
-async fn docker_nonempty_line_count(args: &[&str]) -> u64 {
-  match exec_output_limit("docker", args, cmd_timeout_short()).await {
-    Ok(out) => out.lines().filter(|l| !l.trim().is_empty()).count() as u64,
-    Err(_) => 0,
-  }
-}
-
 
 async fn exec_sshpass_ssh(
   password: &str,
@@ -538,236 +155,6 @@ async fn exec_sshpass_ssh(
     Ok(inner) => inner,
     Err(_) => Err("[HOST_COMMAND_TIMEOUT] sshpass ssh".to_string()),
   }
-}
-
-
-pub(crate) async fn sudo_bash_install_step(cmd: &str, password: Option<&str>, logs: &mut Vec<String>, app: Option<tauri::AppHandle>, job_id: Option<String>, base_progress: u32, step_weight: u32) -> Result<(), String> {
-  logs.push(format!("RUNNING: {}", cmd));
-
-  let pw_trim = password.and_then(|p| {
-    let t = p.trim();
-    if t.is_empty() {
-      None
-    } else {
-      Some(t)
-    }
-  });
-
-  let pwless = sudo_passwordless_ok().await;
-
-  enum SpawnMode<'a> {
-    Pkexec,
-    SudoPwless,
-    SudoStdin(&'a str),
-  }
-
-  let mode = if pwless {
-    SpawnMode::SudoPwless
-  } else if let Some(pw) = pw_trim {
-    SpawnMode::SudoStdin(pw)
-  } else {
-    logs.push("AUTH: system privilege dialog — enter your login password there (leave Lumina sudo field blank if using this)".into());
-    SpawnMode::Pkexec
-  };
-
-  let mut limit_cores = 0;
-  let mut cores = 0;
-  let mut ram_limit_mb = 0;
-  let has_limits = if let Some(ref app_h) = app {
-    let (l_cores, c, r_limit) = get_resource_limits(app_h);
-    limit_cores = l_cores;
-    cores = c;
-    ram_limit_mb = r_limit;
-    true
-  } else {
-    false
-  };
-
-  let mut wrapped_cmd: String;
-  let effective_cmd: &str = if has_limits {
-    logs.push(format!(
-      "[RESOURCE_ENFORCEMENT] Constraints: CPU Cores = {}/{} (nice 19, CARGO_BUILD_JOBS, MAKEFLAGS), RAM limit = {} MB (ulimit -v + runtime env vars), max processes = 512 (ulimit -u)",
-      limit_cores, cores, ram_limit_mb
-    ));
-    wrapped_cmd = format!(
-      "ulimit -v {} 2>/dev/null; ulimit -u 512 2>/dev/null; ",
-      ram_limit_mb.saturating_mul(1024)
-    );
-    wrapped_cmd.push_str(cmd);
-    wrapped_cmd.as_str()
-  } else {
-    cmd
-  };
-
-  let mut child = match mode {
-    SpawnMode::Pkexec => {
-      let mut cmd_builder = Command::new("pkexec");
-      cmd_builder.args(["nice", "-n", "19", "bash", "-c", effective_cmd]);
-      if has_limits {
-        cmd_builder
-          .env("CARGO_BUILD_JOBS", limit_cores.to_string())
-          .env("MAKEFLAGS", format!("-j{}", limit_cores))
-          .env("MISE_JOBS", limit_cores.to_string())
-          .env("NODE_OPTIONS", format!("--max-old-space-size={}", ram_limit_mb))
-          .env("GOMEMLIMIT", format!("{}MiB", ram_limit_mb))
-          .env("_JAVA_OPTIONS", format!("-Xmx{}m", ram_limit_mb));
-      }
-      cmd_builder
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|e| format!("[ELEVATED_CMD_FAILED] pkexec spawn: {}", e))?
-    }
-    SpawnMode::SudoPwless => {
-      let mut cmd_builder = Command::new("sudo");
-      cmd_builder.args(["nice", "-n", "19", "bash", "-c", effective_cmd]);
-      if has_limits {
-        cmd_builder
-          .env("CARGO_BUILD_JOBS", limit_cores.to_string())
-          .env("MAKEFLAGS", format!("-j{}", limit_cores))
-          .env("MISE_JOBS", limit_cores.to_string())
-          .env("NODE_OPTIONS", format!("--max-old-space-size={}", ram_limit_mb))
-          .env("GOMEMLIMIT", format!("{}MiB", ram_limit_mb))
-          .env("_JAVA_OPTIONS", format!("-Xmx{}m", ram_limit_mb));
-      }
-      cmd_builder
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|e| format!("[ELEVATED_CMD_FAILED] sudo spawn: {}", e))?
-    }
-    SpawnMode::SudoStdin(pw) => {
-      let mut cmd_builder = Command::new("sudo");
-      cmd_builder
-        .arg("-S")
-        .arg("-p")
-        .arg("")
-        .arg("nice")
-        .arg("-n")
-        .arg("19")
-        .arg("bash")
-        .arg("-c")
-        .arg(effective_cmd);
-      if has_limits {
-        cmd_builder
-          .env("CARGO_BUILD_JOBS", limit_cores.to_string())
-          .env("MAKEFLAGS", format!("-j{}", limit_cores))
-          .env("MISE_JOBS", limit_cores.to_string())
-          .env("NODE_OPTIONS", format!("--max-old-space-size={}", ram_limit_mb))
-          .env("GOMEMLIMIT", format!("{}MiB", ram_limit_mb))
-          .env("_JAVA_OPTIONS", format!("-Xmx{}m", ram_limit_mb));
-      }
-      let mut c = cmd_builder
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|e| format!("[ELEVATED_CMD_FAILED] sudo spawn: {}", e))?;
-      if let Some(mut stdin) = c.stdin.take() {
-        stdin
-          .write_all(format!("{pw}\n").as_bytes())
-          .await
-          .map_err(|e| format!("[ELEVATED_CMD_FAILED] stdin: {}", e))?;
-        let _ = stdin.shutdown().await;
-      }
-      c
-    }
-  };
-
-  let stdout = child.stdout.take().unwrap();
-  let stderr = child.stderr.take().unwrap();
-  let mut reader = tokio::io::BufReader::new(stdout).lines();
-  let mut err_reader = tokio::io::BufReader::new(stderr).lines();
-
-  let job_id_clone = job_id.clone();
-  let app_clone = app.clone();
-
-  // Read stdout and update logs/progress
-  let mut line_count: u32 = 0;
-  let mut last_explicit_bonus: u32 = 0; // highest % seen from explicit patterns
-
-  loop {
-    tokio::select! {
-      res = reader.next_line() => {
-        match res {
-          Ok(Some(line)) => {
-            if !line.trim().is_empty() {
-              logs.push(format!("OUT: {}", line.clone()));
-              line_count += 1;
-            }
-            // Progress parsing: explicit patterns take priority; line counter fills gaps
-            if let (Some(app), Some(jid)) = (&app_clone, &job_id_clone) {
-              let mut bonus = last_explicit_bonus;
-              if line.contains('%') {
-                let parts: Vec<&str> = line.split('%').collect();
-                if let Some(p_str) = parts[0].split_whitespace().last() {
-                  if let Ok(p) = p_str.parse::<u32>() {
-                    let explicit = (p * step_weight) / 100;
-                    if explicit > bonus { bonus = explicit; last_explicit_bonus = explicit; }
-                  }
-                }
-              } else if line.contains('/') && (line.contains('(') || line.contains('[')) {
-                if let Some(caps) = line.find('/') {
-                  let start_search = &line[..caps];
-                  let start = start_search.rfind(|c: char| !c.is_ascii_digit()).map(|idx| idx + 1).unwrap_or(0);
-                  let end_search = &line[caps+1..];
-                  let end = end_search.find(|c: char| !c.is_ascii_digit()).unwrap_or(end_search.len());
-                  let cur = line[start..caps].trim().parse::<u32>().unwrap_or(0);
-                  let total = line[caps+1..caps+1+end].trim().parse::<u32>().unwrap_or(1);
-                  if let Some(explicit) = (cur * step_weight).checked_div(total) {
-                    if explicit > bonus { bonus = explicit; last_explicit_bonus = explicit; }
-                  }
-                }
-              } else {
-                // Line-count heuristic: each line nudges progress forward (capped below explicit)
-                let heuristic = (line_count * step_weight)
-                  .checked_div(60)
-                  .unwrap_or(0)
-                  .min(step_weight.saturating_sub(2));
-                if heuristic > bonus { bonus = heuristic; }
-              }
-              let prog = (base_progress + bonus).min(base_progress + step_weight.saturating_sub(1));
-              let st = app.state::<AppState>();
-              let mut jobs = st.jobs.lock().await;
-              if let Some(j) = jobs.iter_mut().find(|j| j.get("id").and_then(|v| v.as_str()) == Some(jid.as_str())) {
-                let cur_prog = j["progress"].as_u64().unwrap_or(0) as u32;
-                if prog > cur_prog {
-                  j["progress"] = json!(prog);
-                }
-              }
-            }
-          }
-          _ => break,
-        }
-      }
-      res = err_reader.next_line() => {
-        match res {
-          Ok(Some(line)) => {
-            if line.contains("[sudo] password") { continue; }
-            if !line.trim().is_empty() {
-              logs.push(line);
-            }
-          }
-          _ => break,
-        }
-      }
-    }
-  }
-
-  let status = child.wait().await.map_err(|e| format!("[DOCKER_INSTALL_FAILED] {}", e))?;
-  if status.success() {
-    Ok(())
-  } else {
-    Err(format!("[PROCESS_EXIT_ERROR] Command failed with code {}", status.code().unwrap_or(-1)))
-  }
-}
-
-pub(crate) async fn sudo_passwordless_ok() -> bool {
-  exec_output_limit("sudo", &["-n", "true"], cmd_timeout_short())
-    .await
-    .is_ok()
 }
 
 
@@ -928,61 +315,11 @@ async fn runtime_set_active_invoke(body: &Value) -> Value {
 
 
 #[tauri::command]
-async fn ipc_send(channel: String, payload: Value, app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
+async fn ipc_send(channel: String, payload: Value, app: AppHandle, state: State<'_, state::AppState>) -> Result<(), String> {
   match channel.as_str() {
-    "dh:terminal:write" => {
-      let id = payload.get("id").and_then(|v| v.as_str()).unwrap_or_default().to_string();
-      let data = payload.get("data").and_then(|v| v.as_str()).unwrap_or_default().to_string();
-      let map = state.terminals.lock().await;
-      if let Some(session) = map.get(&id) {
-        let mut writer = session
-          .writer
-          .lock()
-          .map_err(|_| "[TERMINAL_WRITE_FAILED] writer lock poisoned".to_string())?;
-        writer
-          .write_all(data.as_bytes())
-          .map_err(|e| format!("[TERMINAL_WRITE_FAILED] {}", e))?;
-        writer.flush().map_err(|e| format!("[TERMINAL_WRITE_FAILED] {}", e))?;
-      }
-      Ok(())
-    },
-    "dh:terminal:close" => {
-      let id = payload.get("id").and_then(|v| v.as_str()).unwrap_or_default().to_string();
-      let session = {
-        let mut map = state.terminals.lock().await;
-        map.remove(&id)
-      };
-      if let Some(session) = session {
-        // Kill child first, then wait for it to exit so the PTY reader thread
-        // gets a clean EOF before the master fd is dropped. Without this wait
-        // the reader thread can access freed PTY memory → heap corruption.
-        tokio::task::spawn_blocking(move || {
-          if let Ok(mut child) = session.child.lock() {
-            let _ = child.kill();
-            let _ = child.wait();
-          }
-          // session (and master) dropped here, after child has exited
-        });
-      }
-      Ok(())
-    },
-    "dh:terminal:resize" => {
-      let id = payload.get("id").and_then(|v| v.as_str()).unwrap_or_default().to_string();
-      let cols = payload.get("cols").and_then(|v| v.as_u64()).unwrap_or(80) as u16;
-      let rows = payload.get("rows").and_then(|v| v.as_u64()).unwrap_or(24) as u16;
-      let map = state.terminals.lock().await;
-      if let Some(session) = map.get(&id) {
-        if let Ok(master) = session.master.lock() {
-          let _ = master.resize(PtySize {
-            rows,
-            cols,
-            pixel_width: 0,
-            pixel_height: 0,
-          });
-        }
-      }
-      Ok(())
-    },
+    "dh:terminal:write" => terminal_pty::terminal_write(&payload, &state).await,
+    "dh:terminal:close" => terminal_pty::terminal_close(&payload, &state).await,
+    "dh:terminal:resize" => terminal_pty::terminal_resize(&payload, &state).await,
     _ => {
       let _ = app.emit("dh:warn", json!({ "channel": channel, "kind": "unknown_ipc_send" }));
       Ok(())
@@ -1006,7 +343,7 @@ async fn git_ahead_behind(repo_path: &str) -> (Option<i64>, Option<i64>) {
 }
 
 #[tauri::command]
-async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, state: State<'_, AppState>) -> Result<Value, String> {
+async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, state: State<'_, state::AppState>) -> Result<Value, String> {
   let body = payload.unwrap_or_else(|| json!({}));
   let res = match channel.as_str() {
         "dh:app:info" => json!({
@@ -1161,7 +498,7 @@ let prof = body.get("profile").and_then(|v| v.as_str()).unwrap_or("default");
       let host_uptime_sec = uptime_str.split_whitespace().next()
         .and_then(|v| v.parse::<f64>().ok()).unwrap_or(0.0) as u64;
       
-      let app_uptime_ms = START_TIME.get().map(|t| t.elapsed().as_millis() as u64).unwrap_or(0);
+      let app_uptime_ms = state::START_TIME.get().map(|t| t.elapsed().as_millis() as u64).unwrap_or(0);
 
       json!({
         "ok": true,
@@ -1181,349 +518,27 @@ let prof = body.get("profile").and_then(|v| v.as_str()).unwrap_or("default");
         .unwrap_or_else(|| "linux".to_string());
       json!(distro)
     },
-    "dh:docker:check-installed" => {
-      let docker = exec_output_limit("docker", &["--version"], cmd_timeout_short()).await.is_ok();
-      let compose = exec_output_limit("docker", &["compose", "version"], cmd_timeout_short()).await.is_ok();
-      let buildx = exec_output_limit("docker", &["buildx", "version"], cmd_timeout_short()).await.is_ok();
-      json!({ "docker": docker, "compose": compose, "buildx": buildx })
-    },
-    "dh:docker:list" => match exec_output("docker", &["ps", "-a", "--format", "{\"ID\":\"{{.ID}}\",\"Names\":\"{{.Names}}\",\"Image\":\"{{.Image}}\",\"State\":\"{{.State}}\",\"Status\":\"{{.Status}}\",\"Ports\":\"{{.Ports}}\",\"Networks\":\"{{.Networks}}\",\"Mounts\":\"{{.Mounts}}\"}"]).await {
-      Ok(out) => {
-        let rows: Vec<Value> = out
-          .lines()
-          .filter_map(|line| serde_json::from_str::<Value>(line).ok())
-          .map(|v| {
-            let mut networks: Vec<String> = v
-              .get("Networks")
-              .and_then(|x| x.as_str())
-              .unwrap_or_default()
-              .split(',')
-              .map(|s| s.trim().to_string())
-              .filter(|s| !s.is_empty())
-              .collect();
-            // `docker ps --format {{.Networks}}` is occasionally empty for running containers
-            // that are actually on the default bridge; avoid misclassifying them as `none`.
-            if networks.is_empty() {
-              networks.push("bridge".to_string());
-            }
-            let volumes: Vec<String> = v
-              .get("Mounts")
-              .and_then(|x| x.as_str())
-              .unwrap_or_default()
-              .split(',')
-              .map(|s| s.trim().to_string())
-              .filter(|s| !s.is_empty())
-              .collect();
-            json!({
-              "id": v.get("ID").and_then(|x| x.as_str()).unwrap_or_default(),
-              "name": v.get("Names").and_then(|x| x.as_str()).map(|s| s.trim_start_matches('/')).unwrap_or_default(),
-              "image": v.get("Image").and_then(|x| x.as_str()).unwrap_or_default(),
-              "imageId": "",
-              "state": v.get("State").and_then(|x| x.as_str()).unwrap_or("unknown"),
-              "status": v.get("Status").and_then(|x| x.as_str()).unwrap_or("unknown"),
-              "ports": v.get("Ports").and_then(|x| x.as_str()).filter(|x| !x.is_empty()).unwrap_or("—"),
-              "networks": networks,
-              "volumes": volumes
-            })
-          })
-          .collect();
-        json!({ "ok": true, "rows": rows })
-      }
-      Err(e) => json!({ "ok": false, "error": format!("[DOCKER_LIST_FAILED] {}", e.trim()) }),
-    },
-    "dh:docker:action" => {
-      let id = body.get("id").and_then(|v| v.as_str()).unwrap_or_default();
-      let action = body.get("action").and_then(|v| v.as_str()).unwrap_or_default();
-      if id.is_empty() || action.is_empty() {
-        json!({ "ok": false, "error": "[DOCKER_ACTION_FAILED] Missing id or action." })
-      } else {
-        let args: Vec<&str> = match action {
-          "start" => vec!["start", id],
-          "stop" => vec!["stop", id],
-          "restart" => vec!["restart", id],
-          "remove" => {
-            let remove_volumes = body.get("removeVolumes").and_then(|v| v.as_bool()).unwrap_or(false);
-            let remove_image = body.get("removeImage").and_then(|v| v.as_bool()).unwrap_or(false);
-            let image_ref = body.get("image").and_then(|v| v.as_str()).unwrap_or_default().to_string();
-            let remove_args: Vec<&str> = if remove_volumes {
-              vec!["rm", "-f", "-v", id]
-            } else {
-              vec!["rm", "-f", id]
-            };
-            match exec_output("docker", &remove_args).await {
-              Ok(_) => {
-                if remove_image && !image_ref.trim().is_empty() {
-                  let _ = exec_output("docker", &["rmi", image_ref.trim()]).await;
-                }
-                return Ok(json!({ "ok": true }));
-              }
-              Err(e) => return Ok(json!({ "ok": false, "error": format!("[DOCKER_ACTION_FAILED] {}", e.trim()) })),
-            }
-          }
-          _ => vec![],
-        };
-        if args.is_empty() {
-          json!({ "ok": false, "error": format!("[DOCKER_ACTION_FAILED] Unsupported action: {}", action) })
-        } else {
-          match exec_output("docker", &args).await {
-            Ok(_) => json!({ "ok": true }),
-            Err(e) => json!({ "ok": false, "error": format!("[DOCKER_ACTION_FAILED] {}", e.trim()) }),
-          }
-        }
-      }
-    },
-    "dh:docker:logs" => {
-      let id = body.get("id").and_then(|v| v.as_str()).unwrap_or_default();
-      let tail = body.get("tail").and_then(|v| v.as_u64()).unwrap_or(200).to_string();
-      if id.is_empty() {
-        json!({ "ok": false, "log": "", "error": "[DOCKER_LOGS_FAILED] Missing id." })
-      } else {
-        match exec_result("docker", &["logs", "--tail", &tail, id]).await {
-          Ok((stdout, stderr)) => json!({ "ok": true, "text": format!("{}{}", stdout, stderr) }),
-          Err(e) => json!({ "ok": false, "text": "", "error": format!("[DOCKER_LOGS_FAILED] {}", e.trim()) }),
-        }
-      }
-    },
-    "dh:docker:images:list" => match exec_output("docker", &["images", "--format", "{{json .}}", "--no-trunc"]).await {
-      Ok(out) => {
-        let rows: Vec<Value> = out
-          .lines()
-          .filter_map(|line| serde_json::from_str::<Value>(line).ok())
-          .map(|v| {
-            let repository = v.get("Repository").and_then(|x| x.as_str()).unwrap_or("<none>");
-            let tag = v.get("Tag").and_then(|x| x.as_str()).unwrap_or("<none>");
-            let id = v.get("ID").and_then(|x| x.as_str()).unwrap_or_default();
-            let size = v.get("Size").and_then(|x| x.as_str()).unwrap_or("0MB");
-            json!({
-              "id": id,
-              "repoTags": [format!("{}:{}", repository, tag)],
-              "sizeMb": parse_size_mb(size),
-              "createdAt": v.get("CreatedAt").and_then(|x| x.as_str()).unwrap_or_default()
-            })
-          })
-          .collect();
-        json!({ "ok": true, "rows": rows })
-      }
-      Err(e) => json!({ "ok": false, "error": format!("[DOCKER_IMAGES_FAILED] {}", e.trim()) }),
-    },
-    "dh:docker:image:action" => {
-      let id = body.get("id").and_then(|v| v.as_str()).unwrap_or_default();
-      let force = body.get("force").and_then(|v| v.as_bool()).unwrap_or(false);
-      if id.is_empty() {
-        json!({ "ok": false, "error": "[DOCKER_IMAGE_ACTION_FAILED] Missing image id." })
-      } else {
-        let args: Vec<&str> = if force { vec!["rmi", "-f", id] } else { vec!["rmi", id] };
-        match exec_output("docker", &args).await {
-          Ok(_) => json!({ "ok": true }),
-          Err(e) => json!({ "ok": false, "error": format!("[DOCKER_IMAGE_ACTION_FAILED] {}", e.trim()) }),
-        }
-      }
-    },
-    "dh:docker:volumes:list" => match exec_output("docker", &["volume", "ls", "--format", "{{.Name}}"]).await {
-      Ok(out) => {
-        let rows: Vec<Value> = out
-          .lines()
-          .filter(|name| !name.trim().is_empty())
-          .map(|name| json!({ "name": name.trim(), "driver": "local", "mountpoint": "", "scope": "local", "usedBy": [] }))
-          .collect();
-        json!({ "ok": true, "rows": rows })
-      }
-      Err(e) => json!({ "ok": false, "error": format!("[DOCKER_VOLUMES_FAILED] {}", e.trim()) }),
-    },
-    "dh:docker:volume:create" => {
-      let name = body.get("name").and_then(|v| v.as_str()).unwrap_or_default();
-      if name.is_empty() {
-        json!({ "ok": false, "error": "[DOCKER_VOLUME_CREATE_FAILED] Missing volume name." })
-      } else {
-        match exec_output("docker", &["volume", "create", name]).await {
-          Ok(_) => json!({ "ok": true }),
-          Err(e) => json!({ "ok": false, "error": format!("[DOCKER_VOLUME_CREATE_FAILED] {}", e.trim()) }),
-        }
-      }
-    },
-    "dh:docker:volume:action" => {
-      let name = body.get("name").and_then(|v| v.as_str()).unwrap_or_default();
-      let action = body.get("action").and_then(|v| v.as_str()).unwrap_or_default();
-      if name.is_empty() || action != "remove" {
-        json!({ "ok": false, "error": "[DOCKER_VOLUME_ACTION_FAILED] Invalid payload." })
-      } else {
-        match exec_output("docker", &["volume", "rm", name]).await {
-          Ok(_) => json!({ "ok": true }),
-          Err(e) => json!({ "ok": false, "error": format!("[DOCKER_VOLUME_ACTION_FAILED] {}", e.trim()) }),
-        }
-      }
-    },
-    "dh:docker:networks:list" => match exec_output("docker", &["network", "ls", "--format", "{{json .}}"]).await {
-      Ok(out) => {
-        let rows: Vec<Value> = out
-          .lines()
-          .filter_map(|line| serde_json::from_str::<Value>(line).ok())
-          .map(|v| json!({
-            "id": v.get("ID").and_then(|x| x.as_str()).unwrap_or_default(),
-            "name": v.get("Name").and_then(|x| x.as_str()).unwrap_or_default(),
-            "driver": v.get("Driver").and_then(|x| x.as_str()).unwrap_or("bridge"),
-            "scope": v.get("Scope").and_then(|x| x.as_str()).unwrap_or("local"),
-            "usedBy": []
-          }))
-          .collect();
-        json!({ "ok": true, "rows": rows })
-      }
-      Err(e) => json!({ "ok": false, "error": format!("[DOCKER_NETWORKS_FAILED] {}", e.trim()) }),
-    },
-    "dh:docker:network:create" => {
-      let name = body.get("name").and_then(|v| v.as_str()).unwrap_or_default();
-      if name.is_empty() {
-        json!({ "ok": false, "error": "[DOCKER_NETWORK_CREATE_FAILED] Missing network name." })
-      } else {
-        match exec_output("docker", &["network", "create", name]).await {
-          Ok(_) => json!({ "ok": true }),
-          Err(e) => json!({ "ok": false, "error": format!("[DOCKER_NETWORK_CREATE_FAILED] {}", e.trim()) }),
-        }
-      }
-    },
-    "dh:docker:network:action" => {
-      let id = body.get("id").and_then(|v| v.as_str()).unwrap_or_default();
-      let action = body.get("action").and_then(|v| v.as_str()).unwrap_or_default();
-      if id.is_empty() || action != "remove" {
-        json!({ "ok": false, "error": "[DOCKER_NETWORK_ACTION_FAILED] Invalid payload." })
-      } else {
-        match exec_output("docker", &["network", "rm", id]).await {
-          Ok(_) => json!({ "ok": true }),
-          Err(e) => json!({ "ok": false, "error": format!("[DOCKER_NETWORK_ACTION_FAILED] {}", e.trim()) }),
-        }
-      }
-    },
-    "dh:docker:prune" => match exec_output("docker", &["system", "prune", "-f", "--volumes"]).await {
-      Ok(log) => json!({ "ok": true, "log": log }),
-      Err(e) => json!({ "ok": false, "error": format!("[DOCKER_PRUNE_FAILED] {}", e.trim()) }),
-    },
-    "dh:docker:prune:preview" => {
-      let containers = docker_nonempty_line_count(&["ps", "-a", "-q", "--filter", "status=exited"]).await;
-      let images = docker_nonempty_line_count(&["images", "-f", "dangling=true", "-q"]).await;
-      let volumes = docker_nonempty_line_count(&["volume", "ls", "-qf", "dangling=true"]).await;
-      let networks = docker_nonempty_line_count(&["network", "ls", "-qf", "dangling=true"]).await;
-      docker_prune_preview_payload(containers, images, volumes, networks)
-    },
-    "dh:docker:cleanup:run" => {
-      let mut logs: Vec<String> = Vec::new();
-      if body.get("containers").and_then(|v| v.as_bool()).unwrap_or(false) {
-        logs.push(exec_output("docker", &["container", "prune", "-f"]).await.unwrap_or_else(|e| e));
-      }
-      if body.get("images").and_then(|v| v.as_bool()).unwrap_or(false) {
-        logs.push(exec_output("docker", &["image", "prune", "-af"]).await.unwrap_or_else(|e| e));
-      }
-      if body.get("volumes").and_then(|v| v.as_bool()).unwrap_or(false) {
-        logs.push(exec_output("docker", &["volume", "prune", "-f"]).await.unwrap_or_else(|e| e));
-      }
-      if body.get("networks").and_then(|v| v.as_bool()).unwrap_or(false) {
-        logs.push(exec_output("docker", &["network", "prune", "-f"]).await.unwrap_or_else(|e| e));
-      }
-      json!({ "ok": true, "log": logs.join("\n") })
-    },
-    "dh:docker:pull" => {
-      let image = body.get("image").and_then(|v| v.as_str()).unwrap_or_default();
-      if image.is_empty() {
-        json!({ "ok": false, "error": "[DOCKER_PULL_FAILED] Missing image name." })
-      } else {
-        match exec_result_limit("docker", &["pull", image], cmd_timeout_long()).await {
-          Ok((stdout, stderr)) => json!({ "ok": true, "log": format!("{}{}", stdout, stderr) }),
-          Err(e) => json!({ "ok": false, "error": format!("[DOCKER_PULL_FAILED] {}", e.trim()) }),
-        }
-      }
-    },
-    "dh:docker:search" => {
-      let term = body.as_str().unwrap_or_default();
-      match exec_output_limit("curl", &["-fsSL", &format!("https://hub.docker.com/v2/search/repositories/?query={}&page_size=12", term)], cmd_timeout_short()).await {
-        Ok(raw) => match serde_json::from_str::<Value>(&raw) {
-          Ok(v) => {
-            let results: Vec<Value> = v
-              .get("results")
-              .and_then(|x| x.as_array())
-              .cloned()
-              .unwrap_or_default()
-              .into_iter()
-              .map(|r| {
-                json!({
-                  "name": r.get("repo_name").and_then(|x| x.as_str()).unwrap_or_default(),
-                  "description": r.get("short_description").and_then(|x| x.as_str()).unwrap_or_default(),
-                  "star_count": r.get("star_count").and_then(|x| x.as_u64()).unwrap_or(0),
-                  "is_official": r.get("is_official").and_then(|x| x.as_bool()).unwrap_or(false),
-                })
-              })
-              .collect();
-            json!({ "ok": true, "results": results })
-          }
-          Err(_) => json!({ "ok": false, "error": "[DOCKER_SEARCH_FAILED] Invalid response format." }),
-        },
-        Err(e) => json!({ "ok": false, "error": format!("[DOCKER_SEARCH_FAILED] {}", e.trim()) }),
-      }
-    },
-    "dh:docker:tags" => {
-      let image = body.as_str().unwrap_or_default();
-      let mut parts = image.split('/');
-      let (namespace, repo) = if image.contains('/') {
-        (parts.next().unwrap_or("library"), parts.collect::<Vec<_>>().join("/"))
-      } else {
-        ("library", image.to_string())
-      };
-      let url = format!("https://hub.docker.com/v2/repositories/{}/{}/tags/?page_size=20", namespace, repo);
-      match exec_output_limit("curl", &["-fsSL", &url], cmd_timeout_short()).await {
-        Ok(raw) => match serde_json::from_str::<Value>(&raw) {
-          Ok(v) => {
-            let tags: Vec<Value> = v
-              .get("results")
-              .and_then(|x| x.as_array())
-              .cloned()
-              .unwrap_or_default()
-              .into_iter()
-              .filter_map(|item| item.get("name").cloned())
-              .collect();
-            json!({ "ok": true, "tags": tags })
-          }
-          Err(_) => json!({ "ok": false, "error": "[DOCKER_TAGS_FAILED] Invalid response format." }),
-        },
-        Err(e) => json!({ "ok": false, "error": format!("[DOCKER_TAGS_FAILED] {}", e.trim()) }),
-      }
-    },
-    "dh:compose:up" => {
-      let profile = body.get("profile").and_then(|v| v.as_str()).unwrap_or("web-dev");
-      let template = resolve_profile_template(&app, profile);
-      let dir = compose_profiles::compose_profile_workdir(&app, &template);
-      if !dir.is_dir() {
-        json!({ "ok": false, "log": "", "error": format!("[DOCKER_COMPOSE_FAILED] missing compose directory: {} (set LUMINA_DEV_COMPOSE_ROOT or run from a checkout with docker/compose)", dir.display()) })
-      } else {
-        match exec_docker_compose_in_dir(&dir, &["up", "-d"], cmd_timeout_long(), Some(profile), Some(get_profile_extra_env(&app, profile))).await {
-          Ok((stdout, stderr)) => json!({ "ok": true, "log": format!("{}{}", stdout, stderr) }),
-          Err(e) => json!({ "ok": false, "log": "", "error": format!("[DOCKER_COMPOSE_FAILED] {}", e.trim()) }),
-        }
-      }
-    },
-    "dh:compose:logs" => {
-      let profile = body.get("profile").and_then(|v| v.as_str()).unwrap_or("web-dev");
-      let template = resolve_profile_template(&app, profile);
-      let dir = compose_profiles::compose_profile_workdir(&app, &template);
-      if !dir.is_dir() {
-        json!({ "ok": false, "log": "", "error": format!("[DOCKER_COMPOSE_FAILED] missing compose directory: {} (set LUMINA_DEV_COMPOSE_ROOT or run from a checkout with docker/compose)", dir.display()) })
-      } else {
-        match exec_docker_compose_in_dir(&dir, &["logs", "--tail", "200"], get_global_ipc_timeout(), Some(profile), Some(get_profile_extra_env(&app, profile))).await {
-          Ok((stdout, stderr)) => json!({ "ok": true, "log": format!("{}{}", stdout, stderr) }),
-          Err(e) => json!({ "ok": false, "log": "", "error": format!("[DOCKER_COMPOSE_FAILED] {}", e.trim()) }),
-        }
-      }
-    },
-    "dh:compose:down" => {
-      let profile = body.get("profile").and_then(|v| v.as_str()).unwrap_or("web-dev");
-      let template = resolve_profile_template(&app, profile);
-      let dir = compose_profiles::compose_profile_workdir(&app, &template);
-      if !dir.is_dir() {
-        json!({ "ok": false, "log": "", "error": format!("[DOCKER_COMPOSE_FAILED] missing compose directory: {} (set LUMINA_DEV_COMPOSE_ROOT or run from a checkout with docker/compose)", dir.display()) })
-      } else {
-        match exec_docker_compose_in_dir(&dir, &["down"], cmd_timeout_long(), Some(profile), Some(get_profile_extra_env(&app, profile))).await {
-          Ok((stdout, stderr)) => json!({ "ok": true, "log": format!("{}{}", stdout, stderr) }),
-          Err(e) => json!({ "ok": false, "log": "", "error": format!("[DOCKER_COMPOSE_FAILED] {}", e.trim()) }),
-        }
-      }
-    },
+    "dh:docker:check-installed" => docker_engine::docker_check_installed().await,
+    "dh:docker:list" => docker_engine::docker_list().await,
+    "dh:docker:action" => docker_engine::docker_action(&body).await,
+    "dh:docker:logs" => docker_engine::docker_logs(&body).await,
+    "dh:docker:images:list" => docker_engine::docker_images_list().await,
+    "dh:docker:image:action" => docker_engine::docker_image_action(&body).await,
+    "dh:docker:volumes:list" => docker_engine::docker_volumes_list().await,
+    "dh:docker:volume:create" => docker_engine::docker_volume_create(&body).await,
+    "dh:docker:volume:action" => docker_engine::docker_volume_action(&body).await,
+    "dh:docker:networks:list" => docker_engine::docker_networks_list().await,
+    "dh:docker:network:create" => docker_engine::docker_network_create(&body).await,
+    "dh:docker:network:action" => docker_engine::docker_network_action(&body).await,
+    "dh:docker:prune" => docker_engine::docker_prune().await,
+    "dh:docker:prune:preview" => docker_engine::docker_prune_preview(&body).await,
+    "dh:docker:cleanup:run" => docker_engine::docker_cleanup_run(&body).await,
+    "dh:docker:pull" => docker_engine::docker_pull(&body).await,
+    "dh:docker:search" => docker_engine::docker_search(&body).await,
+    "dh:docker:tags" => docker_engine::docker_tags(&body).await,
+    "dh:compose:up" => compose_engine::docker_compose_up(&app, &body).await,
+    "dh:compose:logs" => compose_engine::docker_compose_logs(&app, &body).await,
+    "dh:compose:down" => compose_engine::docker_compose_down(&app, &body).await,
     "dh:ports:suggest" => {
       let template = body.get("template").and_then(|v| v.as_str()).unwrap_or_default();
       let profile = body.get("profile").and_then(|v| v.as_str()).unwrap_or_default();
@@ -1566,352 +581,15 @@ let prof = body.get("profile").and_then(|v| v.as_str()).unwrap_or("default");
       }
       json!({ "ok": true, "ports": ports })
     },
-    "dh:profile:switch" => {
-      let from_profile = body.get("from").and_then(|v| v.as_str());
-      let to_profile = body.get("to").and_then(|v| v.as_str()).unwrap_or_default();
-      let _env_vars = body.get("envVars").and_then(|v| v.as_array()).cloned().unwrap_or_default();
-
-      if to_profile.is_empty() {
-        return Ok(json!({ "ok": false, "log": "", "error": "[PROFILE_SWITCH_INVALID] 'to' profile required" }));
-      }
-
-      let emit_step = |step: &str, progress: u8| {
-        let _ = app.emit("profile-switch-progress", serde_json::json!({ "step": step, "progress": progress }));
-      };
-
-      emit_step("Checking Docker...", 5);
-      match exec_output_limit("docker", &["info", "--format", "{{.ServerVersion}}"], cmd_timeout_short()).await {
-        Err(_) => return Ok(json!({ "ok": false, "log": "", "error": "[DOCKER_UNAVAILABLE] Docker daemon is not reachable" })),
-        Ok(ref out) if out.trim().is_empty() => return Ok(json!({ "ok": false, "log": "", "error": "[DOCKER_UNAVAILABLE] Docker daemon is not reachable" })),
-        Ok(_) => {}
-      }
-
-      let mut logs = String::new();
-
-      // Stop containers from other profiles (docker stop — preserves containers, just pauses them)
-      emit_step("Pausing other profiles...", 20);
-      if let Ok(ps_out) = exec_output_limit(
-        "docker",
-        &["ps", "--filter", "label=com.docker.compose.project",
-          "--format", "{{.ID}}\t{{.Label \"com.docker.compose.project\"}}"],
-        cmd_timeout_short(),
-      ).await {
-        let ids_to_stop: Vec<String> = ps_out.lines()
-          .filter_map(|line| {
-            let mut parts = line.splitn(2, '\t');
-            let id = parts.next()?.trim().to_string();
-            let project = parts.next()?.trim().to_string();
-            if project != to_profile { Some(id) } else { None }
-          })
-          .collect();
-        if !ids_to_stop.is_empty() {
-          let mut stop_args = vec!["stop".to_string()];
-          stop_args.extend(ids_to_stop);
-          let stop_refs: Vec<&str> = stop_args.iter().map(|s| s.as_str()).collect();
-          match exec_output_limit("docker", &stop_refs, get_global_ipc_timeout()).await {
-            Ok(out) => logs.push_str(&format!("Paused other profile containers:\n{}\n", out.trim())),
-            Err(e) => logs.push_str(&format!("Warning: could not pause other containers: {}\n", e.trim())),
-          }
-          tokio::time::sleep(std::time::Duration::from_millis(800)).await;
-        }
-      }
-
-      // Stop from profile (docker compose stop — preserves containers)
-      if let Some(from) = from_profile {
-        emit_step(&format!("Stopping {}...", from), 35);
-        let from_template = resolve_profile_template(&app, from);
-        let from_dir = compose_profiles::compose_profile_workdir(&app, &from_template);
-        if from_dir.is_dir() {
-          match exec_docker_compose_in_dir(&from_dir, &["stop"], get_global_ipc_timeout(), Some(from), Some(get_profile_extra_env(&app, from))).await {
-            Ok((stdout, stderr)) => logs.push_str(&format!("Stopped old profile:\n{}{}\n", stdout, stderr)),
-            Err(e) => logs.push_str(&format!("Warning: failed to stop old profile: {}\n", e.trim())),
-          }
-        }
-      }
-
-      let to_template = resolve_profile_template(&app, to_profile);
-      let to_dir = compose_profiles::compose_profile_workdir(&app, &to_template);
-      if !to_dir.is_dir() {
-        return Ok(json!({
-          "ok": false,
-          "log": logs,
-          "error": format!("[PROFILE_SWITCH_FAILED] missing compose directory: {} (set LUMINA_DEV_COMPOSE_ROOT or run from a checkout with docker/compose)", to_dir.display())
-        }));
-      }
-
-      // Auto-assign unique ports for this profile on first switch
-      emit_step("Assigning ports...", 50);
-      if let Ok(store_path) = crate::app_file(&app, "store.json") {
-        let mut store = crate::read_json(&store_path);
-        let mut changed = false;
-        let port_specs: &[(&str, u16)] = match to_template.as_str() {
-          "data-science" => &[("jupyter_port", 8888), ("postgres_port", 54320)],
-          "web-dev"      => &[("node_port", 3000), ("node_hmr_port", 5173), ("postgres_port", 54321)],
-          _              => &[],
-        };
-        for (store_key_suffix, preferred) in port_specs {
-          let store_key = format!("{}_{}", store_key_suffix, to_profile);
-          if store.get(&store_key).is_none() {
-            let free = find_free_port(*preferred);
-            store[&store_key] = serde_json::json!(free);
-            changed = true;
-          }
-        }
-        if changed {
-          let _ = std::fs::write(&store_path, serde_json::to_string_pretty(&store).unwrap_or_default());
-        }
-      }
-
-      emit_step(&format!("Starting {}...", to_profile), 65);
-      match exec_docker_compose_in_dir(&to_dir, &["up", "-d"], get_global_ipc_timeout(), Some(to_profile), Some(get_profile_extra_env(&app, to_profile))).await {
-        Ok((stdout, stderr)) => {
-          logs.push_str(&format!("Started new profile:\n{}{}\n", stdout, stderr));
-          // Persist active profile so the frontend refresh reads it correctly on reload
-          if let Ok(store_path) = crate::app_file(&app, "store.json") {
-            let mut store = crate::read_json(&store_path);
-            if !store.is_object() { store = serde_json::json!({}); }
-            if let Some(map) = store.as_object_mut() {
-              map.insert("active_profile".to_string(), serde_json::json!(to_profile));
-            }
-            let _ = std::fs::write(&store_path, serde_json::to_string_pretty(&store).unwrap_or_default());
-          }
-          emit_step("Done", 100);
-          json!({ "ok": true, "log": logs })
-        },
-        Err(e) => {
-          logs.push_str(&format!("Failed to start new profile: {}\n", e.trim()));
-          json!({ "ok": false, "log": logs, "error": format!("[PROFILE_SWITCH_FAILED] {}", e.trim()) })
-        },
-      }
-    },
-    "dh:profile:credentials:store" => {
-      let id = body.get("id").and_then(|v| v.as_str()).unwrap_or_default();
-      let value = body.get("value").and_then(|v| v.as_str()).unwrap_or_default();
-      if id.is_empty() || value.is_empty() {
-        return Ok(json!({ "ok": false, "error": "[PROFILE_CRED_INVALID] 'id' and 'value' required" }));
-      }
-      let store = profile_credentials::app_profile_credential_store(&app);
-      match store.save(id, value) {
-        Ok(_) => json!({ "ok": true }),
-        Err(e) => json!({ "ok": false, "error": e }),
-      }
-    },
-    "dh:profile:credentials:list" => {
-      let store = profile_credentials::app_profile_credential_store(&app);
-      match store.list_ids() {
-        Ok(ids) => json!({ "ok": true, "ids": ids }),
-        Err(e) => json!({ "ok": false, "error": e }),
-      }
-    },
-    "dh:profile:credentials:delete" => {
-      let id = body.get("id").and_then(|v| v.as_str()).unwrap_or_default();
-      if id.is_empty() {
-        return Ok(json!({ "ok": false, "error": "[PROFILE_CRED_INVALID] 'id' required" }));
-      }
-      let store = profile_credentials::app_profile_credential_store(&app);
-      match store.delete(id) {
-        Ok(_) => json!({ "ok": true }),
-        Err(e) => json!({ "ok": false, "error": e }),
-      }
-    },
-    "dh:profile:credentials:get" => {
-      let id = body.get("id").and_then(|v| v.as_str()).unwrap_or_default();
-      if id.is_empty() {
-        return Ok(json!({ "ok": false, "error": "[PROFILE_CRED_INVALID] 'id' required" }));
-      }
-      let store = profile_credentials::app_profile_credential_store(&app);
-      match store.load(id) {
-        Ok(val) => json!({ "ok": true, "value": val }),
-        Err(e) => json!({ "ok": false, "error": e }),
-      }
-    },
-    "dh:terminal:openExternal" => {
-      let launched = exec_output_limit(
-        "bash",
-        &["-lc", "for t in xdg-terminal-emulator gnome-console kitty alacritty gnome-terminal konsole xfce4-terminal xterm; do command -v $t >/dev/null 2>&1 && ($t >/dev/null 2>&1 &); if [ $? -eq 0 ]; then echo ok; exit 0; fi; done; exit 1"],
-        cmd_timeout_short(),
-      )
-      .await
-      .is_ok();
-      if launched {
-        json!({ "ok": true })
-      } else {
-        json!({ "ok": false, "error": "[TERMINAL_NOT_FOUND] Could not spawn host terminal." })
-      }
-    },
-    "dh:terminal:create" => {
-      let cols = body.get("cols").and_then(|v| v.as_u64()).unwrap_or(120) as u16;
-      let rows = body.get("rows").and_then(|v| v.as_u64()).unwrap_or(34) as u16;
-      let cmd_name = body
-        .get("cmd")
-        .and_then(|v| v.as_str())
-        .map(|s| s.trim())
-        .filter(|s| !s.is_empty())
-        .map(|s| s.to_string())
-        .unwrap_or_else(|| {
-          if Path::new("/usr/bin/bash").exists() || Path::new("/bin/bash").exists() {
-            "bash".to_string()
-          } else {
-            "sh".to_string()
-          }
-        });
-      let pty_system = native_pty_system();
-      match pty_system.openpty(PtySize {
-        rows,
-        cols,
-        pixel_width: 0,
-        pixel_height: 0,
-      }) {
-        Ok(pair) => {
-          let mut cmd = CommandBuilder::new(&cmd_name);
-          cmd.env("TERM", "xterm-256color");
-          if let Some(env_map) = body.get("env").and_then(|v| v.as_object()) {
-            for (key, val) in env_map {
-              if let Some(s) = val.as_str() {
-                cmd.env(key, s);
-              }
-            }
-          }
-          if let Some(args) = body.get("args").and_then(|v| v.as_array()) {
-            for arg in args {
-              if let Some(s) = arg.as_str() {
-                cmd.arg(s);
-              }
-            }
-          } else {
-            if cmd_name == "bash" {
-              cmd.args(["--noprofile", "--norc", "-i"]);
-            } else {
-              cmd.arg("-i");
-            }
-          }
-          match pair.slave.spawn_command(cmd) {
-            Ok(child) => {
-              let id = Uuid::new_v4().to_string();
-              let master = Arc::new(StdMutex::new(pair.master));
-              let child = Arc::new(StdMutex::new(child));
-              let writer = match master.lock() {
-                Ok(guard) => match guard.take_writer() {
-                  Ok(w) => Arc::new(StdMutex::new(w)),
-                  Err(e) => return Ok(json!({ "ok": false, "error": format!("[TERMINAL_CREATE_FAILED] {}", e) })),
-                },
-                Err(_) => return Ok(json!({ "ok": false, "error": "[TERMINAL_CREATE_FAILED] PTY lock poisoned." })),
-              };
-              let app_out = app.clone();
-              let id_out = id.clone();
-              let master_for_reader = Arc::clone(&master);
-              std::thread::spawn(move || {
-                let mut reader = {
-                  let guard = match master_for_reader.lock() {
-                    Ok(g) => g,
-                    Err(_) => return,
-                  };
-                  match guard.try_clone_reader() {
-                    Ok(r) => r,
-                    Err(_) => return,
-                  }
-                };
-                let mut buf = [0u8; 8192];
-                while let Ok(n) = reader.read(&mut buf) {
-                  if n == 0 {
-                    break;
-                  }
-                  let data = String::from_utf8_lossy(&buf[..n]).to_string();
-                  let _ = app_out.emit("dh:terminal:data", json!({ "id": id_out, "data": data }));
-                }
-                let _ = app_out.emit("dh:terminal:exit", json!({ "id": id_out }));
-              });
-              state
-                .terminals
-                .lock()
-                .await
-                .insert(id.clone(), TerminalSession { master, child, writer });
-              json!({ "ok": true, "id": id })
-            }
-            Err(e) => json!({ "ok": false, "error": format!("[TERMINAL_CREATE_FAILED] {}", e) }),
-          }
-        }
-        Err(e) => json!({ "ok": false, "error": format!("[TERMINAL_CREATE_FAILED] {}", e) }),
-      }
-    }
-    "dh:terminal:get-all-env" => {
-      let envs: HashMap<String, String> = std::env::vars().collect();
-      json!({ "ok": true, "env": envs })
-    }
-    "dh:docker:terminal" => {
-      let container_id = body.get("containerId").and_then(|v| v.as_str()).unwrap_or_default();
-      if container_id.is_empty() {
-        json!({ "ok": false, "error": "[DOCKER_TERMINAL_FAILED] Missing containerId." })
-      } else {
-        let cols = body.get("cols").and_then(|v| v.as_u64()).unwrap_or(120) as u16;
-        let rows = body.get("rows").and_then(|v| v.as_u64()).unwrap_or(34) as u16;
-        let pty_system = native_pty_system();
-        match pty_system.openpty(PtySize {
-          rows,
-          cols,
-          pixel_width: 0,
-          pixel_height: 0,
-        }) {
-          Ok(pair) => {
-            let mut cmd = CommandBuilder::new("docker");
-            cmd.args([
-              "exec",
-              "-it",
-              container_id,
-              "sh",
-              "-lc",
-              "if command -v bash >/dev/null 2>&1; then exec bash --noprofile --norc -i; else exec sh -i; fi",
-            ]);
-            match pair.slave.spawn_command(cmd) {
-              Ok(child) => {
-                let id = Uuid::new_v4().to_string();
-                let master = Arc::new(StdMutex::new(pair.master));
-                let child = Arc::new(StdMutex::new(child));
-                let writer = match master.lock() {
-                  Ok(guard) => match guard.take_writer() {
-                    Ok(w) => Arc::new(StdMutex::new(w)),
-                    Err(e) => return Ok(json!({ "ok": false, "error": format!("[DOCKER_TERMINAL_FAILED] {}", e) })),
-                  },
-                  Err(_) => return Ok(json!({ "ok": false, "error": "[DOCKER_TERMINAL_FAILED] PTY lock poisoned." })),
-                };
-                let app_out = app.clone();
-                let id_out = id.clone();
-                let master_for_reader = Arc::clone(&master);
-                std::thread::spawn(move || {
-                  let mut reader = {
-                    let guard = match master_for_reader.lock() {
-                      Ok(g) => g,
-                      Err(_) => return,
-                    };
-                    match guard.try_clone_reader() {
-                      Ok(r) => r,
-                      Err(_) => return,
-                    }
-                  };
-                  let mut buf = [0u8; 8192];
-                  while let Ok(n) = reader.read(&mut buf) {
-                    if n == 0 {
-                      break;
-                    }
-                    let data = String::from_utf8_lossy(&buf[..n]).to_string();
-                    let _ = app_out.emit("dh:terminal:data", json!({ "id": id_out, "data": data }));
-                  }
-                  let _ = app_out.emit("dh:terminal:exit", json!({ "id": id_out }));
-                });
-                state
-                  .terminals
-                  .lock()
-                  .await
-                  .insert(id.clone(), TerminalSession { master, child, writer });
-                json!({ "ok": true, "id": id })
-              }
-              Err(e) => json!({ "ok": false, "error": format!("[DOCKER_TERMINAL_FAILED] {}", e) }),
-            }
-          }
-          Err(e) => json!({ "ok": false, "error": format!("[DOCKER_TERMINAL_FAILED] {}", e) }),
-        }
-      }
-    }
+    "dh:profile:switch" => profile_engine::profile_switch(&app, &body).await,
+    "dh:profile:credentials:store" => profile_engine::profile_credentials_store(&app, &body).await,
+    "dh:profile:credentials:list" => profile_engine::profile_credentials_list(&app, &body).await,
+    "dh:profile:credentials:delete" => profile_engine::profile_credentials_delete(&app, &body).await,
+    "dh:profile:credentials:get" => profile_engine::profile_credentials_get(&app, &body).await,
+    "dh:terminal:openExternal" => terminal_pty::terminal_open_external().await,
+    "dh:terminal:create" => terminal_pty::terminal_create(&app, &body, &state).await,
+    "dh:terminal:get-all-env" => terminal_pty::terminal_get_all_env(),
+    "dh:docker:terminal" => docker_engine::docker_terminal(&app, &body).await,
     "dh:job:list" => json!(state.jobs.lock().await.clone()),
     "dh:job:start" => {
       let id = Uuid::new_v4().to_string();
@@ -1950,7 +628,7 @@ let prof = body.get("profile").and_then(|v| v.as_str()).unwrap_or("default");
         runtime_job_execute(app2.clone(), jid.clone(), kind, runtime_id, method, version, remove_mode, sudo_password).await;
         if get_global_daemon_auto_restart() {
           let final_state = {
-            let st = app2.state::<AppState>();
+            let st = app2.state::<state::AppState>();
             let jobs = st.jobs.lock().await;
             jobs.iter()
               .find(|j| j.get("id").and_then(|v| v.as_str()) == Some(jid.as_str()))
@@ -1960,7 +638,7 @@ let prof = body.get("profile").and_then(|v| v.as_str()).unwrap_or("default");
           };
           if final_state == "error" {
             {
-              let st = app2.state::<AppState>();
+              let st = app2.state::<state::AppState>();
               let mut jobs = st.jobs.lock().await;
               if let Some(j) = jobs.iter_mut().find(|j| j.get("id").and_then(|v| v.as_str()) == Some(jid.as_str())) {
                 j["state"] = json!("running");
@@ -4150,76 +2828,10 @@ let id_clone = id.clone();
         _ => json!({ "ok": false, "result": Value::Null, "error": "[HOST_EXEC_NOT_ALLOWED] command not allowed" }),
       }
     },
-    "dh:docker:create" => {
-      let image = body.get("image").and_then(|v| v.as_str()).unwrap_or_default();
-      let name = body.get("name").and_then(|v| v.as_str()).unwrap_or_default();
-      if image.is_empty() || name.is_empty() {
-        json!({ "ok": false, "error": "[DOCKER_INVALID_REQUEST] Missing image or name." })
-      } else {
-        let mut args = vec!["create".to_string(), "--name".to_string(), name.to_string()];
-        let network_mode = body.get("networkMode").and_then(|v| v.as_str()).unwrap_or("bridge");
-        if !network_mode.trim().is_empty() {
-          args.push("--network".to_string());
-          args.push(network_mode.trim().to_string());
-        }
-        if let Some(ports) = body.get("ports").and_then(|v| v.as_array()) {
-          for p in ports {
-            let host = p.get("hostPort").and_then(|v| v.as_u64()).unwrap_or(0);
-            let ctr = p.get("containerPort").and_then(|v| v.as_u64()).unwrap_or(0);
-            let proto = p.get("protocol").and_then(|v| v.as_str()).unwrap_or("tcp");
-            args.push("-p".to_string());
-            args.push(format!("{}:{}/{}", host, ctr, proto));
-          }
-        }
-        if let Some(envs) = body.get("env").and_then(|v| v.as_array()) {
-          for e in envs {
-            if let Some(s) = e.as_str() {
-              args.push("-e".to_string());
-              args.push(s.to_string());
-            }
-          }
-        }
-        if let Some(vols) = body.get("volumes").and_then(|v| v.as_array()) {
-          for v in vols {
-            let hp = v.get("hostPath").and_then(|v| v.as_str()).unwrap_or_default();
-            let cp = v.get("containerPath").and_then(|v| v.as_str()).unwrap_or_default();
-            if !hp.is_empty() && !cp.is_empty() {
-              args.push("-v".to_string());
-              args.push(format!("{}:{}", hp, cp));
-            }
-          }
-        }
-        args.push(image.to_string());
-        if let Some(cmd_str) = body.get("command").and_then(|v| v.as_str()) {
-          if !cmd_str.is_empty() {
-            args.push(cmd_str.to_string());
-          }
-        } else if image.to_lowercase().contains("bash") {
-          // UX default: keep utility bash containers running without requiring manual terminal input.
-          args.push("sh".to_string());
-          args.push("-c".to_string());
-          args.push("while true; do sleep 3600; done".to_string());
-        }
-        let refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
-        match exec_output("docker", &refs).await {
-          Ok(out) => {
-            let id = out.trim().to_string();
-            if id.is_empty() {
-              return Ok(json!({ "ok": false, "error": "[DOCKER_CREATE_FAILED] docker create returned empty id.", "id": "" }));
-            }
-            let auto_start = body.get("autoStart").and_then(|v| v.as_bool()).unwrap_or(true);
-            if auto_start {
-              let _ = exec_output("docker", &["start", &id]).await;
-            }
-            json!({ "ok": true, "id": id })
-          }
-          Err(e) => json!({ "ok": false, "error": format!("[DOCKER_CREATE_FAILED] {}", e.trim()), "id": "" }),
-        }
-      }
-    },
-    "dh:docker:remap-port" => docker_remap_port_invoke(&body).await,
-    "dh:docker:inspect" => docker_inspect_invoke(&body).await,
-    "dh:docker:reconfigure" => docker_reconfigure_invoke(&body).await,
+    "dh:docker:create" => docker_engine::docker_create(&body).await,
+    "dh:docker:remap-port" => docker_engine::docker_remap_port(&body).await,
+    "dh:docker:inspect" => docker_engine::docker_inspect(&body).await,
+    "dh:docker:reconfigure" => docker_engine::docker_reconfigure(&body).await,
     "dh:ssh:list:dir" => {
       let user = body.get("user").and_then(|v| v.as_str()).unwrap_or_default();
       let host_str = body.get("host").and_then(|v| v.as_str()).unwrap_or_default();
@@ -4367,7 +2979,7 @@ let id_clone = id.clone();
         Err(_) => json!({ "ok": false, "error": "[UPDATE_CHECK_FAILED] Failed to create HTTP client." }),
       }
     },
-    "dh:docker:install" => docker_install_invoke(&body).await,
+    "dh:docker:install" => docker_engine::docker_install(&body).await,
     _ => json!({ "ok": false, "error": format!("[UNKNOWN_CHANNEL] {}", channel) }),
   };
   Ok(res)
@@ -4410,15 +3022,13 @@ async fn startup_update_check(app: AppHandle) {
   }
 }
 
-static START_TIME: OnceLock<Instant> = OnceLock::new();
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-  START_TIME.set(Instant::now()).ok();
+  state::START_TIME.set(std::time::Instant::now()).ok();
   tauri::Builder::default()
     .plugin(tauri_plugin_dialog::init())
     .plugin(tauri_plugin_opener::init())
-    .manage(AppState::default())
+    .manage(state::AppState::default())
     .setup(|app| {
       let handle = app.handle();
       if let Ok(store_path) = app_file(handle, "store.json") {
@@ -4454,12 +3064,13 @@ pub fn run() {
 mod tests {
   use super::*;
   use crate::docker_ext::docker_install_build_steps;
+  use crate::utils::parse_size_mb;
 
   #[tokio::test]
   async fn job_runner_long_task_completes_and_collects_logs() {
     let mut logs = Vec::new();
     let cmd = r#"for i in 1 2 3; do echo "long-step-$i"; sleep 0.05; done"#;
-    let res = runtime_bash_user_step(cmd, &mut logs, None, None, 0, 100).await;
+    let res = executor::runtime_bash_user_step(cmd, &mut logs, None, None, 0, 100).await;
     assert!(res.is_ok(), "expected long task to complete: {res:?}");
     assert!(logs.iter().any(|l| l.contains("long-step-1")));
     assert!(logs.iter().any(|l| l.contains("long-step-3")));
@@ -4469,7 +3080,7 @@ mod tests {
   async fn job_runner_streaming_captures_multiple_lines() {
     let mut logs = Vec::new();
     let cmd = r#"for i in 1 2 3 4 5; do echo "stream-$i"; sleep 0.02; done"#;
-    runtime_bash_user_step(cmd, &mut logs, None, None, 0, 100)
+    executor::runtime_bash_user_step(cmd, &mut logs, None, None, 0, 100)
       .await
       .expect("streaming command should succeed");
 
