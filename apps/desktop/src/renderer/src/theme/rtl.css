@@ -1,4 +1,14 @@
-/* RTL text direction — text alignment only, no layout mirror */
+/* RTL text direction — content area only, nav/sidebar stay LTR */
+
+/* Set direction on content area so bidi algorithm works for mixed Arabic+Latin */
+.hp-rtl .app-shell-main {
+  direction: rtl;
+}
+
+/* Nav sidebar stays LTR regardless */
+.hp-rtl .app-shell-nav {
+  direction: ltr;
+}
 
 .hp-rtl p,
 .hp-rtl label,
@@ -13,6 +23,7 @@
 .hp-rtl textarea,
 .hp-rtl select {
   text-align: right;
+  direction: rtl;
 }
 
 /* Code, terminal, paths — always LTR */
