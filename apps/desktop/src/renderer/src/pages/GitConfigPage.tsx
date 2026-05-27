@@ -1272,7 +1272,7 @@ function BackupsSection({ rows, onApplyPreset }: {
           style={{ minHeight: 120, fontSize: 11, marginBottom: 12 }}
           value={importText}
           onChange={e => setImportText(e.target.value)}
-          placeholder={t('config.backups.importPlaceholder')}
+          placeholder='[{"key": "user.name", "value": "Jane Doe"}, ...]'
         />
         <button type="button" className="hp-btn" onClick={() => void handleImport()} disabled={!importText.trim()}>
           {t('config.backups.restoreBtn')}
@@ -1352,7 +1352,7 @@ export function GitConfigPage(): ReactElement {
       })
       assertGitOk(res, 'Failed to save identity.')
       await loadConfig()
-      showToast('Identity saved successfully.')
+      showToast(t('config.identity.saved'))
     } catch (e) {
       showToast(humanizeGitError(e), false)
     } finally {
