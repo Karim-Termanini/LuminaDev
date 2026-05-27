@@ -4,16 +4,17 @@ use std::ffi::OsStr;
 use std::io::{Read, Write};
 use std::path::Path;
 use std::process::Stdio;
-use std::sync::{Arc, Mutex as StdMutex, OnceLock};
+use std::sync::{Arc, Mutex as StdMutex};
 use std::time::{Duration, Instant};
 use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
 use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
 use tokio::process::Command;
-use tokio::sync::Mutex;
 use uuid::Uuid;
 
 mod project_scaffold;
+mod state;
+pub(crate) use state::{AppState, TerminalSession, START_TIME};
 mod utils;
 use utils::{
   app_file,
@@ -105,23 +106,6 @@ use docker_ext::{
 };
 use cloud_auth::CredentialStore;
 
-struct TerminalSession {
-  master: Arc<StdMutex<Box<dyn MasterPty + Send>>>,
-  child: Arc<StdMutex<Box<dyn Child + Send + Sync>>>,
-  writer: Arc<StdMutex<Box<dyn Write + Send>>>,
-}
-
-#[derive(Default)]
-struct AppState {
-  terminals: Mutex<HashMap<String, TerminalSession>>,
-  jobs: Mutex<Vec<Value>>,
-  // (rx_bytes, tx_bytes, instant) for net delta
-  net_prev: Mutex<Option<(u64, u64, std::time::Instant)>>,
-  // (read_kb, write_kb, instant) for disk I/O delta
-  disk_prev: Mutex<Option<(u64, u64, std::time::Instant)>>,
-  // (total_ticks, idle_ticks, instant) for CPU delta
-  cpu_prev: Mutex<Option<(u64, u64, std::time::Instant)>>,
-}
 
 fn is_allowed_store_key(key: &str) -> bool {
   const ALLOWED_KEYS: &[&str] = &[
@@ -4409,8 +4393,6 @@ async fn startup_update_check(app: AppHandle) {
     }
   }
 }
-
-static START_TIME: OnceLock<Instant> = OnceLock::new();
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
