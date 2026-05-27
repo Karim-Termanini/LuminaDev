@@ -1,4 +1,5 @@
 import type { ContainerRow, NetworkRow } from '@linux-dev-home/shared'
+import { useTranslation } from 'react-i18next'
 import {
   Background,
   Controls,
@@ -159,6 +160,7 @@ function NetworkNode({ data }: { data: NetworkRow }) {
 }
 
 function ClusterGroupNode({ data }: { data: { isSystem: boolean } }) {
+  const { t } = useTranslation('docker')
   const isSystem = data.isSystem
   return (
     <div
@@ -194,7 +196,7 @@ function ClusterGroupNode({ data }: { data: { isSystem: boolean } }) {
           textOverflow: 'ellipsis',
         }}
       >
-        {isSystem ? 'System Network' : 'Custom Project Network'}
+        {isSystem ? t('scheme.systemNetwork') : t('scheme.customProjectNetwork')}
       </div>
     </div>
   )
