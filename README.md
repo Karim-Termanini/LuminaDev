@@ -70,7 +70,7 @@ The image runs tests, typecheck, lint, and production build inside Node 20.
 
 ## 📦 Flatpak
 
-Distributed as a Flatpak with full host permissions (`--filesystem=host`, `--device=all`, `--socket=system-bus`). No sandbox overrides required — Docker socket, SSH, PTY, and `/proc` all work out of the box.
+Distributed as a Flatpak with full host permissions (`--filesystem=host`, `--device=all`, `--socket=system-bus`). No sandbox overrides required — Docker socket, SSH, PTY, and `/proc` all work out of the box. The canonical manifest is [`flatpak/io.github.karimodora.LinuxDevHome.yml`](flatpak/io.github.karimodora.LinuxDevHome.yml).
 
 ## ✅ Stabilization Tracker
 
