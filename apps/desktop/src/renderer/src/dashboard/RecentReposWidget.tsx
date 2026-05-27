@@ -1,14 +1,16 @@
 import type { ReactElement } from 'react'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 
 import { assertGitRecentList } from '../pages/registryContract'
 
 const MAX = 6
 
 export function RecentReposWidget(props: { comfortable: boolean }): ReactElement {
+  const { t } = useTranslation('dashboard')
   const c = props.comfortable
-  const fs = (t: number) => (c ? t + 1 : t)
+  const fs = (n: number) => (c ? n + 1 : n)
   const [rows, setRows] = useState<{ path: string; branch: string; dirty: string }[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -59,11 +61,13 @@ export function RecentReposWidget(props: { comfortable: boolean }): ReactElement
     <div style={{ display: 'flex', flexDirection: 'column', gap: c ? 12 : 8 }}>
       {loading ? (
         <p className="hp-muted" style={{ margin: 0, fontSize: fs(12) }}>
-          Loading recent repos…
+          {t('recentRepos.loading')}
         </p>
       ) : rows.length === 0 ? (
         <p className="hp-muted" style={{ margin: 0, fontSize: fs(12), lineHeight: 1.45 }}>
-          Open a folder in <Link to="/git?tab=vcs">Git VCS</Link> to populate recents.
+          {t('recentRepos.empty.before')}{' '}
+          <Link to="/git?tab=vcs">{t('recentRepos.empty.linkText')}</Link>{' '}
+          {t('recentRepos.empty.after')}
         </p>
       ) : (
         <ul style={{ margin: 0, paddingLeft: 18, fontSize: fs(12), lineHeight: 1.5 }}>
@@ -87,7 +91,7 @@ export function RecentReposWidget(props: { comfortable: boolean }): ReactElement
                   textDecoration: 'none',
                 }}
               >
-                Open in Git VCS →
+                {t('recentRepos.openInGitVcs')}
               </Link>
             </li>
           ))}

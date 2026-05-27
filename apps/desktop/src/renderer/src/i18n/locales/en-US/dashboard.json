@@ -212,5 +212,41 @@
   "profile.emptyDesc": "Create a profile in the Profiles page to get started.",
   "widgets.addWidget": "Add Widget",
   "widgets.noPinned": "No pinned widgets yet",
-  "widgets.noPinnedDesc": "Use Add Widget to pin tips, quick links, or recent repos. With two or more cards, drag one onto another to reorder."
+  "widgets.noPinnedDesc": "Use Add Widget to pin tips, quick links, or recent repos. With two or more cards, drag one onto another to reorder.",
+
+  "addWidget.title": "Add widget",
+  "addWidget.closeAriaLabel": "Close",
+  "addWidget.description": "Built-in widgets registry. Layout is stored under your app user data directory.",
+  "addWidget.noIpc": "no IPC",
+  "addWidget.alreadyOnDashboard": "Already on dashboard",
+  "addWidget.addToDashboard": "Add to dashboard",
+
+  "cloudNotifications.loading": "Loading notifications…",
+  "cloudNotifications.noAccounts.before": "Connect GitHub or GitLab in",
+  "cloudNotifications.noAccounts.linkText": "Cloud Git",
+  "cloudNotifications.noAccounts.after": "to see notifications.",
+  "cloudNotifications.empty": "No failed pipelines or open issues.",
+  "cloudNotifications.failedPipeline": "Failed pipeline",
+  "cloudNotifications.openIssue": "Open issue",
+
+  "customProfile.title": "Create Custom Profile",
+  "customProfile.description": "Define a new custom profile by selecting a base template. Each preset includes its own dedicated Docker Compose stack and development tools.",
+  "customProfile.profileName": "Profile Name",
+  "customProfile.profileNamePlaceholder": "e.g. My Next.js Setup",
+  "customProfile.baseTemplate": "Base Template",
+  "customProfile.cancel": "Cancel",
+  "customProfile.create": "Create",
+
+  "guardian.analyzing": "Analyzing system...",
+  "guardian.health": "{{score}}% Health",
+  "guardian.offline": "Offline",
+  "guardian.optimal": "System is in optimal condition.",
+  "guardian.maintenanceRecommended": "Maintenance recommended.",
+  "guardian.openPanel": "Open Guardian Panel →",
+
+  "recentRepos.loading": "Loading recent repos…",
+  "recentRepos.empty.before": "Open a folder in",
+  "recentRepos.empty.linkText": "Git VCS",
+  "recentRepos.empty.after": "to populate recents.",
+  "recentRepos.openInGitVcs": "Open in Git VCS →"
 }

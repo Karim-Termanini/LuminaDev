@@ -353,7 +353,7 @@ export function WizardFlow({ onComplete }: { onComplete: () => void }): ReactEle
   }
 
   return (
-    <div style={{
+    <div className="wizard-flow-overlay" style={{
       position: 'fixed', inset: 0, background: 'var(--bg-base)', zIndex: 9999,
       display: 'flex', alignItems: 'center', justifyContent: 'center'
     }}>

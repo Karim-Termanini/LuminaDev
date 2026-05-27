@@ -1,6 +1,7 @@
 import type { BranchEntry, GitRemoteEntry } from '@linux-dev-home/shared'
 import type { ReactElement } from 'react'
 import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { GLASS } from '../layout/GLASS'
 import { classifyGitRemoteUrl, type GitProviderFamily } from './gitVcsProviderHost'
 
@@ -83,6 +84,7 @@ export function GitVcsIntegrateWizardModal({
   onAction,
   busy,
 }: GitVcsIntegrateWizardModalProps): ReactElement | null {
+  const { t } = useTranslation('git')
   const [target, setTarget] = useState(suggestedTarget ?? '')
   const [method, setMethod] = useState<IntegrateMethod>('merge')
 
@@ -144,9 +146,9 @@ export function GitVcsIntegrateWizardModal({
       >
         {/* Header */}
         <div style={{ padding: '24px 24px 16px', background: 'var(--bg-secondary)' }}>
-          <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 4 }}>Integrate Changes</div>
+          <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 4 }}>{t('integrateWizard.title')}</div>
           <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-            Bringing updates from another branch into <span className="mono" style={{ color: 'var(--accent)' }}>{currentBranch}</span>
+            {t('integrateWizard.subtitle.before')}<span className="mono" style={{ color: 'var(--accent)' }}>{currentBranch}</span>
           </div>
         </div>
 
@@ -154,22 +156,20 @@ export function GitVcsIntegrateWizardModal({
           {/* Target Selection */}
           <div>
             <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 8, display: 'block' }}>
-              Branch or remote ref to merge/rebase from
+              {t('integrateWizard.targetLabel')}
             </label>
             <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 10px', lineHeight: 1.45 }}>
-              Choose a branch below or type any ref. That ref is merged/rebased <em>into</em>{' '}
-              <span className="mono">{currentBranch || 'this branch'}</span>. For Push or New PR only, close this
-              dialog.
+              {t('integrateWizard.targetHint.before')}<span className="mono">{currentBranch || t('integrateWizard.targetHint.thisBranch')}</span>{t('integrateWizard.targetHint.after')}
               {remoteProviderFilter === 'github' ? (
                 <>
                   {' '}
-                  Remote suggestions are <strong>GitHub</strong> remotes only (same host as your fetch remote).
+                  {t('integrateWizard.remoteSuggestions', { host: 'GitHub' })}
                 </>
               ) : null}
               {remoteProviderFilter === 'gitlab' ? (
                 <>
                   {' '}
-                  Remote suggestions are <strong>GitLab</strong> remotes only (same host as your fetch remote).
+                  {t('integrateWizard.remoteSuggestions', { host: 'GitLab' })}
                 </>
               ) : null}
             </p>
@@ -181,11 +181,11 @@ export function GitVcsIntegrateWizardModal({
                 disabled={busy}
                 autoFocus
                 style={{ width: '100%', fontSize: 13, marginBottom: 10 }}
-                aria-label="Pick a branch to integrate from"
+                aria-label={t('integrateWizard.pickBranchAriaLabel')}
               >
-                <option value="">— Choose branch —</option>
+                <option value="">{t('integrateWizard.chooseBranch')}</option>
                 {remoteRefs.length > 0 ? (
-                  <optgroup label="Remote">
+                  <optgroup label={t('integrateWizard.remoteGroup')}>
                     {remoteRefs.map((r) => (
                       <option key={`r:${r}`} value={r}>
                         {r}
@@ -194,7 +194,7 @@ export function GitVcsIntegrateWizardModal({
                   </optgroup>
                 ) : null}
                 {localRefs.length > 0 ? (
-                  <optgroup label="Local">
+                  <optgroup label={t('integrateWizard.localGroup')}>
                     {localRefs.map((r) => (
                       <option key={`l:${r}`} value={r}>
                         {r}
@@ -207,24 +207,24 @@ export function GitVcsIntegrateWizardModal({
             <label
               style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}
             >
-              Ref to integrate from
+              {t('integrateWizard.refLabel')}
             </label>
             <input
               className="hp-input mono"
               value={target}
               onChange={(e) => setTarget(e.target.value)}
-              placeholder={refSuggestions.length > 0 ? 'Matches the menu above; edit here if needed' : 'e.g. origin/main'}
+              placeholder={refSuggestions.length > 0 ? t('integrateWizard.refPlaceholderMenu') : t('integrateWizard.refPlaceholderDefault')}
               autoFocus={refSuggestions.length === 0}
               disabled={busy}
               style={{ width: '100%', fontSize: 14 }}
-              aria-label="Branch or remote ref to merge or rebase from"
+              aria-label={t('integrateWizard.refAriaLabel')}
             />
           </div>
 
           {/* Method Selection */}
           <div>
             <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 8, display: 'block' }}>
-              Strategy
+              {t('integrateWizard.strategy')}
             </label>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
               <div 
@@ -238,8 +238,8 @@ export function GitVcsIntegrateWizardModal({
                   transition: 'all 0.2s',
                 }}
               >
-                <div style={{ fontWeight: 600, fontSize: 14 }}>Merge</div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Combine histories. Creates a merge commit.</div>
+                <div style={{ fontWeight: 600, fontSize: 14 }}>{t('integrateWizard.merge.label')}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{t('integrateWizard.merge.desc')}</div>
               </div>
               <div 
                 onClick={() => !busy && setMethod('rebase')}
@@ -252,37 +252,35 @@ export function GitVcsIntegrateWizardModal({
                   transition: 'all 0.2s',
                 }}
               >
-                <div style={{ fontWeight: 600, fontSize: 14 }}>Rebase</div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Replay your work on top of the target history.</div>
+                <div style={{ fontWeight: 600, fontSize: 14 }}>{t('integrateWizard.rebase.label')}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{t('integrateWizard.rebase.desc')}</div>
               </div>
             </div>
           </div>
 
           {/* Quick Note */}
           <div style={{ padding: 12, borderRadius: 8, background: 'rgba(255,255,255,0.05)', fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>
-            <span style={{ fontWeight: 600 }}>Tip:</span> LuminaDev will automatically open the Resolution Studio if conflicts occur during the process.
+            <span style={{ fontWeight: 600 }}>{t('integrateWizard.tip.label')}</span> {t('integrateWizard.tip.text')}
             <br />
-            <span style={{ fontWeight: 600 }}>Scope:</span> This only updates your <span className="mono">{currentBranch || 'current branch'}</span> in this
-            clone (local merge/rebase). It does <strong>not</strong> merge a pull or merge request on GitHub/GitLab—you still push, then complete the MR/PR
-            on the website (or merge via API) when you are ready.
+            <span style={{ fontWeight: 600 }}>{t('integrateWizard.scope.label')}</span> {t('integrateWizard.scope.before')}<span className="mono">{currentBranch || t('integrateWizard.scope.currentBranch')}</span>{t('integrateWizard.scope.after')}
           </div>
         </div>
 
         {/* Footer */}
         <div style={{ padding: '16px 24px', background: 'var(--bg-secondary)', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
-          <button className="hp-btn" onClick={onClose} disabled={isWorking}>Cancel</button>
-          <button 
-            className="hp-btn hp-btn-primary" 
-            onClick={handleRun} 
+          <button className="hp-btn" onClick={onClose} disabled={isWorking}>{t('integrateWizard.cancel')}</button>
+          <button
+            className="hp-btn hp-btn-primary"
+            onClick={handleRun}
             disabled={isWorking || !target.trim()}
             style={{ minWidth: 100 }}
           >
             {isWorking ? (
               <>
                 <span className="codicon codicon-loading spin" style={{ marginRight: 6 }} />
-                Working...
+                {t('integrateWizard.working')}
               </>
-            ) : method === 'merge' ? 'Start Merge' : 'Start Rebase'}
+            ) : method === 'merge' ? t('integrateWizard.startMerge') : t('integrateWizard.startRebase')}
           </button>
         </div>
       </div>

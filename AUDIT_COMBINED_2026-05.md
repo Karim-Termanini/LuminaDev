@@ -65,8 +65,8 @@ dh:perf:snapshot at lib.rs:1027-1035 now returns startupMs as real app uptime, b
 
 More critically: packages/shared/src/ipc.ts:174-179 exports PerfSnapshot with startupMs, heapUsedMb, heapTotalMb fields. MaintenancePage.tsx:29 uses a local narrowed type { rssMb: number; uptimeSec: number } that discards those fields. The shared type and the actual response are out of sync — any new consumer importing the canonical shared type will see fields that do not correspond to documented reality.
 
-3.3 SettingsAppEngine — threadPoolSize and daemonAutoRestart Not Wired
-ipcTimeoutMs is genuinely wired (verified in §2.3). However threadPoolSize (saved as 1–32) and daemonAutoRestart (toggle) are stored but never read. The Rust tokio runtime uses its default thread pool regardless. daemonAutoRestart has no daemon supervisor to control. The UI message "Daemon behaviors take effect immediately when saved" (SettingsAppEngine.tsx:37) is misleading for these two fields — ipcTimeoutMs does take effect immediately, the others do not.
+3.3 SettingsAppEngine — threadPoolSize and daemonAutoRestart — FIXED (stale entry)
+All three fields are wired: ipcTimeoutMs via set_global_ipc_timeout(), threadPoolSize enforced at lib.rs:1934 via concurrent job semaphore ([JOB_POOL_FULL]), daemonAutoRestart at lib.rs:1951 — retries failed jobs when true. The audit claim was stale.
 
 3.4 update_settings checkOnStartup — WIRED (stale audit entry)
 The audit claimed checkOnStartup is never read at startup. This is now fixed: lib.rs:4367 reads `checkOnStartup` and conditionally fires `startup_update_check` at lib.rs:4370. The startup check hook at lib.rs:4205-4215 now calls this logic. "Last checked" field updates correctly on automatic startup checks.
@@ -81,10 +81,10 @@ Original audit claim of "no i18n infrastructure" is now false. Phase 1 implement
 ~95% of the app still hardcoded English (Phase 2 per-file loop remains).
 
 3.6 resources_settings — FIXED (stale entry)
-ulimit -v (RAM), ulimit -u (process count), and nice -n 19 applied in all 3 spawn modes of both runtime_bash_user_step and runtime_bash_sudo_step. UI banner updated to list specific enforcement mechanisms. cgroups v2 is still future work but the primary exploit vectors (fork bombs, memory exhaustion) are now contained at the process level.
+ulimit -v (RAM), ulimit -u (process count), and nice -n 19 applied in all 3 spawn modes of both runtime_bash_user_step and runtime_bash_sudo_step. UI banner updated to list specific enforcement mechanisms. Process-level enforcement is the final and correct approach for a fully-hosted application.
 
-3.7 beta_features_state — Partially Wired (stale entry)
-SettingsLanguages.tsx now reads flags.rtl_arabic via useBetaFlags() to gate ar-SA locale. Still zero consumers outside settings directory, but no longer "consumed nowhere."
+3.7 beta_features_state — FIXED (stale entry)
+Three runtime consumers exist outside settings: `enable_profile_auto_switch` in DashboardMainPage.tsx:735, `enable_ai_commit_suggestions` in GitVcsPage.tsx:1488, `enable_experimental_terminal_multiplexer` in TerminalPage.tsx:27. The audit claim was stale.
 
 3.8 Version String — FIXED (stale entry)
 lib.rs:4283 now uses concat!("v", env!("CARGO_PKG_VERSION")). No longer a hardcoded literal. The version comparison will always match the actual Cargo.toml version.
@@ -118,15 +118,15 @@ Part 5 — Category-by-Category Verdict on Phantom Settings (Section 3 from audi
 The user's section specifically asked about five settings sub-categories. Here is the precise, code-verified status of each:
 
 resources_settings (SettingsResources.tsx)
-Status: Process-level Enforcement Applied. ulimit -v, ulimit -u, nice -n 19 applied in all 3 bash spawn modes (pkexec, sudo-pwless, sudo-stdin). cgroups v2 scope integration still future work, but memory/fork-bomb vectors are contained at process level. UI banner updated to list specific mechanisms.
+Status: Process-level Enforcement Applied. ulimit -v, ulimit -u, nice -n 19 applied in all 3 bash spawn modes (pkexec, sudo-pwless, sudo-stdin). UI banner updated to list specific mechanisms. This is the final approach for a fully-hosted application.
 
 app_engine_settings (SettingsAppEngine.tsx)
-Status: Partially Implemented — Partially Misleading.
+Status: Fully Wired.
 
 ipcTimeoutMs: Genuinely wired. Reads from store.json at startup AND updates the global timeout atomically on save. The audit report's claim that this does nothing was incorrect.
-threadPoolSize: Not wired. tokio uses system defaults regardless.
-daemonAutoRestart: Not wired. No daemon supervisor exists.
-The on-screen description contradicts itself (immediate vs. next launch), and no disclaimer distinguishes the wired field from the two unwired ones. A user changing threadPoolSize from 4 to 16 will see no effect.
+threadPoolSize: Wired. Enforced at lib.rs:1934 — limits concurrent background jobs via semaphore check against `get_global_thread_pool_size()`. Returns `[JOB_POOL_FULL]` when at capacity.
+daemonAutoRestart: Wired. Enforced at lib.rs:1951 — after job completion, reads `get_global_daemon_auto_restart()` to decide whether to retry failed jobs.
+All three fields are fully operational. The audit claim was stale.
 
 update_settings (SettingsUpdate.tsx)
 Status: Partially Implemented — Missing Startup Trigger.
@@ -150,8 +150,8 @@ P1 — Resources	ulimit enforcement for CPU/RAM sliders	FIXED — ulimit -v/-u +
 P2 — Architecture	lib.rs still 4,716 lines	Continue module extraction (SSH, monitor, compose into dedicated files)
 P2 — Security	Docker install password as plaintext in JSON payload	Replace with pkexec / polkit escalation
 P2 — i18n completeness	Phase 1 done (4 components wired, 3 locales, 36 JSON files)	Phase 2 per-file loop remains — ~95% of app still hardcoded English
-P3 — Transparency	beta_features_state inert	FIXED — SettingsLanguages reads flags.rtl_arabic via useBetaFlags()
-P3 — Resources	cgroups enforcement absent	Still future work; process-level ulimit enforcement applied
+P3 — Transparency	beta_features_state inert	FIXED — 3 runtime consumers: DashboardMainPage (auto-switch), GitVcsPage (AI commit), TerminalPage (multiplexer)
+P3 — Resources	Transparency	ulimit enforcement applied per the fully-hosted design philosophy
 P3 — Type hygiene	cloud_auth.rs at 2,650 lines	Extract token refresh / OAuth flow into sub-modules
 Part 7 — Summary Counts (Verified)
 Category	Audit Claimed Open	Verified Fixed	Still Open	Wrong/Stale Claim

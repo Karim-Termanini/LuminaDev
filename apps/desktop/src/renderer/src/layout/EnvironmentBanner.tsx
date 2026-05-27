@@ -1,11 +1,13 @@
 import type { SessionInfo } from '@linux-dev-home/shared'
 import type { ReactElement } from 'react'
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 const DOCS_DOCKER_FLATPAK =
   'https://github.com/Karim-Termanini/LuminaDev/blob/main/docs/DOCKER_FLATPAK.md'
 
 export function EnvironmentBanner(): ReactElement {
+  const { t } = useTranslation('common')
   const [info, setInfo] = useState<SessionInfo | null>(null)
 
   useEffect(() => {
@@ -31,12 +33,12 @@ export function EnvironmentBanner(): ReactElement {
           background: 'var(--bg-panel)',
         }}
       >
-        Detecting session…
+        {t('envBanner.detecting')}
       </div>
     )
   }
 
-  const label = info.kind === 'flatpak' ? 'Flatpak session' : 'Native / host session'
+  const label = info.kind === 'flatpak' ? t('envBanner.flatpakSession') : t('envBanner.nativeSession')
   const tone = info.kind === 'flatpak' ? 'var(--orange)' : 'var(--green)'
 
   return (
@@ -82,7 +84,7 @@ export function EnvironmentBanner(): ReactElement {
           cursor: 'pointer',
         }}
       >
-        Docker &amp; Flatpak notes
+        {t('envBanner.dockerFlatpakNotes')}
       </button>
     </div>
   )

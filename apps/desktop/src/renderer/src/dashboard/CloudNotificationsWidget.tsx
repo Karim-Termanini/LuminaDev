@@ -2,6 +2,7 @@ import type { CloudIssueEntry, CloudPipelineEntry } from '@linux-dev-home/shared
 import type { ReactElement } from 'react'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 
 type Provider = 'github' | 'gitlab'
 
@@ -12,8 +13,9 @@ type NotifRow =
 const LABEL: Record<Provider, string> = { github: 'GitHub', gitlab: 'GitLab' }
 
 export function CloudNotificationsWidget(props: { comfortable: boolean }): ReactElement {
+  const { t } = useTranslation('dashboard')
   const c = props.comfortable
-  const fs = (t: number) => (c ? t + 1 : t)
+  const fs = (n: number) => (c ? n + 1 : n)
   const [rows, setRows] = useState<NotifRow[]>([])
   const [loading, setLoading] = useState(true)
   const [noAccounts, setNoAccounts] = useState(false)
@@ -82,7 +84,7 @@ export function CloudNotificationsWidget(props: { comfortable: boolean }): React
   if (loading) {
     return (
       <p className="hp-muted" style={{ margin: 0, fontSize: fs(12) }}>
-        Loading notifications…
+        {t('cloudNotifications.loading')}
       </p>
     )
   }
@@ -90,8 +92,9 @@ export function CloudNotificationsWidget(props: { comfortable: boolean }): React
   if (noAccounts) {
     return (
       <p className="hp-muted" style={{ margin: 0, fontSize: fs(12), lineHeight: 1.45 }}>
-        Connect GitHub or GitLab in{' '}
-        <Link to="/git?tab=cloud">Cloud Git</Link> to see notifications.
+        {t('cloudNotifications.noAccounts.before')}{' '}
+        <Link to="/git?tab=cloud">{t('cloudNotifications.noAccounts.linkText')}</Link>{' '}
+        {t('cloudNotifications.noAccounts.after')}
       </p>
     )
   }
@@ -99,7 +102,7 @@ export function CloudNotificationsWidget(props: { comfortable: boolean }): React
   if (rows.length === 0) {
     return (
       <p className="hp-muted" style={{ margin: 0, fontSize: fs(12) }}>
-        No failed pipelines or open issues.
+        {t('cloudNotifications.empty')}
       </p>
     )
   }
@@ -111,8 +114,8 @@ export function CloudNotificationsWidget(props: { comfortable: boolean }): React
         const url = isPipeline ? row.entry.url : row.entry.url
         const title = isPipeline ? `${row.entry.repo}: ${row.entry.name}` : row.entry.title
         const meta = isPipeline
-          ? `Failed pipeline · ${LABEL[row.provider]}`
-          : `Open issue · ${LABEL[row.provider]} · ${row.entry.repo}`
+          ? `${t('cloudNotifications.failedPipeline')} · ${LABEL[row.provider]}`
+          : `${t('cloudNotifications.openIssue')} · ${LABEL[row.provider]} · ${row.entry.repo}`
         const color = isPipeline ? 'var(--red, #ff5252)' : 'var(--accent)'
         const icon = isPipeline ? '✕' : '!'
 

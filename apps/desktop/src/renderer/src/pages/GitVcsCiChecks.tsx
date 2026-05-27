@@ -1,6 +1,7 @@
 import type { ReactElement } from 'react'
 import { useEffect, useState, useMemo } from 'react'
 import type { CloudCiCheck } from '@linux-dev-home/shared'
+import { useTranslation } from 'react-i18next'
 import { GLASS } from '../layout/GLASS'
 import { humanizeCloudAuthError } from './cloudAuthError'
 
@@ -23,6 +24,7 @@ export function GitVcsCiChecks({
   onClose,
   onResolveConflicts,
 }: GitVcsCiChecksProps): ReactElement {
+  const { t } = useTranslation('git')
   const [checks, setChecks] = useState<CloudCiCheck[]>([])
   const [mergeable, setMergeable] = useState<boolean | null>(null)
   const [baseBranch, setBaseBranch] = useState<string>('main')
@@ -97,22 +99,22 @@ export function GitVcsCiChecks({
           : '#4caf50'
 
   const checksHeadline = loading
-    ? 'Loading checks…'
+    ? t('ciChecks.loadingChecks')
     : hasConflicts
-      ? 'This branch has conflicts'
+      ? t('ciChecks.hasConflicts')
       : stats.inProgress > 0
-        ? "Some checks haven't completed yet"
+        ? t('ciChecks.someChecksIncomplete')
         : stats.failed > 0
-          ? 'Checks failed'
+          ? t('ciChecks.checksFailed')
           : noJobRows
-            ? 'No pipeline jobs listed'
-            : 'All checks passed'
+            ? t('ciChecks.noJobsListed')
+            : t('ciChecks.allChecksPassed')
 
   const checksSubline = loading
-    ? 'Fetching merge status and latest pipeline jobs…'
+    ? t('ciChecks.fetchingStatus')
     : noJobRows
-      ? 'GitLab did not return job rows for this branch (pipelines may be disabled or the token cannot read jobs).'
-      : `${stats.inProgress} in progress, ${stats.successful} successful checks`
+      ? t('ciChecks.noJobsSubline')
+      : t('ciChecks.inProgressSubline', { inProgress: stats.inProgress, successful: stats.successful })
 
   const canMergeOnServer =
     Boolean(prUrl) &&
@@ -145,7 +147,7 @@ export function GitVcsCiChecks({
               className="hp-btn hp-btn-sm"
               style={{ textDecoration: 'none' }}
             >
-              View on {provider === 'github' ? 'GitHub' : 'GitLab'}
+              {t('ciChecks.viewOn', { host: provider === 'github' ? 'GitHub' : 'GitLab' })}
             </a>
           )}
           {prUrl && repoPath.trim() && provider === 'github' ? (
@@ -155,12 +157,12 @@ export function GitVcsCiChecks({
               disabled={!canMergeOnServer || mergeBusy}
               title={
                 hasConflicts
-                  ? 'Resolve merge conflicts before merging on the server.'
+                  ? t('ciChecks.mergeTitle.hasConflicts')
                   : stats.failed > 0
-                    ? 'Fix failing checks before merging on the server.'
+                    ? t('ciChecks.mergeTitle.hasFailed')
                     : stats.inProgress > 0
-                      ? 'Wait for checks to finish.'
-                      : 'Merge this pull request on GitHub (requires permission).'
+                      ? t('ciChecks.mergeTitle.inProgress')
+                      : t('ciChecks.mergeTitle.ready')
               }
               onClick={() => {
                 void (async () => {
@@ -191,10 +193,10 @@ export function GitVcsCiChecks({
               {mergeBusy ? (
                 <>
                   <span className="codicon codicon-loading spin" style={{ marginRight: 6 }} aria-hidden />
-                  Merging…
+                  {t('ciChecks.merging')}
                 </>
               ) : (
-                'Merge PR on GitHub'
+                t('ciChecks.mergePr')
               )}
             </button>
           ) : null}
@@ -240,10 +242,10 @@ export function GitVcsCiChecks({
           <span className="codicon codicon-warning" style={{ color: '#ff5252', fontSize: 18 }} />
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 14, fontWeight: 600, color: '#ff8a80' }}>
-              This branch has conflicts that must be resolved
+              {t('ciChecks.conflictBanner.title')}
             </div>
             <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
-              Resolve conflicts before merging this {provider === 'github' ? 'Pull Request' : 'Merge Request'}.
+              {t('ciChecks.conflictBanner.body', { requestType: provider === 'github' ? 'Pull Request' : 'Merge Request' })}
             </div>
           </div>
           {onResolveConflicts && (
@@ -263,9 +265,9 @@ export function GitVcsCiChecks({
               {resolving ? (
                 <>
                   <span className="codicon codicon-loading spin" style={{ marginRight: 6 }} />
-                  Resolving...
+                  {t('ciChecks.resolving')}
                 </>
-              ) : 'Resolve locally'}
+              ) : t('ciChecks.resolveLocally')}
             </button>
           )}
         </div>
@@ -273,7 +275,7 @@ export function GitVcsCiChecks({
 
       {loading && checks.length === 0 ? (
         <div style={{ padding: '20px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: 14 }}>
-          Fetching CI status...
+          {t('ciChecks.fetchingCiStatus')}
         </div>
       ) : error ? (
         <div style={{ padding: '12px', borderRadius: 8, background: 'rgba(255,82,82,0.08)', color: '#ff8a80', fontSize: 13 }}>
@@ -324,7 +326,7 @@ export function GitVcsCiChecks({
                   target="_blank" 
                   rel="noreferrer" 
                   style={{ color: 'var(--text-muted)', fontSize: 16 }}
-                  title="View details"
+                  title={t('ciChecks.viewDetails')}
                 >
                   <span className="codicon codicon-link-external" />
                 </a>
@@ -336,16 +338,16 @@ export function GitVcsCiChecks({
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
         <div style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic' }}>
-          Last updated: {lastUpdated.toLocaleTimeString()}
+          {t('ciChecks.lastUpdated', { time: lastUpdated.toLocaleTimeString() })}
         </div>
-        <button 
-          type="button" 
-          className="hp-btn hp-btn-sm" 
+        <button
+          type="button"
+          className="hp-btn hp-btn-sm"
           onClick={() => void fetchChecks()}
           disabled={loading}
           style={{ fontSize: 11 }}
         >
-          {loading ? 'Refreshing...' : 'Refresh'}
+          {loading ? t('ciChecks.refreshing') : t('ciChecks.refresh')}
         </button>
       </div>
     </div>

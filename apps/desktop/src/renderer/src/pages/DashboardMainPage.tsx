@@ -702,21 +702,19 @@ title: t('main.activity.jobPrefix', { kind: j.kind, state: j.state }),
               <button
                 type="button"
                 onClick={() => setConfirmModalOpen(true)}
-                disabled={selectedProfile.status === 'planned' || (swState.active && swState.targetProfile === selectedProfileName) || activeProfile === selectedProfileName}
+                disabled={(swState.active && swState.targetProfile === selectedProfileName) || activeProfile === selectedProfileName}
                 style={{
                   padding: '12px 24px',
                   borderRadius: 8,
                   border: 'none',
-                  background: selectedProfile.status === 'planned'
-                    ? 'var(--bg-widget)'
-                    : activeProfile === selectedProfileName
-                      ? 'var(--green)'
-                      : selectedProfile.accent,
+                  background: activeProfile === selectedProfileName
+                    ? 'var(--green)'
+                    : selectedProfile.accent,
                   color: '#fff',
                   fontWeight: 600,
                   fontSize: 15,
-                  cursor: selectedProfile.status === 'planned' || (swState.active && swState.targetProfile === selectedProfileName) || activeProfile === selectedProfileName ? 'default' : 'pointer',
-                  opacity: selectedProfile.status === 'planned' || activeProfile === selectedProfileName ? 0.6 : (swState.active && swState.targetProfile === selectedProfileName) ? 0.8 : 1,
+                  cursor: activeProfile === selectedProfileName ? 'default' : 'pointer',
+                  opacity: activeProfile === selectedProfileName ? 0.6 : (swState.active && swState.targetProfile === selectedProfileName) ? 0.8 : 1,
                   display: 'flex',
                   alignItems: 'center',
                   gap: 8,

@@ -19,8 +19,9 @@
   direction: rtl;
 }
 
-/* Wizard renders outside AppShell — needs its own direction scope */
-.hp-rtl .readiness-wizard {
+/* Both wizard overlays render outside AppShell — need their own direction scope */
+.hp-rtl .readiness-wizard,
+.hp-rtl .wizard-flow-overlay {
   direction: rtl;
 }
 

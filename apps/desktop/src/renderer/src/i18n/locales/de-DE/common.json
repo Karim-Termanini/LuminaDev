@@ -30,5 +30,30 @@
   "state.running": "Läuft",
   "state.completed": "Abgeschlossen",
   "state.failed": "Fehlgeschlagen",
-  "state.cancelled": "Abgebrochen"
+  "state.cancelled": "Abgebrochen",
+
+  "envBanner.detecting": "Sitzung wird erkannt…",
+  "envBanner.flatpakSession": "Flatpak-Sitzung",
+  "envBanner.nativeSession": "Native / Host-Sitzung",
+  "envBanner.dockerFlatpakNotes": "Docker & Flatpak Hinweise",
+
+  "registry.title": "Registry & Git",
+  "registry.description": "Verwalten Sie Ihre Quellcodeverwaltung und Container-Assets. Klonen Sie Repositories oder suchen Sie nach offiziellen Docker-Images direkt vom Hub.",
+  "registry.browse": "Durchsuchen",
+  "registry.clone.remoteUrl": "Remote-URL",
+  "registry.clone.targetDir": "Zielverzeichnis",
+  "registry.clone.selectFolder": "Ordner mit Durchsuchen auswählen…",
+  "registry.clone.button": "git clone",
+  "registry.clone.noTarget": "Wählen Sie ein Zielverzeichnis mit Durchsuchen.",
+  "registry.clone.cloning": "Wird geklont…",
+  "registry.clone.complete": "Klonen abgeschlossen",
+  "registry.docker.title": "Docker Hub Suche",
+  "registry.docker.placeholder": "Images suchen (z.B. redis, postgres)…",
+  "registry.docker.search": "Suchen",
+  "registry.docker.searching": "Wird gesucht…",
+  "registry.docker.viewHub": "Im Hub ansehen ↗",
+  "registry.inspect.title": "Repository inspizieren",
+  "registry.inspect.placeholder": "Repository-Pfad",
+  "registry.inspect.status": "Status",
+  "registry.recent.title": "Letzte Repositories"
 }

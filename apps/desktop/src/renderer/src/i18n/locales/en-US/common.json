@@ -30,5 +30,30 @@
   "state.running": "Running",
   "state.completed": "Completed",
   "state.failed": "Failed",
-  "state.cancelled": "Cancelled"
+  "state.cancelled": "Cancelled",
+
+  "envBanner.detecting": "Detecting session…",
+  "envBanner.flatpakSession": "Flatpak session",
+  "envBanner.nativeSession": "Native / host session",
+  "envBanner.dockerFlatpakNotes": "Docker & Flatpak notes",
+
+  "registry.title": "Registry & Git",
+  "registry.description": "Manage your source control and container assets. Clone repositories or search for official Docker images directly from the Hub.",
+  "registry.browse": "Browse",
+  "registry.clone.remoteUrl": "Remote URL",
+  "registry.clone.targetDir": "Target directory",
+  "registry.clone.selectFolder": "Select folder with Browse…",
+  "registry.clone.button": "git clone",
+  "registry.clone.noTarget": "Choose a target directory with Browse.",
+  "registry.clone.cloning": "Cloning…",
+  "registry.clone.complete": "Clone complete",
+  "registry.docker.title": "Docker Hub Search",
+  "registry.docker.placeholder": "Search images (e.g. redis, postgres)…",
+  "registry.docker.search": "Search",
+  "registry.docker.searching": "Searching…",
+  "registry.docker.viewHub": "View Hub ↗",
+  "registry.inspect.title": "Inspect repository",
+  "registry.inspect.placeholder": "Repository path",
+  "registry.inspect.status": "Status",
+  "registry.recent.title": "Recent repositories"
 }

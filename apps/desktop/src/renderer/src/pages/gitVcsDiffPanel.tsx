@@ -1,4 +1,5 @@
 import type { ReactElement } from 'react'
+import { useTranslation } from 'react-i18next'
 import { parseUnifiedDiff } from './gitVcsDiffParser'
 
 export type GitVcsDiffPanelProps = {
@@ -8,6 +9,7 @@ export type GitVcsDiffPanelProps = {
 }
 
 export function GitVcsDiffPanel({ fileLabel, diff, binary }: GitVcsDiffPanelProps): ReactElement {
+  const { t } = useTranslation('git')
   if (!fileLabel) {
     return (
       <div
@@ -23,7 +25,7 @@ export function GitVcsDiffPanel({ fileLabel, diff, binary }: GitVcsDiffPanelProp
           minHeight: 200,
         }}
       >
-        Select a file to view its diff
+        {t('diffPanel.selectFile')}
       </div>
     )
   }
@@ -44,7 +46,7 @@ export function GitVcsDiffPanel({ fileLabel, diff, binary }: GitVcsDiffPanelProp
         <div className="mono" style={{ marginBottom: 8, color: 'var(--text)' }}>
           {fileLabel}
         </div>
-        Binary file changes cannot be displayed here.
+        {t('diffPanel.binaryFile')}
       </div>
     )
   }
@@ -65,7 +67,7 @@ export function GitVcsDiffPanel({ fileLabel, diff, binary }: GitVcsDiffPanelProp
         <div className="mono" style={{ marginBottom: 8, color: 'var(--text)' }}>
           {fileLabel}
         </div>
-        No textual diff (empty or new empty file).
+        {t('diffPanel.noDiff')}
       </div>
     )
   }

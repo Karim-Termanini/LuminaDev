@@ -29,8 +29,8 @@ describe('GitVcsStateBanner', () => {
         onAbortOperation={noop}
       />,
     )
-    expect(html).toContain('Merge in progress')
-    expect(html).toContain('2 file(s) with conflicts')
+    expect(html).toContain('stateBanner.mergeInProgress')
+    expect(html).toContain('stateBanner.mergeConflicts')
   })
 
   it('includes rebase title', () => {
@@ -43,6 +43,6 @@ describe('GitVcsStateBanner', () => {
         onAbortOperation={noop}
       />,
     )
-    expect(html).toContain('Rebase in progress')
+    expect(html).toContain('stateBanner.rebaseInProgress')
   })
 })
