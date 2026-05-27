@@ -96,7 +96,8 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
     } finally {
       setLoading(false)
     }
-  }, [buildCategories])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     if (currentStep === 3) {
