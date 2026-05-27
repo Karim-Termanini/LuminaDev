@@ -95,5 +95,16 @@
   "error.warningLabel": "⚠ Error: {{error}}",
   "error.suffix": "Error: {{msg}}",
 
-  "flatpakHint": "Flatpak note: if SSH key/files are inaccessible, grant access to `~/.ssh` for the app (for example with `flatpak override --user --filesystem=~/.ssh io.github.karimodora.LinuxDevHome`)."
+  "flatpakHint": "Flatpak note: if SSH key/files are inaccessible, grant access to `~/.ssh` for the app (for example with `flatpak override --user --filesystem=~/.ssh io.github.karimodora.LinuxDevHome`).",
+
+  "error.authFailed": "Authentication failed. Check your keys or password.",
+  "error.hostKeyFail": "Host key verification failed. The server identity changed or is unknown.",
+  "error.timeout": "Connection timed out. Ensure the server is reachable.",
+  "error.refused": "Connection refused. Is SSH running on the remote host?",
+  "error.fileNotFound": "Local file or SSH identity not found.",
+  "error.toolMissing": "SSH tools are missing on your host system.",
+  "error.noKey": "No SSH key found. Please generate one first.",
+  "error.enableLocalFailed": "Could not enable SSH daemon.",
+  "error.hostCommandTimeout": "A host command took too long and was stopped.",
+  "error.fallback": "SSH operation failed."
 }

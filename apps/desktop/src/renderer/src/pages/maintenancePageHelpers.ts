@@ -1,9 +1,9 @@
 /** In-app runbook: each action runs a fixed whitelisted host probe (no clipboard). */
 export const OPS_RUNBOOK = [
-  { id: 'docker-df', label: 'Docker disk usage', probe: 'maintenance_docker_system_df', icon: 'database' },
-  { id: 'docker-ps', label: 'Running containers', probe: 'maintenance_docker_ps_table', icon: 'list-tree' },
-  { id: 'docker-journal', label: 'Docker service log', probe: 'maintenance_journalctl_docker', icon: 'output' },
-  { id: 'cache-du', label: 'Largest cache folders', probe: 'maintenance_du_cache_tail', icon: 'folder-opened' },
+  { id: 'docker-df', label: 'Docker disk usage', labelKey: 'runbook.dockerDiskUsage', probe: 'maintenance_docker_system_df', icon: 'database' },
+  { id: 'docker-ps', label: 'Running containers', labelKey: 'runbook.runningContainers', probe: 'maintenance_docker_ps_table', icon: 'list-tree' },
+  { id: 'docker-journal', label: 'Docker service log', labelKey: 'runbook.dockerServiceLog', probe: 'maintenance_journalctl_docker', icon: 'output' },
+  { id: 'cache-du', label: 'Largest cache folders', labelKey: 'runbook.largestCacheFolders', probe: 'maintenance_du_cache_tail', icon: 'folder-opened' },
 ] as const
 
 export type MaintenanceHostProbe = (typeof OPS_RUNBOOK)[number]['probe']

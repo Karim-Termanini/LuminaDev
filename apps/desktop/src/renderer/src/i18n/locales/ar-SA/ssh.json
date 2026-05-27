@@ -95,5 +95,16 @@
   "error.warningLabel": "⚠ خطأ: {{error}}",
   "error.suffix": "خطأ: {{msg}}",
 
-  "flatpakHint": "ملاحظة Flatpak: إذا تعذر الوصول إلى ملفات/مفاتيح SSH، امنح التطبيق إذن الوصول إلى `~/.ssh` (مثلاً باستخدام `flatpak override --user --filesystem=~/.ssh io.github.karimodora.LinuxDevHome`)."
+  "flatpakHint": "ملاحظة Flatpak: إذا تعذر الوصول إلى ملفات/مفاتيح SSH، امنح التطبيق إذن الوصول إلى `~/.ssh` (مثلاً باستخدام `flatpak override --user --filesystem=~/.ssh io.github.karimodora.LinuxDevHome`).",
+
+  "error.authFailed": "فشل المصادقة. تحقق من مفاتيحك أو كلمة المرور.",
+  "error.hostKeyFail": "فشل التحقق من مفتاح المضيف. تغيرت هوية الخادم أو غير معروفة.",
+  "error.timeout": "انتهت مهلة الاتصال. تأكد من أن الخادم قابل للوصول.",
+  "error.refused": "تم رفض الاتصال. هل SSH يعمل على المضيف البعيد؟",
+  "error.fileNotFound": "الملف المحلي أو هوية SSH غير موجودة.",
+  "error.toolMissing": "أدوات SSH مفقودة على نظام المضيف.",
+  "error.noKey": "لم يتم العثور على مفتاح SSH. الرجاء إنشاء مفتاح أولاً.",
+  "error.enableLocalFailed": "تعذر تشغيل خدمة SSH.",
+  "error.hostCommandTimeout": "استغرق أمر المضيف وقتاً طويلاً وتم إيقافه.",
+  "error.fallback": "فشلت عملية SSH."
 }

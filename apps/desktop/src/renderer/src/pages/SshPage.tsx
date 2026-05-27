@@ -109,11 +109,11 @@ export function SshPage(): ReactElement {
     setStatus(t('generate.inProgress'))
     try {
       const res = await window.dh.sshGenerate({ target, email })
-      assertSshOk(res, 'Failed to generate SSH key.')
+      assertSshOk(res, 'Failed to generate SSH key.', t)
       setStatus(t('generate.success'))
       await loadPub()
     } catch (e) {
-      setStatus(`❌ ${humanizeSshError(e)}`)
+      setStatus(`❌ ${humanizeSshError(e, t)}`)
     } finally {
       setBusy(false)
     }
@@ -130,7 +130,7 @@ export function SshPage(): ReactElement {
         setPubKey('')
         setFingerprint('')
         if (res.error && !res.error.includes('SSH_NO_KEY')) {
-           setStatus(`❌ ${humanizeSshError(res.error)}`)
+           setStatus(`❌ ${humanizeSshError(res.error, t)}`)
         }
       }
     } catch (e) {
@@ -145,9 +145,9 @@ export function SshPage(): ReactElement {
     setEnableLocalLog('')
     try {
       const res = await window.dh.sshEnableLocal()
-      setEnableLocalLog(res.log + (res.error ? `\n✗ ${humanizeSshError(res.error)}` : ''))
+      setEnableLocalLog(res.log + (res.error ? `\n✗ ${humanizeSshError(res.error, t)}` : ''))
     } catch (e) {
-      setEnableLocalLog(`✗ ${humanizeSshError(e)}`)
+      setEnableLocalLog(`✗ ${humanizeSshError(e, t)}`)
     } finally {
       setEnableLocalBusy(false)
     }
@@ -184,7 +184,7 @@ export function SshPage(): ReactElement {
     try {
       const pubRes = await window.dh.sshGetPub({ target: 'host' })
       if (!pubRes.ok || !pubRes.pub) {
-        setStatus(`⚠ ${humanizeSshError(pubRes.error || t('password.noKey'))}`)
+        setStatus(`⚠ ${humanizeSshError(pubRes.error || t('password.noKey'), t)}`)
         return
       }
 
@@ -201,7 +201,7 @@ export function SshPage(): ReactElement {
         setPassModalSess(null)
         setPassInput('')
       } else {
-        setStatus(t('password.failed', { error: humanizeSshError(setupRes.error) }))
+        setStatus(t('password.failed', { error: humanizeSshError(setupRes.error, t) }))
       }
     } catch (err) {
       setStatus(t('error.suffix', { msg: err instanceof Error ? err.message : String(err) }))
@@ -222,10 +222,10 @@ export function SshPage(): ReactElement {
       setStatus(
         res.ok
           ? t('identity.testSuccess')
-          : `❌ ${humanizeSshError(res.error || t('identity.testFailGeneric', { code: res.code ?? 'n/a' }))}`
+          : `❌ ${humanizeSshError(res.error || t('identity.testFailGeneric', { code: res.code ?? 'n/a' }), t)}`
       )
     } catch (e) {
-      setStatus(humanizeSshError(e))
+      setStatus(humanizeSshError(e, t))
       setTestOk(false)
     } finally {
       setBusy(false)
@@ -482,7 +482,7 @@ export function SshPage(): ReactElement {
         setFtRemotePath(path)
         setFtStatus('')
       } else {
-        setFtStatus(`❌ ${humanizeSshError(res.error)}`)
+        setFtStatus(`❌ ${humanizeSshError(res.error, t)}`)
       }
     } finally {
       setRemoteBrowsing(false)

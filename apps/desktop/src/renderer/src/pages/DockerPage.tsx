@@ -1118,16 +1118,16 @@ export function DockerPage(): ReactElement {
                         {truncateMiddle(v.mountpoint, 60)}
                       </div>
                       <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.4 }}>
-                        {getVolumeDescription(v.name, !!(v.usedBy && v.usedBy.length > 0))}
+                        {getVolumeDescription(v.name, !!(v.usedBy && v.usedBy.length > 0), t)}
                       </div>
                       <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                        Used by:{' '}
+                        {t('volume.usedBy')}:{' '}
                         <span className="mono" style={{ fontSize: 11 }}>
-                          {v.usedBy && v.usedBy.length > 0 ? v.usedBy.join(', ') : 'unused'}
+                          {v.usedBy && v.usedBy.length > 0 ? v.usedBy.join(', ') : t('volume.unused')}
                         </span>
                       </div>
                       <button type="button" style={{ ...btnSmallDanger, marginTop: 8 }} onClick={() => void removeVolume(v.name)} disabled={busy}>
-                        Remove Volume
+                        {t('volume.remove')}
                       </button>
                     </div>
                   ))}
@@ -1225,17 +1225,17 @@ export function DockerPage(): ReactElement {
                         <span>{t('network.scope')}: <span className="mono" data-ltr>{n.scope}</span></span>
                       </div>
                       <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.4 }}>
-                        {getNetworkDescription(n.name)}
+                        {getNetworkDescription(n.name, t)}
                       </div>
                       <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                        Used by:{' '}
+                        {t('network.usedBy')}:{' '}
                         <span className="mono" style={{ fontSize: 11 }}>
-                          {n.usedBy && n.usedBy.length > 0 ? n.usedBy.join(', ') : 'unused'}
+                          {n.usedBy && n.usedBy.length > 0 ? n.usedBy.join(', ') : t('volume.unused')}
                         </span>
                       </div>
                       {n.name === 'bridge' || n.name === 'host' || n.name === 'none' ? (
                         <div style={{ ...systemBadge, marginTop: 8 }}>
-                          Protected system network
+                          {t('network.protected')}
                         </div>
                       ) : (
                         <button
@@ -1244,7 +1244,7 @@ export function DockerPage(): ReactElement {
                           onClick={() => void removeNetwork(n.id)}
                           disabled={busy}
                         >
-                          Remove Network
+                          {t('network.remove')}
                         </button>
                       )}
                     </div>
@@ -2092,21 +2092,21 @@ function parseVolumeMappings(text: string): Array<{ hostPath: string; containerP
   })
 }
 
-function getNetworkDescription(name: string): string {
-  if (name === 'bridge') return 'Default network. Connects containers together and provides internet access.'
-  if (name === 'host') return "Removes network isolation. Containers share the host's exact IP and ports."
-  if (name === 'none') return 'Completely disables networking. Container has no internet or local access.'
-  if (name.endsWith('_default')) return 'Custom bridge network (usually created by Docker Compose) to isolate an app.'
-  return 'User-created custom network.'
+function getNetworkDescription(name: string, t: (key: string) => string): string {
+  if (name === 'bridge') return t('network.descBridge')
+  if (name === 'host') return t('network.descHost')
+  if (name === 'none') return t('network.descNone')
+  if (name.endsWith('_default')) return t('network.descCompose')
+  return t('network.descCustom')
 }
 
-function getVolumeDescription(name: string, isUsed: boolean): string {
+function getVolumeDescription(name: string, isUsed: boolean, t: (key: string) => string): string {
   if (name.length === 64 && !name.includes('_')) {
     return isUsed 
-      ? 'Anonymous Volume. Automatically created by a running container to store internal data.'
-      : 'Unused Anonymous Volume. Leftover data from a deleted container. Safe to remove if unneeded.'
+      ? t('volume.descAnonymousUsed')
+      : t('volume.descAnonymous')
   }
-  return 'Named Volume. Specifically created to persist important database or application data safely.'
+  return t('volume.descNamed')
 }
 
 function parseEnvLines(text: string): string[] {

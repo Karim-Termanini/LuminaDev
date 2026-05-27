@@ -152,6 +152,7 @@
   "create.autoStart": "Nach Erstellung automatisch starten",
   "create.createCustom": "Benutzerdefinierten Container erstellen",
   "volume.usedBy": "Verwendet von",
+  "volume.unused": "ungenutzt",
   "volume.remove": "Volume entfernen",
   "volume.descAnonymous": "Ungenutztes anonymes Volume. Überbleibsel eines gelöschten Containers. Sicher zu entfernen wenn nicht benötigt.",
   "volume.descAnonymousUsed": "Anonymes Volume. Automatisch von einem laufenden Container erstellt.",

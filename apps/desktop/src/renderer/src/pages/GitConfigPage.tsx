@@ -1012,7 +1012,11 @@ function InspectorSection({ rows, loading }: { rows: ConfigRow[]; loading: boole
   }
 
   const CATEGORY_LABELS: Record<CategoryFilter, string> = {
-    all: 'All', identity: 'Identity', security: 'Security', performance: 'Performance', advanced: 'Advanced',
+    all: t('config.categories.all'),
+    identity: t('config.categories.identity'),
+    security: t('config.categories.security'),
+    performance: t('config.categories.performance'),
+    advanced: t('config.categories.advanced'),
   }
 
   function cellValue(r: ConfigRow): string {

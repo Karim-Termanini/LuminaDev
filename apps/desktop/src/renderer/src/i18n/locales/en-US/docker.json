@@ -152,6 +152,7 @@
   "create.autoStart": "Auto start after create",
   "create.createCustom": "Create custom container",
   "volume.usedBy": "Used by",
+  "volume.unused": "unused",
   "volume.remove": "Remove Volume",
   "volume.descAnonymous": "Unused Anonymous Volume. Leftover data from a deleted container. Safe to remove if unneeded.",
   "volume.descAnonymousUsed": "Anonymous Volume. Automatically created by a running container to store internal data.",

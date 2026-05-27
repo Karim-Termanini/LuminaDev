@@ -95,5 +95,16 @@
   "error.warningLabel": "⚠ Fehler: {{error}}",
   "error.suffix": "Fehler: {{msg}}",
 
-  "flatpakHint": "Flatpak-Hinweis: Falls SSH-Schlüssel/-Dateien nicht zugänglich sind, gewähre der App Zugriff auf `~/.ssh` (z. B. mit `flatpak override --user --filesystem=~/.ssh io.github.karimodora.LinuxDevHome`)."
+  "flatpakHint": "Flatpak-Hinweis: Falls SSH-Schlüssel/-Dateien nicht zugänglich sind, gewähre der App Zugriff auf `~/.ssh` (z. B. mit `flatpak override --user --filesystem=~/.ssh io.github.karimodora.LinuxDevHome`).",
+
+  "error.authFailed": "Authentifizierung fehlgeschlagen. Überprüfe deine Schlüssel oder dein Passwort.",
+  "error.hostKeyFail": "Host-Key-Überprüfung fehlgeschlagen. Die Serveridentität hat sich geändert oder ist unbekannt.",
+  "error.timeout": "Verbindungszeitüberschreitung. Stelle sicher, dass der Server erreichbar ist.",
+  "error.refused": "Verbindung abgelehnt. Läuft SSH auf dem entfernten Rechner?",
+  "error.fileNotFound": "Lokale Datei oder SSH-Identität nicht gefunden.",
+  "error.toolMissing": "SSH-Werkzeuge fehlen auf deinem Host-System.",
+  "error.noKey": "Kein SSH-Schlüssel gefunden. Bitte erstelle zuerst einen.",
+  "error.enableLocalFailed": "SSH-Daemon konnte nicht aktiviert werden.",
+  "error.hostCommandTimeout": "Ein Host-Befehl dauerte zu lange und wurde gestoppt.",
+  "error.fallback": "SSH-Operation fehlgeschlagen."
 }

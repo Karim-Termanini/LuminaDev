@@ -1,6 +1,7 @@
 import type { BranchEntry, ConnectedAccount, FileEntry, GitRemoteEntry, GitRepoEntry } from '@linux-dev-home/shared'
 import type { CSSProperties, ReactElement } from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Trans, useTranslation } from 'react-i18next'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 
 import { assertGitOk } from './gitContract'
@@ -39,6 +40,7 @@ import { useBetaFlags } from '../hooks/useBetaFlags'
 type DirtyCheckoutPrompt = { branch: string; create: boolean; files: string[] }
 
 export function GitVcsPage(): ReactElement {
+  const { t } = useTranslation('git')
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const betaFlags = useBetaFlags()
@@ -1024,15 +1026,11 @@ export function GitVcsPage(): ReactElement {
     >
       <header>
         <div className="mono" style={{ color: 'var(--cg-accent, var(--accent))', fontSize: 12, marginBottom: 6 }}>
-          GIT.WORKTREE
+          {t('page.worktreeLabel')}
         </div>
-        <h1 style={{ margin: 0, fontSize: 24, fontWeight: 700 }}>Git VCS</h1>
+        <h1 style={{ margin: 0, fontSize: 24, fontWeight: 700 }}>{t('page.title')}</h1>
         <p style={{ color: 'var(--text-muted)', marginTop: 6, maxWidth: 720, lineHeight: 1.5 }}>
-          Status, diffs, stage, commit, fetch, pull, push, merge, rebase, and stash pop. HTTPS remotes use credentials from{' '}
-          <Link to="/git?tab=cloud&provider=github" style={{ color: 'var(--cg-accent, var(--accent))' }}>
-            Cloud Git
-          </Link>
-          .
+          <Trans i18nKey="page.subtitle" ns="git" t={t} components={{ link: <Link to="/git?tab=cloud&provider=github" style={{ color: 'var(--cg-accent, var(--accent))' }} /> }} />
         </p>
       </header>
 
@@ -1284,11 +1282,11 @@ export function GitVcsPage(): ReactElement {
               >
                 {ahead != null && ahead > 0 ? `↑${ahead} ` : ''}
                 {behind != null && behind > 0 ? `↓${behind}` : ''}
-                {ahead === 0 && behind === 0 ? 'up to date' : ''}
+                {ahead === 0 && behind === 0 ? t('toolbar.upToDate') : ''}
               </span>
             ) : (
               <span className="mono" style={{ fontSize: 12, color: 'var(--text-muted)', opacity: 0.6 }}>
-                no upstream
+                {t('toolbar.noUpstream')}
               </span>
             )}
             {/* remote selector — only show if multiple remotes */}
@@ -1316,7 +1314,7 @@ export function GitVcsPage(): ReactElement {
               </select>
             ) : null}
             <button type="button" className="hp-btn" disabled={busy} onClick={() => void runFetch()}>
-              Fetch
+              {t('toolbar.fetch')}
             </button>
             <button
               type="button"
@@ -1325,7 +1323,7 @@ export function GitVcsPage(): ReactElement {
               onClick={() => void runPull()}
               style={nextActionButtonStyle(nextGitAction, 'pull', {})}
             >
-              Pull
+              {t('toolbar.pull')}
             </button>
             <button
               type="button"
@@ -1334,18 +1332,18 @@ export function GitVcsPage(): ReactElement {
               onClick={() => void runPush()}
               style={nextActionButtonStyle(nextGitAction, 'push', {})}
             >
-              Push
+              {t('toolbar.push')}
             </button>
             {activeFetchProvider !== 'other' && cloudAccounts.some((a) => a.provider === activeFetchProvider) ? (
               <button
                 type="button"
                 className="hp-btn"
                 disabled={busy}
-                title={`Create ${activeFetchProvider === 'gitlab' ? 'Merge Request' : 'Pull Request'}`}
+                title={activeFetchProvider === 'gitlab' ? t('toolbar.createMr') : t('toolbar.createPr')}
                 onClick={() => { setLastCreatedPrUrl(null); setPrWizardOpen(true) }}
               >
                 <span className="codicon codicon-git-pull-request" style={{ fontSize: 13, marginRight: 4 }} aria-hidden />
-                {activeFetchProvider === 'gitlab' ? 'New MR' : 'New PR'}
+                {activeFetchProvider === 'gitlab' ? t('toolbar.newMr') : t('toolbar.newPr')}
               </button>
             ) : null}
           </div>
@@ -1381,7 +1379,7 @@ export function GitVcsPage(): ReactElement {
             <div style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
               <span className="codicon codicon-check" style={{ color: '#69f0ae' }} aria-hidden />
               <a href={lastCreatedPrUrl} target="_blank" rel="noreferrer" style={{ color: 'var(--cg-accent, var(--accent))' }}>
-                {activeFetchProvider === 'gitlab' ? 'Merge request' : 'Pull request'} created →
+                {activeFetchProvider === 'gitlab' ? t('toolbar.mrCreated') : t('toolbar.prCreated')}
               </a>
               <button type="button" className="hp-btn" style={{ fontSize: 11, padding: '1px 6px' }} onClick={() => setLastCreatedPrUrl(null)}>
                 ✕
@@ -1405,7 +1403,7 @@ export function GitVcsPage(): ReactElement {
                 style={{ flex: 1 }}
               >
                 <span className="codicon codicon-git-merge" style={{ marginRight: 8 }} />
-                Integrate / Sync...
+                {t('toolbar.integrate')}
               </button>
               {gitOperation !== 'none' && (
                  <>
