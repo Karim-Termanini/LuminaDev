@@ -19,7 +19,7 @@ export function SettingsRemote(): ReactElement {
         setLoadError(bm.error ?? t('remote.loadError'))
       }
     })
-  }, [])
+  }, [t])
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>

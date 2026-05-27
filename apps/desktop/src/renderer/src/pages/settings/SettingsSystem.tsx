@@ -221,7 +221,7 @@ export function SettingsSystem(): ReactElement {
       setHostsBusy(false)
       setEnvBusy(false)
     })
-  }, [])
+  }, [t])
 
   async function refreshHosts(): Promise<void> {
     setHostsBusy(true)

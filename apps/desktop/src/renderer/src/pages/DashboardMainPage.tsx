@@ -580,7 +580,7 @@ export function DashboardMainPage(): ReactElement {
       cpu: item.cpu,
       ram: item.ram,
     }))
-  }, [metricsHistory])
+  }, [metricsHistory, t])
 
   const resourceAllocation = useMemo(() => {
     if (activeContainers.length === 0) {
@@ -608,7 +608,7 @@ export function DashboardMainPage(): ReactElement {
       { label: t('main.resourceAllocation.exited'), value: exited, color: 'var(--text-muted)' },
       { label: t('main.resourceAllocation.paused'), value: paused, color: 'var(--yellow)' },
     ]
-  }, [activeContainers])
+  }, [activeContainers, t])
 
   const liveEvents = useMemo(() => {
     if (jobs.length === 0) {
@@ -645,7 +645,7 @@ export function DashboardMainPage(): ReactElement {
           : j.logTail[j.logTail.length - 1] || t('main.activity.completed')
       }
     })
-  }, [jobs])
+  }, [jobs, t])
 
   return (
     <div className="dashboard-split-layout">

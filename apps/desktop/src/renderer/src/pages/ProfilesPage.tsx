@@ -41,8 +41,6 @@ export function ProfilesPage(): ReactElement {
   const [profiles, setProfiles] = useState<CustomProfileEntry[]>([])
   const [importText, setImportText] = useState('')
   const [status, setStatus] = useState<{ message: string; type: 'success' | 'warning' } | null>(null)
-  const showOk = (message: string): void => setStatus({ message, type: 'success' })
-  const showWarn = (message: string): void => setStatus({ message, type: 'warning' })
   const [onLogin, setOnLogin] = useState<OnLoginAutomationStore>(() =>
     OnLoginAutomationStoreSchema.parse({}),
   )
@@ -149,7 +147,7 @@ export function ProfilesPage(): ReactElement {
       const ol = (await window.dh.storeGet({ key: 'on_login_automation' })) as { ok: boolean; data: unknown }
       if (ol.ok) setOnLogin(parseOnLoginAutomation(ol.data))
     } catch { /* ignore */ }
-  }, [loadExtras])
+  }, [loadExtras, t])
 
   useEffect(() => { void load() }, [load])
 

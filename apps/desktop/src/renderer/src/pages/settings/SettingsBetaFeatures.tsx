@@ -43,7 +43,7 @@ export const SettingsBetaFeatures: React.FC = () => {
     };
 
     loadFlags();
-  }, []);
+  }, [t]);
 
   const handleToggle = async (key: string) => {
     try {

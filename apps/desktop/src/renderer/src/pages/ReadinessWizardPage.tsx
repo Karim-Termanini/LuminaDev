@@ -96,7 +96,7 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [buildCategories])
 
   useEffect(() => {
     if (currentStep === 3) {

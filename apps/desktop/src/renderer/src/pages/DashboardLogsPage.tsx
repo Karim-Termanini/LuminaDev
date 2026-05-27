@@ -154,7 +154,7 @@ export function DashboardLogsPage(): ReactElement {
         term.write(colorizeLine(line) + '\r\n')
       }
     }
-  }, [])
+  }, [t])
 
   const refreshJobs = useCallback(async () => {
     try {
@@ -234,7 +234,7 @@ export function DashboardLogsPage(): ReactElement {
     }
 
     return unified
-  }, [containers])
+  }, [containers, t])
 
   const loadSourceLogs = useCallback(async () => {
     let rawText = ''
@@ -274,7 +274,7 @@ export function DashboardLogsPage(): ReactElement {
     }
 
     writeLogs(rawText, searchText)
-  }, [activeSource, searchText, jobs, getUnifiedLogs, writeLogs])
+  }, [activeSource, searchText, jobs, getUnifiedLogs, writeLogs, t])
 
   useEffect(() => {
     if (!containerRef.current) return

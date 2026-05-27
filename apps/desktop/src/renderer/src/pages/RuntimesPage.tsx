@@ -145,7 +145,7 @@ export function RuntimesPage(): ReactElement {
       setDependencies([])
       setErrorMessage(humanizeRuntimeError(e))
     }
-  }, [selectedId])
+  }, [selectedId, t])
 
   const refreshStatus = useCallback(async () => {
     setIsRefreshing(true)
@@ -180,7 +180,7 @@ export function RuntimesPage(): ReactElement {
         setSettingActivePath(null)
       }
     },
-    [refreshStatus, selectedId],
+    [refreshStatus, selectedId, t],
   )
 
   const removeVersion = useCallback(
@@ -198,7 +198,7 @@ export function RuntimesPage(): ReactElement {
         setRemovingVersionPath(null)
       }
     },
-    [refreshStatus, selectedId],
+    [refreshStatus, selectedId, t],
   )
 
   useEffect(() => {

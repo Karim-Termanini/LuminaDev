@@ -24,7 +24,7 @@ export function SettingsHelpAbout(): ReactElement {
         }
       })
       .catch((e: unknown) => setErr(e instanceof Error ? e.message : t('helpAbout.loading')))
-  }, [])
+  }, [t])
 
   const rows: Array<{ label: string; value: string }> = info ? [
     { label: t('helpAbout.version'), value: info.version },

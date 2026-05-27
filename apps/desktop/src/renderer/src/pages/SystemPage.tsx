@@ -29,7 +29,7 @@ export function SystemPage(): ReactElement {
     } catch {
       setGpu(t('system.gpuUnavailable'))
     }
-  }, [])
+  }, [t])
 
   useEffect(() => {
     void refresh()

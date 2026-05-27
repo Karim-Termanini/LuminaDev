@@ -113,7 +113,7 @@ export function MaintenancePage(): ReactElement {
     } finally {
       setSavingState(false)
     }
-  }, [])
+  }, [t])
 
   const refreshCleanupPreview = useCallback(async () => {
     try {
@@ -191,7 +191,7 @@ export function MaintenancePage(): ReactElement {
     } catch (e) {
       showStatus(humanizeDashboardError(e))
     }
-  }, [refreshSystemdSnapshot])
+  }, [refreshSystemdSnapshot, t])
 
   useEffect(() => {
     void refreshLive()
@@ -404,7 +404,7 @@ export function MaintenancePage(): ReactElement {
     } finally {
       setRunbookBusyId(null)
     }
-  }, [])
+  }, [t])
 
   async function runDiagnosticsWizard(): Promise<void> {
     setRunningDiagnostics(true)

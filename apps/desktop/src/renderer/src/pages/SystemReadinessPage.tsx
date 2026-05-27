@@ -65,7 +65,7 @@ export function SystemReadinessPage(): ReactElement {
     { id: 'virtualization' as Category, label: t('system.categoryVirtualization'), icon: 'circuit-board' },
     { id: 'network' as Category, label: t('system.categoryNetwork'), icon: 'globe' },
     { id: 'tools' as Category, label: t('system.categoryTools'), icon: 'tools' },
-  ], [])
+  ], [t])
 
   const renderHardware = () => {
     if (!report) return null
