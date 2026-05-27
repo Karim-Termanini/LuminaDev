@@ -2,6 +2,7 @@ import type { ContainerInspectData, ContainerRow, ImageRow, NetworkRow, SessionI
 import type { ReactElement } from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
@@ -62,6 +63,7 @@ const RECOMMENDED_IMAGES = [
 
 
 export function DockerPage(): ReactElement {
+  const { t } = useTranslation('docker')
   const [searchParams] = useSearchParams()
   const initialTab = (searchParams.get('tab') as TabId) || 'scheme'
   const [tab, setTab] = useState<TabId>(initialTab)
@@ -687,8 +689,8 @@ export function DockerPage(): ReactElement {
         </button>
         <span className="docker-toolbar-stats">
           {docker?.ok
-            ? `${rows.length} containers • ${images.length} images • ${volumes.length} volumes • ${networks.length} networks`
-            : 'docker unavailable'}
+            ? t('toolbar.stats', { containers: rows.length, images: images.length, volumes: volumes.length, networks: networks.length })
+            : t('toolbar.unavailable')}
         </span>
       </div>
 
@@ -728,15 +730,15 @@ export function DockerPage(): ReactElement {
         <nav className="docker-sidebar">
           {(
             [
-              { id: 'scheme',     icon: '🗺', label: 'Scheme'     },
-              { id: 'create',     icon: '➕', label: 'Create'     },
-              { id: 'containers', icon: '📦', label: 'Containers' },
-              { id: 'images',     icon: '🖼', label: 'Images'     },
-              { id: 'volumes',    icon: '💾', label: 'Volumes'    },
-              { id: 'networks',   icon: '🌐', label: 'Networks'   },
-              { id: 'ports',      icon: '🔌', label: 'Ports'      },
-              { id: 'cleanup',    icon: '🧹', label: 'Cleanup'    },
-            ] as const
+              { id: 'scheme',     icon: '🗺', label: t('tab.scheme')     },
+              { id: 'create',     icon: '➕', label: t('tab.create')     },
+              { id: 'containers', icon: '📦', label: t('tab.containers') },
+              { id: 'images',     icon: '🖼', label: t('tab.images')     },
+              { id: 'volumes',    icon: '💾', label: t('tab.volumes')    },
+              { id: 'networks',   icon: '🌐', label: t('tab.networks')   },
+              { id: 'ports',      icon: '🔌', label: t('tab.ports')      },
+              { id: 'cleanup',    icon: '🧹', label: t('tab.cleanup')    },
+            ] as { id: TabId; icon: string; label: string }[]
           ).map(({ id, icon, label }) => (
             <button
               key={id}
@@ -752,17 +754,17 @@ export function DockerPage(): ReactElement {
 
         {/* Content pane */}
         <section className="docker-content">
-        {!docker ? <div style={{ color: 'var(--text-muted)' }}>Checking Docker daemon…</div> : null}
+        {!docker ? <div style={{ color: 'var(--text-muted)' }}>{t('daemon.checking')}</div> : null}
         {docker && !docker.ok ? <div style={{ color: 'var(--orange)' }}>{humanizeDockerError(docker.error)}</div> : null}
         {docker?.ok && tab === 'create' ? (
           <div style={{ display: 'grid', gap: 8 }}>
             <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>
-              Create from examples. Click <span className="mono">Use</span> to create a new container template.
+              {t('create.fromExamples', { use: t('action.use') })}
             </div>
             <div className="hp-card">
               <div className="hp-card-header">
-                <div className="hp-card-title">Pull from Docker Hub Explorer</div>
-                <div className="hp-card-subtitle">Search image names and pick a tag before pulling.</div>
+                <div className="hp-card-title">{t('create.hubExplorer')}</div>
+                <div className="hp-card-subtitle">{t('create.hubExplorerDesc')}</div>
               </div>
               <div style={{ position: 'relative' }}>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -773,7 +775,7 @@ export function DockerPage(): ReactElement {
                         setPullImage(e.target.value)
                         setAvailableTags([]) // Reset tags if typing manually
                       }}
-                      placeholder="Search images (e.g. redis, postgres, nginx)..."
+                      placeholder={t('create.hubSearch')}
                       style={{ ...nameInput, marginTop: 0, width: '100%' }}
                       disabled={busy}
                     />
@@ -852,17 +854,17 @@ export function DockerPage(): ReactElement {
             </div>
             <div className="hp-card">
               <div className="hp-card-header">
-                <div className="hp-card-title">Custom create (ports/env/volumes)</div>
-                <div className="hp-card-subtitle">Define runtime options line-by-line, then create once.</div>
+                <div className="hp-card-title">{t('create.custom')}</div>
+                <div className="hp-card-subtitle">{t('create.customDesc')}</div>
               </div>
               <div style={formGrid}>
-                <input value={customImage} onChange={(e) => setCustomImage(e.target.value)} placeholder="Image" className="hp-input" disabled={busy} />
-                <input value={customName} onChange={(e) => setCustomName(e.target.value)} placeholder="Container name (optional)" className="hp-input" disabled={busy} />
-                <textarea value={customPortsText} onChange={(e) => setCustomPortsText(e.target.value)} placeholder="Ports: host:container per line (e.g. 8080:80)" className="hp-input" style={{ minHeight: 60 }} />
-                <textarea value={customVolumesText} onChange={(e) => setCustomVolumesText(e.target.value)} placeholder="Volumes: /host/path:/container/path per line" className="hp-input" style={{ minHeight: 60 }} />
-                <textarea value={customEnvText} onChange={(e) => setCustomEnvText(e.target.value)} placeholder="Env: KEY=VALUE per line" className="hp-input" style={{ minHeight: 60 }} />
+                <input value={customImage} onChange={(e) => setCustomImage(e.target.value)} placeholder={t('create.imagePlaceholder')} className="hp-input" disabled={busy} />
+                <input value={customName} onChange={(e) => setCustomName(e.target.value)} placeholder={t('create.namePlaceholder')} className="hp-input" disabled={busy} />
+                <textarea value={customPortsText} onChange={(e) => setCustomPortsText(e.target.value)} placeholder={t('create.portsPlaceholder')} className="hp-input" style={{ minHeight: 60 }} />
+                <textarea value={customVolumesText} onChange={(e) => setCustomVolumesText(e.target.value)} placeholder={t('create.volumesPlaceholder')} className="hp-input" style={{ minHeight: 60 }} />
+                <textarea value={customEnvText} onChange={(e) => setCustomEnvText(e.target.value)} placeholder={t('create.envPlaceholder')} className="hp-input" style={{ minHeight: 60 }} />
                 <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13 }}>
-                  <span style={{ fontWeight: 600 }}>Network mode</span>
+                  <span style={{ fontWeight: 600 }}>{t('create.networkMode')}</span>
                   <select className="hp-input" value={customNetworkMode} onChange={(e) => setCustomNetworkMode(e.target.value)}>
                     <option value="bridge">bridge</option>
                     <option value="host">host</option>
@@ -957,11 +959,11 @@ export function DockerPage(): ReactElement {
         ) : null}
         {docker?.ok && tab === 'containers' ? (
           rows.length === 0 ? (
-            <div style={{ color: 'var(--text-muted)' }}>No containers found.</div>
+            <div style={{ color: 'var(--text-muted)' }}>{t('container.none')}</div>
           ) : (
             <div style={{ display: 'grid', gap: 16 }}>
               <ContainerTable
-                title={`Running now (${runningRows.length})`}
+                title={t('container.running', { count: runningRows.length })}
                 rows={runningRows}
                 busy={busy}
                 onAction={runAction}
@@ -969,7 +971,7 @@ export function DockerPage(): ReactElement {
                 onConfigure={(r) => setInspectRow(r)}
               />
               <ContainerTable
-                title={`Not running (${stoppedRows.length})`}
+                title={t('container.notRunning', { count: stoppedRows.length })}
                 rows={stoppedRows}
                 busy={busy}
                 onAction={runAction}
@@ -978,7 +980,7 @@ export function DockerPage(): ReactElement {
               />
               {stoppedRows.length === 0 ? (
                 <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>
-                  No stopped containers from current Docker daemon/context.
+                  {t('container.noStopped')}
                 </div>
               ) : null}
             </div>
@@ -987,7 +989,7 @@ export function DockerPage(): ReactElement {
         {docker?.ok && tab === 'images' ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
             <div>
-              <div className="hp-section-title">Recommended images</div>
+              <div className="hp-section-title">{t('image.recommended')}</div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: 12 }}>
                 {RECOMMENDED_IMAGES.map((rec) => (
                   <div key={rec.name} style={{
@@ -1027,9 +1029,9 @@ export function DockerPage(): ReactElement {
             </div>
 
             <div>
-              <div className="hp-section-title">Downloaded images</div>
+              <div className="hp-section-title">{t('image.downloaded')}</div>
               {images.length === 0 ? (
-                <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>No images found.</div>
+                <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>{t('image.none')}</div>
               ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: 12 }}>
                   {images.map((img) => (
@@ -1074,25 +1076,25 @@ export function DockerPage(): ReactElement {
         {docker?.ok && tab === 'volumes' ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
             <div className="hp-card">
-              <div style={{ fontWeight: 600, marginBottom: 8 }}>Create Volume</div>
+              <div style={{ fontWeight: 600, marginBottom: 8 }}>{t('volume.create')}</div>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <input
                   value={createVolumeName}
                   onChange={(e) => setCreateVolumeName(e.target.value)}
-                  placeholder="e.g. my_database_data"
+                  placeholder={t('volume.namePlaceholder')}
                   style={{ ...nameInput, marginTop: 0, maxWidth: 320 }}
                   disabled={busy}
                 />
                 <button type="button" className="hp-btn hp-btn-primary" onClick={() => void createCustomVolume()} disabled={busy}>
-                  Create Volume
+                  {t('volume.create')}
                 </button>
               </div>
             </div>
 
             <div>
-              <div style={{ fontWeight: 600, marginBottom: 12 }}>Local Volumes</div>
+              <div style={{ fontWeight: 600, marginBottom: 12 }}>{t('volume.local')}</div>
               {volumes.length === 0 ? (
-                <div style={{ color: 'var(--text-muted)' }}>No volumes found.</div>
+                <div style={{ color: 'var(--text-muted)' }}>{t('volume.none')}</div>
               ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
                   {volumes.map((v) => (
@@ -1109,8 +1111,8 @@ export function DockerPage(): ReactElement {
                         {v.name}
                       </div>
                       <div style={{ fontSize: 12, color: 'var(--text-muted)', display: 'flex', gap: 8 }}>
-                        <span>Driver: <span className="mono">{v.driver}</span></span>
-                        <span>Scope: <span className="mono">{v.scope}</span></span>
+                        <span>{t('volume.driver')}: <span className="mono" data-ltr>{v.driver}</span></span>
+                        <span>{t('volume.scope')}: <span className="mono" data-ltr>{v.scope}</span></span>
                       </div>
                       <div className="mono" style={{ fontSize: 11, background: 'var(--bg)', padding: '6px 8px', borderRadius: 6, wordBreak: 'break-all' }} title={v.mountpoint}>
                         {truncateMiddle(v.mountpoint, 60)}
@@ -1138,20 +1140,20 @@ export function DockerPage(): ReactElement {
           <div style={{ display: 'grid', gap: 12 }}>
             <DockerSchemeView containers={rows} networks={networks} />
             <div className="hp-card">
-              <div style={{ fontWeight: 600, marginBottom: 8 }}>Relationship details</div>
+              <div style={{ fontWeight: 600, marginBottom: 8 }}>{t('scheme.relationship')}</div>
               {rows.length === 0 ? (
-                <div style={{ color: 'var(--text-muted)' }}>No containers found.</div>
+                <div style={{ color: 'var(--text-muted)' }}>{t('scheme.none')}</div>
               ) : (
                 <div style={tableWrap}>
                   <table style={table}>
                     <thead>
                       <tr style={{ color: 'var(--text-muted)', textAlign: 'left' }}>
-                        <th style={{ padding: '8px 6px' }}>Container</th>
-                        <th>Image</th>
-                        <th>Networks</th>
-                        <th>Volumes</th>
-                        <th>Ports</th>
-                        <th>State</th>
+                        <th style={{ padding: '8px 6px' }}>{t('scheme.col.container')}</th>
+                        <th>{t('scheme.col.image')}</th>
+                        <th>{t('scheme.col.networks')}</th>
+                        <th>{t('scheme.col.volumes')}</th>
+                        <th>{t('scheme.col.ports')}</th>
+                        <th>{t('scheme.col.state')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1167,8 +1169,8 @@ export function DockerPage(): ReactElement {
                           <td className="mono" style={monoCell} title={(r.volumes ?? []).join(', ')}>
                             {(r.volumes ?? []).length > 0 ? (r.volumes ?? []).join(', ') : '—'}
                           </td>
-                          <td className="mono" style={monoCell} title={r.ports}>{r.ports}</td>
-                          <td>{r.state}</td>
+                          <td className="mono" style={monoCell} data-ltr title={r.ports}>{r.ports}</td>
+                          <td>{t(`common:status.${r.state}`, { defaultValue: r.state })}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -1181,25 +1183,25 @@ export function DockerPage(): ReactElement {
         {docker?.ok && tab === 'networks' ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
             <div className="hp-card">
-              <div style={{ fontWeight: 600, marginBottom: 8 }}>Create Network</div>
+              <div style={{ fontWeight: 600, marginBottom: 8 }}>{t('network.create')}</div>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <input
                   value={createNetworkName}
                   onChange={(e) => setCreateNetworkName(e.target.value)}
-                  placeholder="e.g. my_custom_network"
+                  placeholder={t('network.namePlaceholder')}
                   style={{ ...nameInput, marginTop: 0, maxWidth: 320 }}
                   disabled={busy}
                 />
                 <button type="button" className="hp-btn hp-btn-primary" onClick={() => void createCustomNetwork()} disabled={busy}>
-                  Create Network
+                  {t('network.create')}
                 </button>
               </div>
             </div>
 
             <div>
-              <div style={{ fontWeight: 600, marginBottom: 12 }}>Local Networks</div>
+              <div style={{ fontWeight: 600, marginBottom: 12 }}>{t('network.local')}</div>
               {networks.length === 0 ? (
-                <div style={{ color: 'var(--text-muted)' }}>No networks found.</div>
+                <div style={{ color: 'var(--text-muted)' }}>{t('network.none')}</div>
               ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
                   {networks.map((n) => (
@@ -1219,8 +1221,8 @@ export function DockerPage(): ReactElement {
                         {n.id.slice(0, 12)}
                       </div>
                       <div style={{ fontSize: 12, color: 'var(--text-muted)', display: 'flex', gap: 8, marginTop: 4 }}>
-                        <span>Driver: <span className="mono">{n.driver}</span></span>
-                        <span>Scope: <span className="mono">{n.scope}</span></span>
+                        <span>{t('network.driver')}: <span className="mono" data-ltr>{n.driver}</span></span>
+                        <span>{t('network.scope')}: <span className="mono" data-ltr>{n.scope}</span></span>
                       </div>
                       <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.4 }}>
                         {getNetworkDescription(n.name)}
@@ -1260,26 +1262,26 @@ export function DockerPage(): ReactElement {
               {' '}(that is what Remap can clone and change).
             </div>
             <div className="hp-card">
-              <div style={{ fontWeight: 600, marginBottom: 8 }}>Containers and Docker Ports column</div>
+              <div style={{ fontWeight: 600, marginBottom: 8 }}>{t('ports.title')}</div>
               {rows.length === 0 ? (
-                <div style={{ color: 'var(--text-muted)' }}>No containers.</div>
+                <div style={{ color: 'var(--text-muted)' }}>{t('ports.none')}</div>
               ) : (
                 <div style={tableWrap}>
                   <table style={table}>
                     <thead>
                       <tr style={{ color: 'var(--text-muted)', textAlign: 'left' }}>
-                        <th style={{ padding: '8px 6px' }}>Container</th>
-                        <th>State</th>
-                        <th>Ports</th>
-                        <th>Host publish</th>
+                        <th style={{ padding: '8px 6px' }}>{t('ports.col.container')}</th>
+                        <th>{t('ports.col.state')}</th>
+                        <th>{t('ports.col.ports')}</th>
+                        <th>{t('ports.col.hostPublish')}</th>
                       </tr>
                     </thead>
                     <tbody>
                       {rows.map((r) => (
                         <tr key={r.id} style={{ borderTop: '1px solid var(--border)' }}>
-                          <td style={{ padding: '9px 6px', fontWeight: 600 }}>{r.name}</td>
-                          <td>{r.state}</td>
-                          <td className="mono" style={monoCell} title={r.ports}>{r.ports}</td>
+                          <td style={{ padding: '9px 6px', fontWeight: 600 }} data-ltr>{r.name}</td>
+                          <td>{t(`common:status.${r.state}`, { defaultValue: r.state })}</td>
+                          <td className="mono" style={monoCell} data-ltr title={r.ports}>{r.ports}</td>
                           <td style={{ fontSize: 13 }}>
                             {extractFirstHostPort(r.ports) ? (
                               <span style={{ color: 'var(--green)' }}>yes</span>
@@ -1295,12 +1297,12 @@ export function DockerPage(): ReactElement {
               )}
             </div>
             <div className="hp-card">
-              <div style={{ fontWeight: 600, marginBottom: 8 }}>Port bindings</div>
+              <div style={{ fontWeight: 600, marginBottom: 8 }}>{t('ports.bindings')}</div>
               {sessionKind === 'flatpak' ? (
                 <div className="hp-status-alert warning" style={{ marginBottom: 0 }}>
                   <span className="codicon codicon-tools" aria-hidden />
                   <div>
-                    <div style={{ fontWeight: 600, marginBottom: 2 }}>Not available in Flatpak</div>
+                    <div style={{ fontWeight: 600, marginBottom: 2 }}>{t('ports.notFlatpak')}</div>
                     <div style={{ fontSize: 12 }}>
                       Remap uses host Docker CLI. Use a native install session, or recreate the container manually with a new{' '}
                       <span className="mono">-p</span> mapping.
@@ -1474,7 +1476,7 @@ export function DockerPage(): ReactElement {
         {tab === 'cleanup' ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
             <div className="hp-card">
-              <h3 style={{ margin: 0, fontSize: 18 }}>Guided System Cleanup</h3>
+              <h3 style={{ margin: 0, fontSize: 18 }}>{t('cleanup.title')}</h3>
               <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>
                 Free up disk space by removing unused Docker resources. Select what to prune:
               </p>
@@ -1482,34 +1484,34 @@ export function DockerPage(): ReactElement {
                 <label style={checkboxLabel}>
                   <input type="checkbox" checked={pruneSelection.containers} onChange={e => setPruneSelection(p => ({ ...p, containers: e.target.checked }))} />
                   <div>
-                    <div style={{ fontWeight: 600 }}>Prune Stopped Containers</div>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Removes all containers that are not currently running.</div>
+                    <div style={{ fontWeight: 600 }}>{t('cleanup.pruneContainers')}</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('cleanup.pruneContainersDesc')}</div>
                   </div>
                 </label>
                 <label style={checkboxLabel}>
                   <input type="checkbox" checked={pruneSelection.images} onChange={e => setPruneSelection(p => ({ ...p, images: e.target.checked }))} />
                   <div>
-                    <div style={{ fontWeight: 600 }}>Prune Unused Images</div>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Removes images that are not referenced by any containers.</div>
+                    <div style={{ fontWeight: 600 }}>{t('cleanup.pruneImages')}</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('cleanup.pruneImagesDesc')}</div>
                   </div>
                 </label>
                 <label style={checkboxLabel}>
                   <input type="checkbox" checked={pruneSelection.volumes} onChange={e => setPruneSelection(p => ({ ...p, volumes: e.target.checked }))} />
                   <div>
-                    <div style={{ fontWeight: 600 }}>Prune Unused Volumes</div>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Removes all local volumes not used by at least one container.</div>
+                    <div style={{ fontWeight: 600 }}>{t('cleanup.pruneVolumes')}</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('cleanup.pruneVolumesDesc')}</div>
                   </div>
                 </label>
                 <label style={checkboxLabel}>
                   <input type="checkbox" checked={pruneSelection.networks} onChange={e => setPruneSelection(p => ({ ...p, networks: e.target.checked }))} />
                   <div>
-                    <div style={{ fontWeight: 600 }}>Prune Unused Networks</div>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Removes all networks not used by at least one container.</div>
+                    <div style={{ fontWeight: 600 }}>{t('cleanup.pruneNetworks')}</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('cleanup.pruneNetworksDesc')}</div>
                   </div>
                 </label>
               </div>
               <div style={{ marginTop: 16 }}>
-                <div style={{ fontWeight: 600, marginBottom: 8 }}>Dry-run preview</div>
+                <div style={{ fontWeight: 600, marginBottom: 8 }}>{t('cleanup.dryRun')}</div>
                 {!prunePreview ? (
                   <button type="button" className="hp-btn" onClick={() => void previewCleanup()} disabled={busy}>
                     Load preview
@@ -1517,20 +1519,20 @@ export function DockerPage(): ReactElement {
                 ) : (
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(120px, 1fr))', gap: 8 }}>
                     <div style={previewCard}>
-                      <div style={previewLabel}>Containers</div>
-                      <div style={previewValue}>{prunePreview.containers}</div>
+                      <div style={previewLabel}>{t('cleanup.col.containers')}</div>
+                      <div style={previewValue} data-numeric>{prunePreview.containers}</div>
                     </div>
                     <div style={previewCard}>
-                      <div style={previewLabel}>Images</div>
-                      <div style={previewValue}>{prunePreview.images}</div>
+                      <div style={previewLabel}>{t('cleanup.col.images')}</div>
+                      <div style={previewValue} data-numeric>{prunePreview.images}</div>
                     </div>
                     <div style={previewCard}>
-                      <div style={previewLabel}>Volumes</div>
-                      <div style={previewValue}>{prunePreview.volumes}</div>
+                      <div style={previewLabel}>{t('cleanup.col.volumes')}</div>
+                      <div style={previewValue} data-numeric>{prunePreview.volumes}</div>
                     </div>
                     <div style={previewCard}>
-                      <div style={previewLabel}>Networks</div>
-                      <div style={previewValue}>{prunePreview.networks}</div>
+                      <div style={previewLabel}>{t('cleanup.col.networks')}</div>
+                      <div style={previewValue} data-numeric>{prunePreview.networks}</div>
                     </div>
                   </div>
                 )}
@@ -1563,7 +1565,7 @@ export function DockerPage(): ReactElement {
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 <div style={{ width: 32, height: 32, background: 'var(--accent)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700 }}>D</div>
                 <div>
-                  <h2 style={{ margin: 0, fontSize: 18 }}>Docker Setup Wizard</h2>
+                  <h2 style={{ margin: 0, fontSize: 18 }}>{t('wizard.title')}</h2>
                   <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Step {installStep + 1} of 5</div>
                 </div>
               </div>
@@ -1578,7 +1580,7 @@ export function DockerPage(): ReactElement {
                       <div className="hp-status-alert warning">
                         <span className="codicon codicon-info" aria-hidden />
                         <div>
-                          <div style={{ fontWeight: 600, marginBottom: 4 }}>Automated install is not available in Flatpak</div>
+                          <div style={{ fontWeight: 600, marginBottom: 4 }}>{t('wizard.noFlatpak')}</div>
                           <div style={{ fontSize: 13 }}>
                             Package-manager install needs a native host session. Install Docker on the host, then reopen the app outside Flatpak or use documented socket overrides.
                           </div>
@@ -1605,7 +1607,7 @@ export function DockerPage(): ReactElement {
                       <div className="hp-status-alert success">
                         <span className="codicon codicon-pass" aria-hidden />
                         <div>
-                          <div style={{ fontWeight: 600, marginBottom: 4 }}>Automated install available on this session</div>
+                          <div style={{ fontWeight: 600, marginBottom: 4 }}>{t('wizard.available')}</div>
                           <div style={{ fontSize: 13 }}>
                             This build can run your distro&apos;s package steps (with <span className="mono">sudo</span>) for Docker Engine and selected components. You can still follow the official guide instead if you prefer.
                           </div>
@@ -1630,7 +1632,7 @@ export function DockerPage(): ReactElement {
 
               {installStep === 1 && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  <h3 style={{ margin: 0, fontSize: 16 }}>Distribution</h3>
+                  <h3 style={{ margin: 0, fontSize: 16 }}>{t('wizard.distribution')}</h3>
                   <p style={{ margin: 0, fontSize: 14, color: 'var(--text-muted)' }}>
                     Pick the package family for install commands (<span className="mono">apt</span>, <span className="mono">dnf</span>, or <span className="mono">pacman</span>).
                   </p>
@@ -1645,10 +1647,10 @@ export function DockerPage(): ReactElement {
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
                     {(
                       [
-                        { id: 'ubuntu' as const, label: 'Debian / Ubuntu (apt)' },
-                        { id: 'fedora' as const, label: 'Fedora / RHEL family (dnf)' },
-                        { id: 'arch' as const, label: 'Arch / Endeavour (pacman)' },
-                      ] as const
+                        { id: 'ubuntu' as const, label: t('wizard.distro.ubuntu') },
+                        { id: 'fedora' as const, label: t('wizard.distro.fedora') },
+                        { id: 'arch' as const, label: t('wizard.distro.arch') },
+                      ] as { id: InstallDistroId; label: string }[]
                     ).map((d) => (
                       <label
                         key={d.id}
@@ -1674,7 +1676,7 @@ export function DockerPage(): ReactElement {
                       </label>
                     ))}
                   </div>
-                  <h3 style={{ margin: 0, fontSize: 16 }}>Select Components</h3>
+                  <h3 style={{ margin: 0, fontSize: 16 }}>{t('wizard.components')}</h3>
                   <p style={{ margin: 0, fontSize: 14, color: 'var(--text-muted)' }}>
                     We scanned your system and found some components are already installed.
                   </p>
@@ -1717,17 +1719,17 @@ export function DockerPage(): ReactElement {
 
               {installStep === 2 && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  <h3 style={{ margin: 0, fontSize: 16 }}>Authentication Required</h3>
+                  <h3 style={{ margin: 0, fontSize: 16 }}>{t('wizard.auth')}</h3>
                   <p style={{ margin: 0, fontSize: 14, color: 'var(--text-muted)' }}>
                     Installation requires root privileges. Enter your <strong>sudo</strong> password to proceed, or leave it blank to authenticate securely via your system's graphical dialog (Polkit / pkexec).
                     This password is only used to run the installation commands and is not stored.
                   </p>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    <label style={{ fontSize: 12, fontWeight: 600 }}>Sudo Password (Optional)</label>
-                    <input 
-                      type="password" 
-                      className="hp-input" 
-                      placeholder="Sudo password (optional, leave blank for Polkit)" 
+                    <label style={{ fontSize: 12, fontWeight: 600 }}>{t('wizard.sudoPassword')}</label>
+                    <input
+                      type="password"
+                      className="hp-input"
+                      placeholder={t('wizard.sudoPlaceholder')} 
                       value={sudoPassword} 
                       onChange={e => setSudoPassword(e.target.value)} 
                       autoFocus
@@ -1743,7 +1745,7 @@ export function DockerPage(): ReactElement {
               {installStep === 3 && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16, flex: 1 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <h3 style={{ margin: 0, fontSize: 16 }}>Installing Docker...</h3>
+                    <h3 style={{ margin: 0, fontSize: 16 }}>{t('wizard.installing')}</h3>
                     {installBusy && <div className="spinner" style={{ width: 20, height: 20, border: '2px solid var(--accent)', borderTopColor: 'transparent', borderRadius: '50%' }} />}
                   </div>
                   <div style={{ 
@@ -1762,7 +1764,7 @@ export function DockerPage(): ReactElement {
                     {installError && <div style={{ color: 'var(--red)', marginTop: 8, fontWeight: 700 }}>Error: {installError}</div>}
                   </div>
                   {installError && (
-                    <button className="hp-btn hp-btn-danger" onClick={() => setInstallStep(2)}>Retry Step</button>
+                    <button className="hp-btn hp-btn-danger" onClick={() => setInstallStep(2)}>{t('action.retryStep')}</button>
                   )}
                 </div>
               )}
@@ -1770,16 +1772,16 @@ export function DockerPage(): ReactElement {
               {installStep === 4 && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16, alignItems: 'center', textAlign: 'center', padding: '20px 0' }}>
                   <div style={{ width: 64, height: 64, background: 'var(--green)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 32, marginBottom: 12 }}>✔</div>
-                  <h2 style={{ margin: 0 }}>Installation Complete!</h2>
+                  <h2 style={{ margin: 0 }}>{t('wizard.complete')}</h2>
                   <p style={{ margin: 0, fontSize: 14, color: 'var(--text-muted)', maxWidth: 400 }}>
                     Docker Engine has been successfully installed and started. You can now manage containers directly from this dashboard.
                   </p>
                   <div style={{ ...sectionBox, textAlign: 'left', width: '100%' }}>
-                    <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 4 }}>Next Steps:</div>
+                    <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 4 }}>{t('wizard.nextSteps')}</div>
                     <ul style={{ margin: 0, paddingLeft: 20, fontSize: 12, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      <li>Refresh the dashboard to detect the daemon.</li>
-                      <li>Run <code>docker version</code> in your host terminal to verify.</li>
-                      <li>If access is denied, log out and back in to refresh group permissions.</li>
+                      <li>{t('wizard.step.refreshDashboard')}</li>
+                      <li>{t('wizard.step.verify')}</li>
+                      <li>{t('wizard.step.permissions')}</li>
                     </ul>
                   </div>
                 </div>
@@ -1808,14 +1810,14 @@ export function DockerPage(): ReactElement {
               {installStep === 2 && (
                 <>
                   <button className="hp-btn" onClick={() => setInstallStep(1)}>{'<'}- Back</button>
-                  <button className="hp-btn hp-btn-primary" onClick={() => void runInstallation()}>Install Now</button>
+                  <button className="hp-btn hp-btn-primary" onClick={() => void runInstallation()}>{t('action.installNow')}</button>
                 </>
               )}
               {(installStep === 3 && !installBusy) && (
-                 <button className="hp-btn" onClick={() => setInstallStep(0)}>Abort</button>
+                 <button className="hp-btn" onClick={() => setInstallStep(0)}>{t('action.abort')}</button>
               )}
               {installStep === 4 && (
-                <button className="hp-btn hp-btn-primary" onClick={() => setShowInstallModal(false)}>Finish</button>
+                <button className="hp-btn hp-btn-primary" onClick={() => setShowInstallModal(false)}>{t('action.finish')}</button>
               )}
             </div>
           </div>
@@ -1834,7 +1836,7 @@ export function DockerPage(): ReactElement {
       {removeDialog.open ? (
         <div style={modalOverlay}>
           <div style={{ ...modalContent, maxWidth: 520 }}>
-            <h3 style={{ marginTop: 0, marginBottom: 10 }}>Remove Container</h3>
+            <h3 style={{ marginTop: 0, marginBottom: 10 }}>{t('container.remove.title')}</h3>
             <p style={{ marginTop: 0, color: 'var(--text-muted)', fontSize: 13 }}>
               Confirm removal options (like Windows dialog behavior).
             </p>
@@ -1844,7 +1846,7 @@ export function DockerPage(): ReactElement {
                 checked={removeDialog.removeVolumes}
                 onChange={(e) => setRemoveDialog((s) => ({ ...s, removeVolumes: e.target.checked }))}
               />
-              <span>Also remove attached volumes (`docker rm -v`)</span>
+              <span>{t('container.remove.withVolumes')}</span>
             </label>
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
               <input
@@ -2131,11 +2133,12 @@ type ContainerTableProps = {
 
 function ContainerTable(props: ContainerTableProps & { onConsole: (row: ContainerRow) => void }): ReactElement {
   const { title, rows, busy, onAction, onConsole, onConfigure } = props
+  const { t } = useTranslation('docker')
   return (
     <div>
       <div className="hp-section-title">{title}</div>
       {rows.length === 0 ? (
-        <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>No containers in this group.</div>
+        <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>{t('container.noneInGroup')}</div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))', gap: 16 }}>
           {rows.map((r) => {
@@ -2182,25 +2185,25 @@ function ContainerTable(props: ContainerTableProps & { onConsole: (row: Containe
                 
                 <div style={{ marginTop: 'auto', display: 'flex', gap: 8, paddingTop: 4, flexWrap: 'wrap' }}>
                   <button type="button" className="hp-btn" onClick={() => void onAction(r.id, isRunning ? 'stop' : 'start')} disabled={busy}>
-                    {isRunning ? 'Stop' : 'Start'}
+                    {isRunning ? t('action.stop') : t('action.start')}
                   </button>
                   {isRunning && (
                     <button type="button" className="hp-btn" onClick={() => void onAction(r.id, 'restart')} disabled={busy}>
-                      Restart
+                      {t('action.restart')}
                     </button>
                   )}
                   {isRunning && (
                     <button type="button" className="hp-btn" onClick={() => onConsole(r)} disabled={busy}>
-                      Console
+                      {t('action.console')}
                     </button>
                   )}
                   {!isRunning ? (
                     <button type="button" className="hp-btn hp-btn-danger" onClick={() => void onAction(r.id, 'remove')} disabled={busy}>
-                      Remove
+                      {t('action.remove')}
                     </button>
                   ) : null}
                   <button type="button" className="hp-btn" onClick={() => onConfigure(r)} disabled={busy}>
-                    Configure
+                    {t('action.configure')}
                   </button>
                 </div>
               </div>
@@ -2254,6 +2257,7 @@ function hydrateDrawerFromInspect(data: ContainerInspectData): {
 }
 
 function ContainerInspectDrawer({ row, networks, onClose, onRefresh }: InspectDrawerProps): ReactElement {
+  const { t } = useTranslation('docker')
   const [drawerTab, setDrawerTab] = useState<DrawerTab>('info')
   const [logs, setLogs] = useState<string>('')
   const [logsBusy, setLogsBusy] = useState(false)
@@ -2350,12 +2354,12 @@ function ContainerInspectDrawer({ row, networks, onClose, onRefresh }: InspectDr
   const volumeMounts = inspectVolumes.length > 0 ? inspectVolumes : (row.volumes ?? [])
 
   const sectionLabels: Record<DrawerTab, string> = {
-    info: 'Info',
-    ports: 'Ports',
-    networks: 'Networks',
-    env: 'Env',
-    volumes: 'Volumes',
-    logs: 'Logs',
+    info: t('drawer.info'),
+    ports: t('drawer.ports'),
+    networks: t('drawer.networks'),
+    env: t('drawer.env'),
+    volumes: t('drawer.volumes'),
+    logs: t('drawer.logs'),
   }
 
   return (
@@ -2391,7 +2395,7 @@ function ContainerInspectDrawer({ row, networks, onClose, onRefresh }: InspectDr
           gap: 12,
         }}>
           {inspectBusy && (
-          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>Loading inspect data…</div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>{t('inspect.loading')}</div>
         )}
         {inspectError && !inspectBusy && (
           <div style={{ fontSize: 12, color: 'var(--red)', marginBottom: 12 }}>{inspectError}</div>
@@ -2399,11 +2403,11 @@ function ContainerInspectDrawer({ row, networks, onClose, onRefresh }: InspectDr
 
         {drawerTab === 'info' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div><span style={{ color: 'var(--text-muted)', fontSize: 12 }}>IMAGE</span><div className="mono" style={{ marginTop: 4 }}>{row.image}</div></div>
-            <div><span style={{ color: 'var(--text-muted)', fontSize: 12 }}>STATE</span><div style={{ marginTop: 4 }}>{row.state} — {row.status}</div></div>
-            <div><span style={{ color: 'var(--text-muted)', fontSize: 12 }}>ID</span><div className="mono" style={{ marginTop: 4, fontSize: 12 }}>{row.id}</div></div>
+            <div><span style={{ color: 'var(--text-muted)', fontSize: 12 }}>{t('inspect.image')}</span><div className="mono" data-ltr style={{ marginTop: 4 }}>{row.image}</div></div>
+            <div><span style={{ color: 'var(--text-muted)', fontSize: 12 }}>{t('inspect.state')}</span><div style={{ marginTop: 4 }}>{t(`common:status.${row.state}`, { defaultValue: row.state })} — <span data-ltr>{row.status}</span></div></div>
+            <div><span style={{ color: 'var(--text-muted)', fontSize: 12 }}>{t('inspect.id')}</span><div className="mono" data-ltr style={{ marginTop: 4, fontSize: 12 }}>{row.id}</div></div>
             <div>
-              <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>RESTART POLICY</span>
+              <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>{t('inspect.restartPolicy')}</span>
               <select className="hp-input" value={editRestart} onChange={(e) => setEditRestart(e.target.value)} style={{ marginTop: 4, display: 'block', width: '100%', background: '#1e1e1e', color: '#e8e8e8', border: '1px solid var(--border)', height: 36 }}>
                 <option value="no">no (default)</option>
                 <option value="always">always</option>
@@ -2420,7 +2424,7 @@ function ContainerInspectDrawer({ row, networks, onClose, onRefresh }: InspectDr
 
         {drawerTab === 'ports' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Port bindings. Apply recreates the container.</div>
+            <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>{t('inspect.portBindings')}</div>
             {editPorts.map((p, i) => (
               <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <input className="hp-input" type="number" min={1} max={65535} value={p.hostPort} onChange={(e) => setEditPorts((prev) => prev.map((x, j) => j === i ? { ...x, hostPort: e.target.value } : x))} placeholder="Host" style={{ width: 80 }} />
@@ -2445,7 +2449,7 @@ function ContainerInspectDrawer({ row, networks, onClose, onRefresh }: InspectDr
 
         {drawerTab === 'networks' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Network mode. Apply recreates the container.</div>
+            <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>{t('inspect.networkMode')}</div>
             <select className="hp-input" value={editNetwork} onChange={(e) => setEditNetwork(e.target.value)} style={{ background: '#1e1e1e', color: '#e8e8e8', border: '1px solid var(--border)', height: 36, width: '100%' }}>
               <option value="bridge">bridge</option>
               <option value="host">host</option>
@@ -2464,7 +2468,7 @@ function ContainerInspectDrawer({ row, networks, onClose, onRefresh }: InspectDr
 
         {drawerTab === 'env' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Environment variables. Apply recreates the container.</div>
+            <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>{t('inspect.envVars')}</div>
             {editEnv.map((e, i) => (
               <div key={i} style={{ display: 'flex', gap: 8 }}>
                 <input className="hp-input" value={e} onChange={(ev) => setEditEnv((prev) => prev.map((x, j) => j === i ? ev.target.value : x))} placeholder="KEY=VALUE" style={{ flex: 1 }} />
@@ -2481,9 +2485,9 @@ function ContainerInspectDrawer({ row, networks, onClose, onRefresh }: InspectDr
 
         {drawerTab === 'volumes' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Volume mounts (read-only).</div>
+            <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>{t('inspect.volumeMounts')}</div>
             {volumeMounts.length === 0
-              ? <div style={{ color: 'var(--text-muted)' }}>No volume mounts.</div>
+              ? <div style={{ color: 'var(--text-muted)' }}>{t('inspect.noVolumes')}</div>
               : volumeMounts.map((v, i) => (
                   <div key={i} className="mono" style={{ fontSize: 12, background: 'rgba(0, 0, 0, 0.2)', padding: '6px 10px', borderRadius: 6 }}>{v}</div>
                 ))
