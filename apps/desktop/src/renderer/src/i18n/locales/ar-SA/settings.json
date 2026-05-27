@@ -1,0 +1,9 @@
+{
+  "languages.title": "اللغات",
+  "languages.description": "اختر لغتك المفضلة. يتم تطبيق التخطيط من اليمين إلى اليسار تلقائياً للعربية.",
+  "languages.displayLanguage": "لغة العرض",
+  "languages.english": "الإنجليزية",
+  "languages.german": "الألمانية",
+  "languages.arabic": "العربية (تجريبي)",
+  "languages.restartNote": "يسري تغيير اللغة فوراً."
+}

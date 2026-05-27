@@ -1,6 +1,7 @@
 import type { ReactElement, ReactNode } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import { ActiveJobsStrip } from './ActiveJobsStrip'
 import { EnvironmentBanner } from './EnvironmentBanner'
@@ -25,19 +26,7 @@ const DEFAULT_SHORTCUTS: Record<string, string> = {
   go_settings: 'Ctrl+,',
 }
 
-const nav = [
-  { to: '/dashboard', label: 'Dashboard', icon: 'dashboard', status: 'live' as RouteStatus },
-  { to: '/system', label: 'Monitor', icon: 'pulse', status: 'live' as RouteStatus },
-  { to: '/docker', label: 'Docker', icon: 'package', status: 'live' as RouteStatus },
-  { to: '/ssh', label: 'SSH', icon: 'key', status: 'live' as RouteStatus },
-  { to: '/git', label: 'Developer Git', icon: 'git-branch', status: 'live' as RouteStatus },
-  { to: '/profiles', label: 'Profiles', icon: 'account', status: 'live' as RouteStatus },
-  { to: '/terminal', label: 'Terminal', icon: 'terminal', status: 'live' as RouteStatus },
-  { to: '/runtimes', label: 'Runtimes', icon: 'zap', status: 'live' as RouteStatus },
-  { to: '/maintenance', label: 'Maintenance', icon: 'shield', status: 'live' as RouteStatus },
-  { to: '/system-readiness', label: 'Readiness', icon: 'checklist', status: 'live' as RouteStatus },
-  { to: '/settings', label: 'Settings', icon: 'settings', status: 'live' as RouteStatus },
-] as const
+type NavItem = { to: string; label: string; icon: string; status: RouteStatus }
 
 const statusStyles: Record<RouteStatus, { label: string; color: string; bg: string; border: string }> = {
   live: { label: 'LIVE', color: 'var(--green)', bg: 'rgba(0, 230, 118, 0.1)', border: 'rgba(0, 230, 118, 0.25)' },
@@ -47,8 +36,23 @@ const statusStyles: Record<RouteStatus, { label: string; color: string; bg: stri
 
 export function AppShell({ children }: { children: ReactNode }): ReactElement {
   const navigate = useNavigate()
+  const { t } = useTranslation('nav')
   const [profileName, setProfileName] = useState<string>('Local user')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+
+  const nav: NavItem[] = [
+    { to: '/dashboard', label: t('nav.dashboard'), icon: 'dashboard', status: 'live' as RouteStatus },
+    { to: '/system', label: t('nav.monitor'), icon: 'pulse', status: 'live' as RouteStatus },
+    { to: '/docker', label: t('nav.docker'), icon: 'package', status: 'live' as RouteStatus },
+    { to: '/ssh', label: t('nav.ssh'), icon: 'key', status: 'live' as RouteStatus },
+    { to: '/git', label: t('nav.git'), icon: 'git-branch', status: 'live' as RouteStatus },
+    { to: '/profiles', label: t('nav.profiles'), icon: 'account', status: 'live' as RouteStatus },
+    { to: '/terminal', label: t('nav.terminal'), icon: 'terminal', status: 'live' as RouteStatus },
+    { to: '/runtimes', label: t('nav.runtimes'), icon: 'zap', status: 'live' as RouteStatus },
+    { to: '/maintenance', label: t('nav.maintenance'), icon: 'shield', status: 'live' as RouteStatus },
+    { to: '/system-readiness', label: t('nav.readiness'), icon: 'checklist', status: 'live' as RouteStatus },
+    { to: '/settings', label: t('nav.settings'), icon: 'settings', status: 'live' as RouteStatus },
+  ]
   
   // High-reliability ref for event listener to access latest bindings without re-render
   const bindingsRef = useRef<Record<string, string>>(DEFAULT_SHORTCUTS)
@@ -146,8 +150,8 @@ export function AppShell({ children }: { children: ReactNode }): ReactElement {
     <div className="app-shell">
       <aside className={`app-shell-nav ${sidebarCollapsed ? 'collapsed' : ''}`}>
         <div className="app-shell-header">
-          <div className="app-shell-header-title">LuminaDev</div>
-          <div className="mono app-shell-header-subtitle">Linux session</div>
+          <div className="app-shell-header-title">{t('appTitle')}</div>
+          <div className="mono app-shell-header-subtitle">{t('footer.linuxSession')}</div>
         </div>
         <nav className="app-shell-nav-list">
           {nav.map((item) => (
@@ -177,7 +181,7 @@ export function AppShell({ children }: { children: ReactNode }): ReactElement {
             className="app-shell-footer-link"
           >
             <span className="codicon codicon-book" aria-hidden />
-            Docs
+            {t('footer.docs')}
           </a>
           <a
             href="#"
@@ -192,7 +196,7 @@ export function AppShell({ children }: { children: ReactNode }): ReactElement {
             className="app-shell-footer-link"
           >
             <span className="codicon codicon-wand" aria-hidden />
-            Setup Wizard
+            {t('footer.setupWizard')}
           </a>
           <div
             className="app-shell-profile-section"
@@ -207,7 +211,7 @@ export function AppShell({ children }: { children: ReactNode }): ReactElement {
             </div>
             <div className="app-shell-profile-info">
               <div className="app-shell-profile-name">{profileName}</div>
-              <div className="app-shell-profile-session">Switch Profile ›</div>
+              <div className="app-shell-profile-session">{t('footer.switchProfile')}</div>
             </div>
           </div>
         </div>

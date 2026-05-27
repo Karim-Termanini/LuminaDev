@@ -7,6 +7,8 @@ import { ensureDesktopApi } from './api/desktopApiBridge'
 import { I18nProvider } from './i18n/I18nContext'
 import { NotificationProvider } from './layout/NotificationProvider'
 import './theme/global.css'
+import './theme/rtl.css'
+import './i18n/i18n'
 
 ensureDesktopApi()
 

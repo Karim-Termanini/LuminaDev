@@ -1,0 +1,32 @@
+/* RTL text direction — text alignment only, no layout mirror */
+
+.hp-rtl p,
+.hp-rtl label,
+.hp-rtl h1,
+.hp-rtl h2,
+.hp-rtl h3,
+.hp-rtl h4 {
+  text-align: right;
+}
+
+.hp-rtl input:not([type="number"]),
+.hp-rtl textarea,
+.hp-rtl select {
+  text-align: right;
+}
+
+/* Code, terminal, paths — always LTR */
+.hp-rtl code,
+.hp-rtl pre,
+.hp-rtl .mono,
+.hp-rtl [data-ltr] {
+  direction: ltr;
+  unicode-bidi: plaintext;
+  text-align: left;
+}
+
+/* Numbers stay LTR inline in RTL prose */
+.hp-rtl [data-numeric] {
+  direction: ltr;
+  unicode-bidi: embed;
+}

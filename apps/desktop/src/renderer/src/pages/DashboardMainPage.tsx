@@ -136,6 +136,7 @@ export function DashboardMainPage(): ReactElement {
 
   // Slow ticker: while switch active and progress stuck between 60-95, nudge +0.4% every 800ms
   const shouldNudge = swState.active && swState.progress >= 60 && swState.progress < 95
+
   useEffect(() => {
     if (!shouldNudge) return
     const t = setInterval(() => {

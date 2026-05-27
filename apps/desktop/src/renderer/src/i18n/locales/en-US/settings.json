@@ -1,0 +1,9 @@
+{
+  "languages.title": "Languages",
+  "languages.description": "Select your preferred language. RTL layout is automatically applied for Arabic.",
+  "languages.displayLanguage": "Display language",
+  "languages.english": "English",
+  "languages.german": "German",
+  "languages.arabic": "Arabic (Beta)",
+  "languages.restartNote": "Language change takes effect immediately."
+}

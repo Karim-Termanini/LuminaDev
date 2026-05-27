@@ -1,0 +1,9 @@
+{
+  "languages.title": "Sprachen",
+  "languages.description": "Wählen Sie Ihre bevorzugte Sprache. Für Arabisch wird automatisch RTL-Layout angewendet.",
+  "languages.displayLanguage": "Anzeigesprache",
+  "languages.english": "Englisch",
+  "languages.german": "Deutsch",
+  "languages.arabic": "Arabisch (Beta)",
+  "languages.restartNote": "Sprachänderung tritt sofort in Kraft."
+}

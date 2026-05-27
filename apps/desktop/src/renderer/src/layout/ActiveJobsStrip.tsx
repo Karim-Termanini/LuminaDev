@@ -1,8 +1,10 @@
 import type { JobSummary } from '@linux-dev-home/shared'
 import type { ReactElement } from 'react'
 import { useCallback, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 export function ActiveJobsStrip(): ReactElement {
+  const { t } = useTranslation('nav')
   const [jobs, setJobs] = useState<JobSummary[]>([])
 
   const refresh = useCallback(async () => {
@@ -49,10 +51,10 @@ export function ActiveJobsStrip(): ReactElement {
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--green)', boxShadow: '0 0 4px var(--green)' }} />
-          <span style={{ fontWeight: 500 }}>LuminaDev Engine: Connected</span>
+          <span data-ltr style={{ fontWeight: 500 }}>{t('engineConnected')}</span>
         </div>
         <div style={{ width: 1, height: 12, background: 'var(--border)' }} />
-        <span>v0.2.0-alpha</span>
+        <span data-ltr>v0.2.0-alpha</span>
       </div>
 
       {/* Right: Active Task Progress */}
@@ -62,7 +64,7 @@ export function ActiveJobsStrip(): ReactElement {
           return (
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <span style={{ color: 'var(--text)' }}>
-                {active.length > 1 ? `[${active.length} Jobs]` : ''} {firstActive.kind.replace(/_/g, ' ')} ({Math.min(100, Math.max(0, firstActive.progress ?? 0))}%)
+                {active.length > 1 ? t('jobs.count', { count: active.length }) : ''} <span data-ltr>{firstActive.kind.replace(/_/g, ' ')}</span> (<span data-numeric>{Math.min(100, Math.max(0, firstActive.progress ?? 0))}%</span>)
               </span>
               <div style={{ width: 80, height: 4, background: 'rgba(255,255,255,0.06)', borderRadius: 2, overflow: 'hidden' }}>
                 <div style={{ width: `${Math.min(100, Math.max(0, firstActive.progress ?? 0))}%`, height: '100%', background: 'var(--accent)', transition: 'width 0.2s ease' }} />
@@ -85,13 +87,13 @@ export function ActiveJobsStrip(): ReactElement {
                 }}
               >
                 <span className="codicon codicon-close" style={{ fontSize: 10 }} />
-                STOP
+                {t('stop')}
               </button>
             </div>
           )
         })()
       ) : (
-        <span>Ready.</span>
+        <span>{t('ready')}</span>
       )}
     </div>
   )

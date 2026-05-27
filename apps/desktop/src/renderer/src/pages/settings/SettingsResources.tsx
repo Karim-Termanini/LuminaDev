@@ -36,7 +36,7 @@ export function SettingsResources(): ReactElement {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: 'rgba(0, 230, 118, 0.08)', border: '1px solid rgba(0, 230, 118, 0.25)', borderRadius: 6, fontSize: 12, color: 'var(--green, #00e676)' }}>
         <span className="codicon codicon-check" />
-        CPU and RAM resource limits are active and enforced by the background job runner.
+        CPU: <b>nice -n 19</b> (reduced scheduling priority), <b>CARGO_BUILD_JOBS</b>/<b>MAKEFLAGS</b> (parallelism caps). RAM: <b>ulimit -v</b> (OS-level) + <b>NODE_OPTIONS</b>/<b>GOMEMLIMIT</b>/<b>_JAVA_OPTIONS</b> (runtime-specific). Applies to all runtime install, update, remove, and profile switch jobs.
       </div>
       <div>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>

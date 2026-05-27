@@ -214,16 +214,21 @@ async fn runtime_bash_user_step(
     .arg("19")
     .arg("bash")
     .arg("-c")
-    .arg(cmd)
     .env_remove("npm_config_prefix")
     .env_remove("NPM_CONFIG_PREFIX");
 
+  let mut prefixed_cmd;
   if let Some(ref app_h) = app {
     let (limit_cores, cores, ram_limit_mb) = get_resource_limits(app_h);
     logs.push(format!(
-      "[RESOURCE_ENFORCEMENT] Constraints: CPU Cores = {}/{} (nice 19), RAM limit = {} MB",
+      "[RESOURCE_ENFORCEMENT] Constraints: CPU Cores = {}/{} (nice 19, CARGO_BUILD_JOBS, MAKEFLAGS), RAM limit = {} MB (ulimit -v + runtime env vars), max processes = 512 (ulimit -u)",
       limit_cores, cores, ram_limit_mb
     ));
+    prefixed_cmd = format!(
+      "ulimit -v {} 2>/dev/null; ulimit -u 512 2>/dev/null; ",
+      ram_limit_mb.saturating_mul(1024)
+    );
+    prefixed_cmd.push_str(cmd);
     cmd_builder
       .env("CARGO_BUILD_JOBS", limit_cores.to_string())
       .env("MAKEFLAGS", format!("-j{}", limit_cores))
@@ -231,6 +236,9 @@ async fn runtime_bash_user_step(
       .env("NODE_OPTIONS", format!("--max-old-space-size={}", ram_limit_mb))
       .env("GOMEMLIMIT", format!("{}MiB", ram_limit_mb))
       .env("_JAVA_OPTIONS", format!("-Xmx{}m", ram_limit_mb));
+    cmd_builder.arg(prefixed_cmd.as_str());
+  } else {
+    cmd_builder.arg(cmd);
   }
 
   logs.push(format!("RUNNING (user shell, no sudo): {}", cmd));
@@ -564,17 +572,26 @@ pub(crate) async fn sudo_bash_install_step(cmd: &str, password: Option<&str>, lo
     false
   };
 
-  if has_limits {
+  let mut wrapped_cmd: String;
+  let effective_cmd: &str = if has_limits {
     logs.push(format!(
-      "[RESOURCE_ENFORCEMENT] Constraints: CPU Cores = {}/{} (nice 19), RAM limit = {} MB",
+      "[RESOURCE_ENFORCEMENT] Constraints: CPU Cores = {}/{} (nice 19, CARGO_BUILD_JOBS, MAKEFLAGS), RAM limit = {} MB (ulimit -v + runtime env vars), max processes = 512 (ulimit -u)",
       limit_cores, cores, ram_limit_mb
     ));
-  }
+    wrapped_cmd = format!(
+      "ulimit -v {} 2>/dev/null; ulimit -u 512 2>/dev/null; ",
+      ram_limit_mb.saturating_mul(1024)
+    );
+    wrapped_cmd.push_str(cmd);
+    wrapped_cmd.as_str()
+  } else {
+    cmd
+  };
 
   let mut child = match mode {
     SpawnMode::Pkexec => {
       let mut cmd_builder = Command::new("pkexec");
-      cmd_builder.args(["nice", "-n", "19", "bash", "-c", cmd]);
+      cmd_builder.args(["nice", "-n", "19", "bash", "-c", effective_cmd]);
       if has_limits {
         cmd_builder
           .env("CARGO_BUILD_JOBS", limit_cores.to_string())
@@ -593,7 +610,7 @@ pub(crate) async fn sudo_bash_install_step(cmd: &str, password: Option<&str>, lo
     }
     SpawnMode::SudoPwless => {
       let mut cmd_builder = Command::new("sudo");
-      cmd_builder.args(["nice", "-n", "19", "bash", "-c", cmd]);
+      cmd_builder.args(["nice", "-n", "19", "bash", "-c", effective_cmd]);
       if has_limits {
         cmd_builder
           .env("CARGO_BUILD_JOBS", limit_cores.to_string())
@@ -621,7 +638,7 @@ pub(crate) async fn sudo_bash_install_step(cmd: &str, password: Option<&str>, lo
         .arg("19")
         .arg("bash")
         .arg("-c")
-        .arg(cmd);
+        .arg(effective_cmd);
       if has_limits {
         cmd_builder
           .env("CARGO_BUILD_JOBS", limit_cores.to_string())

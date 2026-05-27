@@ -1,39 +1,40 @@
 import type { CSSProperties, ReactElement } from 'react'
 import { useEffect, useState } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import type { JobSummary } from '@linux-dev-home/shared'
 
-const titles: Record<string, string> = {
-  '/system': 'System',
-  '/workstation': 'Workstation',
-  '/docker': 'Docker',
-  '/ssh': 'SSH',
-  '/git': 'Developer Git',
-  '/profiles': 'Profiles',
-  '/terminal': 'Terminal',
-  '/runtimes': 'Runtimes',
-  '/maintenance': 'Maintenance',
-  '/settings': 'Settings',
-}
-
-function screenTitle(pathname: string): string {
-  if (pathname === '/dashboard' || pathname.startsWith('/dashboard/')) {
-    return 'HYPEDEVHOME'
-  }
-  return titles[pathname] ?? 'Linux Dev Home'
-}
-
 export function TopBar(): ReactElement {
+  const { t } = useTranslation('nav')
   const location = useLocation()
   const navigate = useNavigate()
   const pathname = location.pathname
   const [q, setQ] = useState('')
+
+  const titles: Record<string, string> = {
+    '/system': t('topbar.system'),
+    '/workstation': t('topbar.workstation'),
+    '/docker': t('topbar.docker'),
+    '/ssh': t('topbar.ssh'),
+    '/git': t('topbar.git'),
+    '/profiles': t('topbar.profiles'),
+    '/terminal': t('topbar.terminal'),
+    '/runtimes': t('topbar.runtimes'),
+    '/maintenance': t('topbar.maintenance'),
+    '/settings': t('topbar.settings'),
+  }
   const [showNotifications, setShowNotifications] = useState(false)
   const [jobs, setJobs] = useState<JobSummary[]>([])
 
   useEffect(() => {
     setQ('')
     setShowNotifications(false)
+
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setShowNotifications(false)
+    }
+    document.addEventListener('keydown', handleEscape)
+    return () => document.removeEventListener('keydown', handleEscape)
   }, [pathname])
 
   useEffect(() => {
@@ -75,22 +76,22 @@ export function TopBar(): ReactElement {
         position: 'relative',
       }}
     >
-      <div style={{ fontWeight: 700, letterSpacing: '0.04em', minWidth: 140 }}>{screenTitle(pathname)}</div>
+      <div style={{ fontWeight: 700, letterSpacing: '0.04em', minWidth: 140 }}>{pathname === '/dashboard' || pathname.startsWith('/dashboard/') ? t('topbar.dashboardTitle') : (titles[pathname] ?? t('topbar.linuxDevHome'))}</div>
       <div style={{ display: 'flex', gap: 2, flex: 1, justifyContent: 'center' }}>
         {onDashboard ? (
           <>
-            <DashTab to="/dashboard" end label="Main" />
-            <DashTab to="/dashboard/kernels" label="Kernels" />
-            <DashTab to="/dashboard/logs" label="Logs" />
+            <DashTab to="/dashboard" end label={t('topbar.main')} />
+            <DashTab to="/dashboard/kernels" label={t('topbar.kernels')} />
+            <DashTab to="/dashboard/logs" label={t('topbar.logs')} />
           </>
         ) : (
-          <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>Overview</span>
+          <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>{t('topbar.overview')}</span>
         )}
       </div>
       <input
         value={q}
         onChange={(e) => setQ(e.target.value)}
-        placeholder="Search workstation..."
+        placeholder={t('topbar.searchPlaceholder')}
         className="hp-search-input"
         style={{
           width: 220,
@@ -148,7 +149,7 @@ export function TopBar(): ReactElement {
             padding: 12,
           }}>
             <div style={{ fontWeight: 600, borderBottom: '1px solid var(--border)', paddingBottom: 8, marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span id="notifications-title">Recent Activity &amp; Jobs</span>
+              <span id="notifications-title">{t('topbar.notifications')}</span>
               <button
                 type="button"
                 onClick={() => setShowNotifications(false)}
@@ -160,7 +161,7 @@ export function TopBar(): ReactElement {
             <div style={{ maxHeight: 200, overflowY: 'auto' }}>
               {jobs.length === 0 ? (
                 <div style={{ color: 'var(--text-muted)', fontSize: 12, textAlign: 'center', padding: '16px 0' }}>
-                  No recent activity.
+                  {t('topbar.noActivity')}
                 </div>
               ) : (
                 jobs.slice(-5).reverse().map((j) => (
