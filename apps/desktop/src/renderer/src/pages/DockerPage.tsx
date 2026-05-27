@@ -659,19 +659,19 @@ export function DockerPage(): ReactElement {
   return (
     <div className="docker-page elevated-page">
       <div className="docker-hero">
-        <div className="docker-hero-eyebrow">Docker.Surface</div>
-        <h1 className="docker-hero-title">Docker</h1>
+        <div className="docker-hero-eyebrow">{t('page.label')}</div>
+        <h1 className="docker-hero-title">{t('page.title')}</h1>
         <p className="docker-hero-subtitle">
-          Full Docker surface from one click UI: containers, images, volumes, networks, and cleanup.
+          {t('page.desc')}
         </p>
       </div>
 
       <div className="docker-toolbar">
         <button type="button" className="hp-btn" onClick={() => void refreshAll()} disabled={busy || refreshing}>
-          {refreshing ? 'Refreshing…' : 'Refresh'}
+          {refreshing ? t('toolbar.refreshing') : t('toolbar.refresh')}
         </button>
         <button type="button" className="hp-btn" style={btnWarn} onClick={() => void runPrune()} disabled={busy}>
-          Cleanup unused (prune)
+          {t('toolbar.pruneAll')}
         </button>
         <button
           type="button"
@@ -805,7 +805,7 @@ export function DockerPage(): ReactElement {
                     }} 
                     disabled={busy || !pullImage || isLoadingTags}
                   >
-                    {isLoadingTags ? 'Tags...' : 'Pull Image'}
+                    {isLoadingTags ? t('create.pullingTags') : t('create.pullImage')}
                   </button>
                 </div>
 
@@ -881,10 +881,10 @@ export function DockerPage(): ReactElement {
                 </label>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
                   <input type="checkbox" checked={autoStart} onChange={(e) => setAutoStart(e.target.checked)} />
-                  Auto start after create
+                  {t('create.autoStart')}
                 </label>
                 <button type="button" className="hp-btn hp-btn-primary" onClick={() => void createCustomContainer()} disabled={busy}>
-                  Create custom container
+                  {t('create.createCustom')}
                 </button>
               </div>
             </div>
@@ -1118,16 +1118,16 @@ export function DockerPage(): ReactElement {
                         {truncateMiddle(v.mountpoint, 60)}
                       </div>
                       <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.4 }}>
-                        {getVolumeDescription(v.name, !!(v.usedBy && v.usedBy.length > 0))}
+                        {getVolumeDescription(v.name, !!(v.usedBy && v.usedBy.length > 0), t)}
                       </div>
                       <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                        Used by:{' '}
+                        {t('volume.usedBy')}:{' '}
                         <span className="mono" style={{ fontSize: 11 }}>
                           {v.usedBy && v.usedBy.length > 0 ? v.usedBy.join(', ') : 'unused'}
                         </span>
                       </div>
                       <button type="button" style={{ ...btnSmallDanger, marginTop: 8 }} onClick={() => void removeVolume(v.name)} disabled={busy}>
-                        Remove Volume
+                        {t('volume.remove')}
                       </button>
                     </div>
                   ))}
@@ -1225,17 +1225,17 @@ export function DockerPage(): ReactElement {
                         <span>{t('network.scope')}: <span className="mono" data-ltr>{n.scope}</span></span>
                       </div>
                       <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.4 }}>
-                        {getNetworkDescription(n.name)}
+                        {getNetworkDescription(n.name, t)}
                       </div>
                       <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                        Used by:{' '}
+                        {t('network.usedBy')}:{' '}
                         <span className="mono" style={{ fontSize: 11 }}>
                           {n.usedBy && n.usedBy.length > 0 ? n.usedBy.join(', ') : 'unused'}
                         </span>
                       </div>
                       {n.name === 'bridge' || n.name === 'host' || n.name === 'none' ? (
                         <div style={{ ...systemBadge, marginTop: 8 }}>
-                          Protected system network
+                          {t('network.protected')}
                         </div>
                       ) : (
                         <button
@@ -1244,7 +1244,7 @@ export function DockerPage(): ReactElement {
                           onClick={() => void removeNetwork(n.id)}
                           disabled={busy}
                         >
-                          Remove Network
+                          {t('network.remove')}
                         </button>
                       )}
                     </div>
@@ -1454,7 +1454,7 @@ export function DockerPage(): ReactElement {
                             disabled={remapBusy}
                             onClick={() => void runRemapPort()}
                           >
-                            {remapBusy ? 'Working…' : 'Remap port'}
+                            {remapBusy ? t('ports.remapping') : t('ports.remap')}
                           </button>
                         </div>
                       )}
@@ -1543,7 +1543,7 @@ export function DockerPage(): ReactElement {
                 onClick={() => void runPrune()}
                 disabled={busy || !Object.values(pruneSelection).some(v => v)}
               >
-                Run Selected Cleanup
+                {t('cleanup.runSelected')}
               </button>
             </div>
 
@@ -2094,21 +2094,21 @@ function parseVolumeMappings(text: string): Array<{ hostPath: string; containerP
   })
 }
 
-function getNetworkDescription(name: string): string {
-  if (name === 'bridge') return 'Default network. Connects containers together and provides internet access.'
-  if (name === 'host') return "Removes network isolation. Containers share the host's exact IP and ports."
-  if (name === 'none') return 'Completely disables networking. Container has no internet or local access.'
-  if (name.endsWith('_default')) return 'Custom bridge network (usually created by Docker Compose) to isolate an app.'
-  return 'User-created custom network.'
+function getNetworkDescription(name: string, t: (k: string) => string): string {
+  if (name === 'bridge') return t('network.descBridge')
+  if (name === 'host') return t('network.descHost')
+  if (name === 'none') return t('network.descNone')
+  if (name.endsWith('_default')) return t('network.descCompose')
+  return t('network.descCustom')
 }
 
-function getVolumeDescription(name: string, isUsed: boolean): string {
+function getVolumeDescription(name: string, isUsed: boolean, t: (k: string) => string): string {
   if (name.length === 64 && !name.includes('_')) {
-    return isUsed 
-      ? 'Anonymous Volume. Automatically created by a running container to store internal data.'
-      : 'Unused Anonymous Volume. Leftover data from a deleted container. Safe to remove if unneeded.'
+    return isUsed
+      ? t('volume.descAnonymousUsed')
+      : t('volume.descAnonymous')
   }
-  return 'Named Volume. Specifically created to persist important database or application data safely.'
+  return t('volume.descNamed')
 }
 
 function parseEnvLines(text: string): string[] {
