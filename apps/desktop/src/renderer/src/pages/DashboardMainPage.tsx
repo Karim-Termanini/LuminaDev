@@ -722,11 +722,13 @@ title: t('main.activity.jobPrefix', { kind: j.kind, state: j.state }),
                 }}
               >
                 {swState.active && swState.targetProfile === selectedProfileName && <span className="codicon codicon-loading" style={{ animation: 'spin 1s linear infinite' }} />}
-                {activeProfile === selectedProfileName
-                  ? t('main.btn.currentlyActive')
-                  : activeProfile
-                    ? t('main.btn.switchToThis')
-                    : t('main.btn.initialize')}
+                {selectedProfile.status === 'planned'
+                  ? t('main.btn.comingSoon')
+                  : activeProfile === selectedProfileName
+                    ? t('main.btn.currentlyActive')
+                    : activeProfile
+                      ? t('main.btn.switchToThis')
+                      : t('main.btn.initialize')}
               </button>
               {betaFlags['enable_profile_auto_switch'] && (
                 <div title={t('main.btn.autoSwitchOn')} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 10px', borderRadius: 20, background: 'rgba(124, 77, 255, 0.12)', border: '1px solid rgba(124, 77, 255, 0.3)', fontSize: 11, color: 'var(--accent)', fontWeight: 600, whiteSpace: 'nowrap' }}>

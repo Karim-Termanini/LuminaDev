@@ -208,6 +208,7 @@
   "kernels.noRiskyPorts": "لم يتم اكتشاف منافذ مفتوحة خطيرة على المستمعين العموميين النشطين.",
   "kernels.toolchainTip": "نصيحة سلسلة الأدوات",
   "kernels.toolchainTipText": "تأكد من تكوين التبعيات على مستوى النظام مثل <code>docker-compose</code> و <code>ssh-agent</code> وأنها قابلة للوصول من قبل الملف الشخصي النشط.",
+
   "profile.customDesc": "بيئة مخصصة مبنية على {{base}}.",
   "profile.emptyDesc": "أنشئ ملفاً شخصياً في صفحة الملفات الشخصية للبدء.",
   "widgets.addWidget": "إضافة أداة",

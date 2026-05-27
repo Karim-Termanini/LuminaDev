@@ -335,7 +335,7 @@
   "conflictResolver.incomingTheirs": "Eingehend (theirs)",
   "conflictResolver.hunkTooltip": "Hunk {{idx}}: Z{{startLine}}-{{endLine}} ({{status}})",
   "conflictResolver.unresolved": "ungelöst",
-  "conflictResolver.clickToAdd": "Klicken, um zum zusammengeführten Ergebnis hinzuzufügen",
+  "conflictResolver.clickToAdd": "Klicken, um zum zusammengefügten Ergebnis hinzuzufügen",
 
   "conflictWizard.overview.title": "Merge-Konflikte lösen",
   "conflictWizard.overview.fileProgress": "Datei {{current}} von {{total}} mit Konflikten",

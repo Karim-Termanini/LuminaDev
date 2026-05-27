@@ -208,6 +208,7 @@
   "kernels.noRiskyPorts": "Keine riskanten offenen Ports auf aktiven öffentlichen Zuhörern erkannt.",
   "kernels.toolchainTip": "Toolchain-Tipp",
   "kernels.toolchainTipText": "Stellen Sie sicher, dass systemweite Abhängigkeiten wie <code>docker-compose</code> und <code>ssh-agent</code> konfiguriert und für das aktive Profil zugänglich sind.",
+
   "profile.customDesc": "Benutzerdefinierte Umgebung basierend auf {{base}}.",
   "profile.emptyDesc": "Erstellen Sie ein Profil auf der Profilseite, um zu beginnen.",
   "widgets.addWidget": "Widget hinzufügen",
