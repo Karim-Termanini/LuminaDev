@@ -42,10 +42,8 @@ export function useI18nBridge(): I18nBridgeContextType {
 function applyDomLocale(locale: string): void {
   document.documentElement.lang = locale.split('-')[0]
   if (locale === 'ar-SA') {
-    document.documentElement.dir = 'rtl'
     document.documentElement.classList.add('hp-rtl')
   } else {
-    document.documentElement.dir = 'ltr'
     document.documentElement.classList.remove('hp-rtl')
   }
 }
