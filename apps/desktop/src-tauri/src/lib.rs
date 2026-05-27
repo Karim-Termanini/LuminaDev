@@ -35,6 +35,10 @@ mod host_exec;
 use host_exec::{
   get_global_ipc_timeout,
   set_global_ipc_timeout,
+  get_global_thread_pool_size,
+  set_global_thread_pool_size,
+  get_global_daemon_auto_restart,
+  set_global_daemon_auto_restart,
   cmd_timeout_install_step,
   cmd_timeout_long,
   cmd_timeout_short,
@@ -1061,6 +1065,12 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
             if let Some(ms) = value.get("ipcTimeoutMs").and_then(|v| v.as_u64()) {
               set_global_ipc_timeout(ms);
             }
+            if let Some(n) = value.get("threadPoolSize").and_then(|v| v.as_u64()) {
+              set_global_thread_pool_size(n);
+            }
+            if let Some(v) = value.get("daemonAutoRestart").and_then(|v| v.as_bool()) {
+              set_global_daemon_auto_restart(v);
+            }
           }
           match write_json(&path, &store) {
             Ok(_) => json!({ "ok": true }),
@@ -1918,6 +1928,12 @@ let prof = body.get("profile").and_then(|v| v.as_str()).unwrap_or("default");
         .to_string();
       {
         let mut jobs = state.jobs.lock().await;
+        let running = jobs.iter()
+          .filter(|j| j.get("state").and_then(|v| v.as_str()) == Some("running"))
+          .count();
+        if running >= get_global_thread_pool_size() {
+          return Ok(json!({ "ok": false, "error": format!("[JOB_POOL_FULL] Thread pool at capacity ({} concurrent jobs). Wait for a running job to complete.", get_global_thread_pool_size()) }));
+        }
         jobs.push(json!({
           "id": id,
           "kind": kind,
@@ -1930,7 +1946,32 @@ let prof = body.get("profile").and_then(|v| v.as_str()).unwrap_or("default");
       let jid = id.clone();
       let app2 = app.clone();
       tauri::async_runtime::spawn(async move {
-        runtime_job_execute(app2, jid, kind, runtime_id, method, version, remove_mode, sudo_password).await;
+        let retry_args = (kind.clone(), runtime_id.clone(), method.clone(), version.clone(), remove_mode.clone(), sudo_password.clone());
+        runtime_job_execute(app2.clone(), jid.clone(), kind, runtime_id, method, version, remove_mode, sudo_password).await;
+        if get_global_daemon_auto_restart() {
+          let final_state = {
+            let st = app2.state::<AppState>();
+            let jobs = st.jobs.lock().await;
+            jobs.iter()
+              .find(|j| j.get("id").and_then(|v| v.as_str()) == Some(jid.as_str()))
+              .and_then(|j| j.get("state").and_then(|v| v.as_str()))
+              .unwrap_or("")
+              .to_string()
+          };
+          if final_state == "error" {
+            {
+              let st = app2.state::<AppState>();
+              let mut jobs = st.jobs.lock().await;
+              if let Some(j) = jobs.iter_mut().find(|j| j.get("id").and_then(|v| v.as_str()) == Some(jid.as_str())) {
+                j["state"] = json!("running");
+                j["progress"] = json!(5);
+                j["logTail"] = json!(["Auto-restarting after failure…"]);
+              }
+            }
+            let (kind, runtime_id, method, version, remove_mode, sudo_password) = retry_args;
+            runtime_job_execute(app2, jid, kind, runtime_id, method, version, remove_mode, sudo_password).await;
+          }
+        }
       });
       json!({ "id": id })
     }
@@ -4385,6 +4426,12 @@ pub fn run() {
         if let Some(engine) = store.get("app_engine_settings") {
           if let Some(ms) = engine.get("ipcTimeoutMs").and_then(|v| v.as_u64()) {
             set_global_ipc_timeout(ms);
+          }
+          if let Some(n) = engine.get("threadPoolSize").and_then(|v| v.as_u64()) {
+            set_global_thread_pool_size(n);
+          }
+          if let Some(v) = engine.get("daemonAutoRestart").and_then(|v| v.as_bool()) {
+            set_global_daemon_auto_restart(v);
           }
         }
         if let Some(update) = store.get("update_settings") {

@@ -1,7 +1,7 @@
 use std::time::Duration;
 use tokio::process::Command;
 
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 /// Default wall-clock bound for host `exec_output` / `exec_result` (prevents hung IPC).
 static IPC_TIMEOUT_MS: AtomicU64 = AtomicU64::new(30_000);
@@ -12,6 +12,28 @@ pub(crate) fn set_global_ipc_timeout(ms: u64) {
 
 pub(crate) fn get_global_ipc_timeout() -> Duration {
   Duration::from_millis(IPC_TIMEOUT_MS.load(Ordering::Relaxed))
+}
+
+/// Maximum number of concurrent background jobs (dh:job:start).
+static THREAD_POOL_SIZE: AtomicU64 = AtomicU64::new(4);
+
+pub(crate) fn set_global_thread_pool_size(n: u64) {
+  THREAD_POOL_SIZE.store(n.max(1).min(64), Ordering::Relaxed);
+}
+
+pub(crate) fn get_global_thread_pool_size() -> usize {
+  THREAD_POOL_SIZE.load(Ordering::Relaxed) as usize
+}
+
+/// Whether failed background jobs automatically retry once before being marked error.
+static DAEMON_AUTO_RESTART: AtomicBool = AtomicBool::new(true);
+
+pub(crate) fn set_global_daemon_auto_restart(v: bool) {
+  DAEMON_AUTO_RESTART.store(v, Ordering::Relaxed);
+}
+
+pub(crate) fn get_global_daemon_auto_restart() -> bool {
+  DAEMON_AUTO_RESTART.load(Ordering::Relaxed)
 }
 
 /// Short probe (sudo -n, quick shell checks, `ssh -T` smoke test).
