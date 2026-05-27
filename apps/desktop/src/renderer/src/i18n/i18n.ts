@@ -13,7 +13,7 @@ i18n
     fallbackLng: 'en-US',
     defaultNS: 'common',
     ns: [
-      'common', 'nav', 'dashboard', 'docker', 'git', 'ssh',
+      'common', 'nav', 'dashboard', 'docker', 'git', 'cloudGit', 'ssh',
       'runtimes', 'monitor', 'maintenance', 'profiles', 'settings', 'readiness',
     ],
     interpolation: { escapeValue: false },

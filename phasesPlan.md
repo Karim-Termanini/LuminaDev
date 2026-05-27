@@ -621,6 +621,13 @@ When user clicks "Install" / "Fix":
 
 ---
 
+### Phase 16 — lib.rs Monolith Refactoring
+**Status:** 📋 Planned (Refactor sprint)  
+**Scope:** Decompose 4,700+ line `lib.rs` into domain modules.  
+**Details:** See [`docs/superpowers/plans/2026-05-27-phase16-refactor.md`](docs/superpowers/plans/2026-05-27-phase16-refactor.md)
+
+---
+
 ---
 
 ## 📋 Future Phases — Scope & Dependencies
@@ -734,4 +741,5 @@ Based on current app state (Phase 16 + Phase 7 complete), here's what remaining 
 📋  UI/UX & Performance Debt
 📋  Phase 10 — Extensions (Plugin model v0, Dev API)
 🔄  Phase 14 — Flatpak Release Gate
+📋  Phase 16 — lib.rs Monolith Refactoring
 ```

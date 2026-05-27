@@ -1,12 +1,13 @@
 import { ComposeProfileSchema, type ComposeProfile, type ContainerRow, type HostMetricsResponse, type HostSecuritySnapshot, type JobSummary, type MaintenanceProfileHealth, type MaintenanceStateStore, type MaintenanceTask, type TopProcessRow, type PerfSnapshot } from '@linux-dev-home/shared'
 import type { ReactElement } from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { humanizeDashboardError } from './dashboardError'
 import { humanizeDockerError } from './dockerError'
 import { humanizeRuntimeError } from './runtimeError'
 import { collectAccessibilitySnapshot, evaluateAccessibilitySnapshot } from './accessibilityAudit'
 import { evaluateGuardian } from './maintenanceGuardian'
-import { OPS_RUNBOOK, maintenanceStatusTone } from './maintenancePageHelpers'
+import { OPS_RUNBOOK } from './maintenancePageHelpers'
 import './MaintenancePage.css'
 
 const CRON_HINTS = ['0 */6 * * *', '0 3 * * *', '30 2 * * 0']
@@ -45,9 +46,10 @@ function MaintenanceRunbookStrip({
   runbookBusyId: string | null
   onRun: (op: RunbookOp) => void
 }): ReactElement {
+  const { t } = useTranslation('maintenance')
   return (
     <>
-      <div className="maint-runbook-label">Host diagnostics</div>
+      <div className="maint-runbook-label">{t('runbook.label')}</div>
       <div className="maint-runbook-grid">
         {OPS_RUNBOOK.map((op) => (
           <button
@@ -58,7 +60,7 @@ function MaintenanceRunbookStrip({
             onClick={() => void onRun(op)}
           >
             <span className={`codicon codicon-${op.icon}`} aria-hidden />
-            <span>{runbookBusyId === op.id ? 'Running…' : op.label}</span>
+            <span>{runbookBusyId === op.id ? t('runbook.running') : op.label}</span>
           </button>
         ))}
       </div>
@@ -67,6 +69,7 @@ function MaintenanceRunbookStrip({
 }
 
 export function MaintenancePage(): ReactElement {
+  const { t } = useTranslation('maintenance')
   const [activeTab, setActiveTab] = useState<TabId>('Overview / Health Dashboard')
   const [metrics, setMetrics] = useState<HostMetricsResponse | null>(null)
   const [containers, setContainers] = useState<ContainerRow[]>([])
@@ -92,6 +95,7 @@ export function MaintenancePage(): ReactElement {
   const [diagnostics, setDiagnostics] = useState<DiagnosticCheck[]>([])
   const [includeSensitiveBundle, setIncludeSensitiveBundle] = useState(false)
   const [status, setStatus] = useState('')
+  const [statusTone, setStatusTone] = useState<'success' | 'warning'>('warning')
   const [runbook, setRunbook] = useState<{ title: string; text: string } | null>(null)
   const [runbookBusyId, setRunbookBusyId] = useState<string | null>(null)
   const [commandPeek, setCommandPeek] = useState<string | null>(null)
@@ -103,9 +107,9 @@ export function MaintenancePage(): ReactElement {
     try {
       await window.dh.storeSet({ key: 'maintenance_state', data: next })
       setState(next)
-      setStatus('Maintenance state saved.')
+      showStatus(t('page.statusSaved'), 'success')
     } catch (e) {
-      setStatus(e instanceof Error ? e.message : String(e))
+      showStatus(e instanceof Error ? e.message : String(e))
     } finally {
       setSavingState(false)
     }
@@ -122,10 +126,10 @@ export function MaintenancePage(): ReactElement {
         setCleanupPreview(res.preview ?? null)
       } else {
         setCleanupPreview(null)
-        setStatus(humanizeDockerError(res.error))
+        showStatus(humanizeDockerError(res.error))
       }
     } catch (e) {
-      setStatus(humanizeDockerError(e))
+      showStatus(humanizeDockerError(e))
       setCleanupPreview(null)
     }
   }, [])
@@ -136,11 +140,11 @@ export function MaintenancePage(): ReactElement {
       if (m.ok) {
         setMetrics(m)
       } else {
-        setStatus(humanizeDashboardError(m.error))
+        showStatus(humanizeDashboardError(m.error))
       }
       const c = (await window.dh.dockerList()) as { ok: boolean; rows: ContainerRow[]; error?: string }
       if (c.ok) setContainers(c.rows)
-      else setStatus(humanizeDockerError(c.error))
+      else showStatus(humanizeDockerError(c.error))
       const proc = await window.dh.monitorTopProcesses()
       if (proc && 'processes' in proc && Array.isArray(proc.processes)) {
         setTopProcesses(proc.processes)
@@ -149,7 +153,7 @@ export function MaintenancePage(): ReactElement {
       setJobs(Array.isArray(j) ? j : [])
       await refreshCleanupPreview()
     } catch (e) {
-      setStatus(humanizeDashboardError(e))
+      showStatus(humanizeDashboardError(e))
     }
   }, [refreshCleanupPreview])
 
@@ -174,18 +178,18 @@ export function MaintenancePage(): ReactElement {
       const sec = await window.dh.monitorSecurity()
       setSecurity(sec.ok ? sec.snapshot : null)
       if (!sec.ok && sec.error) {
-        setStatus(humanizeDashboardError(sec.error))
+        showStatus(humanizeDashboardError(sec.error))
       }
       const stored = await window.dh.storeGet({ key: 'maintenance_state' })
       if (stored.ok) {
         setState((stored.data as MaintenanceStateStore | null) ?? { tasks: [], profileHealth: [], history: [] })
       } else {
         setState({ tasks: [], profileHealth: [], history: [] })
-        setStatus(stored.error || 'Failed to load maintenance state.')
+        showStatus(stored.error || t('page.statusLoadError'))
       }
       await refreshSystemdSnapshot()
     } catch (e) {
-      setStatus(humanizeDashboardError(e))
+      showStatus(humanizeDashboardError(e))
     }
   }, [refreshSystemdSnapshot])
 
@@ -216,6 +220,29 @@ export function MaintenancePage(): ReactElement {
     ? Math.floor((Date.now() - new Date(state.lastMaintenanceAtIso).getTime()) / (1000 * 3600 * 24))
     : null
 
+  function showStatus(msg: string, tone: 'success' | 'warning' = 'warning') {
+    setStatus(msg)
+    setStatusTone(tone)
+  }
+
+  const tabShortLabel = useMemo<Record<TabId, string>>(() => ({
+    'Overview / Health Dashboard': t('tabs.overviewShort'),
+    'System Cleanup': t('tabs.cleanupShort'),
+    'Docker Maintenance': t('tabs.dockerShort'),
+    'Data & Profiles': t('tabs.dataShort'),
+    'Logs & History': t('tabs.logsShort'),
+    'Scheduled / Automation': t('tabs.scheduleShort'),
+  }), [t])
+
+  const tabFullLabel = useMemo<Record<TabId, string>>(() => ({
+    'Overview / Health Dashboard': t('tabs.overview'),
+    'System Cleanup': t('tabs.cleanup'),
+    'Docker Maintenance': t('tabs.docker'),
+    'Data & Profiles': t('tabs.data'),
+    'Logs & History': t('tabs.logs'),
+    'Scheduled / Automation': t('tabs.schedule'),
+  }), [t])
+
   async function appendHistory(action: string, result: 'success' | 'warning' | 'failed', note?: string, reclaimedMb?: number): Promise<void> {
     const next = {
       ...state,
@@ -239,12 +266,12 @@ export function MaintenancePage(): ReactElement {
         health,
         lastCheckedAtIso: new Date().toISOString(),
         lastRunAtIso: health === 'healthy' ? new Date().toISOString() : undefined,
-        note: hasErrors ? 'Error markers found in compose logs.' : 'Compose logs inspected from maintenance.',
+        note: hasErrors ? t('compose.errorMarkers') : t('compose.inspected'),
       }
       const next = { ...state, profileHealth: [nextEntry, ...state.profileHealth.filter((x) => x.profile !== profile)].slice(0, 40) }
       await saveState(next)
     } catch (e) {
-      setStatus(e instanceof Error ? e.message : String(e))
+      showStatus(e instanceof Error ? e.message : String(e))
     }
   }
 
@@ -264,14 +291,14 @@ export function MaintenancePage(): ReactElement {
         lastCheckedAtIso: new Date().toISOString(),
         lastRunAtIso: new Date().toISOString(),
         note: res.ok
-          ? 'Compose up succeeded.'
-          : (humanizeDockerError(res.error || res.log || 'Compose up returned non-zero.')).slice(0, 280),
+          ? t('compose.upSuccess')
+          : (humanizeDockerError(res.error || res.log || t('compose.upError'))).slice(0, 280),
       }
       const next = { ...state, profileHealth: [nextEntry, ...state.profileHealth.filter((x) => x.profile !== profile)].slice(0, 40) }
       await saveState(next)
       await refreshLive()
     } catch (e) {
-      setStatus(e instanceof Error ? e.message : String(e))
+      showStatus(e instanceof Error ? e.message : String(e))
     }
   }
 
@@ -287,11 +314,11 @@ export function MaintenancePage(): ReactElement {
         throw new Error(humanizeDockerError(res.error))
       }
       const mb = Math.round((((res.reclaimedBytes ?? 0) / (1024 * 1024)) * 10)) / 10
-      setStatus(`Cleanup finished. Reclaimed ~${mb} MB.`)
-      await appendHistory('docker.cleanup', 'success', 'Selected Docker cleanup executed.', mb)
+      showStatus(`Cleanup finished. Reclaimed ~${mb} MB.`, 'success')
+      await appendHistory('docker.cleanup', 'success', t('cleanup.dockerExecuted'), mb)
       await refreshLive()
     } catch (e) {
-      setStatus(e instanceof Error ? e.message : String(e))
+      showStatus(e instanceof Error ? e.message : String(e))
       await appendHistory('docker.cleanup', 'failed', e instanceof Error ? e.message : String(e))
     } finally {
       setBusyCleanup(false)
@@ -309,18 +336,18 @@ export function MaintenancePage(): ReactElement {
         if (!saveRes.ok) {
           throw new Error(saveRes.error || 'Failed to refresh widget layout cache.')
         }
-        await appendHistory('widgets.refresh', 'success', 'Widget layout cache refreshed.')
+        await appendHistory('widgets.refresh', 'success', t('cleanup.widgetRefreshed'))
       } else {
         throw new Error(layoutRes.error || 'Failed to load widget layout cache.')
       }
     }
     if (recommendedSelection.clearCache) {
-      await appendHistory('cache.cleanup.manual', 'warning', 'Use runbook command templates for host cache cleanup.')
+      await appendHistory('cache.cleanup.manual', 'warning', t('cleanup.hostCache'))
     }
     if (recommendedSelection.cleanLogs) {
-      await appendHistory('logs.cleanup.manual', 'warning', 'Job logs are session-bound; app log cleanup is manual currently.')
+      await appendHistory('logs.cleanup.manual', 'warning', t('cleanup.logCleanup'))
     }
-    setStatus('Recommended maintenance completed.')
+    showStatus(t('page.recommendedDone'), 'success')
   }
 
   async function saveReminder(days: number): Promise<void> {
@@ -370,7 +397,7 @@ export function MaintenancePage(): ReactElement {
       }
       const text = res.ok
         ? (typeof res.result === 'string' ? res.result : JSON.stringify(res.result ?? '')) || '(empty)'
-        : res.error ?? 'Request failed'
+        : res.error ?? t('cleanup.requestFailed')
       setRunbook({ title: op.label, text })
     } catch (e) {
       setRunbook({ title: op.label, text: e instanceof Error ? e.message : String(e) })
@@ -386,7 +413,7 @@ export function MaintenancePage(): ReactElement {
       const docker = (await window.dh.dockerCheckInstalled()) as { docker: boolean; compose: boolean; buildx: boolean }
       checks.push({
         id: 'docker',
-        label: 'Docker connectivity',
+        label: t('check.docker'),
         ok: docker.docker && docker.compose,
         details: `docker=${docker.docker} compose=${docker.compose} buildx=${docker.buildx}`,
       })
@@ -395,11 +422,11 @@ export function MaintenancePage(): ReactElement {
       const hostSec = hostSecRes.ok ? hostSecRes.snapshot : null
       checks.push({
         id: 'security',
-        label: 'Security baseline',
+        label: t('check.security'),
         ok: Boolean(hostSec && hostSec.firewall === 'active' && hostSec.sshPasswordAuth !== 'yes'),
         details: hostSec
           ? `firewall=${hostSec.firewall}, sshPasswordAuth=${hostSec.sshPasswordAuth}`
-          : hostSecRes.error || 'Security snapshot unavailable',
+          : hostSecRes.error || t('check.securityUnavailable'),
       })
 
       const gitHost = (await window.dh.gitConfigList({ target: 'host' })) as {
@@ -412,17 +439,17 @@ export function MaintenancePage(): ReactElement {
       const hasEmail = rows.some((r) => r.key.toLowerCase() === 'user.email')
       checks.push({
         id: 'git',
-        label: 'Git identity',
+        label: t('check.git'),
         ok: hasName && hasEmail,
-        details: gitHost.ok ? `user.name=${hasName} user.email=${hasEmail}` : gitHost.error || 'Git config unavailable',
+        details: gitHost.ok ? t('check.gitDetail', { name: String(hasName), email: String(hasEmail) }) : gitHost.error || t('check.gitUnavailable'),
       })
 
       const sshHost = await window.dh.sshGetPub({ target: 'host' })
       checks.push({
         id: 'ssh',
-        label: 'SSH key',
+        label: t('check.ssh'),
         ok: Boolean(sshHost.ok && sshHost.pub),
-        details: sshHost.ok && sshHost.fingerprint ? `fingerprint=${sshHost.fingerprint}` : 'No host SSH key detected',
+        details: sshHost.ok && sshHost.fingerprint ? t('check.sshDetail', { fp: sshHost.fingerprint }) : t('check.sshNone'),
       })
 
       const rt = await window.dh.runtimeStatus()
@@ -432,7 +459,7 @@ export function MaintenancePage(): ReactElement {
         : 0
       checks.push({
         id: 'runtimes',
-        label: 'Core runtimes',
+        label: t('check.runtimes'),
         ok: installedCount >= 2,
         details: rt.ok ? `${installedCount}/3 core runtimes installed` : humanizeRuntimeError(rt.error),
       })
@@ -441,28 +468,28 @@ export function MaintenancePage(): ReactElement {
       const snap = perf.ok ? (perf.snapshot as PerfSnapshot | undefined) : undefined
       checks.push({
         id: 'perf',
-        label: 'Performance baseline',
+        label: t('check.perf'),
         ok: Boolean(snap && snap.rssMb < 900),
         details: snap
           ? `rss=${snap.rssMb}MB uptime=${snap.uptimeSec}s`
-          : perf.error || 'Perf snapshot unavailable',
+          : perf.error || t('check.perfUnavailable'),
       })
 
       const a11ySnapshot = collectAccessibilitySnapshot(document)
       const a11y = evaluateAccessibilitySnapshot(a11ySnapshot)
       checks.push({
         id: 'a11y',
-        label: 'Accessibility baseline',
+        label: t('check.a11y'),
         ok: a11y.ok,
         details: a11y.details,
       })
 
       setDiagnostics(checks)
       const failed = checks.filter((c) => !c.ok).length
-      await appendHistory('diagnostics.run', failed === 0 ? 'success' : 'warning', `${failed} check(s) failed out of ${checks.length}.`)
-      setStatus(failed === 0 ? 'Diagnostics passed.' : `Diagnostics completed with ${failed} issue(s).`)
+      await appendHistory('diagnostics.run', failed === 0 ? 'success' : 'warning', t('health.someIssues', { count: failed, total: checks.length }))
+      showStatus(failed === 0 ? t('health.passed') : t('health.failed', { count: failed }), failed === 0 ? 'success' : 'warning')
     } catch (e) {
-      setStatus(e instanceof Error ? e.message : String(e))
+      showStatus(e instanceof Error ? e.message : String(e))
       await appendHistory('diagnostics.run', 'failed', e instanceof Error ? e.message : String(e))
     } finally {
       setRunningDiagnostics(false)
@@ -490,18 +517,18 @@ export function MaintenancePage(): ReactElement {
     if (!res.ok) {
       throw new Error(res.error ?? 'bundle generation failed')
     }
-    setStatus(`Support bundle exported: ${res.path ?? 'Downloads/LuminaDev'} (${includeSensitiveBundle ? 'full' : 'redacted'})`)
-    await appendHistory('diagnostics.export', 'success', `Support bundle exported (${includeSensitiveBundle ? 'include-sensitive' : 'redacted'}).`)
+    showStatus(t('health.exported', { path: res.path ?? 'Downloads/LuminaDev', mode: includeSensitiveBundle ? t('health.exportFull') : t('health.exportRedacted') }), 'success')
+    await appendHistory('diagnostics.export', 'success', `Support bundle exported (${includeSensitiveBundle ? t('health.exportIncludeSensitive') : t('health.exportRedacted')}).`)
   }
 
   return (
     <div className="maint-page elevated-page">
       <header className="maint-hero">
         <div className="maint-hero-eyebrow">Workspace care</div>
-        <h1 className="maint-hero-title">Maintenance</h1>
+        <h1 className="maint-hero-title">{t('page.contentTitle')}</h1>
         <p className="maint-hero-sub">
-          {degradedProfiles > 0 ? `${degradedProfiles} profile issues detected.` : 'Your workstation looks healthy.'}{' '}
-          Last maintenance: {lastMaintenanceDaysAgo === null ? 'never' : `${lastMaintenanceDaysAgo} day(s) ago`}.
+          {degradedProfiles > 0 ? t('page.statusIssues', { count: degradedProfiles }) : t('page.statusHealthy')}{' '}
+          {lastMaintenanceDaysAgo === null ? t('page.lastMaintenanceNever') : t('page.lastMaintenance', { days: lastMaintenanceDaysAgo })}
         </p>
       </header>
 
@@ -512,12 +539,12 @@ export function MaintenancePage(): ReactElement {
               key={tab}
               type="button"
               className={`maint-tab ${activeTab === tab ? 'maint-tab-active' : ''}`}
-              title={tab}
+              title={tabFullLabel[tab]}
               onClick={() => setActiveTab(tab)}
             >
               <span className={`codicon codicon-${MAINT_TAB_META[tab].icon}`} aria-hidden />
-              <span>{MAINT_TAB_META[tab].short}</span>
-              <span className="maint-tab-full">{tab}</span>
+              <span>{tabShortLabel[tab]}</span>
+              <span className="maint-tab-full">{tabFullLabel[tab]}</span>
             </button>
           ))}
         </nav>
@@ -596,7 +623,7 @@ export function MaintenancePage(): ReactElement {
             <div style={{ marginTop: 22 }}>
               <div className="hp-section-title">Your checklist</div>
               <p className="hp-muted" style={{ fontSize: 12, lineHeight: 1.55, marginTop: 6, marginBottom: 10 }}>
-                Open items from <strong>Schedule</strong> → Maintenance Tasks. Checking a box here updates the same list.
+                {t('schedule.openItems')}
               </p>
               {pendingTasks.length === 0 ? (
                 <div className="hp-muted" style={{ fontSize: 13 }}>No open tasks. Add reminders from the Schedule tab.</div>
@@ -842,7 +869,7 @@ export function MaintenancePage(): ReactElement {
 
       {activeTab === 'Scheduled / Automation' ? (
         <section className="hp-card">
-          <div className="hp-section-title">Scheduled / Automation</div>
+          <div className="hp-section-title">{tabFullLabel['Scheduled / Automation']}</div>
           <div className="hp-row-wrap">
             <button className="hp-btn" onClick={() => void saveReminder(3)}>Reminder 3d</button>
             <button className="hp-btn" onClick={() => void saveReminder(7)}>Reminder 7d</button>
@@ -892,11 +919,11 @@ export function MaintenancePage(): ReactElement {
           <div className="maint-toolbar">
             <button className="hp-btn hp-btn-primary" onClick={() => void runDiagnosticsWizard()} disabled={runningDiagnostics}>
               <span className="codicon codicon-run-all" aria-hidden style={{ fontSize: 15 }} />
-              {runningDiagnostics ? 'Running…' : 'Run diagnostics'}
+              {runningDiagnostics ? t('health.running') : t('health.run')}
             </button>
             <button type="button" className="hp-btn" onClick={() => void exportDiagnosticReport()}>
               <span className="codicon codicon-export" aria-hidden style={{ fontSize: 15 }} />
-              Export report
+              {t('health.export')}
             </button>
             <label className="hp-muted" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
               <input
@@ -953,7 +980,7 @@ export function MaintenancePage(): ReactElement {
       {status ? (
         <div
           role="status"
-          className={`hp-status-alert ${maintenanceStatusTone(status) === 'success' ? 'success' : 'warning'}`}
+          className={`hp-status-alert ${statusTone === 'success' ? 'success' : 'warning'}`}
           style={{ justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}
         >
           <span style={{ flex: '1 1 220px', minWidth: 0 }}>{status}</span>
@@ -967,6 +994,7 @@ export function MaintenancePage(): ReactElement {
 }
 
 function StatusPill({ state }: { state: string }): ReactElement {
+  const { t } = useTranslation('maintenance')
   const color =
     state === 'running' || state === 'healthy' || state === 'active' || state === 'success'
       ? 'var(--green)'
@@ -987,7 +1015,11 @@ function StatusPill({ state }: { state: string }): ReactElement {
         boxShadow: `0 0 20px -8px ${color}`,
       }}
     >
-      {state.toUpperCase()}
+      {({
+        active: t('statusPill.active'),
+        inactive: t('statusPill.inactive'),
+        unknown: t('statusPill.unknown'),
+      }[state] ?? state).toUpperCase()}
     </span>
   )
 }

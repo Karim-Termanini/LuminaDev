@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import type { ConnectedAccount } from '@linux-dev-home/shared'
 import { CloudOauthClientsStoreSchema } from '@linux-dev-home/shared'
+import { useTranslation } from 'react-i18next'
 
 import { assertCloudAuthOk } from './cloudAuthContract'
 import { CloudGitActivityPanel } from './CloudGitActivityPanel'
@@ -44,6 +45,7 @@ type ScopedVars = React.CSSProperties & {
 }
 
 export function CloudGitPage(): ReactElement {
+  const { t } = useTranslation('cloudGit')
   const [searchParams, setSearchParams] = useSearchParams()
 
   const parseTab = (raw: string | null): Provider => (raw === 'gitlab' ? 'gitlab' : 'github')
@@ -185,7 +187,7 @@ export function CloudGitPage(): ReactElement {
           if (!res.ok) {
             stopPoll()
             setDeviceFlow(null)
-            applyCloudAuthFailure(new Error(res.error ?? 'Poll failed'))
+            applyCloudAuthFailure(new Error(res.error ?? t('oauth.pollFailed')))
             return
           }
           if (res.status === 'complete') {
@@ -195,11 +197,11 @@ export function CloudGitPage(): ReactElement {
           } else if (res.status === 'expired') {
             stopPoll()
             setDeviceFlow(null)
-            setError('Code expired — click Connect to try again.')
+            setError(t('oauth.expired'))
           } else if (res.status === 'denied') {
             stopPoll()
             setDeviceFlow(null)
-            setError('Authorization was denied on the provider side.')
+            setError(t('oauth.denied'))
           }
         } catch {
           // Network hiccup — keep polling
@@ -247,8 +249,8 @@ export function CloudGitPage(): ReactElement {
         github_client_id: advGithub.trim() || undefined,
       })
       const res = await window.dh.storeSet({ key: 'cloud_oauth_clients', data })
-      if (!res.ok) throw new Error(res.error ?? 'Could not save.')
-      setAdvMsg('Saved. Use Connect on the GitHub tab again to start device flow with this client ID.')
+      if (!res.ok) throw new Error(res.error ?? t('oauth.couldNotSave'))
+      setAdvMsg(t('oauth.saved', { label: t('provider.github') }))
     } catch (e) {
       setAdvMsg(e instanceof Error ? e.message : String(e))
     } finally {
@@ -267,7 +269,7 @@ export function CloudGitPage(): ReactElement {
   }
 
   if (loading) {
-    return <div style={{ padding: '48px 32px', color: 'var(--text-muted)' }}>Loading…</div>
+    return <div style={{ padding: '48px 32px', color: 'var(--text-muted)' }}>{t('page.loading')}</div>
   }
 
   const scopedStyle: ScopedVars = {
@@ -290,11 +292,10 @@ export function CloudGitPage(): ReactElement {
     >
       <header style={{ marginBottom: 22 }}>
         <h1 className="hp-title" style={{ fontSize: 32, fontWeight: 700, letterSpacing: '-0.03em' }}>
-          Cloud Git
+          {t('page.title')}
         </h1>
         <p className="hp-muted" style={{ marginTop: 10, maxWidth: 560, fontSize: 14, lineHeight: 1.55 }}>
-          Choose a provider below. Each tab scopes the layout and accent to that host—PRs and CI views will follow the
-          same pattern. Tokens are stored locally for HTTPS Git on the Git VCS page.
+          {t('page.desc')}
         </p>
       </header>
 
@@ -323,9 +324,9 @@ export function CloudGitPage(): ReactElement {
               onClick={() => setOauthSetupNotice(null)}
               className="hp-btn"
               style={{ flexShrink: 0, padding: '4px 10px', fontSize: 12 }}
-              aria-label="Dismiss notice"
+              aria-label={t('notice.dismissAria')}
             >
-              Dismiss
+              {t('notice.dismiss')}
             </button>
           </div>
         </div>
@@ -349,7 +350,7 @@ export function CloudGitPage(): ReactElement {
 
       <div
         role="tablist"
-        aria-label="Git host"
+        aria-label={t('host.label')}
         style={{
           display: 'flex',
           gap: 8,
@@ -361,7 +362,7 @@ export function CloudGitPage(): ReactElement {
         }}
       >
         {(['github', 'gitlab'] as const).map((p) => {
-          const t = CLOUD_GIT_PROVIDER_THEME[p]
+          const tTab = CLOUD_GIT_PROVIDER_THEME[p]
           const active = activeTab === p
           const m = PROVIDER_META[p]
           return (
@@ -393,19 +394,19 @@ export function CloudGitPage(): ReactElement {
                 justifyContent: 'center',
                 gap: 10,
                 border: active
-                  ? `1px solid color-mix(in srgb, ${t.accent} 45%, var(--border))`
+                  ? `1px solid color-mix(in srgb, ${tTab.accent} 45%, var(--border))`
                   : '1px solid transparent',
                 background: active
-                  ? `color-mix(in srgb, ${t.accent} 14%, var(--bg-panel))`
+                  ? `color-mix(in srgb, ${tTab.accent} 14%, var(--bg-panel))`
                   : 'transparent',
-                color: active ? t.accent : 'var(--text)',
-                boxShadow: active ? `0 2px 12px color-mix(in srgb, ${t.accent} 20%, transparent)` : 'none',
+                color: active ? tTab.accent : 'var(--text)',
+                boxShadow: active ? `0 2px 12px color-mix(in srgb, ${tTab.accent} 20%, transparent)` : 'none',
                 transition: 'all 0.18s ease',
               }}
             >
               <span aria-hidden style={{ fontSize: 18 }}>{m.tabEmoji}</span>
               <span className={`codicon codicon-${m.icon}`} style={{ fontSize: 19 }} aria-hidden />
-              <span>{m.label}</span>
+              <span>{t(`provider.${p}`)}</span>
             </button>
           )
         })}
@@ -423,16 +424,13 @@ export function CloudGitPage(): ReactElement {
             }}
           >
             <div style={{ fontWeight: 700, fontSize: 17, marginBottom: 8, color: 'var(--text)' }}>
-              Connecting to {PROVIDER_META[deviceFlow.provider].label}
+              {t('oauth.title', { label: t(`provider.${deviceFlow.provider}`) })}
             </div>
             <p className="hp-muted" style={{ fontSize: 13, marginBottom: 12 }}>
-              On GitHub, approve the app and enter this user code if prompted. Keep this page open
-              until it shows connected — Lumina polls in the background. If the browser step succeeds
-              but this screen never finishes, the OAuth Client ID is usually wrong: set your own under{' '}
-              <strong>Advanced</strong> (or use a <strong>personal access token</strong> on this tab).
+              {t('oauth.deviceInstructions', { label: t(`provider.${deviceFlow.provider}`) })}
             </p>
             <p className="hp-muted" style={{ fontSize: 13, marginBottom: 22 }}>
-              Open:{' '}
+              {t('oauth.openLabel')}{' '}
               <span className="mono" style={{ color: 'var(--text)', wordBreak: 'break-all' }}>
                 {deviceFlow.verification_uri}
               </span>
@@ -457,7 +455,7 @@ export function CloudGitPage(): ReactElement {
                   void navigator.clipboard.writeText(deviceFlow.user_code).catch(() => { })
                   void window.dh.openExternal(deviceFlow.verification_uri).catch(() => {
                     setError(
-                      `Could not open the browser automatically. Open ${deviceFlow.verification_uri} manually and paste the code above.`,
+                      t('oauth.browserFallback', { uri: deviceFlow.verification_uri }),
                     )
                   })
                 }}
@@ -475,12 +473,12 @@ export function CloudGitPage(): ReactElement {
                   gap: 8,
                 }}
               >
-                <span className="codicon codicon-copy" aria-hidden /> Copy & open browser
+                <span className="codicon codicon-copy" aria-hidden /> {t('oauth.copyOpen')}
               </button>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-muted)', fontSize: 13 }}>
               <span className="codicon codicon-sync codicon-modifier-spin" aria-hidden style={{ flexShrink: 0 }} />
-              Waiting for authorization…
+              {t('oauth.waiting')}
               <button
                 type="button"
                 onClick={cancelDeviceFlow}
@@ -495,7 +493,7 @@ export function CloudGitPage(): ReactElement {
                   textDecoration: 'underline',
                 }}
               >
-                Cancel
+                {t('oauth.cancel')}
               </button>
             </div>
           </div>
@@ -519,7 +517,7 @@ export function CloudGitPage(): ReactElement {
                   textTransform: 'uppercase',
                 }}
               >
-                Account & security
+                {t('account.title')}
               </div>
               <section
                 aria-labelledby={`cloud-git-hero-${activeTab}`}
@@ -584,10 +582,10 @@ export function CloudGitPage(): ReactElement {
                             }}
                             aria-hidden
                           />
-                          Connected · HTTPS ready
+                          {t('provider.connected')}
                         </span>
                         <span className="hp-muted" style={{ display: 'block', marginTop: 10, fontSize: 12 }}>
-                          Linked {account.connected_at.slice(0, 10)} · token stored locally for Git over HTTPS
+                          {t('provider.connectedAt', { date: account.connected_at.slice(0, 10) })}
                         </span>
                       </p>
                     </div>
@@ -601,24 +599,21 @@ export function CloudGitPage(): ReactElement {
                         color: 'var(--text)',
                       }}
                     >
-                      Disconnect {meta.label}
+                      {t('provider.disconnect', { label: t(`provider.${activeTab}`) })}
                     </button>
                   </div>
                 ) : (
                   <div>
                     <h2 id={`cloud-git-hero-${activeTab}`} style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>
-                      Connect {meta.label}
+                      {t('provider.connect', { label: t(`provider.${activeTab}`) })}
                     </h2>
                     {activeTab === 'gitlab' ? (
                       <p className="hp-muted" style={{ margin: '12px 0 20px', fontSize: 14, lineHeight: 1.55, maxWidth: 520 }}>
-                        Paste a <strong>personal access token</strong> from GitLab (Preferences → Access Tokens, or the same
-                        path on your self-managed instance). Include the <strong>api</strong> scope so merge requests and API
-                        actions work. Credentials stay on this machine and power HTTPS remotes on the Git VCS page.
+                        {t('provider.gitlabConnectDesc')}
                       </p>
                     ) : (
                       <p className="hp-muted" style={{ margin: '12px 0 20px', fontSize: 14, lineHeight: 1.55, maxWidth: 520 }}>
-                        Sign in with device flow (browser) or paste a personal access token. Credentials stay on this machine
-                        and power HTTPS remotes on the Git VCS page.
+                        {t('provider.githubConnectDesc')}
                       </p>
                     )}
                     {!showPatForm ? (
@@ -627,7 +622,7 @@ export function CloudGitPage(): ReactElement {
                         <div style={{ maxWidth: 420 }}>
                           <input
                             type="text"
-                            placeholder="Custom Host URL (optional, e.g. gitlab.company.com)"
+                            placeholder={t('host.customPlaceholder')}
                             value={patHost}
                             onChange={(e) => setPatHost(e.target.value)}
                             className="hp-input"
@@ -635,14 +630,14 @@ export function CloudGitPage(): ReactElement {
                           />
                           <input
                             type="password"
-                            placeholder="Paste personal access token"
+                            placeholder={t('pat.placeholder')}
                             value={patToken}
                             onChange={(e) => setPatToken(e.target.value)}
                             className="hp-input"
                             style={{ width: '100%', marginBottom: 4, boxSizing: 'border-box' }}
                           />
                           <p className="hp-muted" style={{ fontSize: 11, margin: '0 0 10px' }}>
-                            Required scopes: {PROVIDER_META['gitlab'].scopes.join(', ')}
+                            {t('scopes.required')} {PROVIDER_META['gitlab'].scopes.join(', ')}
                           </p>
                           <div
                             style={{
@@ -659,7 +654,7 @@ export function CloudGitPage(): ReactElement {
                             }}
                           >
                             <span className="codicon codicon-info" style={{ fontSize: 13 }} />
-                            <span>Ensure the 'api' scope is enabled to create and manage Merge Requests.</span>
+                            <span>{t('scopes.gitlabApiNote')}</span>
                           </div>
                           <div style={{ display: 'flex', gap: 10 }}>
                             <button
@@ -677,7 +672,7 @@ export function CloudGitPage(): ReactElement {
                                 cursor: connecting ? 'wait' : 'pointer',
                               }}
                             >
-                              {connecting ? 'Verifying…' : 'Verify & save'}
+                              {connecting ? t('pat.verifying') : t('pat.verify')}
                             </button>
                           </div>
                         </div>
@@ -699,7 +694,7 @@ export function CloudGitPage(): ReactElement {
                               display: 'inline-flex',
                             }}
                           >
-                            {connecting ? 'Connecting…' : `Connect ${meta.label}`}
+                            {connecting ? t('oauth.connecting') : t('provider.connect', { label: t(`provider.${activeTab}`) })}
                           </button>
                           <button
                             type="button"
@@ -719,7 +714,7 @@ export function CloudGitPage(): ReactElement {
                               setPatError(null)
                             }}
                           >
-                            Use a personal access token instead
+                            {t('provider.switchToPat')}
                           </button>
                         </>
                       )
@@ -727,7 +722,7 @@ export function CloudGitPage(): ReactElement {
                       <div style={{ maxWidth: 420 }}>
                         <input
                           type="text"
-                          placeholder={`Custom Host URL (optional, e.g. ${activeTab}.company.com)`}
+                          placeholder={t('host.customTemplate', { host: activeTab })}
                           value={patHost}
                           onChange={(e) => setPatHost(e.target.value)}
                           className="hp-input"
@@ -735,14 +730,14 @@ export function CloudGitPage(): ReactElement {
                         />
                         <input
                           type="password"
-                          placeholder="Paste personal access token"
+                          placeholder={t('pat.placeholder')}
                           value={patToken}
                           onChange={(e) => setPatToken(e.target.value)}
                           className="hp-input"
                           style={{ width: '100%', marginBottom: 4, boxSizing: 'border-box' }}
                         />
                         <p className="hp-muted" style={{ fontSize: 11, margin: '0 0 10px' }}>
-                          Required scopes: {PROVIDER_META[activeTab].scopes.join(', ')}
+                          {t('scopes.required')} {PROVIDER_META[activeTab].scopes.join(', ')}
                         </p>
                         {activeTab === 'gitlab' && (
                           <div
@@ -760,7 +755,7 @@ export function CloudGitPage(): ReactElement {
                             }}
                           >
                             <span className="codicon codicon-info" style={{ fontSize: 13 }} />
-                            <span>Ensure the 'api' scope is enabled to create and manage Merge Requests.</span>
+                            <span>{t('scopes.gitlabApiNote')}</span>
                           </div>
                         )}
                         {patError ? <p style={{ color: 'var(--red)', fontSize: 12, margin: '0 0 10px' }}>{patError}</p> : null}
@@ -780,7 +775,7 @@ export function CloudGitPage(): ReactElement {
                               cursor: connecting ? 'wait' : 'pointer',
                             }}
                           >
-                            Verify & save
+                            {t('pat.verify')}
                           </button>
                           {patProvider !== null ? (
                             <button
@@ -792,14 +787,14 @@ export function CloudGitPage(): ReactElement {
                                 setPatError(null)
                               }}
                             >
-                              Cancel
+                              {t('pat.cancel')}
                             </button>
                           ) : null}
                         </div>
                       </div>
                     )}
                     <p className="hp-muted" style={{ margin: '18px 0 0', fontSize: 12, lineHeight: 1.5 }}>
-                      Scopes: {meta.scopes.join(', ')}
+                      {t('scopes.list')} {meta.scopes.join(', ')}
                     </p>
                   </div>
                 )}
@@ -817,31 +812,29 @@ export function CloudGitPage(): ReactElement {
       <section style={{ marginTop: 8 }}>
         <details style={{ maxWidth: '100%' }}>
           <summary className="hp-muted" style={{ cursor: 'pointer', fontSize: 13, userSelect: 'none' }}>
-            Advanced: GitHub OAuth client ID (device flow)
+            {t('advanced.title')}
           </summary>
           <div className="hp-card" style={{ marginTop: 12, padding: 16 }}>
             <p className="hp-muted" style={{ margin: '0 0 14px', fontSize: 12, lineHeight: 1.5 }}>
-              Public OAuth application client ID from GitHub developer settings. Stored locally in{' '}
-              <span className="mono">store.json</span>. Used only for GitHub browser device flow when the build does not
-              embed a default client ID.
+              {t('advanced.desc')}
             </p>
             <label className="hp-muted" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
-              GitHub client ID
+              {t('advanced.clientIdLabel')}
             </label>
             <input
               type="text"
               className="hp-input"
               value={advGithub}
               onChange={(e) => setAdvGithub(e.target.value)}
-              placeholder="e.g. Iv1.…"
+              placeholder={t('advanced.clientIdPlaceholder')}
               autoComplete="off"
               style={{ width: '100%', marginBottom: 12, boxSizing: 'border-box' }}
             />
             <div className="hp-row-wrap" style={{ gap: 10, alignItems: 'center' }}>
               <button type="button" className="hp-btn hp-btn-primary" disabled={advSaving} onClick={() => void saveAdvOauth()}>
-                Save client IDs
+                {t('advanced.save')}
               </button>
-              {advSaving ? <span className="hp-muted" style={{ fontSize: 12 }}>Saving…</span> : null}
+              {advSaving ? <span className="hp-muted" style={{ fontSize: 12 }}>{t('advanced.saving')}</span> : null}
             </div>
             {advMsg ? (
               <p className="hp-muted" style={{ margin: '10px 0 0', fontSize: 12, lineHeight: 1.45 }}>

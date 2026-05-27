@@ -8,6 +8,7 @@ import type {
 import type { ReactElement } from 'react'
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { Trans, useTranslation } from 'react-i18next'
 import { humanizeCloudAuthError } from './cloudAuthError'
 import { cloudGitMergeViewUrl } from './cloudGitMergeViewUrl'
 import { assertGitRecentList } from './registryContract'
@@ -43,6 +44,7 @@ export function CloudGitActivityPanel({
   label: string
   repoPath?: string
 }): ReactElement {
+  const { t } = useTranslation('cloudGit')
   const urls = WEB[provider]
   const [prLimit, setPrLimit] = useState(12)
   const [reviewLimit, setReviewLimit] = useState(12)
@@ -272,18 +274,20 @@ export function CloudGitActivityPanel({
     >
       <div>
         <h2 id="cloud-git-activity-heading" style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>
-          Activity
+          {t('activity.title')}
         </h2>
         <p className="hp-muted" style={{ margin: '8px 0 0', fontSize: 13, lineHeight: 1.5 }}>
-          PRs/MRs, reviews requested of you, assigned issues, CI, and latest releases for{' '}
-          <strong>{label}</strong> (account-scoped). When a row’s repo basename matches a recent local folder, use{' '}
-          <strong>Open in Lumina VCS</strong> to jump to Git VCS; otherwise open in the browser.
+          <Trans t={t} i18nKey="activity.desc" values={{ label }}>
+            PRs/MRs, reviews requested of you, assigned issues, CI, and latest releases for{' '}
+            <strong>{label}</strong> (account-scoped). When a row's repo basename matches a recent local folder, use{' '}
+            <strong>{t('activity.openInVcs')}</strong> to jump to Git VCS; otherwise open in the browser.
+          </Trans>
         </p>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <div className="hp-card" style={{ padding: '14px 16px' }}>
-          <div style={{ fontWeight: 650, fontSize: 14, marginBottom: 6 }}>Pull requests</div>
-          {prLoading ? <p className="hp-muted" style={{ margin: '0 0 12px', fontSize: 12 }}>Loading…</p> : null}
+          <div style={{ fontWeight: 650, fontSize: 14, marginBottom: 6 }}>{t('activity.prs')}</div>
+          {prLoading ? <p className="hp-muted" style={{ margin: '0 0 12px', fontSize: 12 }}>{t('activity.loading')}</p> : null}
           {!prLoading && error ? (
             <div style={{ margin: '0 0 12px' }}>
               <p style={{ margin: 0, fontSize: 12, color: '#ff8a80', lineHeight: 1.45 }}>
@@ -291,19 +295,19 @@ export function CloudGitActivityPanel({
               </p>
               {needsReconnect(error) ? (
                 <button type="button" className="hp-btn hp-btn-primary" style={{ marginTop: 10, fontSize: 12 }} onClick={scrollToReconnect}>
-                  Reconnect {label}
+                  {t('provider.reconnect', { label })}
                 </button>
               ) : null}
             </div>
           ) : null}
           {!prLoading && !error && prs.length === 0 ? (
             <p className="hp-muted" style={{ margin: '0 0 12px', fontSize: 12, lineHeight: 1.45 }}>
-              No open PRs/MRs found for your account.
+              {t('activity.emptyPrs')}
             </p>
           ) : null}
           {!prLoading && !error && prs.length > 0 ? (
             <div className="mono" style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
-              Showing {prs.length} of up to {prLimit}
+              {t('activity.showing', { count: prs.length, total: prLimit })}
             </div>
           ) : null}
           {!prLoading && !error && prs.length > 0 ? (
@@ -338,7 +342,7 @@ export function CloudGitActivityPanel({
                           fontWeight: 600,
                         }}
                       >
-                        Open in Lumina VCS
+                        {t('activity.openInVcs')}
                       </Link>
                     ) : null}
                     {mergeHref ? (
@@ -358,7 +362,7 @@ export function CloudGitActivityPanel({
                         }}
                         onClick={() => void window.dh.openExternal(mergeHref)}
                       >
-                        Merge on {label}
+                        {t('activity.mergeOn', { label })}
                       </button>
                     ) : null}
                   </li>
@@ -377,7 +381,7 @@ export function CloudGitActivityPanel({
                   style={{ fontSize: 12, borderColor: 'var(--cg-accent-muted)' }}
                   onClick={() => setPrLimit((n) => Math.min(50, n + 12))}
                 >
-                  Show more
+                  {t('activity.showMore')}
                 </button>
               ) : null}
               {prLimit > 12 ? (
@@ -387,7 +391,7 @@ export function CloudGitActivityPanel({
                   style={{ fontSize: 12, borderColor: 'var(--cg-accent-muted)' }}
                   onClick={() => setPrLimit(12)}
                 >
-                  Reset
+                  {t('activity.reset')}
                 </button>
               ) : null}
             </div>
@@ -398,12 +402,12 @@ export function CloudGitActivityPanel({
             style={{ borderColor: 'var(--cg-accent-muted)', fontSize: 12 }}
             onClick={() => void window.dh.openExternal(urls.prs)}
           >
-            <span className="codicon codicon-link-external" aria-hidden /> View on {label}
+            <span className="codicon codicon-link-external" aria-hidden /> {t('activity.viewOn', { label })}
           </button>
         </div>
         <div className="hp-card" style={{ padding: '14px 16px' }}>
-          <div style={{ fontWeight: 650, fontSize: 14, marginBottom: 6 }}>Reviews requested of you</div>
-          {reviewLoading ? <p className="hp-muted" style={{ margin: '0 0 12px', fontSize: 12 }}>Loading…</p> : null}
+          <div style={{ fontWeight: 650, fontSize: 14, marginBottom: 6 }}>{t('activity.reviews')}</div>
+          {reviewLoading ? <p className="hp-muted" style={{ margin: '0 0 12px', fontSize: 12 }}>{t('activity.loading')}</p> : null}
           {!reviewLoading && reviewError ? (
             <div style={{ margin: '0 0 12px' }}>
               <p style={{ margin: 0, fontSize: 12, color: '#ff8a80', lineHeight: 1.45 }}>
@@ -411,19 +415,19 @@ export function CloudGitActivityPanel({
               </p>
               {needsReconnect(reviewError) ? (
                 <button type="button" className="hp-btn hp-btn-primary" style={{ marginTop: 10, fontSize: 12 }} onClick={scrollToReconnect}>
-                  Reconnect {label}
+                  {t('provider.reconnect', { label })}
                 </button>
               ) : null}
             </div>
           ) : null}
           {!reviewLoading && !reviewError && reviewRequests.length === 0 ? (
             <p className="hp-muted" style={{ margin: '0 0 12px', fontSize: 12, lineHeight: 1.45 }}>
-              No open PRs/MRs with a pending review request for your account.
+              {t('activity.emptyReviews')}
             </p>
           ) : null}
           {!reviewLoading && !reviewError && reviewRequests.length > 0 ? (
             <div className="mono" style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
-              Showing {reviewRequests.length} of up to {reviewLimit}
+              {t('activity.showing', { count: reviewRequests.length, total: reviewLimit })}
             </div>
           ) : null}
           {!reviewLoading && !reviewError && reviewRequests.length > 0 ? (
@@ -458,7 +462,7 @@ export function CloudGitActivityPanel({
                           fontWeight: 600,
                         }}
                       >
-                        Open in Lumina VCS
+                        {t('activity.openInVcs')}
                       </Link>
                     ) : null}
                     {mergeHref ? (
@@ -478,7 +482,7 @@ export function CloudGitActivityPanel({
                         }}
                         onClick={() => void window.dh.openExternal(mergeHref)}
                       >
-                        Merge on {label}
+                        {t('activity.mergeOn', { label })}
                       </button>
                     ) : null}
                   </li>
@@ -497,7 +501,7 @@ export function CloudGitActivityPanel({
                   style={{ fontSize: 12, borderColor: 'var(--cg-accent-muted)' }}
                   onClick={() => setReviewLimit((n) => Math.min(50, n + 12))}
                 >
-                  Show more
+                  {t('activity.showMore')}
                 </button>
               ) : null}
               {reviewLimit > 12 ? (
@@ -507,7 +511,7 @@ export function CloudGitActivityPanel({
                   style={{ fontSize: 12, borderColor: 'var(--cg-accent-muted)' }}
                   onClick={() => setReviewLimit(12)}
                 >
-                  Reset
+                  {t('activity.reset')}
                 </button>
               ) : null}
             </div>
@@ -518,12 +522,12 @@ export function CloudGitActivityPanel({
             style={{ borderColor: 'var(--cg-accent-muted)', fontSize: 12 }}
             onClick={() => void window.dh.openExternal(urls.reviews)}
           >
-            <span className="codicon codicon-link-external" aria-hidden /> View on {label}
+            <span className="codicon codicon-link-external" aria-hidden /> {t('activity.viewOn', { label })}
           </button>
         </div>
         <div className="hp-card" style={{ padding: '14px 16px' }}>
-          <div style={{ fontWeight: 650, fontSize: 14, marginBottom: 6 }}>Issues assigned to you</div>
-          {issueLoading ? <p className="hp-muted" style={{ margin: '0 0 12px', fontSize: 12 }}>Loading…</p> : null}
+          <div style={{ fontWeight: 650, fontSize: 14, marginBottom: 6 }}>{t('activity.issues')}</div>
+          {issueLoading ? <p className="hp-muted" style={{ margin: '0 0 12px', fontSize: 12 }}>{t('activity.loading')}</p> : null}
           {!issueLoading && issueError ? (
             <div style={{ margin: '0 0 12px' }}>
               <p style={{ margin: 0, fontSize: 12, color: '#ff8a80', lineHeight: 1.45 }}>
@@ -531,19 +535,19 @@ export function CloudGitActivityPanel({
               </p>
               {needsReconnect(issueError) ? (
                 <button type="button" className="hp-btn hp-btn-primary" style={{ marginTop: 10, fontSize: 12 }} onClick={scrollToReconnect}>
-                  Reconnect {label}
+                  {t('provider.reconnect', { label })}
                 </button>
               ) : null}
             </div>
           ) : null}
           {!issueLoading && !issueError && issues.length === 0 ? (
             <p className="hp-muted" style={{ margin: '0 0 12px', fontSize: 12, lineHeight: 1.45 }}>
-              No open assigned issues found.
+              {t('activity.emptyIssues')}
             </p>
           ) : null}
           {!issueLoading && !issueError && issues.length > 0 ? (
             <div className="mono" style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
-              Showing {issues.length} of up to {issueLimit}
+              {t('activity.showing', { count: issues.length, total: issueLimit })}
             </div>
           ) : null}
           {!issueLoading && !issueError && issues.length > 0 ? (
@@ -586,7 +590,7 @@ export function CloudGitActivityPanel({
                           fontWeight: 600,
                         }}
                       >
-                        Open in Lumina VCS
+                        {t('activity.openInVcs')}
                       </Link>
                     ) : null}
                   </div>
@@ -605,7 +609,7 @@ export function CloudGitActivityPanel({
                   style={{ fontSize: 12, borderColor: 'var(--cg-accent-muted)' }}
                   onClick={() => setIssueLimit((n) => Math.min(50, n + 10))}
                 >
-                  Show more
+                  {t('activity.showMore')}
                 </button>
               ) : null}
               {issueLimit > 10 ? (
@@ -615,7 +619,7 @@ export function CloudGitActivityPanel({
                   style={{ fontSize: 12, borderColor: 'var(--cg-accent-muted)' }}
                   onClick={() => setIssueLimit(10)}
                 >
-                  Reset
+                  {t('activity.reset')}
                 </button>
               ) : null}
             </div>
@@ -626,12 +630,12 @@ export function CloudGitActivityPanel({
             style={{ borderColor: 'var(--cg-accent-muted)', fontSize: 12 }}
             onClick={() => void window.dh.openExternal(urls.issues)}
           >
-            <span className="codicon codicon-link-external" aria-hidden /> Issues on {label}
+            <span className="codicon codicon-link-external" aria-hidden /> {t('activity.issuesOn', { label })}
           </button>
         </div>
         <div className="hp-card" style={{ padding: '14px 16px' }}>
-          <div style={{ fontWeight: 650, fontSize: 14, marginBottom: 6 }}>CI / pipelines</div>
-          {ciLoading ? <p className="hp-muted" style={{ margin: '0 0 12px', fontSize: 12 }}>Loading…</p> : null}
+          <div style={{ fontWeight: 650, fontSize: 14, marginBottom: 6 }}>{t('activity.ci')}</div>
+          {ciLoading ? <p className="hp-muted" style={{ margin: '0 0 12px', fontSize: 12 }}>{t('activity.loading')}</p> : null}
           {!ciLoading && pipelineError ? (
             <div style={{ margin: '0 0 12px' }}>
               <p style={{ margin: 0, fontSize: 12, color: '#ff8a80', lineHeight: 1.45 }}>
@@ -639,19 +643,19 @@ export function CloudGitActivityPanel({
               </p>
               {needsReconnect(pipelineError) ? (
                 <button type="button" className="hp-btn hp-btn-primary" style={{ marginTop: 10, fontSize: 12 }} onClick={scrollToReconnect}>
-                  Reconnect {label}
+                  {t('provider.reconnect', { label })}
                 </button>
               ) : null}
             </div>
           ) : null}
           {!ciLoading && !pipelineError && pipelines.length === 0 ? (
             <p className="hp-muted" style={{ margin: '0 0 12px', fontSize: 12, lineHeight: 1.45 }}>
-              No recent pipelines found for your account.
+              {t('activity.emptyCi')}
             </p>
           ) : null}
           {!ciLoading && !pipelineError && pipelines.length > 0 ? (
             <div className="mono" style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
-              Showing {pipelines.length} of up to {pipelineLimit} runs
+              {t('activity.showingRuns', { count: pipelines.length, total: pipelineLimit })}
             </div>
           ) : null}
           {!ciLoading && !pipelineError && pipelines.length > 0 ? (
@@ -713,7 +717,7 @@ export function CloudGitActivityPanel({
                           fontWeight: 600,
                         }}
                       >
-                        Open in Lumina VCS
+                        {t('activity.openInVcs')}
                       </Link>
                     ) : null}
                   </div>
@@ -732,7 +736,7 @@ export function CloudGitActivityPanel({
                   style={{ fontSize: 12, borderColor: 'var(--cg-accent-muted)' }}
                   onClick={() => setPipelineLimit((n) => Math.min(50, n + 8))}
                 >
-                  Show more
+                  {t('activity.showMore')}
                 </button>
               ) : null}
               {pipelineLimit > 8 ? (
@@ -742,7 +746,7 @@ export function CloudGitActivityPanel({
                   style={{ fontSize: 12, borderColor: 'var(--cg-accent-muted)' }}
                   onClick={() => setPipelineLimit(8)}
                 >
-                  Reset
+                  {t('activity.reset')}
                 </button>
               ) : null}
             </div>
@@ -753,12 +757,12 @@ export function CloudGitActivityPanel({
             style={{ borderColor: 'var(--cg-accent-muted)', fontSize: 12 }}
             onClick={() => void window.dh.openExternal(urls.ci)}
           >
-            <span className="codicon codicon-link-external" aria-hidden /> Open CI on {label}
+            <span className="codicon codicon-link-external" aria-hidden /> {t('activity.openCiOn', { label })}
           </button>
         </div>
         <div className="hp-card" style={{ padding: '14px 16px' }}>
-          <div style={{ fontWeight: 650, fontSize: 14, marginBottom: 6 }}>Latest releases</div>
-          {releaseLoading ? <p className="hp-muted" style={{ margin: '0 0 12px', fontSize: 12 }}>Loading…</p> : null}
+          <div style={{ fontWeight: 650, fontSize: 14, marginBottom: 6 }}>{t('activity.releases')}</div>
+          {releaseLoading ? <p className="hp-muted" style={{ margin: '0 0 12px', fontSize: 12 }}>{t('activity.loading')}</p> : null}
           {!releaseLoading && releaseError ? (
             <div style={{ margin: '0 0 12px' }}>
               <p style={{ margin: 0, fontSize: 12, color: '#ff8a80', lineHeight: 1.45 }}>
@@ -766,19 +770,19 @@ export function CloudGitActivityPanel({
               </p>
               {needsReconnect(releaseError) ? (
                 <button type="button" className="hp-btn hp-btn-primary" style={{ marginTop: 10, fontSize: 12 }} onClick={scrollToReconnect}>
-                  Reconnect {label}
+                  {t('provider.reconnect', { label })}
                 </button>
               ) : null}
             </div>
           ) : null}
           {!releaseLoading && !releaseError && releases.length === 0 ? (
             <p className="hp-muted" style={{ margin: '0 0 12px', fontSize: 12, lineHeight: 1.45 }}>
-              No recent releases found across your repos.
+              {t('activity.emptyReleases')}
             </p>
           ) : null}
           {!releaseLoading && !releaseError && releases.length > 0 ? (
             <div className="mono" style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
-              Showing {releases.length} of up to {releaseLimit}
+              {t('activity.showing', { count: releases.length, total: releaseLimit })}
             </div>
           ) : null}
           {!releaseLoading && !releaseError && releases.length > 0 ? (
@@ -821,7 +825,7 @@ export function CloudGitActivityPanel({
                           fontWeight: 600,
                         }}
                       >
-                        Open in Lumina VCS
+                        {t('activity.openInVcs')}
                       </Link>
                     ) : null}
                   </div>
@@ -840,7 +844,7 @@ export function CloudGitActivityPanel({
                   style={{ fontSize: 12, borderColor: 'var(--cg-accent-muted)' }}
                   onClick={() => setReleaseLimit((n) => Math.min(50, n + 8))}
                 >
-                  Show more
+                  {t('activity.showMore')}
                 </button>
               ) : null}
               {releaseLimit > 8 ? (
@@ -850,7 +854,7 @@ export function CloudGitActivityPanel({
                   style={{ fontSize: 12, borderColor: 'var(--cg-accent-muted)' }}
                   onClick={() => setReleaseLimit(8)}
                 >
-                  Reset
+                  {t('activity.reset')}
                 </button>
               ) : null}
             </div>
@@ -861,7 +865,7 @@ export function CloudGitActivityPanel({
             style={{ borderColor: 'var(--cg-accent-muted)', fontSize: 12 }}
             onClick={() => void window.dh.openExternal(urls.releases)}
           >
-            <span className="codicon codicon-link-external" aria-hidden /> Browse releases on {label}
+            <span className="codicon codicon-link-external" aria-hidden /> {t('activity.browseReleasesOn', { label })}
           </button>
         </div>
       </div>

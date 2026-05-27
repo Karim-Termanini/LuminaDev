@@ -1,5 +1,6 @@
 import type { ReactElement } from 'react'
 import { useCallback, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { assertGitOk } from './gitContract'
 import { humanizeGitError } from './gitError'
 import './GitConfigPage.css'
@@ -123,14 +124,18 @@ const GLASS_CARD = {
 
 type Preset = {
   label: string
+  labelKey: string
   description: string
+  descKey: string
   keys: Record<string, string | null>
 }
 
 const PRESETS: Preset[] = [
   {
     label: 'Beginner Safe',
+    labelKey: 'config.presets.beginnerSafe',
     description: 'Sensible defaults. Safe credential storage, main branch, nano editor.',
+    descKey: 'config.presets.beginnerSafeDesc',
     keys: {
       'init.defaultbranch': 'main',
       'pull.rebase': 'false',
@@ -141,7 +146,9 @@ const PRESETS: Preset[] = [
   },
   {
     label: 'Developer Pro',
+    labelKey: 'config.presets.devPro',
     description: 'Rebase workflow, auto prune, performance cache enabled.',
+    descKey: 'config.presets.devProDesc',
     keys: {
       'init.defaultbranch': 'main',
       'pull.rebase': 'true',
@@ -155,7 +162,9 @@ const PRESETS: Preset[] = [
   },
   {
     label: 'Open Source Ready',
+    labelKey: 'config.presets.oss',
     description: 'Clean merge history, compatible line endings, prune on fetch.',
+    descKey: 'config.presets.ossDesc',
     keys: {
       'init.defaultbranch': 'main',
       'pull.rebase': 'false',
@@ -167,7 +176,9 @@ const PRESETS: Preset[] = [
   },
   {
     label: 'High Security',
+    labelKey: 'config.presets.highSecurity',
     description: 'GPG signing required, SSL verification enforced.',
+    descKey: 'config.presets.highSecurityDesc',
     keys: {
       'commit.gpgsign': 'true',
       'http.sslverify': 'true',
@@ -177,7 +188,9 @@ const PRESETS: Preset[] = [
   },
   {
     label: 'Corporate Policy',
+    labelKey: 'config.presets.corporate',
     description: 'Merge commits, signed commits, strict SSL, prune enabled.',
+    descKey: 'config.presets.corporateDesc',
     keys: {
       'pull.rebase': 'false',
       'merge.ff': 'false',
@@ -408,6 +421,7 @@ function GitDoctor({ cfg, onSetKey }: {
   cfg: Map<string, string>
   onSetKey: (k: string, v?: string) => Promise<void>
 }): ReactElement {
+  const { t } = useTranslation('git')
   const [scanned, setScanned] = useState(false)
   const [findings, setFindings] = useState<DoctorFinding[]>([])
 
@@ -430,17 +444,17 @@ function GitDoctor({ cfg, onSetKey }: {
     <div className="hp-card">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
         <div>
-          <div className="hp-section-title" style={{ marginBottom: 2 }}>Git Doctor</div>
+          <div className="hp-section-title" style={{ marginBottom: 2 }}>{t('config.doctor.title')}</div>
           <div className="hp-muted" style={{ fontSize: 12 }}>
             {scanned
               ? critCount + warnCount === 0
-                ? 'No issues detected.'
-                : `${critCount} critical · ${warnCount} warnings`
-              : 'Scan your config for misconfigurations, security issues, and performance gaps.'}
+                ? t('config.doctor.noIssues')
+                : t('config.doctor.issues', { critical: critCount, warnings: warnCount })
+              : t('config.doctor.scanDesc')}
           </div>
         </div>
         <button type="button" className="hp-btn hp-btn-primary" onClick={scan}>
-          {scanned ? 'Re-scan' : 'Scan Configuration'}
+          {scanned ? t('config.doctor.rescanBtn') : t('config.doctor.scanBtn')}
         </button>
       </div>
 
@@ -476,6 +490,7 @@ function OverviewSection({ cfg, onSection, onSetKey }: {
   onSection: (s: Section) => void
   onSetKey: (k: string, v?: string) => Promise<void>
 }): ReactElement {
+  const { t } = useTranslation('git')
   const total = totalScore(cfg)
   const suggestions = buildSuggestions(cfg, onSetKey)
   return (
@@ -505,23 +520,23 @@ function OverviewSection({ cfg, onSection, onSetKey }: {
             letterSpacing: -4,
             textShadow: `0 0 30px ${scoreColor(total)}33`
           }}>{total}%</div>
-          <div style={{ fontWeight: 800, fontSize: 24, marginTop: -8, letterSpacing: -0.5 }}>Configuration Health</div>
+          <div style={{ fontWeight: 800, fontSize: 24, marginTop: -8, letterSpacing: -0.5 }}>{t('config.score.health')}</div>
           <p className="hp-muted" style={{ maxWidth: 500, margin: '12px auto 0', fontSize: 14 }}>
-            {total >= 80 ? 'Your Git environment is in pristine condition.' : total >= 50 ? 'Optimization is recommended for better security and workflow.' : 'Critical misconfigurations detected. High priority action required.'}
+            {total >= 80 ? t('config.score.pristine') : total >= 50 ? t('config.score.optimization') : t('config.score.critical')}
           </p>
         </div>
       </header>
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
-        <ScoreCard title="Identity" score={identityScore(cfg)} subtitle="Name, email, branch" />
-        <ScoreCard title="Security" score={securityScore(cfg)} subtitle="Credentials, signing, SSL" />
-        <ScoreCard title="Performance" score={performanceScore(cfg)} subtitle="Cache, index preload" />
-        <ScoreCard title="Compatibility" score={compatibilityScore(cfg)} subtitle="Line endings, prune" />
+        <ScoreCard title={t('config.score.identity')} score={identityScore(cfg)} subtitle={t('config.score.identitySub')} />
+        <ScoreCard title={t('config.score.security')} score={securityScore(cfg)} subtitle={t('config.score.securitySub')} />
+        <ScoreCard title={t('config.score.performance')} score={performanceScore(cfg)} subtitle={t('config.score.performanceSub')} />
+        <ScoreCard title={t('config.score.compatibility')} score={compatibilityScore(cfg)} subtitle={t('config.score.compatibilitySub')} />
       </div>
 
       {suggestions.length > 0 && (
         <div className="hp-card">
-          <div className="hp-section-title">Smart Suggestions</div>
+          <div className="hp-section-title">{t('config.suggestions.title')}</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
             {suggestions.map((s, i) => (
               <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 0', borderBottom: i < suggestions.length - 1 ? '1px solid var(--border)' : undefined }}>
@@ -539,12 +554,12 @@ function OverviewSection({ cfg, onSection, onSetKey }: {
                     whiteSpace: 'nowrap',
                   }}
                 >
-                  {s.priority === 'high' ? 'High' : 'Medium'}
+                  {s.priority === 'high' ? t('config.suggestions.high') : t('config.suggestions.medium')}
                 </span>
                 <div style={{ flex: 1, fontSize: 13 }}>{s.text}</div>
                 {s.action && (
                   <button type="button" className="hp-btn" style={{ fontSize: 11, padding: '3px 10px' }} onClick={s.action}>
-                    Fix
+                    {t('config.suggestions.fix')}
                   </button>
                 )}
               </div>
@@ -556,12 +571,12 @@ function OverviewSection({ cfg, onSection, onSetKey }: {
       <GitDoctor cfg={cfg} onSetKey={onSetKey} />
 
       <div className="hp-card">
-        <div className="hp-section-title">Quick Actions</div>
+        <div className="hp-section-title">{t('config.quickActions.title')}</div>
         <div className="hp-row-wrap" style={{ gap: 10 }}>
-          <button type="button" className="hp-btn" onClick={() => onSection('identity')}>Edit Identity</button>
-          <button type="button" className="hp-btn" onClick={() => onSection('security')}>Review Security</button>
-          <button type="button" className="hp-btn" onClick={() => onSection('behavior')}>Behavior Settings</button>
-          <button type="button" className="hp-btn" onClick={() => onSection('inspector')}>Config Inspector</button>
+          <button type="button" className="hp-btn" onClick={() => onSection('identity')}>{t('config.quickActions.editIdentity')}</button>
+          <button type="button" className="hp-btn" onClick={() => onSection('security')}>{t('config.quickActions.reviewSecurity')}</button>
+          <button type="button" className="hp-btn" onClick={() => onSection('behavior')}>{t('config.quickActions.behaviorSettings')}</button>
+          <button type="button" className="hp-btn" onClick={() => onSection('inspector')}>{t('config.quickActions.inspector')}</button>
         </div>
       </div>
     </div>
@@ -575,6 +590,7 @@ function IdentitySection({ cfg, busy, onSave }: {
   busy: boolean
   onSave: (fields: { name: string; email: string; branch: string; editor: string }) => Promise<void>
 }): ReactElement {
+  const { t } = useTranslation('git')
   const [name, setName] = useState(cfg.get('user.name') ?? '')
   const [email, setEmail] = useState(cfg.get('user.email') ?? '')
   const [branch, setBranch] = useState(cfg.get('init.defaultbranch') ?? '')
@@ -597,7 +613,7 @@ function IdentitySection({ cfg, busy, onSave }: {
     if (errs.length) {
       setStatus('')
     } else {
-      setStatus('Validation passed. You can apply to write global Git config.')
+      setStatus(t('config.identity.validationPassed'))
     }
   }
 
@@ -607,7 +623,7 @@ function IdentitySection({ cfg, busy, onSave }: {
     setErrors([])
     setStatus('')
     await onSave({ name, email, branch, editor })
-    setStatus('Identity saved successfully.')
+    setStatus(t('config.identity.saved'))
   }
 
   const EDITORS = [
@@ -623,7 +639,7 @@ function IdentitySection({ cfg, busy, onSave }: {
       <div className="hp-card" style={GLASS_CARD}>
         <div className="hp-section-title" style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
           <span className="codicon codicon-tag" style={{ color: 'var(--accent)' }} />
-          Profile Label
+          {t('config.identity.profileLabel')}
         </div>
         <div className="hp-row-wrap" style={{ gap: 10 }}>
           {(['Default', 'Personal', 'Work', 'Open Source'] as ProfileLabel[]).map((l) => (
@@ -650,15 +666,15 @@ function IdentitySection({ cfg, busy, onSave }: {
       <div className="hp-card" style={GLASS_CARD}>
         <div className="hp-section-title" style={{ marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
           <span className="codicon codicon-account" style={{ color: 'var(--accent)' }} />
-          User Identity
+          {t('config.identity.userIdentity')}
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
           <div>
-            <label style={{ fontSize: 11, fontWeight: 800, display: 'block', marginBottom: 8, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Full Name</label>
+            <label style={{ fontSize: 11, fontWeight: 800, display: 'block', marginBottom: 8, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t('config.identity.fullName')}</label>
             <input className="hp-input" style={{ width: '100%', padding: '12px 14px', background: 'var(--bg-input)' }} value={name} onChange={(e) => setName(e.target.value)} placeholder="Jane Doe" disabled={busy} />
           </div>
           <div>
-            <label style={{ fontSize: 11, fontWeight: 800, display: 'block', marginBottom: 8, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Email Address</label>
+            <label style={{ fontSize: 11, fontWeight: 800, display: 'block', marginBottom: 8, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t('config.identity.email')}</label>
             <input className="hp-input" style={{ width: '100%', padding: '12px 14px', background: 'var(--bg-input)' }} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="jane@example.com" disabled={busy} type="email" />
           </div>
         </div>
@@ -667,11 +683,11 @@ function IdentitySection({ cfg, busy, onSave }: {
       <div className="hp-card" style={GLASS_CARD}>
         <div className="hp-section-title" style={{ marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
           <span className="codicon codicon-settings" style={{ color: 'var(--accent)' }} />
-          Repository Defaults
+          {t('config.identity.repoDefaults')}
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
           <div>
-            <label style={{ fontSize: 11, fontWeight: 800, display: 'block', marginBottom: 8, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Default Branch</label>
+            <label style={{ fontSize: 11, fontWeight: 800, display: 'block', marginBottom: 8, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t('config.identity.defaultBranch')}</label>
             <div className="hp-row-wrap" style={{ gap: 6, marginBottom: 12 }}>
               {['main', 'master', 'develop'].map((b) => (
                 <button key={b} type="button" className={`hp-btn${branch === b ? ' hp-btn-primary' : ''}`} style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => setBranch(b)} disabled={busy}>
@@ -682,7 +698,7 @@ function IdentitySection({ cfg, busy, onSave }: {
             <input className="hp-input" style={{ width: '100%', padding: '12px 14px', background: 'var(--bg-input)' }} value={branch} onChange={(e) => setBranch(e.target.value)} placeholder="main" disabled={busy} />
           </div>
           <div>
-            <label style={{ fontSize: 11, fontWeight: 800, display: 'block', marginBottom: 8, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Default Editor</label>
+            <label style={{ fontSize: 11, fontWeight: 800, display: 'block', marginBottom: 8, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t('config.identity.defaultEditor')}</label>
             <div className="hp-row-wrap" style={{ gap: 6, marginBottom: 12 }}>
               {EDITORS.map((e) => (
                 <button key={e.value} type="button" className={`hp-btn${editor === e.value ? ' hp-btn-primary' : ''}`} style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => setEditor(e.value)} disabled={busy}>
@@ -697,7 +713,7 @@ function IdentitySection({ cfg, busy, onSave }: {
 
       {errors.length > 0 && (
         <div className="hp-status-alert warning" style={{ borderRadius: 12, border: '1px solid rgba(255, 140, 66, 0.2)' }}>
-          <span style={{ fontWeight: 800, textTransform: 'uppercase', fontSize: 11 }}>Warning</span>
+          <span style={{ fontWeight: 800, textTransform: 'uppercase', fontSize: 11 }}>{t('config.identity.warning')}</span>
           <ul style={{ margin: 0, paddingLeft: 16, fontSize: 13 }}>{errors.map((m) => <li key={m}>{m}</li>)}</ul>
         </div>
       )}
@@ -710,10 +726,10 @@ function IdentitySection({ cfg, busy, onSave }: {
 
       <div className="hp-row-wrap" style={{ gap: 12, marginTop: 8 }}>
         <button type="button" className="hp-btn" style={{ padding: '12px 24px', borderRadius: 10 }} onClick={handleValidateOnly} disabled={busy}>
-          Validate Configuration
+          {t('config.identity.validate')}
         </button>
         <button type="button" className="hp-btn hp-btn-primary" style={{ padding: '12px 24px', borderRadius: 10 }} onClick={() => void handleApply()} disabled={busy}>
-          Apply Changes
+          {t('config.identity.apply')}
         </button>
       </div>
     </div>
@@ -727,6 +743,7 @@ function SecuritySection({ cfg, busy, onSetKey }: {
   busy: boolean
   onSetKey: (k: string, v?: string) => Promise<void>
 }): ReactElement {
+  const { t } = useTranslation('git')
   const helper = cfg.get('credential.helper') ?? ''
   const gpgSign = cfg.get('commit.gpgsign') === 'true'
   const sslVerify = cfg.get('http.sslverify') !== 'false'
@@ -745,43 +762,43 @@ function SecuritySection({ cfg, busy, onSetKey }: {
       <div className="hp-card" style={GLASS_CARD}>
         <div className="hp-section-title" style={{ marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
           <span className="codicon codicon-shield" style={{ color: 'var(--accent)' }} />
-          Security Overview
+          {t('config.security.title')}
         </div>
         <div className="hp-muted" style={{ fontSize: 12, marginBottom: 24 }}>
-          Review your Git security posture. Green = secure, Yellow = attention needed, Red = risk.
+          {t('config.security.desc')}
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <SecurityRow
-            label="Credential Storage"
+            label={t('config.security.credStorage')}
             level={credLevel()}
-            description={helper ? `Using: ${helper}` : 'No credential helper configured — Git will prompt for password every time.'}
+            description={helper ? `${t('config.security.usingHelper')} ${helper}` : t('config.security.noHelper')}
             action={!helper ? () => void onSetKey('credential.helper', 'store') : undefined}
-            actionLabel="Set basic store"
+            actionLabel={t('config.security.setBasicStore')}
           />
           <SecurityRow
-            label="Commit Signing"
+            label={t('config.security.commitSigning')}
             level={gpgSign ? 'secure' : 'attention'}
-            description={gpgSign ? `GPG signing enabled${signingKey ? ` (key: ${signingKey.slice(0, 12)}…)` : ''}.` : 'Commits are not cryptographically signed. Others cannot verify authorship.'}
+            description={gpgSign ? `${t('config.security.gpgEnabled')}${signingKey ? ` (key: ${signingKey.slice(0, 12)}…)` : ''}.` : t('config.security.gpgDisabled')}
             action={!gpgSign ? () => void onSetKey('commit.gpgsign', 'true') : undefined}
-            actionLabel="Enable signing"
+            actionLabel={t('config.security.enableSigning')}
           />
           <SecurityRow
-            label="SSL Verification"
+            label={t('config.security.sslVerify')}
             level={sslVerify ? 'secure' : 'risk'}
-            description={sslVerify ? 'SSL certificate verification is enabled (default).' : 'SSL verification is disabled — vulnerable to man-in-the-middle attacks.'}
+            description={sslVerify ? t('config.security.sslEnabled') : t('config.security.sslDisabled')}
             action={!sslVerify ? () => void onSetKey('http.sslverify', 'true') : undefined}
-            actionLabel="Re-enable SSL"
+            actionLabel={t('config.security.reenableSsl')}
           />
           <SecurityRow
-            label="Cookie File"
+            label={t('config.security.cookieFile')}
             level={hasCookieFile ? 'attention' : 'secure'}
-            description={hasCookieFile ? `http.cookiefile is set — make sure this file has restricted permissions (chmod 600).` : 'No cookie file configured.'}
+            description={hasCookieFile ? t('config.security.cookieSet') : t('config.security.cookieNone')}
           />
           <div style={{ borderBottom: 'none' }}>
             <SecurityRow
-              label="Sensitive Config"
+              label={t('config.security.sensitiveConfig')}
               level={isSensitiveExposed(cfg) ? 'attention' : 'secure'}
-              description={isSensitiveExposed(cfg) ? 'Some sensitive keys (tokens, keys) are stored in global config. Review Config Inspector.' : 'No obviously sensitive values detected in global config.'}
+              description={isSensitiveExposed(cfg) ? t('config.security.sensitiveExposed') : t('config.security.sensitiveClean')}
             />
           </div>
         </div>
@@ -790,14 +807,14 @@ function SecuritySection({ cfg, busy, onSetKey }: {
       <div className="hp-card" style={GLASS_CARD}>
         <div className="hp-section-title" style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
           <span className="codicon codicon-lock" style={{ color: 'var(--accent)' }} />
-          Privacy Actions
+          {t('config.security.privacyTitle')}
         </div>
         <div className="hp-row-wrap" style={{ gap: 12 }}>
           <button type="button" className="hp-btn" style={{ padding: '10px 16px' }} disabled={busy} onClick={() => void onSetKey('commit.gpgsign', gpgSign ? 'false' : 'true')}>
-            {gpgSign ? 'Disable Commit Signing' : 'Enable Commit Signing'}
+            {gpgSign ? t('config.security.disableSigning') : t('config.security.enableSigning')}
           </button>
           <button type="button" className="hp-btn" style={{ padding: '10px 16px' }} disabled={busy} onClick={() => void onSetKey('http.sslverify', sslVerify ? 'false' : 'true')}>
-            {sslVerify ? 'Disable SSL Verify (unsafe)' : 'Restore SSL Verify'}
+            {sslVerify ? t('config.security.disableSSL') : t('config.security.restoreSSL')}
           </button>
         </div>
       </div>
@@ -820,6 +837,7 @@ function BehaviorSection({ cfg, busy, onSetKey, onApplyPreset }: {
   onSetKey: (k: string, v?: string) => Promise<void>
   onApplyPreset: (p: Preset) => Promise<void>
 }): ReactElement {
+  const { t } = useTranslation('git')
   const [presetApplying, setPresetApplying] = useState('')
 
   async function applyPreset(p: Preset): Promise<void> {
@@ -835,10 +853,10 @@ function BehaviorSection({ cfg, busy, onSetKey, onApplyPreset }: {
       <div className="hp-card" style={GLASS_CARD}>
         <div className="hp-section-title" style={{ marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
           <span className="codicon codicon-zap" style={{ color: 'var(--accent)' }} />
-          Preset Templates
+          {t('config.behavior.presetsTitle')}
         </div>
         <div className="hp-muted" style={{ fontSize: 13, marginBottom: 20 }}>
-          Apply a curated set of settings in one click. You can fine-tune individual toggles below afterwards.
+          {t('config.behavior.presetsDesc')}
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 16 }}>
           {PRESETS.map((p) => (
@@ -851,8 +869,8 @@ function BehaviorSection({ cfg, busy, onSetKey, onApplyPreset }: {
             }}
             onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--accent)'}
             onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}>
-              <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 6, color: 'var(--accent)' }}>{p.label}</div>
-              <div className="hp-muted" style={{ fontSize: 12, marginBottom: 16, lineHeight: 1.4 }}>{p.description}</div>
+              <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 6, color: 'var(--accent)' }}>{t(p.labelKey)}</div>
+              <div className="hp-muted" style={{ fontSize: 12, marginBottom: 16, lineHeight: 1.4 }}>{t(p.descKey)}</div>
               <button
                 type="button"
                 className="hp-btn hp-btn-primary"
@@ -860,7 +878,7 @@ function BehaviorSection({ cfg, busy, onSetKey, onApplyPreset }: {
                 disabled={busy || presetApplying !== ''}
                 onClick={() => void applyPreset(p)}
               >
-                {presetApplying === p.label ? 'Applying…' : 'Apply Preset'}
+                {presetApplying === p.label ? t('config.behavior.applying') : t('config.behavior.applyPreset')}
               </button>
             </div>
           ))}
@@ -870,66 +888,66 @@ function BehaviorSection({ cfg, busy, onSetKey, onApplyPreset }: {
       <div className="hp-card" style={GLASS_CARD}>
         <div className="hp-section-title" style={{ marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
           <span className="codicon codicon-checklist" style={{ color: 'var(--accent)' }} />
-          Behavior Toggles
+          {t('config.behavior.togglesTitle')}
         </div>
-        <div className="hp-muted" style={{ fontSize: 13, marginBottom: 20 }}>Toggle individual Git behavior settings for your local environment.</div>
+        <div className="hp-muted" style={{ fontSize: 13, marginBottom: 20 }}>{t('config.behavior.togglesDesc')}</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <BehaviorToggle
-            label="Rebase on Pull"
-            description="pull.rebase=true — rewrites local commits on top of remote instead of creating a merge commit."
+            label={t('config.behavior.rebaseOnPull')}
+            description={t('config.behavior.rebaseDesc')}
             checked={bool('pull.rebase')}
             onChange={(v) => void onSetKey('pull.rebase', String(v))}
             disabled={busy}
           />
           <BehaviorToggle
-            label="Auto Prune Stale Branches"
-            description="fetch.prune=true — deletes local remote-tracking branches that no longer exist on the remote."
+            label={t('config.behavior.autoPruneBranches')}
+            description={t('config.behavior.pruneBranchesDesc')}
             checked={bool('fetch.prune')}
             onChange={(v) => void onSetKey('fetch.prune', String(v))}
             disabled={busy}
           />
           <BehaviorToggle
-            label="Auto Prune Tags"
-            description="fetch.prunetags=true — also removes stale remote tags during fetch."
+            label={t('config.behavior.autoPruneTags')}
+            description={t('config.behavior.pruneTagsDesc')}
             checked={bool('fetch.prunetags')}
             onChange={(v) => void onSetKey('fetch.prunetags', String(v))}
             disabled={busy}
           />
           <BehaviorToggle
-            label="Performance Index Preload"
-            description="core.preloadindex=true — parallelizes stat calls during git status on large repos."
+            label={t('config.behavior.preloadIndex')}
+            description={t('config.behavior.preloadDesc')}
             checked={bool('core.preloadindex')}
             onChange={(v) => void onSetKey('core.preloadindex', String(v))}
             disabled={busy}
           />
           <BehaviorToggle
-            label="File System Cache"
-            description="core.fscache=true — caches filesystem data for improved performance."
+            label={t('config.behavior.fsCache')}
+            description={t('config.behavior.fsCacheDesc')}
             checked={bool('core.fscache')}
             onChange={(v) => void onSetKey('core.fscache', String(v))}
             disabled={busy}
           />
           <BehaviorToggle
-            label="Auto Stash on Rebase"
-            description="rebase.autostash=true — stash working directory changes before rebase, pop them after."
+            label={t('config.behavior.autoStash')}
+            description={t('config.behavior.autoStashDesc')}
             checked={bool('rebase.autostash')}
             onChange={(v) => void onSetKey('rebase.autostash', String(v))}
             disabled={busy}
           />
           <BehaviorToggle
-            label="Commit Signing (GPG)"
-            description="commit.gpgsign=true — all commits will be cryptographically signed with your GPG key."
+            label={t('config.behavior.gpgSigning')}
+            description={t('config.behavior.gpgDesc')}
             checked={bool('commit.gpgsign')}
             onChange={(v) => void onSetKey('commit.gpgsign', String(v))}
             disabled={busy}
           />
           <div style={{ padding: '16px 0' }}>
-            <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 6 }}>Line Ending Mode</div>
+            <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 6 }}>{t('config.behavior.lineEndingTitle')}</div>
             <div className="hp-muted" style={{ fontSize: 12, marginBottom: 12 }}>
-              core.autocrlf — normalizes line endings on checkout/commit. On Linux, Input is usually best.
+              {t('config.behavior.lineEndingDesc')}
             </div>
             <div className="hp-row-wrap" style={{ gap: 10 }}>
-              {[['input', 'Input'], ['false', 'Off']].map(([v, l]) => (
+              {[['input', t('config.behavior.inputMode')], ['false', t('config.behavior.offMode')]].map(([v, l]) => (
                 <button
                   key={v}
                   type="button"
@@ -955,6 +973,7 @@ const CATEGORY_OPTIONS = ['all', 'identity', 'security', 'performance', 'advance
 type CategoryFilter = typeof CATEGORY_OPTIONS[number]
 
 function InspectorSection({ rows, loading }: { rows: ConfigRow[]; loading: boolean }): ReactElement {
+  const { t } = useTranslation('git')
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState<CategoryFilter>('all')
   const [sortKey, setSortKey] = useState<'key' | 'value'>('key')
@@ -1012,7 +1031,7 @@ function InspectorSection({ rows, loading }: { rows: ConfigRow[]; loading: boole
               style={{ width: '100%', paddingLeft: 40, background: 'var(--bg-input)' }}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search keys or values…"
+              placeholder={t('config.inspector.searchPlaceholder')}
               disabled={loading}
             />
           </div>
@@ -1035,14 +1054,14 @@ function InspectorSection({ rows, loading }: { rows: ConfigRow[]; loading: boole
             }}
             disabled={loading}
           />
-          <span>Show sensitive values (tokens, helpers, signing keys)</span>
+          <span>{t('config.inspector.showSensitive')}</span>
         </label>
         <div className="hp-muted" style={{ fontSize: 11, marginBottom: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-          {filtered.length} of {rows.length} configuration entries
+          {t('config.inspector.entries', { count: filtered.length, total: rows.length })}
         </div>
         {filtered.length === 0 ? (
           <div className="hp-muted" style={{ fontSize: 14, textAlign: 'center', padding: '40px 0' }}>
-            {rows.length === 0 ? 'No global config entries found.' : 'No entries match your search criteria.'}
+            {rows.length === 0 ? t('config.inspector.noEntries') : t('config.inspector.noMatch')}
           </div>
         ) : (
           <div className="hp-table-wrap" style={{ borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-widget)' }}>
@@ -1050,13 +1069,13 @@ function InspectorSection({ rows, loading }: { rows: ConfigRow[]; loading: boole
               <thead>
                 <tr className="hp-table-head" style={{ background: 'var(--bg-input)' }}>
                   <th className="hp-table-sort" style={{ width: '30%', padding: '12px 16px', fontWeight: 700 }} onClick={() => handleSort('key')}>
-                    Key {sortKey === 'key' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
+                    {t('config.inspector.colKey')} {sortKey === 'key' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
                   </th>
                   <th className="hp-table-sort" style={{ width: '40%', padding: '12px 16px', fontWeight: 700 }} onClick={() => handleSort('value')}>
-                    Value {sortKey === 'value' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
+                    {t('config.inspector.colValue')} {sortKey === 'value' ? (sortDir === 'asc' ? '↑' : '↓') : ''}
                   </th>
-                  <th style={{ width: '15%', padding: '12px 16px', fontWeight: 700 }}>Category</th>
-                  <th style={{ width: '15%', padding: '12px 16px', fontWeight: 700 }}>Risk</th>
+                  <th style={{ width: '15%', padding: '12px 16px', fontWeight: 700 }}>{t('config.inspector.colCategory')}</th>
+                  <th style={{ width: '15%', padding: '12px 16px', fontWeight: 700 }}>{t('config.inspector.colRisk')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -1078,7 +1097,7 @@ function InspectorSection({ rows, loading }: { rows: ConfigRow[]; loading: boole
                           {cellValue(r)}
                           {sensitive && !showSensitiveValues && (
                             <button type="button" className="hp-btn" style={{ fontSize: 10, padding: '2px 8px', borderRadius: 4, background: 'var(--bg-input)' }} onClick={() => toggleReveal(r.key)}>
-                              {revealed.has(r.key) ? 'Hide' : 'Reveal'}
+                              {revealed.has(r.key) ? t('config.inspector.hide') : t('config.inspector.reveal')}
                             </button>
                           )}
                         </div>
@@ -1092,7 +1111,7 @@ function InspectorSection({ rows, loading }: { rows: ConfigRow[]; loading: boole
                         {risk ? (
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--red)' }}>
                             <span className="codicon codicon-warning" style={{ fontSize: 14 }} />
-                            <span title={risk} style={{ fontSize: 11, fontWeight: 700, cursor: 'help' }}>RISK</span>
+                            <span title={risk} style={{ fontSize: 11, fontWeight: 700, cursor: 'help' }}>{t('config.inspector.riskLabel')}</span>
                           </div>
                         ) : (
                           <span style={{ color: 'var(--text-muted)', opacity: 0.3 }}>—</span>
@@ -1117,6 +1136,7 @@ function DiagnosticsSection({ cfg, busy, onSetKey }: {
   busy: boolean
   onSetKey: (k: string, v?: string) => Promise<void>
 }): ReactElement {
+  const { t } = useTranslation('git')
   const suggestions = buildSuggestions(cfg, onSetKey)
   const total = totalScore(cfg)
 
@@ -1138,8 +1158,8 @@ function DiagnosticsSection({ cfg, busy, onSetKey }: {
             <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', fontWeight: 900, fontSize: 20, color: scoreColor(total) }}>{total}%</div>
           </div>
           <div>
-            <div style={{ fontWeight: 800, fontSize: 24, letterSpacing: -0.5 }}>Git Doctor Diagnostics</div>
-            <div className="hp-muted" style={{ fontSize: 14, marginTop: 4 }}>System health is <strong>{total >= 90 ? 'Optimal' : total >= 70 ? 'Stable' : 'Critical'}</strong>. {suggestions.length} issues identified.</div>
+            <div style={{ fontWeight: 800, fontSize: 24, letterSpacing: -0.5 }}>{t('config.diagnostics.title')}</div>
+            <div className="hp-muted" style={{ fontSize: 14, marginTop: 4 }}>{t('config.diagnostics.healthPrefix')} <strong>{total >= 90 ? t('config.diagnostics.optimal') : total >= 70 ? t('config.diagnostics.stable') : t('config.diagnostics.critical')}</strong>. {t('config.diagnostics.healthSuffix', { count: suggestions.length })}</div>
           </div>
         </div>
       </div>
@@ -1147,12 +1167,12 @@ function DiagnosticsSection({ cfg, busy, onSetKey }: {
       <div className="hp-card">
         <div className="hp-section-title" style={{ marginBottom: 16 }}>
           <span className="codicon codicon-heart" style={{ marginRight: 8, color: 'var(--red)' }} />
-          Smart Diagnostics
+          {t('config.diagnostics.smart')}
         </div>
         {suggestions.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '24px 0' }}>
             <div className="codicon codicon-check-all" style={{ fontSize: 32, color: 'var(--green)', marginBottom: 12 }} />
-            <div style={{ fontWeight: 600 }}>No issues detected. Your Git environment is healthy!</div>
+            <div style={{ fontWeight: 600 }}>{t('config.diagnostics.noIssues')}</div>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -1170,13 +1190,13 @@ function DiagnosticsSection({ cfg, busy, onSetKey }: {
                       style={{ fontSize: 20, color: s.priority === 'high' ? 'var(--orange)' : 'var(--yellow)' }} />
                 <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: 600, fontSize: 13, textTransform: 'uppercase', color: s.priority === 'high' ? 'var(--orange)' : 'var(--yellow)', marginBottom: 2 }}>
-                    {s.priority} Priority
+                    {t('config.diagnostics.priority', { level: s.priority === 'high' ? t('config.suggestions.high') : t('config.suggestions.medium') })}
                   </div>
                   <div style={{ fontSize: 13 }}>{s.text}</div>
                 </div>
                 {s.action && (
                   <button type="button" className="hp-btn hp-btn-primary" style={{ fontSize: 12 }} onClick={s.action} disabled={busy}>
-                    Auto Fix
+                    {t('config.diagnostics.autoFix')}
                   </button>
                 )}
               </div>
@@ -1194,6 +1214,7 @@ function BackupsSection({ rows, onApplyPreset }: {
   rows: ConfigRow[]
   onApplyPreset: (p: Preset) => Promise<void> 
 }): ReactElement {
+  const { t } = useTranslation('git')
   const [importText, setImportText] = useState('')
   const [status, setStatus] = useState('')
 
@@ -1201,10 +1222,10 @@ function BackupsSection({ rows, onApplyPreset }: {
     const data = JSON.stringify(rows, null, 2)
     try {
       await navigator.clipboard.writeText(data)
-      setStatus('Configuration exported to clipboard as JSON.')
+      setStatus(t('config.backups.exportSuccess'))
     } catch {
       setImportText(data)
-      setStatus('Clipboard unavailable. JSON pasted in the box below.')
+      setStatus(t('config.backups.clipboardUnavailable'))
     }
     setTimeout(() => setStatus(''), 3000)
   }
@@ -1212,14 +1233,14 @@ function BackupsSection({ rows, onApplyPreset }: {
   async function handleImport(): Promise<void> {
     try {
       const parsed = JSON.parse(importText) as ConfigRow[]
-      if (!Array.isArray(parsed)) throw new Error('Invalid JSON format.')
+      if (!Array.isArray(parsed)) throw new Error(t('config.backups.invalidFormat'))
       const keys: Record<string, string> = {}
       parsed.forEach(r => { keys[r.key] = r.value })
-      await onApplyPreset({ label: 'Imported Backup', description: 'User provided JSON backup', keys })
-      setStatus('Backup imported successfully.')
+      await onApplyPreset({ label: 'Imported Backup', labelKey: '', description: 'User provided JSON backup', descKey: '', keys })
+      setStatus(t('config.backups.importSuccess'))
       setImportText('')
     } catch (e) {
-      setStatus(`Import failed: ${e instanceof Error ? e.message : String(e)}`)
+      setStatus(`${t('config.backups.importFail')} ${e instanceof Error ? e.message : String(e)}`)
     }
     setTimeout(() => setStatus(''), 4000)
   }
@@ -1235,26 +1256,26 @@ function BackupsSection({ rows, onApplyPreset }: {
           <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--accent-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <span className="codicon codicon-cloud-download" style={{ color: 'var(--accent)' }} />
           </div>
-          Export Settings
+          {t('config.backups.exportTitle')}
         </div>
-        <p className="hp-muted" style={{ fontSize: 14, marginBottom: 24 }}>Generate a secure, portable JSON snapshot of your current global Git configurations to keep as backup or sync across machines.</p>
+        <p className="hp-muted" style={{ fontSize: 14, marginBottom: 24 }}>{t('config.backups.exportDesc')}</p>
         <button type="button" className="hp-btn hp-btn-primary" style={{ padding: '12px 24px', borderRadius: 10 }} onClick={() => void handleExport()}>
-          Export to Clipboard
+          {t('config.backups.exportBtn')}
         </button>
       </div>
 
       <div className="hp-card">
-        <div className="hp-section-title">Import Settings</div>
-        <p className="hp-muted" style={{ fontSize: 13, marginBottom: 12 }}>Paste a previously exported JSON array to restore your settings.</p>
+        <div className="hp-section-title">{t('config.backups.importTitle')}</div>
+        <p className="hp-muted" style={{ fontSize: 13, marginBottom: 12 }}>{t('config.backups.importDesc')}</p>
         <textarea 
           className="hp-input mono" 
           style={{ minHeight: 120, fontSize: 11, marginBottom: 12 }}
           value={importText}
           onChange={e => setImportText(e.target.value)}
-          placeholder='[{"key": "user.name", "value": "Jane Doe"}, ...]'
+          placeholder={t('config.backups.importPlaceholder')}
         />
         <button type="button" className="hp-btn" onClick={() => void handleImport()} disabled={!importText.trim()}>
-          Restore Backup
+          {t('config.backups.restoreBtn')}
         </button>
       </div>
       {status && <div className="hp-status-alert success">{status}</div>}
@@ -1264,17 +1285,18 @@ function BackupsSection({ rows, onApplyPreset }: {
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
-const NAV_ITEMS: { id: Section; label: string; icon: string }[] = [
-  { id: 'overview', label: 'Overview', icon: 'dashboard' },
-  { id: 'identity', label: 'Identity', icon: 'account' },
-  { id: 'security', label: 'Security', icon: 'shield' },
-  { id: 'behavior', label: 'Behavior', icon: 'settings-gear' },
-  { id: 'inspector', label: 'Config Inspector', icon: 'search' },
-  { id: 'diagnostics', label: 'Git Doctor', icon: 'heart' },
-  { id: 'backups', label: 'Backups', icon: 'cloud-download' },
+const NAV_ITEM_ICONS: { id: Section; icon: string }[] = [
+  { id: 'overview', icon: 'dashboard' },
+  { id: 'identity', icon: 'account' },
+  { id: 'security', icon: 'shield' },
+  { id: 'behavior', icon: 'settings-gear' },
+  { id: 'inspector', icon: 'search' },
+  { id: 'diagnostics', icon: 'heart' },
+  { id: 'backups', icon: 'cloud-download' },
 ]
 
 export function GitConfigPage(): ReactElement {
+  const { t } = useTranslation('git')
   const [section, setSection] = useState<Section>('overview')
   const [rows, setRows] = useState<ConfigRow[]>([])
   const [cfg, setCfg] = useState<Map<string, string>>(new Map())
@@ -1358,16 +1380,16 @@ export function GitConfigPage(): ReactElement {
     <div className="git-config-page elevated-page">
       {/* Header */}
       <header style={{ marginBottom: 4 }}>
-        <div className="mono" style={{ color: 'var(--accent)', fontSize: 12, marginBottom: 8 }}>GIT CONFIG</div>
-        <h1 style={{ margin: 0, fontSize: 28, fontWeight: 700 }}>Git Configuration</h1>
+        <div className="mono" style={{ color: 'var(--accent)', fontSize: 12, marginBottom: 8 }}>{t('config.pageLabel')}</div>
+        <h1 style={{ margin: 0, fontSize: 28, fontWeight: 700 }}>{t('config.pageTitle')}</h1>
         <p style={{ color: 'var(--text-muted)', marginTop: 10, maxWidth: 760, lineHeight: 1.5 }}>
-          Manage your Git identity, SSH keys, security settings, and repository behavior globally.
+          {t('config.pageDesc')}
         </p>
       </header>
 
       {/* Horizontal Tabs */}
       <nav className="git-config-tabs-wrap">
-        {NAV_ITEMS.map((item) => (
+        {NAV_ITEM_ICONS.map((item) => (
           <button
             key={item.id}
             type="button"
@@ -1375,7 +1397,7 @@ export function GitConfigPage(): ReactElement {
             className={`git-config-tab ${section === item.id ? 'git-config-tab-active' : ''}`}
           >
             <span className={`codicon codicon-${item.icon}`} />
-            <span>{item.label}</span>
+            <span>{t(`config.nav.${item.id}`)}</span>
           </button>
         ))}
       </nav>
@@ -1397,7 +1419,7 @@ export function GitConfigPage(): ReactElement {
             boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
             pointerEvents: 'none',
           }}>
-            {toast.ok ? 'OK: ' : 'Error: '}{toast.msg}
+            {toast.ok ? t('config.toast.ok') : t('config.toast.error')}{toast.msg}
           </div>
         )}
 

@@ -1,6 +1,7 @@
 import './DashboardKernelsPage.css'
 import type { ReactElement } from 'react'
 import { useCallback, useEffect, useState } from 'react'
+import { Trans, useTranslation } from 'react-i18next'
 import type { HostSecuritySnapshot, RuntimeStatus, HostPortRow } from '@linux-dev-home/shared'
 
 const UNITS = ['docker', 'ssh', 'nginx'] as const
@@ -41,6 +42,8 @@ export function DashboardKernelsPage(): ReactElement {
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null)
   const [busy, setBusy] = useState(false)
   const [runtimesLoaded, setRuntimesLoaded] = useState(false)
+
+  const { t } = useTranslation('dashboard')
 
   const refresh = useCallback(async () => {
     setBusy(true)
@@ -106,17 +109,17 @@ export function DashboardKernelsPage(): ReactElement {
         <div>
           <div className="kernels-eyebrow">
             <span className="codicon codicon-circuit-board" />
-            Dashboard · Kernels
+            {t('kernels.pageTitle')}
           </div>
-          <h1 className="kernels-title">Kernels &amp; Toolchains</h1>
+          <h1 className="kernels-title">{t('kernels.heading')}</h1>
           <p className="kernels-subtitle">
-            GPU probe, service states &amp; security audit — monitored in real-time.
+            {t('kernels.subtitle')}
           </p>
         </div>
         <div className="kernels-toolbar">
           {lastRefreshed && (
             <span className="kernels-updated">
-              Last check: {lastRefreshed.toLocaleTimeString()}
+              {t('kernels.lastCheck', { time: lastRefreshed.toLocaleTimeString() })}
             </span>
           )}
           <button
@@ -126,7 +129,7 @@ export function DashboardKernelsPage(): ReactElement {
             disabled={busy}
           >
             <span className={`codicon ${busy ? 'codicon-loading codicon-modifier-spin' : 'codicon-refresh'}`} />
-            {busy ? 'Refreshing…' : 'Refresh now'}
+            {busy ? t('kernels.refreshing') : t('kernels.refreshNow')}
           </button>
         </div>
       </div>
@@ -139,7 +142,7 @@ export function DashboardKernelsPage(): ReactElement {
           <div className="kernels-card-container">
             <div className="kernels-card-header-title">
               <span className="codicon codicon-server-process" style={{ color: 'var(--accent)' }} />
-              System Services
+              {t('kernels.systemServices')}
             </div>
             <div className="kernels-services-grid">
               {UNITS.map((u) => {
@@ -155,7 +158,7 @@ export function DashboardKernelsPage(): ReactElement {
                     </div>
                     <div className="kernels-service-name">{u}</div>
                     <div className="kernels-service-value" style={{ color }}>
-                      {val || 'checking...'}
+                      {val || t('kernels.checking')}
                     </div>
                   </div>
                 )
@@ -167,7 +170,7 @@ export function DashboardKernelsPage(): ReactElement {
           <div className="kernels-card-container">
             <div className="kernels-card-header-title">
               <span className="codicon codicon-terminal" style={{ color: 'var(--accent)' }} />
-              Development Kernels &amp; Toolchains
+              {t('kernels.devKernels')}
             </div>
             {runtimes.length > 0 ? (
               <div className="kernels-audit-list">
@@ -190,14 +193,14 @@ export function DashboardKernelsPage(): ReactElement {
                         border: `1px solid ${r.installed ? 'rgba(63, 185, 80, 0.2)' : 'rgba(255, 255, 255, 0.08)'}`,
                       }}
                     >
-                      {r.installed ? 'ACTIVE' : 'NOT INSTALLED'}
+                      {r.installed ? t('kernels.active') : t('kernels.notInstalled')}
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
               <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>
-                {runtimesLoaded ? 'No runtimes detected.' : 'Loading runtime states...'}
+                {runtimesLoaded ? t('kernels.noRuntimes') : t('kernels.loadingRuntimes')}
               </div>
             )}
           </div>
@@ -207,7 +210,7 @@ export function DashboardKernelsPage(): ReactElement {
             <div className="kernels-card-container">
               <div className="kernels-card-header-title">
                 <span className="codicon codicon-shield" style={{ color: 'var(--accent)' }} />
-                Security Audit
+                {t('kernels.securityAudit')}
               </div>
               <div className="kernels-audit-list">
                 {secItems.map(({ label, value, icon }, i) => {
@@ -247,15 +250,15 @@ export function DashboardKernelsPage(): ReactElement {
           <div className="kernels-card-container">
             <div className="kernels-card-header-title">
               <span className="codicon codicon-circuit-board" style={{ color: 'var(--accent)' }} />
-              GPU &amp; Hardware
+              {t('kernels.gpuHardware')}
             </div>
             <div className="kernels-gpu-info">
               <div className="kernels-gpu-icon-huge">
                 <span className="codicon codicon-circuit-board" />
               </div>
               <div className="kernels-gpu-details">
-                <span className="kernels-gpu-label">ACTIVE GRAPHICS PROBE</span>
-                <span className="kernels-gpu-value">{gpu || 'Detecting GPU...'}</span>
+                <span className="kernels-gpu-label">{t('kernels.activeGraphicsProbe')}</span>
+                <span className="kernels-gpu-value">{gpu || t('kernels.detectingGpu')}</span>
               </div>
             </div>
           </div>
@@ -264,7 +267,7 @@ export function DashboardKernelsPage(): ReactElement {
           <div className="kernels-card-container">
             <div className="kernels-card-header-title">
               <span className="codicon codicon-link-external" style={{ color: 'var(--accent)' }} />
-              Active Port Bindings
+              {t('kernels.activePortBindings')}
             </div>
             {ports.length > 0 ? (
               <div className="kernels-audit-list" style={{ maxHeight: 200, overflowY: 'auto' }}>
@@ -293,7 +296,7 @@ export function DashboardKernelsPage(): ReactElement {
                           textDecoration: 'none',
                         }}
                       >
-                        OPEN LINK
+                        {t('kernels.openLink')}
                       </a>
                     ) : (
                       <div
@@ -312,7 +315,7 @@ export function DashboardKernelsPage(): ReactElement {
               </div>
             ) : (
               <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)' }}>
-                No active local ports listening.
+                {t('kernels.noPorts')}
               </p>
             )}
           </div>
@@ -322,10 +325,10 @@ export function DashboardKernelsPage(): ReactElement {
             <div className="kernels-alert-container error">
               <div className="kernels-alert-title">
                 <span className="codicon codicon-warning" />
-                Risky Open Ports Detected
+                {t('kernels.riskyPortsTitle')}
               </div>
               <p className="kernels-alert-desc">
-                The following ports are open on public interfaces and may pose a security risk:
+                {t('kernels.riskyPortsDesc')}
               </p>
               <div className="kernels-alert-ports-grid">
                 {security.riskyOpenPorts.map((port) => (
@@ -339,10 +342,10 @@ export function DashboardKernelsPage(): ReactElement {
             <div className="kernels-alert-container success">
               <div className="kernels-alert-title">
                 <span className="codicon codicon-check" />
-                Network Interfaces Secured
+                {t('kernels.networkSecured')}
               </div>
               <p className="kernels-alert-desc">
-                No risky open ports detected on active public listeners.
+                {t('kernels.noRiskyPorts')}
               </p>
             </div>
           )}
@@ -351,10 +354,12 @@ export function DashboardKernelsPage(): ReactElement {
           <div className="kernels-card-container kernels-tips-card">
             <div className="kernels-card-header-title">
               <span className="codicon codicon-info" style={{ color: 'var(--accent)' }} />
-              Toolchain Tip
+              {t('kernels.toolchainTip')}
             </div>
             <p className="kernels-tip-text">
-              Ensure system-level dependencies like <code>docker-compose</code> and <code>ssh-agent</code> are configured and accessible by the active profile.
+              <Trans t={t} i18nKey="kernels.toolchainTipText">
+                Ensure system-level dependencies like <code>docker-compose</code> and <code>ssh-agent</code> are configured and accessible by the active profile.
+              </Trans>
             </p>
           </div>
         </div>

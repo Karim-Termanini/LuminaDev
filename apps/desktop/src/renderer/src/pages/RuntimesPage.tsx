@@ -1,28 +1,35 @@
 import type { ReactElement } from 'react'
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { RuntimeStatus, JobSummary } from '@linux-dev-home/shared'
 import { assertRuntimeOk } from './runtimeContract'
 import { humanizeRuntimeError } from './runtimeError'
 import './RuntimesPage.css'
 
-const RUNTIME_DETAILS: Record<string, { description: string, website: string, icon: string }> = {
-  node: { description: 'Node.js is a JavaScript runtime built on Chrome\'s V8 JavaScript engine. Ideal for scalable network applications.', website: 'https://nodejs.org', icon: 'symbol-method' },
-  rust: { description: 'Rust is a language empowering everyone to build reliable and efficient software. Blazingly fast and memory-efficient.', website: 'https://rust-lang.org', icon: 'tools' },
-  python: { description: 'Python is a programming language that lets you work quickly and integrate systems more effectively.', website: 'https://python.org', icon: 'symbol-keyword' },
-  go: { description: 'Go is an open source programming language that makes it easy to build simple, reliable, and efficient software.', website: 'https://go.dev', icon: 'zap' },
-  java: { description: 'Java is a high-level, class-based, object-oriented programming language that is designed to have as few implementation dependencies as possible.', website: 'https://java.com', icon: 'beaker' },
-  php: { description: 'PHP is a popular general-purpose scripting language that is especially suited to web development.', website: 'https://php.net', icon: 'globe' },
-  ruby: { description: 'Ruby is a dynamic, open source programming language with a focus on simplicity and productivity.', website: 'https://ruby-lang.org', icon: 'ruby' },
-  dotnet: { description: '.NET is a free, cross-platform, open source developer platform for building many different types of applications.', website: 'https://dotnet.microsoft.com', icon: 'library' },
-  bun: { description: 'Bun is a fast all-in-one JavaScript runtime. Bundle, transpile, install and run JavaScript & TypeScript projects.', website: 'https://bun.sh', icon: 'flame' },
-  zig: { description: 'Zig is a general-purpose programming language and toolchain for maintaining robust, optimal, and reusable software.', website: 'https://ziglang.org', icon: 'circuit-board' },
-  c_cpp: { description: 'C/C++ toolchain with compilers and debugger for systems programming, high-performance apps, and native libraries.', website: 'https://gcc.gnu.org', icon: 'terminal-bash' },
-  matlab: { description: 'MATLAB-compatible environment powered by GNU Octave for numerical computing and matrix-heavy workflows.', website: 'https://octave.org', icon: 'graph-line' },
-  dart: { description: 'Dart is a client-optimized language for building fast apps on any platform.', website: 'https://dart.dev', icon: 'symbol-namespace' },
-  flutter: { description: 'Flutter is a UI toolkit for building natively compiled applications from a single codebase.', website: 'https://flutter.dev', icon: 'device-mobile' },
-  julia: { description: 'Julia is a high-performance dynamic language for technical and scientific computing.', website: 'https://julialang.org', icon: 'symbol-color' },
-  lua: { description: 'Lua is a lightweight embeddable scripting language used in game engines and automation.', website: 'https://www.lua.org', icon: 'symbol-variable' },
-  lisp: { description: 'Common Lisp environment (SBCL) for symbolic programming and advanced macro systems.', website: 'https://www.sbcl.org', icon: 'symbol-class' },
+const RUNTIME_DETAILS: Record<string, { website: string, icon: string }> = {
+  node: { website: 'https://nodejs.org', icon: 'symbol-method' },
+  rust: { website: 'https://rust-lang.org', icon: 'tools' },
+  python: { website: 'https://python.org', icon: 'symbol-keyword' },
+  go: { website: 'https://go.dev', icon: 'zap' },
+  java: { website: 'https://java.com', icon: 'beaker' },
+  php: { website: 'https://php.net', icon: 'globe' },
+  ruby: { website: 'https://ruby-lang.org', icon: 'ruby' },
+  dotnet: { website: 'https://dotnet.microsoft.com', icon: 'library' },
+  bun: { website: 'https://bun.sh', icon: 'flame' },
+  zig: { website: 'https://ziglang.org', icon: 'circuit-board' },
+  c_cpp: { website: 'https://gcc.gnu.org', icon: 'terminal-bash' },
+  matlab: { website: 'https://octave.org', icon: 'graph-line' },
+  dart: { website: 'https://dart.dev', icon: 'symbol-namespace' },
+  flutter: { website: 'https://flutter.dev', icon: 'device-mobile' },
+  julia: { website: 'https://julialang.org', icon: 'symbol-color' },
+  lua: { website: 'https://www.lua.org', icon: 'symbol-variable' },
+  lisp: { website: 'https://www.sbcl.org', icon: 'symbol-class' },
+}
+
+const RUNTIME_LOCALE_KEY: Record<string, string> = {
+  c_cpp: 'cpp',
+  matlab: 'octave',
+  lisp: 'clisp',
 }
 
 const UPDATE_OUTCOME_STORAGE_KEY = 'dh:runtimes:update-outcomes:v1'
@@ -52,28 +59,8 @@ function pickDefaultRuntimeVersion(runtimeId: string, versions: string[]): strin
   return versions[0]
 }
 
-/** Suggested version command for onboarding copy (login shell PATH may apply). */
-const RUNTIME_VERIFY_CMD: Record<string, string> = {
-  node: 'node --version',
-  python: 'python3 --version',
-  go: 'go version',
-  rust: 'rustc --version',
-  java: 'java -version',
-  php: 'php --version',
-  ruby: 'ruby --version',
-  dotnet: 'dotnet --version',
-  bun: 'bun --version',
-  zig: 'zig version',
-  c_cpp: 'gcc --version',
-  matlab: 'octave --version',
-  dart: 'dart --version',
-  flutter: 'flutter --version',
-  julia: 'julia --version',
-  lua: 'lua -v',
-  lisp: 'sbcl --version',
-}
-
 export function RuntimesPage(): ReactElement {
+  const { t } = useTranslation('runtimes')
   const [runtimes, setRuntimes] = useState<RuntimeStatus[]>([])
   const [activeJobs, setActiveJobs] = useState<JobSummary[]>([])
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -119,7 +106,7 @@ export function RuntimesPage(): ReactElement {
     setVersionsLoading(true)
     try {
       const res = await window.dh.getAvailableVersions(runtimeId, method)
-      assertRuntimeOk(res, 'Failed to fetch runtime versions.')
+      assertRuntimeOk(res, t('page.errorFetch'))
       const vs = res.versions
       setAvailableVersions(vs)
       if (vs.length === 0) return
@@ -152,7 +139,7 @@ export function RuntimesPage(): ReactElement {
   const refreshDeps = useCallback(async () => {
     try {
       const res = await window.dh.checkDependencies(selectedId)
-      assertRuntimeOk(res, 'Failed to check runtime dependencies.')
+      assertRuntimeOk(res, t('page.errorDeps'))
       setDependencies(res.dependencies)
     } catch (e) {
       setDependencies([])
@@ -185,7 +172,7 @@ export function RuntimesPage(): ReactElement {
       setErrorMessage(null)
       try {
         const res = await window.dh.runtimeSetActive({ runtimeId: selectedId, path })
-        assertRuntimeOk(res, 'Failed to set active runtime.')
+        assertRuntimeOk(res, t('page.errorActive'))
         await refreshStatus()
       } catch (e) {
         setErrorMessage(humanizeRuntimeError(e))
@@ -198,12 +185,12 @@ export function RuntimesPage(): ReactElement {
 
   const removeVersion = useCallback(
     async (version: string, path: string) => {
-      if (!window.confirm(`Remove ${selectedId} ${version}?\n\nThis will delete the installation directory. This cannot be undone.`)) return
+      if (!window.confirm(t('page.removeConfirm', { id: selectedId, version }))) return
       setRemovingVersionPath(path)
       setErrorMessage(null)
       try {
         const res = await window.dh.runtimeRemoveVersion({ runtimeId: selectedId, version, path })
-        assertRuntimeOk(res, 'Failed to remove version.')
+        assertRuntimeOk(res, t('page.errorRemove'))
         await refreshStatus()
       } catch (e) {
         setErrorMessage(humanizeRuntimeError(e))
@@ -221,11 +208,11 @@ export function RuntimesPage(): ReactElement {
     // Fast poll (800ms) only while a job is running; 3s idle to avoid CPU spike
     const hasRunningJob = activeJobs.some((j) => j.state === 'running')
     const interval = hasRunningJob ? 800 : 3000
-    const t = setInterval(() => {
+    const intervalId = setInterval(() => {
       void refreshStatus()
       if (showWizard && wizardStep === 2) void refreshDeps()
     }, interval)
-    return () => clearInterval(t)
+    return () => clearInterval(intervalId)
   }, [refreshStatus, refreshDeps, showWizard, wizardStep, activeJobs])
 
   const selectedRuntime = useMemo(() => runtimes.find(r => r.id === selectedId), [runtimes, selectedId])
@@ -277,7 +264,9 @@ export function RuntimesPage(): ReactElement {
     [installMethod, displayedVersions],
   )
 
-  const suggestVerifyCmd = RUNTIME_VERIFY_CMD[selectedId] ?? `${selectedId} --version`
+  const rtLocaleKey = RUNTIME_LOCALE_KEY[selectedId] ?? selectedId
+  const suggestVerifyCmd = t(rtLocaleKey + '.verify')
+  const progressAction = isUninstallJob ? 'Removing' : isUpdateJob ? 'Updating' : 'Installing'
   const lastJobTail = activeJob?.logTail ?? []
   const logHasVerifyOk = lastJobTail.some((l) => /VERIFY OK/i.test(l))
   const logHasVerifyFail = lastJobTail.some((l) => l.includes('VERIFY FAIL:'))
@@ -408,11 +397,11 @@ export function RuntimesPage(): ReactElement {
       {/* Sidebar List */}
       <aside style={{ width: 280, borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', background: 'rgba(0,0,0,0.1)' }}>
         <div style={{ padding: '20px 16px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ fontSize: 14, fontWeight: 800, letterSpacing: '0.05em', color: 'var(--text-muted)' }}>RUNTIMES</div>
+          <div style={{ fontSize: 14, fontWeight: 800, letterSpacing: '0.05em', color: 'var(--text-muted)' }}>{t('page.sidebarTitle')}</div>
           <button 
             onClick={() => void refreshStatus()}
             className="hp-btn-icon" 
-            title="Refresh Status"
+            title={t('page.refresh')}
             disabled={isRefreshing}
             style={{ padding: 4, background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: isRefreshing ? 'default' : 'pointer', opacity: isRefreshing ? 0.65 : 1 }}
           >
@@ -442,7 +431,7 @@ export function RuntimesPage(): ReactElement {
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 14, fontWeight: 600 }}>{r.name}</div>
                 <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
-                  {r.installed ? r.version : 'Not installed'}
+                  {r.installed ? r.version : t('page.notInstalled')}
                 </div>
               </div>
               {r.installed && <span className="codicon codicon-check" style={{ color: 'var(--green)', fontSize: 12 }} />}
@@ -492,9 +481,9 @@ export function RuntimesPage(): ReactElement {
                       color: selectedRuntime.installed ? 'var(--green)' : 'var(--text-muted)',
                       border: `1px solid ${selectedRuntime.installed ? 'rgba(0, 230, 118, 0.2)' : 'rgba(255,255,255,0.1)'}`
                     }}>
-                      {selectedRuntime.installed ? 'Installed' : 'Available'}
+                      {selectedRuntime.installed ? t('page.installed') : t('page.available')}
                     </span>
-                    {selectedRuntime.installed && <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>Version {selectedRuntime.version}</span>}
+                    {selectedRuntime.installed && <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>{t('page.version', { v: selectedRuntime.version })}</span>}
                   </div>
                 </div>
               </div>
@@ -515,7 +504,7 @@ export function RuntimesPage(): ReactElement {
                      boxShadow: '0 4px 15px rgba(124, 77, 255, 0.3)'
                    }}
                  >
-                   {installInProgress && !isUninstallJob && !isUpdateJob ? 'Installing...' : 'Install Version'}
+                   {installInProgress && !isUninstallJob && !isUpdateJob ? t('view.installing') : t('view.installVersion')}
                  </button>
 
                  {selectedRuntime.installed && (
@@ -538,7 +527,7 @@ export function RuntimesPage(): ReactElement {
                          opacity: installInProgress ? 0.6 : 1,
                        }}
                      >
-                       {isUpdateJob ? 'Updating...' : (effectiveUpdateOutcome === 'already_latest' ? 'Already Latest' : 'Update Current')}
+                       {isUpdateJob ? t('view.updating') : (effectiveUpdateOutcome === 'already_latest' ? t('view.installLatest') : t('view.updateCurrent'))}
                      </button>
                      <button
                        onClick={() => void openUninstallModal()}
@@ -554,7 +543,7 @@ export function RuntimesPage(): ReactElement {
                          opacity: installInProgress ? 0.5 : 1,
                        }}
                      >
-                       Remove
+                       {t('view.remove')}
                      </button>
                    </>
                  )}
@@ -562,22 +551,22 @@ export function RuntimesPage(): ReactElement {
             </div>
 
             <div style={{ marginTop: 48 }}>
-              <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>Description</h3>
+              <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>{t('view.description')}</h3>
               <p style={{ fontSize: 16, color: 'var(--text-main)', lineHeight: 1.6, opacity: 0.8 }}>
-                {RUNTIME_DETAILS[selectedId]?.description}
+                {t(rtLocaleKey + '.desc')}
               </p>
               <a 
                 href="#" 
                 onClick={(e) => { e.preventDefault(); window.dh.openExternal(RUNTIME_DETAILS[selectedId]?.website || '') }}
                 style={{ color: 'var(--accent)', textDecoration: 'none', fontSize: 14, fontWeight: 600, marginTop: 12, display: 'inline-block' }}
               >
-                Visit Official Website →
+                {t('view.visitWebsite')}
               </a>
             </div>
 
             {selectedRuntime.installed && selectedRuntime.allVersions && (
               <div style={{ marginTop: 40 }}>
-                <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>Detected Installations</h3>
+                <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>{t('view.detected')}</h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                   {selectedRuntime.allVersions.map((v, i) => (
                     <div key={i} style={{ 
@@ -585,13 +574,13 @@ export function RuntimesPage(): ReactElement {
                       padding: '12px 16px', background: 'rgba(255,255,255,0.03)', borderRadius: 12, border: '1px solid var(--border)' 
                     }}>
                       <div>
-                        <div style={{ fontSize: 14, fontWeight: 700 }}>Version {v.version}</div>
+                        <div style={{ fontSize: 14, fontWeight: 700 }}>{t('page.version', { v: v.version })}</div>
                         <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, fontFamily: 'monospace' }}>{v.path}</div>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         {v.path === selectedRuntime.path && (
                           <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--green)', padding: '2px 8px', borderRadius: 10, border: '1px solid rgba(0,230,118,0.3)', background: 'rgba(0,230,118,0.05)' }}>
-                            ACTIVE
+                            {t('page.active')}
                           </span>
                         )}
                         {v.path !== selectedRuntime.path && (
@@ -611,14 +600,14 @@ export function RuntimesPage(): ReactElement {
                               opacity: installInProgress || settingActivePath === v.path ? 0.55 : 1,
                             }}
                           >
-                            {settingActivePath === v.path ? 'Switching…' : 'Set active'}
+                            {settingActivePath === v.path ? t('view.switching') : t('view.switch')}
                           </button>
                         )}
                         <button
                           type="button"
                           onClick={() => void removeVersion(v.version, v.path)}
                           disabled={installInProgress || removingVersionPath === v.path || v.path === selectedRuntime.path}
-                          title={v.path === selectedRuntime.path ? 'Cannot remove active version' : `Remove ${v.version}`}
+                          title={v.path === selectedRuntime.path ? t('view.cannotRemoveActive') : t('page.removeVersion', { v: v.version })}
                           style={{
                             fontSize: 11,
                             fontWeight: 800,
@@ -631,7 +620,7 @@ export function RuntimesPage(): ReactElement {
                             opacity: installInProgress || removingVersionPath === v.path || v.path === selectedRuntime.path ? 0.4 : 1,
                           }}
                         >
-                          {removingVersionPath === v.path ? 'Removing…' : 'Remove'}
+                          {removingVersionPath === v.path ? t('view.removing') : t('view.remove')}
                         </button>
                       </div>
                     </div>
@@ -646,17 +635,17 @@ export function RuntimesPage(): ReactElement {
                 <button onClick={() => setShowWizard(false)} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
                    <span className="codicon codicon-arrow-left" style={{ fontSize: 20 }} />
                 </button>
-                <h2 style={{ margin: 0, fontSize: 24, fontWeight: 800 }}>{selectedRuntime?.name} Setup</h2>
+                <h2 style={{ margin: 0, fontSize: 24, fontWeight: 800 }}>{t('wizard.setup', { name: selectedRuntime?.name })}</h2>
              </div>
 
              <div style={{ flex: 1, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border)', borderRadius: 16, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                 {/* Stepper Header */}
                 <div style={{ padding: '24px 32px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', background: 'rgba(255,255,255,0.02)' }}>
                    {[
-                     { step: 1, label: 'Configuration' },
-                     { step: 2, label: 'Dependencies' },
-                     { step: 3, label: 'Installation' },
-                     { step: 4, label: 'Finish' }
+                     { step: 1, label: t('wizard.step1') },
+                     { step: 2, label: t('wizard.step2') },
+                     { step: 3, label: t('wizard.step3') },
+                     { step: 4, label: t('wizard.step4') }
                    ].map((s) => (
                      <div key={s.step} style={{ display: 'flex', alignItems: 'center', gap: 10, opacity: wizardStep >= s.step ? 1 : 0.3 }}>
                         <div style={{ 
@@ -675,11 +664,11 @@ export function RuntimesPage(): ReactElement {
                 <div style={{ flex: 1, padding: 40, overflowY: 'auto' }}>
                    {wizardStep === 1 && (
                      <div>
-                        <h3 style={{ marginTop: 0 }}>Installation Settings</h3>
-                        <p style={{ color: 'var(--text-muted)', marginBottom: 32 }}>Choose how you want to install {selectedRuntime?.name} on your system.</p>
+                        <h3 style={{ marginTop: 0 }}>{t('wizConfig.title')}</h3>
+                        <p style={{ color: 'var(--text-muted)', marginBottom: 32 }}>{t('wizConfig.desc', { name: selectedRuntime?.name })}</p>
                         
                         <div className="hp-card" style={{ marginBottom: 20 }}>
-                           <div style={{ fontWeight: 600, marginBottom: 12 }}>Installation Method</div>
+                           <div style={{ fontWeight: 600, marginBottom: 12 }}>{t('wizConfig.method')}</div>
                            <div style={{ display: 'flex', gap: 12 }}>
                               <button 
                                 onClick={() => setInstallMethod('system')}
@@ -688,8 +677,8 @@ export function RuntimesPage(): ReactElement {
                                   background: installMethod === 'system' ? 'rgba(124, 77, 255, 0.1)' : 'transparent', color: 'var(--text-main)', cursor: 'pointer', textAlign: 'left'
                                 }}
                               >
-                                 <div style={{ fontWeight: 700, fontSize: 14 }}>System Package Manager</div>
-                                 <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>DNF / APT with fixed distro package names—the version dropdown does not change what the OS installs.</div>
+                                 <div style={{ fontWeight: 700, fontSize: 14 }}>{t('wizConfig.system')}</div>
+                                 <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>{t('wizConfig.systemDesc')}</div>
                               </button>
                               <button 
                                 onClick={() => setInstallMethod('local')}
@@ -698,19 +687,19 @@ export function RuntimesPage(): ReactElement {
                                   background: installMethod === 'local' ? 'rgba(124, 77, 255, 0.1)' : 'transparent', color: 'var(--text-main)', cursor: 'pointer', textAlign: 'left'
                                 }}
                               >
-                                 <div style={{ fontWeight: 700, fontSize: 14 }}>Isolated Script (Local)</div>
-                                 <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>User-scope install without sudo where supported; Node, Python, and Go use the version you picked.</div>
+                                 <div style={{ fontWeight: 700, fontSize: 14 }}>{t('wizConfig.local')}</div>
+                                 <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>{t('wizConfig.localDesc')}</div>
                               </button>
                            </div>
                         </div>
 
                         <div className="hp-card" style={{ marginBottom: 20 }}>
                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, gap: 12 }}>
-                             <div style={{ fontWeight: 600 }}>{installMethod === 'system' && !systemHasRealVersionChoice ? 'Repository Track' : 'Target Version'}</div>
+                             <div style={{ fontWeight: 600 }}>{t(installMethod === 'system' && !systemHasRealVersionChoice ? 'wizConfig.repoTrack' : 'wizConfig.targetVersion')}</div>
                              <button
                                type="button"
                                className="hp-btn-icon"
-                               title="Refresh version list from the network (new releases appear here without an app update)"
+                               title={t('wizConfig.refreshTitle')}
                                disabled={versionsLoading}
                                onClick={() => void refreshVersionsList(false)}
                                style={{
@@ -729,7 +718,7 @@ export function RuntimesPage(): ReactElement {
                                }}
                              >
                                <span className={`codicon ${versionsLoading ? 'codicon-loading codicon-modifier-spin' : 'codicon-refresh'}`} />
-                               Refresh
+                               {t('wizConfig.refresh')}
                              </button>
                            </div>
                            <select 
@@ -742,16 +731,16 @@ export function RuntimesPage(): ReactElement {
                              {displayedVersions.map(v => <option key={v} value={v}>{v}</option>)}
                            </select>
                            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
-                             Lists are loaded from upstream APIs where possible; use Refresh after a new release if you do not change language.
+                             {t('wizConfig.apiNote')}
                            </div>
                            {selectedId === 'java' && installMethod === 'system' && (
                              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
-                               System list shows only Java versions currently available from your distro repositories.
+                               {t('wizConfig.systemNote')}
                              </div>
                            )}
                            {installMethod === 'system' && selectedId !== 'java' && (
                              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
-                               System mode now shows only repository-backed choices for this runtime on your distro.
+                               {t('wizConfig.systemModeNote')}
                              </div>
                            )}
                            {installMethod === 'system' && (
@@ -768,8 +757,7 @@ export function RuntimesPage(): ReactElement {
                                  lineHeight: 1.45,
                                }}
                              >
-                               With <strong>System</strong>, the target version shown above is informational only for most languages—we call fixed package names (<code className="mono">nodejs</code>, etc.). Pick <strong>Local</strong>
-                               {' '}for Node.js, Python, or Go if you want the selected version installed.
+                               {t('wizConfig.methodNote')}
                              </div>
                            )}
                         </div>
@@ -782,21 +770,20 @@ export function RuntimesPage(): ReactElement {
                                 onChange={(e) => setAddToPath(e.target.checked)} 
                               />
                               <div>
-                                 <div style={{ fontWeight: 600 }}>Add to system PATH</div>
-                                 <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Automatically configure environment variables for this runtime.</div>
+                                 <div style={{ fontWeight: 600 }}>{t('wizConfig.addToPath')}</div>
+                                 <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('wizConfig.addToPathDesc')}</div>
                               </div>
                            </label>
                         </div>
 
                         <div className="hp-card">
-                           <div style={{ fontWeight: 600, marginBottom: 6 }}>Sudo password (optional)</div>
+                           <div style={{ fontWeight: 600, marginBottom: 6 }}>{t('wizConfig.sudoPassword')}</div>
                            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 10 }}>
-                             For system installs (dnf / apt / snap): paste your sudo password here, or leave blank — a
-                             graphical password prompt (pkexec) usually opens. Leave blank too if passwordless sudo is enabled.
+                             {t('wizConfig.sudoDesc')}
                            </div>
                            <input
                              type="password"
-                             placeholder="Enter sudo password…"
+                             placeholder={t('wizConfig.sudoPlaceholder')}
                              value={sudoPassword}
                              onChange={(e) => setSudoPassword(e.target.value)}
                              style={{ width: '100%', boxSizing: 'border-box' }}
@@ -809,8 +796,8 @@ export function RuntimesPage(): ReactElement {
 
                    {wizardStep === 2 && (
                      <div>
-                        <h3 style={{ marginTop: 0 }}>System Dependencies</h3>
-                        <p style={{ color: 'var(--text-muted)', marginBottom: 32 }}>We found the following requirements for building/running {selectedRuntime?.name}.</p>
+                        <h3 style={{ marginTop: 0 }}>{t('wizDeps.title')}</h3>
+                        <p style={{ color: 'var(--text-muted)', marginBottom: 32 }}>{t('wizDeps.desc', { name: selectedRuntime?.name })}</p>
                         
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                            {dependencies.length > 0 ? dependencies.map((d, idx) => {
@@ -844,27 +831,27 @@ export function RuntimesPage(): ReactElement {
                                       {isFinished && <span className="codicon codicon-pass" style={{ fontSize: 12, color: 'var(--green)' }} />}
                                     </span>
                                     <span style={{ color: d.ok || isFinished ? 'var(--green)' : 'var(--orange)', fontSize: 12, fontWeight: 700 }}>
-                                      {isFinished ? 'Installed' : (isCurrent ? 'Installing...' : d.status)}
+                                      {isFinished ? t('page.installed') : (isCurrent ? t('view.installing') : d.status)}
                                     </span>
                                   </div>
                                </div>
                              );
                            }) : (
-                             <div style={{ textAlign: 'center', padding: 20, opacity: 0.5 }}>Checking requirements...</div>
+                             <div style={{ textAlign: 'center', padding: 20, opacity: 0.5 }}>{t('wizDeps.checking')}</div>
                            )}
                         </div>
                         
                         {!selectedRuntime?.installed && (
                           <div style={{ marginTop: 24, padding: 16, background: 'rgba(255, 152, 0, 0.1)', borderRadius: 8, border: '1px solid rgba(255, 152, 0, 0.2)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                              <div style={{ fontSize: 13 }}>
-                                💡 <strong>Note:</strong> Some missing headers might be required for building.
+                                {t('wizDeps.headerNote')}
                              </div>
                              <button 
                               onClick={() => window.dh.jobStart({ kind: 'install_deps', runtimeId: selectedId, sudoPassword })}
                                className="hp-btn" 
                                style={{ background: 'var(--accent)', color: 'white', border: 'none', padding: '6px 12px', fontSize: 11, fontWeight: 700 }}
                              >
-                                Fix Missing Dependencies
+                                {t('wizDeps.fixBtn')}
                              </button>
                           </div>
                         )}
@@ -874,24 +861,24 @@ export function RuntimesPage(): ReactElement {
                    {wizardStep === 3 && (
                      <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                           <h3 style={{ marginTop: 0 }}>{isUninstallJob ? 'Removing' : isUpdateJob ? 'Updating' : 'Installing'} {selectedRuntime?.name}</h3>
+                           <h3 style={{ marginTop: 0 }}>{t('wizProgress.title', { action: progressAction, name: selectedRuntime?.name })}</h3>
                            {activeJob?.state === 'running' && (
                              <button 
                                onClick={cancelInstall}
                                style={{ background: 'rgba(255, 82, 82, 0.1)', color: '#ff5252', border: '1px solid rgba(255, 82, 82, 0.2)', padding: '6px 12px', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
                              >
-                               Cancel Installation
+                               {t('wizProgress.cancel')}
                              </button>
                            )}
                         </div>
                         <p style={{ color: 'var(--text-muted)' }}>
-                          {isUninstallJob ? 'Please wait while we remove runtime files and clean shared dependencies safely...' : isUpdateJob ? 'Please wait while we update runtime packages and verify the version...' : 'Please wait while we set up your environment...'}
+                          {t(isUninstallJob ? 'wizProgress.pleaseWaitRemove' : isUpdateJob ? 'wizProgress.pleaseWaitUpdate' : 'wizProgress.pleaseWaitInstall')}
                         </p>
 
                         <div style={{ marginTop: 24 }}>
                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
                               <span style={{ fontWeight: 700, fontSize: 14 }}>
-                                {activeJob?.progress === 100 ? 'Verification...' : (isUninstallJob ? 'Removing packages...' : isUpdateJob ? 'Updating packages...' : 'Downloading & Extracting...')}
+                                {activeJob?.progress === 100 ? t('wizProgress.verifyStep') : t(isUninstallJob ? 'wizProgress.removeStep' : isUpdateJob ? 'wizProgress.updateStep' : 'wizProgress.installStep')}
                               </span>
                               <span className="mono">{activeJob?.progress || 0}%</span>
                            </div>
@@ -917,10 +904,10 @@ export function RuntimesPage(): ReactElement {
                              )
                            })}
                            {activeJob?.state === 'completed' && !logHasVerifyFail && (
-                             <div style={{ color: 'var(--green)', fontWeight: 700, marginTop: 10 }}>✔ Job finished. Check VERIFY lines below if present.</div>
+                             <div style={{ color: 'var(--green)', fontWeight: 700, marginTop: 10 }}>{t('wizProgress.jobOk')}</div>
                            )}
                            {activeJob?.state === 'completed' && logHasVerifyFail && (
-                             <div style={{ color: '#ff8a65', fontWeight: 700, marginTop: 10 }}>Job finished but post-install VERIFY reported a problem—see log.</div>
+                             <div style={{ color: '#ff8a65', fontWeight: 700, marginTop: 10 }}>{t('wizProgress.jobWarn')}</div>
                            )}
                         </div>
                      </div>
@@ -935,42 +922,41 @@ export function RuntimesPage(): ReactElement {
                            {activeJob?.state === 'failed' ? '✗' : '✔'}
                         </div>
                         <h2 style={{ fontSize: 28, fontWeight: 800 }}>
-                          {activeJob?.state === 'failed' ? 'Install did not finish' : 'Installer finished'}
+                          {activeJob?.state === 'failed' ? t('wizFinish.failed') : t('wizFinish.completed')}
                         </h2>
                         <p style={{ color: 'var(--text-muted)', fontSize: 16, maxWidth: 460, margin: '16px auto 40px' }}>
-                          Review step 3 job log—the <strong>VERIFY</strong> lines show what a login shell could find on PATH. 
+                          {t('wizFinish.reviewLog')}
                           {logHasVerifyOk && (
                             <span style={{ color: 'var(--green)', display: 'block', marginTop: 8, fontSize: 14 }}>
                                <span className="codicon codicon-pass" style={{ verticalAlign: 'middle', marginRight: 6 }} />
-                               Post-install check reported a toolchain on PATH.
+                               {t('wizFinish.verifyOk')}
                             </span>
                           )}
                           {!logHasVerifyOk && !logHasVerifyFail && activeJob?.state === 'completed' && (
                             <span style={{ color: 'var(--orange)', display: 'block', marginTop: 8, fontSize: 14 }}>
                                <span className="codicon codicon-warning" style={{ verticalAlign: 'middle', marginRight: 6 }} />
-                               No VERIFY OK line yet—retry after opening a new terminal.
+                               {t('wizFinish.verifyRetry')}
                             </span>
                           )}
                           {logHasVerifyFail && (
                             <span style={{ color: '#ff8a65', display: 'block', marginTop: 8, fontSize: 14 }}>
                                <span className="codicon codicon-error" style={{ verticalAlign: 'middle', marginRight: 6 }} />
-                               VERIFY failed—the binary was not visible on PATH in a login shell.
+                               {t('wizFinish.verifyFail')}
                             </span>
                           )}
                           {installMethod === 'system' && activeJob?.state === 'completed' && ['node', 'python', 'go'].includes(selectedId) && (
                             <span style={{ display: 'block', marginTop: 10, fontSize: 13, color: 'var(--text-muted)' }}>
-                              You used <strong>System</strong>; the distro may have only confirmed packages already on disk.
-                              Choose <strong>Local</strong> next time if you want the version you picked in the dropdown.
+                              {t('wizFinish.systemNote')}
                             </span>
                           )}
                         </p>
                         
                         <div style={{ background: 'rgba(0,0,0,0.2)', padding: 20, borderRadius: 12, display: 'inline-block', textAlign: 'left', minWidth: 300 }}>
-                           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>NEXT STEPS:</div>
+                           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>{t('wizFinish.nextSteps')}</div>
                            <div style={{ fontSize: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                              <span>• Restart any open terminals</span>
-                              <span>• Try running <code className="mono">{suggestVerifyCmd}</code> in a new terminal</span>
-                              <span>• Start building something amazing!</span>
+                              <span>{t('wizFinish.stepRestart')}</span>
+                              <span>{t('wizFinish.stepVerify', { cmd: suggestVerifyCmd })}</span>
+                              <span>{t('wizFinish.stepBuild')}</span>
                            </div>
                         </div>
                      </div>
@@ -980,26 +966,26 @@ export function RuntimesPage(): ReactElement {
                 {/* Stepper Footer */}
                 <div style={{ padding: '20px 32px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: 12, background: 'rgba(0,0,0,0.1)' }}>
                    {wizardStep < 3 && (
-                     <button className="hp-btn" onClick={() => setShowWizard(false)}>Cancel</button>
+                     <button className="hp-btn" onClick={() => setShowWizard(false)}>{t('wizard.cancel')}</button>
                    )}
                    {wizardStep === 1 && (
-                     <button className="hp-btn hp-btn-primary" onClick={() => setWizardStep(2)}>Next</button>
+                     <button className="hp-btn hp-btn-primary" onClick={() => setWizardStep(2)}>{t('wizard.next')}</button>
                    )}
                    {wizardStep === 2 && (
-                     <button className="hp-btn hp-btn-primary" onClick={runInstall}>Install Now</button>
+                     <button className="hp-btn hp-btn-primary" onClick={runInstall}>{t('wizard.installNow')}</button>
                    )}
                    {wizardStep === 3 && (activeJob?.state === 'completed' || activeJob?.state === 'failed') && (
-                     <button className="hp-btn hp-btn-primary" onClick={() => setWizardStep(4)}>Next</button>
+                     <button className="hp-btn hp-btn-primary" onClick={() => setWizardStep(4)}>{t('wizard.next')}</button>
                    )}
                    {wizardStep === 4 && (
-                     <button className="hp-btn hp-btn-primary" onClick={() => setShowWizard(false)}>Close Wizard</button>
+                     <button className="hp-btn hp-btn-primary" onClick={() => setShowWizard(false)}>{t('wizard.close')}</button>
                    )}
                 </div>
              </div>
           </div>
         ) : (
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}>
-            Select a runtime to see details.
+            {t('page.selectPrompt')}
           </div>
         )}
       </main>
@@ -1022,9 +1008,9 @@ export function RuntimesPage(): ReactElement {
             borderRadius: 16,
             padding: 24,
           }}>
-            <h3 style={{ marginTop: 0, marginBottom: 8 }}>Confirm Remove {selectedRuntime.name}</h3>
+            <h3 style={{ marginTop: 0, marginBottom: 8 }}>{t('uninstall.title', { name: selectedRuntime.name })}</h3>
             <p style={{ marginTop: 0, color: 'var(--text-muted)', fontSize: 13 }}>
-              Choose how much cleanup to apply. Preview reflects detected distro and package mapping.
+              {t('uninstall.desc')}
             </p>
 
             <div style={{ display: 'flex', gap: 12, marginTop: 16 }}>
@@ -1041,8 +1027,8 @@ export function RuntimesPage(): ReactElement {
                   cursor: 'pointer',
                 }}
               >
-                <div style={{ fontWeight: 700 }}>Remove runtime only</div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>Removes language package only.</div>
+                <div style={{ fontWeight: 700 }}>{t('uninstall.runtimeOnly')}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>{t('uninstall.runtimeOnlyDesc')}</div>
               </button>
               <button
                 onClick={() => { setRemoveMode('runtime_and_deps'); fetchUninstallPreview(selectedId, 'runtime_and_deps') }}
@@ -1057,20 +1043,20 @@ export function RuntimesPage(): ReactElement {
                   cursor: 'pointer',
                 }}
               >
-                <div style={{ fontWeight: 700 }}>Remove + autoremove deps</div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>Also removes safe non-shared dependencies.</div>
+                <div style={{ fontWeight: 700 }}>{t('uninstall.fullClean')}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>{t('uninstall.fullCleanDesc')}</div>
               </button>
             </div>
 
             <div style={{ marginTop: 18, padding: 14, borderRadius: 10, border: '1px solid var(--border)', background: 'rgba(255,255,255,0.02)' }}>
               {loadingUninstallPreview ? (
-                <div style={{ color: 'var(--text-muted)' }}>Preparing removal preview...</div>
+                <div style={{ color: 'var(--text-muted)' }}>{t('uninstall.previewLoading')}</div>
               ) : (
                 <>
                   <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>
-                    Distro: <strong>{uninstallPreview?.distro ?? 'unknown'}</strong>
+                    {t('uninstall.distro', { distro: uninstallPreview?.distro ?? 'unknown' })}
                   </div>
-                  <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6 }}>Packages to remove now:</div>
+                  <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6 }}>{t('uninstall.packagesToRemove')}</div>
                   {uninstallPreview?.finalPackages.length ? (
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                       {uninstallPreview.finalPackages.map((pkg) => (
@@ -1080,17 +1066,16 @@ export function RuntimesPage(): ReactElement {
                       ))}
                     </div>
                   ) : (
-                    <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>No package-managed items detected for this runtime.</div>
+                    <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>{t('uninstall.noPackages')}</div>
                   )}
                   {removeMode === 'runtime_and_deps' && uninstallPreview && uninstallPreview.removableDeps.length > 0 && (
                     <div style={{ marginTop: 10, fontSize: 12, color: 'var(--text-muted)' }}>
-                      Extra safe deps included: {uninstallPreview.removableDeps.join(', ')}
+                      {t('uninstall.extraDeps')} {uninstallPreview.removableDeps.join(', ')}
                     </div>
                   )}
                   {removeMode === 'runtime_and_deps' && uninstallPreview && uninstallPreview.blockedSharedDeps.length > 0 && (
                     <div style={{ marginTop: 10, fontSize: 12, color: '#ffb74d' }}>
-                      Shared dependencies will NOT be removed (used by other runtimes): {uninstallPreview.blockedSharedDeps.join(', ')}.
-                      Runtime removal will continue safely without deleting them.
+                      {t('uninstall.sharedDeps', { deps: uninstallPreview.blockedSharedDeps.join(', ') })}
                     </div>
                   )}
                   {uninstallPreview?.note && (
@@ -1101,13 +1086,13 @@ export function RuntimesPage(): ReactElement {
             </div>
 
             <div style={{ marginTop: 20, display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-              <button className="hp-btn" onClick={() => setShowUninstallModal(false)}>Cancel</button>
+              <button className="hp-btn" onClick={() => setShowUninstallModal(false)}>{t('uninstall.cancel')}</button>
               <button
                 className="hp-btn"
                 onClick={() => { setShowUninstallModal(false); void runUninstall() }}
                 style={{ background: 'rgba(255,82,82,0.18)', border: '1px solid rgba(255,82,82,0.4)', color: '#ff8a80', fontWeight: 700 }}
               >
-                Confirm Remove
+                {t('uninstall.confirm')}
               </button>
             </div>
           </div>

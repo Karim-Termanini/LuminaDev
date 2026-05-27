@@ -2,6 +2,7 @@ import { ComposeProfileSchema, type JobSummary, type ContainerRow, type ComposeP
 import './DashboardLogsPage.css'
 import type { ReactElement } from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
@@ -120,11 +121,12 @@ function stateBorder(s: string): string {
 }
 
 export function DashboardLogsPage(): ReactElement {
+  const { t } = useTranslation('dashboard')
   const [activeSource, setActiveSource] = useState<{
     type: 'compose' | 'job' | 'unified' | 'container'
     id?: string
     label: string
-  }>({ type: 'unified', label: 'Unified Log Feed' })
+  }>({ type: 'unified', label: t('logs.unifiedLabel') })
   const [searchText, setSearchText] = useState('')
   const [jobs, setJobs] = useState<JobSummary[]>([])
   const [containers, setContainers] = useState<ContainerRow[]>([])
@@ -146,7 +148,7 @@ export function DashboardLogsPage(): ReactElement {
       : lines
 
     if (filteredLines.length === 0) {
-      term.write('\r\n(No lines matching search filter)\r\n')
+      term.write('\r\n' + t('logs.noLinesMatch') + '\r\n')
     } else {
       for (const line of filteredLines) {
         term.write(colorizeLine(line) + '\r\n')
@@ -178,14 +180,14 @@ export function DashboardLogsPage(): ReactElement {
   }, [])
 
   const getUnifiedLogs = useCallback(async () => {
-    let unified = '=== UNIFIED FEED (COMPOSE STACKS + RUNNING CONTAINERS + BACKGROUND JOBS) ===\r\n\r\n'
+    let unified = `=== ${t('logs.unifiedFeedTitle')} ===\r\n\r\n`
     
     const composeResults = await Promise.all(
       profiles.map(async (p) => {
         try {
           const res = await window.dh.composeLogs({ profile: p })
           if (res.ok && res.log) {
-            return `--- Compose Profile: ${p} ---\r\n${res.log}\r\n`
+            return `--- ${t('logs.composeProfileSection', { profile: p })} ---\r\n${res.log}\r\n`
           }
         } catch {
           // ignore
@@ -207,7 +209,7 @@ export function DashboardLogsPage(): ReactElement {
             if (bag.ok && bag.text) logStr = bag.text
           }
           if (logStr) {
-            return `--- Container: ${c.name} (${c.image}) ---\r\n${logStr}\r\n`
+            return `--- ${t('logs.containerSection', { name: c.name, image: c.image })} ---\r\n${logStr}\r\n`
           }
         } catch {
           // ignore
@@ -220,10 +222,10 @@ export function DashboardLogsPage(): ReactElement {
     try {
       const list = (await window.dh.jobsList()) as JobSummary[]
       if (Array.isArray(list) && list.length > 0) {
-        unified += '\r\n--- Background Job Logs ---\r\n'
+        unified += '\r\n--- ' + t('logs.backgroundJobsSection') + ' ---\r\n'
         for (const j of list) {
           if (j.logTail && j.logTail.length > 0) {
-            unified += `[Job: ${j.kind}] (${j.state})\r\n` + j.logTail.join('\r\n') + '\r\n\r\n'
+            unified += `[${t('logs.jobEntryLabel', { kind: j.kind, state: j.state })}]\r\n` + j.logTail.join('\r\n') + '\r\n\r\n'
           }
         }
       }
@@ -241,33 +243,33 @@ export function DashboardLogsPage(): ReactElement {
     } else if (activeSource.type === 'compose') {
       try {
         const res = await window.dh.composeLogs({ profile: activeSource.id as ComposeProfile })
-        rawText = res.ok ? res.log || '(no output yet)' : res.error || '(error fetching logs)'
+        rawText = res.ok ? res.log || t('logs.noOutputYet') : res.error || t('logs.errorFetchingLogs')
       } catch (e) {
-        rawText = `Error: ${e instanceof Error ? e.message : String(e)}`
+        rawText = t('logs.errorPrefix') + ' ' + (e instanceof Error ? e.message : String(e))
       }
     } else if (activeSource.type === 'container') {
       try {
         const res = await window.dh.dockerLogs({ id: activeSource.id!, tail: 200 })
         if (typeof res === 'string') {
-          rawText = res || '(no output yet)'
+          rawText = res || t('logs.noOutputYet')
         } else if (res && typeof res === 'object' && 'ok' in res) {
           const bag = res as { ok: boolean; text?: string; error?: string }
-          rawText = bag.ok ? bag.text || '(no output yet)' : bag.error || '(error fetching logs)'
+          rawText = bag.ok ? bag.text || t('logs.noOutputYet') : bag.error || t('logs.errorFetchingLogs')
         } else {
-          rawText = '(no output yet)'
+          rawText = t('logs.noOutputYet')
         }
       } catch (e) {
-        rawText = `Error: ${e instanceof Error ? e.message : String(e)}`
+        rawText = t('logs.errorPrefix') + ' ' + (e instanceof Error ? e.message : String(e))
       }
     } else if (activeSource.type === 'job') {
       const job = jobs.find(j => j.id === activeSource.id)
       if (job) {
-        rawText = `=== Background Job: ${job.kind} (${job.state}) ===\r\n` +
-          `Progress: ${job.progress}%\r\n\r\n` +
-          `--- Logs ---\r\n` +
+        rawText = `=== ${t('logs.jobDetailHeader', { kind: job.kind, state: job.state })} ===\r\n` +
+          `${t('logs.jobProgress', { progress: job.progress })}\r\n\r\n` +
+          `--- ${t('logs.logsSection')} ---\r\n` +
           (job.logTail || []).join('\r\n')
       } else {
-        rawText = `Job with ID ${activeSource.id} not found.`
+        rawText = t('logs.jobNotFound', { id: activeSource.id })
       }
     }
 
@@ -358,11 +360,11 @@ export function DashboardLogsPage(): ReactElement {
         <div>
           <div className="logs-eyebrow">
             <span className="codicon codicon-output" />
-            Dashboard · Logs
+            {t('logs.heroEyebrow')}
           </div>
-          <h1 className="logs-title">Logs &amp; Activity</h1>
+          <h1 className="logs-title">{t('logs.heroTitle')}</h1>
           <p className="logs-subtitle">
-            Compose stack output, docker container logs, and background job history.
+            {t('logs.heroSubtitle')}
           </p>
         </div>
       </div>
@@ -385,7 +387,7 @@ export function DashboardLogsPage(): ReactElement {
                   <span className="codicon codicon-search" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontSize: 13 }} />
                   <input
                     type="text"
-                    placeholder="Search logs (filtering line-by-line)..."
+                    placeholder={t('logs.searchPlaceholder')}
                     value={searchText}
                     onChange={(e) => setSearchText(e.target.value)}
                     style={{
@@ -417,39 +419,39 @@ export function DashboardLogsPage(): ReactElement {
                     onChange={(e) => {
                       const val = e.target.value
                       if (val === 'unified') {
-                        setActiveSource({ type: 'unified', label: 'Unified Log Feed' })
+                        setActiveSource({ type: 'unified', label: t('logs.unifiedLabel') })
                       } else {
                         const [type, ...rest] = val.split(':')
                         const id = rest.join(':')
                         if (type === 'compose') {
-                          setActiveSource({ type: 'compose', id, label: `Compose: ${id}` })
+                          setActiveSource({ type: 'compose', id, label: `${t('logs.composeLabel')}: ${id}` })
                         } else if (type === 'container') {
                           const container = containers.find(c => c.id === id)
-                          setActiveSource({ type: 'container', id, label: `Container: ${container?.name || id}` })
+                          setActiveSource({ type: 'container', id, label: `${t('logs.containerLabel')}: ${container?.name || id}` })
                         } else if (type === 'job') {
                           const job = jobs.find(j => j.id === id)
-                          setActiveSource({ type: 'job', id, label: `Job: ${job?.kind || id}` })
+                          setActiveSource({ type: 'job', id, label: `${t('logs.jobLabel')}: ${job?.kind || id}` })
                         }
                       }
                     }}
                   >
-                    <option value="unified">Unified Log Feed</option>
-                    <optgroup label="Docker Compose Profiles">
+                    <option value="unified">{t('logs.unifiedLabel')}</option>
+                    <optgroup label={t('logs.composeProfilesGroup')}>
                       {profiles.map((p) => (
-                        <option key={p} value={`compose:${p}`}>Compose: {p}</option>
+                        <option key={p} value={`compose:${p}`}>{t('logs.composeLabel')}: {p}</option>
                       ))}
                     </optgroup>
                     {containers.length > 0 && (
-                      <optgroup label="Active Docker Containers">
+                      <optgroup label={t('logs.activeContainersGroup')}>
                         {containers.map((c) => (
-                          <option key={c.id} value={`container:${c.id}`}>Container: {c.name} ({c.state})</option>
+                          <option key={c.id} value={`container:${c.id}`}>{t('logs.containerLabel')}: {c.name} ({c.state})</option>
                         ))}
                       </optgroup>
                     )}
                     {jobs.length > 0 && (
-                      <optgroup label="Background Jobs">
+                      <optgroup label={t('logs.jobsGroup')}>
                         {jobs.map((j) => (
-                          <option key={j.id} value={`job:${j.id}`}>Job: {j.kind.replace(/_/g, ' ')} ({j.state})</option>
+                          <option key={j.id} value={`job:${j.id}`}>{t('logs.jobLabel')}: {j.kind.replace(/_/g, ' ')} ({j.state})</option>
                         ))}
                       </optgroup>
                     )}
@@ -463,7 +465,7 @@ export function DashboardLogsPage(): ReactElement {
                   onClick={() => void loadSourceLogs()}
                 >
                   <span className="codicon codicon-refresh" style={{ marginRight: 6 }} />
-                  Refresh
+                  {t('logs.refresh')}
                 </button>
               </div>
             </div>
@@ -478,7 +480,7 @@ export function DashboardLogsPage(): ReactElement {
           {/* Running Job Banners */}
           {runningJobs.length > 0 && (
             <div className="logs-active-jobs-group">
-              <div className="logs-section-subtitle">Active Processes</div>
+              <div className="logs-section-subtitle">{t('logs.activeProcesses')}</div>
               {runningJobs.map((j) => (
                 <div key={j.id} className="logs-running-banner">
                   <div className="logs-banner-top">
@@ -499,7 +501,7 @@ export function DashboardLogsPage(): ReactElement {
             <div className="logs-card-header">
               <div className="logs-card-header-title">
                 <span className="codicon codicon-run-all" style={{ color: 'var(--accent)' }} />
-                Job History
+                {t('logs.jobHistory')}
               </div>
               <span
                 className="logs-status-badge"
@@ -509,16 +511,16 @@ export function DashboardLogsPage(): ReactElement {
                   border: `1px solid ${runningJobs.length > 0 ? 'rgba(124, 77, 255, 0.35)' : 'rgba(128, 128, 128, 0.3)'}`,
                 }}
               >
-                {runningJobs.length > 0 ? `${runningJobs.length} active` : 'idle'}
+                {runningJobs.length > 0 ? `${runningJobs.length} ${t('logs.active')}` : t('logs.idle')}
               </span>
             </div>
 
             {allJobsDisplay.length === 0 ? (
               <div className="logs-empty-state">
                 <span className="codicon codicon-history" style={{ fontSize: 32, color: 'var(--text-muted)' }} />
-                <p className="logs-empty-title">No jobs recorded</p>
+                <p className="logs-empty-title">{t('logs.noJobsRecorded')}</p>
                 <p className="logs-empty-desc">
-                  Install a runtime or switch compose profiles to initiate tasks.
+                  {t('logs.noJobsDescription')}
                 </p>
               </div>
             ) : (
@@ -528,7 +530,7 @@ export function DashboardLogsPage(): ReactElement {
                   return (
                     <div
                       key={j.id}
-                      onClick={() => setActiveSource({ type: 'job', id: j.id, label: `Job: ${j.kind.replace(/_/g, ' ')}` })}
+                      onClick={() => setActiveSource({ type: 'job', id: j.id, label: `${t('logs.jobLabel')}: ${j.kind.replace(/_/g, ' ')}` })}
                       className="logs-job-row"
                       style={{
                         borderBottom: i < allJobsDisplay.length - 1 ? '1px solid var(--border)' : 'none',
