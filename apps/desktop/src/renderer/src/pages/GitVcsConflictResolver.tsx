@@ -1,6 +1,7 @@
 import type { ReactElement } from 'react'
 import { useEffect, useState, useCallback, useRef } from 'react'
 import type { GitVcsConflictFile, GitVcsConflictHunk } from '@linux-dev-home/shared'
+import { useTranslation } from 'react-i18next'
 
 export type GitVcsConflictResolverProps = {
   repoPath: string
@@ -65,6 +66,7 @@ export function GitVcsConflictResolver({
   onError,
   onCancel,
 }: GitVcsConflictResolverProps): ReactElement {
+  const { t } = useTranslation('git')
   const [conflictData, setConflictData] = useState<GitVcsConflictFile | null>(null)
   const [loading, setLoading] = useState(false)
   const [currentHunkIdx, setCurrentHunkIdx] = useState(0)
@@ -216,7 +218,7 @@ export function GitVcsConflictResolver({
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 12, color: 'var(--text-muted)', fontSize: 14 }}>
         <span className="codicon codicon-loading codicon-modifier-spin" style={{ fontSize: 20 }} />
-        Loading conflict data…
+        {t('conflictResolver.loadingData')}
       </div>
     )
   }
@@ -224,7 +226,7 @@ export function GitVcsConflictResolver({
   if (!conflictData || (totalHunks === 0 && !conflictData.ours && !conflictData.theirs)) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)', fontSize: 14 }}>
-        No conflict data found for this file.
+        {t('conflictResolver.noDataFound')}
       </div>
     )
   }
@@ -233,20 +235,19 @@ export function GitVcsConflictResolver({
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 24, padding: 32, alignItems: 'center', justifyContent: 'center', height: '100%' }}>
         <span className="codicon codicon-warning" style={{ fontSize: 48, color: '#ff9800' }} />
-        <div style={{ fontSize: 18, fontWeight: 600 }}>Whole File Conflict</div>
+        <div style={{ fontSize: 18, fontWeight: 600 }}>{t('conflictResolver.wholeFileConflict')}</div>
         <div style={{ color: 'var(--text-muted)', textAlign: 'center', maxWidth: 400, fontSize: 13, lineHeight: 1.5 }}>
-          This file has a conflict but no markers were found (likely a binary file or structural conflict).
-          Pick which version to keep.
+          {t('conflictResolver.wholeFileDesc')}
         </div>
         <div style={{ display: 'flex', gap: 12 }}>
           <button className="hp-btn hp-btn-primary" onClick={() => void window.dh.gitVcsResolveConflict({ repoPath, filePath, resolution: 'ours' }).then(onResolved)}>
-            <span className="codicon codicon-check" style={{ marginRight: 6 }} /> Keep Mine
+            <span className="codicon codicon-check" style={{ marginRight: 6 }} /> {t('conflictResolver.keepMine')}
           </button>
           <button className="hp-btn hp-btn-primary" style={{ background: THEIRS_ACCENT }} onClick={() => void window.dh.gitVcsResolveConflict({ repoPath, filePath, resolution: 'theirs' }).then(onResolved)}>
-            <span className="codicon codicon-arrow-right" style={{ marginRight: 6 }} /> Take Theirs
+            <span className="codicon codicon-arrow-right" style={{ marginRight: 6 }} /> {t('conflictResolver.takeTheirs')}
           </button>
         </div>
-        <button className="hp-btn" onClick={onCancel} style={{ marginTop: 8 }}>Cancel</button>
+        <button className="hp-btn" onClick={onCancel} style={{ marginTop: 8 }}>{t('conflictResolver.cancel')}</button>
       </div>
     )
   }
@@ -271,19 +272,19 @@ export function GitVcsConflictResolver({
           <span className="codicon codicon-git-merge" style={{ fontSize: 18, color: '#ff9800' }} />
           <div>
             <div className="mono" style={{ fontSize: 12, color: 'var(--text-muted)', letterSpacing: 0.04, textTransform: 'uppercase' }}>
-              Conflict Resolution Studio
+              {t('conflictResolver.studioTitle')}
             </div>
             <div className="mono" style={{ fontSize: 13, marginTop: 2 }}>{filePath}</div>
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           {undoStack.length > 0 && (
-            <button type="button" className="hp-btn hp-btn-sm" onClick={handleUndo} title="Undo (Ctrl+Z)">
-              <span className="codicon codicon-discard" style={{ marginRight: 4 }} /> Undo
+            <button type="button" className="hp-btn hp-btn-sm" onClick={handleUndo} title={t('conflictResolver.undoTitle')}>
+              <span className="codicon codicon-discard" style={{ marginRight: 4 }} /> {t('conflictResolver.undo')}
             </button>
           )}
           <button type="button" className="hp-btn" disabled={isDisabled} onClick={onCancel}>
-            Cancel
+            {t('conflictResolver.cancel')}
           </button>
           <button
             type="button"
@@ -292,9 +293,9 @@ export function GitVcsConflictResolver({
             onClick={() => void handleFinalize()}
           >
             {resolving ? (
-              <><span className="codicon codicon-loading codicon-modifier-spin" style={{ marginRight: 6 }} /> Finalizing…</>
+              <><span className="codicon codicon-loading codicon-modifier-spin" style={{ marginRight: 6 }} /> {t('conflictResolver.finalizing')}</>
             ) : (
-              <><span className="codicon codicon-check" style={{ marginRight: 6 }} /> Finalize Merge</>
+              <><span className="codicon codicon-check" style={{ marginRight: 6 }} /> {t('conflictResolver.finalizeMerge')}</>
             )}
           </button>
         </div>
@@ -312,7 +313,7 @@ export function GitVcsConflictResolver({
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', flex: 1, overflow: 'hidden' }}>
         {/* LEFT: OURS */}
         <DiffColumn
-          label="Yours (ours)"
+          label={t('conflictResolver.yoursOurs')}
           accent={OURS_ACCENT}
           bgTint={OURS_BG}
           lineBg={OURS_LINE_BG}
@@ -339,7 +340,7 @@ export function GitVcsConflictResolver({
             background: 'rgba(255,215,64,0.04)',
           }}>
             <span className="codicon codicon-edit" style={{ fontSize: 12 }} />
-            Merged Result
+            {t('conflictResolver.mergedResult')}
             {currentResolution && (
               <span style={{
                 marginLeft: 'auto',
@@ -377,7 +378,7 @@ export function GitVcsConflictResolver({
 
         {/* RIGHT: THEIRS */}
         <DiffColumn
-          label="Incoming (theirs)"
+          label={t('conflictResolver.incomingTheirs')}
           accent={THEIRS_ACCENT}
           bgTint={THEIRS_BG}
           lineBg={THEIRS_LINE_BG}
@@ -401,16 +402,16 @@ export function GitVcsConflictResolver({
         background: 'rgba(0,0,0,0.25)',
         alignItems: 'center',
       }}>
-        <button type="button" className="hp-btn" disabled={isDisabled} onClick={() => resolveHunk('ours')} title="Keep only your changes (1)">
-          <span className="codicon codicon-check" style={{ marginRight: 4, color: OURS_ACCENT }} /> Keep Mine
+        <button type="button" className="hp-btn" disabled={isDisabled} onClick={() => resolveHunk('ours')} title={t('conflictResolver.keepMineTitle')}>
+          <span className="codicon codicon-check" style={{ marginRight: 4, color: OURS_ACCENT }} /> {t('conflictResolver.keepMine')}
           <kbd style={kbdStyle}>1</kbd>
         </button>
-        <button type="button" className="hp-btn" disabled={isDisabled} onClick={() => resolveHunk('theirs')} title="Take only their changes (2)">
-          <span className="codicon codicon-arrow-right" style={{ marginRight: 4, color: THEIRS_ACCENT }} /> Take Theirs
+        <button type="button" className="hp-btn" disabled={isDisabled} onClick={() => resolveHunk('theirs')} title={t('conflictResolver.taketheirsTitle')}>
+          <span className="codicon codicon-arrow-right" style={{ marginRight: 4, color: THEIRS_ACCENT }} /> {t('conflictResolver.takeTheirs')}
           <kbd style={kbdStyle}>2</kbd>
         </button>
-        <button type="button" className="hp-btn" disabled={isDisabled} onClick={() => resolveHunk('both')} title="Combine both sides (3)">
-          <span className="codicon codicon-fold" style={{ marginRight: 4 }} /> Keep Both
+        <button type="button" className="hp-btn" disabled={isDisabled} onClick={() => resolveHunk('both')} title={t('conflictResolver.keepBothTitle')}>
+          <span className="codicon codicon-fold" style={{ marginRight: 4 }} /> {t('conflictResolver.keepBoth')}
           <kbd style={kbdStyle}>3</kbd>
         </button>
         <button
@@ -418,9 +419,9 @@ export function GitVcsConflictResolver({
           className="hp-btn hp-btn-primary"
           disabled={isDisabled}
           onClick={() => resolveHunk('manual', editingMerged)}
-          title="Use the manually edited merged content"
+          title={t('conflictResolver.useEditedTitle')}
         >
-          <span className="codicon codicon-edit" style={{ marginRight: 4 }} /> Use Edited
+          <span className="codicon codicon-edit" style={{ marginRight: 4 }} /> {t('conflictResolver.useEdited')}
         </button>
       </div>
 
@@ -442,13 +443,13 @@ export function GitVcsConflictResolver({
           disabled={isDisabled || currentHunkIdx === 0}
           onClick={() => setCurrentHunkIdx(Math.max(0, currentHunkIdx - 1))}
         >
-          <span className="codicon codicon-chevron-left" /> Prev
+          <span className="codicon codicon-chevron-left" /> {t('conflictResolver.prev')}
         </button>
         <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          Hunk {currentHunkIdx + 1} / {totalHunks}
-          <span style={{ color: OURS_ACCENT }}>{hunkResolutions.size} resolved</span>
+          {t('conflictResolver.hunkProgress', { current: currentHunkIdx + 1, total: totalHunks })}
+          <span style={{ color: OURS_ACCENT }}>{t('conflictResolver.resolved', { count: hunkResolutions.size })}</span>
           {totalHunks - hunkResolutions.size > 0 && (
-            <span style={{ color: '#ff9800' }}>{totalHunks - hunkResolutions.size} remaining</span>
+            <span style={{ color: '#ff9800' }}>{t('conflictResolver.remaining', { count: totalHunks - hunkResolutions.size })}</span>
           )}
         </span>
         <button
@@ -457,7 +458,7 @@ export function GitVcsConflictResolver({
           disabled={isDisabled || currentHunkIdx >= totalHunks - 1}
           onClick={() => setCurrentHunkIdx(Math.min(totalHunks - 1, currentHunkIdx + 1))}
         >
-          Next <span className="codicon codicon-chevron-right" />
+          {t('conflictResolver.next')} <span className="codicon codicon-chevron-right" />
         </button>
       </div>
     </div>
@@ -488,6 +489,7 @@ function HunkMinimap({
   currentIdx: number
   onSelect: (idx: number) => void
 }): ReactElement {
+  const { t } = useTranslation('git')
   if (hunks.length <= 1) return <></>
   return (
     <div style={{
@@ -520,7 +522,7 @@ function HunkMinimap({
               whiteSpace: 'nowrap',
               transition: 'all 0.15s',
             }}
-            title={`Hunk ${idx + 1}: L${h.startLine}-${h.endLine} (${resolved ? res.resolution : 'unresolved'})`}
+            title={t('conflictResolver.hunkTooltip', { idx: idx + 1, startLine: h.startLine, endLine: h.endLine, status: resolved ? res.resolution : t('conflictResolver.unresolved') })}
           >
             {resolved && <span style={{ marginRight: 3 }}>&#10003;</span>}
             {idx + 1}
@@ -554,6 +556,7 @@ function DiffColumn({
   hunk: GitVcsConflictHunk | undefined
   resolution: HunkResolution | undefined
 }): ReactElement {
+  const { t } = useTranslation('git')
   const isResolved = !!resolution
   return (
     <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -594,7 +597,7 @@ function DiffColumn({
               }}
               onMouseEnter={(e) => { if (isUnique) e.currentTarget.style.background = lineBg.replace('0.15', '0.3') }}
               onMouseLeave={(e) => { if (isUnique) e.currentTarget.style.background = lineBg }}
-              title={isUnique ? 'Click to add to merged result' : undefined}
+              title={isUnique ? t('conflictResolver.clickToAdd') : undefined}
             >
               <span style={{
                 minWidth: 32,

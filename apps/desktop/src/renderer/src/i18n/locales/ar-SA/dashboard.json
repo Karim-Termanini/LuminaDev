@@ -218,5 +218,41 @@
   "profile.emptyDesc": "أنشئ ملفاً شخصياً في صفحة الملفات الشخصية للبدء.",
   "widgets.addWidget": "إضافة أداة",
   "widgets.noPinned": "لا توجد أدوات مثبتة بعد",
-  "widgets.noPinnedDesc": "استخدم \"إضافة أداة\" لتثبيت نصائح أو روابط سريعة أو مستودعات حديثة. مع بطاقتين أو أكثر، اسحب إحداهما فوق الأخرى لإعادة الترتيب."
+  "widgets.noPinnedDesc": "استخدم \"إضافة أداة\" لتثبيت نصائح أو روابط سريعة أو مستودعات حديثة. مع بطاقتين أو أكثر، اسحب إحداهما فوق الأخرى لإعادة الترتيب.",
+
+  "addWidget.title": "إضافة أداة",
+  "addWidget.closeAriaLabel": "إغلاق",
+  "addWidget.description": "سجل الأدوات المدمجة. يتم تخزين التخطيط في مجلد بيانات تطبيق المستخدم.",
+  "addWidget.noIpc": "بدون IPC",
+  "addWidget.alreadyOnDashboard": "موجودة بالفعل في لوحة المعلومات",
+  "addWidget.addToDashboard": "إضافة إلى لوحة المعلومات",
+
+  "cloudNotifications.loading": "جارٍ تحميل الإشعارات…",
+  "cloudNotifications.noAccounts.before": "قم بتوصيل GitHub أو GitLab في",
+  "cloudNotifications.noAccounts.linkText": "Cloud Git",
+  "cloudNotifications.noAccounts.after": "لرؤية الإشعارات.",
+  "cloudNotifications.empty": "لا توجد خطوط أنابيب فاشلة أو مشكلات مفتوحة.",
+  "cloudNotifications.failedPipeline": "خط أنابيب فاشل",
+  "cloudNotifications.openIssue": "مشكلة مفتوحة",
+
+  "customProfile.title": "إنشاء ملف شخصي مخصص",
+  "customProfile.description": "حدد ملفاً شخصياً مخصصاً جديداً عن طريق اختيار قالب أساسي. تتضمن كل إعداد مسبق مكدس Docker Compose الخاص به وأدوات التطوير.",
+  "customProfile.profileName": "اسم الملف الشخصي",
+  "customProfile.profileNamePlaceholder": "مثال: إعداد Next.js الخاص بي",
+  "customProfile.baseTemplate": "القالب الأساسي",
+  "customProfile.cancel": "إلغاء",
+  "customProfile.create": "إنشاء",
+
+  "guardian.analyzing": "جارٍ تحليل النظام...",
+  "guardian.health": "{{score}}% صحة",
+  "guardian.offline": "غير متصل",
+  "guardian.optimal": "النظام في حالة مثلى.",
+  "guardian.maintenanceRecommended": "يُنصح بالصيانة.",
+  "guardian.openPanel": "فتح لوحة Guardian ←",
+
+  "recentRepos.loading": "جارٍ تحميل المستودعات الأخيرة…",
+  "recentRepos.empty.before": "افتح مجلداً في",
+  "recentRepos.empty.linkText": "Git VCS",
+  "recentRepos.empty.after": "لملء قائمة الأخيرة.",
+  "recentRepos.openInGitVcs": "فتح في Git VCS ←"
 }

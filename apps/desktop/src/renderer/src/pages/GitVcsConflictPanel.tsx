@@ -1,5 +1,6 @@
 import type { ReactElement } from 'react'
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 export type GitVcsConflictPanelProps = {
   repoPath: string
@@ -16,6 +17,7 @@ export function GitVcsConflictPanel({
   onResolved,
   onError,
 }: GitVcsConflictPanelProps): ReactElement {
+  const { t } = useTranslation('git')
   const [ours, setOurs] = useState<string | null>(null)
   const [theirs, setTheirs] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -55,7 +57,7 @@ export function GitVcsConflictPanel({
   if (loading) {
     return (
       <div style={{ padding: 24, color: 'var(--text-muted)', fontSize: 14 }}>
-        Loading conflict diff…
+        {t('conflictPanel.loadingDiff')}
       </div>
     )
   }
@@ -88,7 +90,7 @@ export function GitVcsConflictPanel({
             disabled={isDisabled}
             onClick={() => void resolve('ours')}
           >
-            Keep mine (ours)
+            {t('conflictPanel.keepMine')}
           </button>
           <button
             type="button"
@@ -96,16 +98,16 @@ export function GitVcsConflictPanel({
             disabled={isDisabled}
             onClick={() => void resolve('theirs')}
           >
-            Take theirs
+            {t('conflictPanel.takeTheirs')}
           </button>
         </div>
       </div>
 
       {/* Two-column diff */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', flex: 1, overflow: 'hidden', gap: 0 }}>
-        <ConflictSide label="Current (ours)" content={ours} accent="#69f0ae" />
+        <ConflictSide label={t('conflictPanel.currentOurs')} content={ours} accent="#69f0ae" />
         <ConflictSide
-          label="Incoming (theirs)"
+          label={t('conflictPanel.incomingTheirs')}
           content={theirs}
           accent="#82b1ff"
           borderLeft
@@ -126,6 +128,7 @@ function ConflictSide({
   accent: string
   borderLeft?: boolean
 }): ReactElement {
+  const { t } = useTranslation('git')
   return (
     <div
       style={{
@@ -162,7 +165,7 @@ function ConflictSide({
           background: 'transparent',
         }}
       >
-        {content ?? '(empty)'}
+        {content ?? t('conflictPanel.empty')}
       </pre>
     </div>
   )

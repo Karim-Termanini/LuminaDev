@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactElement } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import { GIT_VCS_NEXT_ACTION_RING } from './gitVcsUiTokens'
 
@@ -20,6 +21,8 @@ export function GitVcsStateBanner({
   /** Matches workflow hint “next” control — adds green focus ring. */
   emphasizeNext?: 'resolution_studio' | 'continue_merge' | null
 }): ReactElement | null {
+  const { t } = useTranslation('git')
+
   if (operation === 'none' && conflictFileCount === 0) {
     return null
   }
@@ -28,18 +31,18 @@ export function GitVcsStateBanner({
   let title = ''
   let body = ''
   if (operation === 'merging') {
-    title = 'Merge in progress'
-    body = conflictFileCount > 0 
-      ? `You have ${conflictFileCount} file(s) with conflicts. Use the Resolution Studio to pick which changes to keep.`
-      : 'All conflicts are resolved! You can now conclude the merge to save your changes.'
-  } else if (operation === 'rebasing') {
-    title = 'Rebase in progress'
+    title = t('stateBanner.mergeInProgress')
     body = conflictFileCount > 0
-      ? `Rebase paused due to ${conflictFileCount} conflicted file(s).`
-      : 'No conflicts remaining. Continue rebase to apply the next commit.'
+      ? t('stateBanner.mergeConflicts', { count: conflictFileCount })
+      : t('stateBanner.mergeAllResolved')
+  } else if (operation === 'rebasing') {
+    title = t('stateBanner.rebaseInProgress')
+    body = conflictFileCount > 0
+      ? t('stateBanner.rebaseConflicts', { count: conflictFileCount })
+      : t('stateBanner.rebaseNoConflicts')
   } else {
-    title = 'Unmerged paths detected'
-    body = `Git still lists ${conflictFileCount} file(s) with merge conflicts.`
+    title = t('stateBanner.unmergedPaths')
+    body = t('stateBanner.unmergedBody', { count: conflictFileCount })
   }
 
   const resStyle = (kind: 'resolution_studio' | 'continue_merge', base: CSSProperties): CSSProperties =>
@@ -71,7 +74,7 @@ export function GitVcsStateBanner({
               style={resStyle('resolution_studio', { padding: '4px 12px', fontSize: 12 })}
             >
               <span className="codicon codicon-tools" style={{ marginRight: 6 }} />
-              Open Resolution Studio
+              {t('stateBanner.openResolutionStudio')}
             </button>
           ) : operation !== 'none' ? (
             <button
@@ -86,7 +89,7 @@ export function GitVcsStateBanner({
               })}
             >
               <span className="codicon codicon-check" style={{ marginRight: 6 }} />
-              Conclude {operation === 'merging' ? 'Merge' : 'Rebase'}
+              {t('stateBanner.conclude', { op: operation === 'merging' ? t('stateBanner.merge') : t('stateBanner.rebase') })}
             </button>
           ) : null}
           {operation !== 'none' && (
@@ -96,7 +99,7 @@ export function GitVcsStateBanner({
               onClick={onAbortOperation}
               style={{ padding: '4px 12px', fontSize: 12, opacity: 0.8 }}
             >
-              Abort
+              {t('stateBanner.abort')}
             </button>
           )}
         </div>

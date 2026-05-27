@@ -30,5 +30,30 @@
   "state.running": "يعمل",
   "state.completed": "مكتمل",
   "state.failed": "فشل",
-  "state.cancelled": "ملغى"
+  "state.cancelled": "ملغى",
+
+  "envBanner.detecting": "جارٍ اكتشاف الجلسة…",
+  "envBanner.flatpakSession": "جلسة Flatpak",
+  "envBanner.nativeSession": "جلسة أصلية / مضيف",
+  "envBanner.dockerFlatpakNotes": "ملاحظات Docker و Flatpak",
+
+  "registry.title": "السجل و Git",
+  "registry.description": "إدارة أصول التحكم في المصدر والحاويات. استنساخ المستودعات أو البحث عن صور Docker الرسمية مباشرة من Hub.",
+  "registry.browse": "استعراض",
+  "registry.clone.remoteUrl": "رابط بعيد",
+  "registry.clone.targetDir": "المجلد الهدف",
+  "registry.clone.selectFolder": "اختر مجلداً بالاستعراض…",
+  "registry.clone.button": "git clone",
+  "registry.clone.noTarget": "اختر مجلداً هدفاً بالاستعراض.",
+  "registry.clone.cloning": "جارٍ الاستنساخ…",
+  "registry.clone.complete": "اكتمل الاستنساخ",
+  "registry.docker.title": "بحث Docker Hub",
+  "registry.docker.placeholder": "ابحث عن صور (مثال: redis, postgres)…",
+  "registry.docker.search": "بحث",
+  "registry.docker.searching": "جارٍ البحث…",
+  "registry.docker.viewHub": "عرض في Hub ↗",
+  "registry.inspect.title": "فحص المستودع",
+  "registry.inspect.placeholder": "مسار المستودع",
+  "registry.inspect.status": "الحالة",
+  "registry.recent.title": "المستودعات الأخيرة"
 }

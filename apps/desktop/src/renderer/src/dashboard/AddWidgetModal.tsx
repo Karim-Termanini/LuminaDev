@@ -1,6 +1,7 @@
 import type { DashboardLayoutFile } from '@linux-dev-home/shared'
 import { WIDGET_DEFINITIONS } from '@linux-dev-home/shared'
 import type { ReactElement } from 'react'
+import { useTranslation } from 'react-i18next'
 
 export function AddWidgetModal(props: {
   open: boolean
@@ -8,6 +9,8 @@ export function AddWidgetModal(props: {
   onClose: () => void
   onSaved: (next: DashboardLayoutFile) => void
 }): ReactElement | null {
+  const { t } = useTranslation('dashboard')
+
   if (!props.open) return null
 
   function add(typeId: string): void {
@@ -54,7 +57,7 @@ export function AddWidgetModal(props: {
         onClick={(e) => e.stopPropagation()}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h2 style={{ margin: 0, fontSize: 18 }}>Add widget</h2>
+          <h2 style={{ margin: 0, fontSize: 18 }}>{t('addWidget.title')}</h2>
           <button
             type="button"
             onClick={props.onClose}
@@ -65,13 +68,13 @@ export function AddWidgetModal(props: {
               cursor: 'pointer',
               fontSize: 18,
             }}
-            aria-label="Close"
+            aria-label={t('addWidget.closeAriaLabel')}
           >
             ×
           </button>
         </div>
         <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>
-          Built-in widgets registry. Layout is stored under your app user data directory.
+          {t('addWidget.description')}
         </p>
         <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
           {WIDGET_DEFINITIONS.map((w) => {
@@ -92,7 +95,7 @@ export function AddWidgetModal(props: {
                 <div style={{ fontWeight: 600 }}>{w.title}</div>
                 <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>{w.description}</div>
                 <div className="mono" style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                  {w.typeId} · minCols {w.minCols} · {w.ipcHints.length ? w.ipcHints.join(', ') : 'no IPC'}
+                  {w.typeId} · minCols {w.minCols} · {w.ipcHints.length ? w.ipcHints.join(', ') : t('addWidget.noIpc')}
                 </div>
                 <button
                   type="button"
@@ -111,7 +114,7 @@ export function AddWidgetModal(props: {
                     cursor: already || props.layout.placements.length >= 24 ? 'not-allowed' : 'pointer',
                   }}
                 >
-                  {already ? 'Already on dashboard' : 'Add to dashboard'}
+                  {already ? t('addWidget.alreadyOnDashboard') : t('addWidget.addToDashboard')}
                 </button>
               </li>
             )

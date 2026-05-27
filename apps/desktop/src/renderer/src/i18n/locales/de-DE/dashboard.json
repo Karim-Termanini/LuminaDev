@@ -218,5 +218,41 @@
   "profile.emptyDesc": "Erstellen Sie ein Profil auf der Profilseite, um zu beginnen.",
   "widgets.addWidget": "Widget hinzufügen",
   "widgets.noPinned": "Noch keine angehefteten Widgets",
-  "widgets.noPinnedDesc": "Verwenden Sie \"Widget hinzufügen\" um Tipps, Schnelllinks oder aktuelle Repos anzuheften. Mit zwei oder mehr Karten können Sie eine auf eine andere ziehen um die Reihenfolge zu ändern."
+  "widgets.noPinnedDesc": "Verwenden Sie \"Widget hinzufügen\" um Tipps, Schnelllinks oder aktuelle Repos anzuheften. Mit zwei oder mehr Karten können Sie eine auf eine andere ziehen um die Reihenfolge zu ändern.",
+
+  "addWidget.title": "Widget hinzufügen",
+  "addWidget.closeAriaLabel": "Schließen",
+  "addWidget.description": "Integrierte Widget-Registrierung. Das Layout wird im App-Benutzerdatenverzeichnis gespeichert.",
+  "addWidget.noIpc": "kein IPC",
+  "addWidget.alreadyOnDashboard": "Bereits auf dem Dashboard",
+  "addWidget.addToDashboard": "Zum Dashboard hinzufügen",
+
+  "cloudNotifications.loading": "Benachrichtigungen werden geladen…",
+  "cloudNotifications.noAccounts.before": "Verbinden Sie GitHub oder GitLab in",
+  "cloudNotifications.noAccounts.linkText": "Cloud Git",
+  "cloudNotifications.noAccounts.after": "um Benachrichtigungen zu sehen.",
+  "cloudNotifications.empty": "Keine fehlgeschlagenen Pipelines oder offenen Issues.",
+  "cloudNotifications.failedPipeline": "Fehlgeschlagene Pipeline",
+  "cloudNotifications.openIssue": "Offenes Issue",
+
+  "customProfile.title": "Benutzerdefiniertes Profil erstellen",
+  "customProfile.description": "Definieren Sie ein neues benutzerdefiniertes Profil durch Auswahl einer Basisvorlage. Jede Voreinstellung enthält einen eigenen Docker-Compose-Stack und Entwicklungstools.",
+  "customProfile.profileName": "Profilname",
+  "customProfile.profileNamePlaceholder": "z.B. Mein Next.js-Setup",
+  "customProfile.baseTemplate": "Basisvorlage",
+  "customProfile.cancel": "Abbrechen",
+  "customProfile.create": "Erstellen",
+
+  "guardian.analyzing": "System wird analysiert...",
+  "guardian.health": "{{score}}% Gesundheit",
+  "guardian.offline": "Offline",
+  "guardian.optimal": "Das System ist in optimalem Zustand.",
+  "guardian.maintenanceRecommended": "Wartung empfohlen.",
+  "guardian.openPanel": "Guardian-Panel öffnen →",
+
+  "recentRepos.loading": "Aktuelle Repos werden geladen…",
+  "recentRepos.empty.before": "Öffnen Sie einen Ordner in",
+  "recentRepos.empty.linkText": "Git VCS",
+  "recentRepos.empty.after": "um die Verlaufsliste zu füllen.",
+  "recentRepos.openInGitVcs": "In Git VCS öffnen →"
 }

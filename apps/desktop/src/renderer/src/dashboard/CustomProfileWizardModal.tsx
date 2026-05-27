@@ -1,6 +1,7 @@
 import { ComposeProfileSchema, type ComposeProfile, type CustomProfileEntry } from '@linux-dev-home/shared'
 import type { ReactElement } from 'react'
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 const PROFILE_LABELS: Record<ComposeProfile, string> = {
   'web-dev': 'Web Development',
@@ -21,6 +22,7 @@ export function CustomProfileWizardModal(props: {
   onClose: () => void
   onSave: (data: CustomProfileEntry) => void
 }): ReactElement | null {
+  const { t } = useTranslation('dashboard')
   const [name, setName] = useState('')
   const [template, setTemplate] = useState<ComposeProfile>('web-dev')
 
@@ -50,21 +52,21 @@ export function CustomProfileWizardModal(props: {
           boxShadow: '0 10px 30px rgba(0,0,0,0.3)',
         }}
       >
-        <h2 style={{ margin: 0, fontSize: 20 }}>Create Custom Profile</h2>
+        <h2 style={{ margin: 0, fontSize: 20 }}>{t('customProfile.title')}</h2>
         <p style={{ color: 'var(--text-muted)', fontSize: 13, marginBottom: 20 }}>
-          Define a new custom profile by selecting a base template. Each preset includes its own dedicated Docker Compose stack and development tools.
+          {t('customProfile.description')}
         </p>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div>
             <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 600 }}>
-              Profile Name
+              {t('customProfile.profileName')}
             </label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. My Next.js Setup"
+              placeholder={t('customProfile.profileNamePlaceholder')}
               style={{
                 width: '100%',
                 padding: '10px 12px',
@@ -78,7 +80,7 @@ export function CustomProfileWizardModal(props: {
 
           <div>
             <label style={{ display: 'block', marginBottom: 6, fontSize: 13, fontWeight: 600 }}>
-              Base Template
+              {t('customProfile.baseTemplate')}
             </label>
             <select
               value={template}
@@ -113,7 +115,7 @@ export function CustomProfileWizardModal(props: {
               cursor: 'pointer',
             }}
           >
-            Cancel
+            {t('customProfile.cancel')}
           </button>
           <button
             type="button"
@@ -133,7 +135,7 @@ export function CustomProfileWizardModal(props: {
               fontWeight: 600,
             }}
           >
-            Create
+            {t('customProfile.create')}
           </button>
         </div>
       </div>

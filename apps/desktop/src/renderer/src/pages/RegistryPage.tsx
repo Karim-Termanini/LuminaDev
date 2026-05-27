@@ -2,6 +2,7 @@ import type { GitRepoEntry } from '@linux-dev-home/shared'
 import './RegistryPage.css'
 import type { CSSProperties, ReactElement } from 'react'
 import { useCallback, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { assertGitOk } from './gitContract'
 import { humanizeGitError } from './gitError'
 import { humanizeDockerError } from './dockerError'
@@ -9,6 +10,7 @@ import { dockerHubRepositoryUrl } from './dockerHub'
 import { assertGitRecentList } from './registryContract'
 
 export function RegistryPage(): ReactElement {
+  const { t } = useTranslation('common')
   const [url, setUrl] = useState('')
   const [target, setTarget] = useState('')
   const [recent, setRecent] = useState<GitRepoEntry[]>([])
@@ -48,14 +50,14 @@ export function RegistryPage(): ReactElement {
 
   async function clone(): Promise<void> {
     if (!target.trim()) {
-      setStatus('Choose a target directory with Browse.')
+      setStatus(t('registry.clone.noTarget'))
       return
     }
-    setStatus('Cloning…')
+    setStatus(t('registry.clone.cloning'))
     try {
       const res = await window.dh.gitClone({ url, targetDir: target.trim() })
       assertGitOk(res, 'Git clone failed.')
-      setStatus('Clone complete')
+      setStatus(t('registry.clone.complete'))
       await loadRecent()
     } catch (e) {
       setStatus(humanizeGitError(e))
@@ -97,10 +99,9 @@ export function RegistryPage(): ReactElement {
   return (
     <div className="registry-page elevated-page" style={{ maxWidth: 980, display: 'flex', flexDirection: 'column', gap: 18 }}>
       <header>
-      <h1 style={{ marginTop: 0, marginBottom: 6 }}>Registry &amp; Git</h1>
+      <h1 style={{ marginTop: 0, marginBottom: 6 }}>{t('registry.title')}</h1>
       <p style={{ color: 'var(--text-muted)', marginTop: 0, lineHeight: 1.5 }}>
-        Manage your source control and container assets. Clone repositories or search for official
-        Docker images directly from the Hub.
+        {t('registry.description')}
       </p>
       </header>
       {status ? (
@@ -112,35 +113,35 @@ export function RegistryPage(): ReactElement {
 
       <section style={section}>
         <label style={label}>
-          Remote URL
+          {t('registry.clone.remoteUrl')}
           <input value={url} onChange={(e) => setUrl(e.target.value)} style={input} />
         </label>
         <label style={label}>
-          Target directory
+          {t('registry.clone.targetDir')}
           <div style={{ display: 'flex', gap: 8 }}>
-            <input value={target} readOnly placeholder="Select folder with Browse…" style={{ ...input, flex: 1 }} />
+            <input value={target} readOnly placeholder={t('registry.clone.selectFolder')} style={{ ...input, flex: 1 }} />
             <button type="button" onClick={() => void pickTarget()} style={btn}>
-              Browse
+              {t('registry.browse')}
             </button>
           </div>
         </label>
         <button type="button" onClick={() => void clone()} style={btnPrimary}>
-          git clone
+          {t('registry.clone.button')}
         </button>
       </section>
 
       <section style={{ ...section, marginTop: 20 }}>
-        <div style={{ fontWeight: 600, marginBottom: 12 }}>Docker Hub Search</div>
+        <div style={{ fontWeight: 600, marginBottom: 12 }}>{t('registry.docker.title')}</div>
         <div style={{ display: 'flex', gap: 8 }}>
           <input
             value={dockerTerm}
             onChange={(e) => setDockerTerm(e.target.value)}
-            placeholder="Search images (e.g. redis, postgres)…"
+            placeholder={t('registry.docker.placeholder')}
             style={{ ...input, flex: 1 }}
             onKeyDown={(e) => e.key === 'Enter' && void searchDocker()}
           />
           <button type="button" onClick={() => void searchDocker()} style={btnPrimary} disabled={dockerLoading}>
-            {dockerLoading ? 'Searching…' : 'Search'}
+            {dockerLoading ? t('registry.docker.searching') : t('registry.docker.search')}
           </button>
         </div>
         {dockerResults.length > 0 && (
@@ -196,7 +197,7 @@ export function RegistryPage(): ReactElement {
                   <span>★ {r.star_count}</span>
                   <button type="button" style={{ ...btnLink }} onClick={() => {
                     void window.dh.openExternal(dockerHubRepositoryUrl(r.name))
-                  }}>View Hub ↗</button>
+                  }}>{t('registry.docker.viewHub')}</button>
                 </div>
               </div>
             ))}
@@ -205,14 +206,14 @@ export function RegistryPage(): ReactElement {
       </section>
 
       <section style={{ ...section, marginTop: 20 }}>
-        <div style={{ fontWeight: 600, marginBottom: 12 }}>Inspect repository</div>
+        <div style={{ fontWeight: 600, marginBottom: 12 }}>{t('registry.inspect.title')}</div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <input value={repoPath} readOnly placeholder="Repository path" style={{ ...input, flex: 1 }} />
+          <input value={repoPath} readOnly placeholder={t('registry.inspect.placeholder')} style={{ ...input, flex: 1 }} />
           <button type="button" onClick={() => void pickRepo()} style={btn}>
-            Browse
+            {t('registry.browse')}
           </button>
           <button type="button" onClick={() => void inspect()} style={btnPrimary}>
-            Status
+            {t('registry.inspect.status')}
           </button>
         </div>
         {gitInfo ? (
@@ -226,7 +227,7 @@ export function RegistryPage(): ReactElement {
       </section>
 
       <section style={{ ...section, paddingTop: 14 }}>
-        <div style={{ fontWeight: 600, marginBottom: 8 }}>Recent repositories</div>
+        <div style={{ fontWeight: 600, marginBottom: 8 }}>{t('registry.recent.title')}</div>
         <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
           {recent.map((r) => (
             <li

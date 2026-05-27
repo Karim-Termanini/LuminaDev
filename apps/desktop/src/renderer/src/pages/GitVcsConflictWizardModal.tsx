@@ -1,5 +1,6 @@
 import type { ReactElement } from 'react'
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { GitVcsConflictResolver } from './GitVcsConflictResolver'
 
 export type GitVcsConflictWizardModalProps = {
@@ -19,6 +20,7 @@ export function GitVcsConflictWizardModal({
   onClose,
   onSuccess,
 }: GitVcsConflictWizardModalProps): ReactElement | null {
+  const { t } = useTranslation('git')
   const [step, setStep] = useState<WizardStep>('overview')
   const [currentFileIdx, setCurrentFileIdx] = useState(0)
   const [resolvedFiles, setResolvedFiles] = useState<Set<string>>(new Set())
@@ -103,10 +105,10 @@ export function GitVcsConflictWizardModal({
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 16, fontWeight: 600, color: 'white' }}>
                   <span className="codicon codicon-git-merge" style={{ fontSize: 20 }} />
-                  Resolve Merge Conflicts
+                  {t('conflictWizard.overview.title')}
                 </div>
                 <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.8)', marginTop: 4 }}>
-                  File {currentFileIdx + 1} of {totalFiles} with conflicts
+                  {t('conflictWizard.overview.fileProgress', { current: currentFileIdx + 1, total: totalFiles })}
                 </div>
               </div>
 
@@ -114,7 +116,7 @@ export function GitVcsConflictWizardModal({
               <div style={{ padding: '24px', flex: 1, overflow: 'auto' }}>
                 <div style={{ marginBottom: 16 }}>
                   <div style={{ fontSize: 12, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1 }}>
-                    Current File
+                    {t('conflictWizard.overview.currentFile')}
                   </div>
                   <div
                     className="mono"
@@ -126,7 +128,7 @@ export function GitVcsConflictWizardModal({
 
                 <div>
                   <div style={{ fontSize: 12, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1 }}>
-                    Status
+                    {t('conflictWizard.overview.status')}
                   </div>
                   <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {conflictFiles.map((file, idx) => (
@@ -181,7 +183,7 @@ export function GitVcsConflictWizardModal({
                 }}
               >
                 <button type="button" className="hp-btn" onClick={onClose}>
-                  Cancel
+                  {t('conflictWizard.overview.cancel')}
                 </button>
                 <button
                   type="button"
@@ -189,7 +191,7 @@ export function GitVcsConflictWizardModal({
                   onClick={() => setStep('resolving')}
                 >
                   <span className="codicon codicon-git-merge" style={{ marginRight: 6 }} />
-                  Open Resolution Studio
+                  {t('conflictWizard.overview.openStudio')}
                 </button>
               </div>
             </>
@@ -207,10 +209,10 @@ export function GitVcsConflictWizardModal({
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 16, fontWeight: 600, color: 'white' }}>
                   <span className="codicon codicon-check" style={{ fontSize: 20 }} />
-                  All Conflicts Resolved
+                  {t('conflictWizard.summary.title')}
                 </div>
                 <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.8)', marginTop: 4 }}>
-                  Ready to continue with merge
+                  {t('conflictWizard.summary.subtitle')}
                 </div>
               </div>
 
@@ -218,7 +220,7 @@ export function GitVcsConflictWizardModal({
               <div style={{ padding: '24px', flex: 1, overflow: 'auto' }}>
                 <div style={{ marginBottom: 16 }}>
                   <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 8 }}>
-                    Resolved {resolvedFiles.size} file(s):
+                    {t('conflictWizard.summary.resolvedCount', { count: resolvedFiles.size })}
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                     {Array.from(resolvedFiles).map((file) => (
@@ -244,10 +246,10 @@ export function GitVcsConflictWizardModal({
 
                 <div style={{ marginTop: 20, padding: '12px', background: 'var(--bg-secondary)', borderRadius: 4 }}>
                   <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>
-                    Next step: Stage and commit your changes
+                    {t('conflictWizard.summary.nextStep')}
                   </div>
                   <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                    All conflicts have been resolved. You can now continue with the merge or rebase.
+                    {t('conflictWizard.summary.allResolved')}
                   </div>
                 </div>
               </div>
@@ -263,10 +265,10 @@ export function GitVcsConflictWizardModal({
                 }}
               >
                 <button type="button" className="hp-btn" onClick={onClose}>
-                  Dismiss
+                  {t('conflictWizard.summary.dismiss')}
                 </button>
                 <button type="button" className="hp-btn hp-btn-primary" onClick={handleConfirmSummary}>
-                  Done
+                  {t('conflictWizard.summary.done')}
                 </button>
               </div>
             </>

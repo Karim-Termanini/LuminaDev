@@ -702,21 +702,19 @@ title: t('main.activity.jobPrefix', { kind: j.kind, state: j.state }),
               <button
                 type="button"
                 onClick={() => setConfirmModalOpen(true)}
-                disabled={selectedProfile.status === 'planned' || (swState.active && swState.targetProfile === selectedProfileName) || activeProfile === selectedProfileName}
+                disabled={(swState.active && swState.targetProfile === selectedProfileName) || activeProfile === selectedProfileName}
                 style={{
                   padding: '12px 24px',
                   borderRadius: 8,
                   border: 'none',
-                  background: selectedProfile.status === 'planned'
-                    ? 'var(--bg-widget)'
-                    : activeProfile === selectedProfileName
-                      ? 'var(--green)'
-                      : selectedProfile.accent,
+                  background: activeProfile === selectedProfileName
+                    ? 'var(--green)'
+                    : selectedProfile.accent,
                   color: '#fff',
                   fontWeight: 600,
                   fontSize: 15,
-                  cursor: selectedProfile.status === 'planned' || (swState.active && swState.targetProfile === selectedProfileName) || activeProfile === selectedProfileName ? 'default' : 'pointer',
-                  opacity: selectedProfile.status === 'planned' || activeProfile === selectedProfileName ? 0.6 : (swState.active && swState.targetProfile === selectedProfileName) ? 0.8 : 1,
+                  cursor: activeProfile === selectedProfileName ? 'default' : 'pointer',
+                  opacity: activeProfile === selectedProfileName ? 0.6 : (swState.active && swState.targetProfile === selectedProfileName) ? 0.8 : 1,
                   display: 'flex',
                   alignItems: 'center',
                   gap: 8,
@@ -724,13 +722,11 @@ title: t('main.activity.jobPrefix', { kind: j.kind, state: j.state }),
                 }}
               >
                 {swState.active && swState.targetProfile === selectedProfileName && <span className="codicon codicon-loading" style={{ animation: 'spin 1s linear infinite' }} />}
-                {selectedProfile.status === 'planned'
-                  ? t('main.btn.comingSoon')
-                  : activeProfile === selectedProfileName
-                    ? t('main.btn.currentlyActive')
-                    : activeProfile
-                      ? t('main.btn.switchToThis')
-                      : t('main.btn.initialize')}
+                {activeProfile === selectedProfileName
+                  ? t('main.btn.currentlyActive')
+                  : activeProfile
+                    ? t('main.btn.switchToThis')
+                    : t('main.btn.initialize')}
               </button>
               {betaFlags['enable_profile_auto_switch'] && (
                 <div title={t('main.btn.autoSwitchOn')} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 10px', borderRadius: 20, background: 'rgba(124, 77, 255, 0.12)', border: '1px solid rgba(124, 77, 255, 0.3)', fontSize: 11, color: 'var(--accent)', fontWeight: 600, whiteSpace: 'nowrap' }}>

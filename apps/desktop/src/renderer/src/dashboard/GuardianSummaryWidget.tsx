@@ -2,10 +2,12 @@ import type { ReactElement } from 'react'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import type { HostMetricsResponse, HostSecuritySnapshot, ContainerRow } from '@linux-dev-home/shared'
+import { useTranslation } from 'react-i18next'
 
 import { evaluateGuardian } from '../pages/maintenanceGuardian'
 
 export function GuardianSummaryWidget(): ReactElement {
+  const { t } = useTranslation('dashboard')
   const [score, setScore] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -30,7 +32,7 @@ export function GuardianSummaryWidget(): ReactElement {
     return () => clearInterval(id)
   }, [])
 
-  if (loading) return <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Analyzing system...</div>
+  if (loading) return <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>{t('guardian.analyzing')}</div>
 
   const color = score !== null && score >= 90 ? 'var(--green)' : score !== null && score >= 70 ? 'var(--accent)' : 'var(--orange)'
 
@@ -42,14 +44,14 @@ export function GuardianSummaryWidget(): ReactElement {
           boxShadow: `0 0 10px ${color}55`
         }} />
         <span style={{ fontSize: 16, fontWeight: 800, color }}>
-          {score !== null ? `${score}% Health` : 'Offline'}
+          {score !== null ? t('guardian.health', { score }) : t('guardian.offline')}
         </span>
       </div>
       <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)' }}>
-        {score !== null && score >= 90 ? 'System is in optimal condition.' : 'Maintenance recommended.'}
+        {score !== null && score >= 90 ? t('guardian.optimal') : t('guardian.maintenanceRecommended')}
       </p>
       <Link to="/maintenance" style={{ fontSize: 13, fontWeight: 600, color: 'var(--accent)', marginTop: 4 }}>
-        Open Guardian Panel →
+        {t('guardian.openPanel')}
       </Link>
     </div>
   )

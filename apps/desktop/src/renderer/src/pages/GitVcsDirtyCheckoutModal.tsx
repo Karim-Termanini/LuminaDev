@@ -1,5 +1,6 @@
 import type { ReactElement } from 'react'
 import { useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import './GitVcsDirtyCheckoutModal.css'
 
 export type GitVcsDirtyCheckoutModalProps = {
@@ -15,6 +16,7 @@ export type GitVcsDirtyCheckoutModalProps = {
 }
 
 export function GitVcsDirtyCheckoutModal(props: GitVcsDirtyCheckoutModalProps): ReactElement | null {
+  const { t } = useTranslation('git')
   const {
     open,
     targetBranch,
@@ -41,7 +43,7 @@ export function GitVcsDirtyCheckoutModal(props: GitVcsDirtyCheckoutModalProps): 
 
   if (!open) return null
 
-  const title = creatingNewBranch ? 'Create branch blocked' : 'Switch branch blocked'
+  const title = creatingNewBranch ? t('dirtyCheckout.createBlocked') : t('dirtyCheckout.switchBlocked')
 
   return (
     <div
@@ -68,7 +70,7 @@ export function GitVcsDirtyCheckoutModal(props: GitVcsDirtyCheckoutModalProps): 
             }}
             disabled={busy}
             className="git-vcs-dirty-modal-close"
-            aria-label="Close"
+            aria-label={t('dirtyCheckout.closeAriaLabel')}
           >
             ×
           </button>
@@ -76,17 +78,17 @@ export function GitVcsDirtyCheckoutModal(props: GitVcsDirtyCheckoutModalProps): 
 
         <div className="git-vcs-dirty-modal-body">
           <p className="git-vcs-dirty-modal-text">
-            Git cannot {creatingNewBranch ? `create and check out` : `check out`}{' '}
+            {t('dirtyCheckout.body', { action: creatingNewBranch ? t('dirtyCheckout.createAndCheckout') : t('dirtyCheckout.checkout') })}{' '}
             <span className="git-vcs-dirty-modal-branch">
               {targetBranch}
             </span>{' '}
-            because local changes would be overwritten. Choose how to proceed.
+            {t('dirtyCheckout.bodyReason')}
           </p>
 
           {files.length > 0 ? (
             <div>
               <div className="git-vcs-dirty-modal-files-label">
-                Affected paths ({files.length})
+                {t('dirtyCheckout.affectedPaths', { count: files.length })}
               </div>
               <ul className="git-vcs-dirty-modal-files mono">
                 {files.map((f) => (
@@ -98,8 +100,7 @@ export function GitVcsDirtyCheckoutModal(props: GitVcsDirtyCheckoutModalProps): 
             </div>
           ) : (
             <p className="git-vcs-dirty-modal-text mono">
-              (Could not parse file list from Git output — stash still includes tracked changes and, if enabled,
-              untracked files.)
+              {t('dirtyCheckout.cannotParseFiles')}
             </p>
           )}
 
@@ -110,21 +111,21 @@ export function GitVcsDirtyCheckoutModal(props: GitVcsDirtyCheckoutModalProps): 
               disabled={busy}
               onChange={(e) => onIncludeUntrackedChange(e.target.checked)}
             />
-            Include untracked files in stash (<span className="mono">git stash push -u</span>)
+            {t('dirtyCheckout.includeUntracked.before')}<span className="mono">git stash push -u</span>{t('dirtyCheckout.includeUntracked.after')}
           </label>
 
           <p className="git-vcs-dirty-modal-help-text mono">
-            After switching, restore your shelved work with <span>git stash pop</span>{' '}
-            or <span>git stash apply</span> in a terminal.
+            {t('dirtyCheckout.helpText.before')}<span>git stash pop</span>{' '}
+            {t('dirtyCheckout.helpText.or')}<span>git stash apply</span>{t('dirtyCheckout.helpText.after')}
           </p>
         </div>
 
         <div className="git-vcs-dirty-modal-footer">
           <button type="button" className="hp-btn" disabled={busy} onClick={() => onCancel()}>
-            Cancel
+            {t('dirtyCheckout.cancel')}
           </button>
           <button type="button" className="hp-btn hp-btn-primary" disabled={busy} onClick={() => void onStashAndSwitch()}>
-            Stash all and switch
+            {t('dirtyCheckout.stashAndSwitch')}
           </button>
         </div>
       </div>
