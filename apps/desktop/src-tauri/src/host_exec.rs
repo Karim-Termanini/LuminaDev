@@ -18,7 +18,7 @@ pub(crate) fn get_global_ipc_timeout() -> Duration {
 static THREAD_POOL_SIZE: AtomicU64 = AtomicU64::new(4);
 
 pub(crate) fn set_global_thread_pool_size(n: u64) {
-  THREAD_POOL_SIZE.store(n.max(1).min(64), Ordering::Relaxed);
+  THREAD_POOL_SIZE.store(n.clamp(1, 64), Ordering::Relaxed);
 }
 
 pub(crate) fn get_global_thread_pool_size() -> usize {
