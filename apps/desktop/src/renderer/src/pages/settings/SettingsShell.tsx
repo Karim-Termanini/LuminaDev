@@ -113,16 +113,16 @@ export function SettingsShell(): ReactElement {
             const active = item.id === navId
             return (
               <button key={item.id} type="button" onClick={() => navigate(item.id)}
-                style={{ display: 'flex', alignItems: 'flex-start', gap: 12, textAlign: 'left', width: '100%', padding: '12px 14px', borderRadius: 8, border: '1px solid',
+                style={{ display: 'flex', alignItems: 'flex-start', gap: 12, textAlign: 'start', width: '100%', padding: '12px 14px', borderRadius: 8, border: '1px solid',
                   borderColor: active ? 'color-mix(in srgb, var(--accent) 45%, var(--border))' : 'transparent',
                   background: active ? 'color-mix(in srgb, var(--accent) 14%, var(--bg-widget))' : 'color-mix(in srgb, var(--bg-widget) 88%, transparent)',
                   color: 'var(--text)', cursor: 'pointer', transition: 'background 0.15s ease, border-color 0.15s ease',
                   boxShadow: active ? '0 1px 0 rgba(255,255,255,0.04)' : 'none' }}>
                 <span className={`codicon codicon-${item.icon}`}
                   style={{ fontSize: 20, marginTop: 2, opacity: active ? 1 : 0.85, color: active ? 'var(--accent)' : 'var(--text-muted)' }} aria-hidden />
-                <span style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+                <span style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0, overflow: 'hidden' }}>
                   <span style={{ fontWeight: 650, fontSize: 14, letterSpacing: '0.01em' }}>{t(item.labelKey)}</span>
-                  <span style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.4 }}>{t(item.hintKey)}</span>
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.4, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{t(item.hintKey)}</span>
                 </span>
               </button>
             )
