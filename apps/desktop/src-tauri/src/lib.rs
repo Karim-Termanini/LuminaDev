@@ -455,8 +455,15 @@ async fn exec_docker_compose_in_dir(
     let mut cmd = Command::new("docker");
     cmd.current_dir(compose_dir).args(&compose_args);
     if let Some(pn) = project_name {
-      if !pn.trim().is_empty() {
-        cmd.env("COMPOSE_PROJECT_NAME", pn.trim());
+      let trimmed = pn.trim();
+      if !trimmed.is_empty() {
+        // Docker Compose requires lowercase alphanumeric, hyphens, underscores
+        let sanitized = trimmed
+          .to_lowercase()
+          .chars()
+          .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '-' })
+          .collect::<String>();
+        cmd.env("COMPOSE_PROJECT_NAME", sanitized);
       }
     }
     if let Some(env_map) = extra_env {
