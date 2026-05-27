@@ -1,5 +1,15 @@
 /* RTL text direction — content area only, nav/sidebar stay LTR */
 
+/*
+ * Inter has no Arabic glyphs; without an explicit Arabic font the browser
+ * picks glyphs from whichever system font covers each codepoint, mixing fonts
+ * with different baseline metrics → words jump vertically on the same line.
+ * Noto Sans Arabic ships on most Linux distros and has consistent metrics.
+ */
+.hp-rtl {
+  --font-ui: 'Inter', 'Noto Sans Arabic', 'Tahoma', system-ui, sans-serif;
+}
+
 /* Set direction on content area so bidi algorithm works for mixed Arabic+Latin */
 .hp-rtl .app-shell-main {
   direction: rtl;
