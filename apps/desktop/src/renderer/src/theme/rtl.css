@@ -1,18 +1,33 @@
 /* RTL text direction — content area only, nav/sidebar stay LTR */
 
 /*
- * Inter has no Arabic glyphs; without an explicit Arabic font the browser
- * picks glyphs from whichever system font covers each codepoint, mixing fonts
- * with different baseline metrics → words jump vertically on the same line.
+ * Inter / JetBrains Mono have no Arabic glyphs; without an explicit Arabic
+ * font the browser picks glyphs from whichever system font covers each
+ * codepoint, mixing fonts with different baseline metrics → words jump
+ * vertically on the same line.
  * Noto Sans Arabic ships on most Linux distros and has consistent metrics.
+ * We add it to both --font-ui and --font-mono so mixed Latin/Arabic inline
+ * text renders with the same vertical metrics.
  */
 .hp-rtl {
   --font-ui: 'Inter', 'Noto Sans Arabic', 'Tahoma', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Noto Sans Arabic', 'Fira Code', monospace;
 }
 
 /* Set direction on content area so bidi algorithm works for mixed Arabic+Latin */
 .hp-rtl .app-shell-main {
   direction: rtl;
+}
+
+/* Wizard renders outside AppShell — needs its own direction scope */
+.hp-rtl .readiness-wizard {
+  direction: rtl;
+}
+
+/* Progress dots and icon chrome are positional — keep LTR so they don't mirror */
+.hp-rtl .readiness-progress-dots,
+.hp-rtl .readiness-welcome-icon {
+  direction: ltr;
 }
 
 /* Nav sidebar stays LTR regardless */
@@ -44,6 +59,7 @@
   direction: ltr;
   unicode-bidi: plaintext;
   text-align: left;
+  font-size: 1em;
 }
 
 /* Numbers stay LTR inline in RTL prose */
