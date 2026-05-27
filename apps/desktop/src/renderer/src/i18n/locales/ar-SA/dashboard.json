@@ -213,5 +213,7 @@
   "logs.empty": "لا توجد سجلات متاحة.",
   "kernels.title": "حالة النواة",
   "kernels.loading": "جارٍ التحميل…",
-  "kernels.empty": "لا توجد بيانات نواة متاحة."
+  "kernels.empty": "لا توجد بيانات نواة متاحة.",
+  "profile.customDesc": "بيئة مخصصة مبنية على {{base}}.",
+  "profile.emptyDesc": "أنشئ ملفاً شخصياً في صفحة الملفات الشخصية للبدء."
 }

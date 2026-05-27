@@ -103,7 +103,7 @@ export function TopBar(): ReactElement {
           fontSize: 13,
         }}
       />
-      <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+      <div style={{ position: 'relative', display: 'flex', alignItems: 'center', direction: 'ltr' }}>
         <button
           type="button"
           aria-label="Notifications"

@@ -213,5 +213,7 @@
   "logs.empty": "Keine Protokolle verfügbar.",
   "kernels.title": "Kernel-Status",
   "kernels.loading": "Wird geladen…",
-  "kernels.empty": "Keine Kernel-Daten verfügbar."
+  "kernels.empty": "Keine Kernel-Daten verfügbar.",
+  "profile.customDesc": "Benutzerdefinierte Umgebung basierend auf {{base}}.",
+  "profile.emptyDesc": "Erstellen Sie ein Profil auf der Profilseite, um zu beginnen."
 }

@@ -207,5 +207,7 @@
   "kernels.networkSecured": "Network Interfaces Secured",
   "kernels.noRiskyPorts": "No risky open ports detected on active public listeners.",
   "kernels.toolchainTip": "Toolchain Tip",
-  "kernels.toolchainTipText": "Ensure system-level dependencies like <code>docker-compose</code> and <code>ssh-agent</code> are configured and accessible by the active profile."
+  "kernels.toolchainTipText": "Ensure system-level dependencies like <code>docker-compose</code> and <code>ssh-agent</code> are configured and accessible by the active profile.",
+  "profile.customDesc": "Custom environment based on {{base}}.",
+  "profile.emptyDesc": "Create a profile in the Profiles page to get started."
 }

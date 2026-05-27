@@ -194,7 +194,7 @@ export function DashboardMainPage(): ReactElement {
       return {
         name: p.name,
         title: p.name,
-        description: `Custom environment based on ${preset?.title || p.baseTemplate}.`,
+        description: t('profile.customDesc', { base: preset?.title || p.baseTemplate }),
         icon: preset?.icon || 'blank',
         accent: preset?.accent || 'var(--text-muted)',
         status: 'live' as ProfileDef['status'],
@@ -204,7 +204,7 @@ export function DashboardMainPage(): ReactElement {
     })
     if (customDefs.length > 0) return customDefs
     // Fallback until the user creates and switches to a real profile
-    return [{ name: 'empty', title: 'Empty Minimal', description: 'Create a profile in the Profiles page to get started.', icon: 'blank', accent: 'var(--text-muted)', status: 'live' as ProfileDef['status'], isCustom: false, baseTemplate: 'empty' }]
+    return [{ name: 'empty', title: 'Empty Minimal', description: t('profile.emptyDesc'), icon: 'blank', accent: 'var(--text-muted)', status: 'live' as ProfileDef['status'], isCustom: false, baseTemplate: 'empty' }]
   }, [customProfiles])
 
   const refresh = useCallback(async () => {
