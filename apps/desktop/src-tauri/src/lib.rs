@@ -1123,7 +1123,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
             }
           });
         }
-        let prof = body.get("profile").and_then(|v| v.as_str()).unwrap_or("default");
+let prof = body.get("profile").and_then(|v| v.as_str()).unwrap_or("default");
         let value_to_store = body.get("layout").cloned().unwrap_or_else(|| body.clone());
         if let Some(obj) = layout_data.get_mut("profiles").and_then(|v| v.as_object_mut()) {
           obj.insert(prof.to_string(), value_to_store);
@@ -2767,12 +2767,12 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
         ("lisp",    "SBCL",    "sbcl --version"),
       ];
       
-      let mut tasks: Vec<(String, String, _)> = Vec::new();
+let mut tasks: Vec<(String, String, _)> = Vec::new();
       for &(id, name, shell_cmd) in checks {
         let id = id.to_string();
         let name = name.to_string();
         let shell_cmd = shell_cmd.to_string();
-        let id_clone = id.clone();
+let id_clone = id.clone();
         let name_clone = name.clone();
         tasks.push((id_clone, name_clone, tokio::spawn(async move {
           match exec_result_limit("bash", &["-lc", &shell_cmd], cmd_timeout_short()).await {
@@ -2998,7 +2998,7 @@ async fn ipc_invoke(channel: String, payload: Option<Value>, app: AppHandle, sta
             }
             Err(_) => json!({ "id": id, "name": name, "installed": false }),
           }
-        })));
+})));
       }
 
       let mut runtimes = Vec::new();

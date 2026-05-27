@@ -10,6 +10,8 @@ export function TopBar(): ReactElement {
   const navigate = useNavigate()
   const pathname = location.pathname
   const [q, setQ] = useState('')
+  const [showNotifications, setShowNotifications] = useState(false)
+  const [jobs, setJobs] = useState<JobSummary[]>([])
 
   const titles: Record<string, string> = {
     '/system': t('topbar.system'),
@@ -23,9 +25,6 @@ export function TopBar(): ReactElement {
     '/maintenance': t('topbar.maintenance'),
     '/settings': t('topbar.settings'),
   }
-  const [showNotifications, setShowNotifications] = useState(false)
-  const [jobs, setJobs] = useState<JobSummary[]>([])
-
   useEffect(() => {
     setQ('')
     setShowNotifications(false)
@@ -74,7 +73,7 @@ export function TopBar(): ReactElement {
         background: 'var(--bg-panel)',
         flexShrink: 0,
         position: 'relative',
-        direction: 'ltr',
+direction: 'ltr',
       }}
     >
       <div style={{ fontWeight: 700, letterSpacing: '0.04em', minWidth: 140 }}>{pathname === '/dashboard' || pathname.startsWith('/dashboard/') ? t('topbar.dashboardTitle') : (titles[pathname] ?? t('topbar.linuxDevHome'))}</div>
@@ -108,7 +107,7 @@ export function TopBar(): ReactElement {
         <button
           type="button"
           aria-label="Notifications"
-          aria-expanded={showNotifications}
+aria-expanded={showNotifications}
           aria-haspopup="dialog"
           style={{
             ...btnIcon,
@@ -133,7 +132,7 @@ export function TopBar(): ReactElement {
         </button>
 
         {showNotifications && (
-          <div
+<div
             role="dialog"
             aria-labelledby="notifications-title"
             style={{
@@ -150,7 +149,7 @@ export function TopBar(): ReactElement {
             padding: 12,
           }}>
             <div style={{ fontWeight: 600, borderBottom: '1px solid var(--border)', paddingBottom: 8, marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span id="notifications-title">{t('topbar.notifications')}</span>
+<span id="notifications-title">{t('topbar.notifications')}</span>
               <button
                 type="button"
                 onClick={() => setShowNotifications(false)}
@@ -162,7 +161,7 @@ export function TopBar(): ReactElement {
             <div style={{ maxHeight: 200, overflowY: 'auto' }}>
               {jobs.length === 0 ? (
                 <div style={{ color: 'var(--text-muted)', fontSize: 12, textAlign: 'center', padding: '16px 0' }}>
-                  {t('topbar.noActivity')}
+{t('topbar.noActivity')}
                 </div>
               ) : (
                 jobs.slice(-5).reverse().map((j) => (
@@ -178,7 +177,7 @@ export function TopBar(): ReactElement {
                     </div>
                     {j.state === 'running' && (
                       <div style={{ width: '100%', height: 4, background: 'rgba(255,255,255,0.06)', borderRadius: 2, overflow: 'hidden', marginTop: 4 }}>
-                        <div style={{ width: `${Math.min(100, Math.max(0, j.progress ?? 0))}%`, height: '100%', background: 'var(--accent)' }} />
+<div style={{ width: `${Math.min(100, Math.max(0, j.progress ?? 0))}%`, height: '100%', background: 'var(--accent)' }} />
                       </div>
                     )}
                   </div>

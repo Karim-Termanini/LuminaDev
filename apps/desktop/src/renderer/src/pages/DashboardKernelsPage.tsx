@@ -64,7 +64,7 @@ export function DashboardKernelsPage(): ReactElement {
       if (rtRes.status === 'fulfilled' && rtRes.value && rtRes.value.runtimes) {
         setRuntimes(rtRes.value.runtimes)
       }
-      setRuntimesLoaded(true)
+setRuntimesLoaded(true)
       if (portsRes.status === 'fulfilled' && Array.isArray(portsRes.value)) {
         setPorts(portsRes.value)
       }
@@ -170,7 +170,7 @@ export function DashboardKernelsPage(): ReactElement {
           <div className="kernels-card-container">
             <div className="kernels-card-header-title">
               <span className="codicon codicon-terminal" style={{ color: 'var(--accent)' }} />
-              {t('kernels.devKernels')}
+{t('kernels.devKernels')}
             </div>
             {runtimes.length > 0 ? (
               <div className="kernels-audit-list">
@@ -193,13 +193,13 @@ export function DashboardKernelsPage(): ReactElement {
                         border: `1px solid ${r.installed ? 'rgba(63, 185, 80, 0.2)' : 'rgba(255, 255, 255, 0.08)'}`,
                       }}
                     >
-                      {r.installed ? t('kernels.active') : t('kernels.notInstalled')}
+{r.installed ? t('kernels.active') : t('kernels.notInstalled')}
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
-              <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>
+<div style={{ color: 'var(--text-muted)', fontSize: 12 }}>
                 {runtimesLoaded ? t('kernels.noRuntimes') : t('kernels.loadingRuntimes')}
               </div>
             )}
@@ -267,7 +267,7 @@ export function DashboardKernelsPage(): ReactElement {
           <div className="kernels-card-container">
             <div className="kernels-card-header-title">
               <span className="codicon codicon-link-external" style={{ color: 'var(--accent)' }} />
-              {t('kernels.activePortBindings')}
+{t('kernels.activePortBindings')}
             </div>
             {ports.length > 0 ? (
               <div className="kernels-audit-list" style={{ maxHeight: 200, overflowY: 'auto' }}>
@@ -282,7 +282,7 @@ export function DashboardKernelsPage(): ReactElement {
                       <span className="mono" style={{ fontWeight: 600 }}>:{p.port}</span>
                       <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 6 }}>({p.service})</span>
                     </div>
-                    {p.protocol === 'tcp' && HTTP_PORTS.has(p.port) ? (
+{p.protocol === 'tcp' && HTTP_PORTS.has(p.port) ? (
                       <a
                         href={`http://localhost:${p.port}`}
                         target="_blank"
@@ -296,7 +296,7 @@ export function DashboardKernelsPage(): ReactElement {
                           textDecoration: 'none',
                         }}
                       >
-                        {t('kernels.openLink')}
+{t('kernels.openLink')}
                       </a>
                     ) : (
                       <div
@@ -307,7 +307,7 @@ export function DashboardKernelsPage(): ReactElement {
                           border: '1px solid rgba(255, 255, 255, 0.08)',
                         }}
                       >
-                        {p.protocol.toUpperCase()}
+{p.protocol.toUpperCase()}
                       </div>
                     )}
                   </div>
@@ -315,7 +315,7 @@ export function DashboardKernelsPage(): ReactElement {
               </div>
             ) : (
               <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)' }}>
-                {t('kernels.noPorts')}
+{t('kernels.noPorts')}
               </p>
             )}
           </div>

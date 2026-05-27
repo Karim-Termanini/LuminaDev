@@ -56,7 +56,7 @@ export function DashboardWidgetDeck(props: {
             }}
           >
             <span className="codicon codicon-add" style={{ fontSize: 12 }} />
-            {t('widgets.addWidget')}
+{t('widgets.addWidget')}
           </button>
         )}
       </div>

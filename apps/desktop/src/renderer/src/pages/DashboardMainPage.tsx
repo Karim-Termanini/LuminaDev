@@ -136,7 +136,7 @@ export function DashboardMainPage(): ReactElement {
     return () => { unsub(); if (unlisten) unlisten() }
   }, [])
 
-  // Slow ticker: while switch active and progress stuck between 60-95, nudge +0.4% every 800ms
+// Slow ticker: while switch active and progress stuck between 60-95, nudge +0.4% every 800ms
   const shouldNudge = swState.active && swState.progress >= 60 && swState.progress < 95
 
   useEffect(() => {
@@ -576,7 +576,7 @@ export function DashboardMainPage(): ReactElement {
 
   const activityData = useMemo(() => {
     return metricsHistory.map((item, idx) => ({
-      label: idx === metricsHistory.length - 1 ? t('main.activity.now') : t('main.activity.ago', { seconds: (metricsHistory.length - 1 - idx) * 4 }),
+label: idx === metricsHistory.length - 1 ? t('main.activity.now') : t('main.activity.ago', { seconds: (metricsHistory.length - 1 - idx) * 4 }),
       cpu: item.cpu,
       ram: item.ram,
     }))
@@ -585,7 +585,7 @@ export function DashboardMainPage(): ReactElement {
   const resourceAllocation = useMemo(() => {
     if (activeContainers.length === 0) {
       return [
-        { label: t('main.resourceAllocation.running'), value: 0, color: 'var(--green)' },
+{ label: t('main.resourceAllocation.running'), value: 0, color: 'var(--green)' },
         { label: t('main.resourceAllocation.exited'), value: 0, color: 'var(--text-muted)' },
         { label: t('main.resourceAllocation.paused'), value: 0, color: 'var(--yellow)' },
       ]
@@ -604,7 +604,7 @@ export function DashboardMainPage(): ReactElement {
       }
     }
     return [
-      { label: t('main.resourceAllocation.running'), value: running, color: 'var(--green)' },
+{ label: t('main.resourceAllocation.running'), value: running, color: 'var(--green)' },
       { label: t('main.resourceAllocation.exited'), value: exited, color: 'var(--text-muted)' },
       { label: t('main.resourceAllocation.paused'), value: paused, color: 'var(--yellow)' },
     ]
@@ -617,7 +617,7 @@ export function DashboardMainPage(): ReactElement {
           id: 'no-jobs',
           icon: 'info',
           color: 'rgba(255,255,255,0.1)',
-          title: t('main.activity.noJobs.title'),
+title: t('main.activity.noJobs.title'),
           time: t('main.activity.noJobs.time')
         }
       ]
@@ -639,7 +639,7 @@ export function DashboardMainPage(): ReactElement {
         id: j.id,
         icon,
         color,
-        title: t('main.activity.jobPrefix', { kind: j.kind, state: j.state }),
+title: t('main.activity.jobPrefix', { kind: j.kind, state: j.state }),
         time: j.state === 'running' 
           ? t('main.activity.progress', { progress: j.progress, log: j.logTail[j.logTail.length - 1] || t('main.activity.jobRunning') })
           : j.logTail[j.logTail.length - 1] || t('main.activity.completed')
@@ -830,7 +830,7 @@ export function DashboardMainPage(): ReactElement {
                     })
                   }}
                   density="comfortable"
-                  heading={t('main.widgets.pinned')}
+heading={t('main.widgets.pinned')}
                   onAdd={() => setPickerOpen(true)}
                 />
                 <AddWidgetModal
@@ -1058,7 +1058,7 @@ export function DashboardMainPage(): ReactElement {
                   <h3 style={{ margin: '0 0 16px', fontSize: 14, fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.05em' }}>
                     {t('main.services.title')}
                   </h3>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+<div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                     {activeContainers.length > 0 ? (
                       activeContainers.map((c) => {
                         const isRunning = c.state.toLowerCase().includes('running') || c.state.toLowerCase().includes('up')
@@ -1587,7 +1587,7 @@ function ActivityChart(props: { data: Array<{ label: string; cpu: number; ram: n
   const maxVal = 100
   return (
     <div className="dashboard-widget" style={{ display: 'flex', flexDirection: 'column' }}>
-      <h3 className="dashboard-widget-title">{t('main.activity.title')}</h3>
+<h3 className="dashboard-widget-title">{t('main.activity.title')}</h3>
       <div style={{
         display: 'flex',
         alignItems: 'flex-end',
@@ -1599,7 +1599,7 @@ function ActivityChart(props: { data: Array<{ label: string; cpu: number; ram: n
         {props.data.map((d, i) => (
           <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, flex: 1 }}>
             <div style={{ display: 'flex', gap: 2, height: 140, alignItems: 'flex-end' }}>
-              <div style={{ width: 8, height: `${Math.max(2, (d.cpu / maxVal) * 120)}px`, background: 'var(--accent)', borderRadius: '2px 2px 0 0', transition: 'height 0.3s ease' }} title={`${t('main.activity.cpu')} ${d.cpu.toFixed(0)}%`} />
+<div style={{ width: 8, height: `${Math.max(2, (d.cpu / maxVal) * 120)}px`, background: 'var(--accent)', borderRadius: '2px 2px 0 0', transition: 'height 0.3s ease' }} title={`${t('main.activity.cpu')} ${d.cpu.toFixed(0)}%`} />
               <div style={{ width: 8, height: `${Math.max(2, (d.ram / maxVal) * 120)}px`, background: 'var(--green)', borderRadius: '2px 2px 0 0', transition: 'height 0.3s ease' }} title={`${t('main.activity.ram')} ${d.ram.toFixed(0)}%`} />
             </div>
             <span style={{ fontSize: 10, color: 'var(--text-muted)', textAlign: 'center', whiteSpace: 'nowrap' }}>
@@ -1645,7 +1645,7 @@ function ResourceDonutChart(props: { data: Array<{ label: string; value: number;
 
   return (
     <div className="dashboard-widget" style={{ display: 'flex', flexDirection: 'column' }}>
-      <h3 className="dashboard-widget-title">{t('main.containerStatus.title')}</h3>
+<h3 className="dashboard-widget-title">{t('main.containerStatus.title')}</h3>
       <div style={{ display: 'flex', gap: 24, alignItems: 'center', flexWrap: 'wrap', flex: 1 }}>
         <div style={{
           position: 'relative',

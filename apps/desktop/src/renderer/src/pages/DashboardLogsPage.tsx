@@ -121,12 +121,12 @@ function stateBorder(s: string): string {
 }
 
 export function DashboardLogsPage(): ReactElement {
-  const { t } = useTranslation('dashboard')
+const { t } = useTranslation('dashboard')
   const [activeSource, setActiveSource] = useState<{
     type: 'compose' | 'job' | 'unified' | 'container'
     id?: string
     label: string
-  }>({ type: 'unified', label: t('logs.unifiedLabel') })
+}>({ type: 'unified', label: t('logs.unifiedLabel') })
   const [searchText, setSearchText] = useState('')
   const [jobs, setJobs] = useState<JobSummary[]>([])
   const [containers, setContainers] = useState<ContainerRow[]>([])
@@ -134,7 +134,7 @@ export function DashboardLogsPage(): ReactElement {
   const terminalRef = useRef<Terminal | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
-  const activeRef = useRef(false)
+const activeRef = useRef(false)
 
   const writeLogs = useCallback((text: string, filter: string) => {
     const term = terminalRef.current
@@ -148,7 +148,7 @@ export function DashboardLogsPage(): ReactElement {
       : lines
 
     if (filteredLines.length === 0) {
-      term.write('\r\n' + t('logs.noLinesMatch') + '\r\n')
+term.write('\r\n' + t('logs.noLinesMatch') + '\r\n')
     } else {
       for (const line of filteredLines) {
         term.write(colorizeLine(line) + '\r\n')
@@ -180,14 +180,14 @@ export function DashboardLogsPage(): ReactElement {
   }, [])
 
   const getUnifiedLogs = useCallback(async () => {
-    let unified = `=== ${t('logs.unifiedFeedTitle')} ===\r\n\r\n`
+let unified = `=== ${t('logs.unifiedFeedTitle')} ===\r\n\r\n`
     
     const composeResults = await Promise.all(
       profiles.map(async (p) => {
         try {
           const res = await window.dh.composeLogs({ profile: p })
           if (res.ok && res.log) {
-            return `--- ${t('logs.composeProfileSection', { profile: p })} ---\r\n${res.log}\r\n`
+return `--- ${t('logs.composeProfileSection', { profile: p })} ---\r\n${res.log}\r\n`
           }
         } catch {
           // ignore
@@ -209,7 +209,7 @@ export function DashboardLogsPage(): ReactElement {
             if (bag.ok && bag.text) logStr = bag.text
           }
           if (logStr) {
-            return `--- ${t('logs.containerSection', { name: c.name, image: c.image })} ---\r\n${logStr}\r\n`
+return `--- ${t('logs.containerSection', { name: c.name, image: c.image })} ---\r\n${logStr}\r\n`
           }
         } catch {
           // ignore
@@ -222,7 +222,7 @@ export function DashboardLogsPage(): ReactElement {
     try {
       const list = (await window.dh.jobsList()) as JobSummary[]
       if (Array.isArray(list) && list.length > 0) {
-        unified += '\r\n--- ' + t('logs.backgroundJobsSection') + ' ---\r\n'
+unified += '\r\n--- ' + t('logs.backgroundJobsSection') + ' ---\r\n'
         for (const j of list) {
           if (j.logTail && j.logTail.length > 0) {
             unified += `[${t('logs.jobEntryLabel', { kind: j.kind, state: j.state })}]\r\n` + j.logTail.join('\r\n') + '\r\n\r\n'
@@ -234,7 +234,7 @@ export function DashboardLogsPage(): ReactElement {
     }
 
     return unified
-  }, [containers, t])
+}, [containers, t])
 
   const loadSourceLogs = useCallback(async () => {
     let rawText = ''
@@ -243,7 +243,7 @@ export function DashboardLogsPage(): ReactElement {
     } else if (activeSource.type === 'compose') {
       try {
         const res = await window.dh.composeLogs({ profile: activeSource.id as ComposeProfile })
-        rawText = res.ok ? res.log || t('logs.noOutputYet') : res.error || t('logs.errorFetchingLogs')
+rawText = res.ok ? res.log || t('logs.noOutputYet') : res.error || t('logs.errorFetchingLogs')
       } catch (e) {
         rawText = t('logs.errorPrefix') + ' ' + (e instanceof Error ? e.message : String(e))
       }
@@ -251,7 +251,7 @@ export function DashboardLogsPage(): ReactElement {
       try {
         const res = await window.dh.dockerLogs({ id: activeSource.id!, tail: 200 })
         if (typeof res === 'string') {
-          rawText = res || t('logs.noOutputYet')
+rawText = res || t('logs.noOutputYet')
         } else if (res && typeof res === 'object' && 'ok' in res) {
           const bag = res as { ok: boolean; text?: string; error?: string }
           rawText = bag.ok ? bag.text || t('logs.noOutputYet') : bag.error || t('logs.errorFetchingLogs')
@@ -264,7 +264,7 @@ export function DashboardLogsPage(): ReactElement {
     } else if (activeSource.type === 'job') {
       const job = jobs.find(j => j.id === activeSource.id)
       if (job) {
-        rawText = `=== ${t('logs.jobDetailHeader', { kind: job.kind, state: job.state })} ===\r\n` +
+rawText = `=== ${t('logs.jobDetailHeader', { kind: job.kind, state: job.state })} ===\r\n` +
           `${t('logs.jobProgress', { progress: job.progress })}\r\n\r\n` +
           `--- ${t('logs.logsSection')} ---\r\n` +
           (job.logTail || []).join('\r\n')
@@ -274,7 +274,7 @@ export function DashboardLogsPage(): ReactElement {
     }
 
     writeLogs(rawText, searchText)
-  }, [activeSource, searchText, jobs, getUnifiedLogs, writeLogs, t])
+}, [activeSource, searchText, jobs, getUnifiedLogs, writeLogs, t])
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -341,7 +341,7 @@ export function DashboardLogsPage(): ReactElement {
     void refreshJobs()
     void refreshContainers()
     const id = setInterval(() => {
-      if (activeRef.current) {
+if (activeRef.current) {
         void refreshJobs()
         void refreshContainers()
       }
@@ -364,7 +364,7 @@ export function DashboardLogsPage(): ReactElement {
           </div>
           <h1 className="logs-title">{t('logs.heroTitle')}</h1>
           <p className="logs-subtitle">
-            {t('logs.heroSubtitle')}
+{t('logs.heroSubtitle')}
           </p>
         </div>
       </div>
@@ -387,7 +387,7 @@ export function DashboardLogsPage(): ReactElement {
                   <span className="codicon codicon-search" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontSize: 13 }} />
                   <input
                     type="text"
-                    placeholder={t('logs.searchPlaceholder')}
+placeholder={t('logs.searchPlaceholder')}
                     value={searchText}
                     onChange={(e) => setSearchText(e.target.value)}
                     style={{
@@ -419,7 +419,7 @@ export function DashboardLogsPage(): ReactElement {
                     onChange={(e) => {
                       const val = e.target.value
                       if (val === 'unified') {
-                        setActiveSource({ type: 'unified', label: t('logs.unifiedLabel') })
+setActiveSource({ type: 'unified', label: t('logs.unifiedLabel') })
                       } else {
                         const [type, ...rest] = val.split(':')
                         const id = rest.join(':')
@@ -435,7 +435,7 @@ export function DashboardLogsPage(): ReactElement {
                       }
                     }}
                   >
-                    <option value="unified">{t('logs.unifiedLabel')}</option>
+<option value="unified">{t('logs.unifiedLabel')}</option>
                     <optgroup label={t('logs.composeProfilesGroup')}>
                       {profiles.map((p) => (
                         <option key={p} value={`compose:${p}`}>{t('logs.composeLabel')}: {p}</option>
@@ -449,7 +449,7 @@ export function DashboardLogsPage(): ReactElement {
                       </optgroup>
                     )}
                     {jobs.length > 0 && (
-                      <optgroup label={t('logs.jobsGroup')}>
+<optgroup label={t('logs.jobsGroup')}>
                         {jobs.map((j) => (
                           <option key={j.id} value={`job:${j.id}`}>{t('logs.jobLabel')}: {j.kind.replace(/_/g, ' ')} ({j.state})</option>
                         ))}
@@ -465,7 +465,7 @@ export function DashboardLogsPage(): ReactElement {
                   onClick={() => void loadSourceLogs()}
                 >
                   <span className="codicon codicon-refresh" style={{ marginRight: 6 }} />
-                  {t('logs.refresh')}
+{t('logs.refresh')}
                 </button>
               </div>
             </div>
@@ -530,7 +530,7 @@ export function DashboardLogsPage(): ReactElement {
                   return (
                     <div
                       key={j.id}
-                      onClick={() => setActiveSource({ type: 'job', id: j.id, label: `${t('logs.jobLabel')}: ${j.kind.replace(/_/g, ' ')}` })}
+onClick={() => setActiveSource({ type: 'job', id: j.id, label: `${t('logs.jobLabel')}: ${j.kind.replace(/_/g, ' ')}` })}
                       className="logs-job-row"
                       style={{
                         borderBottom: i < allJobsDisplay.length - 1 ? '1px solid var(--border)' : 'none',
@@ -564,7 +564,7 @@ export function DashboardLogsPage(): ReactElement {
                           {j.state}
                         </span>
                       </div>
-                      {j.logTail && j.logTail.length > 0 && (
+{j.logTail && j.logTail.length > 0 && (
                         <div className="logs-job-tail-snippet">
                           {j.logTail[j.logTail.length - 1]}
                         </div>
