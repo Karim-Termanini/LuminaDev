@@ -1,6 +1,7 @@
 import type { CloudPipelineEntry } from '@linux-dev-home/shared'
 import type { CSSProperties, ReactElement } from 'react'
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 
 import { humanizeCloudAuthError } from './cloudAuthError'
@@ -48,6 +49,7 @@ export function GitVcsRepoPipelines({
   ambiguousHost?: boolean
   onAmbiguousTokenChange?: (next: 'github' | 'gitlab') => void
 }): ReactElement | null {
+  const { t } = useTranslation('git')
   const [pipelines, setPipelines] = useState<CloudPipelineEntry[]>([])
   const [loading, setLoading] = useState(false)
   const [errRaw, setErrRaw] = useState<string | null>(null)
@@ -132,11 +134,11 @@ export function GitVcsRepoPipelines({
               marginBottom: 4,
             }}
           >
-            CI · THIS REPO
+            {t('pipelines.section')}
           </div>
-          <div style={{ fontSize: 15, fontWeight: 650, color: 'var(--text)', lineHeight: 1.3 }}>Pipelines</div>
+          <div style={{ fontSize: 15, fontWeight: 650, color: 'var(--text)', lineHeight: 1.3 }}>{t('pipelines.title')}</div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.45, marginTop: 4 }}>
-            Latest runs for <span className="mono">{remoteName}</span> via{' '}
+            {t('pipelines.latestRuns', { remote: remoteName })} {' '}
             <Link to={`/git?tab=cloud&provider=${provider}`} style={{ color: 'var(--cg-accent, var(--accent))' }}>
               Cloud Git
             </Link>
@@ -153,7 +155,7 @@ export function GitVcsRepoPipelines({
       {ambiguousHost && onAmbiguousTokenChange ? (
         <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
           <span className="hp-muted" style={{ fontSize: 11 }}>
-            Token for CI API
+            {t('pipelines.tokenLabel')}
           </span>
           <div style={{ display: 'inline-flex', gap: 6 }}>
             <button
@@ -177,13 +179,13 @@ export function GitVcsRepoPipelines({
       ) : null}
 
       {loading ? (
-        <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: '8px 0' }}>Loading pipelines…</div>
+        <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: '8px 0' }}>{t('pipelines.loading')}</div>
       ) : errDisplay ? (
         <div role="alert" style={{ fontSize: 13, color: '#f87171', padding: '4px 0' }}>
           {errDisplay}
         </div>
       ) : pipelines.length === 0 ? (
-        <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: '4px 0' }}>No recent runs for this repository.</div>
+        <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: '4px 0' }}>{t('pipelines.none')}</div>
       ) : (
         <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
           {pipelines.map((row) => {

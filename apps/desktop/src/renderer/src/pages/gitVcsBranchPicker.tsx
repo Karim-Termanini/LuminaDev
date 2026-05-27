@@ -1,6 +1,7 @@
 import type { BranchEntry } from '@linux-dev-home/shared'
 import type { KeyboardEvent, ReactElement } from 'react'
 import { useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 export type GitVcsBranchPickerProps = {
   branches: BranchEntry[]
@@ -24,6 +25,7 @@ export function GitVcsBranchPicker({
   onCreateBranch,
   onRenameBranch,
 }: GitVcsBranchPickerProps): ReactElement {
+  const { t } = useTranslation('git')
   const [creating, setCreating] = useState(false)
   const [renaming, setRenaming] = useState(false)
   const [newName, setNewName] = useState('')
@@ -102,7 +104,7 @@ export function GitVcsBranchPicker({
       <span className="codicon codicon-git-branch" style={{ fontSize: 14, color: 'var(--text-muted)', flexShrink: 0 }} aria-hidden />
       <select
         className="mono"
-        aria-label="Current branch"
+        aria-label={t('branch.current')}
         value={currentBranch}
         disabled={busy || !currentBranch}
         onChange={(e) => onCheckout(e.target.value)}
@@ -121,7 +123,7 @@ export function GitVcsBranchPicker({
           <option value={currentBranch}>{currentBranch || '—'}</option>
         ) : (
           <>
-            <optgroup label="Local branches">
+            <optgroup label={t('branch.local')}>
               {localOptions.map((b) => (
                 <option key={`l:${b.name}`} value={b.name}>
                   {b.name}
@@ -129,7 +131,7 @@ export function GitVcsBranchPicker({
               ))}
             </optgroup>
             {remotes.length > 0 ? (
-              <optgroup label="Remote branches">
+              <optgroup label={t('branch.remote')}>
                 {remotes.map((b) => (
                   <option key={`r:${b.name}`} value={b.name}>
                     {b.name}
@@ -147,7 +149,7 @@ export function GitVcsBranchPicker({
             ref={renameRef}
             type="text"
             className="mono"
-            aria-label="New branch name"
+            aria-label={t('branch.newName')}
             value={renameName}
             onChange={(e) => setRenameName(e.target.value)}
             onKeyDown={handleRenameKey}
@@ -169,7 +171,7 @@ export function GitVcsBranchPicker({
             onClick={commitRename}
             style={{ whiteSpace: 'nowrap' }}
           >
-            Rename
+            {t('branch.rename')}
           </button>
           <button type="button" className="hp-btn" disabled={busy} onClick={cancelRename}>
             ✕
@@ -181,7 +183,7 @@ export function GitVcsBranchPicker({
             ref={inputRef}
             type="text"
             className="mono"
-            placeholder="new-branch-name"
+            placeholder={t('branch.newPlaceholder')}
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
             onKeyDown={handleInputKey}
@@ -203,7 +205,7 @@ export function GitVcsBranchPicker({
             onClick={commitCreate}
             style={{ whiteSpace: 'nowrap' }}
           >
-            Create
+            {t('branch.create')}
           </button>
           <button type="button" className="hp-btn" disabled={busy} onClick={cancelCreate}>
             ✕
@@ -215,7 +217,7 @@ export function GitVcsBranchPicker({
             type="button"
             className="hp-btn"
             disabled={busy}
-            title="Create and checkout a new branch"
+            title={t('branch.createTitle')}
             onClick={openCreate}
             style={{ padding: '4px 8px', fontSize: 16, lineHeight: 1 }}
           >
@@ -226,7 +228,7 @@ export function GitVcsBranchPicker({
               type="button"
               className="hp-btn"
               disabled={busy}
-              title="Rename current branch"
+              title={t('branch.renameTitle')}
               onClick={openRename}
               style={{ padding: '4px 7px' }}
             >

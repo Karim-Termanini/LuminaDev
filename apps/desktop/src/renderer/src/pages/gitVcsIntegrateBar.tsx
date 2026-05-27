@@ -1,6 +1,7 @@
 import type { BranchEntry } from '@linux-dev-home/shared'
 import type { ReactElement } from 'react'
 import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import type { GitVcsOperation } from './GitVcsStateBanner'
 
@@ -41,6 +42,7 @@ export function GitVcsIntegrateBar({
   onMergeAbort,
   onRebaseAbort,
 }: GitVcsIntegrateBarProps): ReactElement {
+  const { t } = useTranslation('git')
   const [expanded, setExpanded] = useState(false)
   const [otherRef, setOtherRef] = useState('')
   const [ffOnly, setFfOnly] = useState(true)
@@ -88,7 +90,7 @@ export function GitVcsIntegrateBar({
         disabled={busy}
       >
         <span className="codicon codicon-git-merge" style={{ fontSize: 13 }} aria-hidden />
-        Integrate (merge / rebase / stash pop)…
+        {t('integrate.label')}
       </button>
     )
   }
@@ -107,7 +109,7 @@ export function GitVcsIntegrateBar({
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <span className="mono" style={{ fontSize: 11, color: 'var(--text-muted)', letterSpacing: 0.04 }}>
-          {merging ? 'MERGE IN PROGRESS' : rebasing ? 'REBASE IN PROGRESS' : 'INTEGRATE'}
+          {merging ? t('integrate.inProgress.merge') : rebasing ? t('integrate.inProgress.rebase') : t('integrate.title')}
         </span>
         {idle ? (
           <button
@@ -125,22 +127,22 @@ export function GitVcsIntegrateBar({
       {merging ? (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
           <button type="button" className="hp-btn hp-btn-primary" disabled={busy} onClick={() => void onMergeContinue()}>
-            Continue merge
+            {t('integrate.continueMerge')}
           </button>
           <button type="button" className="hp-btn" disabled={busy} onClick={() => void onMergeAbort()}>
-            Abort merge
+            {t('integrate.abortMerge')}
           </button>
         </div>
       ) : rebasing ? (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
           <button type="button" className="hp-btn hp-btn-primary" disabled={busy} onClick={() => void onRebaseContinue()}>
-            Continue rebase
+            {t('integrate.continueRebase')}
           </button>
           <button type="button" className="hp-btn" disabled={busy} onClick={() => void onRebaseSkip()}>
-            Skip commit
+            {t('integrate.skipCommit')}
           </button>
           <button type="button" className="hp-btn" disabled={busy} onClick={() => void onRebaseAbort()}>
-            Abort rebase
+            {t('integrate.abortRebase')}
           </button>
         </div>
       ) : (
@@ -149,7 +151,7 @@ export function GitVcsIntegrateBar({
           <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10 }}>
             <select
               className="mono"
-              aria-label="Branch or remote ref to merge or rebase with"
+              aria-label={t('integrate.branchLabel')}
               value={otherRef}
               disabled={busy || !repoPath.trim()}
               onChange={(e) => setOtherRef(e.target.value)}
@@ -164,17 +166,17 @@ export function GitVcsIntegrateBar({
                 fontSize: 13,
               }}
             >
-              <option value="">Select branch or remote ref…</option>
-              <optgroup label="Local branches">
+              <option value="">{t('integrate.selectBranch')}</option>
+              <optgroup label={t('integrate.localBranches')}>
                 {locals.map((b) => (
                   <option key={`l:${b.name}`} value={b.name}>
                     {b.name}
-                    {b.name === currentBranch ? ' (current)' : ''}
+                    {b.name === currentBranch ? ` ${t('integrate.current')}` : ''}
                   </option>
                 ))}
               </optgroup>
               {remotes.length > 0 ? (
-                <optgroup label="Remote-tracking">
+                <optgroup label={t('integrate.remoteTracking')}>
                   {remotes.map((b) => (
                     <option key={`r:${b.name}`} value={b.name}>
                       {b.name}
@@ -194,7 +196,7 @@ export function GitVcsIntegrateBar({
               }}
             >
               <input type="checkbox" checked={ffOnly} disabled={busy} onChange={(e) => setFfOnly(e.target.checked)} />
-              Fast-forward only
+              {t('integrate.ffOnly')}
             </label>
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
@@ -204,7 +206,7 @@ export function GitVcsIntegrateBar({
               disabled={busy || !canIntegrate}
               onClick={() => void onMerge(otherRef.trim(), ffOnly)}
             >
-              Merge into current
+              {t('integrate.merge')}
             </button>
             <button
               type="button"
@@ -212,11 +214,11 @@ export function GitVcsIntegrateBar({
               disabled={busy || !canIntegrate}
               onClick={() => void onRebase(otherRef.trim())}
             >
-              Rebase onto
+              {t('integrate.rebase')}
             </button>
             <span style={{ width: 1, height: 20, background: 'var(--border)', margin: '0 2px' }} aria-hidden />
             <button type="button" className="hp-btn" disabled={busy} onClick={() => void onStashPop()}>
-              Stash pop
+              {t('integrate.stashPop')}
             </button>
           </div>
         </>

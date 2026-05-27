@@ -1,5 +1,6 @@
 import type { GitRepoEntry } from '@linux-dev-home/shared'
 import type { ReactElement } from 'react'
+import { useTranslation } from 'react-i18next'
 
 export type GitVcsRepoPickerProps = {
   value: string
@@ -16,12 +17,13 @@ export function GitVcsRepoPicker({
   onOpenFolder,
   highlightPath,
 }: GitVcsRepoPickerProps): ReactElement {
+  const { t } = useTranslation('git')
   const sorted = [...recents].sort((a, b) => b.lastOpened - a.lastOpened)
 
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10 }}>
       <label className="mono" style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-        Repository
+        {t('repo.label')}
       </label>
       <select
         className="mono"
@@ -38,7 +40,7 @@ export function GitVcsRepoPicker({
           color: 'var(--text)',
         }}
       >
-        <option value="">— Select —</option>
+        <option value="">{t('repo.select')}</option>
         {sorted.map((r) => (
           <option key={r.path} value={r.path}>
             {highlightPath && r.path === highlightPath ? `⚡ ${r.path}` : r.path}
@@ -46,7 +48,7 @@ export function GitVcsRepoPicker({
         ))}
       </select>
       <button type="button" className="hp-btn" onClick={() => void onOpenFolder()}>
-        Open folder…
+        {t('repo.openFolder')}
       </button>
     </div>
   )

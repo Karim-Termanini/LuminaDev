@@ -1,5 +1,6 @@
 import type { CSSProperties, ReactElement } from 'react'
 import { useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import { GIT_VCS_NEXT_ACTION_RING } from './gitVcsUiTokens'
 
@@ -37,6 +38,7 @@ export function GitVcsCommitBar({
   emphasizeCommit = null,
   showAiSuggest = false,
 }: GitVcsCommitBarProps): ReactElement {
+  const { t } = useTranslation('git')
   const taRef = useRef<HTMLTextAreaElement>(null)
   const taStyle =
     emphasizeCommit === 'commit_message' ? { ...BASE_TEXTAREA, ...GIT_VCS_NEXT_ACTION_RING } : BASE_TEXTAREA
@@ -54,14 +56,14 @@ export function GitVcsCommitBar({
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <label className="mono" style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-          Commit message
+          {t('commit.label')}
         </label>
         {showAiSuggest && (
           <button
             type="button"
             className="hp-btn"
             disabled={busy || disabled}
-            title="Generate a commit message from staged changes"
+            title={t('commit.aiTitle')}
             onClick={() => {
               if (!message.trim()) {
                 onMessageChange('feat: describe your changes here')
@@ -70,7 +72,7 @@ export function GitVcsCommitBar({
             style={{ fontSize: 11, padding: '2px 8px', display: 'flex', alignItems: 'center', gap: 4 }}
           >
             <span className="codicon codicon-sparkle" style={{ fontSize: 11 }} />
-            Suggest
+            {t('commit.aiSuggest')}
           </button>
         )}
       </div>
@@ -81,7 +83,7 @@ export function GitVcsCommitBar({
           onChange={(e) => onMessageChange(e.target.value)}
           disabled={busy || disabled}
           rows={2}
-          placeholder="Describe your changes…"
+          placeholder={t('commit.placeholder')}
           style={taStyle}
         />
         <button
@@ -91,7 +93,7 @@ export function GitVcsCommitBar({
           onClick={() => void onCommit(taRef.current?.value ?? message)}
           style={commitBtnStyle}
         >
-          Commit
+          {t('commit.button')}
         </button>
       </div>
     </div>

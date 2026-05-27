@@ -1,5 +1,6 @@
 import type { ReactElement } from 'react'
 import { useCallback, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { CloudGitPage } from './CloudGitPage'
 import { GitConfigPage } from './GitConfigPage'
@@ -9,13 +10,8 @@ import { humanizeGitError } from './gitError'
 
 type GitTab = 'vcs' | 'config' | 'cloud'
 
-const TABS: { id: GitTab; label: string; icon: string }[] = [
-  { id: 'vcs', label: 'Version Control', icon: 'source-control' },
-  { id: 'config', label: 'Git Config', icon: 'settings-gear' },
-  { id: 'cloud', label: 'Cloud (GitHub / GitLab)', icon: 'github' },
-]
-
 export function DeveloperGitPage(): ReactElement {
+  const { t } = useTranslation('git')
   const [searchParams, setSearchParams] = useSearchParams()
   const activeTab: GitTab = (() => {
     const raw = searchParams.get('tab')
@@ -45,13 +41,17 @@ export function DeveloperGitPage(): ReactElement {
           flexShrink: 0,
         }}
       >
-        {TABS.map((t) => {
-          const active = activeTab === t.id
+        {([
+          { id: 'vcs' as GitTab, icon: 'source-control', label: t('tab.vcs') },
+          { id: 'config' as GitTab, icon: 'settings-gear', label: t('tab.config') },
+          { id: 'cloud' as GitTab, icon: 'github', label: t('tab.cloud') },
+        ] as { id: GitTab; icon: string; label: string }[]).map((tab) => {
+          const active = activeTab === tab.id
           return (
             <button
-              key={t.id}
+              key={tab.id}
               type="button"
-              onClick={() => switchTab(t.id)}
+              onClick={() => switchTab(tab.id)}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -68,8 +68,8 @@ export function DeveloperGitPage(): ReactElement {
                 transition: 'color 120ms ease',
               }}
             >
-              <span className={`codicon codicon-${t.icon}`} aria-hidden />
-              {t.label}
+              <span className={`codicon codicon-${tab.icon}`} aria-hidden />
+              {tab.label}
             </button>
           )
         })}
@@ -98,6 +98,7 @@ function VcsTabWrapper(): ReactElement {
 }
 
 function CloneBar(): ReactElement {
+  const { t } = useTranslation('git')
   const navigate = useNavigate()
   const [url, setUrl] = useState('')
   const [target, setTarget] = useState('')
@@ -106,16 +107,16 @@ function CloneBar(): ReactElement {
 
   const run = useCallback(async () => {
     const u = url.trim()
-    const t = target.trim()
+    const tDir = target.trim()
     if (!u) return
     setBusy(true)
     setMsg(null)
     try {
-      if (!t) { setMsg({ text: 'Enter a target directory.', ok: false }); setBusy(false); return }
-      const res = await window.dh.gitClone({ url: u, targetDir: t })
+      if (!tDir) { setMsg({ text: t('clone.noTarget'), ok: false }); setBusy(false); return }
+      const res = await window.dh.gitClone({ url: u, targetDir: tDir })
       assertGitOk(res, 'Clone failed.')
       const clonedPath = (res as Record<string, unknown>).path as string | undefined
-      setMsg({ text: 'Clone complete.', ok: true })
+      setMsg({ text: t('clone.complete'), ok: true })
       setUrl('')
       setTarget('')
       if (clonedPath) {
@@ -127,7 +128,7 @@ function CloneBar(): ReactElement {
     } finally {
       setBusy(false)
     }
-  }, [url, target, navigate])
+  }, [url, target, navigate, t])
 
   return (
     <div
@@ -142,10 +143,10 @@ function CloneBar(): ReactElement {
         flexWrap: 'wrap',
       }}
     >
-      <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600, flexShrink: 0 }}>Clone</span>
+      <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600, flexShrink: 0 }}>{t('clone.label')}</span>
       <input
         type="text"
-        placeholder="Repository URL"
+        placeholder={t('clone.urlPlaceholder')}
         value={url}
         disabled={busy}
         onChange={(e) => setUrl(e.target.value)}
@@ -162,7 +163,7 @@ function CloneBar(): ReactElement {
       />
       <input
         type="text"
-        placeholder="Target directory"
+        placeholder={t('clone.targetPlaceholder')}
         value={target}
         disabled={busy}
         onChange={(e) => setTarget(e.target.value)}
@@ -184,7 +185,7 @@ function CloneBar(): ReactElement {
         onClick={() => void run()}
         style={{ fontSize: 12, padding: '6px 14px' }}
       >
-        {busy ? 'Cloning…' : 'Clone'}
+        {busy ? t('clone.busy') : t('clone.button')}
       </button>
       {msg ? (
         <span style={{ fontSize: 11, color: msg.ok ? 'var(--green)' : 'var(--red)', flexBasis: '100%' }}>

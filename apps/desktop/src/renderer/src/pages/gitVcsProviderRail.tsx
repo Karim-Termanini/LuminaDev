@@ -1,5 +1,6 @@
 import type { ConnectedAccount, GitRemoteEntry } from '@linux-dev-home/shared'
 import type { ReactElement } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 
 import { classifyGitRemoteUrl, truncateMiddleUrl, type GitProviderFamily } from './gitVcsProviderHost'
@@ -96,6 +97,7 @@ function ProviderCard(props: {
   activeHere: boolean
   onActivate: () => void
 }): ReactElement {
+  const { t } = useTranslation('git')
   const { provider, title, iconClass, accent, account, remotes, hasRepo, activeFetchRemote, activeHere, onActivate } =
     props
   return (
@@ -109,7 +111,7 @@ function ProviderCard(props: {
           onActivate()
         }
       }}
-      aria-label={`${title}: use this host for fetch or open Cloud Git`}
+      aria-label={t('provider.useForFetch', { title })}
       style={{
         ...CARD,
         cursor: 'pointer',
@@ -133,25 +135,25 @@ function ProviderCard(props: {
           onClick={(e) => e.stopPropagation()}
           style={{ fontSize: 11, color: 'var(--cg-accent, var(--accent))', textDecoration: 'none', flexShrink: 0 }}
         >
-          Cloud Git
+          {t('provider.cloudGit')}
         </Link>
       </div>
       <div style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.45 }}>
         {account ? (
           <span>
-            Signed in as <span style={{ color: 'var(--text)', fontWeight: 600 }}>@{account.username}</span>
+            {t('provider.signedInAs')} <span style={{ color: 'var(--text)', fontWeight: 600 }}>@{account.username}</span>
           </span>
         ) : (
-          <span>Not connected — HTTPS sync needs a token in Cloud Git.</span>
+          <span>{t('provider.notConnected')}</span>
         )}
       </div>
       {!hasRepo ? (
         <div className="mono" style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-          Open a repository below to list remotes for this host.
+          {t('provider.noRepo')}
         </div>
       ) : remotes.length === 0 ? (
         <div className="mono" style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-          No remotes in this repo point here (SSH/HTTPS URL detection).
+          {t('provider.noRemotes')}
         </div>
       ) : (
         <ul
@@ -174,7 +176,7 @@ function ProviderCard(props: {
       )}
       {hasRepo && activeHere ? (
         <div className="mono" style={{ fontSize: 11, color: 'var(--cg-accent, var(--accent))', fontWeight: 600 }}>
-          Fetch uses remote “{activeFetchRemote}” on this host.
+          {t('provider.fetchUsing', { remote: activeFetchRemote })}
         </div>
       ) : null}
     </div>
