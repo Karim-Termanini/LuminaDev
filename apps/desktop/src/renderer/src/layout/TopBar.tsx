@@ -74,6 +74,7 @@ export function TopBar(): ReactElement {
         background: 'var(--bg-panel)',
         flexShrink: 0,
         position: 'relative',
+        direction: 'ltr',
       }}
     >
       <div style={{ fontWeight: 700, letterSpacing: '0.04em', minWidth: 140 }}>{pathname === '/dashboard' || pathname.startsWith('/dashboard/') ? t('topbar.dashboardTitle') : (titles[pathname] ?? t('topbar.linuxDevHome'))}</div>
@@ -103,7 +104,7 @@ export function TopBar(): ReactElement {
           fontSize: 13,
         }}
       />
-      <div style={{ position: 'relative', display: 'flex', alignItems: 'center', direction: 'ltr' }}>
+      <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
         <button
           type="button"
           aria-label="Notifications"
