@@ -805,7 +805,7 @@ export function DockerPage(): ReactElement {
                     }} 
                     disabled={busy || !pullImage || isLoadingTags}
                   >
-                    {isLoadingTags ? 'Tags...' : 'Pull Image'}
+                    {isLoadingTags ? t('create.pullingTags') : t('create.pullImage')}
                   </button>
                 </div>
 
@@ -881,10 +881,10 @@ export function DockerPage(): ReactElement {
                 </label>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
                   <input type="checkbox" checked={autoStart} onChange={(e) => setAutoStart(e.target.checked)} />
-                  Auto start after create
+                  {t('create.autoStart')}
                 </label>
                 <button type="button" className="hp-btn hp-btn-primary" onClick={() => void createCustomContainer()} disabled={busy}>
-                  Create custom container
+                  {t('create.createCustom')}
                 </button>
               </div>
             </div>
@@ -916,7 +916,7 @@ export function DockerPage(): ReactElement {
                         [`${ex.title}-${ex.image}`]: e.target.value,
                       }))
                     }
-                    placeholder="Container name (optional)"
+                    placeholder={t('create.namePlaceholder')}
                     className="hp-input"
                     disabled={busy}
                   />
@@ -951,7 +951,7 @@ export function DockerPage(): ReactElement {
                   onClick={() => applyExampleToForm(ex)}
                   disabled={busy}
                 >
-                  Use
+                  {t('action.use')}
                 </button>
               </div>
             ))}
@@ -1021,7 +1021,7 @@ export function DockerPage(): ReactElement {
                         setPullImage(img)
                         void pullCustomImage(img)
                       }} disabled={busy}>
-                      PULL
+                      {t('action.download')}
                     </button>
                   </div>
                 ))}
@@ -1452,7 +1452,7 @@ export function DockerPage(): ReactElement {
                             disabled={remapBusy}
                             onClick={() => void runRemapPort()}
                           >
-                            {remapBusy ? 'Working…' : 'Remap port'}
+                            {remapBusy ? t('ports.remapping') : t('ports.remap')}
                           </button>
                         </div>
                       )}
@@ -1541,7 +1541,7 @@ export function DockerPage(): ReactElement {
                 onClick={() => void runPrune()}
                 disabled={busy || !Object.values(pruneSelection).some(v => v)}
               >
-                Run Selected Cleanup
+                {t('cleanup.runSelected')}
               </button>
             </div>
 
