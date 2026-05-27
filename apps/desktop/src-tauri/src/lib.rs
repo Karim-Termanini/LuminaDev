@@ -6,7 +6,7 @@ use std::path::Path;
 use std::process::Stdio;
 use std::sync::{Arc, Mutex as StdMutex};
 use std::time::{Duration, Instant};
-use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
+use portable_pty::{native_pty_system, CommandBuilder, PtySize};
 use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
 use tokio::process::Command;
@@ -18,12 +18,10 @@ pub(crate) use state::{AppState, TerminalSession, START_TIME};
 mod utils;
 use utils::{
   app_file,
-  docker_prune_preview_payload,
   is_physical_disk_name,
   now_ms,
   parse_git_remote_fetch_lines,
   parse_porcelain_v1,
-  parse_size_mb,
   read_json,
   sanitize_docker_name,
   shell_quote_value,
@@ -46,7 +44,6 @@ use host_exec::{
   cmd_timeout_ssh,
   exec_output,
   exec_output_limit,
-  exec_result,
   exec_result_limit,
   read_proc_text,
 };
