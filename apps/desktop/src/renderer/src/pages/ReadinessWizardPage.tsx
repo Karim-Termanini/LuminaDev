@@ -1,5 +1,6 @@
 import type { ReactElement } from 'react'
 import { useCallback, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import './ReadinessWizardPage.css'
 
 type RequirementStatus = 'ok' | 'warning' | 'error'
@@ -50,17 +51,8 @@ type InstallationTask = {
   progress: number
 }
 
-const OPEN_SOURCE_LICENSE = `LuminaDev - Open Source License
-
-Copyright (c) 2024-present LuminaDev Contributors
-
-This software is released under the MIT License. You are free to use, modify, and distribute this software, provided that you include this license notice in all copies or substantial portions of the software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-For more information, visit: https://github.com/luminadev/luminadev`
-
 export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }): ReactElement {
+  const { t } = useTranslation('readiness')
   const [currentStep, setCurrentStep] = useState(1)
   const [categories, setCategories] = useState<RequirementCategory[]>([])
   const [loading, setLoading] = useState(true)
@@ -125,11 +117,11 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
 
     type FinalizationTask = { id: string; label: string; status: 'pending' | 'running' | 'complete'; progress: number }
     const tasks: FinalizationTask[] = [
-      { id: 'git', label: 'Saving Git identity...', status: 'pending', progress: 0 },
-      { id: 'theme', label: 'Applying theme preference...', status: 'pending', progress: 0 },
-      { id: 'profile', label: 'Saving starter profile...', status: 'pending', progress: 0 },
-      { id: 'projects-dir', label: 'Configuring projects directory...', status: 'pending', progress: 0 },
-      { id: 'complete', label: 'Finalizing setup...', status: 'pending', progress: 0 },
+      { id: 'git', label: t('wizard.install.taskGit'), status: 'pending', progress: 0 },
+      { id: 'theme', label: t('wizard.install.taskTheme'), status: 'pending', progress: 0 },
+      { id: 'profile', label: t('wizard.install.taskProfile'), status: 'pending', progress: 0 },
+      { id: 'projects-dir', label: t('wizard.install.taskProjectsDir'), status: 'pending', progress: 0 },
+      { id: 'complete', label: t('wizard.install.taskComplete'), status: 'pending', progress: 0 },
     ]
     setInstallationTasks(tasks)
 
@@ -196,72 +188,72 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
     const hardwareReqs: Requirement[] = [
       {
         id: 'ram',
-        label: 'RAM',
-        description: '≥4GB required',
+        label: t('wizard.prereqs.reqRam'),
+        description: t('wizard.prereqs.reqRamDesc'),
         status: hardware.ram_total_gb >= 4 ? 'ok' : 'warning',
         critical: hardware.ram_total_gb >= 4,
-        value: `${hardware.ram_total_gb.toFixed(1)}GB total`,
+        value: t('wizard.prereqs.reqRamValue', { gb: hardware.ram_total_gb.toFixed(1) }),
       },
       {
         id: 'cpu',
-        label: 'CPU Cores',
-        description: '≥2 required',
+        label: t('wizard.prereqs.reqCpu'),
+        description: t('wizard.prereqs.reqCpuDesc'),
         status: hardware.cpu_cores >= 2 ? 'ok' : 'warning',
         critical: hardware.cpu_cores >= 2,
-        value: `${hardware.cpu_cores} cores`,
+        value: t('wizard.prereqs.reqCpuValue', { cores: hardware.cpu_cores }),
       },
       {
         id: 'arch',
-        label: 'Architecture',
-        description: 'x86_64 required',
+        label: t('wizard.prereqs.reqArch'),
+        description: t('wizard.prereqs.reqArchDesc'),
         status: hardware.architecture === 'x86_64' ? 'ok' : 'error',
         critical: hardware.architecture === 'x86_64',
         value: hardware.architecture,
       },
       {
         id: 'virt',
-        label: 'Virtualization',
-        description: 'KVM support required',
+        label: t('wizard.prereqs.reqVirt'),
+        description: t('wizard.prereqs.reqVirtDesc'),
         status: software.kvm_supported ? 'ok' : 'error',
         critical: software.kvm_supported,
-        value: software.kvm_supported ? 'Enabled' : 'Not available',
+        value: software.kvm_supported ? t('wizard.prereqs.virtEnabled') : t('wizard.prereqs.virtNotAvailable'),
       },
     ]
 
     const toolReqs: Requirement[] = [
       {
         id: 'docker',
-        label: 'Docker',
-        description: 'v20.10+',
+        label: t('wizard.prereqs.reqDocker'),
+        description: t('wizard.prereqs.reqDockerDesc'),
         status: software.docker_installed ? 'ok' : 'error',
         critical: true,
-        value: software.docker_installed ? software.docker_version : 'Not installed',
+        value: software.docker_installed ? software.docker_version : t('wizard.prereqs.dockerNotInstalled'),
       },
       {
         id: 'git',
-        label: 'Git',
-        description: 'Required',
+        label: t('wizard.prereqs.reqGit'),
+        description: t('wizard.prereqs.reqGitDesc'),
         status: tools.git ? 'ok' : 'error',
         critical: true,
       },
       {
         id: 'curl',
-        label: 'Curl',
-        description: 'Required',
+        label: t('wizard.prereqs.reqCurl'),
+        description: t('wizard.prereqs.reqCurlDesc'),
         status: tools.curl ? 'ok' : 'warning',
         critical: false,
       },
       {
         id: 'tar',
-        label: 'Tar',
-        description: 'Required',
+        label: t('wizard.prereqs.reqTar'),
+        description: t('wizard.prereqs.reqTarDesc'),
         status: tools.tar ? 'ok' : 'warning',
         critical: false,
       },
       {
         id: 'unzip',
-        label: 'Unzip',
-        description: 'Required',
+        label: t('wizard.prereqs.reqUnzip'),
+        description: t('wizard.prereqs.reqUnzipDesc'),
         status: tools.unzip ? 'ok' : 'warning',
         critical: false,
       },
@@ -270,26 +262,26 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
     const dockerReqs: Requirement[] = [
       {
         id: 'daemon',
-        label: 'Docker Daemon',
-        description: 'Must be running',
+        label: t('wizard.prereqs.reqDaemon'),
+        description: t('wizard.prereqs.reqDaemonDesc'),
         status: software.docker_running ? 'ok' : 'error',
         critical: true,
-        value: software.docker_running ? 'Running' : 'Not running',
+        value: software.docker_running ? t('wizard.prereqs.daemonRunning') : t('wizard.prereqs.daemonNotRunning'),
       },
       {
         id: 'group',
-        label: 'Docker Group',
-        description: 'User in docker group',
+        label: t('wizard.prereqs.reqGroup'),
+        description: t('wizard.prereqs.reqGroupDesc'),
         status: software.in_docker_group ? 'ok' : 'warning',
         critical: true,
-        value: software.in_docker_group ? 'Yes' : 'No',
+        value: software.in_docker_group ? t('wizard.prereqs.groupYes') : t('wizard.prereqs.groupNo'),
       },
     ]
 
     setCategories([
-      { title: 'Hardware', icon: 'circuit-board', requirements: hardwareReqs },
-      { title: 'System Tools', icon: 'wrench', requirements: toolReqs },
-      { title: 'Docker', icon: 'package', requirements: dockerReqs },
+      { title: t('wizard.prereqs.categoryHardware'), icon: 'circuit-board', requirements: hardwareReqs },
+      { title: t('wizard.prereqs.categoryTools'), icon: 'wrench', requirements: toolReqs },
+      { title: t('wizard.prereqs.categoryDocker'), icon: 'package', requirements: dockerReqs },
     ])
   }
 
@@ -318,15 +310,15 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
 
   const getProgressMessage = (fixId: string): string => {
     const messageMap: Record<string, string> = {
-      'install-docker': 'Installing Docker container runtime...',
-      'install-git': 'Installing Git version control...',
-      'install-curl': 'Installing Curl HTTP client...',
-      'install-tar': 'Installing Tar archiver...',
-      'install-unzip': 'Installing Unzip utility...',
-      'docker-start': 'Starting Docker daemon...',
-      'docker-group': 'Adding user to docker group...',
+      'install-docker': t('wizard.progress.docker'),
+      'install-git': t('wizard.progress.git'),
+      'install-curl': t('wizard.progress.curl'),
+      'install-tar': t('wizard.progress.tar'),
+      'install-unzip': t('wizard.progress.unzip'),
+      'docker-start': t('wizard.progress.dockerStart'),
+      'docker-group': t('wizard.progress.dockerGroup'),
     }
-    return messageMap[fixId] || 'Processing...'
+    return messageMap[fixId] || t('wizard.progress.processing')
   }
 
   const handleInstall = async (reqId: string) => {
@@ -338,7 +330,7 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
       const res = (await window.dh.systemReadinessFix({ id: fixId })) as { ok: boolean; error?: string }
 
       if (res.ok) {
-        setProgress((p) => p ? { ...p, status: 'complete', message: 'Installation complete. Verifying...' } : null)
+        setProgress((p) => p ? { ...p, status: 'complete', message: t('wizard.progress.verifying') } : null)
         await new Promise((r) => setTimeout(r, 800))
         await runProbes()
         setProgress(null)
@@ -346,7 +338,7 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
         setProgress((p) => ({
           ...(p || { reqId, fixId, status: 'error', message: '' }),
           status: 'error',
-          error: res.error || 'Installation failed',
+          error: res.error || t('wizard.progress.installFailed'),
         }))
       }
     } catch (e) {
@@ -396,10 +388,10 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
         if (pubRes.ok && pubRes.pub) {
           setSshPublicKey(pubRes.pub)
         } else {
-          setSshError(pubRes.error || 'Failed to retrieve public key')
+          setSshError(pubRes.error || t('wizard.ssh.failedRetrieve'))
         }
       } else {
-        setSshError(genRes.error || 'Failed to generate SSH key')
+        setSshError(genRes.error || t('wizard.ssh.failedGenerate'))
       }
     } catch (e) {
       setSshError(e instanceof Error ? e.message : String(e))
@@ -457,10 +449,10 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
               <div className="readiness-welcome-icon">
                 <span className="codicon codicon-circle-large-filled" />
               </div>
-              <h1 className="readiness-welcome-title">Welcome to LuminaDev</h1>
-              <p className="readiness-welcome-subtitle">A premium development container orchestration platform</p>
+              <h1 className="readiness-welcome-title">{t('wizard.welcome.title')}</h1>
+              <p className="readiness-welcome-subtitle">{t('wizard.welcome.subtitle')}</p>
               <p className="readiness-welcome-description">
-                This installer will check your system, verify prerequisites, and prepare LuminaDev for first use.
+                {t('wizard.welcome.description')}
               </p>
             </div>
           )}
@@ -468,14 +460,14 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
           {/* STEP 2: License */}
           {currentStep === 2 && (
             <div className="readiness-step-license">
-              <h2 className="readiness-license-title">Open Source License</h2>
-              <p className="readiness-license-subtitle">Please review our open source license agreement</p>
+              <h2 className="readiness-license-title">{t('wizard.license.title')}</h2>
+              <p className="readiness-license-subtitle">{t('wizard.license.subtitle')}</p>
               <div className="readiness-license-box">
-                <pre className="readiness-license-text">{OPEN_SOURCE_LICENSE}</pre>
+                <pre className="readiness-license-text">{t('wizard.license.text')}</pre>
               </div>
               <label className="readiness-license-agree">
                 <input type="checkbox" defaultChecked disabled />
-                <span>I agree to the terms and conditions</span>
+                <span>{t('wizard.license.agree')}</span>
               </label>
             </div>
           )}
@@ -483,13 +475,13 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
           {/* STEP 3: Pre-Requisites */}
           {currentStep === 3 && (
             <div className="readiness-step-prereqs">
-              <h2 className="readiness-prereqs-title">System Requirements</h2>
-              <p className="readiness-prereqs-subtitle">Verifying your system meets LuminaDev requirements</p>
+              <h2 className="readiness-prereqs-title">{t('wizard.prereqs.title')}</h2>
+              <p className="readiness-prereqs-subtitle">{t('wizard.prereqs.subtitle')}</p>
 
               {loading ? (
                 <div className="readiness-loading">
                   <div className="codicon codicon-loading codicon-modifier-spin" />
-                  <div>Checking system requirements...</div>
+                  <div>{t('wizard.prereqs.checking')}</div>
                 </div>
               ) : (
                 <div className="readiness-categories">
@@ -523,20 +515,20 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
                                   className="readiness-btn readiness-btn-install"
                                   onClick={() => void handleInstall(req.id)}
                                   disabled={installing === req.id}
-                                  title={`Fix: ${req.label}`}
+                                  title={t('wizard.prereqs.fixTitle', { name: req.label })}
                                 >
                                   {installing === req.id ? (
                                     <>
                                       <span className="codicon codicon-loading codicon-modifier-spin" />
-                                      Installing...
+                                      {t('wizard.prereqs.installing')}
                                     </>
                                   ) : (
-                                    'Fix It'
+                                    t('wizard.prereqs.fixIt')
                                   )}
                                 </button>
                                 <button
                                   className="readiness-btn readiness-btn-help"
-                                  title="How to fix manually"
+                                  title={t('wizard.prereqs.helpTitle')}
                                 >
                                   <span className="codicon codicon-question" />
                                 </button>
@@ -559,19 +551,19 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
                       void runProbes().finally(() => setRecheckLoading(false))
                     }}
                     disabled={recheckLoading}
-                    title="Re-run all system probes"
+                    title={t('wizard.prereqs.recheckTitle')}
                   >
                     {recheckLoading ? (
-                      <><span className="codicon codicon-loading codicon-modifier-spin" /> Checking...</>
+                      <><span className="codicon codicon-loading codicon-modifier-spin" /> {t('wizard.prereqs.checking')}</>
                     ) : (
-                      <><span className="codicon codicon-refresh" /> Recheck All</>
+                      <><span className="codicon codicon-refresh" /> {t('wizard.prereqs.recheck')}</>
                     )}
                   </button>
                   {!allCriticalMet && (
                     <div className="readiness-prereqs-notice" style={{ margin: 0 }}>
                       <span className="codicon codicon-warning" />
                       <div>
-                        <strong>Fix all critical requirements to continue.</strong> Click "Fix It" on any red items to install automatically, then press Recheck All.
+                        {t('wizard.prereqs.notice')}
                       </div>
                     </div>
                   )}
@@ -583,22 +575,22 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
           {/* STEP 4: Projects Home Directory */}
           {currentStep === 4 && (
             <div className="readiness-step-location">
-              <h2 className="readiness-location-title">Projects Home Directory</h2>
-              <p className="readiness-location-subtitle">Choose where LuminaDev stores your development projects</p>
+              <h2 className="readiness-location-title">{t('wizard.location.title')}</h2>
+              <p className="readiness-location-subtitle">{t('wizard.location.subtitle')}</p>
 
               <div className="readiness-location-section">
-                <label className="readiness-location-label">Projects Directory</label>
+                <label className="readiness-location-label">{t('wizard.location.label')}</label>
                 <div className="readiness-location-input-group">
                   <input
                     type="text"
                     className="readiness-location-input"
                     value={projectsDir}
                     onChange={(e) => setProjectsDir(e.target.value)}
-                    placeholder="~/LuminaProjects"
+                    placeholder={t('wizard.location.placeholder')}
                   />
                   <button
                     className="readiness-location-browse"
-                    title="Browse for folder"
+                    title={t('wizard.location.browseTitle')}
                     onClick={() => {
                       void window.dh.selectFolder().then((p) => {
                         if (p) setProjectsDir(p)
@@ -608,13 +600,13 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
                     <span className="codicon codicon-folder-open" />
                   </button>
                 </div>
-                <p className="readiness-location-hint">Each new project will be created inside this folder (e.g. ~/LuminaProjects/data-science/my-project)</p>
+                <p className="readiness-location-hint">{t('wizard.location.hint')}</p>
               </div>
 
               <div className="readiness-location-info">
                 <span className="codicon codicon-info" />
                 <div>
-                  <strong>Recommended:</strong> Use a path on a fast SSD with at least 20GB of free space. You can change this later in Settings.
+                  {t('wizard.location.info')}
                 </div>
               </div>
             </div>
@@ -623,48 +615,48 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
           {/* STEP 5: Configuration */}
           {currentStep === 5 && (
             <div className="readiness-step-config">
-              <h2 className="readiness-config-title">User Configuration</h2>
-              <p className="readiness-config-subtitle">Set your preferences before starting</p>
+              <h2 className="readiness-config-title">{t('wizard.config.title')}</h2>
+              <p className="readiness-config-subtitle">{t('wizard.config.subtitle')}</p>
 
               <div className="readiness-config-section">
-                <label className="readiness-config-label">Theme</label>
+                <label className="readiness-config-label">{t('wizard.config.themeLabel')}</label>
                 <div className="readiness-config-theme-options">
                   <button
                     className={`readiness-theme-option ${theme === 'dark' ? 'active' : ''}`}
                     onClick={() => setTheme('dark')}
                   >
                     <span className="codicon codicon-circle-large-filled" />
-                    <div>Dark</div>
+                    <div>{t('wizard.config.dark')}</div>
                   </button>
                   <button
                     className={`readiness-theme-option ${theme === 'light' ? 'active' : ''}`}
                     onClick={() => setTheme('light')}
                   >
                     <span className="codicon codicon-circle-large-filled" />
-                    <div>Light</div>
+                    <div>{t('wizard.config.light')}</div>
                   </button>
                 </div>
               </div>
 
               <div className="readiness-config-section">
-                <label className="readiness-config-label">Git Identity</label>
+                <label className="readiness-config-label">{t('wizard.config.gitLabel')}</label>
                 <div className="readiness-config-fields">
                   <input
                     type="text"
                     className="readiness-config-input"
-                    placeholder="Your Name"
+                    placeholder={t('wizard.config.namePlaceholder')}
                     value={gitName}
                     onChange={(e) => setGitName(e.target.value)}
                   />
                   <input
                     type="email"
                     className="readiness-config-input"
-                    placeholder="your.email@example.com"
+                    placeholder={t('wizard.config.emailPlaceholder')}
                     value={gitEmail}
                     onChange={(e) => setGitEmail(e.target.value)}
                   />
                 </div>
-                <p className="readiness-config-hint">Used for commits in your development environment</p>
+                <p className="readiness-config-hint">{t('wizard.config.hint')}</p>
               </div>
             </div>
           )}
@@ -672,23 +664,23 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
           {/* STEP 6: SSH Key Generation */}
           {currentStep === 6 && (
             <div className="readiness-step-ssh">
-              <h2 className="readiness-ssh-title">SSH Key Generation</h2>
-              <p className="readiness-ssh-subtitle">Generate an Ed25519 SSH key for GitHub/GitLab authentication</p>
+              <h2 className="readiness-ssh-title">{t('wizard.ssh.title')}</h2>
+              <p className="readiness-ssh-subtitle">{t('wizard.ssh.subtitle')}</p>
 
               {sshPublicKey ? (
                 <div className="readiness-ssh-success">
                   <div className="readiness-ssh-icon">
                     <span className="codicon codicon-check" />
                   </div>
-                  <p className="readiness-ssh-message">Key generated! Add this to your GitHub account:</p>
+                  <p className="readiness-ssh-message">{t('wizard.ssh.generated')}</p>
                   <pre className="readiness-ssh-key">{sshPublicKey}</pre>
-                  <p className="readiness-ssh-hint">Save this key in your GitHub Settings → SSH and GPG keys</p>
+                  <p className="readiness-ssh-hint">{t('wizard.ssh.saveHint')}</p>
                 </div>
               ) : (
                 <div className="readiness-ssh-info">
                   <span className="codicon codicon-info" />
                   <div>
-                    <strong>What is an SSH key?</strong> It's a secure way to authenticate with GitHub/GitLab without passwords. We'll generate one at <code>~/.ssh/id_ed25519</code>
+                    {t('wizard.ssh.whatIs')}
                   </div>
                 </div>
               )}
@@ -710,12 +702,12 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
                     {sshGenerating ? (
                       <>
                         <span className="codicon codicon-loading codicon-modifier-spin" />
-                        Generating...
+                        {t('wizard.ssh.generating')}
                       </>
                     ) : (
                       <>
                         <span className="codicon codicon-key" />
-                        Generate SSH Key
+                        {t('wizard.ssh.generate')}
                       </>
                     )}
                   </button>
@@ -727,8 +719,8 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
           {/* STEP 7: Starter Profile Selection */}
           {currentStep === 7 && (
             <div className="readiness-step-profile">
-              <h2 className="readiness-profile-title">Choose a Starter Profile</h2>
-              <p className="readiness-profile-subtitle">Select your development environment preset. You can change this anytime in Profiles.</p>
+              <h2 className="readiness-profile-title">{t('wizard.profile.title')}</h2>
+              <p className="readiness-profile-subtitle">{t('wizard.profile.subtitle')}</p>
 
               <div className="readiness-profile-grid">
                 {STARTER_PROFILES.map((profile) => (
@@ -738,7 +730,7 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
                     onClick={() => setPickedProfile(profile.id)}
                   >
                     <span className="readiness-profile-icon">{profile.icon}</span>
-                    <span className="readiness-profile-label">{profile.label}</span>
+                    <span className="readiness-profile-label">{t(`wizard.profile.${profile.id}`)}</span>
                   </button>
                 ))}
               </div>
@@ -753,10 +745,10 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
                   <div className="readiness-install-success-icon">
                     <span className="codicon codicon-check-all" />
                   </div>
-                  <h2 className="readiness-install-complete-title">Installation Complete</h2>
-                  <p className="readiness-install-complete-subtitle">LuminaDev is ready to use</p>
+                  <h2 className="readiness-install-complete-title">{t('wizard.install.completeTitle')}</h2>
+                  <p className="readiness-install-complete-subtitle">{t('wizard.install.completeSubtitle')}</p>
                   <p className="readiness-install-complete-message">
-                    Your development environment has been configured and all dependencies are installed. Ready to launch!
+                    {t('wizard.install.completeMessage')}
                   </p>
                 </div>
               ) : installationStatus === 'error' ? (
@@ -764,17 +756,17 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
                   <div className="readiness-install-error-icon">
                     <span className="codicon codicon-error" />
                   </div>
-                  <h2 className="readiness-install-error-title">Installation Failed</h2>
+                  <h2 className="readiness-install-error-title">{t('wizard.install.failedTitle')}</h2>
                   <p className="readiness-install-error-message">{installationError}</p>
                   <button className="readiness-install-retry-btn" onClick={handleRetryInstallation}>
                     <span className="codicon codicon-refresh" />
-                    Retry Installation
+                    {t('wizard.install.retry')}
                   </button>
                 </div>
               ) : (
                 <div className="readiness-install-progress">
-                  <h2 className="readiness-install-title">Setting Up LuminaDev</h2>
-                  <p className="readiness-install-subtitle">Initializing your development environment...</p>
+                  <h2 className="readiness-install-title">{t('wizard.install.title')}</h2>
+                  <p className="readiness-install-subtitle">{t('wizard.install.subtitle')}</p>
 
                   <div className="readiness-install-tasks">
                     {installationTasks.map((task) => (
@@ -803,7 +795,7 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
                     <div className="readiness-install-status-spinner">
                       <span className="codicon codicon-loading codicon-modifier-spin" />
                     </div>
-                    <div>Installation in progress...</div>
+                    <div>{t('wizard.install.inProgress')}</div>
                   </div>
                 </div>
               )}
@@ -817,10 +809,10 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
             className="readiness-btn-nav readiness-btn-back"
             onClick={handleBack}
             disabled={currentStep === 1 || currentStep === 8}
-            title={currentStep === 1 || currentStep === 8 ? 'Cannot go back' : 'Go back'}
+            title={currentStep === 1 || currentStep === 8 ? t('wizard.footer.backDisabledTitle') : t('wizard.footer.backTitle')}
           >
             <span className="codicon codicon-chevron-left" />
-            Back
+            {t('wizard.footer.back')}
           </button>
 
           <button
@@ -829,15 +821,15 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
             disabled={!canProceed()}
             title={
               currentStep === 3 && !allCriticalMet
-                ? 'Install missing requirements to continue'
+                ? t('wizard.footer.nextDisabledPrereqs')
                 : currentStep === 8 && installationStatus !== 'complete'
-                  ? 'Waiting for installation to complete'
+                  ? t('wizard.footer.nextDisabledInstalling')
                   : currentStep === 8
-                    ? 'Start LuminaDev'
-                    : 'Continue to next step'
+                    ? t('wizard.footer.nextStartTitle')
+                    : t('wizard.footer.nextContinueTitle')
             }
           >
-            {currentStep === 8 && installationStatus === 'complete' ? 'Start LuminaDev' : 'Next'}
+            {currentStep === 8 && installationStatus === 'complete' ? t('wizard.footer.start') : t('wizard.footer.next')}
             <span className="codicon codicon-chevron-right" />
           </button>
         </div>
@@ -852,14 +844,14 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
                 <div className="readiness-progress-error-icon">
                   <span className="codicon codicon-error" />
                 </div>
-                <h3 className="readiness-progress-title">Installation Failed</h3>
+                <h3 className="readiness-progress-title">{t('wizard.progress.failed')}</h3>
                 <p className="readiness-progress-error-message">{progress.error}</p>
                 <div className="readiness-progress-actions">
                   <button className="readiness-progress-btn readiness-progress-btn-primary" onClick={() => void handleRetry()}>
-                    Retry
+                    {t('wizard.progress.retry')}
                   </button>
                   <button className="readiness-progress-btn" onClick={handleDismissError}>
-                    Dismiss
+                    {t('wizard.progress.dismiss')}
                   </button>
                 </div>
               </>
@@ -868,7 +860,7 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
                 <div className="readiness-progress-success-icon">
                   <span className="codicon codicon-check" />
                 </div>
-                <h3 className="readiness-progress-title">Success</h3>
+                <h3 className="readiness-progress-title">{t('wizard.progress.success')}</h3>
                 <p className="readiness-progress-message">{progress.message}</p>
                 <div className="readiness-progress-bar readiness-progress-bar-complete" />
               </>
@@ -877,7 +869,7 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
                 <div className="readiness-progress-spinner">
                   <span className="codicon codicon-loading codicon-modifier-spin" />
                 </div>
-                <h3 className="readiness-progress-title">Installing</h3>
+                <h3 className="readiness-progress-title">{t('wizard.progress.installing')}</h3>
                 <p className="readiness-progress-message">{progress.message}</p>
                 <div className="readiness-progress-bar">
                   <div className="readiness-progress-bar-fill" />

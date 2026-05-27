@@ -1,25 +1,27 @@
 import React, { useEffect, useState } from 'react';
 import { assertSettingsOk } from '../settingsContract';
+import { useTranslation } from 'react-i18next';
 
 const Flags = [
   {
     key: 'enable_experimental_terminal_multiplexer',
-    label: 'Experimental Terminal multiplexer',
-    description: 'xterm.js multi-pane',
+    labelKey: 'beta.labelExperimentalTerminalMultiplexer',
+    descKey: 'beta.descExperimentalTerminalMultiplexer',
   },
   {
     key: 'enable_ai_commit_suggestions',
-    label: 'AI commit suggestions',
-    description: 'requires API key',
+    labelKey: 'beta.labelAiCommitSuggestions',
+    descKey: 'beta.descAiCommitSuggestions',
   },
   {
     key: 'enable_profile_auto_switch',
-    label: 'Auto-switch profile on project directory change',
-    description: '',
+    labelKey: 'beta.labelAutoSwitchProfile',
+    descKey: 'beta.descAutoSwitchProfile',
   },
 ];
 
 export const SettingsBetaFeatures: React.FC = () => {
+  const { t } = useTranslation('settings')
   const [flags, setFlags] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,7 +36,7 @@ export const SettingsBetaFeatures: React.FC = () => {
         assertSettingsOk(res);
         setFlags((res.data as Record<string, boolean>) ?? {});
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Failed to load flags');
+        setError(e instanceof Error ? e.message : t('beta.loadFailed'));
       } finally {
         setLoading(false);
       }
@@ -53,21 +55,21 @@ export const SettingsBetaFeatures: React.FC = () => {
       assertSettingsOk(res);
       setFlags((prev) => ({ ...prev, [key]: !prev[key] }));
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to save flag');
+      setError(e instanceof Error ? e.message : t('beta.saveFailed'));
     } finally {
       setSaving((prev) => ({ ...prev, [key]: false }));
     }
   };
 
   if (loading) {
-    return <div className="hp-settings-loading">Loading…</div>;
+    return <div className="hp-settings-loading">{t('beta.loading')}</div>;
   }
 
   return (
     <div className="hp-settings-page">
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: 'rgba(234, 88, 12, 0.08)', border: '1px solid rgba(234, 88, 12, 0.25)', borderRadius: 6, fontSize: 12, color: 'var(--orange, #ea580c)', marginBottom: 16 }}>
         <span className="codicon codicon-warning" />
-        Beta feature selections are saved locally. Enable them only for local experimentation.
+        {t('beta.warning')}
       </div>
       {error && (
         <div className="hp-status-alert error" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: 'rgba(248, 81, 73, 0.1)', border: '1px solid var(--red)', borderRadius: 6, fontSize: 13, color: 'var(--red)', marginBottom: 16 }}>
@@ -76,12 +78,12 @@ export const SettingsBetaFeatures: React.FC = () => {
         </div>
       )}
       <form className="hp-settings-form">
-        {Flags.map(({ key, label, description }) => (
+        {Flags.map(({ key, labelKey, descKey }) => (
           <div key={key} className="hp-settings-row">
             <div className="hp-settings-row-label">
-              <label>{label}</label>
-              {description && (
-                <span className="hp-settings-row-description">{description}</span>
+              <label>{t(labelKey)}</label>
+              {descKey && t(descKey) && (
+                <span className="hp-settings-row-description">{t(descKey)}</span>
               )}
             </div>
             <div className="hp-settings-row-control">

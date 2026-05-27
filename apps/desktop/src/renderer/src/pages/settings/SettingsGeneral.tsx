@@ -1,8 +1,10 @@
 import type { ReactElement } from 'react'
 import { useEffect, useState } from 'react'
 import { assertSettingsOk } from '../settingsContract'
+import { useTranslation } from 'react-i18next'
 
 export function SettingsGeneral(): ReactElement {
+  const { t } = useTranslation('settings')
   const [generalSettings, setGeneralSettings] = useState<{ startupBehavior?: string; windowSize?: { width: number; height: number }; telemetry?: boolean }>({})
   const [generalMsg, setGeneralMsg] = useState<string | null>(null)
   const [generalBusy, setGeneralBusy] = useState(false)
@@ -33,10 +35,10 @@ export function SettingsGeneral(): ReactElement {
       }
       const res = await window.dh.storeSet({ key: 'general_settings', data })
       assertSettingsOk(res)
-      setGeneralMsg('Saved.')
+      setGeneralMsg(t('general.saved'))
       setTimeout(() => setGeneralMsg(null), 3000)
     } catch (e) {
-      setGeneralMsg(e instanceof Error ? e.message : 'Save failed.')
+      setGeneralMsg(e instanceof Error ? e.message : t('general.saveFailed'))
     } finally {
       setGeneralBusy(false)
     }
@@ -45,37 +47,37 @@ export function SettingsGeneral(): ReactElement {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div style={{ paddingTop: 8 }}>
-        <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 10 }}>Startup behavior</div>
+        <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 10 }}>{t('general.startupBehavior')}</div>
         <select value={(generalSettings.startupBehavior ?? 'default') as string}
           onChange={(e) => setGeneralSettings((p) => ({ ...p, startupBehavior: e.target.value as 'default' | 'minimized' }))}
           className="hp-input" style={{ fontSize: 13 }}>
-          <option value="default">Default (show app window)</option>
-          <option value="minimized">Minimized (start in background)</option>
+          <option value="default">{t('general.startupDefault')}</option>
+          <option value="minimized">{t('general.startupMinimized')}</option>
         </select>
       </div>
       <div style={{ paddingTop: 8 }}>
-        <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 10 }}>Telemetry</div>
+        <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 10 }}>{t('general.telemetry')}</div>
         <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
           <input type="checkbox" checked={generalSettings.telemetry ?? false}
             onChange={(e) => setGeneralSettings((p) => ({ ...p, telemetry: e.target.checked }))} />
-          <span style={{ fontSize: 13 }}>Send usage data to help improve LuminaDev</span>
+          <span style={{ fontSize: 13 }}>{t('general.telemetryLabel')}</span>
         </label>
       </div>
       <div style={{ paddingTop: 8 }}>
         <button type="button" className="hp-btn hp-btn-primary" onClick={() => void saveGeneralSettings()} disabled={generalBusy} style={{ fontSize: 13, padding: '8px 16px' }}>
-          {generalBusy ? 'Saving…' : 'Save'}
+          {generalBusy ? t('general.saving') : t('general.save')}
         </button>
-        {generalMsg ? <p style={{ margin: '8px 0 0', fontSize: 12, color: generalMsg === 'Saved.' ? 'var(--green)' : 'var(--red)' }}>{generalMsg}</p> : null}
+        {generalMsg ? <p style={{ margin: '8px 0 0', fontSize: 12, color: generalMsg === t('general.saved') ? 'var(--green)' : 'var(--red)' }}>{generalMsg}</p> : null}
       </div>
       <div style={{ paddingTop: 16, borderTop: '1px solid var(--border)', marginTop: 8 }}>
-        <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 6 }}>Projects Home Directory</div>
+        <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 6 }}>{t('general.projectsHomeDir')}</div>
         <p className="hp-muted" style={{ margin: '0 0 10px', fontSize: 13 }}>
-          Where new projects are scaffolded. Set during setup wizard — change here any time.
+          {t('general.projectsHomeDirDesc')}
         </p>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <input type="text" className="hp-input" style={{ fontSize: 13, flex: 1, minWidth: 200 }}
-            value={projectsHomeDir} onChange={(e) => setProjectsHomeDir(e.target.value)} placeholder="~/LuminaProjects" />
-          <button type="button" className="hp-btn" style={{ fontSize: 13, padding: '8px 12px' }} title="Browse for folder"
+            value={projectsHomeDir} onChange={(e) => setProjectsHomeDir(e.target.value)} placeholder={t('general.projectsHomePlaceholder')} />
+          <button type="button" className="hp-btn" style={{ fontSize: 13, padding: '8px 12px' }} title={t('general.browseForFolder')}
             onClick={() => { void window.dh.selectFolder().then((p) => { if (p) setProjectsHomeDir(p) }) }}>
             <span className="codicon codicon-folder-open" aria-hidden />
           </button>
@@ -85,22 +87,22 @@ export function SettingsGeneral(): ReactElement {
               setProjectsHomeDirBusy(true)
               setProjectsHomeDirMsg(null)
               void window.dh.storeSet({ key: 'projects_home_dir', data: projectsHomeDir.trim() })
-                .then(() => { setProjectsHomeDirMsg('Saved.') })
-                .catch((e: unknown) => { setProjectsHomeDirMsg(e instanceof Error ? e.message : 'Save failed.') })
+                .then(() => { setProjectsHomeDirMsg(t('general.saved')) })
+                .catch((e: unknown) => { setProjectsHomeDirMsg(e instanceof Error ? e.message : t('general.saveFailed')) })
                 .finally(() => {
                   setProjectsHomeDirBusy(false)
                   setTimeout(() => setProjectsHomeDirMsg(null), 3000)
                 })
             }}>
-            {projectsHomeDirBusy ? 'Saving…' : 'Save'}
+            {projectsHomeDirBusy ? t('general.saving') : t('general.save')}
           </button>
         </div>
-        {projectsHomeDirMsg ? <p style={{ margin: '8px 0 0', fontSize: 12, color: projectsHomeDirMsg === 'Saved.' ? 'var(--green)' : 'var(--red)' }}>{projectsHomeDirMsg}</p> : null}
+        {projectsHomeDirMsg ? <p style={{ margin: '8px 0 0', fontSize: 12, color: projectsHomeDirMsg === t('general.saved') ? 'var(--green)' : 'var(--red)' }}>{projectsHomeDirMsg}</p> : null}
       </div>
       <div style={{ paddingTop: 16, borderTop: '1px solid var(--border)', marginTop: 8 }}>
-        <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 6, color: 'var(--red)' }}>Danger Zone</div>
+        <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 6, color: 'var(--red)' }}>{t('general.dangerZone')}</div>
         <p className="hp-muted" style={{ margin: '0 0 12px', fontSize: 13 }}>
-          Reset the setup wizard so it runs again on next app launch. Useful if you changed your system configuration or want to reconfigure Git identity and profile preferences.
+          {t('general.dangerZoneDesc')}
         </p>
         <button type="button" className="hp-btn" style={{ fontSize: 13, padding: '8px 16px', borderColor: 'var(--red)', color: 'var(--red)' }}
           disabled={wizardResetBusy}
@@ -108,12 +110,12 @@ export function SettingsGeneral(): ReactElement {
             setWizardResetBusy(true)
             setWizardResetMsg(null)
             void window.dh.storeSet({ key: 'readiness_wizard_complete', data: false })
-              .then(() => setWizardResetMsg('Setup wizard will run on next launch.'))
-              .catch((e: unknown) => setWizardResetMsg(e instanceof Error ? e.message : 'Failed to reset wizard.'))
+              .then(() => setWizardResetMsg(t('general.wizardResetSuccess')))
+              .catch((e: unknown) => setWizardResetMsg(e instanceof Error ? e.message : t('general.wizardResetFailed')))
               .finally(() => setWizardResetBusy(false))
           }}>
           <span className="codicon codicon-refresh" aria-hidden />
-          {wizardResetBusy ? 'Resetting…' : 'Run Setup Wizard Again'}
+          {wizardResetBusy ? t('general.resetting') : t('general.runSetupWizard')}
         </button>
         {wizardResetMsg ? <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>{wizardResetMsg}</p> : null}
       </div>

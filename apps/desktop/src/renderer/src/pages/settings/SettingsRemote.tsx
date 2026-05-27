@@ -3,8 +3,10 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import type { SshBookmark } from '@linux-dev-home/shared'
 import { parseSshBookmarks } from '@linux-dev-home/shared'
+import { useTranslation } from 'react-i18next'
 
 export function SettingsRemote(): ReactElement {
+  const { t } = useTranslation('settings')
   const [bookmarks, setBookmarks] = useState<SshBookmark[]>([])
   const [loadError, setLoadError] = useState<string | null>(null)
 
@@ -14,7 +16,7 @@ export function SettingsRemote(): ReactElement {
         setBookmarks(parseSshBookmarks(bm.data))
       } else {
         setBookmarks([])
-        setLoadError(bm.error ?? 'Could not read ssh_bookmarks.')
+        setLoadError(bm.error ?? t('remote.loadError'))
       }
     })
   }, [])
@@ -23,24 +25,24 @@ export function SettingsRemote(): ReactElement {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div className="hp-row-wrap" style={{ justifyContent: 'space-between' }}>
         <span className="hp-muted" style={{ fontSize: 13 }}>
-          {bookmarks.length === 1 ? '1 saved bookmark' : `${bookmarks.length} saved bookmarks`}
+          {t('remote.savedBookmarks', { count: bookmarks.length })}
         </span>
         <Link to="/ssh" className="hp-btn hp-btn-primary" style={{ textDecoration: 'none' }}>
-          <span className="codicon codicon-arrow-right" aria-hidden /> Manage on SSH page
+          <span className="codicon codicon-arrow-right" aria-hidden /> {t('remote.manageOnSsh')}
         </Link>
       </div>
       {loadError ? <div className="hp-status-alert error">{loadError}</div> : null}
       {bookmarks.length === 0 && !loadError ? (
-        <p className="hp-muted" style={{ margin: 0 }}>No bookmarks yet. Add one on the SSH page.</p>
+        <p className="hp-muted" style={{ margin: 0 }}>{t('remote.noBookmarks')}</p>
       ) : null}
       {bookmarks.length > 0 ? (
         <div className="hp-table-wrap">
           <table className="hp-table">
             <thead>
               <tr>
-                <th className="hp-table-cell hp-table-head">Name</th>
-                <th className="hp-table-cell hp-table-head">Target</th>
-                <th className="hp-table-cell hp-table-head" style={{ width: 72 }}>Port</th>
+                <th className="hp-table-cell hp-table-head">{t('remote.name')}</th>
+                <th className="hp-table-cell hp-table-head">{t('remote.target')}</th>
+                <th className="hp-table-cell hp-table-head" style={{ width: 72 }}>{t('remote.port')}</th>
               </tr>
             </thead>
             <tbody>

@@ -14,7 +14,7 @@ i18n
     defaultNS: 'common',
     ns: [
       'common', 'nav', 'dashboard', 'docker', 'git', 'cloudGit', 'ssh',
-      'runtimes', 'monitor', 'maintenance', 'profiles', 'settings', 'readiness',
+      'runtimes', 'monitor', 'maintenance', 'profiles', 'settings', 'readiness', 'terminal',
     ],
     interpolation: { escapeValue: false },
     missingKeyHandler: import.meta.env.DEV
