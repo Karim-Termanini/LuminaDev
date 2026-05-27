@@ -215,5 +215,8 @@
   "kernels.loading": "Wird geladen…",
   "kernels.empty": "Keine Kernel-Daten verfügbar.",
   "profile.customDesc": "Benutzerdefinierte Umgebung basierend auf {{base}}.",
-  "profile.emptyDesc": "Erstellen Sie ein Profil auf der Profilseite, um zu beginnen."
+  "profile.emptyDesc": "Erstellen Sie ein Profil auf der Profilseite, um zu beginnen.",
+  "widgets.addWidget": "Widget hinzufügen",
+  "widgets.noPinned": "Noch keine angehefteten Widgets",
+  "widgets.noPinnedDesc": "Verwenden Sie \"Widget hinzufügen\" um Tipps, Schnelllinks oder aktuelle Repos anzuheften. Mit zwei oder mehr Karten können Sie eine auf eine andere ziehen um die Reihenfolge zu ändern."
 }

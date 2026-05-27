@@ -2,6 +2,7 @@ import type { DashboardLayoutFile, DashboardPlacement } from '@linux-dev-home/sh
 import { getWidgetDefinition } from '@linux-dev-home/shared'
 import type { ReactElement } from 'react'
 import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 
 import { CloudNotificationsWidget } from './CloudNotificationsWidget'
 import { RecentReposWidget } from './RecentReposWidget'
@@ -15,6 +16,7 @@ export function DashboardWidgetDeck(props: {
   density?: 'compact' | 'comfortable'
   heading?: string
 }): ReactElement {
+  const { t } = useTranslation('dashboard')
   const density = props.density ?? 'compact'
   const comfortable = density === 'comfortable'
   const heading = props.heading ?? 'Your widgets'
@@ -54,7 +56,7 @@ export function DashboardWidgetDeck(props: {
             }}
           >
             <span className="codicon codicon-add" style={{ fontSize: 12 }} />
-            Add Widget
+            {t('widgets.addWidget')}
           </button>
         )}
       </div>
@@ -101,7 +103,7 @@ export function DashboardWidgetDeck(props: {
               ))}
             </div>
             <p style={{ margin: 0, fontSize: comfortable ? 16 : 14, fontWeight: 700, color: 'var(--text)' }}>
-              No pinned widgets yet
+              {t('widgets.noPinned')}
             </p>
             <p
               style={{
@@ -114,8 +116,7 @@ export function DashboardWidgetDeck(props: {
                 lineHeight: 1.5,
               }}
             >
-              Use <strong style={{ color: 'var(--text)' }}>Add widget</strong> to pin tips, quick links, or recent repos.
-              With two or more cards, drag one onto another to reorder.
+              {t('widgets.noPinnedDesc')}
             </p>
           </div>
         ) : (

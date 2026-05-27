@@ -209,5 +209,8 @@
   "kernels.toolchainTip": "Toolchain Tip",
   "kernels.toolchainTipText": "Ensure system-level dependencies like <code>docker-compose</code> and <code>ssh-agent</code> are configured and accessible by the active profile.",
   "profile.customDesc": "Custom environment based on {{base}}.",
-  "profile.emptyDesc": "Create a profile in the Profiles page to get started."
+  "profile.emptyDesc": "Create a profile in the Profiles page to get started.",
+  "widgets.addWidget": "Add Widget",
+  "widgets.noPinned": "No pinned widgets yet",
+  "widgets.noPinnedDesc": "Use Add Widget to pin tips, quick links, or recent repos. With two or more cards, drag one onto another to reorder."
 }
