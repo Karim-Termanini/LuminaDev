@@ -1,13 +1,15 @@
+# SPDX-License-Identifier: MIT
+# Tauri (GTK/WebKit) Flatpak — local / Flathub prep. Not wired into GitHub Actions yet (see flatpak/README.md).
 app-id: io.github.karimodora.LinuxDevHome
-runtime: org.freedesktop.Platform
-runtime-version: '24.08'
-sdk: org.freedesktop.Sdk
-base: org.electronjs.Electron2.BaseApp
-base-version: '24.08'
-sdk-extensions:
-  - org.freedesktop.Sdk.Extension.node20
-
+runtime: org.gnome.Platform
+runtime-version: '49'
+sdk: org.gnome.Sdk
 command: linux-dev-home
+
+# Extension branches must match what org.gnome.Sdk declares (do not add //24.08 etc. — that causes "Unknown extension in runtime").
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
+  - org.freedesktop.Sdk.Extension.node20
 
 finish-args:
   - --share=ipc
@@ -19,16 +21,15 @@ finish-args:
   - --share=network
   - --filesystem=host
   - --talk-name=org.freedesktop.Flatpak
-  - --env=XCURSOR_PATH=/run/host/user-share/icons:/run/host/share/icons
 
 build-options:
-  append-path: /usr/lib/sdk/node20/bin
+  append-path: /usr/lib/sdk/rust-stable/bin:/usr/lib/sdk/node20/bin
 
 modules:
-  - name: linux-dev-home
+  - name: luminadev-tauri
     buildsystem: simple
     build-options:
-      append-path: /usr/lib/sdk/node20/bin
+      append-path: /usr/lib/sdk/rust-stable/bin:/usr/lib/sdk/node20/bin
       env:
         NPM_CONFIG_LOGLEVEL: info
       build-args:
@@ -37,14 +38,11 @@ modules:
       - type: dir
         path: ..
     build-commands:
-      - corepack enable && corepack prepare pnpm@9.14.2 --activate
-      - rm -rf node_modules apps/desktop/out apps/desktop/release apps/desktop/pack-staging
-      - pnpm install --frozen-lockfile
-      - pnpm --filter desktop rebuild:native
-      - pnpm --filter desktop pack:linux
-      - install -Dm755 packaging/linux-dev-home.sh /app/bin/linux-dev-home
-      - mkdir -p /app/lib/linux-dev-home
-      - cp -a apps/desktop/pack-staging/release/linux*unpacked/. /app/lib/linux-dev-home/
+      - npx -y pnpm@9.14.2 install --frozen-lockfile
+      - npx -y pnpm@9.14.2 --filter @linux-dev-home/shared build
+      - npx -y pnpm@9.14.2 --filter desktop build:web
+      - (cd apps/desktop/src-tauri && cargo build --release)
+      - install -Dm755 apps/desktop/src-tauri/target/release/lumina-dev /app/bin/linux-dev-home
       - install -Dm644 data/io.github.karimodora.LinuxDevHome.desktop /app/share/applications/io.github.karimodora.LinuxDevHome.desktop
       - install -Dm644 data/io.github.karimodora.LinuxDevHome.metainfo.xml /app/share/metainfo/io.github.karimodora.LinuxDevHome.metainfo.xml
       - install -Dm644 data/icons/hicolor/scalable/apps/io.github.karimodora.LinuxDevHome.svg /app/share/icons/hicolor/scalable/apps/io.github.karimodora.LinuxDevHome.svg

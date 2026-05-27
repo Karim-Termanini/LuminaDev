@@ -2,6 +2,7 @@ import type { ReactElement } from 'react'
 import { useEffect, useState } from 'react'
 import type { NotificationSettings } from '@linux-dev-home/shared'
 import { assertSettingsOk } from '../settingsContract'
+import { useTranslation } from 'react-i18next'
 
 const DEFAULTS: NotificationSettings = { globalMute: false, minSeverity: 'info', osNotifications: false }
 
@@ -17,6 +18,7 @@ function Toggle({ checked, onChange, disabled }: { checked: boolean; onChange: (
 }
 
 export function SettingsNotification(): ReactElement {
+  const { t } = useTranslation('settings')
   const [settings, setSettings] = useState<NotificationSettings>(DEFAULTS)
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
@@ -34,10 +36,10 @@ export function SettingsNotification(): ReactElement {
     setMsg(null)
     try {
       assertSettingsOk(await window.dh.storeSet({ key: 'notification_settings', data: { ...settings, osNotifications: false } }))
-      setMsg('Saved.')
+      setMsg(t('notification.saved'))
       setTimeout(() => setMsg(null), 3000)
     } catch (e) {
-      setMsg(e instanceof Error ? e.message : 'Save failed.')
+      setMsg(e instanceof Error ? e.message : t('notification.saveFailed'))
     } finally {
       setBusy(false)
     }
@@ -45,8 +47,11 @@ export function SettingsNotification(): ReactElement {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+      <p className="hp-muted" style={{ margin: '0 0 16px', fontSize: 13 }}>
+        {t('notification.description')}
+      </p>
       {[
-        { key: 'globalMute' as const, label: 'Global mute', description: 'Suppress all in-app toast notifications.' },
+        { key: 'globalMute' as const, label: t('notification.globalMute'), description: t('notification.globalMuteDesc') },
       ].map((row) => (
         <div key={row.key} style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '16px 0', borderBottom: '1px solid var(--border)' }}>
           <div style={{ flex: 1 }}>
@@ -57,28 +62,28 @@ export function SettingsNotification(): ReactElement {
         </div>
       ))}
       <div style={{ padding: '16px 0', borderBottom: '1px solid var(--border)' }}>
-        <label style={{ display: 'block', fontWeight: 600, fontSize: 14, marginBottom: 8 }}>Minimum severity</label>
+        <label style={{ display: 'block', fontWeight: 600, fontSize: 14, marginBottom: 8 }}>{t('notification.minimumSeverity')}</label>
         <select value={settings.minSeverity} onChange={(e) => setSettings((p) => ({ ...p, minSeverity: e.target.value as NotificationSettings['minSeverity'] }))}
           className="hp-input" style={{ fontSize: 13 }}>
-          <option value="info">Info and above (all notifications)</option>
-          <option value="warn">Warnings and above</option>
-          <option value="error">Errors only</option>
+          <option value="info">{t('notification.severityInfo')}</option>
+          <option value="warn">{t('notification.severityWarn')}</option>
+          <option value="error">{t('notification.severityError')}</option>
         </select>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '16px 0', borderBottom: '1px solid var(--border)' }}>
         <div style={{ flex: 1 }}>
-          <div style={{ fontWeight: 600, fontSize: 14 }}>OS native notifications</div>
+          <div style={{ fontWeight: 600, fontSize: 14 }}>{t('notification.osNative')}</div>
           <p className="hp-muted" style={{ margin: '4px 0 0', fontSize: 12 }}>
-            Requires Tauri notification plugin (Phase 10).
+            {t('notification.osNativeDesc')}
           </p>
         </div>
         <Toggle checked={false} onChange={() => {}} disabled />
       </div>
       <div style={{ paddingTop: 16 }}>
         <button type="button" className="hp-btn hp-btn-primary" onClick={() => void save()} disabled={busy} style={{ fontSize: 13, padding: '8px 16px' }}>
-          {busy ? 'Saving…' : 'Save'}
+          {busy ? t('notification.saving') : t('notification.save')}
         </button>
-        {msg ? <p style={{ margin: '8px 0 0', fontSize: 12, color: msg === 'Saved.' ? 'var(--green)' : 'var(--red)' }}>{msg}</p> : null}
+        {msg ? <p style={{ margin: '8px 0 0', fontSize: 12, color: msg === t('notification.saved') ? 'var(--green)' : 'var(--red)' }}>{msg}</p> : null}
       </div>
     </div>
   )

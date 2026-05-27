@@ -1,5 +1,6 @@
 import type { ReactElement } from 'react'
 import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 function hostExecStringResult(
   res: unknown,
@@ -60,6 +61,7 @@ const listShell: React.CSSProperties = {
 }
 
 function PathSegmentList({ value }: { value: string }): ReactElement {
+  const { t } = useTranslation('settings')
   const segments = value.split(':').filter(Boolean)
   const [showAll, setShowAll] = useState(false)
   const cap = 8
@@ -75,7 +77,7 @@ function PathSegmentList({ value }: { value: string }): ReactElement {
       </ul>
       {segments.length > cap ? (
         <button type="button" className="hp-btn" style={{ alignSelf: 'flex-start', fontSize: 12, padding: '4px 12px' }} onClick={() => setShowAll(!showAll)}>
-          {showAll ? `Show fewer (${cap}…)` : `Show all ${segments.length} PATH entries`}
+          {showAll ? t('system.showFewer', { count: cap }) : t('system.showAllPath', { count: segments.length })}
         </button>
       ) : null}
     </div>
@@ -83,6 +85,7 @@ function PathSegmentList({ value }: { value: string }): ReactElement {
 }
 
 function EnvValueDisplay({ envKey, value }: { envKey: string; value: string }): ReactElement {
+  const { t } = useTranslation('settings')
   const [open, setOpen] = useState(false)
   if (envKey === 'PATH' && value.includes(':')) {
     return <PathSegmentList value={value} />
@@ -118,13 +121,14 @@ function EnvValueDisplay({ envKey, value }: { envKey: string; value: string }): 
         style={{ marginTop: 8, fontSize: 12, padding: '4px 12px' }}
         onClick={() => setOpen(!open)}
       >
-        {open ? 'Show less' : 'Show full value'}
+        {open ? t('system.showLess') : t('system.showFullValue')}
       </button>
     </div>
   )
 }
 
 export function SettingsSystem(): ReactElement {
+  const { t } = useTranslation('settings')
   const [hostsPreview, setHostsPreview] = useState<string | null>(null)
   const [hostsErr, setHostsErr] = useState<string | null>(null)
   const [hostsBusy, setHostsBusy] = useState(false)
@@ -192,7 +196,7 @@ export function SettingsSystem(): ReactElement {
       window.dh.hostExec({ command: 'settings_read_hosts' }),
       window.dh.hostExec({ command: 'settings_process_env' }),
     ]).then(([hr, er]) => {
-      const hostsParsed = hostExecStringResult(hr, 'Could not read /etc/hosts.')
+      const hostsParsed = hostExecStringResult(hr, t('system.failedReadHosts'))
       if (hostsParsed.ok) {
         setHostsPreview(hostsParsed.text)
         setHostsErr(null)
@@ -200,7 +204,7 @@ export function SettingsSystem(): ReactElement {
         setHostsPreview(null)
         setHostsErr(hostsParsed.error)
       }
-      const envParsed = hostExecStringResult(er, 'Could not load environment preview.')
+      const envParsed = hostExecStringResult(er, t('system.failedEnvPreview'))
       if (envParsed.ok) {
         setEnvPreview(envParsed.text)
         setEnvErr(null)
@@ -210,21 +214,21 @@ export function SettingsSystem(): ReactElement {
       }
     }).catch((e: unknown) => {
       setHostsPreview(null)
-      setHostsErr(e instanceof Error ? e.message : 'Could not read /etc/hosts.')
+      setHostsErr(e instanceof Error ? e.message : t('system.failedReadHosts'))
       setEnvPreview(null)
-      setEnvErr(e instanceof Error ? e.message : 'Could not load environment preview.')
+      setEnvErr(e instanceof Error ? e.message : t('system.failedEnvPreview'))
     }).finally(() => {
       setHostsBusy(false)
       setEnvBusy(false)
     })
-  }, [])
+  }, [t])
 
   async function refreshHosts(): Promise<void> {
     setHostsBusy(true)
     setHostsErr(null)
     try {
       const hr = await window.dh.hostExec({ command: 'settings_read_hosts' })
-      const parsed = hostExecStringResult(hr, 'Could not read /etc/hosts.')
+      const parsed = hostExecStringResult(hr, t('system.failedReadHosts'))
       if (parsed.ok) {
         setHostsPreview(parsed.text)
         setHostsErr(null)
@@ -234,7 +238,7 @@ export function SettingsSystem(): ReactElement {
       }
     } catch (e) {
       setHostsPreview(null)
-      setHostsErr(e instanceof Error ? e.message : 'Could not read /etc/hosts.')
+      setHostsErr(e instanceof Error ? e.message : t('system.failedReadHosts'))
     } finally {
       setHostsBusy(false)
     }
@@ -245,7 +249,7 @@ export function SettingsSystem(): ReactElement {
     setEnvErr(null)
     try {
       const er = await window.dh.hostExec({ command: 'settings_process_env' })
-      const parsed = hostExecStringResult(er, 'Could not load environment preview.')
+      const parsed = hostExecStringResult(er, t('system.failedEnvPreview'))
       if (parsed.ok) {
         setEnvPreview(parsed.text)
         setEnvErr(null)
@@ -255,7 +259,7 @@ export function SettingsSystem(): ReactElement {
       }
     } catch (e) {
       setEnvPreview(null)
-      setEnvErr(e instanceof Error ? e.message : 'Could not load environment preview.')
+      setEnvErr(e instanceof Error ? e.message : t('system.failedEnvPreview'))
     } finally {
       setEnvBusy(false)
     }
@@ -267,14 +271,14 @@ export function SettingsSystem(): ReactElement {
     try {
       const res = await window.dh.hostExec({ command: 'settings_write_hosts', content: hostsDraft })
       if ((res as { ok: boolean }).ok) {
-        setHostsSaveMsg('Saved.')
+        setHostsSaveMsg(t('system.saved'))
         setHostsPreview(hostsDraft)
         setHostsEditing(false)
       } else {
-        setHostsSaveMsg((res as { error?: string }).error ?? 'Save failed.')
+        setHostsSaveMsg((res as { error?: string }).error ?? t('system.saveFailed'))
       }
     } catch (e) {
-      setHostsSaveMsg(e instanceof Error ? e.message : 'Save failed.')
+      setHostsSaveMsg(e instanceof Error ? e.message : t('system.saveFailed'))
     } finally {
       setHostsSaving(false)
     }
@@ -289,10 +293,10 @@ export function SettingsSystem(): ReactElement {
         setProfileEnvContent(res.result ?? '')
         setProfileEnvPath(res.path ?? '~/.profile')
       } else {
-        setProfileEnvErr(res.error ?? 'Failed to read profile.')
+        setProfileEnvErr(res.error ?? t('system.failedReadProfile'))
       }
     } catch (e) {
-      setProfileEnvErr(e instanceof Error ? e.message : 'Failed to read profile.')
+      setProfileEnvErr(e instanceof Error ? e.message : t('system.failedReadProfile'))
     } finally {
       setProfileEnvBusy(false)
     }
@@ -314,11 +318,11 @@ export function SettingsSystem(): ReactElement {
         setProfileEnvNewVal('')
         await loadProfileEnv()
       } else {
-        setProfileEnvErr(res.error ?? 'Write failed.')
+        setProfileEnvErr(res.error ?? t('system.writeFailed'))
         setProfileEnvDiff(null)
       }
     } catch (e) {
-      setProfileEnvErr(e instanceof Error ? e.message : 'Write failed.')
+      setProfileEnvErr(e instanceof Error ? e.message : t('system.writeFailed'))
     } finally {
       setProfileEnvSaving(false)
     }
@@ -330,14 +334,14 @@ export function SettingsSystem(): ReactElement {
       <section>
         <div className="hp-row-wrap" style={{ justifyContent: 'space-between', marginBottom: 10, gap: 12 }}>
           <div>
-            <div style={{ fontWeight: 650, fontSize: 14 }}>Hosts file</div>
+            <div style={{ fontWeight: 650, fontSize: 14 }}>{t('system.hostsFile')}</div>
             <p className="hp-muted" style={{ margin: '6px 0 0', maxWidth: 520 }}>
-              Parsed into address and names. Flatpak may show the sandbox copy, not the host.
+              {t('system.hostsFileDesc')}
             </p>
           </div>
           <button type="button" className="hp-btn" disabled={hostsBusy} onClick={() => void refreshHosts()}>
             <span className="codicon codicon-refresh" aria-hidden />
-            Refresh
+            {t('system.refresh')}
           </button>
         </div>
         {hostsPreview !== null && parsedHostsRows.length > 0 ? (
@@ -349,19 +353,19 @@ export function SettingsSystem(): ReactElement {
                 aria-hidden
               />
               <input
-                type="search" className="hp-input" placeholder="Filter lines…"
+                type="search" className="hp-input" placeholder={t('system.filterLines')}
                 value={hostsFilter} onChange={(e) => setHostsFilter(e.target.value)}
-                aria-label="Filter hosts lines" style={{ paddingLeft: 36, width: '100%' }}
+                aria-label={t('system.filterHostsLabel')} style={{ paddingLeft: 36, width: '100%' }}
               />
             </div>
             <p className="hp-muted" style={{ margin: '6px 0 0', fontSize: 12 }}>
-              Showing {filteredHostsRows.length} of {parsedHostsRows.length} lines
+              {t('system.showingLines', { count: filteredHostsRows.length, total: parsedHostsRows.length })}
             </p>
           </div>
         ) : null}
         {hostsErr ? <div className="hp-status-alert error">{hostsErr}</div> : null}
         {hostsBusy && hostsPreview === null && !hostsErr ? (
-          <p className="hp-muted" style={{ marginTop: 12 }}>Loading…</p>
+          <p className="hp-muted" style={{ marginTop: 12 }}>{t('system.loading')}</p>
         ) : null}
         {hostsPreview !== null && parsedHostsRows.length === 0 && !hostsErr ? (
           <pre className="mono" style={{ marginTop: 12, padding: 14, fontSize: 12, lineHeight: 1.5, background: 'var(--bg-input)', border: '1px solid var(--border)', borderRadius: 10, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
@@ -369,7 +373,7 @@ export function SettingsSystem(): ReactElement {
           </pre>
         ) : null}
         {hostsPreview !== null && parsedHostsRows.length > 0 && filteredHostsRows.length === 0 && !hostsErr ? (
-          <p className="hp-muted">No lines match the filter.</p>
+          <p className="hp-muted">{t('system.noLinesMatch')}</p>
         ) : null}
         {hostsPreview !== null && filteredHostsRows.length > 0 ? (
           <div style={listShell}>
@@ -377,10 +381,10 @@ export function SettingsSystem(): ReactElement {
               <thead style={{ position: 'sticky', top: 0, background: 'var(--bg-widget)', zIndex: 1 }}>
                 <tr style={{ borderBottom: '1px solid var(--border)' }}>
                   <th style={{ textAlign: 'left', padding: '10px 14px', color: 'var(--text-muted)', fontWeight: 600, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em', width: 148 }}>
-                    Address
+                    {t('system.address')}
                   </th>
                   <th style={{ textAlign: 'left', padding: '10px 14px', color: 'var(--text-muted)', fontWeight: 600, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                    Host names
+                    {t('system.hostNames')}
                   </th>
                 </tr>
               </thead>
@@ -414,14 +418,14 @@ export function SettingsSystem(): ReactElement {
       <section style={{ borderTop: '1px solid var(--border)', paddingTop: 24 }}>
         <div className="hp-row-wrap" style={{ justifyContent: 'space-between', marginBottom: 10, gap: 12 }}>
           <div>
-            <div style={{ fontWeight: 650, fontSize: 14 }}>Environment</div>
+            <div style={{ fontWeight: 650, fontSize: 14 }}>{t('system.environment')}</div>
             <p className="hp-muted" style={{ margin: '6px 0 0', maxWidth: 520 }}>
-              Variables as a searchable list. PATH is split into directories so it is easier to scan.
+              {t('system.environmentDesc')}
             </p>
           </div>
           <button type="button" className="hp-btn" disabled={envBusy} onClick={() => void refreshEnv()}>
             <span className="codicon codicon-refresh" aria-hidden />
-            Refresh
+            {t('system.refresh')}
           </button>
         </div>
         {envPreview !== null && parsedEnvRows.length > 0 ? (
@@ -433,25 +437,25 @@ export function SettingsSystem(): ReactElement {
                 aria-hidden
               />
               <input
-                type="search" className="hp-input" placeholder="Filter by name or value…"
+                type="search" className="hp-input" placeholder={t('system.filterEnv')}
                 value={envFilter} onChange={(e) => setEnvFilter(e.target.value)}
-                aria-label="Filter environment variables" style={{ paddingLeft: 36, width: '100%' }}
+                aria-label={t('system.filterEnvLabel')} style={{ paddingLeft: 36, width: '100%' }}
               />
             </div>
             <p className="hp-muted" style={{ margin: '6px 0 0', fontSize: 12 }}>
-              Showing {filteredEnvRows.length} of {parsedEnvRows.length} variables
+              {t('system.showingVariables', { count: filteredEnvRows.length, total: parsedEnvRows.length })}
             </p>
           </div>
         ) : null}
         {envErr ? <div className="hp-status-alert error">{envErr}</div> : null}
         {envBusy && envPreview === null && !envErr ? (
-          <p className="hp-muted" style={{ marginTop: 12 }}>Loading…</p>
+          <p className="hp-muted" style={{ marginTop: 12 }}>{t('system.loading')}</p>
         ) : null}
         {envPreview !== null && parsedEnvRows.length === 0 && !envErr ? (
           <p className="hp-muted mono" style={{ fontSize: 12, lineHeight: 1.5 }}>{envPreview}</p>
         ) : null}
         {envPreview !== null && parsedEnvRows.length > 0 && filteredEnvRows.length === 0 && !envErr ? (
-          <p className="hp-muted">No variables match the filter.</p>
+          <p className="hp-muted">{t('system.noVariablesMatch')}</p>
         ) : null}
         {envPreview !== null && filteredEnvRows.length > 0 ? (
           <div style={listShell}>
@@ -459,10 +463,10 @@ export function SettingsSystem(): ReactElement {
               <thead style={{ position: 'sticky', top: 0, background: 'var(--bg-widget)', zIndex: 1 }}>
                 <tr style={{ borderBottom: '1px solid var(--border)' }}>
                   <th style={{ textAlign: 'left', padding: '10px 14px', color: 'var(--text-muted)', fontWeight: 600, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em', width: 200 }}>
-                    Name
+                    {t('system.name')}
                   </th>
                   <th style={{ textAlign: 'left', padding: '10px 14px', color: 'var(--text-muted)', fontWeight: 600, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                    Value
+                    {t('system.value')}
                   </th>
                 </tr>
               </thead>
@@ -488,21 +492,21 @@ export function SettingsSystem(): ReactElement {
       <section style={{ borderTop: '1px solid var(--border)', paddingTop: 24 }}>
         <div className="hp-row-wrap" style={{ justifyContent: 'space-between', marginBottom: 10, gap: 12 }}>
           <div>
-            <div style={{ fontWeight: 650, fontSize: 14 }}>/etc/hosts editor</div>
+            <div style={{ fontWeight: 650, fontSize: 14 }}>{t('system.hostsEditor')}</div>
             <p className="hp-muted" style={{ margin: '6px 0 0', maxWidth: 520, fontSize: 13 }}>
-              Edit requires sudo. Changes take effect immediately.
+              {t('system.hostsEditorDesc')}
             </p>
           </div>
           {!hostsEditing ? (
             <button type="button" className="hp-btn" disabled={hostsBusy}
               onClick={() => { setHostsDraft(hostsPreview ?? ''); setHostsSaveMsg(null); setHostsEditing(true) }}>
-              <span className="codicon codicon-edit" aria-hidden /> Edit
+              <span className="codicon codicon-edit" aria-hidden /> {t('system.edit')}
             </button>
           ) : (
             <div style={{ display: 'flex', gap: 8 }}>
-              <button type="button" className="hp-btn" onClick={() => setHostsEditing(false)} disabled={hostsSaving}>Cancel</button>
+              <button type="button" className="hp-btn" onClick={() => setHostsEditing(false)} disabled={hostsSaving}>{t('system.cancel')}</button>
               <button type="button" className="hp-btn hp-btn-primary" onClick={() => void saveHosts()} disabled={hostsSaving}>
-                {hostsSaving ? 'Saving…' : 'Save'}
+                {hostsSaving ? t('system.saving') : t('system.save')}
               </button>
             </div>
           )}
@@ -514,7 +518,7 @@ export function SettingsSystem(): ReactElement {
               style={{ width: '100%', boxSizing: 'border-box', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-input)', color: 'var(--text)', fontSize: 12, resize: 'vertical', fontFamily: 'monospace' }}
             />
             {hostsSaveMsg ? (
-              <p style={{ margin: 0, fontSize: 12, color: hostsSaveMsg === 'Saved.' ? 'var(--green)' : 'var(--red)' }}>{hostsSaveMsg}</p>
+              <p style={{ margin: 0, fontSize: 12, color: hostsSaveMsg === t('system.saved') ? 'var(--green)' : 'var(--red)' }}>{hostsSaveMsg}</p>
             ) : null}
           </div>
         ) : null}
@@ -524,13 +528,13 @@ export function SettingsSystem(): ReactElement {
       <section style={{ borderTop: '1px solid var(--border)', paddingTop: 24 }}>
         <div className="hp-row-wrap" style={{ justifyContent: 'space-between', marginBottom: 10, gap: 12 }}>
           <div>
-            <div style={{ fontWeight: 650, fontSize: 14 }}>Profile environment ({profileEnvPath || '~/.profile'})</div>
+            <div style={{ fontWeight: 650, fontSize: 14 }}>{t('system.profileEnv')} ({profileEnvPath || '~/.profile'})</div>
             <p className="hp-muted" style={{ margin: '6px 0 0', maxWidth: 520, fontSize: 13 }}>
-              Add or remove <span className="mono">export KEY=VALUE</span> lines. Changes apply on next login/shell.
+              {t('system.profileEnvDesc')}
             </p>
           </div>
           <button type="button" className="hp-btn" disabled={profileEnvBusy} onClick={() => void loadProfileEnv()}>
-            <span className="codicon codicon-refresh" aria-hidden /> {profileEnvContent === null ? 'Load' : 'Refresh'}
+            <span className="codicon codicon-refresh" aria-hidden /> {profileEnvContent === null ? t('system.load') : t('system.refresh')}
           </button>
         </div>
         {profileEnvErr ? <div className="hp-status-alert error" style={{ marginBottom: 10 }}>{profileEnvErr}</div> : null}
@@ -547,7 +551,7 @@ export function SettingsSystem(): ReactElement {
                         <td style={{ padding: '10px 14px', textAlign: 'right' }}>
                           <button type="button" className="hp-btn" style={{ fontSize: 11, padding: '3px 10px', color: 'var(--red)' }}
                             onClick={() => setProfileEnvDiff({ key: row.key, value: row.value, action: 'remove' })}>
-                            Remove
+                            {t('system.remove')}
                           </button>
                         </td>
                       </tr>
@@ -556,34 +560,34 @@ export function SettingsSystem(): ReactElement {
                 </table>
               </div>
             ) : (
-              <p className="hp-muted" style={{ fontSize: 13 }}>No export lines found in {profileEnvPath}.</p>
+              <p className="hp-muted" style={{ fontSize: 13 }}>{t('system.noExportLines', { path: profileEnvPath })}</p>
             )}
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-              <input type="text" className="mono hp-input" placeholder="KEY" value={profileEnvNewKey}
+              <input type="text" className="mono hp-input" placeholder={t('system.keyPlaceholder')} value={profileEnvNewKey}
                 onChange={(e) => setProfileEnvNewKey(e.target.value)} style={{ width: 140, fontSize: 12 }} />
               <span style={{ color: 'var(--text-muted)' }}>=</span>
-              <input type="text" className="hp-input" placeholder="value" value={profileEnvNewVal}
+              <input type="text" className="hp-input" placeholder={t('system.valuePlaceholder')} value={profileEnvNewVal}
                 onChange={(e) => setProfileEnvNewVal(e.target.value)} style={{ flex: '1 1 160px', fontSize: 12 }} />
               <button type="button" className="hp-btn hp-btn-primary" style={{ fontSize: 12 }}
                 disabled={!profileEnvNewKey.trim()}
                 onClick={() => setProfileEnvDiff({ key: profileEnvNewKey.trim(), value: profileEnvNewVal, action: 'set' })}>
-                Add / Update
+                {t('system.addUpdate')}
               </button>
             </div>
           </div>
         ) : null}
         {profileEnvDiff ? (
           <div style={{ marginTop: 12, padding: '14px 16px', borderRadius: 10, border: '1px solid var(--border)', background: 'rgba(124,77,255,0.06)', display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <div style={{ fontWeight: 600, fontSize: 13 }}>Preview change</div>
+            <div style={{ fontWeight: 600, fontSize: 13 }}>{t('system.previewChange')}</div>
             <pre className="mono" style={{ margin: 0, fontSize: 12, color: profileEnvDiff.action === 'remove' ? 'var(--red)' : 'var(--green)' }}>
               {profileEnvDiff.action === 'remove'
                 ? `- export ${profileEnvDiff.key}=...`
                 : `+ export ${profileEnvDiff.key}=${profileEnvDiff.value}`}
             </pre>
             <div style={{ display: 'flex', gap: 8 }}>
-              <button type="button" className="hp-btn" onClick={() => setProfileEnvDiff(null)} disabled={profileEnvSaving}>Cancel</button>
+              <button type="button" className="hp-btn" onClick={() => setProfileEnvDiff(null)} disabled={profileEnvSaving}>{t('system.cancel')}</button>
               <button type="button" className="hp-btn hp-btn-primary" onClick={() => void applyProfileEnvDiff()} disabled={profileEnvSaving}>
-                {profileEnvSaving ? 'Applying…' : 'Apply'}
+                {profileEnvSaving ? t('system.applying') : t('system.apply')}
               </button>
             </div>
           </div>

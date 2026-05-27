@@ -178,6 +178,8 @@ function createTauriDhApi(): DhApi {
     cloudGitCreatePr: (payload) => tauriInvoke(IPC.cloudGitCreatePr, payload),
     cloudGitGetPrChecks: (payload) => tauriInvoke(IPC.cloudGitGetPrChecks, payload),
     cloudGitMergePr: (payload) => tauriInvoke(IPC.cloudGitMergePr, payload),
+    appUpdateCheck: () => tauriInvoke(IPC.appUpdateCheck),
+    profileCredentialsGet: (payload) => tauriInvoke(IPC.profileCredentialsGet, payload),
   } satisfies DhApi
 }
 

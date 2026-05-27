@@ -7,6 +7,7 @@ import { DashboardKernelsPage } from './pages/DashboardKernelsPage'
 import { DashboardLayout } from './pages/DashboardLayout'
 import { DashboardLogsPage } from './pages/DashboardLogsPage'
 import { DashboardMainPage } from './pages/DashboardMainPage'
+import { DashboardWidgetsPage } from './pages/DashboardWidgetsPage'
 import { DockerPage } from './pages/DockerPage'
 import { DeveloperGitPage } from './pages/DeveloperGitPage'
 import { ProfilesPage } from './pages/ProfilesPage'
@@ -19,10 +20,12 @@ import { SettingsPage } from './pages/SettingsPage'
 import { SystemReadinessPage } from './pages/SystemReadinessPage'
 import { ReadinessWizardPage } from './pages/ReadinessWizardPage'
 import { syncAppearanceFromStore } from './theme/applyAccent'
+import { useNotification } from './layout/NotificationProvider'
 
 export default function App(): ReactElement | null {
   const [ready, setReady] = useState(false)
   const [showReadinessWizard, setShowReadinessWizard] = useState(false)
+  const { showToast } = useNotification()
 
   useEffect(() => {
     window.dh.storeGet({ key: 'readiness_wizard_complete' }).then((res: unknown) => {
@@ -39,6 +42,26 @@ export default function App(): ReactElement | null {
     if (!ready || showReadinessWizard) return
     void syncAppearanceFromStore()
   }, [ready, showReadinessWizard])
+
+  useEffect(() => {
+    // Startup check for updates if enabled in settings
+    void window.dh.storeGet({ key: 'update_settings' }).then((res: unknown) => {
+      const bag = res as { ok?: boolean; data?: unknown }
+      if (bag.ok && bag.data && typeof bag.data === 'object') {
+        const updateSettings = bag.data as { checkOnStartup?: boolean }
+        if (updateSettings.checkOnStartup) {
+          void window.dh.appUpdateCheck().then((updateRes) => {
+            if (updateRes.ok && updateRes.updateAvailable) {
+              showToast(
+                'info',
+                `A new update is available: ${updateRes.latestVersion}. Go to Settings → Update to get it.`
+              )
+            }
+          })
+        }
+      }
+    })
+  }, [showToast])
 
   if (!ready) return null
   if (showReadinessWizard) {
@@ -60,6 +83,7 @@ export default function App(): ReactElement | null {
           <Route index element={<DashboardMainPage />} />
           <Route path="kernels" element={<DashboardKernelsPage />} />
           <Route path="logs" element={<DashboardLogsPage />} />
+          <Route path="widgets" element={<DashboardWidgetsPage />} />
         </Route>
         <Route path="/system" element={<MonitorPage />} />
         <Route path="/docker" element={<DockerPage />} />

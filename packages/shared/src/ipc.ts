@@ -174,8 +174,6 @@ export type RuntimeStatusResponse = {
 export type PerfSnapshot = {
   startupMs: number
   rssMb: number
-  heapUsedMb: number
-  heapTotalMb: number
   uptimeSec: number
 }
 
@@ -309,6 +307,8 @@ export const IPC = {
   cloudGitGetPrChecks: 'dh:cloud:git:get-pr-checks',
   cloudGitMergePr: 'dh:cloud:git:merge-pr',
   appInfo: 'dh:app:info',
+  appUpdateCheck: 'dh:app:update:check',
+  profileCredentialsGet: 'dh:profile:credentials:get',
 } as const
 
 export type DockerActionPayload = { id: string; action: DockerContainerAction }

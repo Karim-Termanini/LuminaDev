@@ -1,12 +1,13 @@
-import { ComposeProfileSchema, type ComposeProfile, type ContainerRow, type HostMetricsResponse, type HostSecuritySnapshot, type JobSummary, type MaintenanceProfileHealth, type MaintenanceStateStore, type MaintenanceTask, type TopProcessRow } from '@linux-dev-home/shared'
+import { ComposeProfileSchema, type ComposeProfile, type ContainerRow, type HostMetricsResponse, type HostSecuritySnapshot, type JobSummary, type MaintenanceProfileHealth, type MaintenanceStateStore, type MaintenanceTask, type TopProcessRow, type PerfSnapshot } from '@linux-dev-home/shared'
 import type { ReactElement } from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Trans, useTranslation } from 'react-i18next'
 import { humanizeDashboardError } from './dashboardError'
 import { humanizeDockerError } from './dockerError'
 import { humanizeRuntimeError } from './runtimeError'
 import { collectAccessibilitySnapshot, evaluateAccessibilitySnapshot } from './accessibilityAudit'
 import { evaluateGuardian } from './maintenanceGuardian'
-import { OPS_RUNBOOK, maintenanceStatusTone } from './maintenancePageHelpers'
+import { OPS_RUNBOOK } from './maintenancePageHelpers'
 import './MaintenancePage.css'
 
 const CRON_HINTS = ['0 */6 * * *', '0 3 * * *', '30 2 * * 0']
@@ -26,7 +27,6 @@ type ServiceState = Record<string, 'active' | 'inactive' | 'unknown'>
 type CleanupPreview = { containers: number; images: number; volumes: number; networks: number } | null
 type TabId = (typeof TABS)[number]
 type DiagnosticCheck = { id: string; label: string; ok: boolean; details: string }
-type PerfSnapshot = { startupMs: number; rssMb: number; heapUsedMb: number; heapTotalMb: number; uptimeSec: number }
 
 type RunbookOp = (typeof OPS_RUNBOOK)[number]
 
@@ -46,9 +46,10 @@ function MaintenanceRunbookStrip({
   runbookBusyId: string | null
   onRun: (op: RunbookOp) => void
 }): ReactElement {
+  const { t } = useTranslation('maintenance')
   return (
     <>
-      <div className="maint-runbook-label">Host diagnostics</div>
+      <div className="maint-runbook-label">{t('runbook.label')}</div>
       <div className="maint-runbook-grid">
         {OPS_RUNBOOK.map((op) => (
           <button
@@ -59,7 +60,7 @@ function MaintenanceRunbookStrip({
             onClick={() => void onRun(op)}
           >
             <span className={`codicon codicon-${op.icon}`} aria-hidden />
-            <span>{runbookBusyId === op.id ? 'Running…' : op.label}</span>
+            <span>{runbookBusyId === op.id ? t('runbook.running') : t(op.labelKey)}</span>
           </button>
         ))}
       </div>
@@ -68,6 +69,7 @@ function MaintenanceRunbookStrip({
 }
 
 export function MaintenancePage(): ReactElement {
+  const { t } = useTranslation('maintenance')
   const [activeTab, setActiveTab] = useState<TabId>('Overview / Health Dashboard')
   const [metrics, setMetrics] = useState<HostMetricsResponse | null>(null)
   const [containers, setContainers] = useState<ContainerRow[]>([])
@@ -93,6 +95,7 @@ export function MaintenancePage(): ReactElement {
   const [diagnostics, setDiagnostics] = useState<DiagnosticCheck[]>([])
   const [includeSensitiveBundle, setIncludeSensitiveBundle] = useState(false)
   const [status, setStatus] = useState('')
+  const [statusTone, setStatusTone] = useState<'success' | 'warning'>('warning')
   const [runbook, setRunbook] = useState<{ title: string; text: string } | null>(null)
   const [runbookBusyId, setRunbookBusyId] = useState<string | null>(null)
   const [commandPeek, setCommandPeek] = useState<string | null>(null)
@@ -104,13 +107,13 @@ export function MaintenancePage(): ReactElement {
     try {
       await window.dh.storeSet({ key: 'maintenance_state', data: next })
       setState(next)
-      setStatus('Maintenance state saved.')
+      showStatus(t('page.statusSaved'), 'success')
     } catch (e) {
-      setStatus(e instanceof Error ? e.message : String(e))
+      showStatus(e instanceof Error ? e.message : String(e))
     } finally {
       setSavingState(false)
     }
-  }, [])
+  }, [t])
 
   const refreshCleanupPreview = useCallback(async () => {
     try {
@@ -123,10 +126,10 @@ export function MaintenancePage(): ReactElement {
         setCleanupPreview(res.preview ?? null)
       } else {
         setCleanupPreview(null)
-        setStatus(humanizeDockerError(res.error))
+        showStatus(humanizeDockerError(res.error))
       }
     } catch (e) {
-      setStatus(humanizeDockerError(e))
+      showStatus(humanizeDockerError(e))
       setCleanupPreview(null)
     }
   }, [])
@@ -137,11 +140,11 @@ export function MaintenancePage(): ReactElement {
       if (m.ok) {
         setMetrics(m)
       } else {
-        setStatus(humanizeDashboardError(m.error))
+        showStatus(humanizeDashboardError(m.error))
       }
       const c = (await window.dh.dockerList()) as { ok: boolean; rows: ContainerRow[]; error?: string }
       if (c.ok) setContainers(c.rows)
-      else setStatus(humanizeDockerError(c.error))
+      else showStatus(humanizeDockerError(c.error))
       const proc = await window.dh.monitorTopProcesses()
       if (proc && 'processes' in proc && Array.isArray(proc.processes)) {
         setTopProcesses(proc.processes)
@@ -150,7 +153,7 @@ export function MaintenancePage(): ReactElement {
       setJobs(Array.isArray(j) ? j : [])
       await refreshCleanupPreview()
     } catch (e) {
-      setStatus(humanizeDashboardError(e))
+      showStatus(humanizeDashboardError(e))
     }
   }, [refreshCleanupPreview])
 
@@ -175,20 +178,20 @@ export function MaintenancePage(): ReactElement {
       const sec = await window.dh.monitorSecurity()
       setSecurity(sec.ok ? sec.snapshot : null)
       if (!sec.ok && sec.error) {
-        setStatus(humanizeDashboardError(sec.error))
+        showStatus(humanizeDashboardError(sec.error))
       }
       const stored = await window.dh.storeGet({ key: 'maintenance_state' })
       if (stored.ok) {
         setState((stored.data as MaintenanceStateStore | null) ?? { tasks: [], profileHealth: [], history: [] })
       } else {
         setState({ tasks: [], profileHealth: [], history: [] })
-        setStatus(stored.error || 'Failed to load maintenance state.')
+        showStatus(stored.error || t('page.statusLoadError'))
       }
       await refreshSystemdSnapshot()
     } catch (e) {
-      setStatus(humanizeDashboardError(e))
+      showStatus(humanizeDashboardError(e))
     }
-  }, [refreshSystemdSnapshot])
+  }, [refreshSystemdSnapshot, t])
 
   useEffect(() => {
     void refreshLive()
@@ -217,6 +220,29 @@ export function MaintenancePage(): ReactElement {
     ? Math.floor((Date.now() - new Date(state.lastMaintenanceAtIso).getTime()) / (1000 * 3600 * 24))
     : null
 
+  function showStatus(msg: string, tone: 'success' | 'warning' = 'warning') {
+    setStatus(msg)
+    setStatusTone(tone)
+  }
+
+  const tabShortLabel = useMemo<Record<TabId, string>>(() => ({
+    'Overview / Health Dashboard': t('tabs.overviewShort'),
+    'System Cleanup': t('tabs.cleanupShort'),
+    'Docker Maintenance': t('tabs.dockerShort'),
+    'Data & Profiles': t('tabs.dataShort'),
+    'Logs & History': t('tabs.logsShort'),
+    'Scheduled / Automation': t('tabs.scheduleShort'),
+  }), [t])
+
+  const tabFullLabel = useMemo<Record<TabId, string>>(() => ({
+    'Overview / Health Dashboard': t('tabs.overview'),
+    'System Cleanup': t('tabs.cleanup'),
+    'Docker Maintenance': t('tabs.docker'),
+    'Data & Profiles': t('tabs.data'),
+    'Logs & History': t('tabs.logs'),
+    'Scheduled / Automation': t('tabs.schedule'),
+  }), [t])
+
   async function appendHistory(action: string, result: 'success' | 'warning' | 'failed', note?: string, reclaimedMb?: number): Promise<void> {
     const next = {
       ...state,
@@ -240,12 +266,12 @@ export function MaintenancePage(): ReactElement {
         health,
         lastCheckedAtIso: new Date().toISOString(),
         lastRunAtIso: health === 'healthy' ? new Date().toISOString() : undefined,
-        note: hasErrors ? 'Error markers found in compose logs.' : 'Compose logs inspected from maintenance.',
+        note: hasErrors ? t('compose.errorMarkers') : t('compose.inspected'),
       }
       const next = { ...state, profileHealth: [nextEntry, ...state.profileHealth.filter((x) => x.profile !== profile)].slice(0, 40) }
       await saveState(next)
     } catch (e) {
-      setStatus(e instanceof Error ? e.message : String(e))
+      showStatus(e instanceof Error ? e.message : String(e))
     }
   }
 
@@ -265,14 +291,14 @@ export function MaintenancePage(): ReactElement {
         lastCheckedAtIso: new Date().toISOString(),
         lastRunAtIso: new Date().toISOString(),
         note: res.ok
-          ? 'Compose up succeeded.'
-          : (humanizeDockerError(res.error || res.log || 'Compose up returned non-zero.')).slice(0, 280),
+          ? t('compose.upSuccess')
+          : (humanizeDockerError(res.error || res.log || t('compose.upError'))).slice(0, 280),
       }
       const next = { ...state, profileHealth: [nextEntry, ...state.profileHealth.filter((x) => x.profile !== profile)].slice(0, 40) }
       await saveState(next)
       await refreshLive()
     } catch (e) {
-      setStatus(e instanceof Error ? e.message : String(e))
+      showStatus(e instanceof Error ? e.message : String(e))
     }
   }
 
@@ -288,11 +314,11 @@ export function MaintenancePage(): ReactElement {
         throw new Error(humanizeDockerError(res.error))
       }
       const mb = Math.round((((res.reclaimedBytes ?? 0) / (1024 * 1024)) * 10)) / 10
-      setStatus(`Cleanup finished. Reclaimed ~${mb} MB.`)
-      await appendHistory('docker.cleanup', 'success', 'Selected Docker cleanup executed.', mb)
+      showStatus(`Cleanup finished. Reclaimed ~${mb} MB.`, 'success')
+      await appendHistory('docker.cleanup', 'success', t('cleanup.dockerExecuted'), mb)
       await refreshLive()
     } catch (e) {
-      setStatus(e instanceof Error ? e.message : String(e))
+      showStatus(e instanceof Error ? e.message : String(e))
       await appendHistory('docker.cleanup', 'failed', e instanceof Error ? e.message : String(e))
     } finally {
       setBusyCleanup(false)
@@ -310,24 +336,24 @@ export function MaintenancePage(): ReactElement {
         if (!saveRes.ok) {
           throw new Error(saveRes.error || 'Failed to refresh widget layout cache.')
         }
-        await appendHistory('widgets.refresh', 'success', 'Widget layout cache refreshed.')
+        await appendHistory('widgets.refresh', 'success', t('cleanup.widgetRefreshed'))
       } else {
         throw new Error(layoutRes.error || 'Failed to load widget layout cache.')
       }
     }
     if (recommendedSelection.clearCache) {
-      await appendHistory('cache.cleanup.manual', 'warning', 'Use runbook command templates for host cache cleanup.')
+      await appendHistory('cache.cleanup.manual', 'warning', t('cleanup.hostCache'))
     }
     if (recommendedSelection.cleanLogs) {
-      await appendHistory('logs.cleanup.manual', 'warning', 'Job logs are session-bound; app log cleanup is manual currently.')
+      await appendHistory('logs.cleanup.manual', 'warning', t('cleanup.logCleanup'))
     }
-    setStatus('Recommended maintenance completed.')
+    showStatus(t('page.recommendedDone'), 'success')
   }
 
   async function saveReminder(days: number): Promise<void> {
     await saveState({ ...state, reminderDays: days })
     if (Notification.permission === 'granted') {
-      new Notification('LuminaDev maintenance reminder', { body: `Reminder set to every ${days} day(s).` })
+      new Notification(t('runbook.notificationTitle'), { body: t('runbook.notificationBody', { days }) })
     }
   }
 
@@ -371,14 +397,14 @@ export function MaintenancePage(): ReactElement {
       }
       const text = res.ok
         ? (typeof res.result === 'string' ? res.result : JSON.stringify(res.result ?? '')) || '(empty)'
-        : res.error ?? 'Request failed'
+        : res.error ?? t('cleanup.requestFailed')
       setRunbook({ title: op.label, text })
     } catch (e) {
       setRunbook({ title: op.label, text: e instanceof Error ? e.message : String(e) })
     } finally {
       setRunbookBusyId(null)
     }
-  }, [])
+  }, [t])
 
   async function runDiagnosticsWizard(): Promise<void> {
     setRunningDiagnostics(true)
@@ -387,7 +413,7 @@ export function MaintenancePage(): ReactElement {
       const docker = (await window.dh.dockerCheckInstalled()) as { docker: boolean; compose: boolean; buildx: boolean }
       checks.push({
         id: 'docker',
-        label: 'Docker connectivity',
+        label: t('check.docker'),
         ok: docker.docker && docker.compose,
         details: `docker=${docker.docker} compose=${docker.compose} buildx=${docker.buildx}`,
       })
@@ -396,11 +422,11 @@ export function MaintenancePage(): ReactElement {
       const hostSec = hostSecRes.ok ? hostSecRes.snapshot : null
       checks.push({
         id: 'security',
-        label: 'Security baseline',
+        label: t('check.security'),
         ok: Boolean(hostSec && hostSec.firewall === 'active' && hostSec.sshPasswordAuth !== 'yes'),
         details: hostSec
           ? `firewall=${hostSec.firewall}, sshPasswordAuth=${hostSec.sshPasswordAuth}`
-          : hostSecRes.error || 'Security snapshot unavailable',
+          : hostSecRes.error || t('check.securityUnavailable'),
       })
 
       const gitHost = (await window.dh.gitConfigList({ target: 'host' })) as {
@@ -413,17 +439,17 @@ export function MaintenancePage(): ReactElement {
       const hasEmail = rows.some((r) => r.key.toLowerCase() === 'user.email')
       checks.push({
         id: 'git',
-        label: 'Git identity',
+        label: t('check.git'),
         ok: hasName && hasEmail,
-        details: gitHost.ok ? `user.name=${hasName} user.email=${hasEmail}` : gitHost.error || 'Git config unavailable',
+        details: gitHost.ok ? t('check.gitDetail', { name: String(hasName), email: String(hasEmail) }) : gitHost.error || t('check.gitUnavailable'),
       })
 
       const sshHost = await window.dh.sshGetPub({ target: 'host' })
       checks.push({
         id: 'ssh',
-        label: 'SSH key',
+        label: t('check.ssh'),
         ok: Boolean(sshHost.ok && sshHost.pub),
-        details: sshHost.ok && sshHost.fingerprint ? `fingerprint=${sshHost.fingerprint}` : 'No host SSH key detected',
+        details: sshHost.ok && sshHost.fingerprint ? t('check.sshDetail', { fp: sshHost.fingerprint }) : t('check.sshNone'),
       })
 
       const rt = await window.dh.runtimeStatus()
@@ -433,7 +459,7 @@ export function MaintenancePage(): ReactElement {
         : 0
       checks.push({
         id: 'runtimes',
-        label: 'Core runtimes',
+        label: t('check.runtimes'),
         ok: installedCount >= 2,
         details: rt.ok ? `${installedCount}/3 core runtimes installed` : humanizeRuntimeError(rt.error),
       })
@@ -442,28 +468,28 @@ export function MaintenancePage(): ReactElement {
       const snap = perf.ok ? (perf.snapshot as PerfSnapshot | undefined) : undefined
       checks.push({
         id: 'perf',
-        label: 'Performance baseline',
-        ok: Boolean(snap && snap.rssMb < 900 && snap.startupMs < 120000),
+        label: t('check.perf'),
+        ok: Boolean(snap && snap.rssMb < 900),
         details: snap
-          ? `startup=${snap.startupMs}ms rss=${snap.rssMb}MB heap=${snap.heapUsedMb}/${snap.heapTotalMb}MB uptime=${snap.uptimeSec}s`
-          : perf.error || 'Perf snapshot unavailable',
+          ? `rss=${snap.rssMb}MB uptime=${snap.uptimeSec}s`
+          : perf.error || t('check.perfUnavailable'),
       })
 
       const a11ySnapshot = collectAccessibilitySnapshot(document)
       const a11y = evaluateAccessibilitySnapshot(a11ySnapshot)
       checks.push({
         id: 'a11y',
-        label: 'Accessibility baseline',
+        label: t('check.a11y'),
         ok: a11y.ok,
         details: a11y.details,
       })
 
       setDiagnostics(checks)
       const failed = checks.filter((c) => !c.ok).length
-      await appendHistory('diagnostics.run', failed === 0 ? 'success' : 'warning', `${failed} check(s) failed out of ${checks.length}.`)
-      setStatus(failed === 0 ? 'Diagnostics passed.' : `Diagnostics completed with ${failed} issue(s).`)
+      await appendHistory('diagnostics.run', failed === 0 ? 'success' : 'warning', t('health.someIssues', { count: failed, total: checks.length }))
+      showStatus(failed === 0 ? t('health.passed') : t('health.failed', { count: failed }), failed === 0 ? 'success' : 'warning')
     } catch (e) {
-      setStatus(e instanceof Error ? e.message : String(e))
+      showStatus(e instanceof Error ? e.message : String(e))
       await appendHistory('diagnostics.run', 'failed', e instanceof Error ? e.message : String(e))
     } finally {
       setRunningDiagnostics(false)
@@ -491,18 +517,18 @@ export function MaintenancePage(): ReactElement {
     if (!res.ok) {
       throw new Error(res.error ?? 'bundle generation failed')
     }
-    setStatus(`Support bundle exported: ${res.path ?? 'Downloads/LuminaDev'} (${includeSensitiveBundle ? 'full' : 'redacted'})`)
-    await appendHistory('diagnostics.export', 'success', `Support bundle exported (${includeSensitiveBundle ? 'include-sensitive' : 'redacted'}).`)
+    showStatus(t('health.exported', { path: res.path ?? 'Downloads/LuminaDev', mode: includeSensitiveBundle ? t('health.exportFull') : t('health.exportRedacted') }), 'success')
+    await appendHistory('diagnostics.export', 'success', `Support bundle exported (${includeSensitiveBundle ? t('health.exportIncludeSensitive') : t('health.exportRedacted')}).`)
   }
 
   return (
     <div className="maint-page elevated-page">
       <header className="maint-hero">
         <div className="maint-hero-eyebrow">Workspace care</div>
-        <h1 className="maint-hero-title">Maintenance</h1>
+        <h1 className="maint-hero-title">{t('page.contentTitle')}</h1>
         <p className="maint-hero-sub">
-          {degradedProfiles > 0 ? `${degradedProfiles} profile issues detected.` : 'Your workstation looks healthy.'}{' '}
-          Last maintenance: {lastMaintenanceDaysAgo === null ? 'never' : `${lastMaintenanceDaysAgo} day(s) ago`}.
+          {degradedProfiles > 0 ? t('page.statusIssues', { count: degradedProfiles }) : t('page.statusHealthy')}{' '}
+          {lastMaintenanceDaysAgo === null ? t('page.lastMaintenanceNever') : t('page.lastMaintenance', { days: lastMaintenanceDaysAgo })}
         </p>
       </header>
 
@@ -513,12 +539,12 @@ export function MaintenancePage(): ReactElement {
               key={tab}
               type="button"
               className={`maint-tab ${activeTab === tab ? 'maint-tab-active' : ''}`}
-              title={tab}
+              title={tabFullLabel[tab]}
               onClick={() => setActiveTab(tab)}
             >
               <span className={`codicon codicon-${MAINT_TAB_META[tab].icon}`} aria-hidden />
-              <span>{MAINT_TAB_META[tab].short}</span>
-              <span className="maint-tab-full">{tab}</span>
+              <span>{tabShortLabel[tab]}</span>
+              <span className="maint-tab-full">{tabFullLabel[tab]}</span>
             </button>
           ))}
         </nav>
@@ -537,17 +563,17 @@ export function MaintenancePage(): ReactElement {
               style={{ fontSize: 12 }}
               onClick={() => document.getElementById('maintenance-job-runner')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
             >
-              View job runner
+              {t('page.viewJobRunner')}
             </button>
           </div>
         ) : null}
         <div className="hp-grid-2" style={{ gap: 18, alignItems: 'stretch' }}>
           <div style={{ minHeight: 130, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-            <div className="hp-section-title">System overview</div>
+            <div className="hp-section-title">{t('section.systemOverview')}</div>
             <div className="maint-score-wrap">
               <div>
                 <div className="maint-score-num">{guardian.score === null ? '—' : `${guardian.score}%`}</div>
-                <div className="maint-score-sub">Guardian health</div>
+                <div className="maint-score-sub">{t('health.guardianHealth')}</div>
               </div>
             </div>
             <div className="maint-kpi-row">
@@ -558,24 +584,23 @@ export function MaintenancePage(): ReactElement {
             </div>
           </div>
           <div style={{ minHeight: 130 }}>
-            <div className="hp-section-title">Run Recommended Maintenance</div>
+            <div className="hp-section-title">{t('section.runRecommended')}</div>
             <div className="hp-grid-gap-8" style={{ fontSize: 13, marginTop: 4 }}>
-              <label><input type="checkbox" checked={recommendedSelection.clearCache} onChange={(e) => setRecommendedSelection((p) => ({ ...p, clearCache: e.target.checked }))} /> Clear app cache/temp (manual-assisted)</label>
-              <label><input type="checkbox" checked={recommendedSelection.pruneDocker} onChange={(e) => setRecommendedSelection((p) => ({ ...p, pruneDocker: e.target.checked }))} /> Prune Docker resources</label>
-              <label><input type="checkbox" checked={recommendedSelection.cleanLogs} onChange={(e) => setRecommendedSelection((p) => ({ ...p, cleanLogs: e.target.checked }))} /> Clean old logs (manual-assisted)</label>
-              <label><input type="checkbox" checked={recommendedSelection.refreshWidgets} onChange={(e) => setRecommendedSelection((p) => ({ ...p, refreshWidgets: e.target.checked }))} /> Refresh widget registry cache</label>
+              <label><input type="checkbox" checked={recommendedSelection.clearCache} onChange={(e) => setRecommendedSelection((p) => ({ ...p, clearCache: e.target.checked }))} /> {t('section.clearCache')}</label>
+              <label><input type="checkbox" checked={recommendedSelection.pruneDocker} onChange={(e) => setRecommendedSelection((p) => ({ ...p, pruneDocker: e.target.checked }))} /> {t('section.pruneDocker')}</label>
+              <label><input type="checkbox" checked={recommendedSelection.cleanLogs} onChange={(e) => setRecommendedSelection((p) => ({ ...p, cleanLogs: e.target.checked }))} /> {t('section.cleanLogs')}</label>
+              <label><input type="checkbox" checked={recommendedSelection.refreshWidgets} onChange={(e) => setRecommendedSelection((p) => ({ ...p, refreshWidgets: e.target.checked }))} /> {t('section.refreshWidgets')}</label>
               <button className="hp-btn hp-btn-primary" onClick={() => void runRecommendedMaintenance()} disabled={busyCleanup || savingState}>
-                Run Quick Maintenance
+                {t('section.runQuick')}
               </button>
             </div>
           </div>
         </div>
         {activeTab === 'Overview / Health Dashboard' ? (
           <div className="maint-divider">
-            <div className="hp-section-title">Guardian layers</div>
+            <div className="hp-section-title">{t('section.guardianLayers')}</div>
             <p className="hp-muted" style={{ fontSize: 12, lineHeight: 1.55, marginTop: 6, marginBottom: 14 }}>
-              Each layer reads a specific IPC signal. The headline score is <strong>100</strong> minus the deductions shown on
-              failing layers (floored at 0). This is the coded definition of “Guardian” in this app — not a separate marketing score.
+              <Trans i18nKey="guardian.description" ns="maintenance" t={t} components={{ 0: <strong /> }} />
             </p>
             <div className="maint-layer-grid">
               {guardian.layers.map((layer) => (
@@ -583,7 +608,14 @@ export function MaintenancePage(): ReactElement {
                   key={layer.id}
                   className={`maint-layer-tile ${layer.ok ? 'maint-layer-tile--ok' : 'maint-layer-tile--warn'}`}
                 >
-                  <div style={{ fontWeight: 750, fontSize: 14, letterSpacing: '-0.01em' }}>{layer.title}</div>
+                  <div style={{ fontWeight: 750, fontSize: 14, letterSpacing: '-0.01em' }}>{({
+                    host_compute: t('guardian.hostCompute'),
+                    memory_pressure: t('guardian.memoryPressure'),
+                    storage_pressure: t('guardian.storagePressure'),
+                    container_fleet: t('guardian.containerFleet'),
+                    process_health: t('guardian.processHealth'),
+                    host_security: t('guardian.hostSecurity'),
+                  } as Record<string, string>)[layer.id] ?? layer.title}</div>
                   <div className="hp-muted" style={{ fontSize: 10, marginTop: 6, lineHeight: 1.4 }}>{layer.signals}</div>
                   <div style={{ marginTop: 10, fontSize: 13, lineHeight: 1.45 }}>{layer.detail}</div>
                   {layer.deduction > 0 ? (
@@ -595,12 +627,12 @@ export function MaintenancePage(): ReactElement {
               ))}
             </div>
             <div style={{ marginTop: 22 }}>
-              <div className="hp-section-title">Your checklist</div>
+              <div className="hp-section-title">{t('section.yourChecklist')}</div>
               <p className="hp-muted" style={{ fontSize: 12, lineHeight: 1.55, marginTop: 6, marginBottom: 10 }}>
-                Open items from <strong>Schedule</strong> → Maintenance Tasks. Checking a box here updates the same list.
+                {t('schedule.openItems')}
               </p>
               {pendingTasks.length === 0 ? (
-                <div className="hp-muted" style={{ fontSize: 13 }}>No open tasks. Add reminders from the Schedule tab.</div>
+                <div className="hp-muted" style={{ fontSize: 13 }}>{t('checklist.noTasks')}</div>
               ) : (
                 <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: 8 }}>
                   {pendingTasks.slice(0, 8).map((task) => (
@@ -622,7 +654,7 @@ export function MaintenancePage(): ReactElement {
                 style={{ marginTop: 12 }}
                 onClick={() => setActiveTab('Scheduled / Automation')}
               >
-                Open Schedule tab
+                {t('checklist.openSchedule')}
               </button>
             </div>
           </div>
@@ -632,20 +664,20 @@ export function MaintenancePage(): ReactElement {
 
       {(activeTab === 'Overview / Health Dashboard' || activeTab === 'Data & Profiles') ? (
       <section className="hp-card">
-        <div className="hp-section-title">Infrastructure Status</div>
+        <div className="hp-section-title">{t('section.infrastructureStatus')}</div>
         <div className="hp-row-wrap" style={{ marginBottom: 12, rowGap: 8 }}>
-          <button className="hp-btn" onClick={() => void checkAllProfiles()} disabled={savingState}>Check all profiles</button>
-          <button className="hp-btn" onClick={() => void refreshSystemdSnapshot()} disabled={savingState}>Refresh systemd snapshot</button>
+          <button className="hp-btn" onClick={() => void checkAllProfiles()} disabled={savingState}>{t('infra.checkAllProfiles')}</button>
+          <button className="hp-btn" onClick={() => void refreshSystemdSnapshot()} disabled={savingState}>{t('infra.refreshSystemd')}</button>
         </div>
         <div className="hp-table-wrap" style={{ borderRadius: 10, border: '1px solid var(--border)' }}>
           <table className="hp-table">
             <thead>
               <tr className="hp-table-head">
-                <th className="hp-table-cell">Profile</th>
-                <th className="hp-table-cell">Health</th>
-                <th className="hp-table-cell">Last Checked</th>
-                <th className="hp-table-cell">Last Run</th>
-                <th className="hp-table-cell">Actions</th>
+                <th className="hp-table-cell">{t('infra.profile')}</th>
+                <th className="hp-table-cell">{t('infra.health')}</th>
+                <th className="hp-table-cell">{t('infra.lastChecked')}</th>
+                <th className="hp-table-cell">{t('infra.lastRun')}</th>
+                <th className="hp-table-cell">{t('infra.actions')}</th>
               </tr>
             </thead>
             <tbody>
@@ -659,8 +691,8 @@ export function MaintenancePage(): ReactElement {
                     <td className="hp-table-cell mono">{entry?.lastRunAtIso ?? '-'}</td>
                     <td className="hp-table-cell">
                       <div className="hp-row-wrap">
-                        <button className="hp-btn" onClick={() => void checkProfileHealth(profile)} disabled={savingState}>Check</button>
-                        <button className="hp-btn" onClick={() => void runProfile(profile)} disabled={savingState}>Run</button>
+                        <button className="hp-btn" onClick={() => void checkProfileHealth(profile)} disabled={savingState}>{t('infra.check')}</button>
+                        <button className="hp-btn" onClick={() => void runProfile(profile)} disabled={savingState}>{t('infra.run')}</button>
                       </div>
                     </td>
                   </tr>
@@ -682,20 +714,20 @@ export function MaintenancePage(): ReactElement {
 
       {(activeTab === 'Docker Maintenance' || activeTab === 'System Cleanup') ? (
       <section className="hp-card">
-        <div className="hp-section-title">Docker Cleanup Planner</div>
+        <div className="hp-section-title">{t('section.dockerCleanupPlanner')}</div>
         <div className="hp-row-wrap" style={{ rowGap: 8 }}>
-          <label><input type="checkbox" checked={cleanupSelection.containers} onChange={(e) => setCleanupSelection((p) => ({ ...p, containers: e.target.checked }))} /> Containers</label>
-          <label><input type="checkbox" checked={cleanupSelection.images} onChange={(e) => setCleanupSelection((p) => ({ ...p, images: e.target.checked }))} /> Images</label>
-          <label><input type="checkbox" checked={cleanupSelection.volumes} onChange={(e) => setCleanupSelection((p) => ({ ...p, volumes: e.target.checked }))} /> Volumes</label>
-          <label><input type="checkbox" checked={cleanupSelection.networks} onChange={(e) => setCleanupSelection((p) => ({ ...p, networks: e.target.checked }))} /> Networks</label>
-          <button className="hp-btn hp-btn-primary" onClick={() => void runCleanup()} disabled={busyCleanup}>{busyCleanup ? 'Running...' : 'Run cleanup'}</button>
+          <label><input type="checkbox" checked={cleanupSelection.containers} onChange={(e) => setCleanupSelection((p) => ({ ...p, containers: e.target.checked }))} /> {t('docker.containers')}</label>
+          <label><input type="checkbox" checked={cleanupSelection.images} onChange={(e) => setCleanupSelection((p) => ({ ...p, images: e.target.checked }))} /> {t('docker.images')}</label>
+          <label><input type="checkbox" checked={cleanupSelection.volumes} onChange={(e) => setCleanupSelection((p) => ({ ...p, volumes: e.target.checked }))} /> {t('docker.volumes')}</label>
+          <label><input type="checkbox" checked={cleanupSelection.networks} onChange={(e) => setCleanupSelection((p) => ({ ...p, networks: e.target.checked }))} /> {t('docker.networks')}</label>
+          <button className="hp-btn hp-btn-primary" onClick={() => void runCleanup()} disabled={busyCleanup}>{busyCleanup ? t('docker.running') : t('docker.runCleanup')}</button>
         </div>
         {cleanupPreview ? (
           <div className="hp-row-wrap hp-muted" style={{ marginTop: 8, fontSize: 12 }}>
-            <span>stopped containers: {cleanupPreview.containers}</span>
-            <span>unused images: {cleanupPreview.images}</span>
-            <span>orphan volumes: {cleanupPreview.volumes}</span>
-            <span>orphan networks: {cleanupPreview.networks}</span>
+            <span>{t('docker.stoppedContainers', { count: cleanupPreview.containers })}</span>
+            <span>{t('docker.unusedImages', { count: cleanupPreview.images })}</span>
+            <span>{t('docker.orphanVolumes', { count: cleanupPreview.volumes })}</span>
+            <span>{t('docker.orphanNetworks', { count: cleanupPreview.networks })}</span>
           </div>
         ) : null}
       </section>
@@ -703,15 +735,15 @@ export function MaintenancePage(): ReactElement {
 
       {(activeTab === 'Data & Profiles' || activeTab === 'Scheduled / Automation') ? (
       <section className="hp-card">
-        <div className="hp-section-title">Maintenance Tasks & Runbook</div>
+        <div className="hp-section-title">{t('section.maintenanceTasksRunbook')}</div>
         <div className="hp-grid-gap-8" style={{ marginTop: 6 }}>
-          <input value={newTaskTitle} onChange={(e) => setNewTaskTitle(e.target.value)} className="hp-input" placeholder="Task title (e.g. rotate local logs)" />
+          <input value={newTaskTitle} onChange={(e) => setNewTaskTitle(e.target.value)} className="hp-input" placeholder={t('tasks.titlePlaceholder')} />
           <div className="hp-grid-2">
-            <input value={newCron} onChange={(e) => setNewCron(e.target.value)} className="hp-input" placeholder="Cron hint (optional)" />
-            <input value={newCmd} onChange={(e) => setNewCmd(e.target.value)} className="hp-input" placeholder="Command hint (optional)" />
+            <input value={newCron} onChange={(e) => setNewCron(e.target.value)} className="hp-input" placeholder={t('tasks.cronPlaceholder')} />
+            <input value={newCmd} onChange={(e) => setNewCmd(e.target.value)} className="hp-input" placeholder={t('tasks.commandPlaceholder')} />
           </div>
           <div className="hp-row-wrap">
-            <button className="hp-btn hp-btn-primary" onClick={() => void addTask()} disabled={savingState || !newTaskTitle.trim()}>Add task</button>
+            <button className="hp-btn hp-btn-primary" onClick={() => void addTask()} disabled={savingState || !newTaskTitle.trim()}>{t('tasks.add')}</button>
             {CRON_HINTS.map((hint) => (
               <button key={hint} className="hp-btn" onClick={() => setNewCron(hint)} disabled={savingState}>Use {hint}</button>
             ))}
@@ -719,7 +751,7 @@ export function MaintenancePage(): ReactElement {
         </div>
         <div style={{ marginTop: 12, display: 'grid', gap: 8 }}>
           {state.tasks.length === 0 ? (
-            <div className="hp-muted">No maintenance tasks yet. Use the host actions below — output opens in a panel (no terminal copy/paste).</div>
+            <div className="hp-muted">{t('tasks.noTasks')}</div>
           ) : (
             state.tasks.map((task) => (
               <div key={task.id} style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 10 }}>
@@ -780,13 +812,13 @@ export function MaintenancePage(): ReactElement {
                       </button>
                     )}
                   </div>
-                  <button className="hp-btn hp-btn-danger" onClick={() => void removeTask(task.id)}>Delete</button>
+                  <button className="hp-btn hp-btn-danger" onClick={() => void removeTask(task.id)}>{t('tasks.delete')}</button>
                 </div>
                 {task.cronHint ? <div className="mono hp-muted" style={{ fontSize: 11, marginTop: 6 }}>cron: {task.cronHint}</div> : null}
                 {task.commandHint ? (
                   <div className="hp-row-wrap" style={{ marginTop: 6 }}>
                     <button type="button" className="hp-btn" onClick={() => setCommandPeek(task.commandHint ?? '')}>
-                      View command hint
+                      {t('tasks.viewCommandHint')}
                     </button>
                   </div>
                 ) : null}
@@ -800,24 +832,24 @@ export function MaintenancePage(): ReactElement {
 
       {(activeTab === 'Logs & History' || activeTab === 'Overview / Health Dashboard') ? (
       <section className="hp-card" id="maintenance-job-runner">
-        <div className="hp-section-title">Job Runner (active tasks)</div>
+        <div className="hp-section-title">{t('section.jobRunner')}</div>
         <p className="hp-muted" style={{ fontSize: 12, marginTop: 4, marginBottom: 10 }}>
-          Long-running work from the Phase 0 job runner (install runtimes, etc.). Polls with the maintenance page refresh.
+          {t('jobs.description')}
         </p>
         <div className="hp-table-wrap" style={{ borderRadius: 10, border: '1px solid var(--border)' }}>
           <table className="hp-table">
             <thead>
               <tr className="hp-table-head">
-                <th className="hp-table-cell">Kind</th>
-                <th className="hp-table-cell">State</th>
-                <th className="hp-table-cell">Progress</th>
-                <th className="hp-table-cell">Tail</th>
-                <th className="hp-table-cell">Action</th>
+                <th className="hp-table-cell">{t('jobs.kind')}</th>
+                <th className="hp-table-cell">{t('jobs.state')}</th>
+                <th className="hp-table-cell">{t('jobs.progress')}</th>
+                <th className="hp-table-cell">{t('jobs.tail')}</th>
+                <th className="hp-table-cell">{t('jobs.action')}</th>
               </tr>
             </thead>
             <tbody>
               {jobs.length === 0 ? (
-                <tr><td className="hp-table-cell hp-muted" colSpan={5}>No jobs yet.</td></tr>
+                <tr><td className="hp-table-cell hp-muted" colSpan={5}>{t('jobs.noJobs')}</td></tr>
               ) : (
                 jobs.map((j) => (
                   <tr key={j.id} className="hp-table-row">
@@ -827,7 +859,7 @@ export function MaintenancePage(): ReactElement {
                     <td className="hp-table-cell mono" style={{ fontSize: 11 }}>{j.logTail[j.logTail.length - 1] ?? '-'}</td>
                     <td className="hp-table-cell">
                       {j.state === 'running' ? (
-                        <button className="hp-btn" onClick={() => void window.dh.jobCancel({ id: j.id })}>Cancel</button>
+                        <button className="hp-btn" onClick={() => void window.dh.jobCancel({ id: j.id })}>{t('jobs.cancel')}</button>
                       ) : (
                         <span className="hp-muted">-</span>
                       )}
@@ -843,33 +875,33 @@ export function MaintenancePage(): ReactElement {
 
       {activeTab === 'Scheduled / Automation' ? (
         <section className="hp-card">
-          <div className="hp-section-title">Scheduled / Automation</div>
+          <div className="hp-section-title">{tabFullLabel['Scheduled / Automation']}</div>
           <div className="hp-row-wrap">
-            <button className="hp-btn" onClick={() => void saveReminder(3)}>Reminder 3d</button>
-            <button className="hp-btn" onClick={() => void saveReminder(7)}>Reminder 7d</button>
-            <button className="hp-btn" onClick={() => void saveReminder(14)}>Reminder 14d</button>
-            <span className="hp-muted">Current: {state.reminderDays ?? 'none'} day(s)</span>
+            <button className="hp-btn" onClick={() => void saveReminder(3)}>{t('schedule.reminder3d')}</button>
+            <button className="hp-btn" onClick={() => void saveReminder(7)}>{t('schedule.reminder7d')}</button>
+            <button className="hp-btn" onClick={() => void saveReminder(14)}>{t('schedule.reminder14d')}</button>
+            <span className="hp-muted">{t('schedule.currentReminder', { days: state.reminderDays ?? 'none' })}</span>
           </div>
         </section>
       ) : null}
 
       {activeTab === 'Logs & History' ? (
         <section className="hp-card">
-          <div className="hp-section-title">Maintenance History</div>
+          <div className="hp-section-title">{t('section.maintenanceHistory')}</div>
           <div className="hp-table-wrap">
             <table className="hp-table">
               <thead>
                 <tr className="hp-table-head">
-                  <th className="hp-table-cell">At</th>
-                  <th className="hp-table-cell">Action</th>
-                  <th className="hp-table-cell">Result</th>
-                  <th className="hp-table-cell">Reclaimed</th>
-                  <th className="hp-table-cell">Note</th>
+                  <th className="hp-table-cell">{t('history.at')}</th>
+                  <th className="hp-table-cell">{t('history.action')}</th>
+                  <th className="hp-table-cell">{t('history.result')}</th>
+                  <th className="hp-table-cell">{t('history.reclaimed')}</th>
+                  <th className="hp-table-cell">{t('history.note')}</th>
                 </tr>
               </thead>
               <tbody>
                 {(state.history ?? []).length === 0 ? (
-                  <tr><td className="hp-table-cell hp-muted" colSpan={5}>No history yet.</td></tr>
+                  <tr><td className="hp-table-cell hp-muted" colSpan={5}>{t('history.noHistory')}</td></tr>
                 ) : (
                   (state.history ?? []).map((h) => (
                     <tr key={h.id} className="hp-table-row">
@@ -889,15 +921,15 @@ export function MaintenancePage(): ReactElement {
 
       {(activeTab === 'Logs & History' || activeTab === 'Overview / Health Dashboard') ? (
         <section className="hp-card">
-          <div className="hp-section-title">Integrity & diagnostics</div>
+          <div className="hp-section-title">{t('section.integrityDiagnostics')}</div>
           <div className="maint-toolbar">
             <button className="hp-btn hp-btn-primary" onClick={() => void runDiagnosticsWizard()} disabled={runningDiagnostics}>
               <span className="codicon codicon-run-all" aria-hidden style={{ fontSize: 15 }} />
-              {runningDiagnostics ? 'Running…' : 'Run diagnostics'}
+              {runningDiagnostics ? t('health.running') : t('health.run')}
             </button>
             <button type="button" className="hp-btn" onClick={() => void exportDiagnosticReport()}>
               <span className="codicon codicon-export" aria-hidden style={{ fontSize: 15 }} />
-              Export report
+              {t('health.export')}
             </button>
             <label className="hp-muted" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
               <input
@@ -905,13 +937,13 @@ export function MaintenancePage(): ReactElement {
                 checked={includeSensitiveBundle}
                 onChange={(e) => setIncludeSensitiveBundle(e.target.checked)}
               />
-              Include sensitive bundle
+              {t('health.includeSensitive')}
             </label>
           </div>
           <div className="maint-diag-list">
             {diagnostics.length === 0 ? (
               <div className="hp-muted" style={{ padding: '8px 0' }}>
-                No diagnostics run yet. Run checks above, then use host actions for deeper probes.
+                {t('health.noDiagnostics')}
               </div>
             ) : (
               diagnostics.map((d) => (
@@ -932,7 +964,7 @@ export function MaintenancePage(): ReactElement {
           <div className="maint-output-head">
             <h2 className="maint-output-title">{runbook.title}</h2>
             <button type="button" className="hp-btn" onClick={() => setRunbook(null)}>
-              Close
+              {t('page.close')}
             </button>
           </div>
           <pre className="maint-output-body">{runbook.text}</pre>
@@ -942,9 +974,9 @@ export function MaintenancePage(): ReactElement {
       {commandPeek ? (
         <section className="hp-card maint-output-panel">
           <div className="maint-output-head">
-            <h2 className="maint-output-title">Command hint</h2>
+            <h2 className="maint-output-title">{t('section.commandHint')}</h2>
             <button type="button" className="hp-btn" onClick={() => setCommandPeek(null)}>
-              Close
+              {t('page.close')}
             </button>
           </div>
           <pre className="maint-output-body maint-output-body--compact">{commandPeek}</pre>
@@ -954,12 +986,12 @@ export function MaintenancePage(): ReactElement {
       {status ? (
         <div
           role="status"
-          className={`hp-status-alert ${maintenanceStatusTone(status) === 'success' ? 'success' : 'warning'}`}
+          className={`hp-status-alert ${statusTone === 'success' ? 'success' : 'warning'}`}
           style={{ justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}
         >
           <span style={{ flex: '1 1 220px', minWidth: 0 }}>{status}</span>
-          <button type="button" className="hp-btn" onClick={() => setStatus('')} aria-label="Dismiss notification">
-            Dismiss
+          <button type="button" className="hp-btn" onClick={() => setStatus('')} aria-label={t('page.dismissNotification')}>
+            {t('page.dismiss')}
           </button>
         </div>
       ) : null}
@@ -968,6 +1000,7 @@ export function MaintenancePage(): ReactElement {
 }
 
 function StatusPill({ state }: { state: string }): ReactElement {
+  const { t } = useTranslation('maintenance')
   const color =
     state === 'running' || state === 'healthy' || state === 'active' || state === 'success'
       ? 'var(--green)'
@@ -988,7 +1021,11 @@ function StatusPill({ state }: { state: string }): ReactElement {
         boxShadow: `0 0 20px -8px ${color}`,
       }}
     >
-      {state.toUpperCase()}
+      {({
+        active: t('statusPill.active'),
+        inactive: t('statusPill.inactive'),
+        unknown: t('statusPill.unknown'),
+      }[state] ?? state).toUpperCase()}
     </span>
   )
 }

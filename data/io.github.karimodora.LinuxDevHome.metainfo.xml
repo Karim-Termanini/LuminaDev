@@ -6,18 +6,63 @@
   <name>Linux Dev Home</name>
   <summary>Developer dashboard for Linux (Docker, metrics, Git, terminal)</summary>
   <description>
-    <p>Linux Dev Home is an open-source desktop dashboard inspired by Microsoft Dev Home and VS Code–style visuals. It surfaces Docker containers, host metrics, bundled compose profiles, Git workflows, and an embedded terminal.</p>
-    <p>Distribution is intended to be Flatpak-first for cross-distro compatibility.</p>
+    <p>Linux Dev Home is an open-source desktop dashboard inspired by Microsoft Dev Home and VS Code–style visuals. It surfaces Docker containers, host metrics, bundled compose profiles, Git workflows, and an embedded terminal — all in a native Tauri application.</p>
+    <p>Distribution is Flatpak-first for cross-distro compatibility. Docker socket, SSH, PTY, and /proc all work out of the box with full host permissions — no sandbox overrides required.</p>
   </description>
-  <url type="homepage">https://github.com/Karim-Termanini/PersonalProjekte</url>
+  <url type="homepage">https://github.com/Karim-Termanini/LuminaDev</url>
   <developer id="github.com/Karim-Termanini">
     <name>Karim Termanini</name>
   </developer>
-  <content_rating type="oars-1.1"/>
+  <categories>
+    <category>Development</category>
+  </categories>
+  <content_rating type="oars-1.1">
+    <content_attribute id="violence-cartoon">none</content_attribute>
+    <content_attribute id="violence-fantasy">none</content_attribute>
+    <content_attribute id="violence-realistic">none</content_attribute>
+    <content_attribute id="violence-bloodshed">none</content_attribute>
+    <content_attribute id="violence-sexual">none</content_attribute>
+    <content_attribute id="drugs-alcohol">none</content_attribute>
+    <content_attribute id="drugs-narcotics">none</content_attribute>
+    <content_attribute id="drugs-tobacco">none</content_attribute>
+    <content_attribute id="sex-nudity">none</content_attribute>
+    <content_attribute id="sex-themes">none</content_attribute>
+    <content_attribute id="sex-homosexuality">none</content_attribute>
+    <content_attribute id="sex-prostitution">none</content_attribute>
+    <content_attribute id="sex-adultery">none</content_attribute>
+    <content_attribute id="sex-appearance">none</content_attribute>
+    <content_attribute id="language-profanity">none</content_attribute>
+    <content_attribute id="language-humor">none</content_attribute>
+    <content_attribute id="language-discrimination">none</content_attribute>
+    <content_attribute id="social-chat">none</content_attribute>
+    <content_attribute id="social-info">none</content_attribute>
+    <content_attribute id="social-audio">none</content_attribute>
+    <content_attribute id="social-location">none</content_attribute>
+    <content_attribute id="social-contacts">none</content_attribute>
+    <content_attribute id="money-purchases">none</content_attribute>
+    <content_attribute id="money-gambling">none</content_attribute>
+    <content_attribute id="money-donation">none</content_attribute>
+  </content_rating>
   <launchable type="desktop-id">io.github.karimodora.LinuxDevHome.desktop</launchable>
+  <screenshots>
+    <screenshot type="default">
+      <caption>Dashboard — profile overview with running services and system health</caption>
+      <image>https://raw.githubusercontent.com/Karim-Termanini/LuminaDev/main/docs/images/screenshot-dashboard.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Docker — container management with logs, images, volumes, and cleanup</caption>
+      <image>https://raw.githubusercontent.com/Karim-Termanini/LuminaDev/main/docs/images/screenshot-docker.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Git VCS — smart push, conflict resolution, and CI/CD status</caption>
+      <image>https://raw.githubusercontent.com/Karim-Termanini/LuminaDev/main/docs/images/screenshot-git.png</image>
+    </screenshot>
+  </screenshots>
   <releases>
-    <release version="0.1.0" date="2026-04-28">
-      <description><p>Initial public skeleton: Electron UI, Docker integration, metrics, compose profiles, Git, terminal.</p></description>
+    <release version="0.2.0" date="2026-05-01">
+      <description>
+        <p>Alpha release with full Tauri native backend. Features: Docker management, SSH, Git VCS with smart push and conflict studio, Cloud Git (GitHub/GitLab), system monitor, runtimes installer (17 languages), maintenance guardian, profiles with compose stacks, and system readiness wizard.</p>
+      </description>
     </release>
   </releases>
 </component>

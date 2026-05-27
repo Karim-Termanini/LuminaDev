@@ -1,14 +1,15 @@
 export type SshOpResult = { ok: boolean; error?: string }
 
-export function assertSshOk(result: unknown, fallback = 'SSH operation failed.'): void {
+export function assertSshOk(result: unknown, fallback?: string, t?: (key: string) => string): void {
+  const fb = fallback || (t ? t('error.fallback') : 'SSH operation failed.')
   if (!result || typeof result !== 'object') {
-    throw new Error(`${fallback} (invalid response payload)`)
+    throw new Error(`${fb} (invalid response payload)`)
   }
   const maybe = result as SshOpResult
   if (typeof maybe.ok !== 'boolean') {
-    throw new Error(`${fallback} (missing ok flag)`)
+    throw new Error(`${fb} (missing ok flag)`)
   }
   if (maybe.ok === false) {
-    throw new Error(maybe.error || fallback)
+    throw new Error(maybe.error || fb)
   }
 }

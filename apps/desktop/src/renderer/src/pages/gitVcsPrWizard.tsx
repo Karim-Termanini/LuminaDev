@@ -1,6 +1,7 @@
 import type { BranchEntry } from '@linux-dev-home/shared'
 import type { KeyboardEvent as ReactKeyboardEvent, ReactElement } from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { GLASS } from '../layout/GLASS'
 import { humanizeCloudAuthError } from './cloudAuthError'
 import { computeBaseBranchOptions, defaultBaseBranch } from './gitVcsPrWizardBranch'
@@ -32,6 +33,7 @@ export function GitVcsPrWizard({
   onClose,
   onCreated,
 }: GitVcsPrWizardProps): ReactElement | null {
+  const { t } = useTranslation('git')
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
   const [base, setBase] = useState('')
@@ -74,7 +76,7 @@ export function GitVcsPrWizard({
   if (!open) return null
   if (provider === 'other') return null
 
-  const label = provider === 'gitlab' ? 'Merge Request' : 'Pull Request'
+  const label = provider === 'gitlab' ? t('pr.createMR') : t('pr.createPR')
   const shortLabel = provider === 'gitlab' ? 'MR' : 'PR'
 
   async function submit(): Promise<void> {
@@ -133,7 +135,7 @@ export function GitVcsPrWizard({
       <div
         role="dialog"
         aria-modal="true"
-        aria-label={`Create ${label}`}
+        aria-label={label}
         onClick={(e) => e.stopPropagation()}
         onKeyDown={handlePanelKeyDown}
         tabIndex={-1}
@@ -152,7 +154,7 @@ export function GitVcsPrWizard({
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
             <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>
-              Create {label}
+              {label}
             </h2>
             <p className="hp-muted" style={{ margin: '6px 0 0', fontSize: 12, lineHeight: 1.45 }}>
               <span className="mono">{folder}</span>
@@ -168,7 +170,7 @@ export function GitVcsPrWizard({
             onClick={closeSafe}
             disabled={busy}
             style={{ padding: '3px 9px', fontSize: 14 }}
-            aria-label="Close"
+            aria-label={t('pr.close')}
           >
             ✕
           </button>
@@ -176,9 +178,7 @@ export function GitVcsPrWizard({
 
         {provider === 'gitlab' ? (
           <p className="hp-muted" style={{ margin: 0, fontSize: 12, lineHeight: 1.45 }}>
-            GitLab only accepts a source branch that already exists on{' '}
-            <span className="mono">{remoteName}</span>. If you only pushed to another remote (for example GitHub), push this
-            branch to GitLab first, then create the merge request.
+            {t('pr.gitlabNote', { remote: remoteName })}
           </p>
         ) : null}
 
@@ -189,10 +189,10 @@ export function GitVcsPrWizard({
               <span className="mono" style={{ background: 'rgba(255,255,255,0.07)', borderRadius: 6, padding: '3px 8px' }}>
                 {currentBranch}
               </span>
-              <span>into</span>
+              <span>{t('pr.into')}</span>
               <select
                 className="mono"
-                aria-label="Target base branch"
+                aria-label={t('pr.targetBase')}
                 value={base}
                 disabled={busy}
                 onChange={(e) => setBase(e.target.value)}
@@ -207,7 +207,7 @@ export function GitVcsPrWizard({
                   fontSize: 13,
                 }}
               >
-                <option value="">— pick base branch —</option>
+                <option value="">{t('pr.pickBase')}</option>
                 {baseOptions.map((n) => (
                   <option key={n} value={n}>
                     {n}
@@ -217,13 +217,11 @@ export function GitVcsPrWizard({
             </div>
             {baseOptions.length === 0 ? (
               <p className="hp-muted" style={{ margin: 0, fontSize: 11, lineHeight: 1.45 }}>
-                No other branches found for this remote. Run <span className="mono">Fetch</span>, or create a local base
-                branch, then open this wizard again.
+                {t('pr.noBaseBranches')}
               </p>
             ) : (
               <p className="hp-muted" style={{ margin: 0, fontSize: 11, lineHeight: 1.45 }}>
-                Base is the branch on the remote you want to merge into (locals and <span className="mono">{remoteName}/…</span>{' '}
-                tracking names are listed).
+                {t('pr.baseNote', { remote: remoteName })}
               </p>
             )}
           </div>
@@ -233,7 +231,7 @@ export function GitVcsPrWizard({
             ref={titleRef}
             type="text"
             className="mono"
-            placeholder={`${shortLabel} title`}
+            placeholder={provider === 'gitlab' ? t('pr.titlePlaceholderMR') : t('pr.titlePlaceholderPR')}
             value={title}
             disabled={busy}
             onChange={(e) => setTitle(e.target.value)}
@@ -251,7 +249,7 @@ export function GitVcsPrWizard({
 
           {/* Description */}
           <textarea
-            placeholder="Description (optional)"
+            placeholder={t('pr.descPlaceholder')}
             value={body}
             disabled={busy}
             onChange={(e) => setBody(e.target.value)}
@@ -289,7 +287,7 @@ export function GitVcsPrWizard({
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
           <button type="button" className="hp-btn" onClick={closeSafe} disabled={busy}>
-            Cancel
+            {t('pr.cancel')}
           </button>
           <button
             type="button"
@@ -297,7 +295,7 @@ export function GitVcsPrWizard({
             disabled={busy || !title.trim() || !base.trim()}
             onClick={() => void submit()}
           >
-            {busy ? `Creating ${shortLabel}…` : `Create ${shortLabel}`}
+            {busy ? t('pr.creating', { shortLabel }) : t('pr.create', { shortLabel })}
           </button>
         </div>
       </div>

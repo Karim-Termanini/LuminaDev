@@ -1,9 +1,6 @@
 fn main() {
-    let date = std::process::Command::new("date")
-        .arg("+%Y-%m-%d")
-        .output()
-        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-        .unwrap_or_else(|_| "unknown".to_string());
+    let now = chrono::Local::now();
+    let date = now.format("%Y-%m-%d").to_string();
     println!("cargo:rustc-env=BUILD_DATE={date}");
 
     let rustc = std::process::Command::new("rustc")

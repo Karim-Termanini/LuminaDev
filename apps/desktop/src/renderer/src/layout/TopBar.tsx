@@ -1,29 +1,11 @@
 import type { CSSProperties, ReactElement } from 'react'
 import { useEffect, useState } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import type { JobSummary } from '@linux-dev-home/shared'
 
-const titles: Record<string, string> = {
-  '/system': 'System',
-  '/workstation': 'Workstation',
-  '/docker': 'Docker',
-  '/ssh': 'SSH',
-  '/git': 'Developer Git',
-  '/profiles': 'Profiles',
-  '/terminal': 'Terminal',
-  '/runtimes': 'Runtimes',
-  '/maintenance': 'Maintenance',
-  '/settings': 'Settings',
-}
-
-function screenTitle(pathname: string): string {
-  if (pathname === '/dashboard' || pathname.startsWith('/dashboard/')) {
-    return 'HYPEDEVHOME'
-  }
-  return titles[pathname] ?? 'Linux Dev Home'
-}
-
 export function TopBar(): ReactElement {
+  const { t } = useTranslation('nav')
   const location = useLocation()
   const navigate = useNavigate()
   const pathname = location.pathname
@@ -31,10 +13,37 @@ export function TopBar(): ReactElement {
   const [showNotifications, setShowNotifications] = useState(false)
   const [jobs, setJobs] = useState<JobSummary[]>([])
 
+  const titles: Record<string, string> = {
+    '/system': t('topbar.system'),
+    '/workstation': t('topbar.workstation'),
+    '/docker': t('topbar.docker'),
+    '/ssh': t('topbar.ssh'),
+    '/git': t('topbar.git'),
+    '/profiles': t('topbar.profiles'),
+    '/terminal': t('topbar.terminal'),
+    '/runtimes': t('topbar.runtimes'),
+    '/maintenance': t('topbar.maintenance'),
+    '/settings': t('topbar.settings'),
+  }
   useEffect(() => {
     setQ('')
     setShowNotifications(false)
+
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setShowNotifications(false)
+    }
+    document.addEventListener('keydown', handleEscape)
+    return () => document.removeEventListener('keydown', handleEscape)
   }, [pathname])
+
+  useEffect(() => {
+    if (!showNotifications) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setShowNotifications(false)
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [showNotifications])
 
   useEffect(() => {
     const fetchJobs = async () => {
@@ -64,24 +73,26 @@ export function TopBar(): ReactElement {
         background: 'var(--bg-panel)',
         flexShrink: 0,
         position: 'relative',
+direction: 'ltr',
       }}
     >
-      <div style={{ fontWeight: 700, letterSpacing: '0.04em', minWidth: 140 }}>{screenTitle(pathname)}</div>
+      <div style={{ fontWeight: 700, letterSpacing: '0.04em', minWidth: 140 }}>{pathname === '/dashboard' || pathname.startsWith('/dashboard/') ? t('topbar.dashboardTitle') : (titles[pathname] ?? t('topbar.linuxDevHome'))}</div>
       <div style={{ display: 'flex', gap: 2, flex: 1, justifyContent: 'center' }}>
         {onDashboard ? (
           <>
-            <DashTab to="/dashboard" end label="Main" />
-            <DashTab to="/dashboard/kernels" label="Kernels" />
-            <DashTab to="/dashboard/logs" label="Logs" />
+            <DashTab to="/dashboard" end label={t('topbar.main')} />
+            <DashTab to="/dashboard/kernels" label={t('topbar.kernels')} />
+            <DashTab to="/dashboard/logs" label={t('topbar.logs')} />
           </>
         ) : (
-          <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>Overview</span>
+          <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>{t('topbar.overview')}</span>
         )}
       </div>
       <input
         value={q}
         onChange={(e) => setQ(e.target.value)}
-        placeholder="Search workstation..."
+        placeholder={t('topbar.searchPlaceholder')}
+        className="hp-search-input"
         style={{
           width: 220,
           background: 'var(--bg-input)',
@@ -96,6 +107,8 @@ export function TopBar(): ReactElement {
         <button
           type="button"
           aria-label="Notifications"
+aria-expanded={showNotifications}
+          aria-haspopup="dialog"
           style={{
             ...btnIcon,
             color: showNotifications || jobs.some(j => j.state === 'running') ? 'var(--accent)' : 'var(--text-muted)',
@@ -119,7 +132,10 @@ export function TopBar(): ReactElement {
         </button>
 
         {showNotifications && (
-          <div style={{
+<div
+            role="dialog"
+            aria-labelledby="notifications-title"
+            style={{
             position: 'absolute',
             right: 0,
             top: '100%',
@@ -133,7 +149,7 @@ export function TopBar(): ReactElement {
             padding: 12,
           }}>
             <div style={{ fontWeight: 600, borderBottom: '1px solid var(--border)', paddingBottom: 8, marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span>Recent Activity &amp; Jobs</span>
+<span id="notifications-title">{t('topbar.notifications')}</span>
               <button
                 type="button"
                 onClick={() => setShowNotifications(false)}
@@ -145,7 +161,7 @@ export function TopBar(): ReactElement {
             <div style={{ maxHeight: 200, overflowY: 'auto' }}>
               {jobs.length === 0 ? (
                 <div style={{ color: 'var(--text-muted)', fontSize: 12, textAlign: 'center', padding: '16px 0' }}>
-                  No recent activity.
+{t('topbar.noActivity')}
                 </div>
               ) : (
                 jobs.slice(-5).reverse().map((j) => (
@@ -161,7 +177,7 @@ export function TopBar(): ReactElement {
                     </div>
                     {j.state === 'running' && (
                       <div style={{ width: '100%', height: 4, background: 'rgba(255,255,255,0.06)', borderRadius: 2, overflow: 'hidden', marginTop: 4 }}>
-                        <div style={{ width: `${j.progress}%`, height: '100%', background: 'var(--accent)' }} />
+<div style={{ width: `${Math.min(100, Math.max(0, j.progress ?? 0))}%`, height: '100%', background: 'var(--accent)' }} />
                       </div>
                     )}
                   </div>

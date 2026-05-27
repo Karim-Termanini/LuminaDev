@@ -1,4 +1,5 @@
 use super::*;
+use crate::runtime_packages::pkg_remove_with_deps_cmd;
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn runtime_job_execute(
@@ -292,7 +293,7 @@ pub(crate) async fn runtime_job_execute(
             runtime_bash_user_step(&cmd, &mut logs, Some(app.clone()), Some(job_id.clone()), 5, 90).await.map_err(|e| e.to_string())
           }
         } else if runtime_id == "flutter" {
-          let has_snap = exec_output_limit("which", &["snap"], CMD_TIMEOUT_SHORT).await.is_ok();
+          let has_snap = exec_output_limit("which", &["snap"], cmd_timeout_short()).await.is_ok();
           if has_snap {
             logs.push("Installing Flutter via snap…".into());
             sudo_bash_install_step("snap install flutter --classic", password_opt, &mut logs, Some(app.clone()), Some(job_id.clone()), 10, 85).await
@@ -495,7 +496,7 @@ fi"#;
       }
       "runtime_update" => {
         if runtime_id == "rust" {
-          match exec_output_limit("bash", &["-lc", "unset RUSTUP_TOOLCHAIN; rustup update 2>&1"], CMD_TIMEOUT_INSTALL_STEP).await {
+          match exec_output_limit("bash", &["-lc", "unset RUSTUP_TOOLCHAIN; rustup update 2>&1"], cmd_timeout_install_step()).await {
             Ok(out) => {
               if !out.is_empty() { logs.push(out.clone()); }
               let lower = out.to_lowercase();
@@ -533,12 +534,12 @@ fi"#;
       }
       "runtime_uninstall" => {
         if runtime_id == "rust" {
-          exec_output_limit("bash", &["-lc", "rustup self uninstall -y 2>/dev/null || true"], CMD_TIMEOUT_INSTALL_STEP).await
+          exec_output_limit("bash", &["-lc", "rustup self uninstall -y 2>/dev/null || true"], cmd_timeout_install_step()).await
             .map(|out| { if !out.is_empty() { logs.push(out); } })
             .map_err(|e| format!("[RUNTIME_UNINSTALL_FAILED] {}", e.trim()))
         } else if runtime_id == "bun" {
           logs.push("Removing Bun (~/.bun)…".into());
-          exec_output_limit("bash", &["-lc", "rm -rf \"$HOME/.bun\" && sed -i '/BUN_INSTALL/d;/.bun\\/bin/d' \"$HOME/.bashrc\" \"$HOME/.zshrc\" 2>/dev/null || true"], CMD_TIMEOUT_INSTALL_STEP).await
+          exec_output_limit("bash", &["-lc", "rm -rf \"$HOME/.bun\" && sed -i '/BUN_INSTALL/d;/.bun\\/bin/d' \"$HOME/.bashrc\" \"$HOME/.zshrc\" 2>/dev/null || true"], cmd_timeout_install_step()).await
             .map(|out| { if !out.is_empty() { logs.push(out); } })
             .map_err(|e| format!("[RUNTIME_UNINSTALL_FAILED] {}", e.trim()))
         } else if runtime_id == "flutter" {
@@ -557,7 +558,7 @@ fi"#;
             sed -i '/juliaup/d;/\.julia/d' "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.profile" "$HOME/.bash_profile" 2>/dev/null || true
           "#;
           logs.push("Removing Julia via juliaup and cleaning home directories…".into());
-          exec_output_limit("bash", &["-lc", cmd], CMD_TIMEOUT_INSTALL_STEP).await
+          exec_output_limit("bash", &["-lc", cmd], cmd_timeout_install_step()).await
             .map(|out| { if !out.is_empty() { logs.push(out); } })
             .map_err(|e| format!("[RUNTIME_UNINSTALL_FAILED] {}", e.trim()))
         } else {
@@ -566,7 +567,11 @@ fi"#;
             logs.push(format!("No system packages to remove for '{}' on {}.", runtime_id, distro));
             Ok(())
           } else {
-            let cmd = pkg_remove_cmd(pkg_mgr, &pkgs);
+            let cmd = if _remove_mode == "runtime_and_deps" {
+              pkg_remove_with_deps_cmd(pkg_mgr, &pkgs)
+            } else {
+              pkg_remove_cmd(pkg_mgr, &pkgs)
+            };
             sudo_bash_install_step(&cmd, password_opt, &mut logs, Some(app.clone()), Some(job_id.clone()), 10, 85).await
               .map_err(|e| format!("[RUNTIME_UNINSTALL_FAILED] {}", e))
           }

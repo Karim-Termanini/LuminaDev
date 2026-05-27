@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactElement, ReactNode } from 'react'
+import { Trans, useTranslation } from 'react-i18next'
 import type { GitVcsOperation } from './GitVcsStateBanner'
 import type { GitVcsNextAction } from './gitVcsNextAction'
 
@@ -9,7 +10,6 @@ export type GitVcsFlowHintsProps = {
   unstagedCount: number
   ahead: number | null
   behind: number | null
-  /** Primary control to call out (green chip + matches highlighted buttons). */
   nextAction: GitVcsNextAction
 }
 
@@ -25,7 +25,7 @@ const CHIP: CSSProperties = {
   verticalAlign: 'middle',
 }
 
-function NextChip({ children }: { children: ReactNode }): ReactElement {
+function NextChip({ children }: { children?: ReactNode }): ReactElement {
   return <span style={CHIP}>{children}</span>
 }
 
@@ -51,8 +51,7 @@ function nextLead(nextAction: GitVcsNextAction): ReactElement | null {
     return (
       <p style={{ margin: '10px 0 0', fontSize: 14, lineHeight: 1.55, color: 'var(--text)' }}>
         <span className="codicon codicon-debug-step-into" style={{ marginRight: 8, color: '#69f0ae' }} aria-hidden />
-        <strong>Do this now:</strong> click <NextChip>Open Resolution Studio</NextChip> in the yellow banner just
-        below, pick a side per conflict, save, then use <NextChip>+</NextChip> on each file you fixed.
+        <Trans i18nKey="flow.lead.resolutionStudio" ns="git" components={{ chip: <NextChip />, chip5: <NextChip /> }} />
       </p>
     )
   }
@@ -60,8 +59,7 @@ function nextLead(nextAction: GitVcsNextAction): ReactElement | null {
     return (
       <p style={{ margin: '10px 0 0', fontSize: 14, lineHeight: 1.55, color: 'var(--text)' }}>
         <span className="codicon codicon-debug-step-into" style={{ marginRight: 8, color: '#69f0ae' }} aria-hidden />
-        <strong>Do this now:</strong> click <NextChip>Continue</NextChip> (green, in the yellow banner or next to
-        Integrate) to finish this merge/rebase step.
+        <Trans i18nKey="flow.lead.continueMerge" ns="git" components={{ chip: <NextChip /> }} />
       </p>
     )
   }
@@ -69,8 +67,7 @@ function nextLead(nextAction: GitVcsNextAction): ReactElement | null {
     return (
       <p style={{ margin: '10px 0 0', fontSize: 14, lineHeight: 1.55, color: 'var(--text)' }}>
         <span className="codicon codicon-debug-step-into" style={{ marginRight: 8, color: '#69f0ae' }} aria-hidden />
-        <strong>Do this now:</strong> click <NextChip>Pull</NextChip> in the toolbar (same row as Fetch / Push) so
-        your branch includes the remote commits you are behind on — then commit or push again.
+        <Trans i18nKey="flow.lead.pull" ns="git" components={{ chip: <NextChip /> }} />
       </p>
     )
   }
@@ -78,9 +75,7 @@ function nextLead(nextAction: GitVcsNextAction): ReactElement | null {
     return (
       <p style={{ margin: '10px 0 0', fontSize: 14, lineHeight: 1.55, color: 'var(--text)' }}>
         <span className="codicon codicon-debug-step-into" style={{ marginRight: 8, color: '#69f0ae' }} aria-hidden />
-        <strong>Do this now:</strong> type a short summary in the <NextChip>Commit message</NextChip> field at the
-        bottom (green outline), then <NextChip>Commit</NextChip>. After a commit that leaves the tree clean, the
-        message is cleared for the next one.
+        <Trans i18nKey="flow.lead.commitMessage" ns="git" components={{ chip: <NextChip />, chip5: <NextChip /> }} />
       </p>
     )
   }
@@ -88,8 +83,7 @@ function nextLead(nextAction: GitVcsNextAction): ReactElement | null {
     return (
       <p style={{ margin: '10px 0 0', fontSize: 14, lineHeight: 1.55, color: 'var(--text)' }}>
         <span className="codicon codicon-debug-step-into" style={{ marginRight: 8, color: '#69f0ae' }} aria-hidden />
-        <strong>Do this now:</strong> click the green-outlined <NextChip>Commit</NextChip> button at the bottom —
-        staged files (and any other local changes) go into one commit.
+        <Trans i18nKey="flow.lead.commit" ns="git" components={{ chip: <NextChip /> }} />
       </p>
     )
   }
@@ -97,17 +91,13 @@ function nextLead(nextAction: GitVcsNextAction): ReactElement | null {
     return (
       <p style={{ margin: '10px 0 0', fontSize: 14, lineHeight: 1.55, color: 'var(--text)' }}>
         <span className="codicon codicon-debug-step-into" style={{ marginRight: 8, color: '#69f0ae' }} aria-hidden />
-        <strong>Do this now:</strong> click <NextChip>Push</NextChip> in the toolbar to publish your commits. If the
-        host blocks the branch, follow the yellow notice for a new branch + PR/MR.
+        <Trans i18nKey="flow.lead.push" ns="git" components={{ chip: <NextChip /> }} />
       </p>
     )
   }
   return null
 }
 
-/**
- * Workflow hints: one “Do this now” line tied to the highlighted control, then short reference bullets.
- */
 export function GitVcsFlowHints({
   gitOperation,
   conflictFileCount,
@@ -117,82 +107,52 @@ export function GitVcsFlowHints({
   behind,
   nextAction,
 }: GitVcsFlowHintsProps): ReactElement {
+  const { t } = useTranslation('git')
   const behindRemote = behind != null && behind > 0
   const aheadOfRemote = ahead != null && ahead > 0
 
-  let title = 'Git workflow on this page'
+  let title: string
   let body: ReactElement
 
+  const chipMap = { chip: <NextChip />, chip3: <NextChip />, chip4: <NextChip />, chip5: <NextChip />, chip7: <NextChip />, chip8: <NextChip />, chip9: <NextChip />, chip10: <NextChip />, bold: <strong />, bold2: <strong />, mono6: <span className="mono" /> }
+
   if (conflictFileCount > 0) {
-    title = 'You have merge conflicts'
+    title = t('flow.title.conflicts')
     body = (
       <Ol>
-        <li>
-          Conflicted files show status <strong style={{ color: 'var(--text)' }}>C</strong> (often red). Click one to
-          read the diff.
-        </li>
-        <li>After Resolution Studio (or your editor), stage with <strong>+</strong> so Git sees the fix.</li>
+        <li><Trans i18nKey="flow.body.conflict1" ns="git" components={{ chip: <NextChip /> }} /></li>
+        <li><Trans i18nKey="flow.body.conflict2" ns="git" components={{ chip: <NextChip /> }} /></li>
         {gitOperation === 'none' ? (
-          <li>
-            If <NextChip>Continue</NextChip> is missing, refresh with <strong>Fetch</strong> or select another file until
-            the banner updates.
-          </li>
+          <li><Trans i18nKey="flow.body.conflict3" ns="git" components={{ chip: <NextChip />, chip3: <NextChip /> }} /></li>
         ) : null}
       </Ol>
     )
   } else if (gitOperation === 'merging' || gitOperation === 'rebasing') {
-    title = `${gitOperation === 'merging' ? 'Merge' : 'Rebase'} is waiting on you`
+    title = t('flow.title.operation', { op: gitOperation === 'merging' ? t('integrate.merge').toLowerCase() : t('integrate.rebase').toLowerCase() })
     body = (
       <Ol>
-        <li>When the index is clean for this step, Continue lets Git move forward or finish.</li>
-        <li>
-          <strong>Abort</strong> cancels the whole {gitOperation === 'merging' ? 'merge' : 'rebase'} (you may need to
-          tidy the tree afterward).
-        </li>
+        <li><Trans i18nKey="flow.body.operation1" ns="git" components={{}} /></li>
+        <li><Trans i18nKey="flow.body.operation2" ns="git" values={{ op: gitOperation === 'merging' ? t('integrate.merge').toLowerCase() : t('integrate.rebase').toLowerCase() }} components={{ bold: <strong /> }} /></li>
       </Ol>
     )
   } else {
-    title = 'End-to-end: edit → commit → sync'
+    title = t('flow.title.e2e')
     body = (
       <Ol>
-        <li>
-          <strong>Left:</strong> files. <strong>Right:</strong> diff. <strong>+ / −</strong> stage or unstage.
-        </li>
-        <li>
-          <strong>Bottom:</strong> message + <strong>Commit</strong>. Empty index + local changes → Commit stages all
-          (except conflicts) then commits. Partial staging + other edits → one Commit includes the rest too.
-        </li>
-        <li>
-          <strong>Toolbar:</strong> <strong>Fetch</strong> updates remote knowledge; <strong>Pull</strong> when you
-          are behind; <strong>Push</strong> when you are ready to publish.
-        </li>
+        <li><Trans i18nKey="flow.body.line1" ns="git" components={chipMap} /></li>
+        <li><Trans i18nKey="flow.body.line2" ns="git" components={chipMap} /></li>
+        <li><Trans i18nKey="flow.body.line3" ns="git" components={chipMap} /></li>
         {behindRemote ? (
-          <li style={{ color: '#ffb74d' }}>
-            Behind by <strong>{behind}</strong> — use <strong>Pull</strong> first. Use <strong>Integrate / Sync</strong>{' '}
-            only if you intentionally want to merge/rebase another ref instead of a straight pull.
-          </li>
+          <li style={{ color: '#ffb74d' }}><Trans i18nKey="flow.body.line4Behind" ns="git" values={{ behind }} components={chipMap} /></li>
         ) : null}
         {aheadOfRemote && !behindRemote ? (
-          <li>
-            Ahead by <strong>{ahead}</strong> — after commits are clean, <strong>Push</strong> sends them upstream;{' '}
-            <strong>New PR</strong> opens a review on the host.
-          </li>
+          <li><Trans i18nKey="flow.body.line4Ahead" ns="git" values={{ ahead }} components={chipMap} /></li>
         ) : null}
         {ahead != null && behind != null && ahead === 0 && behind === 0 ? (
-          <li style={{ color: 'var(--text-muted)' }}>
-            Even with your upstream — you do <strong>not</strong> need <strong>Integrate / Sync</strong> unless you are
-            merging another branch/ref (e.g. <span className="mono">origin/main</span>) into this one. To publish new
-            commits, use <strong>Push</strong>; to start review, use <strong>New PR</strong>.
-          </li>
+          <li style={{ color: 'var(--text-muted)' }}><Trans i18nKey="flow.body.line4Even" ns="git" components={chipMap} /></li>
         ) : null}
-        <li>
-          <strong>Integrate / Sync</strong> opens a merge/rebase wizard: you enter the <strong>other</strong> branch or
-          remote ref (e.g. <span className="mono">main</span>, <span className="mono">origin/main</span>) to bring into
-          your current branch. It is <strong>not</strong> the same as Push or opening a PR.
-        </li>
-        <li>
-          Stash icon: pop the latest stash when you need it.
-        </li>
+        <li><Trans i18nKey="flow.body.line5" ns="git" components={chipMap} /></li>
+        <li><Trans i18nKey="flow.body.line6" ns="git" components={{}} /></li>
       </Ol>
     )
   }
@@ -208,8 +168,7 @@ export function GitVcsFlowHints({
     gitOperation === 'none' ? (
       <p className="hp-muted" style={{ margin: '10px 0 0', fontSize: 12, lineHeight: 1.45 }}>
         <span className="codicon codicon-info" style={{ marginRight: 6, opacity: 0.85 }} aria-hidden />
-        You can stage with <strong>+</strong> first, or go straight to a commit message + <strong>Commit</strong> — both
-        work.
+        <Trans i18nKey="flow.extra.stageInfo" ns="git" components={chipMap} />
       </p>
     ) : null
 

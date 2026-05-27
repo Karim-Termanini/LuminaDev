@@ -2,7 +2,7 @@ use serde_json::{json, Value};
 use tauri::AppHandle;
 
 use crate::cloud_auth::{self, CredentialStore, ParsedRemoteRepo};
-use crate::host_exec::{exec_output_limit, CMD_TIMEOUT_SHORT};
+use crate::host_exec::{exec_output_limit, cmd_timeout_short};
 
 pub async fn invoke(app: &AppHandle, channel: &str, body: &Value) -> Value {
     match channel {
@@ -40,8 +40,18 @@ async fn prs(app: &AppHandle, body: &Value) -> Value {
         Err(e) => return json!({ "ok": false, "error": e }),
     };
     let result = match provider {
-        "github" => cloud_auth::GitHubProvider::list_open_pull_requests(&cred.token, limit).await,
-        "gitlab" => cloud_auth::GitLabProvider::list_open_pull_requests(&cred.token, limit).await,
+        "github" => cloud_auth::GitHubProvider::list_open_pull_requests(
+            &cred.token,
+            limit,
+            cred.web_origin.as_deref().unwrap_or("github.com"),
+        )
+        .await,
+        "gitlab" => cloud_auth::GitLabProvider::list_open_pull_requests(
+            &cred.token,
+            limit,
+            cred.web_origin.as_deref(),
+        )
+        .await,
         _ => Err("[CLOUD_GIT_NETWORK] Unknown provider".to_string()),
     };
     match result {
@@ -89,6 +99,7 @@ async fn review_requests(app: &AppHandle, body: &Value) -> Value {
                 &cred.token,
                 cred.username.trim(),
                 limit,
+                cred.web_origin.as_deref().unwrap_or("github.com"),
             )
             .await
         }
@@ -97,6 +108,7 @@ async fn review_requests(app: &AppHandle, body: &Value) -> Value {
                 &cred.token,
                 cred.username.trim(),
                 limit,
+                cred.web_origin.as_deref(),
             )
             .await
         }
@@ -158,7 +170,7 @@ async fn pipelines(app: &AppHandle, body: &Value) -> Value {
         let url_out = match exec_output_limit(
             "git",
             &["-C", rp, "remote", "get-url", remote_name],
-            CMD_TIMEOUT_SHORT,
+            cmd_timeout_short(),
         )
         .await
         {
@@ -186,10 +198,20 @@ async fn pipelines(app: &AppHandle, body: &Value) -> Value {
 
     let result = match (provider, scoped.as_ref()) {
         ("github", None) => {
-            cloud_auth::GitHubProvider::list_recent_pipelines(&cred.token, limit).await
+            cloud_auth::GitHubProvider::list_recent_pipelines(
+                &cred.token,
+                limit,
+                cred.web_origin.as_deref().unwrap_or("github.com"),
+            )
+            .await
         }
         ("gitlab", None) => {
-            cloud_auth::GitLabProvider::list_recent_pipelines(&cred.token, limit).await
+            cloud_auth::GitLabProvider::list_recent_pipelines(
+                &cred.token,
+                limit,
+                cred.web_origin.as_deref(),
+            )
+            .await
         }
         ("github", Some(ParsedRemoteRepo::Github { hostname, full_name })) => {
             cloud_auth::GitHubProvider::list_repo_pipelines(&cred.token, hostname, full_name, limit).await
@@ -259,9 +281,20 @@ async fn issues(app: &AppHandle, body: &Value) -> Value {
         Err(e) => return json!({ "ok": false, "error": e }),
     };
     let result = match provider {
-        "github" => cloud_auth::GitHubProvider::list_assigned_issues(&cred.token, limit).await,
+        "github" => cloud_auth::GitHubProvider::list_assigned_issues(
+            &cred.token,
+            limit,
+            cred.web_origin.as_deref().unwrap_or("github.com"),
+        )
+        .await,
         "gitlab" => {
-            cloud_auth::GitLabProvider::list_assigned_issues(&cred.token, &cred.username, limit).await
+            cloud_auth::GitLabProvider::list_assigned_issues(
+                &cred.token,
+                &cred.username,
+                limit,
+                cred.web_origin.as_deref(),
+            )
+            .await
         }
         _ => Err("[CLOUD_GIT_NETWORK] Unknown provider".to_string()),
     };
@@ -314,7 +347,7 @@ async fn create_pr(app: &AppHandle, body: &Value) -> Value {
         Some(p) => p,
         None => return json!({ "ok": false, "error": "[CLOUD_GIT_CREATE_PR] repoPath is required." }),
     };
-    let remote_url = match exec_output_limit("git", &["-C", rp, "remote", "get-url", remote_name], CMD_TIMEOUT_SHORT).await {
+    let remote_url = match exec_output_limit("git", &["-C", rp, "remote", "get-url", remote_name], cmd_timeout_short()).await {
         Ok(u) => u,
         Err(e) => return json!({ "ok": false, "error": format!("[CLOUD_GIT_SCOPE] Could not read remote: {}", e.trim()) }),
     };
@@ -324,12 +357,22 @@ async fn create_pr(app: &AppHandle, body: &Value) -> Value {
     };
 
     let result = match (provider, &parsed) {
-        ("github", cloud_auth::ParsedRemoteRepo::Github { hostname: _, full_name }) => {
+        ("github", cloud_auth::ParsedRemoteRepo::Github { hostname, full_name }) => {
             let parts: Vec<&str> = full_name.splitn(2, '/').collect();
             if parts.len() != 2 {
                 return json!({ "ok": false, "error": "[CLOUD_GIT_CREATE_PR] Could not parse owner/repo from remote URL." });
             }
-            cloud_auth::GitHubProvider::create_pull_request(&cred.token, parts[0], parts[1], &title, &description, &head, &base).await
+            cloud_auth::GitHubProvider::create_pull_request(
+                &cred.token,
+                hostname,
+                parts[0],
+                parts[1],
+                &title,
+                &description,
+                &head,
+                &base,
+            )
+            .await
         }
         ("gitlab", cloud_auth::ParsedRemoteRepo::Gitlab { web_origin, path_with_namespace }) => {
             cloud_auth::GitLabProvider::create_merge_request(&cred.token, web_origin, path_with_namespace, &title, &description, &head, &base).await
@@ -365,7 +408,7 @@ async fn get_pr_checks(app: &AppHandle, body: &Value) -> Value {
         None => return json!({ "ok": false, "error": "[CLOUD_GIT_GET_PR_CHECKS] repoPath is required." }),
     };
 
-    let remote_url = match exec_output_limit("git", &["-C", rp, "remote", "get-url", remote_name], CMD_TIMEOUT_SHORT).await {
+    let remote_url = match exec_output_limit("git", &["-C", rp, "remote", "get-url", remote_name], cmd_timeout_short()).await {
         Ok(u) => u,
         Err(e) => return json!({ "ok": false, "error": format!("[CLOUD_GIT_SCOPE] Could not read remote: {}", e.trim()) }),
     };
@@ -531,7 +574,7 @@ async fn merge_pr(app: &AppHandle, body: &Value) -> Value {
     let remote_url = match exec_output_limit(
         "git",
         &["-C", rp, "remote", "get-url", remote_name],
-        CMD_TIMEOUT_SHORT,
+        cmd_timeout_short(),
     )
     .await
     {
@@ -626,8 +669,18 @@ async fn releases(app: &AppHandle, body: &Value) -> Value {
         Err(e) => return json!({ "ok": false, "error": e }),
     };
     let result = match provider {
-        "github" => cloud_auth::GitHubProvider::list_recent_releases(&cred.token, limit).await,
-        "gitlab" => cloud_auth::GitLabProvider::list_recent_releases(&cred.token, limit).await,
+        "github" => cloud_auth::GitHubProvider::list_recent_releases(
+            &cred.token,
+            limit,
+            cred.web_origin.as_deref().unwrap_or("github.com"),
+        )
+        .await,
+        "gitlab" => cloud_auth::GitLabProvider::list_recent_releases(
+            &cred.token,
+            limit,
+            cred.web_origin.as_deref(),
+        )
+        .await,
         _ => Err("[CLOUD_GIT_NETWORK] Unknown provider".to_string()),
     };
     match result {

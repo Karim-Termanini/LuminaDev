@@ -280,36 +280,41 @@ export const LanguageSettingsSchema = z.object({
 export type LanguageSettings = z.infer<typeof LanguageSettingsSchema>
 
 /** Keys with typed payloads persisted under userData (`store_<key>.json`). */
-export const StoreKeySchema = z.enum([
-  'custom_profiles',
-  'wizard_state',
-  'ssh_bookmarks',
-  'maintenance_state',
-  'active_profile',
-  'on_login_automation',
-  'appearance',
-  'cloud_oauth_clients',
-  'readiness_wizard_complete',
-  'general_settings',
-  'update_settings',
-  'profile_credentials',
-  'onboarding_profile',
-  'projects_home_dir',
-  'resources_settings',
-  'app_engine_settings',
-  'builder_settings',
-  'beta_features_state',
-  'notification_settings',
-  'shortcuts_settings',
-  'datetime_settings',
-  'language_settings',
+export const StoreDynamicKeySchema = z.string().regex(/^((project_dir_|python_version_|postgres_version_|node_version_).+)$/)
+
+export const StoreKeySchema = z.union([
+  z.enum([
+    'custom_profiles',
+    'wizard_state',
+    'ssh_bookmarks',
+    'maintenance_state',
+    'active_profile',
+    'on_login_automation',
+    'appearance',
+    'cloud_oauth_clients',
+    'readiness_wizard_complete',
+    'general_settings',
+    'update_settings',
+    'profile_credentials',
+    'onboarding_profile',
+    'projects_home_dir',
+    'resources_settings',
+    'app_engine_settings',
+    'builder_settings',
+    'beta_features_state',
+    'notification_settings',
+    'shortcuts_settings',
+    'datetime_settings',
+    'language_settings',
+  ]),
+  StoreDynamicKeySchema,
 ])
 
 export const StoreGetRequestSchema = z.object({
   key: StoreKeySchema,
 })
 
-export const StoreSetRequestSchema = z.discriminatedUnion('key', [
+export const StoreSetRequestSchema = z.union([
   z.object({
     key: z.literal('custom_profiles'),
     data: CustomProfilesStoreSchema,
@@ -398,6 +403,10 @@ export const StoreSetRequestSchema = z.discriminatedUnion('key', [
   z.object({
     key: z.literal('language_settings'),
     data: LanguageSettingsSchema,
+  }),
+  z.object({
+    key: StoreDynamicKeySchema,
+    data: z.any(),
   }),
 ])
 export const ComposeUpRequestSchema = z.object({

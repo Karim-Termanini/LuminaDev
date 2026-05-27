@@ -1006,4 +1006,202 @@ mod tests {
         assert_eq!(result["ok"], true);
         assert!(dir.path().join("requirements.txt").exists());
     }
+
+    #[tokio::test]
+    async fn handle_scaffold_missing_path_returns_error() {
+        let result = handle_project_scaffold(serde_json::json!({
+            "template": "web-dev"
+        })).await;
+        assert_eq!(result["ok"], false);
+        assert!(result["error"].as_str().unwrap_or("").contains("[SCAFFOLD_FAILED]"));
+        assert!(result["error"].as_str().unwrap_or("").contains("Missing path"));
+    }
+
+    #[tokio::test]
+    async fn handle_scaffold_empty_template_creates_dir_only() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let result = handle_project_scaffold(serde_json::json!({
+            "path": dir.path().to_str().unwrap(),
+            "template": ""
+        })).await;
+        assert_eq!(result["ok"], true);
+        assert!(dir.path().exists());
+    }
+
+    #[tokio::test]
+    async fn handle_scaffold_unknown_template_creates_dir_only() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let result = handle_project_scaffold(serde_json::json!({
+            "path": dir.path().to_str().unwrap(),
+            "template": "nonexistent-template"
+        })).await;
+        assert_eq!(result["ok"], true);
+        assert!(dir.path().exists());
+    }
+
+    #[tokio::test]
+    async fn handle_scaffold_data_science_creates_full_structure() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let result = handle_project_scaffold(serde_json::json!({
+            "path": dir.path().to_str().unwrap(),
+            "template": "data-science",
+            "options": {
+                "dependencies": { "pandas": "latest", "numpy": "1.26.0" },
+                "createMainScript": true,
+                "createNotebook": true
+            }
+        })).await;
+        assert_eq!(result["ok"], true, "data-science scaffold failed: {:?}", result.get("error"));
+
+        assert!(dir.path().join("data/raw/.gitkeep").exists());
+        assert!(dir.path().join("data/processed/.gitkeep").exists());
+        assert!(dir.path().join("src/__init__.py").exists());
+        assert!(dir.path().join("src/db.py").exists());
+        assert!(dir.path().join("src/data_loader.py").exists());
+        assert!(dir.path().join("tests/test_db.py").exists());
+        assert!(dir.path().join(".env").exists());
+        assert!(dir.path().join(".gitignore").exists());
+        assert!(dir.path().join("README.md").exists());
+        assert!(dir.path().join("main.py").exists());
+        assert!(dir.path().join("notebooks/01_exploration.ipynb").exists());
+
+        let reqs = std::fs::read_to_string(dir.path().join("requirements.txt")).unwrap();
+        assert!(reqs.contains("pandas"), "expected pandas in requirements");
+        assert!(reqs.contains("numpy==1.26.0"), "expected numpy==1.26.0 in requirements");
+
+        let vscode = dir.path().join(".vscode").join("extensions.json");
+        assert!(vscode.exists());
+        let vscode_content = std::fs::read_to_string(vscode).unwrap();
+        assert!(vscode_content.contains("ms-python.python"));
+
+        let pyright = dir.path().join("pyrightconfig.json");
+        assert!(pyright.exists());
+    }
+
+    #[tokio::test]
+    async fn handle_scaffold_web_dev_creates_full_structure() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let result = handle_project_scaffold(serde_json::json!({
+            "path": dir.path().to_str().unwrap(),
+            "template": "web-dev",
+            "options": {
+                "dependencies": { "axios": "^1.6.0" }
+            }
+        })).await;
+        assert_eq!(result["ok"], true, "web-dev scaffold failed: {:?}", result.get("error"));
+
+        assert!(dir.path().join("src/components/.gitkeep").exists());
+        assert!(dir.path().join("src/pages/.gitkeep").exists());
+        assert!(dir.path().join("public/.gitkeep").exists());
+        assert!(dir.path().join("src/main.tsx").exists());
+        assert!(dir.path().join("index.html").exists());
+        assert!(dir.path().join("vite.config.ts").exists());
+        assert!(dir.path().join(".env").exists());
+        assert!(dir.path().join(".gitignore").exists());
+        assert!(dir.path().join("README.md").exists());
+
+        let pkg = std::fs::read_to_string(dir.path().join("package.json")).unwrap();
+        assert!(pkg.contains("react"));
+        assert!(pkg.contains("vite"));
+        assert!(pkg.contains("axios"), "expected axios in dependencies");
+
+        let vscode = dir.path().join(".vscode").join("extensions.json");
+        assert!(vscode.exists());
+        let vscode_content = std::fs::read_to_string(vscode).unwrap();
+        assert!(vscode_content.contains("dbaeumer.vscode-eslint"));
+    }
+
+    #[test]
+    fn scaffold_editor_configs_no_intellij_when_not_requested() {
+        let dir = tempfile::TempDir::new().unwrap();
+        scaffold_editor_configs(dir.path(), "web-dev", "code");
+        let idea_dir = dir.path().join(".idea");
+        assert!(!idea_dir.exists(), "should not create .idea when editor is 'code'");
+    }
+
+    #[test]
+    fn scaffold_editor_configs_webstorm_triggers_intellij() {
+        let dir = tempfile::TempDir::new().unwrap();
+        scaffold_editor_configs(dir.path(), "web-dev", "webstorm");
+        assert!(dir.path().join(".idea/modules.xml").exists());
+        assert!(dir.path().join(".idea/project.iml").exists());
+
+        let iml = std::fs::read_to_string(dir.path().join(".idea/project.iml")).unwrap();
+        assert!(iml.contains("WEB_MODULE"));
+    }
+
+    #[test]
+    fn scaffold_editor_configs_eclipse_triggers_intellij_data_science() {
+        let dir = tempfile::TempDir::new().unwrap();
+        scaffold_editor_configs(dir.path(), "data-science", "eclipse");
+        assert!(dir.path().join(".idea/modules.xml").exists());
+        let iml = std::fs::read_to_string(dir.path().join(".idea/project.iml")).unwrap();
+        assert!(iml.contains("PYTHON_MODULE"));
+        assert!(dir.path().join(".idea/misc.xml").exists());
+    }
+
+    #[test]
+    fn detect_template_returns_data_science_by_default() {
+        let dir = tempfile::TempDir::new().unwrap();
+        assert_eq!(detect_template(dir.path()), "data-science");
+    }
+
+    #[test]
+    fn find_free_port_returns_preferred_when_available() {
+        let port = find_free_port(43210);
+        assert!(port >= 43210);
+        assert!(port < 43210 + 200);
+    }
+
+    #[test]
+    fn scaffold_editor_configs_empty_editor_skips_intellij() {
+        let dir = tempfile::TempDir::new().unwrap();
+        scaffold_editor_configs(dir.path(), "data-science", "");
+        assert!(dir.path().join(".vscode/extensions.json").exists());
+        let idea_dir = dir.path().join(".idea");
+        assert!(!idea_dir.exists(), "should not create .idea when editor_cmd is empty");
+        assert!(dir.path().join("pyrightconfig.json").exists());
+    }
+
+    #[tokio::test]
+    async fn handle_scaffold_home_dir_fallback_returns_error() {
+        let result = handle_project_scaffold(serde_json::json!({
+            "path": "",
+            "template": "web-dev"
+        })).await;
+        assert_eq!(result["ok"], false);
+        assert!(result["error"].as_str().unwrap_or("").contains("Missing path"));
+    }
+
+    #[test]
+    fn scaffold_ai_ml_sets_executable_permission_on_setup_sh() {
+        let dir = tempfile::TempDir::new().unwrap();
+        scaffold_ai_ml(dir.path(), &[]).unwrap();
+        let setup = dir.path().join("setup.sh");
+        assert!(setup.exists());
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let meta = std::fs::metadata(&setup).unwrap();
+            assert!(meta.permissions().mode() & 0o111 != 0, "setup.sh should be executable");
+        }
+    }
+
+    #[test]
+    fn scaffold_mobile_react_native_includes_tsconfig() {
+        let dir = tempfile::TempDir::new().unwrap();
+        scaffold_mobile_react_native(dir.path(), &[]).unwrap();
+        assert!(dir.path().join("tsconfig.json").exists());
+        let tsconfig = std::fs::read_to_string(dir.path().join("tsconfig.json")).unwrap();
+        assert!(tsconfig.contains("react-native"));
+    }
+
+    #[test]
+    fn scaffold_flutter_docker_compose_has_expected_content() {
+        let dir = tempfile::TempDir::new().unwrap();
+        scaffold_mobile_flutter(dir.path(), &[("DISPLAY", ":0")]).unwrap();
+        let dc = std::fs::read_to_string(dir.path().join("docker-compose.yml")).unwrap();
+        assert!(dc.contains("cirrusci/flutter"));
+        assert!(dc.contains("DISPLAY"));
+    }
 }

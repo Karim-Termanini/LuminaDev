@@ -1,6 +1,7 @@
 import type { FileEntry } from '@linux-dev-home/shared'
 import type { ReactElement } from 'react'
 import { useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 
 const STATUS_STYLE: Record<
   FileEntry['status'],
@@ -36,6 +37,7 @@ function FileRow(props: {
   onStageOne: () => void
   onUnstageOne: () => void
 }): ReactElement {
+  const { t } = useTranslation('git')
   const st = STATUS_STYLE[props.entry.status]
   const conflict = props.entry.status === 'C'
   const label = props.entry.oldPath
@@ -76,7 +78,7 @@ function FileRow(props: {
     >
       <span
         className="mono"
-        title={conflict ? 'Merge conflict — resolve, then stage' : 'Status'}
+        title={conflict ? t('file.conflictStatus') : t('file.status')}
         style={{
           fontSize: 11,
           fontWeight: 700,
@@ -142,6 +144,7 @@ export function GitVcsFileList({
   onUnstage,
   onResolveConflicts,
 }: GitVcsFileListProps): ReactElement {
+  const { t } = useTranslation('git')
   const unstagedSorted = useMemo(
     () =>
       [...unstaged].sort((a, b) => {
@@ -158,7 +161,7 @@ export function GitVcsFileList({
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minHeight: 200 }}>
       <section>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-          <div style={{ fontWeight: 600, fontSize: 13 }}>Staged ({staged.length})</div>
+          <div style={{ fontWeight: 600, fontSize: 13 }}>{t('file.staged', { count: staged.length })}</div>
           {staged.length > 0 ? (
             <button
               type="button"
@@ -167,14 +170,14 @@ export function GitVcsFileList({
               style={{ fontSize: 12 }}
               onClick={() => onUnstage(staged.map((f) => f.path))}
             >
-              Unstage all
+              {t('file.unstageAll')}
             </button>
           ) : null}
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           {staged.length === 0 ? (
             <div className="mono" style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-              Nothing staged
+              {t('file.nothingStaged')}
             </div>
           ) : (
             staged.map((f) => (
@@ -194,7 +197,7 @@ export function GitVcsFileList({
       </section>
       <section>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-          <div style={{ fontWeight: 600, fontSize: 13 }}>Unstaged ({unstaged.length})</div>
+          <div style={{ fontWeight: 600, fontSize: 13 }}>{t('file.unstaged', { count: unstaged.length })}</div>
           {unstaged.length > 0 ? (
             <button
               type="button"
@@ -203,7 +206,7 @@ export function GitVcsFileList({
               style={{ fontSize: 12 }}
               onClick={() => onStageEntireTree()}
             >
-              Stage all
+              {t('file.stageAll')}
             </button>
           ) : null}
         </div>
@@ -226,7 +229,7 @@ export function GitVcsFileList({
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <span aria-hidden>⚠</span>
-              <span>Unresolved merge conflicts.</span>
+              <span>{t('file.unresolvedConflicts')}</span>
             </div>
             {onResolveConflicts && (
               <button
@@ -235,7 +238,7 @@ export function GitVcsFileList({
                 style={{ fontSize: 10, padding: '4px 8px', background: '#ff5252', borderColor: '#ff5252' }}
                 onClick={onResolveConflicts}
               >
-                RESOLVE IN STUDIO
+                {t('file.resolveInStudio')}
               </button>
             )}
           </div>
@@ -243,7 +246,7 @@ export function GitVcsFileList({
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           {unstaged.length === 0 ? (
             <div className="mono" style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-              Working tree clean
+              {t('file.workingTreeClean')}
             </div>
           ) : (
             unstagedSorted.map((f) => (

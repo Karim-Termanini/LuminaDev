@@ -814,3 +814,13 @@ This file is a living engineering memory, not static documentation.
 - **Impact:** App crash on start for Arch users.
 - **Fix implemented:** Changed mount point to `/run/docker.sock` and verified with a dedicated Arch Linux CI job.
 - **Status:** resolved
+
+#### 2026-05-27 — i18n Phase 2: Locale structural drift across 14 namespaces
+
+- **Area:** i18n / Localization / Quality Gate
+- **Symptom:** DE and AR locale JSONs silently diverged from EN baseline; missing keys caused English fallback for DE/AR users. ESLint `react-hooks/exhaustive-deps` also flagged `t` in dependency arrays.
+- **Root cause:** No automated structural parity check across locales. Manual editing of namespace files without a diff gate.
+- **Impact:** Inconsistent UX for DE/AR users; lint warnings blocked CI. 30+ TSX files needed `useTranslation` wiring across 14 namespaces × 3 languages.
+- **Fix implemented:** Added locale structural parity comparison to smoke gate. Removed unnecessary `t` from dep arrays. Systematically wired `useTranslation` into 30+ page/component files in a single batch pass.
+- **Preventive action:** Smoke gate must include locale structure diff. Never add a key to EN without parallel DE/AR keys in the same change. `t` is stable — omit from dep arrays unless `t` itself is called conditionally inside the effect. Batch cross-cutting infra changes in one pass.
+- **Status:** resolved

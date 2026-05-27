@@ -61,6 +61,7 @@ body {
 .mono {
   font-family: var(--font-mono);
   font-size: 0.9em;
+  vertical-align: middle;
 }
 
 a {

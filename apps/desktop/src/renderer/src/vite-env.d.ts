@@ -80,6 +80,15 @@ declare global {
       storeSet: (payload: import('@linux-dev-home/shared').StoreSetRequest) => Promise<{ ok: boolean; error?: string }>
       storeDelete: (payload: { key: 'active_profile' }) => Promise<{ ok: boolean; error?: string }>
       appInfo: () => Promise<{ ok: boolean; version: string; buildDate: string; rustVersion: string; platform: string; error?: string }>
+      appUpdateCheck: () => Promise<{
+        ok: boolean
+        latestVersion?: string
+        currentVersion?: string
+        updateAvailable?: boolean
+        url?: string
+        error?: string
+      }>
+      profileCredentialsGet: (payload: { id: string }) => Promise<{ ok: boolean; value?: string; error?: string }>
       jobStart: (payload: {
         kind: string
         durationMs?: number
@@ -136,6 +145,7 @@ declare global {
       cloudAuthConnectPat: (payload: {
         provider: 'github' | 'gitlab'
         token: string
+        host?: string
       }) => Promise<{ ok: boolean; username?: string; avatar_url?: string; error?: string }>
       cloudAuthDisconnect: (payload: {
         provider: 'github' | 'gitlab'
@@ -148,6 +158,8 @@ declare global {
       cloudGitPrs: (payload: {
         provider: 'github' | 'gitlab'
         limit?: number
+        repoPath?: string
+        remote?: string
       }) => Promise<{
         ok: boolean
         prs?: import('@linux-dev-home/shared').CloudPullRequestEntry[]
@@ -156,6 +168,8 @@ declare global {
       cloudGitReviewRequests: (payload: {
         provider: 'github' | 'gitlab'
         limit?: number
+        repoPath?: string
+        remote?: string
       }) => Promise<{
         ok: boolean
         reviewRequests?: import('@linux-dev-home/shared').CloudPullRequestEntry[]
@@ -175,6 +189,8 @@ declare global {
       cloudGitIssues: (payload: {
         provider: 'github' | 'gitlab'
         limit?: number
+        repoPath?: string
+        remote?: string
       }) => Promise<{
         ok: boolean
         issues?: import('@linux-dev-home/shared').CloudIssueEntry[]
@@ -183,6 +199,8 @@ declare global {
       cloudGitReleases: (payload: {
         provider: 'github' | 'gitlab'
         limit?: number
+        repoPath?: string
+        remote?: string
       }) => Promise<{
         ok: boolean
         releases?: import('@linux-dev-home/shared').CloudReleaseEntry[]

@@ -1,5 +1,6 @@
 import type { CSSProperties, ReactElement } from 'react'
 import { useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 
 import { GIT_VCS_NEXT_ACTION_RING } from './gitVcsUiTokens'
 
@@ -12,6 +13,8 @@ export type GitVcsCommitBarProps = {
   disabled: boolean
   /** Highlights message field or Commit to match workflow hints. */
   emphasizeCommit?: 'commit' | 'commit_message' | null
+  /** Show AI suggest button (gated on enable_ai_commit_suggestions beta flag). */
+  showAiSuggest?: boolean
 }
 
 const BASE_TEXTAREA: CSSProperties = {
@@ -33,7 +36,9 @@ export function GitVcsCommitBar({
   busy,
   disabled,
   emphasizeCommit = null,
+  showAiSuggest = false,
 }: GitVcsCommitBarProps): ReactElement {
+  const { t } = useTranslation('git')
   const taRef = useRef<HTMLTextAreaElement>(null)
   const taStyle =
     emphasizeCommit === 'commit_message' ? { ...BASE_TEXTAREA, ...GIT_VCS_NEXT_ACTION_RING } : BASE_TEXTAREA
@@ -49,9 +54,28 @@ export function GitVcsCommitBar({
         borderTop: '1px solid var(--border)',
       }}
     >
-      <label className="mono" style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-        Commit message
-      </label>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <label className="mono" style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+          {t('commit.label')}
+        </label>
+        {showAiSuggest && (
+          <button
+            type="button"
+            className="hp-btn"
+            disabled={busy || disabled}
+            title={t('commit.aiTitle')}
+            onClick={() => {
+              if (!message.trim()) {
+                onMessageChange('feat: describe your changes here')
+              }
+            }}
+            style={{ fontSize: 11, padding: '2px 8px', display: 'flex', alignItems: 'center', gap: 4 }}
+          >
+            <span className="codicon codicon-sparkle" style={{ fontSize: 11 }} />
+            {t('commit.aiSuggest')}
+          </button>
+        )}
+      </div>
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
         <textarea
           ref={taRef}
@@ -59,7 +83,7 @@ export function GitVcsCommitBar({
           onChange={(e) => onMessageChange(e.target.value)}
           disabled={busy || disabled}
           rows={2}
-          placeholder="Describe your changes…"
+          placeholder={t('commit.placeholder')}
           style={taStyle}
         />
         <button
@@ -69,7 +93,7 @@ export function GitVcsCommitBar({
           onClick={() => void onCommit(taRef.current?.value ?? message)}
           style={commitBtnStyle}
         >
-          Commit
+          {t('commit.button')}
         </button>
       </div>
     </div>

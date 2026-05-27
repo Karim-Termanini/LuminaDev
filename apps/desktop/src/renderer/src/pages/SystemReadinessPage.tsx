@@ -1,5 +1,6 @@
 import type { ReactElement } from 'react'
 import { useEffect, useState, useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import { GLASS } from '../layout/GLASS'
 
 type ReadinessReport = {
@@ -36,6 +37,7 @@ type ReadinessReport = {
 type Category = 'hardware' | 'docker' | 'virtualization' | 'network' | 'tools'
 
 export function SystemReadinessPage(): ReactElement {
+  const { t } = useTranslation('readiness')
   const [report, setReport] = useState<ReadinessReport | null>(null)
   const [loading, setLoading] = useState(true)
   const [activeCategory, setActiveCategory] = useState<Category>('hardware')
@@ -58,37 +60,37 @@ export function SystemReadinessPage(): ReactElement {
   }, [])
 
   const categories = useMemo(() => [
-    { id: 'hardware' as Category, label: 'Hardware', icon: 'server' },
-    { id: 'docker' as Category, label: 'Docker', icon: 'package' },
-    { id: 'virtualization' as Category, label: 'Virtualization', icon: 'circuit-board' },
-    { id: 'network' as Category, label: 'Network', icon: 'globe' },
-    { id: 'tools' as Category, label: 'System Tools', icon: 'tools' },
-  ], [])
+    { id: 'hardware' as Category, label: t('system.categoryHardware'), icon: 'server' },
+    { id: 'docker' as Category, label: t('system.categoryDocker'), icon: 'package' },
+    { id: 'virtualization' as Category, label: t('system.categoryVirtualization'), icon: 'circuit-board' },
+    { id: 'network' as Category, label: t('system.categoryNetwork'), icon: 'globe' },
+    { id: 'tools' as Category, label: t('system.categoryTools'), icon: 'tools' },
+  ], [t])
 
   const renderHardware = () => {
     if (!report) return null
     const { hardware } = report
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-        <h2 style={{ margin: 0 }}>Hardware Health</h2>
+        <h2 style={{ margin: 0 }}>{t('system.hardware.title')}</h2>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-          <StatCard label="CPU Model" value={hardware.cpu_model} subValue={`${hardware.cpu_cores} Cores`} />
+          <StatCard label={t('system.hardware.cpuModel')} value={hardware.cpu_model} subValue={t('system.hardware.cores', { cores: hardware.cpu_cores })} />
           <StatCard
-            label="Architecture"
+            label={t('system.hardware.architecture')}
             value={hardware.architecture}
-            subValue={hardware.architecture === 'x86_64' ? 'Fully supported' : 'Some runtimes may not be available'}
+            subValue={hardware.architecture === 'x86_64' ? t('system.hardware.supported') : t('system.hardware.unsupported')}
             status={hardware.architecture === 'x86_64' ? 'ok' : 'warning'}
           />
           <StatCard 
-            label="RAM" 
-            value={`${hardware.ram_total_gb.toFixed(1)} GB`} 
-            subValue={`${hardware.ram_free_gb.toFixed(1)} GB Available`}
+            label={t('system.hardware.ram')} 
+            value={t('system.hardware.ramValue', { gb: hardware.ram_total_gb.toFixed(1) })} 
+            subValue={t('system.hardware.ramAvailable', { gb: hardware.ram_free_gb.toFixed(1) })}
             status={hardware.ram_total_gb < 4 ? 'warning' : 'ok'}
           />
           <StatCard 
-            label="Storage" 
-            value={`${hardware.disk_total_gb.toFixed(1)} GB`} 
-            subValue={`${hardware.disk_free_gb.toFixed(1)} GB Free`}
+            label={t('system.hardware.storage')} 
+            value={t('system.hardware.storageValue', { gb: hardware.disk_total_gb.toFixed(1) })} 
+            subValue={t('system.hardware.storageFree', { gb: hardware.disk_free_gb.toFixed(1) })}
             status={hardware.disk_free_gb < 10 ? 'warning' : 'ok'}
           />
         </div>
@@ -101,16 +103,16 @@ export function SystemReadinessPage(): ReactElement {
     const { software } = report
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-        <h2 style={{ margin: 0 }}>Docker Engine</h2>
+        <h2 style={{ margin: 0 }}>{t('system.docker.title')}</h2>
         <CheckRow 
-          label="Docker Installed" 
+          label={t('system.docker.installed')} 
           status={software.docker_installed} 
-          desc={software.docker_installed ? `Version ${software.docker_version}` : 'Docker binary not found in PATH.'}
+          desc={software.docker_installed ? t('system.docker.version', { version: software.docker_version }) : t('system.docker.notFound')}
         />
         <CheckRow 
-          label="Daemon Running" 
+          label={t('system.docker.daemon')} 
           status={software.docker_running} 
-          desc={software.docker_running ? 'Service is active.' : 'Docker daemon is not responding.'}
+          desc={software.docker_running ? t('system.docker.running') : t('system.docker.notResponding')}
           onFix={!software.docker_running ? async () => {
             setFixing('docker-start')
             try {
@@ -124,14 +126,14 @@ export function SystemReadinessPage(): ReactElement {
           isFixing={fixing === 'docker-start'}
         />
         <CheckRow 
-          label="Permissions" 
+          label={t('system.docker.permissions')} 
           status={software.in_docker_group} 
-          desc={software.in_docker_group ? 'User is in docker group.' : 'Missing permissions to access docker socket.'}
+          desc={software.in_docker_group ? t('system.docker.inGroup') : t('system.docker.missingPerms')}
           onFix={!software.in_docker_group ? async () => {
             setFixing('docker-group')
             try {
               const res = await window.dh.systemReadinessFix({ id: 'docker-group' })
-              if (res.ok) alert('Added to group. You may need to log out and back in for changes to take effect.')
+              if (res.ok) alert(t('system.docker.groupAdded'))
               else alert(res.error)
               await fetchReport()
             } finally {
@@ -149,14 +151,14 @@ export function SystemReadinessPage(): ReactElement {
     const { software } = report
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-        <h2 style={{ margin: 0 }}>Virtualization (KVM)</h2>
+        <h2 style={{ margin: 0 }}>{t('system.virt.title')}</h2>
         <CheckRow 
-          label="KVM Support" 
+          label={t('system.virt.kvm')} 
           status={software.kvm_supported} 
-          desc={software.kvm_supported ? 'KVM is available and accessible.' : 'KVM not detected or permissions denied.'}
+          desc={software.kvm_supported ? t('system.virt.available') : t('system.virt.notDetected')}
         />
         <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>
-          KVM is required for high-performance development kernels. Ensure VT-x/AMD-V is enabled in BIOS.
+          {t('system.virt.hint')}
         </p>
       </div>
     )
@@ -167,10 +169,10 @@ export function SystemReadinessPage(): ReactElement {
     const { network } = report
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-        <h2 style={{ margin: 0 }}>Connectivity</h2>
-        <LatencyRow label="GitHub" latency={network.github_latency_ms} />
-        <LatencyRow label="GitLab" latency={network.gitlab_latency_ms} />
-        <LatencyRow label="Docker Hub" latency={network.docker_hub_latency_ms} />
+        <h2 style={{ margin: 0 }}>{t('system.network.title')}</h2>
+        <LatencyRow label={t('system.network.github')} latency={network.github_latency_ms} />
+        <LatencyRow label={t('system.network.gitlab')} latency={network.gitlab_latency_ms} />
+        <LatencyRow label={t('system.network.dockerHub')} latency={network.docker_hub_latency_ms} />
       </div>
     )
   }
@@ -180,12 +182,12 @@ export function SystemReadinessPage(): ReactElement {
     const { tools } = report
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-        <h2 style={{ margin: 0 }}>System Tools</h2>
+        <h2 style={{ margin: 0 }}>{t('system.tools.title')}</h2>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 12 }}>
-          <ToolBadge label="Git" status={tools.git} />
-          <ToolBadge label="Curl" status={tools.curl} />
-          <ToolBadge label="Tar" status={tools.tar} />
-          <ToolBadge label="Unzip" status={tools.unzip} />
+          <ToolBadge label={t('system.tools.git')} status={tools.git} />
+          <ToolBadge label={t('system.tools.curl')} status={tools.curl} />
+          <ToolBadge label={t('system.tools.tar')} status={tools.tar} />
+          <ToolBadge label={t('system.tools.unzip')} status={tools.unzip} />
         </div>
       </div>
     )
@@ -195,7 +197,7 @@ export function SystemReadinessPage(): ReactElement {
     <div className="elevated-page" style={{ display: 'flex', gap: 32, height: '100%' }}>
       <aside style={{ width: 240, display: 'flex', flexDirection: 'column', gap: 8 }}>
         <div className="mono" style={{ fontSize: 12, color: 'var(--text-muted)', padding: '0 12px 12px' }}>
-          READINESS WIZARD
+          {t('system.sidebarTitle')}
         </div>
         {categories.map((cat) => (
           <button
@@ -227,7 +229,7 @@ export function SystemReadinessPage(): ReactElement {
             onClick={fetchReport}
             disabled={loading}
           >
-            {loading ? 'Auditing...' : 'Run Audit'}
+            {loading ? t('system.auditLoading') : t('system.audit')}
           </button>
         </div>
       </aside>
@@ -236,7 +238,7 @@ export function SystemReadinessPage(): ReactElement {
         {loading && !report ? (
           <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16 }}>
             <div className="codicon codicon-loading codicon-modifier-spin" style={{ fontSize: 32 }} />
-            <div className="mono" style={{ color: 'var(--text-muted)' }}>Probing system architecture...</div>
+            <div className="mono" style={{ color: 'var(--text-muted)' }}>{t('system.loadingProbing')}</div>
           </div>
         ) : (
           <>
@@ -264,6 +266,7 @@ function StatCard({ label, value, subValue, status = 'ok' }: { label: string; va
 }
 
 function CheckRow({ label, status, desc, onFix, isFixing }: { label: string; status: boolean; desc: string; onFix?: () => void; isFixing?: boolean }) {
+  const { t } = useTranslation('readiness')
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: 16, borderRadius: 16, border: '1px solid var(--border)' }}>
       <div style={{ 
@@ -284,7 +287,7 @@ function CheckRow({ label, status, desc, onFix, isFixing }: { label: string; sta
       </div>
       {onFix && (
         <button className="hp-btn hp-btn-primary" onClick={onFix} style={{ fontSize: 12, padding: '4px 12px' }} disabled={isFixing}>
-          {isFixing ? 'Fixing...' : 'Fix It'}
+          {isFixing ? t('system.docker.fixing') : t('system.docker.fixIt')}
         </button>
       )}
     </div>
@@ -292,6 +295,7 @@ function CheckRow({ label, status, desc, onFix, isFixing }: { label: string; sta
 }
 
 function LatencyRow({ label, latency }: { label: string; latency: number | null }) {
+  const { t } = useTranslation('readiness')
   const status = latency === null ? 'error' : latency > 500 ? 'warning' : 'ok'
   const color = status === 'ok' ? 'var(--green)' : status === 'warning' ? 'var(--orange)' : 'var(--red)'
   return (
@@ -307,7 +311,7 @@ function LatencyRow({ label, latency }: { label: string; latency: number | null 
         )}
       </div>
       <div className="mono" style={{ width: 80, textAlign: 'right', color }}>
-        {latency === null ? 'Timeout' : `${latency}ms`}
+        {latency === null ? t('system.network.timeout') : t('system.network.ms', { ms: latency })}
       </div>
     </div>
   )

@@ -51,7 +51,7 @@
 
 ### Stage 4 (ناقص / مستمر)
 
-- **Flatpak:** `flatpak/io.github.karimodora.LinuxDevHome.tauri.yml` — جاهز للتحضير المحلي؛ **لا** job Flatpak ثقيل في CI حتى الموافقة (ثقيل، يُفضَّل قبل Flathub فقط).
+- **Flatpak:** `flatpak/io.github.karimodora.LinuxDevHome.yml` — جاهز للتحضير المحلي؛ **لا** job Flatpak ثقيل في CI حتى الموافقة (ثقيل، يُفضَّل قبل Flathub فقط).
 - **Electron:** حذف من الريبو (`electron-vite`، `main/`، `preload/`، سكربتات التعبئة المرتبطة) — **خطوة منفصلة** بعد **Tauri-only** (لا مسار إلزامي لـ Electron)؛ انظر قيود `AGENT_WORK_PLAN`.
 
 ### قبل الوسم / جاهزية منتج (ليست بالضرورة «Stage 5» وحدها)

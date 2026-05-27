@@ -70,7 +70,7 @@ The image runs tests, typecheck, lint, and production build inside Node 20.
 
 ## 📦 Flatpak
 
-Distributed as a Flatpak with full host permissions (`--filesystem=host`, `--device=all`, `--socket=system-bus`). No sandbox overrides required — Docker socket, SSH, PTY, and `/proc` all work out of the box.
+Distributed as a Flatpak with full host permissions (`--filesystem=host`, `--device=all`, `--socket=system-bus`). No sandbox overrides required — Docker socket, SSH, PTY, and `/proc` all work out of the box. The canonical manifest is [`flatpak/io.github.karimodora.LinuxDevHome.yml`](flatpak/io.github.karimodora.LinuxDevHome.yml).
 
 ## ✅ Stabilization Tracker
 
@@ -83,7 +83,7 @@ Documentation audit record: [docs/DOCS_AUDIT_2026-04.md](docs/DOCS_AUDIT_2026-04
 
 ## 🌳 Monorepo Layout
 
-- `apps/desktop` — Tauri + React UI (Electron stack kept under `dev:electron` / `build:electron` until removed)
+- `apps/desktop` — Tauri + React UI (Rust backend, WebKit renderer; Electron removed in v0.2.0-alpha)
 - `packages/shared` — Shared types, IPC channel names, Zod schemas
 - `docker/compose/*` — Bundled `docker compose` profiles
 - `flatpak/` — Flatpak manifest template + notes

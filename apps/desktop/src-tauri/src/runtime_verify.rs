@@ -1,4 +1,4 @@
-use crate::host_exec::{CMD_TIMEOUT_SHORT, exec_result_limit};
+use crate::host_exec::{cmd_timeout_short, exec_result_limit};
 use crate::runtime_versioning::{
   lumina_first_version_token,
   lumina_probe_meaningful_line,
@@ -46,7 +46,7 @@ pub(crate) async fn runtime_append_verify(
       return;
     }
   };
-  match exec_result_limit("bash", &["-lc", probe], CMD_TIMEOUT_SHORT).await {
+  match exec_result_limit("bash", &["-lc", probe], cmd_timeout_short()).await {
     Ok((stdout, stderr)) => {
       let line = lumina_probe_meaningful_line(&stdout, &stderr);
       if line.contains("MISSING") || line.is_empty() {

@@ -399,7 +399,7 @@ Missing: real dep graph (`removableDeps` always empty), Ruby slow on Fedora.
 
 ---
 
-## Phase 8 — Settings 🔄 MVP COMPLETE
+## Phase 8 — Settings ⚠️ PARTIAL (UI exists; most settings are store-only — not enforced at runtime)
 
 **Goal:** Must implement a fully functional settings architecture with the exact specified tabs. All settings must persist correctly to the file system and immediately affect the app state.
 
@@ -598,6 +598,14 @@ When user clicks "Install" / "Fix":
 | 7 | RuntimesPage | `uninstallPreview` fires on every mode toggle | ✅ FIXED |
 | 8 | SystemPage | `setInterval` cleanup leak | ✅ FIXED |
 | 9 | DashboardKernelsPage | `colorFor()` uses `==` not `===` | ✅ FIXED |
+| 10 | DashboardKernelsPage | HTTP OPEN LINK shown for all TCP ports (ssh/22, postgres/5432, etc.) | ✅ FIXED |
+| 11 | DashboardKernelsPage | GPU fallback hardcoded to 'Intel Integrated Graphics' when nvidia-smi fails | ✅ FIXED |
+| 12 | DashboardKernelsPage | Empty runtimes shows 'Loading…' permanently after fetch completes | ✅ FIXED |
+| 13 | DashboardLogsPage | `val.split(':')` breaks on IDs containing colons | ✅ FIXED |
+| 14 | DashboardLogsPage | `j.logTail.length` crashes when logTail is undefined | ✅ FIXED |
+| 15 | TopBar / ActiveJobsStrip | `j.progress` not clamped — can exceed 100% or render NaN | ✅ FIXED |
+| 16 | lib.rs layout_set | Default-profile branch stored entire body instead of layout value | ✅ FIXED |
+| 17 | lib.rs runtime:status | Join error silently drops probe entries | ✅ FIXED |
 
 ---
 
@@ -609,7 +617,14 @@ When user clicks "Install" / "Fix":
 - [ ] **Dashboard - Kernels:** Build a configuration grid that allows starting, stopping, and linking local development kernels (e.g., Jupyter, PHP-FPM).
 - [ ] **Dashboard - Logs:** Implement a unified log viewer using `xterm.js` that multiplexes stdout/stderr streams from all active background jobs and containers into a single searchable buffer.
 - [ ] **Global Navigation (Chrome) Fixes:** Define the specific Tauri commands (e.g., `open_terminal`, `show_notifications_panel`) that must be bound to the Top Bar buttons (Search, Notification, Terminal, Settings) and Left Sidebar buttons (Docs, Setup Wizard, Local User).
-- [ ] **Bottom Bar:** Completely rip out the "Phase 0 task runner" and replace it with a clean, minimized status bar or remove it entirely if a replacement is unnecessary.
+- [x] **Bottom Bar:** Completely rip out the "Phase 0 task runner" and replace it with a clean, minimized status bar or remove it entirely if a replacement is unnecessary. ✅ FIXED
+
+---
+
+### Phase 16 — lib.rs Monolith Refactoring
+**Status:** 📋 Planned (Refactor sprint)  
+**Scope:** Decompose 4,700+ line `lib.rs` into domain modules.  
+**Details:** See [`docs/superpowers/plans/2026-05-27-phase16-refactor.md`](docs/superpowers/plans/2026-05-27-phase16-refactor.md)
 
 ---
 
@@ -726,4 +741,5 @@ Based on current app state (Phase 16 + Phase 7 complete), here's what remaining 
 📋  UI/UX & Performance Debt
 📋  Phase 10 — Extensions (Plugin model v0, Dev API)
 🔄  Phase 14 — Flatpak Release Gate
+📋  Phase 16 — lib.rs Monolith Refactoring
 ```

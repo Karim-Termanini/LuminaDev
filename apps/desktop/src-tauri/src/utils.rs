@@ -252,3 +252,29 @@ pub fn docker_prune_preview_payload(containers: u64, images: u64, volumes: u64, 
     }
   })
 }
+
+// ============================================================================
+// Resource limit math
+// ============================================================================
+
+pub fn calculate_limit_cores(cores: usize, cpu_limit_percent: u64) -> usize {
+  let limit_cores = ((cores as f64) * (cpu_limit_percent as f64 / 100.0)).round() as usize;
+  std::cmp::max(1, limit_cores)
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn test_calculate_limit_cores() {
+    assert_eq!(calculate_limit_cores(4, 50), 2);
+    assert_eq!(calculate_limit_cores(4, 80), 3);
+    assert_eq!(calculate_limit_cores(8, 80), 6);
+    assert_eq!(calculate_limit_cores(1, 0), 1);
+    assert_eq!(calculate_limit_cores(4, 0), 1);
+    assert_eq!(calculate_limit_cores(64, 100), 64);
+    assert_eq!(calculate_limit_cores(64, 200), 128);
+  }
+}
+

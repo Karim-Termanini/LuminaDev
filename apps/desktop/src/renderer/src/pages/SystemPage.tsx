@@ -1,8 +1,10 @@
 import type { ContainerRow, HostMetricsResponse, SystemdRow } from '@linux-dev-home/shared'
 import type { ReactElement, ReactNode } from 'react'
 import { useCallback, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 
 export function SystemPage(): ReactElement {
+  const { t } = useTranslation('monitor')
   const [snap, setSnap] = useState<HostMetricsResponse | null>(null)
   const [docker, setDocker] = useState<{ ok: boolean; rows: ContainerRow[]; error?: string } | null>(null)
   const [gpu, setGpu] = useState<string>('…')
@@ -23,11 +25,11 @@ export function SystemPage(): ReactElement {
     try {
       const g = (await window.dh.hostExec({ command: 'nvidia_smi_short' })) as { ok: boolean; result: string; error?: string }
       if (g.ok) setGpu(g.result)
-      else setGpu('GPU: unavailable')
+      else setGpu(t('system.gpuUnavailable'))
     } catch {
-      setGpu('GPU: unavailable')
+      setGpu(t('system.gpuUnavailable'))
     }
-  }, [])
+  }, [t])
 
   useEffect(() => {
     void refresh()
@@ -43,10 +45,9 @@ export function SystemPage(): ReactElement {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      <h1 style={{ margin: 0, fontSize: 24 }}>System overview</h1>
+      <h1 style={{ margin: 0, fontSize: 24 }}>{t('system.heading')}</h1>
       <p style={{ margin: 0, color: 'var(--text-muted)', maxWidth: 900 }}>
-        Dense host metrics with Docker and systemd visibility (read-only). Sandboxed Flatpak builds
-        may hide some counters; use documented host bridges when needed.
+        {t('system.description')}
       </p>
 
       <div
@@ -58,17 +59,17 @@ export function SystemPage(): ReactElement {
       >
         <Card>
           <div className="mono" style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-            CPU_LOAD
+            {t('system.cpuLabel')}
           </div>
           <div style={{ fontSize: 28, fontWeight: 700, marginTop: 8 }}>
             {m ? `${m.cpuUsagePercent.toFixed(1)}%` : '—'}
           </div>
           <div className="mono" style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 12 }}>
-            Load {m?.loadAvg.map((x: number) => x.toFixed(2)).join(' / ') ?? '—'}
+            {t('system.load')} {m?.loadAvg.map((x: number) => x.toFixed(2)).join(' / ') ?? '—'}
           </div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>{m?.cpuModel}</div>
           <div className="mono" style={{ fontSize: 12, marginTop: 8 }}>
-            Uptime{' '}
+            {t('system.uptime')}{' '}
             {(m?.uptimeSec ?? 0) / 3600 < 48
               ? `${Math.floor((m?.uptimeSec ?? 0) / 3600)}h`
               : `${Math.floor((m?.uptimeSec ?? 0) / 86400)}d`}
@@ -76,7 +77,7 @@ export function SystemPage(): ReactElement {
         </Card>
         <Card>
           <div className="mono" style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-            VOLATILE_MEMORY
+            {t('system.memLabel')}
           </div>
           <div style={{ fontSize: 28, fontWeight: 700, marginTop: 8 }}>
             {m ? `${usedMb} MB` : '—'}
@@ -85,9 +86,9 @@ export function SystemPage(): ReactElement {
               / {m?.totalMemMb ?? '—'} MB
             </span>
           </div>
-          <Bar pct={pctMem} color="var(--accent)" label="In use" />
+          <Bar pct={pctMem} color="var(--accent)" label={t('system.inUse')} />
           <div className="mono" style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-            Free {m?.freeMemMb ?? '—'} MB
+            {t('system.free')} {m?.freeMemMb ?? '—'} MB
           </div>
           <div style={{ fontSize: 12, marginTop: 8, color: 'var(--text-muted)' }}>{gpu}</div>
         </Card>
@@ -96,36 +97,36 @@ export function SystemPage(): ReactElement {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 16 }}>
         <Card>
           <div className="mono" style={{ color: 'var(--text-muted)', marginBottom: 8 }}>
-            NVME_I/O_HINT
+            {t('system.diskLabel')}
           </div>
           <div style={{ fontSize: 14 }}>
-            Root FS (host view): {m?.diskFreeGb ?? '—'} GB free of {m?.diskTotalGb ?? '—'} GB total.
+            {t('system.diskInfo', { free: m?.diskFreeGb ?? '—', total: m?.diskTotalGb ?? '—' })}
           </div>
         </Card>
         <Card>
           <div className="mono" style={{ color: 'var(--text-muted)', marginBottom: 8 }}>
-            NETWORK
+            {t('system.netLabel')}
           </div>
           <div className="mono" style={{ fontSize: 15 }}>
-            RX ~{m?.netRxMbps.toFixed(2) ?? '0'} Mbps · TX ~{m?.netTxMbps.toFixed(2) ?? '0'} Mbps
+            {t('system.netInfo', { rx: m?.netRxMbps.toFixed(2) ?? '0', tx: m?.netTxMbps.toFixed(2) ?? '0' })}
           </div>
         </Card>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 16 }}>
         <Card>
-          <div style={{ fontWeight: 600, marginBottom: 12 }}>Docker containers</div>
+          <div style={{ fontWeight: 600, marginBottom: 12 }}>{t('system.dockerHeading')}</div>
           {!docker ? (
-            <span style={{ color: 'var(--text-muted)' }}>Loading…</span>
+            <span style={{ color: 'var(--text-muted)' }}>{t('system.loading')}</span>
           ) : !docker.ok ? (
             <span style={{ color: 'var(--orange)' }}>{docker.error}</span>
           ) : (
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
                 <tr style={{ color: 'var(--text-muted)', textAlign: 'left' }}>
-                  <th style={{ padding: 6 }}>Name</th>
-                  <th>State</th>
-                  <th>Ports</th>
+                  <th style={{ padding: 6 }}>{t('system.dockerName')}</th>
+                  <th>{t('system.dockerState')}</th>
+                  <th>{t('system.dockerPorts')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -143,7 +144,7 @@ export function SystemPage(): ReactElement {
           )}
         </Card>
         <Card>
-          <div style={{ fontWeight: 600, marginBottom: 12 }}>Systemd units (sample)</div>
+          <div style={{ fontWeight: 600, marginBottom: 12 }}>{t('system.systemdHeading')}</div>
           <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
             {systemd.map((s: SystemdRow) => (
               <li

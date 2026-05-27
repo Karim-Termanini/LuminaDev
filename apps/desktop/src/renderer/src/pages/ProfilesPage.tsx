@@ -10,6 +10,7 @@ import './ProfilesPage.css'
 import type { ReactElement } from 'react'
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { invoke } from '@tauri-apps/api/core'
+import { Trans, useTranslation } from 'react-i18next'
 
 const BASE_TEMPLATES = [
   'web-dev',
@@ -36,9 +37,10 @@ const TEMPLATE_ICONS: Record<string, string> = {
 }
 
 export function ProfilesPage(): ReactElement {
+  const { t } = useTranslation('profiles')
   const [profiles, setProfiles] = useState<CustomProfileEntry[]>([])
   const [importText, setImportText] = useState('')
-  const [status, setStatus] = useState<string | null>(null)
+  const [status, setStatus] = useState<{ message: string; type: 'success' | 'warning' } | null>(null)
   const [onLogin, setOnLogin] = useState<OnLoginAutomationStore>(() =>
     OnLoginAutomationStoreSchema.parse({}),
   )
@@ -136,16 +138,16 @@ export function ProfilesPage(): ReactElement {
         setProfiles(parsed)
         void loadExtras(parsed)
       } else if (!res.ok) {
-        setStatus(res.error || 'Failed to load profiles.')
+        setStatus({ message: res.error || t('msg.loadFailed'), type: 'warning' })
       }
     } catch (e) {
-      setStatus(e instanceof Error ? e.message : String(e))
+      setStatus({ message: e instanceof Error ? e.message : String(e), type: 'warning' })
     }
     try {
       const ol = (await window.dh.storeGet({ key: 'on_login_automation' })) as { ok: boolean; data: unknown }
       if (ol.ok) setOnLogin(parseOnLoginAutomation(ol.data))
     } catch { /* ignore */ }
-  }, [loadExtras])
+  }, [loadExtras, t])
 
   useEffect(() => { void load() }, [load])
 
@@ -153,10 +155,10 @@ export function ProfilesPage(): ReactElement {
     try {
       const parsed = CustomProfilesStoreSchema.parse(next)
       const res = (await window.dh.storeSet({ key: 'custom_profiles', data: parsed })) as { ok: boolean; error?: string }
-      if (res.ok) { setProfiles(parsed); setStatus(msg); void loadExtras(parsed) }
-      else setStatus(res.error || 'Failed to save profiles.')
+      if (res.ok) { setProfiles(parsed); setStatus({ message: msg, type: 'success' }); void loadExtras(parsed) }
+      else setStatus({ message: res.error || t('msg.saveFailed'), type: 'warning' })
     } catch (e) {
-      setStatus(e instanceof Error ? e.message : String(e))
+      setStatus({ message: e instanceof Error ? e.message : String(e), type: 'warning' })
     }
   }
 
@@ -165,12 +167,12 @@ export function ProfilesPage(): ReactElement {
       const res = (await window.dh.storeSet({ key: 'active_profile', data: template })) as { ok: boolean; error?: string }
       if (res.ok) {
         setActiveProfileTemplate(template)
-        setStatus(`"${template}" set as active profile.`)
+        setStatus({ message: t('msg.setActive', { template }), type: 'success' })
       } else {
-        setStatus(res.error || 'Failed to set active profile.')
+        setStatus({ message: res.error || t('msg.setActiveFailed'), type: 'warning' })
       }
     } catch (e) {
-      setStatus(e instanceof Error ? e.message : String(e))
+      setStatus({ message: e instanceof Error ? e.message : String(e), type: 'warning' })
     }
   }
 
@@ -183,12 +185,12 @@ export function ProfilesPage(): ReactElement {
       }
       if (res.ok) {
         setOnLogin(parsed)
-        setStatus('On-login automation preferences saved.')
+        setStatus({ message: t('msg.automationSaved'), type: 'success' })
       } else {
-        setStatus(res.error || 'Failed to save on-login automation.')
+        setStatus({ message: res.error || t('msg.automationSaveFailed'), type: 'warning' })
       }
     } catch (e) {
-      setStatus(e instanceof Error ? e.message : String(e))
+      setStatus({ message: e instanceof Error ? e.message : String(e), type: 'warning' })
     }
   }
 
@@ -205,14 +207,14 @@ export function ProfilesPage(): ReactElement {
       } catch { /* ignore */ }
     }
     const next = profiles.filter((_, i) => i !== idx)
-    await save(next, 'Profile removed.')
+    await save(next, t('msg.removed'))
   }
 
   async function duplicateAt(idx: number): Promise<void> {
     const p = profiles[idx]
     if (!p) return
     const next = [...profiles, { ...p, name: `${p.name} Copy` }]
-    await save(next, 'Profile duplicated.')
+    await save(next, t('msg.duplicated'))
   }
 
   function openCreateModal(): void {
@@ -254,7 +256,7 @@ export function ProfilesPage(): ReactElement {
   async function saveWizardChanges(): Promise<void> {
     if (!wizardData) return
     if (!wizardData.name.trim()) {
-      setStatus('Profile name is required.')
+      setStatus({ message: t('msg.nameRequired'), type: 'warning' })
       return
     }
     const finalData = { ...wizardData, name: wizardData.name.trim() }
@@ -262,11 +264,11 @@ export function ProfilesPage(): ReactElement {
     let next: CustomProfileEntry[]
     if (isCreatingProfile) {
       next = [...profiles, finalData]
-      await save(next, `Profile "${finalData.name}" created.`)
+      await save(next, t('msg.created', { name: finalData.name }))
     } else if (editingProfileIdx !== null) {
       next = [...profiles]
       next[editingProfileIdx] = finalData
-      await save(next, `Profile "${finalData.name}" updated.`)
+      await save(next, t('msg.updated', { name: finalData.name }))
     }
     
     setWizardData(null)
@@ -278,10 +280,10 @@ export function ProfilesPage(): ReactElement {
     const text = JSON.stringify(profiles, null, 2)
     try {
       await navigator.clipboard.writeText(text)
-      setStatus('Profiles JSON copied to clipboard.')
+      setStatus({ message: t('msg.exportCopied'), type: 'success' })
     } catch {
       setImportText(text)
-      setStatus('Clipboard unavailable; JSON put in import box below.')
+      setStatus({ message: t('msg.exportFallback'), type: 'success' })
     }
   }
 
@@ -289,9 +291,9 @@ export function ProfilesPage(): ReactElement {
     try {
       const raw = JSON.parse(importText) as unknown
       const parsed = CustomProfilesStoreSchema.parse(raw)
-      await save(parsed, 'Profiles imported.')
+      await save(parsed, t('msg.imported'))
     } catch (e) {
-      setStatus(e instanceof Error ? e.message : String(e))
+      setStatus({ message: e instanceof Error ? e.message : String(e), type: 'warning' })
     }
   }
 
@@ -301,22 +303,20 @@ export function ProfilesPage(): ReactElement {
     return [...map.entries()]
   }, [profiles])
 
-  const isOk = (s: string) => /copied|saved|removed|duplicated|imported|cleared|set to/i.test(s)
-
   return (
     <div className="profiles-page elevated-page" style={{ display: 'flex', flexDirection: 'column', gap: 0, padding: '0 40px' }}>
       <header style={{ paddingBottom: 24, paddingTop: 16 }}>
-        <div className="mono" style={{ color: 'var(--accent)', fontSize: 12, marginBottom: 8 }}>PROFILES</div>
-        <h1 style={{ margin: 0, fontSize: 32, fontWeight: 700 }}>Profile Engine Room</h1>
+        <div className="mono" style={{ color: 'var(--accent)', fontSize: 12, marginBottom: 8 }}>{t('page.sectionLabel')}</div>
+        <h1 style={{ margin: 0, fontSize: 32, fontWeight: 700 }}>{t('page.title')}</h1>
         <p style={{ color: 'var(--text-muted)', marginTop: 10, maxWidth: 760, lineHeight: 1.5, fontSize: 15 }}>
-          Build, edit, and manage custom profiles. To switch profiles, use the Dashboard command center. Here you can CRUD profiles, set global launch automation, and backup/sync your configuration.
+          {t('page.subtitle')}
         </p>
       </header>
 
       {status && (
-        <div className={`hp-status-alert ${isOk(status) ? 'success' : 'warning'}`} style={{ marginBottom: 24 }}>
-          <span style={{ fontSize: 16 }}>{isOk(status) ? '✔' : '⚠'}</span>
-          <span>{status}</span>
+        <div className={`hp-status-alert ${status.type}`} style={{ marginBottom: 24 }}>
+          <span style={{ fontSize: 16 }}>{status.type === 'success' ? '✔' : '⚠'}</span>
+          <span>{status.message}</span>
         </div>
       )}
 
@@ -329,9 +329,9 @@ export function ProfilesPage(): ReactElement {
             className={`tab-btn ${activeTab === tab ? 'active' : ''}`}
             onClick={() => setActiveTab(tab)}
           >
-            {tab === 'builder' && 'Environments'}
-            {tab === 'automation' && 'Global Automation'}
-            {tab === 'backup' && 'Backup & Sync'}
+            {tab === 'builder' && t('tab.builder')}
+            {tab === 'automation' && t('tab.automation')}
+            {tab === 'backup' && t('tab.backup')}
           </button>
         ))}
       </div>
@@ -339,10 +339,9 @@ export function ProfilesPage(): ReactElement {
       {/* Tab Content: Global Boot Automation */}
       {activeTab === 'automation' && (
       <section style={{ padding: '16px 0' }}>
-        <div style={{ fontWeight: 700, marginBottom: 8, fontSize: 20 }}>Global Boot Automation</div>
+        <div style={{ fontWeight: 700, marginBottom: 8, fontSize: 20 }}>{t('automation.title')}</div>
         <p style={{ margin: '0 0 24px', fontSize: 14, color: 'var(--text-muted)', lineHeight: 1.6, maxWidth: 800 }}>
-          After the Setup Wizard is dismissed, optionally start your active compose stack or refresh the dashboard
-          widget layout from disk. Requires Docker for compose; Flatpak needs socket access.
+          {t('automation.subtitle')}
         </p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <label className="profiles-list-row" style={{ cursor: 'pointer' }}>
@@ -351,8 +350,8 @@ export function ProfilesPage(): ReactElement {
                 <span className="codicon codicon-play" style={{ fontSize: 24, color: 'var(--text)' }} />
               </div>
               <div className="row-title-area">
-                <span className="row-title">Compose up on launch</span>
-                <span className="row-subtitle">Automatically start the active profile once per app launch.</span>
+                <span className="row-title">{t('automation.composeUp.title')}</span>
+                <span className="row-subtitle">{t('automation.composeUp.desc')}</span>
               </div>
             </div>
             <div className="row-actions">
@@ -373,8 +372,8 @@ export function ProfilesPage(): ReactElement {
                 <span className="codicon codicon-refresh" style={{ fontSize: 24, color: 'var(--text)' }} />
               </div>
               <div className="row-title-area">
-                <span className="row-title">Refresh dashboard layout</span>
-                <span className="row-subtitle">Reload widgets from layout.json on launch.</span>
+                <span className="row-title">{t('automation.refreshDashboard.title')}</span>
+                <span className="row-subtitle">{t('automation.refreshDashboard.desc')}</span>
               </div>
             </div>
             <div className="row-actions">
@@ -397,19 +396,19 @@ export function ProfilesPage(): ReactElement {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
         {/* Dev Home Style Hero Banner */}
         <div className="dev-home-hero">
-          <h2 className="dev-home-hero-title">Get ready to code in minutes</h2>
+          <h2 className="dev-home-hero-title">{t('hero.title')}</h2>
           <p className="dev-home-hero-subtitle">
-            Create and configure custom development environments tailored to your stack. Add environment variables, manage credentials, and build the perfect workspace.
+            {t('hero.subtitle')}
           </p>
           <button type="button" className="dev-home-btn" onClick={openCreateModal}>
-            + Create Environment
+            {t('hero.btn')}
           </button>
         </div>
 
         {/* Horizontal Lists */}
         {profiles.length === 0 ? (
           <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 15 }}>
-            No custom environments yet. Click the button above to get started.
+            {t('builder.empty')}
           </div>
         ) : (
           <div className="profiles-list-container">
@@ -429,7 +428,7 @@ export function ProfilesPage(): ReactElement {
                       <h3 className="row-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         {p.name}
                         {activeProfileTemplate === p.baseTemplate && (
-                          <span style={{ fontSize: 11, fontWeight: 700, background: 'color-mix(in srgb, var(--green) 20%, transparent)', color: 'var(--green)', border: '1px solid color-mix(in srgb, var(--green) 40%, transparent)', borderRadius: 20, padding: '2px 8px', letterSpacing: '0.04em' }}>ACTIVE</span>
+                          <span style={{ fontSize: 11, fontWeight: 700, background: 'color-mix(in srgb, var(--green) 20%, transparent)', color: 'var(--green)', border: '1px solid color-mix(in srgb, var(--green) 40%, transparent)', borderRadius: 20, padding: '2px 8px', letterSpacing: '0.04em' }}>{t('badge.active')}</span>
                         )}
                       </h3>
                       <p className="row-subtitle">
@@ -442,7 +441,7 @@ export function ProfilesPage(): ReactElement {
                           {projectPaths[p.baseTemplate]}
                         </p>
                       ) : (
-                        <p className="row-subtitle" style={{ fontSize: 11, marginTop: 2, color: 'var(--text-muted)', fontStyle: 'italic' }}>No project linked</p>
+                        <p className="row-subtitle" style={{ fontSize: 11, marginTop: 2, color: 'var(--text-muted)', fontStyle: 'italic' }}>{t('badge.noProject')}</p>
                       )}
                       {/* Description */}
                       {p.description && (
@@ -465,8 +464,8 @@ export function ProfilesPage(): ReactElement {
                   </div>
 
                   <div className="row-stats">
-                    <div className="row-stat-item"><span className="codicon codicon-symbol-property" /> Env Vars: {envVarCount}</div>
-                    <div className="row-stat-item"><span className="codicon codicon-key" /> Credentials: {credCount}</div>
+                    <div className="row-stat-item"><span className="codicon codicon-symbol-property" /> {t('stat.envVars', { count: envVarCount })}</div>
+                    <div className="row-stat-item"><span className="codicon codicon-key" /> {t('stat.credentials', { count: credCount })}</div>
                   </div>
 
                   <div className="row-actions">
@@ -474,24 +473,24 @@ export function ProfilesPage(): ReactElement {
                     <button
                       type="button"
                       className="row-btn"
-                      title={`Switch to ${(p.composeVariant ?? 'stub') === 'stub' ? 'full' : 'stub'} compose stack`}
+                      title={t('btn.switchStack.title', { variant: (p.composeVariant ?? 'stub') === 'stub' ? 'full' : 'stub' })}
                       onClick={() => {
                         const next = profiles.map((prof, pi) =>
                           pi === i ? { ...prof, composeVariant: ((prof.composeVariant ?? 'stub') === 'stub' ? 'full' : 'stub') as 'stub' | 'full' } : prof
                         )
-                        void save(next, `"${p.name}" switched to ${(p.composeVariant ?? 'stub') === 'stub' ? 'full' : 'stub'} stack.`)
+                        void save(next, t('msg.switchedStack', { name: p.name, variant: (p.composeVariant ?? 'stub') === 'stub' ? 'full' : 'stub' }))
                       }}
                     >
                       <span className="codicon codicon-layers" style={{ marginRight: 4 }} />
-                      {(p.composeVariant ?? 'stub') === 'stub' ? 'STUB' : 'FULL'}
+                      {(p.composeVariant ?? 'stub') === 'stub' ? t('btn.lite') : t('btn.full')}
                     </button>
                     {activeProfileTemplate !== p.baseTemplate && (
-                      <button type="button" className="row-btn" title="Set as active profile in Dashboard" onClick={() => void setAsActive(p.baseTemplate)}>
-                        <span className="codicon codicon-check" style={{ marginRight: 4 }} />Set Active
+                      <button type="button" className="row-btn" title={t('btn.setActive.title')} onClick={() => void setAsActive(p.baseTemplate)}>
+                        <span className="codicon codicon-check" style={{ marginRight: 4 }} />{t('btn.setActive')}
                       </button>
                     )}
                     <button type="button" className="row-btn" onClick={() => openEditModal(i)}>
-                      Edit
+                      {t('btn.edit')}
                     </button>
                     <div style={{ position: 'relative' }}>
                       <button type="button" className="row-btn-icon" onClick={() => setOpenDropdownIdx(isDropdownOpen ? null : i)}>
@@ -512,7 +511,7 @@ export function ProfilesPage(): ReactElement {
                             onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
                             onClick={() => { void duplicateAt(i); setOpenDropdownIdx(null) }}
                           >
-                            <span className="codicon codicon-copy" style={{ marginRight: 8, fontSize: 14 }} /> Duplicate
+                            <span className="codicon codicon-copy" style={{ marginRight: 8, fontSize: 14 }} /> {t('btn.duplicate')}
                           </button>
                           <button
                             type="button"
@@ -521,7 +520,7 @@ export function ProfilesPage(): ReactElement {
                             onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
                             onClick={() => { void removeAt(i); setOpenDropdownIdx(null) }}
                           >
-                            <span className="codicon codicon-trash" style={{ marginRight: 8, fontSize: 14 }} /> Delete
+                            <span className="codicon codicon-trash" style={{ marginRight: 8, fontSize: 14 }} /> {t('btn.delete')}
                           </button>
                         </div>
                       )}
@@ -538,23 +537,23 @@ export function ProfilesPage(): ReactElement {
       {/* Tab Content: Backup & Sync */}
       {activeTab === 'backup' && (
       <section style={{ padding: '16px 0' }}>
-        <div style={{ fontWeight: 700, marginBottom: 10, fontSize: 20 }}>Backup & Sync</div>
+        <div style={{ fontWeight: 700, marginBottom: 10, fontSize: 20 }}>{t('backup.title')}</div>
         <p style={{ margin: '0 0 24px', fontSize: 14, color: 'var(--text-muted)', lineHeight: 1.6, maxWidth: 800 }}>
-          Export all profiles as JSON for backup and team sharing, or import profiles from a previous export.
+          {t('backup.subtitle')}
         </p>
         
         <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
-          <button type="button" style={{...btn, display: 'flex', alignItems: 'center', gap: 8}} onClick={() => void load()}><span className="codicon codicon-refresh"/> Refresh</button>
-          <button type="button" style={{...btn, display: 'flex', alignItems: 'center', gap: 8}} onClick={() => void exportJson()}><span className="codicon codicon-export"/> Export JSON</button>
+          <button type="button" style={{...btn, display: 'flex', alignItems: 'center', gap: 8}} onClick={() => void load()}><span className="codicon codicon-refresh"/> {t('btn.refresh')}</button>
+          <button type="button" style={{...btn, display: 'flex', alignItems: 'center', gap: 8}} onClick={() => void exportJson()}><span className="codicon codicon-export"/> {t('btn.exportJson')}</button>
           <div style={{ flex: 1 }} />
-          <button type="button" style={{...btnDanger, display: 'flex', alignItems: 'center', gap: 8}} onClick={() => void save([], 'All profiles cleared.')}><span className="codicon codicon-trash"/> Clear All</button>
+          <button type="button" style={{...btnDanger, display: 'flex', alignItems: 'center', gap: 8}} onClick={() => void save([], t('msg.cleared'))}><span className="codicon codicon-trash"/> {t('btn.clearAll')}</button>
         </div>
         
         <div style={{ position: 'relative' }}>
           <textarea
             value={importText}
             onChange={(e) => setImportText(e.target.value)}
-            placeholder='Paste JSON array like [{"name":"My AI","baseTemplate":"ai-ml","envVars":[]}]'
+            placeholder={t('backup.placeholder')}
             style={{
               width: '100%', minHeight: 240, resize: 'vertical',
               background: '#0a0a0d', color: 'var(--text)',
@@ -567,13 +566,13 @@ export function ProfilesPage(): ReactElement {
 
         <div style={{ marginTop: 16, display: 'flex', gap: 8 }}>
           <button type="button" style={{...btn, padding: '12px 24px', background: 'var(--accent)', color: '#fff', border: 'none', display: 'flex', alignItems: 'center', gap: 8}} onClick={() => void importJson()}>
-            <span className="codicon codicon-add"/> Import JSON
+            <span className="codicon codicon-add"/> {t('btn.importJson')}
           </button>
         </div>
 
         {byTemplate.length > 0 && (
           <div style={{ marginTop: 40, paddingTop: 32, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-            <div style={{ fontWeight: 700, marginBottom: 16, fontSize: 16 }}>Profile Coverage</div>
+            <div style={{ fontWeight: 700, marginBottom: 16, fontSize: 16 }}>{t('backup.coverage')}</div>
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
               {byTemplate.map(([k, n]) => (
                 <div key={k} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)', padding: '8px 16px', borderRadius: 20, fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -595,14 +594,14 @@ export function ProfilesPage(): ReactElement {
             {/* LEFT SIDEBAR: Steps Indicator */}
             <div style={{ width: '220px', background: 'rgba(0,0,0,0.15)', borderRight: '1px solid var(--border)', padding: '24px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
               <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-muted)', marginBottom: 16, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                {isCreatingProfile ? 'Create Profile' : 'Edit Profile'}
+                {isCreatingProfile ? t('wizard.sidebar.create') : t('wizard.sidebar.edit')}
               </div>
               {[
-                { step: 1, label: '1. General' },
-                { step: 2, label: '2. SSH Key' },
-                { step: 3, label: '3. Env Variables' },
-                { step: 4, label: '4. Credentials' },
-                { step: 5, label: '5. Review & Save' }
+                { step: 1, label: t('wizard.step1') },
+                { step: 2, label: t('wizard.step2') },
+                { step: 3, label: t('wizard.step3') },
+                { step: 4, label: t('wizard.step4') },
+                { step: 5, label: t('wizard.step5') }
               ].map((s) => {
                 const isActive = wizardStep === s.step
                 const isCompleted = wizardStep > s.step
@@ -643,18 +642,18 @@ export function ProfilesPage(): ReactElement {
               <div style={{ flex: 1, overflowY: 'auto' }}>
                 {wizardStep === 1 && (
                   <div>
-                    <h3 style={{ margin: '0 0 8px 0', fontSize: 20, fontWeight: 700 }}>General Information</h3>
+                    <h3 style={{ margin: '0 0 8px 0', fontSize: 20, fontWeight: 700 }}>{t('wizard.general.title')}</h3>
                     <p style={{ color: 'var(--text-muted)', fontSize: 13, marginBottom: 24, lineHeight: 1.4 }}>
-                      Choose a descriptive name and a base development stack for your environment.
+                      {t('wizard.general.subtitle')}
                     </p>
 
                     <div style={{ marginBottom: 20 }}>
-                      <label style={{ display: 'block', fontSize: 14, fontWeight: 600, marginBottom: 8 }}>Profile Name</label>
+                      <label style={{ display: 'block', fontSize: 14, fontWeight: 600, marginBottom: 8 }}>{t('wizard.general.nameLabel')}</label>
                       <input
                         type="text"
                         value={wizardData.name}
                         onChange={(e) => setWizardData({ ...wizardData, name: e.target.value })}
-                        placeholder="e.g. Frontend App"
+                        placeholder={t('wizard.general.namePlaceholder')}
                         className="fluent-input"
                         style={{ width: '100%' }}
                         autoFocus
@@ -662,7 +661,7 @@ export function ProfilesPage(): ReactElement {
                     </div>
 
                     <div style={{ marginBottom: 20 }}>
-                      <label style={{ display: 'block', fontSize: 14, fontWeight: 600, marginBottom: 8 }}>Base Template</label>
+                      <label style={{ display: 'block', fontSize: 14, fontWeight: 600, marginBottom: 8 }}>{t('wizard.general.templateLabel')}</label>
                       <select
                         value={wizardData.baseTemplate}
                         onChange={(e) => setWizardData({ ...wizardData, baseTemplate: e.target.value as ComposeProfile })}
@@ -678,7 +677,7 @@ export function ProfilesPage(): ReactElement {
                       </select>
                       {!isCreatingProfile && (
                         <p style={{ margin: '6px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>
-                          Base template cannot be changed after creation to preserve workspace mappings.
+                          {t('wizard.general.templateLocked')}
                         </p>
                       )}
                     </div>
@@ -686,12 +685,12 @@ export function ProfilesPage(): ReactElement {
                     {/* Description */}
                     <div style={{ marginBottom: 20 }}>
                       <label style={{ display: 'block', fontSize: 14, fontWeight: 600, marginBottom: 8 }}>
-                        Description <span style={{ fontWeight: 400, color: 'var(--text-muted)', fontSize: 12 }}>(optional)</span>
+                        {t('wizard.general.descLabel')} <span style={{ fontWeight: 400, color: 'var(--text-muted)', fontSize: 12 }}>{t('wizard.general.descOptional')}</span>
                       </label>
                       <textarea
                         value={wizardData.description ?? ''}
                         onChange={(e) => setWizardData({ ...wizardData, description: e.target.value || undefined })}
-                        placeholder="e.g. My frontend workspace for project X"
+                        placeholder={t('wizard.general.descPlaceholder')}
                         className="fluent-input"
                         style={{ width: '100%', minHeight: 72, resize: 'vertical', fontFamily: 'inherit' }}
                       />
@@ -700,7 +699,7 @@ export function ProfilesPage(): ReactElement {
                     {/* Tags */}
                     <div style={{ marginBottom: 20 }}>
                       <label style={{ display: 'block', fontSize: 14, fontWeight: 600, marginBottom: 8 }}>
-                        Tags <span style={{ fontWeight: 400, color: 'var(--text-muted)', fontSize: 12 }}>(optional, press Enter)</span>
+                        {t('wizard.general.tagsLabel')} <span style={{ fontWeight: 400, color: 'var(--text-muted)', fontSize: 12 }}>{t('wizard.general.tagsOptional')}</span>
                       </label>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
                         {(wizardData.tags ?? []).map((tag, ti) => (
@@ -717,8 +716,8 @@ export function ProfilesPage(): ReactElement {
                               type="button"
                               onClick={() => setWizardData({ ...wizardData, tags: (wizardData.tags ?? []).filter((_, i) => i !== ti) })}
                               style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 0, fontSize: 12, lineHeight: 1 }}
-                              aria-label="Remove tag"
-                              title="Remove tag"
+                              aria-label={t('btn.removeTag')}
+                              title={t('btn.removeTag')}
                             >✕</button>
                           </span>
                         ))}
@@ -738,7 +737,7 @@ export function ProfilesPage(): ReactElement {
                               setTagInput('')
                             }
                           }}
-                          placeholder="e.g. frontend, react, work"
+                          placeholder={t('wizard.general.tagsPlaceholder')}
                           className="fluent-input"
                           style={{ flex: 1 }}
                         />
@@ -753,13 +752,13 @@ export function ProfilesPage(): ReactElement {
                             }
                             setTagInput('')
                           }}
-                        >Add</button>
+                        >{t('btn.add')}</button>
                       </div>
                     </div>
 
                     {/* Compose Variant */}
                     <div style={{ marginBottom: 20 }}>
-                      <label style={{ display: 'block', fontSize: 14, fontWeight: 600, marginBottom: 8 }}>Compose Stack</label>
+                      <label style={{ display: 'block', fontSize: 14, fontWeight: 600, marginBottom: 8 }}>{t('wizard.general.composeLabel')}</label>
                       <div style={{ display: 'flex', gap: 8 }}>
                         {(['stub', 'full'] as const).map((v) => (
                           <button
@@ -774,12 +773,12 @@ export function ProfilesPage(): ReactElement {
                               color: (wizardData.composeVariant ?? 'stub') === v ? 'var(--accent)' : 'var(--text-muted)',
                             }}
                           >
-                            {v === 'stub' ? 'Stub (lightweight)' : 'Full (all services)'}
+                            {v === 'stub' ? t('wizard.general.composeStub') : t('wizard.general.composeFull')}
                           </button>
                         ))}
                       </div>
                       <p style={{ margin: '6px 0 0', fontSize: 12, color: 'var(--text-muted)' }}>
-                        Stub runs a minimal Alpine container. Full starts the complete stack (nginx, postgres, etc).
+                        {t('wizard.general.composeHint')}
                       </p>
                     </div>
                   </div>
@@ -787,9 +786,9 @@ export function ProfilesPage(): ReactElement {
 
                 {wizardStep === 2 && (
                   <div>
-                    <h3 style={{ margin: '0 0 8px 0', fontSize: 20, fontWeight: 700 }}>SSH Configuration</h3>
+                    <h3 style={{ margin: '0 0 8px 0', fontSize: 20, fontWeight: 700 }}>{t('wizard.ssh.title')}</h3>
                     <p style={{ color: 'var(--text-muted)', fontSize: 13, marginBottom: 20, lineHeight: 1.4 }}>
-                      SSH keys allow your development containers to securely authenticate and communicate with private repositories (e.g., GitHub, GitLab).
+                      {t('wizard.ssh.subtitle')}
                     </p>
 
                     {/* Explanatory Note Card */}
@@ -805,21 +804,21 @@ export function ProfilesPage(): ReactElement {
                     }}>
                       <div style={{ fontWeight: 600, color: 'var(--text)', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
                         <span className="codicon codicon-info" style={{ color: 'var(--accent)' }} />
-                        <span>Guide: How to choose?</span>
+                        <span>{t('wizard.ssh.guideTitle')}</span>
                       </div>
-                      • <strong>Beginners (Recommended):</strong> Use your default host SSH key (click the auto-detect button below or type <code>host</code>).<br />
-                      • <strong>Experts:</strong> Enter a custom SSH key filename located in your local <code>~/.ssh/</code> directory.<br />
-                      • <strong>Skip:</strong> Leave this field empty if you do not require repository authentication inside your containers.
+                      <Trans i18nKey="wizard.ssh.guideBeginner" t={t} /><br />
+                      <Trans i18nKey="wizard.ssh.guideExpert" t={t} /><br />
+                      <Trans i18nKey="wizard.ssh.guideSkip" t={t} />
                     </div>
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                       <div>
-                        <label style={{ display: 'block', fontSize: 14, fontWeight: 600, marginBottom: 8 }}>SSH Key ID</label>
+                        <label style={{ display: 'block', fontSize: 14, fontWeight: 600, marginBottom: 8 }}>{t('wizard.ssh.keyLabel')}</label>
                         <input
                           type="text"
                           value={wizardData.sshKeyId ?? ''}
                           onChange={(e) => setWizardData({ ...wizardData, sshKeyId: e.target.value || undefined })}
-                          placeholder="e.g. host or id_ed25519"
+                          placeholder={t('wizard.ssh.keyPlaceholder')}
                           className="fluent-input"
                           style={{ fontFamily: 'monospace', width: '100%' }}
                         />
@@ -827,7 +826,7 @@ export function ProfilesPage(): ReactElement {
                           <div style={{ marginTop: 8, padding: '10px 12px', borderRadius: 8, background: 'rgba(255,180,0,0.08)', border: '1px solid rgba(255,180,0,0.25)' }}>
                             <p style={{ margin: '0 0 8px', fontSize: 12, color: 'var(--yellow)', display: 'flex', alignItems: 'center', gap: 4 }}>
                               <span className="codicon codicon-warning" />
-                              This SSH key is already used by profile "{profiles.find((p, idx) => p.sshKeyId === wizardData.sshKeyId && idx !== editingProfileIdx)?.name}". Each profile should have its own key.
+                              {t('wizard.ssh.keyDuplicateWarning', { name: profiles.find((p, idx) => p.sshKeyId === wizardData.sshKeyId && idx !== editingProfileIdx)?.name })}
                             </p>
                             <button
                               type="button"
@@ -841,7 +840,7 @@ export function ProfilesPage(): ReactElement {
                                 }
                               }}
                             >
-                              Generate fresh key for this profile
+                              {t('wizard.ssh.generateFresh')}
                             </button>
                           </div>
                         )}
@@ -857,15 +856,15 @@ export function ProfilesPage(): ReactElement {
                         flexDirection: 'column',
                         gap: 12
                       }}>
-                        <div style={{ fontSize: 13, fontWeight: 600 }}>Local SSH Tools & Helpers:</div>
+                        <div style={{ fontSize: 13, fontWeight: 600 }}>{t('wizard.ssh.helperTools')}</div>
                         
                         {detectingSsh ? (
-                          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Scanning your system for local SSH keys...</span>
+                          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('wizard.ssh.scanning')}</span>
                         ) : hostSshKey ? (
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--green)', fontSize: 12 }}>
                               <span className="codicon codicon-check" />
-                              <span>Default SSH key found on your machine!</span>
+                              <span>{t('wizard.ssh.keyFound')}</span>
                             </div>
                             <button
                               type="button"
@@ -873,20 +872,20 @@ export function ProfilesPage(): ReactElement {
                               style={{ alignSelf: 'flex-start', fontSize: 12, padding: '6px 12px', margin: 0 }}
                               onClick={() => setWizardData({ ...wizardData, sshKeyId: 'host' })}
                             >
-                              Use Default Host Key (host)
+                              {t('wizard.ssh.useDefault')}
                             </button>
                           </div>
                         ) : (
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                             <div style={{ color: 'var(--yellow)', fontSize: 12 }}>
-                              No default SSH key (id_ed25519) detected on your system.
+                              {t('wizard.ssh.noKey')}
                             </div>
                             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                               <input
                                 type="text"
                                 value={sshEmail}
                                 onChange={(e) => setSshEmail(e.target.value)}
-                                placeholder="email@example.com"
+                                placeholder={t('wizard.ssh.emailPlaceholder')}
                                 className="fluent-input"
                                 style={{ fontSize: 12, padding: '6px 10px', width: '200px' }}
                               />
@@ -913,7 +912,7 @@ export function ProfilesPage(): ReactElement {
                                   setIsGeneratingSsh(false);
                                 }}
                               >
-                                {isGeneratingSsh ? 'Generating...' : 'Generate New Key Now'}
+                                {isGeneratingSsh ? t('wizard.ssh.generating') : t('wizard.ssh.generate')}
                               </button>
                             </div>
                             {sshGenerateError && (
@@ -929,7 +928,7 @@ export function ProfilesPage(): ReactElement {
                 {wizardStep === 3 && (
                   <div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                      <h3 style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>Environment Variables</h3>
+                      <h3 style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>{t('wizard.env.title')}</h3>
                       {/* Mode Toggle tabs */}
                       <div style={{ display: 'flex', background: 'rgba(255,255,255,0.06)', padding: 3, borderRadius: 6, border: '1px solid var(--border)' }}>
                         <button
@@ -941,7 +940,7 @@ export function ProfilesPage(): ReactElement {
                             border: 'none', padding: '4px 10px', borderRadius: 4, cursor: 'pointer', fontSize: 12, fontWeight: 600
                           }}
                         >
-                          Beginner
+                          {t('mode.beginner')}
                         </button>
                         <button
                           type="button"
@@ -952,7 +951,7 @@ export function ProfilesPage(): ReactElement {
                             border: 'none', padding: '4px 10px', borderRadius: 4, cursor: 'pointer', fontSize: 12, fontWeight: 600
                           }}
                         >
-                          Expert
+                          {t('mode.expert')}
                         </button>
                       </div>
                     </div>
@@ -971,22 +970,22 @@ export function ProfilesPage(): ReactElement {
                         }}>
                           <div style={{ fontWeight: 600, color: 'var(--text)', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
                             <span className="codicon codicon-star-full" style={{ color: 'var(--accent)' }} />
-                            <span>Recommended: Keep it simple!</span>
+                            <span>{t('wizard.env.beginner.title')}</span>
                           </div>
-                          Environment variables define configuration values such as ports or application modes. **If you are unsure, you can safely skip this step!** The environment will run correctly using defaults.
+                          {t('wizard.env.beginner.desc')}
                         </div>
 
                         {/* Quick Presets Buttons */}
                         <div style={{ marginBottom: 20 }}>
                           <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 10, color: 'var(--text-muted)' }}>
-                            Quick Presets (Click to toggle):
+                            {t('wizard.env.beginner.presets')}
                           </label>
                           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                             {[
-                              { key: 'PORT', value: '3000', label: 'Web Port (PORT=3000)' },
-                              { key: 'NODE_ENV', value: 'development', label: 'Dev Mode (NODE_ENV=development)' },
-                              { key: 'DEBUG', value: '*', label: 'Full Debug logs (DEBUG=*)' },
-                              { key: 'DATABASE_URL', value: 'postgresql://postgres:postgres@db:5432/db', label: 'Default DB connection' }
+                              { key: 'PORT', value: '3000', label: t('preset.webPort') },
+                              { key: 'NODE_ENV', value: 'development', label: t('preset.devMode') },
+                              { key: 'DEBUG', value: '*', label: t('preset.debugLogs') },
+                              { key: 'DATABASE_URL', value: 'postgresql://postgres:postgres@db:5432/db', label: t('preset.defaultDb') }
                             ].map((preset) => {
                               const alreadyAdded = (wizardData.envVars || []).some(v => v.key === preset.key);
                               return (
@@ -1024,7 +1023,7 @@ export function ProfilesPage(): ReactElement {
                         {/* Current List Display */}
                         {(wizardData.envVars || []).length > 0 && (
                           <div style={{ background: 'rgba(0,0,0,0.15)', border: '1px solid var(--border)', borderRadius: 8, padding: 12 }}>
-                            <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>Currently Configured Variables:</div>
+                            <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>{t('wizard.env.beginner.currentVars')}</div>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                               {(wizardData.envVars || []).map((ev, i) => (
                                 <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, fontFamily: 'monospace', background: 'rgba(0,0,0,0.1)', padding: '4px 8px', borderRadius: 4 }}>
@@ -1051,16 +1050,16 @@ export function ProfilesPage(): ReactElement {
                           fontSize: 12,
                           color: 'var(--text-muted)'
                         }}>
-                          <strong>Expert Mode:</strong> Add variables manually or copy-paste raw <code>.env</code> file contents below.
+                          <Trans i18nKey="wizard.env.expert.title" t={t} />
                         </div>
 
                         {/* Bulk paste input */}
                         <div style={{ marginBottom: 16 }}>
-                          <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6 }}>Bulk Import (.env):</label>
+                          <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6 }}>{t('wizard.env.expert.bulkImport')}</label>
                           <textarea
                             value={envBulkInput}
                             onChange={(e) => setEnvBulkInput(e.target.value)}
-                            placeholder="PASTE HERE:&#10;API_KEY=12345&#10;DATABASE_URL=postgres://..."
+                                                            placeholder={t('wizard.env.expert.bulkPlaceholder')}
                             className="fluent-input"
                             style={{ width: '100%', height: '60px', fontSize: 12, fontFamily: 'monospace', resize: 'vertical' }}
                           />
@@ -1097,7 +1096,7 @@ export function ProfilesPage(): ReactElement {
                               }
                             }}
                           >
-                            Parse & Import Environment Variables
+                            {t('wizard.env.expert.parseBtn')}
                           </button>
                         </div>
 
@@ -1113,7 +1112,7 @@ export function ProfilesPage(): ReactElement {
                                   vars[vi] = { ...vars[vi], key: e.target.value };
                                   setWizardData({ ...wizardData, envVars: vars });
                                 }}
-                                placeholder="KEY"
+                                placeholder={t('wizard.env.expert.keyPlaceholder')}
                                 className="fluent-input"
                                 style={{ flex: 1, fontFamily: 'monospace', fontSize: 13 }}
                               />
@@ -1125,7 +1124,7 @@ export function ProfilesPage(): ReactElement {
                                   vars[vi] = { ...vars[vi], value: e.target.value };
                                   setWizardData({ ...wizardData, envVars: vars });
                                 }}
-                                placeholder="value"
+                                placeholder={t('wizard.env.expert.valuePlaceholder')}
                                 className="fluent-input"
                                 style={{ flex: 2, fontFamily: 'monospace', fontSize: 13 }}
                               />
@@ -1142,7 +1141,7 @@ export function ProfilesPage(): ReactElement {
                             type="text"
                             value={envKeyInput}
                             onChange={(e) => setEnvKeyInput(e.target.value)}
-                            placeholder="NEW_KEY"
+                            placeholder={t('wizard.env.expert.newKeyPlaceholder')}
                             className="fluent-input"
                             style={{ flex: 1, fontFamily: 'monospace' }}
                           />
@@ -1150,7 +1149,7 @@ export function ProfilesPage(): ReactElement {
                             type="text"
                             value={envValueInput}
                             onChange={(e) => setEnvValueInput(e.target.value)}
-                            placeholder="value"
+                            placeholder={t('wizard.env.expert.newValuePlaceholder')}
                             className="fluent-input"
                             style={{ flex: 2, fontFamily: 'monospace' }}
                           />
@@ -1160,7 +1159,7 @@ export function ProfilesPage(): ReactElement {
                             setWizardData({ ...wizardData, envVars: vars });
                             setEnvKeyInput('');
                             setEnvValueInput('');
-                          }}>Add</button>
+                          }}>{t('btn.add')}</button>
                         </div>
                       </div>
                     )}
@@ -1170,7 +1169,7 @@ export function ProfilesPage(): ReactElement {
                 {wizardStep === 4 && (
                   <div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                      <h3 style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>Credential Store</h3>
+                      <h3 style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>{t('wizard.cred.title')}</h3>
                       {/* Mode Toggle tabs */}
                       <div style={{ display: 'flex', background: 'rgba(255,255,255,0.06)', padding: 3, borderRadius: 6, border: '1px solid var(--border)' }}>
                         <button
@@ -1182,7 +1181,7 @@ export function ProfilesPage(): ReactElement {
                             border: 'none', padding: '4px 10px', borderRadius: 4, cursor: 'pointer', fontSize: 12, fontWeight: 600
                           }}
                         >
-                          Beginner
+                          {t('mode.beginner')}
                         </button>
                         <button
                           type="button"
@@ -1193,7 +1192,7 @@ export function ProfilesPage(): ReactElement {
                             border: 'none', padding: '4px 10px', borderRadius: 4, cursor: 'pointer', fontSize: 12, fontWeight: 600
                           }}
                         >
-                          Expert
+                          {t('mode.expert')}
                         </button>
                       </div>
                     </div>
@@ -1212,21 +1211,21 @@ export function ProfilesPage(): ReactElement {
                         }}>
                           <div style={{ fontWeight: 600, color: 'var(--text)', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
                             <span className="codicon codicon-shield" style={{ color: 'var(--accent)' }} />
-                            <span>Secure Secret Storage: Do you need it?</span>
+                            <span>{t('wizard.cred.beginner.title')}</span>
                           </div>
-                          The credential store securely encrypts and stores access tokens or secrets (e.g. GitHub tokens). **You can safely skip this step if you are not working with private clouds or registries!**
+                          {t('wizard.cred.beginner.desc')}
                         </div>
 
                         {/* Quick Presets Recommendation Buttons */}
                         <div style={{ marginBottom: 20 }}>
                           <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 10, color: 'var(--text-muted)' }}>
-                            Recommended Secret Templates:
+                            {t('wizard.cred.beginner.templates')}
                           </label>
                           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                             {[
-                              { id: 'GITHUB_TOKEN', desc: 'GitHub Personal Access Token' },
-                              { id: 'NPM_TOKEN', desc: 'NPM Registry Private Token' },
-                              { id: 'AWS_ACCESS_KEY_ID', desc: 'AWS IAM Access Key ID' }
+                              { id: 'GITHUB_TOKEN', desc: t('credPreset.github') },
+                              { id: 'NPM_TOKEN', desc: t('credPreset.npm') },
+                              { id: 'AWS_ACCESS_KEY_ID', desc: t('credPreset.aws') }
                             ].map((preset) => {
                               const alreadyLinked = (wizardData.credentialIds || []).includes(preset.id);
                               return (
@@ -1257,15 +1256,15 @@ export function ProfilesPage(): ReactElement {
                         {credInputId && (
                           <div style={{ background: 'rgba(0, 0, 0, 0.15)', border: '1px solid var(--border)', borderRadius: 8, padding: 14, marginBottom: 16 }}>
                             <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, display: 'flex', justifyContent: 'space-between' }}>
-                              <span>Enter secret value for: <code>{credInputId}</code></span>
-                              <button type="button" style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }} onClick={() => setCredInputId('')}>Cancel</button>
+                              <span><Trans i18nKey="wizard.cred.beginner.enterSecret" t={t} values={{ id: credInputId }} /></span>
+                              <button type="button" style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }} onClick={() => setCredInputId('')}>{t('btn.cancel')}</button>
                             </div>
                             <div style={{ display: 'flex', gap: 10 }}>
                               <input
                                 type="password"
                                 value={credInputValue}
                                 onChange={(e) => setCredInputValue(e.target.value)}
-                                placeholder="Paste secret token value here..."
+                                placeholder={t('wizard.cred.beginner.secretPlaceholder')}
                                 className="fluent-input"
                                 style={{ flex: 1 }}
                               />
@@ -1281,7 +1280,7 @@ export function ProfilesPage(): ReactElement {
                                   setCredInputValue('');
                                 }}
                               >
-                                Save & Link
+                                {t('wizard.cred.beginner.saveLink')}
                               </button>
                             </div>
                           </div>
@@ -1290,7 +1289,7 @@ export function ProfilesPage(): ReactElement {
                         {/* Currently Linked Credentials list */}
                         {(wizardData.credentialIds || []).length > 0 && (
                           <div style={{ background: 'rgba(0,0,0,0.15)', border: '1px solid var(--border)', borderRadius: 8, padding: 12 }}>
-                            <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>Currently Linked Secrets:</div>
+                            <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>{t('wizard.cred.beginner.currentSecrets')}</div>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                               {(wizardData.credentialIds || []).map((credId, i) => (
                                 <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, fontFamily: 'monospace', background: 'rgba(0,0,0,0.1)', padding: '4px 8px', borderRadius: 4 }}>
@@ -1301,7 +1300,7 @@ export function ProfilesPage(): ReactElement {
                                     if (cId) void window.dh.profileCredentialsDelete({ id: cId });
                                     const credIds = oldIds.filter((_, idx) => idx !== i);
                                     setWizardData({ ...wizardData, credentialIds: credIds });
-                                  }}>Delete</button>
+                                  }}>{t('btn.delete')}</button>
                                 </div>
                               ))}
                             </div>
@@ -1320,14 +1319,14 @@ export function ProfilesPage(): ReactElement {
                           fontSize: 12,
                           color: 'var(--text-muted)'
                         }}>
-                          <strong>Advanced Credentials Management:</strong> Define custom credential keys and secret values, or link previously saved secrets.
+                          {t('wizard.cred.expert.title')}
                         </div>
 
                         {/* Existing Credentials to link */}
                         {existingCredentialIds.length > 0 && (
                           <div style={{ marginBottom: 16 }}>
                             <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 6, color: 'var(--text-muted)' }}>
-                              Existing System Credentials (Click to link):
+                              {t('wizard.cred.expert.existingCredentials')}
                             </label>
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                               {existingCredentialIds.map(id => {
@@ -1385,7 +1384,7 @@ export function ProfilesPage(): ReactElement {
                             type="text"
                             value={credInputId}
                             onChange={(e) => setCredInputId(e.target.value)}
-                            placeholder="CREDENTIAL_ID"
+                            placeholder={t('wizard.cred.expert.idPlaceholder')}
                             className="fluent-input"
                             style={{ flex: 1 }}
                           />
@@ -1393,7 +1392,7 @@ export function ProfilesPage(): ReactElement {
                             type="password"
                             value={credInputValue}
                             onChange={(e) => setCredInputValue(e.target.value)}
-                            placeholder="Secret value"
+                            placeholder={t('wizard.cred.expert.secretPlaceholder')}
                             className="fluent-input"
                             style={{ flex: 1 }}
                           />
@@ -1405,7 +1404,7 @@ export function ProfilesPage(): ReactElement {
                             void window.dh.profileCredentialsStore({ id: cId, value: credInputValue.trim() });
                             setCredInputId('');
                             setCredInputValue('');
-                          }}>Add</button>
+                          }}>{t('btn.add')}</button>
                         </div>
                       </div>
                     )}
@@ -1414,49 +1413,49 @@ export function ProfilesPage(): ReactElement {
 
                 {wizardStep === 5 && (
                   <div>
-                    <h3 style={{ margin: '0 0 8px 0', fontSize: 20, fontWeight: 700 }}>Review Configuration</h3>
+                    <h3 style={{ margin: '0 0 8px 0', fontSize: 20, fontWeight: 700 }}>{t('wizard.review.title')}</h3>
                     <p style={{ color: 'var(--text-muted)', fontSize: 13, marginBottom: 24, lineHeight: 1.4 }}>
-                      Check your configuration profile options before deploying.
+                      {t('wizard.review.subtitle')}
                     </p>
 
                     <div style={{ background: 'rgba(0,0,0,0.15)', border: '1px solid var(--border)', borderRadius: 8, padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: 8 }}>
-                        <span style={{ fontWeight: 600 }}>Profile Name:</span>
+                        <span style={{ fontWeight: 600 }}>{t('wizard.review.profileName')}</span>
                         <span>{wizardData.name}</span>
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: 8 }}>
-                        <span style={{ fontWeight: 600 }}>Base Template:</span>
+                        <span style={{ fontWeight: 600 }}>{t('wizard.review.baseTemplate')}</span>
                         <span>{wizardData.baseTemplate}</span>
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: 8 }}>
-                        <span style={{ fontWeight: 600 }}>SSH Key:</span>
-                        <span style={{ fontFamily: 'monospace' }}>{wizardData.sshKeyId || 'system default'}</span>
+                        <span style={{ fontWeight: 600 }}>{t('wizard.review.sshKey')}</span>
+                        <span style={{ fontFamily: 'monospace' }}>{wizardData.sshKeyId || t('wizard.review.systemDefault')}</span>
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: 8 }}>
-                        <span style={{ fontWeight: 600 }}>Compose Stack:</span>
+                        <span style={{ fontWeight: 600 }}>{t('wizard.review.composeStack')}</span>
                         <span style={{ textTransform: 'uppercase', fontSize: 12, fontWeight: 700, color: (wizardData.composeVariant ?? 'stub') === 'full' ? 'var(--accent)' : 'var(--text-muted)' }}>
                           {wizardData.composeVariant ?? 'stub'}
                         </span>
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: 8 }}>
-                        <span style={{ fontWeight: 600 }}>Description:</span>
+                        <span style={{ fontWeight: 600 }}>{t('wizard.review.description')}</span>
                         <span style={{ color: wizardData.description ? 'var(--text)' : 'var(--text-muted)', fontStyle: wizardData.description ? 'normal' : 'italic', maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {wizardData.description || 'none'}
+                          {wizardData.description || t('wizard.review.none')}
                         </span>
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: 8 }}>
-                        <span style={{ fontWeight: 600 }}>Tags:</span>
+                        <span style={{ fontWeight: 600 }}>{t('wizard.review.tags')}</span>
                         <span style={{ color: (wizardData.tags ?? []).length > 0 ? 'var(--text)' : 'var(--text-muted)', fontStyle: (wizardData.tags ?? []).length > 0 ? 'normal' : 'italic' }}>
-                          {(wizardData.tags ?? []).length > 0 ? (wizardData.tags ?? []).join(', ') : 'none'}
+                          {(wizardData.tags ?? []).length > 0 ? (wizardData.tags ?? []).join(', ') : t('wizard.review.none')}
                         </span>
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: 8 }}>
-                        <span style={{ fontWeight: 600 }}>Environment Variables:</span>
-                        <span>{(wizardData.envVars || []).length} variable(s)</span>
+                        <span style={{ fontWeight: 600 }}>{t('wizard.review.envVars')}</span>
+                        <span>{t('wizard.review.variableCount', { count: (wizardData.envVars || []).length })}</span>
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ fontWeight: 600 }}>Linked Credentials:</span>
-                        <span>{(wizardData.credentialIds || []).length} secret(s)</span>
+                        <span style={{ fontWeight: 600 }}>{t('wizard.review.linkedCredentials')}</span>
+                        <span>{t('wizard.review.secretCount', { count: (wizardData.credentialIds || []).length })}</span>
                       </div>
                     </div>
                   </div>
@@ -1474,7 +1473,7 @@ export function ProfilesPage(): ReactElement {
                     setEditingProfileIdx(null)
                   }}
                 >
-                  Cancel
+                  {t('btn.cancel')}
                 </button>
                 <div style={{ display: 'flex', gap: 12 }}>
                   {wizardStep > 1 && (
@@ -1483,7 +1482,7 @@ export function ProfilesPage(): ReactElement {
                       style={{ ...btn, padding: '10px 20px' }}
                       onClick={() => setWizardStep(wizardStep - 1)}
                     >
-                      Back
+                      {t('btn.back')}
                     </button>
                   )}
                   {wizardStep < 5 ? (
@@ -1494,7 +1493,7 @@ export function ProfilesPage(): ReactElement {
                       disabled={!wizardData.name.trim()}
                       onClick={() => setWizardStep(wizardStep + 1)}
                     >
-                      Next
+                      {t('btn.next')}
                     </button>
                   ) : (
                     <button
@@ -1503,7 +1502,7 @@ export function ProfilesPage(): ReactElement {
                       style={{ padding: '10px 24px', margin: 0 }}
                       onClick={() => void saveWizardChanges()}
                     >
-                      {isCreatingProfile ? 'Deploy Environment' : 'Apply Changes'}
+                      {isCreatingProfile ? t('wizard.footer.deploy') : t('wizard.footer.apply')}
                     </button>
                   )}
                 </div>

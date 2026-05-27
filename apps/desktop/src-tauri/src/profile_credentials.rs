@@ -92,7 +92,6 @@ impl ProfileCredentialStore {
         self.write_store(&store)
     }
 
-    #[allow(dead_code)]
     pub fn load(&self, id: &str) -> Result<Option<String>, String> {
         let store = self.read_store()?;
         match store.get(id) {

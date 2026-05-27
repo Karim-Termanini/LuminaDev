@@ -1,5 +1,6 @@
 import type { ReactElement, ReactNode } from 'react'
 import { useCallback, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 import type { ContainerRow, HostMetricsResponse, HostPortRow, HostSecurityDrilldown, HostSecuritySnapshot, HostSysInfo, TopProcessRow } from '@linux-dev-home/shared'
 import { humanizeDashboardError } from './dashboardError'
@@ -53,10 +54,10 @@ function gitTotalConfigScore(cfg: Map<string, string>): number {
   )
 }
 
-function gitConfigScoreMessage(total: number): string {
-  if (total >= 80) return 'Your Git environment is well configured.'
-  if (total >= 50) return 'Some improvements recommended.'
-  return 'Several issues need attention.'
+function gitConfigScoreMessage(total: number, t: (key: string) => string): string {
+  if (total >= 80) return t('config.well_configured')
+  if (total >= 50) return t('config.some_improvements')
+  return t('config.needs_attention')
 }
 
 function gitScoreColor(total: number): string {
@@ -109,6 +110,7 @@ const MONITOR_TABS: Array<{ id: MonitorTabId; label: string; anchorId: string }>
 ]
 
 export function MonitorPage(): ReactElement {
+  const { t } = useTranslation('monitor')
   const [metrics, setMetrics] = useState<HostMetricsResponse | null>(null)
   const [ports, setPorts] = useState<HostPortRow[]>([])
   const [sysInfo, setSysInfo] = useState<HostSysInfo | null>(null)
@@ -225,11 +227,11 @@ export function MonitorPage(): ReactElement {
   const runningContainers = containers.filter((c) => c.state === 'running').length
   const dockerNetworks = dockerNetworkCount
   const alerts: string[] = []
-  if (m && m.cpuUsagePercent >= 85) alerts.push(`High CPU usage: ${m.cpuUsagePercent.toFixed(1)}%`)
-  if (memPct >= 90) alerts.push(`High RAM usage: ${memPct}%`)
-  if (swapPct >= 80 && (m?.swapTotalMb ?? 0) > 0) alerts.push(`High swap usage: ${swapPct}%`)
-  if ((security?.riskyOpenPorts?.length ?? 0) > 0) alerts.push(`Risky open ports: ${security?.riskyOpenPorts?.join(', ')}`)
-  if ((security?.failedAuth24h ?? 0) > 20) alerts.push(`Elevated failed SSH auth attempts (24h): ${security?.failedAuth24h}`)
+  if (m && m.cpuUsagePercent >= 85) alerts.push(t('alerts.high_cpu', { value: m.cpuUsagePercent.toFixed(1) }))
+  if (memPct >= 90) alerts.push(t('alerts.high_ram', { value: memPct }))
+  if (swapPct >= 80 && (m?.swapTotalMb ?? 0) > 0) alerts.push(t('alerts.high_swap', { value: swapPct }))
+  if ((security?.riskyOpenPorts?.length ?? 0) > 0) alerts.push(t('alerts.risky_ports', { ports: security?.riskyOpenPorts?.join(', ') }))
+  if ((security?.failedAuth24h ?? 0) > 20) alerts.push(t('alerts.failed_ssh', { count: security?.failedAuth24h }))
   const securityRiskCount =
     (security?.firewall === 'inactive' ? 1 : 0) +
     (security?.sshPermitRootLogin === 'yes' ? 1 : 0) +
@@ -238,18 +240,18 @@ export function MonitorPage(): ReactElement {
     ((security?.failedAuth24h ?? 0) > 20 ? 1 : 0)
   const copySystemReport = async () => {
     const report = [
-      `Distro: ${sysInfo?.distro ?? '—'}`,
-      `Hostname: ${sysInfo?.hostname ?? '—'}`,
-      `Kernel: ${sysInfo?.kernel ?? '—'}`,
-      `Architecture: ${sysInfo?.arch ?? '—'}`,
-      `Packages: ${sysInfo?.packages ?? '—'}`,
-      `Shell: ${sysInfo?.shell ?? '—'}`,
-      `Desktop: ${sysInfo?.de ?? '—'} / ${sysInfo?.wm ?? '—'}`,
-      `Graphics: ${sysInfo?.gpu ?? '—'}`,
-      `Display: ${sysInfo?.resolution ?? '—'}`,
-      `Memory: ${sysInfo?.memoryUsage ?? '—'}`,
-      `Swap: ${m ? `${(swapUsed / 1024).toFixed(1)} / ${(m.swapTotalMb / 1024).toFixed(1)} GB` : '—'}`,
-      `Uptime: ${m ? `${Math.floor(m.uptimeSec / 3600)}h ${Math.floor((m.uptimeSec % 3600) / 60)}m` : '—'}`,
+      t('report.distro', { value: sysInfo?.distro ?? '—' }),
+      t('report.hostname', { value: sysInfo?.hostname ?? '—' }),
+      t('report.kernel', { value: sysInfo?.kernel ?? '—' }),
+      t('report.architecture', { value: sysInfo?.arch ?? '—' }),
+      t('report.packages', { value: sysInfo?.packages ?? '—' }),
+      t('report.shell', { value: sysInfo?.shell ?? '—' }),
+      t('report.desktop', { desktop: sysInfo?.de ?? '—', wm: sysInfo?.wm ?? '—' }),
+      t('report.graphics', { value: sysInfo?.gpu ?? '—' }),
+      t('report.display', { value: sysInfo?.resolution ?? '—' }),
+      t('report.memory', { value: sysInfo?.memoryUsage ?? '—' }),
+      t('report.swap', { used: m ? (swapUsed / 1024).toFixed(1) : '—', total: m ? (m.swapTotalMb / 1024).toFixed(1) : '—' }),
+      t('report.uptime', { hours: m ? Math.floor(m.uptimeSec / 3600) : '—', minutes: m ? Math.floor((m.uptimeSec % 3600) / 60) : '—' }),
     ].join('\n')
     try {
       await navigator.clipboard.writeText(report)
@@ -273,8 +275,8 @@ export function MonitorPage(): ReactElement {
   return (
     <div className="monitor-page elevated-page">
       <header>
-        <h1 style={{ margin: 0, fontSize: 28, fontWeight: 700 }}>Engineering Dashboard</h1>
-        <p style={{ color: 'var(--text-muted)', marginTop: 8 }}>Real-time system health and development activity.</p>
+        <h1 style={{ margin: 0, fontSize: 28, fontWeight: 700 }}>{t('page.title')}</h1>
+        <p style={{ color: 'var(--text-muted)', marginTop: 8 }}>{t('page.subtitle')}</p>
       </header>
       {monitorError ? (
         <div
@@ -307,56 +309,56 @@ export function MonitorPage(): ReactElement {
               cursor: 'pointer',
             }}
           >
-            {tab.label}
+            {t('tabs.' + tab.id)}
           </button>
         ))}
       </div>
 
       {/* Primary Metrics Row */}
       <div id="monitor-overview" className="monitor-grid-metrics">
-        <MetricCard title="CPU LOAD" value={m ? `${m.cpuUsagePercent.toFixed(1)}%` : '—'} subValue={m?.cpuModel}>
+        <MetricCard title={t('metrics.cpu')} value={m ? `${m.cpuUsagePercent.toFixed(1)}%` : '—'} subValue={m?.cpuModel}>
           <LiveLineChart data={cpuHistory} color="var(--accent)" height={60} />
         </MetricCard>
 
-        <MetricCard title="MEMORY USAGE" value={m ? `${(memUsed / 1024).toFixed(1)} GB` : '—'} subValue={`RAM total ${((m?.totalMemMb ?? 0) / 1024).toFixed(1)} GB`}>
+        <MetricCard title={t('metrics.memory')} value={m ? `${(memUsed / 1024).toFixed(1)} GB` : '—'} subValue={t('metrics.ram_total', { size: ((m?.totalMemMb ?? 0) / 1024).toFixed(1) })}>
           <ProgressBar pct={memPct} color="#00e676" />
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontSize: 11, opacity: 0.6 }} className="mono">
-            <span>Used: {memUsed}MB</span>
-            <span>Free: {m?.freeMemMb}MB</span>
+            <span>{t('metrics.used', { value: memUsed })}</span>
+            <span>{t('metrics.free', { value: m?.freeMemMb })}</span>
           </div>
-          <div style={{ marginTop: 12, fontSize: 11, color: 'var(--text-muted)', fontWeight: 700 }}>SWAP</div>
+          <div style={{ marginTop: 12, fontSize: 11, color: 'var(--text-muted)', fontWeight: 700 }}>{t('metrics.swap')}</div>
           <ProgressBar pct={swapPct} color="#42a5f5" />
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontSize: 11, opacity: 0.6 }} className="mono">
-            <span>Used: {swapUsed}MB</span>
-            <span>Total: {m?.swapTotalMb ?? 0}MB</span>
+            <span>{t('metrics.used', { value: swapUsed })}</span>
+            <span>{t('metrics.swap_total', { value: m?.swapTotalMb ?? 0 })}</span>
           </div>
         </MetricCard>
 
-        <MetricCard title="STORAGE" value={m ? `${(m.diskTotalGb - m.diskFreeGb).toFixed(1)} GB` : '—'} subValue={`Root partition: ${m?.diskTotalGb} GB`}>
+        <MetricCard title={t('metrics.storage')} value={m ? `${(m.diskTotalGb - m.diskFreeGb).toFixed(1)} GB` : '—'} subValue={t('metrics.root_partition', { size: m?.diskTotalGb })}>
           <div style={{ display: 'flex', justifyContent: 'center', padding: '10px 0' }}>
             <UsageRing pct={diskPct} size={80} color="var(--orange)" />
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontSize: 11, color: 'var(--text-muted)' }}>
-            <span>Used {(m ? (m.diskTotalGb - m.diskFreeGb).toFixed(1) : '0')} GB</span>
-            <span>Free {m?.diskFreeGb ?? 0} GB</span>
+            <span>{t('metrics.storage_used', { size: m ? (m.diskTotalGb - m.diskFreeGb).toFixed(1) : '0' })}</span>
+            <span>{t('metrics.storage_free', { size: m?.diskFreeGb ?? 0 })}</span>
           </div>
         </MetricCard>
       </div>
 
       {/* Network Activity */}
       <div id="monitor-network" className="monitor-grid-wide">
-        <MetricCard title="NETWORK ACTIVITY" value={`${m?.netRxMbps.toFixed(2) ?? '0.00'} Mbps`} subValue="Downlink / Uplink traffic">
+        <MetricCard title={t('metrics.network')} value={`${m?.netRxMbps.toFixed(2) ?? '0.00'} Mbps`} subValue={t('metrics.network_sub')}>
           <div style={{ border: '1px solid var(--border)', borderRadius: 10, background: 'rgba(255,255,255,0.02)', padding: 10 }}>
             <NetworkChart data={netHistory} height={120} />
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 12 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <div style={{ width: 12, height: 12, borderRadius: 2, background: 'var(--accent)' }} />
-              <span style={{ fontSize: 12 }}>RX: {m?.netRxMbps.toFixed(2) ?? '0.00'} Mbps</span>
+              <span style={{ fontSize: 12 }}>{t('metrics.rx', { value: m?.netRxMbps.toFixed(2) ?? '0.00' })}</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <div style={{ width: 12, height: 12, borderRadius: 2, background: '#ff1744' }} />
-              <span style={{ fontSize: 12 }}>TX: {m?.netTxMbps.toFixed(2) ?? '0.00'} Mbps</span>
+              <span style={{ fontSize: 12 }}>{t('metrics.tx', { value: m?.netTxMbps.toFixed(2) ?? '0.00' })}</span>
             </div>
           </div>
         </MetricCard>
@@ -365,9 +367,9 @@ export function MonitorPage(): ReactElement {
       {/* Engineering Hub Row - 2 Columns */}
       <div id="monitor-docker" className="monitor-grid-dual">
         <MetricCard
-          title={portsView === 'listen' ? 'ACTIVE PORTS (LISTEN)' : 'ACTIVE PORTS (ALL)'}
+          title={portsView === 'listen' ? t('ports.title_listen') : t('ports.title_all')}
           value={`${visiblePortRows.length}`}
-          subValue={portsView === 'listen' ? 'Open listening sockets' : 'All discovered sockets'}
+          subValue={portsView === 'listen' ? t('ports.sub_listen') : t('ports.sub_all')}
           titleColor="#66bb6a"
           valueColor="#81c784"
         >
@@ -379,7 +381,7 @@ export function MonitorPage(): ReactElement {
                 onClick={() => setPortsView('listen')}
                 style={{ opacity: portsView === 'listen' ? 1 : 0.65 }}
               >
-                LISTEN only
+                {t('ports.btn_listen')}
               </button>
               <button
                 type="button"
@@ -387,26 +389,26 @@ export function MonitorPage(): ReactElement {
                 onClick={() => setPortsView('all')}
                 style={{ opacity: portsView === 'all' ? 1 : 0.65 }}
               >
-                Show all
+                {t('ports.btn_all')}
               </button>
             </div>
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 10 }}>
-              Listening sockets refresh automatically (about every 10 seconds).
+              {t('ports.auto_refresh')}
             </div>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
               <thead>
                 <tr style={{ textAlign: 'left', color: 'var(--text-muted)' }}>
-                  <th style={{ padding: '8px 4px' }}>PROTO</th>
-                  <th style={{ padding: '8px 4px' }}>PORT</th>
-                  <th style={{ padding: '8px 4px' }}>STATE</th>
-                  <th style={{ padding: '8px 4px' }}>PROCESS</th>
+                  <th style={{ padding: '8px 4px' }}>{t('ports.col_proto')}</th>
+                  <th style={{ padding: '8px 4px' }}>{t('ports.col_port')}</th>
+                  <th style={{ padding: '8px 4px' }}>{t('ports.col_state')}</th>
+                  <th style={{ padding: '8px 4px' }}>{t('ports.col_process')}</th>
                 </tr>
               </thead>
               <tbody>
                 {visiblePortRows.length === 0 ? (
                   <tr>
                     <td colSpan={4} style={{ padding: '12px 4px', color: 'var(--text-muted)' }}>
-                      No listening ports detected.
+                      {t('ports.empty')}
                     </td>
                   </tr>
                 ) : (
@@ -423,7 +425,7 @@ export function MonitorPage(): ReactElement {
                         {p.state}
                       </span>
                     </td>
-                    <td style={{ padding: '8px 4px' }} className="mono">{p.service || 'unknown'}</td>
+                    <td style={{ padding: '8px 4px' }} className="mono">{p.service || t('ports.unknown')}</td>
                   </tr>
                   )
                   })
@@ -433,16 +435,16 @@ export function MonitorPage(): ReactElement {
           </div>
         </MetricCard>
 
-        <MetricCard title="DOCKER CONTAINERS" value={`${runningContainers}`} subValue={`Running / Total ${containers.length}`}>
+        <MetricCard title={t('docker.title')} value={`${runningContainers}`} subValue={t('docker.running_total', { count: containers.length })}>
           <div style={{ maxHeight: 300, overflow: 'auto', marginTop: 10 }}>
             {containers.length > 0 ? (
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                 <thead>
                   <tr style={{ textAlign: 'left', color: 'var(--text-muted)' }}>
-                    <th style={{ padding: '8px 4px' }}>NAME</th>
-                    <th style={{ padding: '8px 4px' }}>IMAGE</th>
-                    <th style={{ padding: '8px 4px' }}>STATUS</th>
-                    <th style={{ padding: '8px 4px' }}>PORTS</th>
+                    <th style={{ padding: '8px 4px' }}>{t('docker.col_name')}</th>
+                    <th style={{ padding: '8px 4px' }}>{t('docker.col_image')}</th>
+                    <th style={{ padding: '8px 4px' }}>{t('docker.col_status')}</th>
+                    <th style={{ padding: '8px 4px' }}>{t('docker.col_ports')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -466,12 +468,12 @@ export function MonitorPage(): ReactElement {
                 </tbody>
               </table>
             ) : (
-              <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>No containers found.</div>
+              <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>{t('docker.empty')}</div>
             )}
           </div>
         </MetricCard>
 
-        <MetricCard title="NETWORK HOSTS / INTERFACES" titleColor="#64b5f6">
+        <MetricCard title={t('network.title')} titleColor="#64b5f6">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 10 }}>
             {sysInfo && (
               <>
@@ -483,37 +485,37 @@ export function MonitorPage(): ReactElement {
                     background: 'rgba(255,255,255,0.02)',
                   }}
                 >
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>PRIMARY ADAPTER</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>{t('network.primary_adapter')}</div>
                   <div style={{ fontSize: 20, fontWeight: 800, color: '#81d4fa' }}>{sysInfo.ip ?? '—'}</div>
                   <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
-                    Host: <span className="mono">{sysInfo.hostname}</span>
+                    {t('network.host', { hostname: sysInfo.hostname })}
                   </div>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                   <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10, background: 'rgba(79,195,247,0.08)' }}>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>RECEIVE</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('network.receive')}</div>
                     <div style={{ fontSize: 16, fontWeight: 700, color: '#4fc3f7' }}>{m?.netRxMbps.toFixed(2) ?? '0.00'} Mbps</div>
                   </div>
                   <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10, background: 'rgba(255,82,82,0.08)' }}>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>SEND</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('network.send')}</div>
                     <div style={{ fontSize: 16, fontWeight: 700, color: '#ff8a80' }}>{m?.netTxMbps.toFixed(2) ?? '0.00'} Mbps</div>
                   </div>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                   <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10, background: 'rgba(0,230,118,0.08)' }}>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>LISTENING PORTS</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('network.listening_ports')}</div>
                     <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--green)' }}>{listeningPorts}</div>
                   </div>
                   <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10, background: 'rgba(124,77,255,0.1)' }}>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>DOCKER NETWORKS</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('network.docker_networks')}</div>
                     <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--accent)' }}>{dockerNetworks}</div>
                   </div>
                 </div>
 
                 <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                  Active containers: <strong style={{ color: 'var(--text-main)' }}>{runningContainers}</strong>
+                  {t('network.active_containers', { count: runningContainers })}
                 </div>
               </>
             )}
@@ -521,10 +523,10 @@ export function MonitorPage(): ReactElement {
         </MetricCard>
       </div>
 
-      <MetricCard title="SECURITY OVERVIEW" subValue="Host hardening and exposure" titleColor="#ffb74d">
+      <MetricCard title={t('security.title')} subValue={t('security.subtitle')} titleColor="#ffb74d">
         <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 8 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px', background: 'rgba(255,255,255,0.03)' }}>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Current security posture</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('security.posture')}</div>
             <div style={{
               fontSize: 12,
               fontWeight: 800,
@@ -534,27 +536,27 @@ export function MonitorPage(): ReactElement {
               borderRadius: 999,
               padding: '4px 10px'
             }}>
-              {securityRiskCount === 0 ? 'Secure baseline' : `${securityRiskCount} risk${securityRiskCount > 1 ? 's' : ''}`}
+              {securityRiskCount === 0 ? t('security.secure') : t('security.risks', { count: securityRiskCount })}
             </div>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 8 }}>
-            <MiniStatus label="Firewall" value={security?.firewall ?? 'unknown'} ok={security?.firewall === 'active'} />
-            <MiniStatus label="SELinux" value={security?.selinux ?? 'unknown'} ok={(security?.selinux ?? '').toLowerCase() === 'enforcing'} />
-            <MiniStatus label="Failed auth (24h)" value={String(security?.failedAuth24h ?? 0)} ok={(security?.failedAuth24h ?? 0) < 20} />
+            <MiniStatus label={t('security.firewall')} value={security?.firewall ?? 'unknown'} ok={security?.firewall === 'active'} />
+            <MiniStatus label={t('security.selinux')} value={security?.selinux ?? 'unknown'} ok={(security?.selinux ?? '').toLowerCase() === 'enforcing'} />
+            <MiniStatus label={t('security.failed_auth')} value={String(security?.failedAuth24h ?? 0)} ok={(security?.failedAuth24h ?? 0) < 20} />
           </div>
 
           <div style={{ marginTop: 8, display: 'grid', gap: 8 }}>
-            <SettingsRow label="Firewall (ufw)" value={security?.firewall ?? 'unknown'} />
-            <SettingsRow label="SELinux" value={security?.selinux ?? 'unknown'} />
-            <SettingsRow label="SSH root login" value={security?.sshPermitRootLogin ?? 'unknown'} />
-            <SettingsRow label="SSH password auth" value={security?.sshPasswordAuth ?? 'unknown'} />
-            <SettingsRow label="Failed auth (24h)" value={String(security?.failedAuth24h ?? 0)} />
-            <SettingsRow label="Risky open ports" value={(security?.riskyOpenPorts?.length ?? 0) > 0 ? security!.riskyOpenPorts.join(', ') : 'none'} />
+            <SettingsRow label={t('security.firewall_ufw')} value={security?.firewall ?? 'unknown'} />
+            <SettingsRow label={t('security.selinux')} value={security?.selinux ?? 'unknown'} />
+            <SettingsRow label={t('security.ssh_root_login')} value={security?.sshPermitRootLogin ?? 'unknown'} />
+            <SettingsRow label={t('security.ssh_password_auth')} value={security?.sshPasswordAuth ?? 'unknown'} />
+            <SettingsRow label={t('security.failed_auth')} value={String(security?.failedAuth24h ?? 0)} />
+            <SettingsRow label={t('security.risky_ports')} value={(security?.riskyOpenPorts?.length ?? 0) > 0 ? security!.riskyOpenPorts.join(', ') : t('security.none')} />
             <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10, background: 'rgba(255,255,255,0.02)', maxHeight: 180, overflow: 'auto' }}>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>FAILED AUTH SAMPLES (24H)</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>{t('security.failed_auth_samples')}</div>
               {(securityDrilldown?.failedAuthSamples.length ?? 0) === 0 ? (
-                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>No failed auth lines found.</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('security.no_failed_auth')}</div>
               ) : (
                 <div style={{ display: 'grid', gap: 4 }}>
                   {securityDrilldown?.failedAuthSamples.map((line, i) => (
@@ -564,14 +566,16 @@ export function MonitorPage(): ReactElement {
               )}
             </div>
             <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10, background: 'rgba(255,255,255,0.02)', maxHeight: 160, overflow: 'auto' }}>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>RISKY PORT OWNERS</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>{t('security.risky_port_owners')}</div>
               {(securityDrilldown?.riskyPortOwners.length ?? 0) === 0 ? (
-                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>No risky port ownership detected.</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('security.no_risky_port_owners')}</div>
               ) : (
                 <div style={{ display: 'grid', gap: 4 }}>
                   {securityDrilldown?.riskyPortOwners.map((p, i) => (
                     <div key={i} style={{ fontSize: 12 }}>
-                      Port <strong>{p.port}</strong> {'->'} {p.process}{p.pid ? ` (pid ${p.pid})` : ''}
+                      {p.pid
+                        ? t('security.port_process_pid', { port: p.port, process: p.process, pid: p.pid })
+                        : t('security.port_process', { port: p.port, process: p.process })}
                     </div>
                   ))}
                 </div>
@@ -583,15 +587,15 @@ export function MonitorPage(): ReactElement {
 
       {/* System + Activity */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: 20, alignItems: 'stretch' }}>
-        <MetricCard title="SYSTEM INFORMATION" minHeight={560} titleColor="#80deea">
+        <MetricCard title={t('sysinfo.title')} minHeight={560} titleColor="#80deea">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 10 }}>
             <div style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 12, background: 'rgba(255,255,255,0.02)' }}>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700, letterSpacing: '0.06em' }}>ABOUT THIS PC</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700, letterSpacing: '0.06em' }}>{t('sysinfo.about')}</div>
               <div style={{ marginTop: 8, fontSize: 16, fontWeight: 800, lineHeight: 1.25 }}>
                 {sysInfo?.distro ?? '—'}
               </div>
               <div style={{ marginTop: 6, fontSize: 12, color: 'var(--text-muted)' }}>
-                Hostname: <span className="mono" style={{ color: 'var(--text-main)' }}>{sysInfo?.hostname ?? '—'}</span>
+                {t('sysinfo.hostname', { hostname: sysInfo?.hostname ?? '—' })}
               </div>
               <div style={{ marginTop: 10 }}>
                 <button
@@ -607,41 +611,41 @@ export function MonitorPage(): ReactElement {
                     cursor: 'pointer'
                   }}
                 >
-                  {copiedReport ? 'Copied' : 'Copy system report'}
+                  {copiedReport ? t('sysinfo.copied') : t('sysinfo.copy')}
                 </button>
               </div>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 8 }}>
-              <SettingsRow label="Kernel" value={sysInfo?.kernel} />
-              <SettingsRow label="Architecture" value={sysInfo?.arch} />
-              <SettingsRow label="Packages" value={sysInfo?.packages} />
-              <SettingsRow label="Default shell" value={sysInfo?.shell} />
-              <SettingsRow label="Desktop environment" value={sysInfo?.de} />
-              <SettingsRow label="Session" value={sysInfo?.wm} />
+              <SettingsRow label={t('sysinfo.kernel')} value={sysInfo?.kernel} />
+              <SettingsRow label={t('sysinfo.architecture')} value={sysInfo?.arch} />
+              <SettingsRow label={t('sysinfo.packages')} value={sysInfo?.packages} />
+              <SettingsRow label={t('sysinfo.shell')} value={sysInfo?.shell} />
+              <SettingsRow label={t('sysinfo.desktop')} value={sysInfo?.de} />
+              <SettingsRow label={t('sysinfo.session')} value={sysInfo?.wm} />
             </div>
 
             <div style={{ borderTop: '1px solid var(--border)', paddingTop: 10, marginTop: 2 }}>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700, letterSpacing: '0.06em' }}>DEVICE SPECIFICATIONS</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700, letterSpacing: '0.06em' }}>{t('sysinfo.specs')}</div>
               <div style={{ marginTop: 8, display: 'grid', gridTemplateColumns: '1fr', gap: 8 }}>
-                <SettingsRow label="Graphics" value={sysInfo?.gpu} />
-                <SettingsRow label="Display resolution" value={sysInfo?.resolution} />
-                <SettingsRow label="Installed RAM" value={sysInfo?.memoryUsage} />
-                <SettingsRow label="Uptime" value={m ? `${Math.floor(m.uptimeSec / 3600)}h ${Math.floor((m.uptimeSec % 3600) / 60)}m` : '—'} />
+                <SettingsRow label={t('sysinfo.graphics')} value={sysInfo?.gpu} />
+                <SettingsRow label={t('sysinfo.display')} value={sysInfo?.resolution} />
+                <SettingsRow label={t('sysinfo.ram')} value={sysInfo?.memoryUsage} />
+                <SettingsRow label={t('sysinfo.uptime')} value={m ? `${Math.floor(m.uptimeSec / 3600)}h ${Math.floor((m.uptimeSec % 3600) / 60)}m` : '—'} />
               </div>
             </div>
           </div>
         </MetricCard>
 
         <MetricCard
-          title="Configuration Score"
+          title={t('config.title')}
           value={gitTotal !== null ? String(gitTotal) : '—'}
           subValue={
             gitCfgError && !gitCfg
               ? gitCfgError
               : gitTotal !== null
-                ? gitConfigScoreMessage(gitTotal)
-                : 'Loading…'
+                ? gitConfigScoreMessage(gitTotal, t)
+                : t('config.loading')
           }
           minHeight={560}
           titleColor="#a5d6a7"
@@ -649,15 +653,15 @@ export function MonitorPage(): ReactElement {
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 10 }}>
             <div className="hp-muted" style={{ fontSize: 12, lineHeight: 1.45, padding: '2px 2px 0' }}>
-              Based on your global Git config. Refreshes with the slow monitor poll (about every 10 seconds).
+              {t('config.based_on')}
             </div>
             {gitCfg ? (
               <>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, alignItems: 'stretch' }}>
-                  <MonitorGitScoreTile title="Identity" score={gitIdentityScore(gitCfg)} subtitle="Name, email, branch" />
-                  <MonitorGitScoreTile title="Security" score={gitSecurityScore(gitCfg)} subtitle="Credentials, signing, SSL" />
-                  <MonitorGitScoreTile title="Performance" score={gitPerformanceScore(gitCfg)} subtitle="Cache, index preload" />
-                  <MonitorGitScoreTile title="Compatibility" score={gitCompatibilityScore(gitCfg)} subtitle="Line endings, prune" />
+                  <MonitorGitScoreTile title={t('config.identity')} score={gitIdentityScore(gitCfg)} subtitle={t('config.identity_sub')} />
+                  <MonitorGitScoreTile title={t('config.security')} score={gitSecurityScore(gitCfg)} subtitle={t('config.security_sub')} />
+                  <MonitorGitScoreTile title={t('config.performance')} score={gitPerformanceScore(gitCfg)} subtitle={t('config.performance_sub')} />
+                  <MonitorGitScoreTile title={t('config.compatibility')} score={gitCompatibilityScore(gitCfg)} subtitle={t('config.compatibility_sub')} />
                 </div>
                 <Link
                   to="/git?tab=config"
@@ -669,7 +673,7 @@ export function MonitorPage(): ReactElement {
                     alignSelf: 'flex-start',
                   }}
                 >
-                  Open Git Config
+                  {t('config.open')}
                 </Link>
               </>
             ) : null}
@@ -680,23 +684,23 @@ export function MonitorPage(): ReactElement {
       {/* Disk / Processes with Alerts under Disk */}
       <div id="monitor-disk" className="monitor-grid-dual" style={{ alignItems: 'start' }}>
         <div style={{ display: 'grid', gap: 20 }}>
-          <MetricCard title="DISK I/O LIVE" value={`${m?.diskReadMbps.toFixed(2) ?? '0.00'} Mbps`} subValue="Read / Write throughput" titleColor="#80cbc4" valueColor="#80cbc4">
+          <MetricCard title={t('disk.title')} value={`${m?.diskReadMbps.toFixed(2) ?? '0.00'} Mbps`} subValue={t('disk.subtitle')} titleColor="#80cbc4" valueColor="#80cbc4">
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10, background: 'rgba(129,199,132,0.08)' }}>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>READ</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('disk.read')}</div>
                 <div style={{ fontSize: 16, fontWeight: 700, color: '#81c784' }}>{m?.diskReadMbps.toFixed(2) ?? '0.00'} Mbps</div>
               </div>
               <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10, background: 'rgba(255,167,38,0.1)' }}>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>WRITE</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('disk.write')}</div>
                 <div style={{ fontSize: 16, fontWeight: 700, color: '#ffb74d' }}>{m?.diskWriteMbps.toFixed(2) ?? '0.00'} Mbps</div>
               </div>
             </div>
           </MetricCard>
 
-          <MetricCard title="ALERTS THRESHOLDS" value={`${alerts.length}`} subValue="Triggered now" contentMarginTop={22}>
+          <MetricCard title={t('alerts.title')} value={`${alerts.length}`} subValue={t('alerts.subtitle')} contentMarginTop={22}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {alerts.length === 0 ? (
-                <div style={{ color: 'var(--green)', fontWeight: 700 }}>No active alerts.</div>
+                <div style={{ color: 'var(--green)', fontWeight: 700 }}>{t('alerts.none')}</div>
               ) : alerts.map((a, i) => (
                 <div key={i} style={{ border: '1px solid rgba(255,82,82,0.25)', background: 'rgba(255,82,82,0.08)', borderRadius: 8, padding: '8px 10px', color: '#ffb3b3' }}>
                   {a}
@@ -707,15 +711,15 @@ export function MonitorPage(): ReactElement {
         </div>
 
         <div id="monitor-processes">
-          <MetricCard title="TOP PROCESSES" subValue="Highest CPU consumers" minHeight={378} titleColor="#ffd54f">
+          <MetricCard title={t('processes.title')} subValue={t('processes.subtitle')} minHeight={378} titleColor="#ffd54f">
           <div style={{ maxHeight: 322, overflow: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
               <thead>
                 <tr style={{ textAlign: 'left', color: 'var(--text-muted)' }}>
-                  <th style={{ padding: '8px 4px' }}>PID</th>
-                  <th style={{ padding: '8px 4px' }}>COMMAND</th>
-                  <th style={{ padding: '8px 4px' }}>CPU%</th>
-                  <th style={{ padding: '8px 4px' }}>MEM%</th>
+                  <th style={{ padding: '8px 4px' }}>{t('processes.pid')}</th>
+                  <th style={{ padding: '8px 4px' }}>{t('processes.command')}</th>
+                  <th style={{ padding: '8px 4px' }}>{t('processes.cpu')}</th>
+                  <th style={{ padding: '8px 4px' }}>{t('processes.mem')}</th>
                 </tr>
               </thead>
               <tbody>

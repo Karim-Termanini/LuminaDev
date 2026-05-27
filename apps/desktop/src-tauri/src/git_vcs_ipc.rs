@@ -3,7 +3,7 @@
 use serde_json::{json, Value};
 use uuid::Uuid;
 
-use crate::host_exec::{exec_output_limit, exec_result_limit, CMD_TIMEOUT_LONG, CMD_TIMEOUT_SHORT};
+use crate::host_exec::{exec_output_limit, exec_result_limit, cmd_timeout_long, cmd_timeout_short};
 
 fn missing_repo() -> Value {
     json!({ "ok": false, "error": "[GIT_VCS_NOT_A_REPO] Missing repoPath." })
@@ -46,7 +46,7 @@ async fn merge(repo_path: &str, body: &Value) -> Value {
         argv.push("--ff-only");
     }
     argv.push(branch.trim());
-    match exec_output_limit("git", &argv, CMD_TIMEOUT_LONG).await {
+    match exec_output_limit("git", &argv, cmd_timeout_long()).await {
         Ok(output) => json!({ "ok": true, "output": output }),
         Err(e) => {
             let msg = e.trim();
@@ -76,7 +76,7 @@ async fn rebase(repo_path: &str, body: &Value) -> Value {
         return json!({ "ok": false, "error": "[GIT_VCS_NOT_A_REPO] Missing onto ref for rebase." });
     }
     let args = ["-C", repo_path, "rebase", onto.trim()];
-    match exec_output_limit("git", &args, CMD_TIMEOUT_LONG).await {
+    match exec_output_limit("git", &args, cmd_timeout_long()).await {
         Ok(output) => json!({ "ok": true, "output": output }),
         Err(e) => {
             let msg = e.trim();
@@ -97,7 +97,7 @@ fn rebase_error_code(msg: &str) -> &'static str {
 
 async fn stash_pop(repo_path: &str) -> Value {
     let args = ["-C", repo_path, "stash", "pop"];
-    match exec_output_limit("git", &args, CMD_TIMEOUT_LONG).await {
+    match exec_output_limit("git", &args, cmd_timeout_long()).await {
         Ok(output) => json!({ "ok": true, "output": output }),
         Err(e) => {
             let msg = e.trim();
@@ -115,7 +115,7 @@ async fn stash_pop(repo_path: &str) -> Value {
 
 async fn merge_abort(repo_path: &str) -> Value {
     let args = ["-C", repo_path, "merge", "--abort"];
-    match exec_output_limit("git", &args, CMD_TIMEOUT_SHORT).await {
+    match exec_output_limit("git", &args, cmd_timeout_short()).await {
         Ok(output) => json!({ "ok": true, "output": output }),
         Err(e) => {
             let msg = e.trim();
@@ -126,7 +126,7 @@ async fn merge_abort(repo_path: &str) -> Value {
 
 async fn rebase_abort(repo_path: &str) -> Value {
     let args = ["-C", repo_path, "rebase", "--abort"];
-    match exec_output_limit("git", &args, CMD_TIMEOUT_SHORT).await {
+    match exec_output_limit("git", &args, cmd_timeout_short()).await {
         Ok(output) => json!({ "ok": true, "output": output }),
         Err(e) => {
             let msg = e.trim();
@@ -137,7 +137,7 @@ async fn rebase_abort(repo_path: &str) -> Value {
 
 async fn merge_continue(repo_path: &str) -> Value {
     let args = ["-C", repo_path, "merge", "--continue"];
-    match exec_result_limit("git", &args, CMD_TIMEOUT_LONG).await {
+    match exec_result_limit("git", &args, cmd_timeout_long()).await {
         Ok((stdout, stderr)) => {
             let out = format!("{}\n{}", stdout.trim(), stderr.trim()).trim().to_string();
             json!({ "ok": true, "output": out })
@@ -161,7 +161,7 @@ fn merge_continue_error_code(msg: &str) -> &'static str {
 
 async fn rebase_continue(repo_path: &str) -> Value {
     let args = ["-C", repo_path, "rebase", "--continue"];
-    match exec_result_limit("git", &args, CMD_TIMEOUT_LONG).await {
+    match exec_result_limit("git", &args, cmd_timeout_long()).await {
         Ok((stdout, stderr)) => {
             let out = format!("{}\n{}", stdout.trim(), stderr.trim()).trim().to_string();
             json!({ "ok": true, "output": out })
@@ -185,7 +185,7 @@ fn rebase_continue_error_code(msg: &str) -> &'static str {
 
 async fn rebase_skip(repo_path: &str) -> Value {
     let args = ["-C", repo_path, "rebase", "--skip"];
-    match exec_output_limit("git", &args, CMD_TIMEOUT_LONG).await {
+    match exec_output_limit("git", &args, cmd_timeout_long()).await {
         Ok(output) => json!({ "ok": true, "output": output }),
         Err(e) => {
             let msg = e.trim();
@@ -201,7 +201,7 @@ async fn rename_branch(repo_path: &str, body: &Value) -> Value {
         return json!({ "ok": false, "error": "[GIT_VCS_RENAME_BRANCH] oldName and newName are required." });
     }
     let args = ["-C", repo_path, "branch", "-m", &old_name, &new_name];
-    match exec_output_limit("git", &args, CMD_TIMEOUT_SHORT).await {
+    match exec_output_limit("git", &args, cmd_timeout_short()).await {
         Ok(_) => json!({ "ok": true }),
         Err(e) => {
             let msg = e.trim();
@@ -225,11 +225,11 @@ async fn conflict_diff(repo_path: &str, body: &Value) -> Value {
     let base_ref = format!(":1:{}", file_path);
     let ours_ref = format!(":2:{}", file_path);
     let theirs_ref = format!(":3:{}", file_path);
-    let base = exec_output_limit("git", &["-C", repo_path, "show", &base_ref], CMD_TIMEOUT_SHORT)
+    let base = exec_output_limit("git", &["-C", repo_path, "show", &base_ref], cmd_timeout_short())
         .await.unwrap_or_default();
-    let ours = exec_output_limit("git", &["-C", repo_path, "show", &ours_ref], CMD_TIMEOUT_SHORT)
+    let ours = exec_output_limit("git", &["-C", repo_path, "show", &ours_ref], cmd_timeout_short())
         .await.unwrap_or_default();
-    let theirs = exec_output_limit("git", &["-C", repo_path, "show", &theirs_ref], CMD_TIMEOUT_SHORT)
+    let theirs = exec_output_limit("git", &["-C", repo_path, "show", &theirs_ref], cmd_timeout_short())
         .await.unwrap_or_default();
     json!({ "ok": true, "base": base, "ours": ours, "theirs": theirs })
 }
@@ -242,10 +242,10 @@ async fn resolve_conflict(repo_path: &str, body: &Value) -> Value {
         return json!({ "ok": false, "error": "[GIT_VCS_RESOLVE_CONFLICT] filePath is required." });
     }
     let checkout_side = if resolution == "theirs" { "--theirs" } else { "--ours" };
-    if let Err(e) = exec_output_limit("git", &["-C", repo_path, "checkout", checkout_side, "--", &file_path], CMD_TIMEOUT_SHORT).await {
+    if let Err(e) = exec_output_limit("git", &["-C", repo_path, "checkout", checkout_side, "--", &file_path], cmd_timeout_short()).await {
         return json!({ "ok": false, "error": format!("[GIT_VCS_RESOLVE_CONFLICT] {}", e.trim()) });
     }
-    match exec_output_limit("git", &["-C", repo_path, "add", "--", &file_path], CMD_TIMEOUT_SHORT).await {
+    match exec_output_limit("git", &["-C", repo_path, "add", "--", &file_path], cmd_timeout_short()).await {
         Ok(_) => json!({ "ok": true }),
         Err(e) => json!({ "ok": false, "error": format!("[GIT_VCS_RESOLVE_CONFLICT] {}", e.trim()) }),
     }
@@ -259,9 +259,9 @@ async fn conflict_hunks(repo_path: &str, body: &Value) -> Value {
     }
 
     // Get the three versions for context
-    let base = exec_output_limit("git", &["-C", repo_path, "show", &format!(":1:{}", file_path)], CMD_TIMEOUT_SHORT).await.unwrap_or_default();
-    let ours_all = exec_output_limit("git", &["-C", repo_path, "show", &format!(":2:{}", file_path)], CMD_TIMEOUT_SHORT).await.unwrap_or_default();
-    let theirs_all = exec_output_limit("git", &["-C", repo_path, "show", &format!(":3:{}", file_path)], CMD_TIMEOUT_SHORT).await.unwrap_or_default();
+    let base = exec_output_limit("git", &["-C", repo_path, "show", &format!(":1:{}", file_path)], cmd_timeout_short()).await.unwrap_or_default();
+    let ours_all = exec_output_limit("git", &["-C", repo_path, "show", &format!(":2:{}", file_path)], cmd_timeout_short()).await.unwrap_or_default();
+    let theirs_all = exec_output_limit("git", &["-C", repo_path, "show", &format!(":3:{}", file_path)], cmd_timeout_short()).await.unwrap_or_default();
 
     // Read the current file content (with markers)
     let content = match tokio::fs::read_to_string(std::path::Path::new(repo_path).join(&file_path)).await {
@@ -386,7 +386,7 @@ async fn resolve_hunk(repo_path: &str, body: &Value) -> Value {
     // Check if any markers are left. If not, stage the file.
     let recheck = tokio::fs::read_to_string(&full_path).await.unwrap_or_default();
     if !recheck.contains("<<<<<<<") && !recheck.contains(">>>>>>>") {
-        let _ = exec_output_limit("git", &["-C", repo_path, "add", "--", &file_path], CMD_TIMEOUT_SHORT).await;
+        let _ = exec_output_limit("git", &["-C", repo_path, "add", "--", &file_path], cmd_timeout_short()).await;
     }
 
     json!({ "ok": true })

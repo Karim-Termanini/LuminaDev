@@ -1,50 +1,103 @@
-import type { ReactElement } from 'react'
-import { useEffect, useState } from 'react'
-import type { BetaFeaturesState } from '@linux-dev-home/shared'
+import React, { useEffect, useState } from 'react';
+import { assertSettingsOk } from '../settingsContract';
+import { useTranslation } from 'react-i18next';
 
-const FLAGS: ReadonlyArray<{ key: string; label: string; description: string }> = [
-  { key: 'enable_experimental_terminal_multiplexer', label: 'Terminal multiplexer', description: 'Experimental xterm.js multi-pane terminal (unstable).' },
-  { key: 'enable_ai_commit_suggestions', label: 'AI commit suggestions', description: 'Suggest commit messages using AI (requires API key in environment).' },
-  { key: 'enable_profile_auto_switch', label: 'Profile auto-switch', description: 'Auto-switch active profile when changing project directory.' },
-]
+const Flags = [
+  {
+    key: 'enable_experimental_terminal_multiplexer',
+    labelKey: 'beta.labelExperimentalTerminalMultiplexer',
+    descKey: 'beta.descExperimentalTerminalMultiplexer',
+  },
+  {
+    key: 'enable_ai_commit_suggestions',
+    labelKey: 'beta.labelAiCommitSuggestions',
+    descKey: 'beta.descAiCommitSuggestions',
+  },
+  {
+    key: 'enable_profile_auto_switch',
+    labelKey: 'beta.labelAutoSwitchProfile',
+    descKey: 'beta.descAutoSwitchProfile',
+  },
+];
 
-export function SettingsBetaFeatures(): ReactElement {
-  const [state, setState] = useState<BetaFeaturesState>({})
+export const SettingsBetaFeatures: React.FC = () => {
+  const { t } = useTranslation('settings')
+  const [flags, setFlags] = useState<Record<string, boolean>>({});
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
-    void window.dh.storeGet({ key: 'beta_features_state' }).then((res) => {
-      if (res.ok && res.data && typeof res.data === 'object') {
-        setState(res.data as BetaFeaturesState)
+    const loadFlags = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const res = await window.dh.storeGet({ key: 'beta_features_state' });
+        assertSettingsOk(res);
+        setFlags((res.data as Record<string, boolean>) ?? {});
+      } catch (e) {
+        setError(e instanceof Error ? e.message : t('beta.loadFailed'));
+      } finally {
+        setLoading(false);
       }
-    })
-  }, [])
+    };
 
-  async function toggle(key: string, enabled: boolean): Promise<void> {
-    const next = { ...state, [key]: enabled }
-    setState(next)
-    await window.dh.storeSet({ key: 'beta_features_state', data: next })
+    loadFlags();
+  }, [t]);
+
+  const handleToggle = async (key: string) => {
+    try {
+      setSaving((prev) => ({ ...prev, [key]: true }));
+      const res = await window.dh.storeSet({
+        key: 'beta_features_state',
+        data: { ...flags, [key]: !flags[key] },
+      });
+      assertSettingsOk(res);
+      setFlags((prev) => ({ ...prev, [key]: !prev[key] }));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t('beta.saveFailed'));
+    } finally {
+      setSaving((prev) => ({ ...prev, [key]: false }));
+    }
+  };
+
+  if (loading) {
+    return <div className="hp-settings-loading">{t('beta.loading')}</div>;
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-      <p className="hp-muted" style={{ margin: '0 0 16px', fontSize: 13 }}>
-        Experimental flags. May be unstable or incomplete. Saved immediately on toggle.
-      </p>
-      {FLAGS.map((flag, i) => (
-        <div key={flag.key} style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '16px 0',
-          borderTop: i === 0 ? '1px solid var(--border)' : 'none', borderBottom: '1px solid var(--border)' }}>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 600, fontSize: 14 }}>{flag.label}</div>
-            <p className="hp-muted" style={{ margin: '4px 0 0', fontSize: 12 }}>{flag.description}</p>
-          </div>
-          <button type="button" role="switch" aria-checked={!!state[flag.key]}
-            onClick={() => { void toggle(flag.key, !state[flag.key]) }}
-            style={{ flexShrink: 0, width: 44, height: 24, borderRadius: 12, border: 'none', cursor: 'pointer', position: 'relative', transition: 'background 0.2s',
-              background: state[flag.key] ? 'var(--accent)' : 'var(--border)' }}>
-            <span style={{ position: 'absolute', top: 3, left: state[flag.key] ? 22 : 2, width: 18, height: 18, borderRadius: '50%', background: '#fff', transition: 'left 0.2s' }} />
-          </button>
+    <div className="hp-settings-page">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: 'rgba(234, 88, 12, 0.08)', border: '1px solid rgba(234, 88, 12, 0.25)', borderRadius: 6, fontSize: 12, color: 'var(--orange, #ea580c)', marginBottom: 16 }}>
+        <span className="codicon codicon-warning" />
+        {t('beta.warning')}
+      </div>
+      {error && (
+        <div className="hp-status-alert error" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', background: 'rgba(248, 81, 73, 0.1)', border: '1px solid var(--red)', borderRadius: 6, fontSize: 13, color: 'var(--red)', marginBottom: 16 }}>
+          <span className="codicon codicon-error" />
+          <span>{error}</span>
         </div>
-      ))}
+      )}
+      <form className="hp-settings-form">
+        {Flags.map(({ key, labelKey, descKey }) => (
+          <div key={key} className="hp-settings-row">
+            <div className="hp-settings-row-label">
+              <label>{t(labelKey)}</label>
+              {descKey && t(descKey) && (
+                <span className="hp-settings-row-description">{t(descKey)}</span>
+              )}
+            </div>
+            <div className="hp-settings-row-control">
+              <input
+                type="checkbox"
+                checked={flags[key] ?? false}
+                onChange={() => handleToggle(key)}
+                disabled={saving[key]}
+                className="hp-toggle"
+              />
+            </div>
+          </div>
+        ))}
+      </form>
     </div>
-  )
-}
+  );
+};

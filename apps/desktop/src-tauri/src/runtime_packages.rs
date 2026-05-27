@@ -1,4 +1,4 @@
-use crate::host_exec::{CMD_TIMEOUT_SHORT, exec_result_limit};
+use crate::host_exec::{cmd_timeout_short, exec_output_limit, exec_result_limit};
 
 pub(crate) fn runtime_pkg_mgr(distro: &str) -> &'static str {
   match distro {
@@ -118,7 +118,7 @@ pub(crate) fn runtime_java_system_packages_for_version(
 
 pub(crate) async fn runtime_dnf_package_available(pkg: &str) -> bool {
   let cmd = format!("dnf -q list --available '{}' >/dev/null 2>&1", pkg);
-  exec_result_limit("bash", &["-lc", &cmd], CMD_TIMEOUT_SHORT)
+  exec_result_limit("bash", &["-lc", &cmd], cmd_timeout_short())
     .await
     .is_ok()
 }
@@ -131,7 +131,7 @@ pub(crate) async fn runtime_system_package_available(pkg_mgr: &str, pkg: &str) -
     "zypper" => format!("zypper -n info '{}' >/dev/null 2>&1", pkg),
     _ => return false,
   };
-  exec_result_limit("bash", &["-lc", &cmd], CMD_TIMEOUT_SHORT)
+  exec_result_limit("bash", &["-lc", &cmd], cmd_timeout_short())
     .await
     .is_ok()
 }
@@ -143,7 +143,7 @@ pub(crate) async fn runtime_system_package_installed(pkg_mgr: &str, pkg: &str) -
     "pacman" => format!("pacman -Qi '{}' >/dev/null 2>&1", pkg),
     _ => return false,
   };
-  exec_result_limit("bash", &["-lc", &cmd], CMD_TIMEOUT_SHORT)
+  exec_result_limit("bash", &["-lc", &cmd], cmd_timeout_short())
     .await
     .is_ok()
 }
@@ -170,5 +170,86 @@ pub(crate) fn pkg_remove_cmd(pkg_mgr: &str, packages: &[&str]) -> String {
     "pacman" => format!("pacman -R --noconfirm {}", pkgs),
     "zypper" => format!("zypper remove -y {}", pkgs),
     _ => format!("apt-get remove -y {}", pkgs),
+  }
+}
+
+/// Dry-run package removal and return dependency packages that would also be removed.
+/// Returns an empty vec when the package manager is unavailable or unsupported.
+pub(crate) async fn runtime_preview_removable_deps(pkg_mgr: &str, pkgs: &[&str]) -> Vec<String> {
+  if pkgs.is_empty() {
+    return vec![];
+  }
+  let pkg_set: std::collections::HashSet<&str> = pkgs.iter().copied().collect();
+  match pkg_mgr {
+    "apt" => {
+      let mut args = vec!["-s", "remove", "--auto-remove"];
+      args.extend_from_slice(pkgs);
+      let out = exec_output_limit("apt-get", &args, cmd_timeout_short()).await.unwrap_or_default();
+      out.lines()
+        .filter(|l| l.starts_with("Remv "))
+        .filter_map(|l| l.split_whitespace().nth(1))
+        .filter(|p| !pkg_set.contains(*p))
+        .map(|p| p.to_string())
+        .collect()
+    }
+    "dnf" | "yum" => {
+      let mut args = vec!["remove", "--assumeno"];
+      args.extend_from_slice(pkgs);
+      let out = exec_output_limit(pkg_mgr, &args, cmd_timeout_short()).await.unwrap_or_default();
+      // dnf lists packages being removed under a "Removing:" header, one per line with leading space
+      let mut in_removing = false;
+      let mut deps = vec![];
+      for line in out.lines() {
+        if line.trim_start().starts_with("Removing:") || line.trim_start().starts_with("Removing dependent packages:") {
+          in_removing = true;
+          continue;
+        }
+        if in_removing {
+          if line.starts_with(' ') || line.starts_with('\t') {
+            let pkg = line.split_whitespace().next().unwrap_or("").to_string();
+            if !pkg.is_empty() && !pkg_set.contains(pkg.as_str()) {
+              deps.push(pkg);
+            }
+          } else {
+            in_removing = false;
+          }
+        }
+      }
+      deps
+    }
+    "pacman" => {
+      let mut args = vec!["-Rns", "--print-format", "%n\n"];
+      args.extend_from_slice(pkgs);
+      let out = exec_output_limit("pacman", &args, cmd_timeout_short()).await.unwrap_or_default();
+      out.lines()
+        .map(|l| l.trim().to_string())
+        .filter(|p| !p.is_empty() && !pkg_set.contains(p.as_str()))
+        .collect()
+    }
+    "zypper" => {
+      let mut args = vec!["--non-interactive", "remove", "--clean-deps", "--dry-run"];
+      args.extend_from_slice(pkgs);
+      let out = exec_output_limit("zypper", &args, cmd_timeout_short()).await.unwrap_or_default();
+      // zypper dry-run lists "Removing: <pkg>" lines
+      out.lines()
+        .filter(|l| l.trim_start().starts_with("Removing ") || l.starts_with("D "))
+        .filter_map(|l| {
+          let p = l.trim_start_matches("D ").trim_start_matches("Removing ").split_whitespace().next()?.to_string();
+          if !pkg_set.contains(p.as_str()) { Some(p) } else { None }
+        })
+        .collect()
+    }
+    _ => vec![],
+  }
+}
+
+pub(crate) fn pkg_remove_with_deps_cmd(pkg_mgr: &str, packages: &[&str]) -> String {
+  let pkgs = packages.join(" ");
+  match pkg_mgr {
+    "apt" => format!("apt-get remove -y {} && apt-get autoremove -y", pkgs),
+    "dnf" => format!("dnf remove -y {}", pkgs),
+    "pacman" => format!("pacman -Rns --noconfirm {}", pkgs),
+    "zypper" => format!("zypper remove -y --clean-deps {}", pkgs),
+    _ => format!("apt-get remove -y {} && apt-get autoremove -y", pkgs),
   }
 }
