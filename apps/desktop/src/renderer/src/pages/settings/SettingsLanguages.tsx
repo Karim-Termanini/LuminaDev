@@ -1,18 +1,16 @@
 import type { ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useI18nBridge } from '../../i18n/I18nContext'
-import { useBetaFlags } from '../../hooks/useBetaFlags'
 
 export function SettingsLanguages(): ReactElement {
   const { t, i18n } = useTranslation('settings')
   const { setLocale } = useI18nBridge()
-  const flags = useBetaFlags()
   const currentLocale = i18n.language
 
   const languages = [
     { value: 'en-US', label: t('languages.english') },
     { value: 'de-DE', label: t('languages.german') },
-    ...(flags.rtl_arabic ? [{ value: 'ar-SA', label: t('languages.arabic') }] : []),
+    { value: 'ar-SA', label: t('languages.arabic') },
   ]
 
   return (
