@@ -8,7 +8,6 @@ import { SettingsSystem } from './SettingsSystem'
 import { SettingsAccounts } from './SettingsAccounts'
 import { SettingsGeneral } from './SettingsGeneral'
 import { SettingsUpdate } from './SettingsUpdate'
-import { SettingsResources } from './SettingsResources'
 import { SettingsAppEngine } from './SettingsAppEngine'
 import { SettingsBuilder } from './SettingsBuilder'
 import { SettingsExtension } from './SettingsExtension'
@@ -21,7 +20,7 @@ import { SettingsLanguages } from './SettingsLanguages'
 
 type SettingsNavId =
   | 'personalization' | 'remote' | 'system' | 'accounts' | 'general' | 'update'
-  | 'resources' | 'app-engine' | 'builder' | 'extension' | 'beta'
+  | 'app-engine' | 'builder' | 'extension' | 'beta'
   | 'notification' | 'shortcuts' | 'help-about' | 'datetime' | 'languages'
 
 const NAV: ReadonlyArray<{ id: SettingsNavId; labelKey: string; hintKey: string; icon: string; beta?: boolean }> = [
@@ -36,7 +35,6 @@ const NAV: ReadonlyArray<{ id: SettingsNavId; labelKey: string; hintKey: string;
   { id: 'help-about', labelKey: 'shell.navHelpAbout', hintKey: 'shell.navHelpAboutHint', icon: 'info' },
   { id: 'datetime', labelKey: 'shell.navDatetime', hintKey: 'shell.navDatetimeHint', icon: 'clock' },
   { id: 'languages', labelKey: 'shell.navLanguages', hintKey: 'shell.navLanguagesHint', icon: 'globe' },
-  { id: 'resources', labelKey: 'shell.navResources', hintKey: 'shell.navResourcesHint', icon: 'server-process', beta: true },
   { id: 'app-engine', labelKey: 'shell.navAppEngine', hintKey: 'shell.navAppEngineHint', icon: 'server', beta: true },
   { id: 'builder', labelKey: 'shell.navBuilder', hintKey: 'shell.navBuilderHint', icon: 'tools', beta: true },
   { id: 'extension', labelKey: 'shell.navExtension', hintKey: 'shell.navExtensionHint', icon: 'extensions', beta: true },
@@ -55,7 +53,6 @@ const TAB_SUBTITLE_KEYS: Partial<Record<SettingsNavId, string>> = {
   'help-about': 'shell.helpAboutSubtitle',
   datetime: 'shell.datetimeSubtitle',
   languages: 'shell.languagesSubtitle',
-  resources: 'shell.resourcesSubtitle',
   'app-engine': 'shell.appEngineSubtitle',
   builder: 'shell.builderSubtitle',
   extension: 'shell.extensionSubtitle',
@@ -70,7 +67,6 @@ function TabContent({ id }: { id: SettingsNavId }): ReactElement {
     case 'accounts': return <SettingsAccounts />
     case 'general': return <SettingsGeneral />
     case 'update': return <SettingsUpdate />
-    case 'resources': return <SettingsResources />
     case 'app-engine': return <SettingsAppEngine />
     case 'builder': return <SettingsBuilder />
     case 'extension': return <SettingsExtension />

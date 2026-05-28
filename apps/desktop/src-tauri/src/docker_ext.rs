@@ -131,7 +131,7 @@ pub(crate) async fn docker_install_invoke(body: &Value) -> Value {
           "error": format!("[DOCKER_INSTALL_FAILED] Selected distro '{}' does not match host distro '{}'. Choose '{}' in the installer.", distro, host_distro_id, host_family),
         });
     }
-    let password = body.get("password").and_then(|v| v.as_str());
+
 
     let requested_components: Vec<String> = body
         .get("components")
@@ -184,7 +184,7 @@ pub(crate) async fn docker_install_invoke(body: &Value) -> Value {
     };
 
     for cmd in steps {
-        match sudo_bash_install_step(&cmd, password, &mut logs, None, None, 0, 0).await {
+        match sudo_bash_install_step(&cmd, None, &mut logs, None, None, 0, 0).await {
             Ok(()) => {}
             Err(e) => return json!({ "ok": false, "log": logs, "error": e }),
         }

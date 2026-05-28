@@ -187,8 +187,8 @@ pub(crate) async fn exec_sshpass_ssh(
 ) -> Result<(String, String), String> {
     let fut = async {
         let output = Command::new("sshpass")
-            .arg("-p")
-            .arg(password)
+            .arg("-e")
+            .env("SSHPASS", password)
             .arg("ssh")
             .arg("-o")
             .arg("StrictHostKeyChecking=no")

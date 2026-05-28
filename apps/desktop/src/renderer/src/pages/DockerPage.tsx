@@ -93,7 +93,6 @@ export function DockerPage(): ReactElement {
   const [showInstallModal, setShowInstallModal] = useState(false)
   const [installDistro, setInstallDistro] = useState<InstallDistroId>('ubuntu')
   const [installStep, setInstallStep] = useState<number>(0)
-  const [sudoPassword, setSudoPassword] = useState('')
   const [installLogs, setInstallLogs] = useState<string[]>([])
   const [installError, setInstallError] = useState<string | null>(null)
   const [installBusy, setInstallBusy] = useState(false)
@@ -307,7 +306,6 @@ export function DockerPage(): ReactElement {
     try {
       const res = await window.dh.dockerInstall({
         distro: installDistro,
-        password: sudoPassword,
         components: selectedFeatures,
       })
       const logs = Array.isArray(res.log) ? res.log : []
@@ -679,7 +677,6 @@ export function DockerPage(): ReactElement {
           onClick={() => {
             setInstallStep(0)
             setInstallError(null)
-            setSudoPassword('')
             setInstallLogs([])
             void refreshInstalledFeatures()
             setShowInstallModal(true)
@@ -1719,21 +1716,8 @@ export function DockerPage(): ReactElement {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                   <h3 style={{ margin: 0, fontSize: 16 }}>{t('wizard.auth')}</h3>
                   <p style={{ margin: 0, fontSize: 14, color: 'var(--text-muted)' }}>
-                    Installation requires root privileges. Enter your <strong>sudo</strong> password to proceed, or leave it blank to authenticate securely via your system's graphical dialog (Polkit / pkexec).
-                    This password is only used to run the installation commands and is not stored.
+                    Installation requires root privileges. You will be prompted by your system's graphical security dialog (Polkit / pkexec) to authenticate securely.
                   </p>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    <label style={{ fontSize: 12, fontWeight: 600 }}>{t('wizard.sudoPassword')}</label>
-                    <input
-                      type="password"
-                      className="hp-input"
-                      placeholder={t('wizard.sudoPlaceholder')} 
-                      value={sudoPassword} 
-                      onChange={e => setSudoPassword(e.target.value)} 
-                      autoFocus
-                      onKeyDown={e => e.key === 'Enter' && runInstallation()}
-                    />
-                  </div>
                   <div style={{ ...sectionBox, background: 'rgba(255, 159, 67, 0.05)', borderColor: 'rgba(255, 159, 67, 0.2)' }}>
                     <div style={{ fontSize: 12, color: 'var(--orange)' }}>⚠️ Ensure your user has sudo privileges on the host machine.</div>
                   </div>

@@ -222,13 +222,11 @@ declare global {
         method?: 'system' | 'local'
         removeMode?: 'runtime_only' | 'runtime_and_deps'
         addToPath?: boolean
-        sudoPassword?: string
       }) => Promise<{ id: string }>
       jobsList: () => Promise<unknown>
       jobCancel: (payload: { id: string }) => Promise<unknown>
       dockerInstall: (payload: {
         distro: 'ubuntu' | 'fedora' | 'arch'
-        password?: string
         components?: string[]
       }) => Promise<{ ok: boolean; log: string[]; error?: string }>
       dockerCheckInstalled: () => Promise<{ docker: boolean; compose: boolean; buildx: boolean }>

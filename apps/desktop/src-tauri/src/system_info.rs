@@ -541,12 +541,17 @@ async fn host_exec_write_hosts(body: &Value) -> Value {
         Some(c) => c.to_string(),
         None => return json!({ "ok": false, "error": "[HOST_EXEC_FAILED] missing content" }),
     };
-    let tmp = format!("/tmp/lumina_hosts_{}", std::process::id());
-    if let Err(e) = std::fs::write(&tmp, &content) {
-        return json!({ "ok": false, "error": format!("[HOST_EXEC_FAILED] {}", e) });
+    let mut named_tmp = match tempfile::NamedTempFile::new() {
+        Ok(t) => t,
+        Err(e) => return json!({ "ok": false, "error": format!("[HOST_EXEC_FAILED] tempfile: {}", e) }),
+    };
+    if let Err(e) = std::io::Write::write_all(&mut named_tmp, content.as_bytes()) {
+        return json!({ "ok": false, "error": format!("[HOST_EXEC_FAILED] write: {}", e) });
     }
-    let result = exec_result_limit("sudo", &["cp", &tmp, "/etc/hosts"], cmd_timeout_short()).await;
-    let _ = std::fs::remove_file(&tmp);
+    
+    let tmp_path = named_tmp.path().to_string_lossy().to_string();
+    let result = exec_result_limit("sudo", &["cp", &tmp_path, "/etc/hosts"], cmd_timeout_short()).await;
+    
     match result {
         Ok(_) => json!({ "ok": true }),
         Err(e) => json!({ "ok": false, "error": format!("[HOST_EXEC_FAILED] {}", e) }),
@@ -1494,4 +1499,33 @@ pub(crate) async fn handle_metrics(state: &AppState) -> Value {
       },
       "systemd": systemd
     })
+}
+
+/// Returns which profile names from the given list have at least one running Docker container.
+pub(crate) async fn handle_profile_running_status(_app: &AppHandle, body: &Value) -> Value {
+    let names: Vec<String> = body
+        .get("names")
+        .and_then(|v| v.as_array())
+        .map(|a| {
+            a.iter()
+                .filter_map(|v| v.as_str().map(|s| s.to_lowercase()))
+                .collect()
+        })
+        .unwrap_or_default();
+    if names.is_empty() {
+        return json!({ "ok": true, "running": [] });
+    }
+    let out = exec_output("docker", &["ps", "--format", "{{.Names}}"])
+        .await
+        .unwrap_or_default()
+        .to_lowercase();
+    let running: Vec<String> = names
+        .into_iter()
+        .filter(|n| {
+            // Docker compose names: <project>-<service>-<n>
+            let prefix = format!("{n}-");
+            out.contains(&prefix)
+        })
+        .collect();
+    json!({ "ok": true, "running": running })
 }

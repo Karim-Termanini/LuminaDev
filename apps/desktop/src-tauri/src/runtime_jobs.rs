@@ -21,17 +21,12 @@ pub(crate) async fn runtime_job_execute(
     method: String,
     version: String,
     _remove_mode: String,
-    sudo_password: String,
 ) {
     let mut logs: Vec<String> = vec![format!(
         "job={} runtime={} method={}",
         kind, runtime_id, method
     )];
-    let password_opt: Option<&str> = if sudo_password.is_empty() {
-        None
-    } else {
-        Some(&sudo_password)
-    };
+    let password_opt: Option<&str> = None;
     let mut final_state = "completed";
     let effective_verify_method = method.clone();
 
@@ -1246,12 +1241,6 @@ pub(crate) async fn handle_job_start(app: &AppHandle, state: &AppState, body: &V
         .and_then(|v| v.as_str())
         .unwrap_or("runtime_only")
         .to_string();
-    let sudo_password = body
-        .get("sudoPassword")
-        .or_else(|| body.get("sudo_password"))
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_string();
     {
         let mut jobs = state.jobs.lock().await;
         let running = jobs
@@ -1279,7 +1268,6 @@ pub(crate) async fn handle_job_start(app: &AppHandle, state: &AppState, body: &V
             method.clone(),
             version.clone(),
             remove_mode.clone(),
-            sudo_password.clone(),
         );
         runtime_job_execute(
             app2.clone(),
@@ -1289,7 +1277,6 @@ pub(crate) async fn handle_job_start(app: &AppHandle, state: &AppState, body: &V
             method,
             version,
             remove_mode,
-            sudo_password,
         )
         .await;
         if get_global_daemon_auto_restart() {
@@ -1315,7 +1302,7 @@ pub(crate) async fn handle_job_start(app: &AppHandle, state: &AppState, body: &V
                         j["logTail"] = json!(["Auto-restarting after failure…"]);
                     }
                 }
-                let (kind, runtime_id, method, version, remove_mode, sudo_password) = retry_args;
+                let (kind, runtime_id, method, version, remove_mode) = retry_args;
                 runtime_job_execute(
                     app2,
                     jid,
@@ -1324,7 +1311,6 @@ pub(crate) async fn handle_job_start(app: &AppHandle, state: &AppState, body: &V
                     method,
                     version,
                     remove_mode,
-                    sudo_password,
                 )
                 .await;
             }

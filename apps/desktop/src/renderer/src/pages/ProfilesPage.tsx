@@ -142,31 +142,33 @@ export function ProfilesPage(): ReactElement {
     setProjectPaths(paths)
   }, []) // stable: only calls window.dh + setState setters
 
-  const checkRunning = useCallback(async () => {
+  const checkRunning = useCallback(async (profileList: CustomProfileEntry[]) => {
+    if (profileList.length === 0) return
     try {
-      // Query docker ps for container names containing profile names
-      const psRes = await invoke('ipc_invoke', {
-        channel: 'dh:host:exec',
-        payload: { command: 'maintenance_docker_ps_table' },
-      }) as { ok?: boolean; result?: string }
-      const running = new Set<string>()
-      if (psRes.ok && typeof psRes.result === 'string') {
-        const resultLower = psRes.result.toLowerCase()
-        for (const p of profiles) {
-          // Docker compose names containers as <project>-<service>-<n>
-          if (resultLower.includes(p.name.toLowerCase() + '-')) running.add(p.name)
-        }
+      const res = (await invoke('ipc_invoke', {
+        channel: 'dh:profile:running-status',
+        payload: { names: profileList.map((p) => p.name) },
+      })) as { ok?: boolean; running?: string[] }
+      if (res.ok && res.running) {
+        const lower = res.running.map((n) => n.toLowerCase())
+        setRunningProfiles(
+          new Set(
+            profileList.filter((p) => lower.includes(p.name.toLowerCase())).map((p) => p.name)
+          )
+        )
       }
-      setRunningProfiles(running)
-    } catch { /* ignore */ }
     } catch {
       /* ignore */
     }
-  }, [profiles])
+  }, [])
+
+  const refreshRunning = useCallback(async () => {
+    await checkRunning(profiles)
+  }, [profiles, checkRunning])
 
   useEffect(() => {
-    void checkRunning()
-  }, [checkRunning])
+    void checkRunning(profiles)
+  }, [profiles, checkRunning])
 
   const load = useCallback(async (): Promise<void> => {
     try {
@@ -739,7 +741,7 @@ export function ProfilesPage(): ReactElement {
                                   channel: 'dh:compose:down',
                                   payload: { profile: p.name },
                                 })) as { ok?: boolean; error?: string }
-                                await checkRunning()
+                                await refreshRunning()
                                 if (r.ok) {
                                   setStatus({ message: `${p.name} stopped.`, type: 'success' })
                                 } else {
@@ -772,7 +774,7 @@ export function ProfilesPage(): ReactElement {
                                   channel: 'dh:profile:switch',
                                   payload: { to: p.name },
                                 })) as { ok?: boolean; error?: string }
-                                await checkRunning()
+                                await refreshRunning()
                                 if (!r.ok) {
                                   setStatus({ message: r.error || 'Failed', type: 'warning' })
                                 } else {
@@ -811,7 +813,7 @@ export function ProfilesPage(): ReactElement {
                                 channel: 'dh:profile:switch',
                                 payload: { to: p.name },
                               })) as { ok?: boolean; error?: string }
-                              await checkRunning()
+                              await refreshRunning()
                               if (r.ok) {
                                 setStatus({ message: `${p.name} started.`, type: 'success' })
                               } else {
