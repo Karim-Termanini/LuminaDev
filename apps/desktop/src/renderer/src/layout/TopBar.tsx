@@ -561,10 +561,31 @@ export function TopBar(): ReactElement {
       <div style={{ display: 'flex', gap: 2, flex: 1, justifyContent: 'center' }}>
         {onDashboard ? (
           <>
-            <DashTab to="/dashboard" end label={t('topbar.main')} tooltip={t('topbar.mainTooltip')} type="main" />
-            <DashTab to="/dashboard/kernels" label={t('topbar.kernels')} tooltip={t('topbar.kernelsTooltip')} type="kernels" />
-            <DashTab to="/dashboard/logs" label={t('topbar.logs')} tooltip={t('topbar.logsTooltip')} type="logs" />
-            <DashTab to="/dashboard/widgets" label={t('topbar.widgets')} tooltip={t('topbar.widgetsTooltip')} type="widgets" />
+            <DashTab
+              to="/dashboard"
+              end
+              label={t('topbar.main')}
+              tooltip={t('topbar.mainTooltip')}
+              type="main"
+            />
+            <DashTab
+              to="/dashboard/kernels"
+              label={t('topbar.kernels')}
+              tooltip={t('topbar.kernelsTooltip')}
+              type="kernels"
+            />
+            <DashTab
+              to="/dashboard/logs"
+              label={t('topbar.logs')}
+              tooltip={t('topbar.logsTooltip')}
+              type="logs"
+            />
+            <DashTab
+              to="/dashboard/widgets"
+              label={t('topbar.widgets')}
+              tooltip={t('topbar.widgetsTooltip')}
+              type="widgets"
+            />
           </>
         ) : (
           <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>{t('topbar.overview')}</span>
@@ -726,7 +747,7 @@ export function TopBar(): ReactElement {
         <button
           type="button"
           data-tooltip={t('topbar.notifications')}
-          data-tooltip-position="bottom"
+          data-tooltip-position="bottom-notif"
           aria-label="Notifications"
           aria-expanded={showNotifications}
           aria-haspopup="dialog"
@@ -877,7 +898,7 @@ export function TopBar(): ReactElement {
       <button
         type="button"
         data-tooltip={t('topbar.terminal')}
-        data-tooltip-position="bottom"
+        data-tooltip-position="bottom-term"
         aria-label="Console"
         style={btnIcon}
         onClick={() => navigate('/terminal')}
@@ -887,7 +908,7 @@ export function TopBar(): ReactElement {
       <button
         type="button"
         data-tooltip={t('topbar.settings')}
-        data-tooltip-position="bottom"
+        data-tooltip-position="bottom-sett"
         aria-label="Settings"
         style={btnIcon}
         onClick={() => navigate('/settings')}
@@ -898,7 +919,13 @@ export function TopBar(): ReactElement {
   )
 }
 
-function DashTab(props: { to: string; end?: boolean; label: string; tooltip: string; type: string }): ReactElement {
+function DashTab(props: {
+  to: string
+  end?: boolean
+  label: string
+  tooltip: string
+  type: string
+}): ReactElement {
   return (
     <NavLink
       to={props.to}

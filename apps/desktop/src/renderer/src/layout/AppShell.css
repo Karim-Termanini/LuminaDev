@@ -165,6 +165,7 @@
   border: 1px solid rgba(255, 255, 255, 0.08);
   color: #f0f0f0;
   font-size: 12px;
+  line-height: 18px;
   font-weight: 500;
   font-family: var(--font-ui);
   white-space: nowrap;
@@ -175,7 +176,9 @@
   box-shadow:
     0 4px 20px rgba(0, 0, 0, 0.45),
     0 1px 3px rgba(0, 0, 0, 0.3);
-  transition: opacity 0.05s ease-out, visibility 0.05s ease-out;
+  transition:
+    opacity 0.05s ease-out,
+    visibility 0.05s ease-out;
 }
 
 /* Caret arrow pointing left toward the icon */
@@ -191,7 +194,9 @@
   opacity: 0;
   visibility: hidden;
   z-index: 9999;
-  transition: opacity 0.05s ease-out, visibility 0.05s ease-out;
+  transition:
+    opacity 0.05s ease-out,
+    visibility 0.05s ease-out;
 }
 
 [data-tooltip]:hover::after,
@@ -202,23 +207,40 @@
   visibility: visible;
 }
 
-/* Position modifier for bottom-aligned tooltips (e.g. for TopBar) */
-[data-tooltip-position="bottom"]::after {
-  left: 50%;
+/* Position modifiers for TopBar right-edge tooltips (extend LEFT, away from screen edge) */
+[data-tooltip-position='bottom-notif']::after,
+[data-tooltip-position='bottom-term']::after,
+[data-tooltip-position='bottom-sett']::after {
+  left: auto;
+  right: 0;
   top: calc(100% + 12px);
-  transform: translate3d(-50%, 0, 0);
+  transform: none;
+  text-align: center;
 }
 
-[data-tooltip-position="bottom"]::before {
-  left: 50%;
+[data-tooltip-position='bottom-notif']::before,
+[data-tooltip-position='bottom-term']::before,
+[data-tooltip-position='bottom-sett']::before {
+  left: auto;
+  right: 10px;
   top: calc(100% + 6px);
-  transform: translate3d(-50%, 0, 0);
+  transform: none;
   border-right-color: transparent;
   border-bottom-color: rgba(30, 30, 30, 0.96);
 }
 
+[data-tooltip-position='bottom-notif']::after {
+  width: 160px;
+}
+[data-tooltip-position='bottom-term']::after {
+  width: 100px;
+}
+[data-tooltip-position='bottom-sett']::after {
+  width: 120px;
+}
+
 /* Position modifier for bottom-aligned tab tooltips to guarantee integer-pixel sharpness and tight margins */
-[data-tooltip-position^="bottom-tab-"]::after {
+[data-tooltip-position^='bottom-tab-']::after {
   left: 50%;
   top: calc(100% + 12px);
   transform: none;
@@ -226,7 +248,7 @@
   white-space: nowrap;
 }
 
-[data-tooltip-position^="bottom-tab-"]::before {
+[data-tooltip-position^='bottom-tab-']::before {
   left: 50%;
   top: calc(100% + 6px);
   margin-left: -6px;
@@ -235,22 +257,22 @@
   border-bottom-color: rgba(30, 30, 30, 0.96);
 }
 
-[data-tooltip-position="bottom-tab-main"]::after {
+[data-tooltip-position='bottom-tab-main']::after {
   width: 260px;
   margin-left: -130px;
 }
 
-[data-tooltip-position="bottom-tab-kernels"]::after {
+[data-tooltip-position='bottom-tab-kernels']::after {
   width: 360px;
   margin-left: -180px;
 }
 
-[data-tooltip-position="bottom-tab-logs"]::after {
+[data-tooltip-position='bottom-tab-logs']::after {
   width: 240px;
   margin-left: -120px;
 }
 
-[data-tooltip-position="bottom-tab-widgets"]::after {
+[data-tooltip-position='bottom-tab-widgets']::after {
   width: 300px;
   margin-left: -150px;
 }
