@@ -235,7 +235,7 @@ export function RuntimesPage(): ReactElement {
       }
     } catch { /* ignore corrupt cache */ }
     void refreshStatus()
-  }, [refreshStatus]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [refreshStatus])
 
   useEffect(() => {
     if (showWizard && wizardStep === 2) void refreshDeps()

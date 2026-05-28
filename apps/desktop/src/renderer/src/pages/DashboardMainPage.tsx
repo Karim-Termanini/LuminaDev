@@ -15,7 +15,6 @@ import { useCallback, useEffect, useMemo, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { humanizeProfileError } from './profileError'
 import { DashboardWidgetDeck } from '../dashboard/DashboardWidgetDeck'
-import { AddWidgetModal } from '../dashboard/AddWidgetModal'
 import { useBetaFlags } from '../hooks/useBetaFlags'
 import { useTranslation } from 'react-i18next'
 
@@ -82,7 +81,6 @@ export function DashboardMainPage(): ReactElement {
   const [customProfiles, setCustomProfiles] = useState<CustomProfileEntry[]>([])
   const [confirmModalOpen, setConfirmModalOpen] = useState(false)
   const profileSelectionInitialized = useRef(false)
-  const [pickerOpen, setPickerOpen] = useState(false)
 
   const [projectPath, setProjectPath] = useState<string | null>(null)
   const [installedEditors, setInstalledEditors] = useState<Array<{ name: string; cmd: string }>>([])
