@@ -1,8 +1,9 @@
+import './TopBar.css'
 import type { CSSProperties, ReactElement } from 'react'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import type { JobSummary } from '@linux-dev-home/shared'
+import type { ContainerRow, JobSummary } from '@linux-dev-home/shared'
 
 export function TopBar(): ReactElement {
   const { t } = useTranslation('nav')
@@ -12,6 +13,10 @@ export function TopBar(): ReactElement {
   const [q, setQ] = useState('')
   const [showNotifications, setShowNotifications] = useState(false)
   const [jobs, setJobs] = useState<JobSummary[]>([])
+  const [paletteOpen, setPaletteOpen] = useState(false)
+  const [paletteIdx, setPaletteIdx] = useState(0)
+  const [paletteContainers, setPaletteContainers] = useState<ContainerRow[]>([])
+  const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const titles: Record<string, string> = {
     '/system': t('topbar.system'),
@@ -25,9 +30,11 @@ export function TopBar(): ReactElement {
     '/maintenance': t('topbar.maintenance'),
     '/settings': t('topbar.settings'),
   }
+
   useEffect(() => {
     setQ('')
     setShowNotifications(false)
+    setPaletteOpen(false)
 
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setShowNotifications(false)
@@ -59,6 +66,95 @@ export function TopBar(): ReactElement {
     return () => clearInterval(id)
   }, [])
 
+  useEffect(() => {
+    setPaletteIdx(0)
+  }, [q])
+
+  const PAGES = [
+    { label: 'Dashboard', route: '/dashboard', icon: 'dashboard' },
+    { label: 'Monitor', route: '/system', icon: 'pulse' },
+    { label: 'Docker', route: '/docker', icon: 'package' },
+    { label: 'SSH', route: '/ssh', icon: 'key' },
+    { label: 'Git', route: '/git', icon: 'git-branch' },
+    { label: 'Profiles', route: '/profiles', icon: 'account' },
+    { label: 'Terminal', route: '/terminal', icon: 'terminal' },
+    { label: 'Runtimes', route: '/runtimes', icon: 'zap' },
+    { label: 'Maintenance', route: '/maintenance', icon: 'shield' },
+    { label: 'Settings', route: '/settings', icon: 'settings' },
+  ] as const
+
+  const getCachedRuntimes = (): Array<{ name: string; version: string }> => {
+    try {
+      const raw = localStorage.getItem('dh:runtimes:status-cache:v1')
+      if (!raw) return []
+      const cached = JSON.parse(raw) as { ts: number; runtimes: Array<{ name: string; installed: boolean; version?: string }> }
+      return cached.runtimes.filter((r) => r.installed).map((r) => ({ name: r.name, version: r.version ?? '' }))
+    } catch {
+      return []
+    }
+  }
+
+  type PaletteResult =
+    | { kind: 'page'; label: string; route: string; icon: string }
+    | { kind: 'container'; name: string; image: string; state: string }
+    | { kind: 'runtime'; name: string; version: string }
+
+  const getPaletteResults = (query: string, containers: ContainerRow[]): PaletteResult[] => {
+    const lq = query.toLowerCase()
+    const results: PaletteResult[] = []
+    const matchedPages = PAGES.filter((p) => query === '' || p.label.toLowerCase().includes(lq))
+    results.push(...matchedPages.map((p) => ({ kind: 'page' as const, label: p.label, route: p.route, icon: p.icon })))
+    if (query !== '') {
+      containers
+        .filter((c) => c.name.toLowerCase().includes(lq) || c.image.toLowerCase().includes(lq))
+        .forEach((c) => results.push({ kind: 'container', name: c.name, image: c.image, state: c.state }))
+      getCachedRuntimes()
+        .filter((r) => r.name.toLowerCase().includes(lq))
+        .forEach((r) => results.push({ kind: 'runtime', name: r.name, version: r.version }))
+    }
+    return results
+  }
+
+  const onPaletteOpen = useCallback(async () => {
+    setPaletteOpen(true)
+    setPaletteIdx(0)
+    try {
+      const res = await window.dh.dockerList()
+      const bag = res as { ok?: boolean; rows?: ContainerRow[] }
+      if (bag?.ok && Array.isArray(bag.rows)) setPaletteContainers(bag.rows)
+    } catch { /* palette works without containers */ }
+  }, [])
+
+  const onPaletteClose = useCallback(() => {
+    setPaletteOpen(false)
+    setPaletteIdx(0)
+  }, [])
+
+  const paletteResults = paletteOpen ? getPaletteResults(q, paletteContainers) : []
+
+  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!paletteOpen) return
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setPaletteIdx((i) => Math.min(i + 1, paletteResults.length - 1))
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setPaletteIdx((i) => Math.max(i - 1, 0))
+    } else if (e.key === 'Enter') {
+      e.preventDefault()
+      const item = paletteResults[paletteIdx]
+      if (!item) return
+      if (item.kind === 'page') navigate(item.route)
+      else if (item.kind === 'container') navigate('/docker')
+      else if (item.kind === 'runtime') navigate('/runtimes')
+      onPaletteClose()
+      setQ('')
+    } else if (e.key === 'Escape') {
+      onPaletteClose()
+      setQ('')
+    }
+  }
+
   const onDashboard = pathname === '/dashboard' || pathname.startsWith('/dashboard/')
 
   return (
@@ -89,21 +185,99 @@ direction: 'ltr',
           <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>{t('topbar.overview')}</span>
         )}
       </div>
-      <input
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-        placeholder={t('topbar.searchPlaceholder')}
-        className="hp-search-input"
-        style={{
-          width: 220,
-          background: 'var(--bg-input)',
-          border: '1px solid var(--border)',
-          borderRadius: 6,
-          padding: '6px 10px',
-          color: 'var(--text)',
-          fontSize: 13,
-        }}
-      />
+      <div className="cmd-palette-wrap">
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          onFocus={() => void onPaletteOpen()}
+          onBlur={() => {
+            blurTimerRef.current = setTimeout(() => onPaletteClose(), 150)
+          }}
+          onKeyDown={handleInputKeyDown}
+          placeholder={t('topbar.searchPlaceholder')}
+          className="hp-search-input"
+          role="combobox"
+          aria-expanded={paletteOpen}
+          aria-controls="cmd-palette"
+          aria-autocomplete="list"
+          style={{ width: 220, background: 'var(--bg-input)', border: '1px solid var(--border)', borderRadius: 6, padding: '6px 10px', color: 'var(--text)', fontSize: 13 }}
+        />
+
+        {paletteOpen && (paletteResults.length > 0 || q !== '') && (
+          <div
+            id="cmd-palette"
+            role="listbox"
+            className="cmd-palette-panel"
+            onMouseDown={(e) => {
+              e.preventDefault()
+              if (blurTimerRef.current) clearTimeout(blurTimerRef.current)
+            }}
+          >
+            {paletteResults.length === 0 && q !== '' ? (
+              <div className="cmd-palette-empty">No results for &ldquo;{q}&rdquo;</div>
+            ) : (
+              <>
+                {paletteResults.some((r) => r.kind === 'page') && (
+                  <div>
+                    <div className="cmd-palette-section-label">Pages</div>
+                    {paletteResults.map((item, idx) => item.kind !== 'page' ? null : (
+                      <div
+                        key={`page-${item.route}`}
+                        role="option"
+                        aria-selected={idx === paletteIdx}
+                        className={`cmd-palette-item${idx === paletteIdx ? ' active' : ''}`}
+                        onClick={() => { navigate(item.route); onPaletteClose(); setQ('') }}
+                      >
+                        <span className={`codicon codicon-${item.icon}`} aria-hidden />
+                        <span className="cmd-palette-item-label">{item.label}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {paletteResults.some((r) => r.kind === 'container') && (
+                  <div>
+                    <div className="cmd-palette-section-label">Containers</div>
+                    {paletteResults.map((item, idx) => item.kind !== 'container' ? null : (
+                      <div
+                        key={`container-${item.name}`}
+                        role="option"
+                        aria-selected={idx === paletteIdx}
+                        className={`cmd-palette-item${idx === paletteIdx ? ' active' : ''}`}
+                        onClick={() => { navigate('/docker'); onPaletteClose(); setQ('') }}
+                      >
+                        <span className="codicon codicon-package" aria-hidden />
+                        <span className="cmd-palette-item-label">{item.name}</span>
+                        <span className="cmd-palette-item-meta">{item.image}</span>
+                        <span className={`cmd-palette-item-badge ${item.state.toLowerCase() === 'running' ? 'cmd-palette-badge-running' : 'cmd-palette-badge-stopped'}`}>
+                          {item.state.toUpperCase()}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {paletteResults.some((r) => r.kind === 'runtime') && (
+                  <div>
+                    <div className="cmd-palette-section-label">Runtimes</div>
+                    {paletteResults.map((item, idx) => item.kind !== 'runtime' ? null : (
+                      <div
+                        key={`runtime-${item.name}`}
+                        role="option"
+                        aria-selected={idx === paletteIdx}
+                        className={`cmd-palette-item${idx === paletteIdx ? ' active' : ''}`}
+                        onClick={() => { navigate('/runtimes'); onPaletteClose(); setQ('') }}
+                      >
+                        <span className="codicon codicon-zap" aria-hidden />
+                        <span className="cmd-palette-item-label">{item.name}</span>
+                        {item.version && <span className="cmd-palette-item-meta">{item.version}</span>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+      </div>
       <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
         <button
           type="button"
