@@ -581,6 +581,8 @@ When user clicks "Install" / "Fix":
 | 24 | AppShell | Docs link pointed to `github.com` instead of docs | ✅ FIXED (2026-05-28) |
 | 25 | TopBar | Palette hidden on non-dashboard pages (overflow clipping) | ✅ FIXED (2026-05-28) |
 | 26 | TopBar | Palette wouldn't reopen after Enter-navigate (stale focus) | ✅ FIXED (2026-05-28) |
+| 27 | TopBar | Dashboard sub-nav tabs tooltip blurriness (Logs, Widgets) due to subpixel transform offsets | ✅ FIXED (2026-05-28) |
+| 28 | AppShell / TopBar | Sidebar & Topbar icon tooltip blurriness due to dynamic-width fractional offsets | ✅ FIXED (2026-05-28) |
 
 ---
 

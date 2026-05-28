@@ -297,9 +297,9 @@ On a clean Ubuntu 24.04 VM with only Rust + Node + system deps installed (no Lum
 
 ---
 
-### 1.6 Sidebar and Topbar Hover Tooltip Blur Issue 📋 OPEN
+### 1.6 Sidebar and Topbar Hover Tooltip Blur Issue ✅ DONE (2026-05-28)
 - **Issue:** Reverting to dynamic width tooltips with `translate3d(-50%, 0, 0)` causes the tooltip boxes to render at fractional pixel positions when their width in pixels is odd (determined by dynamic text length). This makes all hovered tooltips on the sidebar and topbar icons appear blurry or fuzzy.
-- **Proposed Solution:** Apply individual fixed even-width styles (e.g., `120px`, `160px`, `240px`) and integer-based negative margins (e.g., `margin-left: -60px`, `-80px`, `-120px`) with `transform: none` to all sidebar and topbar buttons, or implement a layout-based snapping wrapper that forces the browser to align tooltip boundaries to whole device pixels.
+- **Solution:** Applied individual fixed even-width styles (e.g., `120px`, `160px`, `240px`) and integer-based negative margins (e.g., `margin-left: -60px`, `-80px`, `-120px`) with `transform: none` to all sidebar and topbar buttons to ensure perfect snapping to whole device pixels.
 
 ---
 
@@ -307,7 +307,6 @@ On a clean Ubuntu 24.04 VM with only Rust + Node + system deps installed (no Lum
 
 | Item | Risk | Mitigation |
 |---|---|---|
-| Tooltip blurriness on Sidebar/TopBar | Medium — affects premium UX visual consistency | Implement fixed even-widths and integer-based margins, or dynamic snapping |
 | `lib.rs` at 684 lines (target: <678) | Medium — will grow with P2 channels | Extract `app_state.rs` if >700 |
 | `AppState.streams` no size cap | Low — dev use only currently | Add `len() > 20` guard in P1.2 |
 | `DashboardWidgetDeck` HTML5 drag on Wayland | Low — Wayland WebView drag is flaky | Add mouse-event fallback if reports come in |
@@ -325,7 +324,7 @@ On a clean Ubuntu 24.04 VM with only Rust + Node + system deps installed (no Lum
 ✅  Week 1  → P1.2 Log stream shutdown cleanup (DONE — 2026-05-28)
 ✅  Week 1  → P1.4 phasesPlan.md + AUDIT accuracy pass (DONE — 2026-05-28)
 ✅  Week 1  → P1.5 Sidebar navigation refactor (collapsed state + tooltips) (DONE — 2026-05-28)
-📋  Week 1  → P1.6 Sidebar & Topbar tooltip blur fix
+✅  Week 1  → P1.6 Sidebar & Topbar tooltip blur fix (DONE — 2026-05-28)
 📋  Week 2  → P2.1 Per-container stats stream
 📋  Week 2  → P2.2 SettingsExtension plugin browser v0
 📋  Week 3  → P3/10a Plugin discovery + trust model
