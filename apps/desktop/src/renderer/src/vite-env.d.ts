@@ -554,6 +554,11 @@ declare global {
         /** GitLab: branch name used to re-resolve open MR if merge-by-URL returns 404 (stale IID). */
         reference?: string
       }) => Promise<{ ok: boolean; url?: string; error?: string }>
+      logStreamStart: (payload: {
+        source: 'compose' | 'container' | 'unified'
+        id?: string
+      }) => Promise<{ ok: boolean; streamId: string }>
+      logStreamStop: (payload: { streamId: string }) => Promise<{ ok: boolean }>
     }
   }
 }

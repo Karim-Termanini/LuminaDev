@@ -274,6 +274,8 @@ export const IPC = {
   jobStart: 'dh:job:start',
   jobsList: 'dh:job:list',
   jobCancel: 'dh:job:cancel',
+  logStreamStart: 'dh:log:stream:start',
+  logStreamStop: 'dh:log:stream:stop',
   dockerInstall: 'dh:docker:install',
   dockerCheckInstalled: 'dh:docker:check-installed',
   getHostDistro: 'dh:host:distro',

@@ -204,6 +204,10 @@ function createTauriDhApi(): DhApi {
     cloudGitMergePr: (payload) => tauriInvoke(IPC.cloudGitMergePr, payload),
     appUpdateCheck: () => tauriInvoke(IPC.appUpdateCheck),
     profileCredentialsGet: (payload) => tauriInvoke(IPC.profileCredentialsGet, payload),
+    logStreamStart: (payload: { source: 'compose' | 'container' | 'unified'; id?: string }) =>
+      tauriInvoke<{ ok: boolean; streamId: string }>(IPC.logStreamStart, payload),
+    logStreamStop: (payload: { streamId: string }) =>
+      tauriInvoke<{ ok: boolean }>(IPC.logStreamStop, payload),
   } satisfies DhApi
 }
 
