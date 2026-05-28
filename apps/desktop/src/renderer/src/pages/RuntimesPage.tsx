@@ -33,6 +33,8 @@ const RUNTIME_LOCALE_KEY: Record<string, string> = {
 }
 
 const UPDATE_OUTCOME_STORAGE_KEY = 'dh:runtimes:update-outcomes:v1'
+const STATUS_CACHE_KEY = 'dh:runtimes:status-cache:v1'
+const STATUS_CACHE_TTL = 30 * 1000
 
 /** Prefer a sensible default when the version API returns many entries (e.g. Node: first LTS row). */
 function pickDefaultRuntimeVersion(runtimeId: string, versions: string[]): string {
@@ -86,9 +88,6 @@ export function RuntimesPage(): ReactElement {
 
   const VERSIONS_CACHE_KEY = 'dh:runtimes:versions-cache:v1'
   const VERSIONS_CACHE_TTL = 5 * 60 * 1000 // 5 minutes
-  const STATUS_CACHE_KEY = 'dh:runtimes:status-cache:v1'
-  const STATUS_CACHE_TTL = 30 * 1000
-
   const loadVersionsForRuntime = useCallback(async (runtimeId: string, method: 'system' | 'local', resetDefault: boolean) => {
     const cacheKey = `${runtimeId}:${method}`
     // Check localStorage cache first
