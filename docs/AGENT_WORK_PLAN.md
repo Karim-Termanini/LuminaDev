@@ -1,3 +1,6 @@
+> [!IMPORTANT]
+> **ملاحظة معمارية هامة:** هذا المشروع (LuminaDev) مصمم ليكون **Full Hosted** ويعمل بشكل مباشر على بيئة المضيف. **البرنامج غير معزول (NOT isolated)** وأي أفكار تتعلق بالعزل الصارم (Strict Isolation مثل cgroups أو Sandbox) مرفوضة تماماً بالتصميم.
+
 # خطة عمل — Agent B و Agent A (المنطق الخلفي)
 
 مستند تنفيذي يفصل المهام بين **Agent B** (واجهة، توثيق، CI خفيف) و**Agent A** (Rust، `ipc_invoke`، عقود `@linux-dev-home/shared`).

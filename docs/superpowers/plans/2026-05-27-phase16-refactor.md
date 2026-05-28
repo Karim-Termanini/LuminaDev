@@ -1,3 +1,6 @@
+> [!IMPORTANT]
+> **Architectural Notice:** LuminaDev is a **Full Hosted** environment manager. It is explicitly **NOT isolated** and does not use strict sandboxing (like cgroups or Docker-based build isolation) by design.
+
 # Phase 16: The Great Extraction — lib.rs Monolith Refactoring
 
 **Status:** ✅ DONE (completed 2026-05-28)  
