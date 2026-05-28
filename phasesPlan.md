@@ -622,9 +622,16 @@ When user clicks "Install" / "Fix":
 ---
 
 ### Phase 16 — lib.rs Monolith Refactoring
-**Status:** 📋 Planned (Refactor sprint)  
-**Scope:** Decompose 4,700+ line `lib.rs` into domain modules.  
+**Status:** ✅ DONE  
+**Scope:** Decomposed 3,963-line `lib.rs` into 14 domain modules (308 non-test dispatcher lines).  
 **Details:** See [`docs/superpowers/plans/2026-05-27-phase16-refactor.md`](docs/superpowers/plans/2026-05-27-phase16-refactor.md)
+
+**Results:**
+- `lib.rs`: 3,963 → 691 (82.6% reduction), 308 non-test dispatcher lines (8 over <300 target)
+- ipc_invoke: 52 clean delegation arms, zero business logic inline
+- 10 standalone functions extracted + 45 inline match arm blocks moved to domain modules
+- executor.rs deduplicated (was dead code)
+- cargo check: zero warnings, clippy: zero errors, 108/108 tests pass
 
 ---
 

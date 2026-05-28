@@ -1,10 +1,5 @@
 use serde_json::{json, Value};
 
-use portable_pty::{native_pty_system, CommandBuilder, PtySize};
-use std::sync::{Arc, Mutex as StdMutex};
-use tauri::{AppHandle, Emitter, Manager};
-use uuid::Uuid;
-
 use crate::host_exec::{
   cmd_timeout_long, cmd_timeout_short, exec_output, exec_output_limit, exec_result, exec_result_limit,
 };
@@ -332,76 +327,6 @@ pub(crate) async fn docker_tags(body: &Value) -> Value {
       Err(_) => json!({ "ok": false, "error": "[DOCKER_TAGS_FAILED] Invalid response format." }),
     },
     Err(e) => json!({ "ok": false, "error": format!("[DOCKER_TAGS_FAILED] {}", e.trim()) }),
-  }
-}
-
-pub(crate) async fn docker_terminal(app: &AppHandle, body: &Value) -> Value {
-  let container_id = body.get("containerId").and_then(|v| v.as_str()).unwrap_or_default();
-  if container_id.is_empty() {
-    return json!({ "ok": false, "error": "[DOCKER_TERMINAL_FAILED] Missing containerId." });
-  }
-  let cols = body.get("cols").and_then(|v| v.as_u64()).unwrap_or(120) as u16;
-  let rows = body.get("rows").and_then(|v| v.as_u64()).unwrap_or(34) as u16;
-  let pty_system = native_pty_system();
-  match pty_system.openpty(PtySize { rows, cols, pixel_width: 0, pixel_height: 0 }) {
-    Ok(pair) => {
-      let mut cmd = CommandBuilder::new("docker");
-      cmd.args([
-        "exec",
-        "-it",
-        container_id,
-        "sh",
-        "-lc",
-        "if command -v bash >/dev/null 2>&1; then exec bash --noprofile --norc -i; else exec sh -i; fi",
-      ]);
-      match pair.slave.spawn_command(cmd) {
-        Ok(child) => {
-          let id = Uuid::new_v4().to_string();
-          let master = Arc::new(StdMutex::new(pair.master));
-          let child = Arc::new(StdMutex::new(child));
-          let writer = match master.lock() {
-            Ok(guard) => match guard.take_writer() {
-              Ok(w) => Arc::new(StdMutex::new(w)),
-              Err(e) => return json!({ "ok": false, "error": format!("[DOCKER_TERMINAL_FAILED] {}", e) }),
-            },
-            Err(_) => return json!({ "ok": false, "error": "[DOCKER_TERMINAL_FAILED] PTY lock poisoned." }),
-          };
-          let app_out = app.clone();
-          let id_out = id.clone();
-          let master_for_reader = Arc::clone(&master);
-          std::thread::spawn(move || {
-            let mut reader = {
-              let guard = match master_for_reader.lock() {
-                Ok(g) => g,
-                Err(_) => return,
-              };
-              match guard.try_clone_reader() {
-                Ok(r) => r,
-                Err(_) => return,
-              }
-            };
-            let mut buf = [0u8; 8192];
-            while let Ok(n) = reader.read(&mut buf) {
-              if n == 0 {
-                break;
-              }
-              let data = String::from_utf8_lossy(&buf[..n]).to_string();
-              let _ = app_out.emit("dh:terminal:data", json!({ "id": id_out, "data": data }));
-            }
-            let _ = app_out.emit("dh:terminal:exit", json!({ "id": id_out }));
-          });
-          let state = app.state::<crate::state::AppState>();
-          state
-            .terminals
-            .lock()
-            .await
-            .insert(id.clone(), crate::state::TerminalSession { master, child, writer });
-          json!({ "ok": true, "id": id })
-        }
-        Err(e) => json!({ "ok": false, "error": format!("[DOCKER_TERMINAL_FAILED] {}", e) }),
-      }
-    }
-    Err(e) => json!({ "ok": false, "error": format!("[DOCKER_TERMINAL_FAILED] {}", e) }),
   }
 }
 

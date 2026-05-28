@@ -166,3 +166,42 @@ pub(crate) fn lumina_probe_meaningful_line(stdout: &str, stderr: &str) -> String
     .unwrap_or("")
     .to_string()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn version_token_helpers_handle_expected_inputs() {
+        assert_eq!(
+            lumina_first_version_token("v22.1.0 (LTS)"),
+            Some("v22.1.0".to_string())
+        );
+        assert_eq!(lumina_first_version_token("latest"), None);
+        assert_eq!(lumina_dotnet_install_channel("9.0.1"), "9.0.1");
+        assert_eq!(lumina_dotnet_install_channel(""), "8.0");
+    }
+
+    #[test]
+    fn version_matching_allows_prerelease_probe_lines() {
+        assert!(lumina_version_token_matches_probe_line(
+            "0.13.0",
+            "0.13.0-dev.20240201"
+        ));
+        assert!(lumina_version_token_matches_probe_line(
+            "v22.2.0",
+            "node v22.2.0"
+        ));
+        assert!(!lumina_version_token_matches_probe_line("1.2.3", "1.2.4"));
+    }
+
+    #[test]
+    fn probe_line_filter_ignores_shell_noise() {
+        let stdout = "bash: /home/me/.bashrc: line 1: foo: command not found\n";
+        let stderr = "Python 3.12.2\n";
+        assert_eq!(
+            lumina_probe_meaningful_line(stdout, stderr),
+            "Python 3.12.2"
+        );
+    }
+}

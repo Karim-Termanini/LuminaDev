@@ -2,7 +2,8 @@ use serde_json::{json, Value};
 use tauri::AppHandle;
 
 use crate::cloud_auth::{self, CredentialStore, ParsedRemoteRepo};
-use crate::host_exec::{exec_output_limit, cmd_timeout_short};
+use crate::host_exec::{cmd_timeout_short, exec_output_limit};
+use crate::store_engine;
 
 pub async fn invoke(app: &AppHandle, channel: &str, body: &Value) -> Value {
     match channel {
@@ -40,18 +41,22 @@ async fn prs(app: &AppHandle, body: &Value) -> Value {
         Err(e) => return json!({ "ok": false, "error": e }),
     };
     let result = match provider {
-        "github" => cloud_auth::GitHubProvider::list_open_pull_requests(
-            &cred.token,
-            limit,
-            cred.web_origin.as_deref().unwrap_or("github.com"),
-        )
-        .await,
-        "gitlab" => cloud_auth::GitLabProvider::list_open_pull_requests(
-            &cred.token,
-            limit,
-            cred.web_origin.as_deref(),
-        )
-        .await,
+        "github" => {
+            cloud_auth::GitHubProvider::list_open_pull_requests(
+                &cred.token,
+                limit,
+                cred.web_origin.as_deref().unwrap_or("github.com"),
+            )
+            .await
+        }
+        "gitlab" => {
+            cloud_auth::GitLabProvider::list_open_pull_requests(
+                &cred.token,
+                limit,
+                cred.web_origin.as_deref(),
+            )
+            .await
+        }
         _ => Err("[CLOUD_GIT_NETWORK] Unknown provider".to_string()),
     };
     match result {
@@ -281,12 +286,14 @@ async fn issues(app: &AppHandle, body: &Value) -> Value {
         Err(e) => return json!({ "ok": false, "error": e }),
     };
     let result = match provider {
-        "github" => cloud_auth::GitHubProvider::list_assigned_issues(
-            &cred.token,
-            limit,
-            cred.web_origin.as_deref().unwrap_or("github.com"),
-        )
-        .await,
+        "github" => {
+            cloud_auth::GitHubProvider::list_assigned_issues(
+                &cred.token,
+                limit,
+                cred.web_origin.as_deref().unwrap_or("github.com"),
+            )
+            .await
+        }
         "gitlab" => {
             cloud_auth::GitLabProvider::list_assigned_issues(
                 &cred.token,
@@ -321,12 +328,40 @@ async fn issues(app: &AppHandle, body: &Value) -> Value {
 
 async fn create_pr(app: &AppHandle, body: &Value) -> Value {
     let provider = body.get("provider").and_then(|v| v.as_str()).unwrap_or("");
-    let title = body.get("title").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
-    let description = body.get("body").and_then(|v| v.as_str()).unwrap_or("").to_string();
-    let head = body.get("head").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
-    let base = body.get("base").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
-    let repo_path = body.get("repoPath").and_then(|v| v.as_str()).map(str::trim).filter(|s| !s.is_empty());
-    let remote_name = body.get("remote").and_then(|v| v.as_str()).map(str::trim).filter(|s| !s.is_empty()).unwrap_or("origin");
+    let title = body
+        .get("title")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    let description = body
+        .get("body")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let head = body
+        .get("head")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    let base = body
+        .get("base")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    let repo_path = body
+        .get("repoPath")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty());
+    let remote_name = body
+        .get("remote")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .unwrap_or("origin");
 
     if title.is_empty() {
         return json!({ "ok": false, "error": "[CLOUD_GIT_CREATE_PR] title is required." });
@@ -338,26 +373,45 @@ async fn create_pr(app: &AppHandle, body: &Value) -> Value {
     let store = cloud_auth::app_encrypted_credential_store(app);
     let cred = match store.load(provider) {
         Ok(Some(c)) => c,
-        Ok(None) => return json!({ "ok": false, "error": "[CLOUD_AUTH_NOT_CONNECTED] Connect this provider in Cloud Git first." }),
+        Ok(None) => {
+            return json!({ "ok": false, "error": "[CLOUD_AUTH_NOT_CONNECTED] Connect this provider in Cloud Git first." })
+        }
         Err(e) => return json!({ "ok": false, "error": e }),
     };
 
     // Resolve owner/repo from the git remote URL.
     let rp = match repo_path {
         Some(p) => p,
-        None => return json!({ "ok": false, "error": "[CLOUD_GIT_CREATE_PR] repoPath is required." }),
+        None => {
+            return json!({ "ok": false, "error": "[CLOUD_GIT_CREATE_PR] repoPath is required." })
+        }
     };
-    let remote_url = match exec_output_limit("git", &["-C", rp, "remote", "get-url", remote_name], cmd_timeout_short()).await {
+    let remote_url = match exec_output_limit(
+        "git",
+        &["-C", rp, "remote", "get-url", remote_name],
+        cmd_timeout_short(),
+    )
+    .await
+    {
         Ok(u) => u,
-        Err(e) => return json!({ "ok": false, "error": format!("[CLOUD_GIT_SCOPE] Could not read remote: {}", e.trim()) }),
+        Err(e) => {
+            return json!({ "ok": false, "error": format!("[CLOUD_GIT_SCOPE] Could not read remote: {}", e.trim()) })
+        }
     };
-    let parsed = match cloud_auth::parse_remote_for_repo_scoped_pipelines(remote_url.trim(), provider) {
-        Ok(p) => p,
-        Err(e) => return json!({ "ok": false, "error": e }),
-    };
+    let parsed =
+        match cloud_auth::parse_remote_for_repo_scoped_pipelines(remote_url.trim(), provider) {
+            Ok(p) => p,
+            Err(e) => return json!({ "ok": false, "error": e }),
+        };
 
     let result = match (provider, &parsed) {
-        ("github", cloud_auth::ParsedRemoteRepo::Github { hostname, full_name }) => {
+        (
+            "github",
+            cloud_auth::ParsedRemoteRepo::Github {
+                hostname,
+                full_name,
+            },
+        ) => {
             let parts: Vec<&str> = full_name.splitn(2, '/').collect();
             if parts.len() != 2 {
                 return json!({ "ok": false, "error": "[CLOUD_GIT_CREATE_PR] Could not parse owner/repo from remote URL." });
@@ -374,10 +428,28 @@ async fn create_pr(app: &AppHandle, body: &Value) -> Value {
             )
             .await
         }
-        ("gitlab", cloud_auth::ParsedRemoteRepo::Gitlab { web_origin, path_with_namespace }) => {
-            cloud_auth::GitLabProvider::create_merge_request(&cred.token, web_origin, path_with_namespace, &title, &description, &head, &base).await
+        (
+            "gitlab",
+            cloud_auth::ParsedRemoteRepo::Gitlab {
+                web_origin,
+                path_with_namespace,
+            },
+        ) => {
+            cloud_auth::GitLabProvider::create_merge_request(
+                &cred.token,
+                web_origin,
+                path_with_namespace,
+                &title,
+                &description,
+                &head,
+                &base,
+            )
+            .await
         }
-        _ => Err("[CLOUD_GIT_SCOPE] Provider/remote mismatch. Make sure the correct tab is active.".to_string()),
+        _ => Err(
+            "[CLOUD_GIT_SCOPE] Provider/remote mismatch. Make sure the correct tab is active."
+                .to_string(),
+        ),
     };
 
     match result {
@@ -388,9 +460,22 @@ async fn create_pr(app: &AppHandle, body: &Value) -> Value {
 
 async fn get_pr_checks(app: &AppHandle, body: &Value) -> Value {
     let provider = body.get("provider").and_then(|v| v.as_str()).unwrap_or("");
-    let repo_path = body.get("repoPath").and_then(|v| v.as_str()).map(str::trim).filter(|s| !s.is_empty());
-    let remote_name = body.get("remote").and_then(|v| v.as_str()).map(str::trim).filter(|s| !s.is_empty()).unwrap_or("origin");
-    let reference = body.get("reference").and_then(|v| v.as_str()).unwrap_or("").trim();
+    let repo_path = body
+        .get("repoPath")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty());
+    let remote_name = body
+        .get("remote")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .unwrap_or("origin");
+    let reference = body
+        .get("reference")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim();
 
     if reference.is_empty() {
         return json!({ "ok": false, "error": "[CLOUD_GIT_GET_PR_CHECKS] reference is required." });
@@ -399,31 +484,63 @@ async fn get_pr_checks(app: &AppHandle, body: &Value) -> Value {
     let store = cloud_auth::app_encrypted_credential_store(app);
     let cred = match store.load(provider) {
         Ok(Some(c)) => c,
-        Ok(None) => return json!({ "ok": false, "error": "[CLOUD_AUTH_NOT_CONNECTED] Connect this provider first." }),
+        Ok(None) => {
+            return json!({ "ok": false, "error": "[CLOUD_AUTH_NOT_CONNECTED] Connect this provider first." })
+        }
         Err(e) => return json!({ "ok": false, "error": e }),
     };
 
     let rp = match repo_path {
         Some(p) => p,
-        None => return json!({ "ok": false, "error": "[CLOUD_GIT_GET_PR_CHECKS] repoPath is required." }),
+        None => {
+            return json!({ "ok": false, "error": "[CLOUD_GIT_GET_PR_CHECKS] repoPath is required." })
+        }
     };
 
-    let remote_url = match exec_output_limit("git", &["-C", rp, "remote", "get-url", remote_name], cmd_timeout_short()).await {
+    let remote_url = match exec_output_limit(
+        "git",
+        &["-C", rp, "remote", "get-url", remote_name],
+        cmd_timeout_short(),
+    )
+    .await
+    {
         Ok(u) => u,
-        Err(e) => return json!({ "ok": false, "error": format!("[CLOUD_GIT_SCOPE] Could not read remote: {}", e.trim()) }),
+        Err(e) => {
+            return json!({ "ok": false, "error": format!("[CLOUD_GIT_SCOPE] Could not read remote: {}", e.trim()) })
+        }
     };
 
-    let parsed = match cloud_auth::parse_remote_for_repo_scoped_pipelines(remote_url.trim(), provider) {
-        Ok(p) => p,
-        Err(e) => return json!({ "ok": false, "error": e }),
-    };
+    let parsed =
+        match cloud_auth::parse_remote_for_repo_scoped_pipelines(remote_url.trim(), provider) {
+            Ok(p) => p,
+            Err(e) => return json!({ "ok": false, "error": e }),
+        };
 
     let result = match (provider, &parsed) {
-        ("github", cloud_auth::ParsedRemoteRepo::Github { hostname, full_name }) => {
-            cloud_auth::GitHubProvider::list_pr_checks(&cred.token, hostname, full_name, reference).await
+        (
+            "github",
+            cloud_auth::ParsedRemoteRepo::Github {
+                hostname,
+                full_name,
+            },
+        ) => {
+            cloud_auth::GitHubProvider::list_pr_checks(&cred.token, hostname, full_name, reference)
+                .await
         }
-        ("gitlab", cloud_auth::ParsedRemoteRepo::Gitlab { web_origin, path_with_namespace }) => {
-            cloud_auth::GitLabProvider::list_pr_checks(&cred.token, web_origin, path_with_namespace, reference).await
+        (
+            "gitlab",
+            cloud_auth::ParsedRemoteRepo::Gitlab {
+                web_origin,
+                path_with_namespace,
+            },
+        ) => {
+            cloud_auth::GitLabProvider::list_pr_checks(
+                &cred.token,
+                web_origin,
+                path_with_namespace,
+                reference,
+            )
+            .await
         }
         _ => Err("[CLOUD_GIT_SCOPE] Provider/remote mismatch.".to_string()),
     };
@@ -436,14 +553,21 @@ async fn get_pr_checks(app: &AppHandle, body: &Value) -> Value {
 
 fn parse_github_pr_merge_params(pr_url: &str) -> Result<(String, String, u32), String> {
     let u = pr_url.trim();
-    let u = u.split('?').next().unwrap_or(u).split('#').next().unwrap_or(u).trim();
+    let u = u
+        .split('?')
+        .next()
+        .unwrap_or(u)
+        .split('#')
+        .next()
+        .unwrap_or(u)
+        .trim();
     let u = u.strip_suffix("/merge").unwrap_or(u).trim_end_matches('/');
 
     let lower = u.to_ascii_lowercase();
     const NEEDLE: &str = "/pull/";
-    let p = lower
-        .find(NEEDLE)
-        .ok_or_else(|| "[CLOUD_GIT_MERGE_PR] URL must be a GitHub pull request link.".to_string())?;
+    let p = lower.find(NEEDLE).ok_or_else(|| {
+        "[CLOUD_GIT_MERGE_PR] URL must be a GitHub pull request link.".to_string()
+    })?;
     let head = &u[..p];
     let tail = &u[p + NEEDLE.len()..];
     let num_str = tail
@@ -460,25 +584,34 @@ fn parse_github_pr_merge_params(pr_url: &str) -> Result<(String, String, u32), S
         .find(SCHEME)
         .ok_or_else(|| "[CLOUD_GIT_MERGE_PR] Invalid pull request URL.".to_string())?;
     let after = &head[si + SCHEME.len()..];
-    let slash = after
-        .find('/')
-        .ok_or_else(|| "[CLOUD_GIT_MERGE_PR] Invalid pull request URL (expected host/owner/repo).".to_string())?;
+    let slash = after.find('/').ok_or_else(|| {
+        "[CLOUD_GIT_MERGE_PR] Invalid pull request URL (expected host/owner/repo).".to_string()
+    })?;
     let hostname = after[..slash].to_ascii_lowercase();
     let full = after[slash + 1..].to_string();
     if full.matches('/').count() != 1 {
-        return Err("[CLOUD_GIT_MERGE_PR] GitHub pull URL must use a single owner/repo path.".to_string());
+        return Err(
+            "[CLOUD_GIT_MERGE_PR] GitHub pull URL must use a single owner/repo path.".to_string(),
+        );
     }
     Ok((hostname, full, num))
 }
 
 fn parse_gitlab_mr_merge_params(pr_url: &str) -> Result<(String, String, u32), String> {
     let u = pr_url.trim();
-    let u = u.split('?').next().unwrap_or(u).split('#').next().unwrap_or(u).trim_end_matches('/');
+    let u = u
+        .split('?')
+        .next()
+        .unwrap_or(u)
+        .split('#')
+        .next()
+        .unwrap_or(u)
+        .trim_end_matches('/');
     let u = u.strip_suffix("/merge").unwrap_or(u).trim_end_matches('/');
     let needle = "/-/merge_requests/";
-    let pos = u
-        .find(needle)
-        .ok_or_else(|| "[CLOUD_GIT_MERGE_PR] URL must be a GitLab merge request link.".to_string())?;
+    let pos = u.find(needle).ok_or_else(|| {
+        "[CLOUD_GIT_MERGE_PR] URL must be a GitLab merge request link.".to_string()
+    })?;
     let prefix = &u[..pos];
     let tail = &u[pos + needle.len()..];
     let num_str = tail
@@ -495,9 +628,10 @@ fn parse_gitlab_mr_merge_params(pr_url: &str) -> Result<(String, String, u32), S
         .find(SCHEME)
         .ok_or_else(|| "[CLOUD_GIT_MERGE_PR] Invalid merge request URL.".to_string())?;
     let after_scheme = &prefix[si + SCHEME.len()..];
-    let slash = after_scheme
-        .find('/')
-        .ok_or_else(|| "[CLOUD_GIT_MERGE_PR] Invalid merge request URL (expected host and project path).".to_string())?;
+    let slash = after_scheme.find('/').ok_or_else(|| {
+        "[CLOUD_GIT_MERGE_PR] Invalid merge request URL (expected host and project path)."
+            .to_string()
+    })?;
     let hostpart = after_scheme[..slash].to_ascii_lowercase();
     let scheme = &prefix[..si];
     let web_origin = format!("{}://{}", scheme, hostpart);
@@ -587,13 +721,20 @@ async fn merge_pr(app: &AppHandle, body: &Value) -> Value {
         }
     };
 
-    let parsed = match cloud_auth::parse_remote_for_repo_scoped_pipelines(remote_url.trim(), provider) {
-        Ok(p) => p,
-        Err(e) => return json!({ "ok": false, "error": e }),
-    };
+    let parsed =
+        match cloud_auth::parse_remote_for_repo_scoped_pipelines(remote_url.trim(), provider) {
+            Ok(p) => p,
+            Err(e) => return json!({ "ok": false, "error": e }),
+        };
 
     let result = match (provider, &parsed) {
-        ("github", cloud_auth::ParsedRemoteRepo::Github { hostname, full_name }) => {
+        (
+            "github",
+            cloud_auth::ParsedRemoteRepo::Github {
+                hostname,
+                full_name,
+            },
+        ) => {
             let (url_host, url_repo, num) = match parse_github_pr_merge_params(pr_url) {
                 Ok(x) => x,
                 Err(e) => return json!({ "ok": false, "error": e }),
@@ -610,12 +751,16 @@ async fn merge_pr(app: &AppHandle, body: &Value) -> Value {
                     "error": "[CLOUD_GIT_MERGE_PR] Pull request is for a different repository than the selected remote."
                 });
             }
-            cloud_auth::GitHubProvider::merge_pull_request(&cred.token, hostname, full_name, num).await
+            cloud_auth::GitHubProvider::merge_pull_request(&cred.token, hostname, full_name, num)
+                .await
         }
-        ("gitlab", cloud_auth::ParsedRemoteRepo::Gitlab {
-            web_origin,
-            path_with_namespace,
-        }) => {
+        (
+            "gitlab",
+            cloud_auth::ParsedRemoteRepo::Gitlab {
+                web_origin,
+                path_with_namespace,
+            },
+        ) => {
             let (url_origin, url_path, num) = match parse_gitlab_mr_merge_params(pr_url) {
                 Ok(x) => x,
                 Err(e) => return json!({ "ok": false, "error": e }),
@@ -669,18 +814,22 @@ async fn releases(app: &AppHandle, body: &Value) -> Value {
         Err(e) => return json!({ "ok": false, "error": e }),
     };
     let result = match provider {
-        "github" => cloud_auth::GitHubProvider::list_recent_releases(
-            &cred.token,
-            limit,
-            cred.web_origin.as_deref().unwrap_or("github.com"),
-        )
-        .await,
-        "gitlab" => cloud_auth::GitLabProvider::list_recent_releases(
-            &cred.token,
-            limit,
-            cred.web_origin.as_deref(),
-        )
-        .await,
+        "github" => {
+            cloud_auth::GitHubProvider::list_recent_releases(
+                &cred.token,
+                limit,
+                cred.web_origin.as_deref().unwrap_or("github.com"),
+            )
+            .await
+        }
+        "gitlab" => {
+            cloud_auth::GitLabProvider::list_recent_releases(
+                &cred.token,
+                limit,
+                cred.web_origin.as_deref(),
+            )
+            .await
+        }
         _ => Err("[CLOUD_GIT_NETWORK] Unknown provider".to_string()),
     };
     match result {
@@ -699,6 +848,173 @@ async fn releases(app: &AppHandle, body: &Value) -> Value {
                 })
                 .collect();
             json!({ "ok": true, "releases": releases })
+        }
+        Err(e) => json!({ "ok": false, "error": e }),
+    }
+}
+
+pub(crate) async fn handle_cloud_auth_connect_start(app: &AppHandle, body: &Value) -> Value {
+    let (gh_store, gl_store) = store_engine::read_cloud_oauth_store_overrides(app);
+    let provider = body.get("provider").and_then(|v| v.as_str()).unwrap_or("");
+    match provider {
+        "github" => {
+            let cid = cloud_auth::compose_github_client_id(gh_store.as_deref());
+            match cloud_auth::GitHubProvider::device_auth_start(
+                &["repo", "read:org", "read:user", "notifications"],
+                cid.as_str(),
+            )
+            .await
+            {
+                Ok(c) => json!({
+                    "ok": true,
+                    "user_code": c.user_code,
+                    "verification_uri": c.verification_uri,
+                    "device_code": c.device_code,
+                    "interval": c.interval,
+                    "expires_in": c.expires_in,
+                }),
+                Err(e) => json!({ "ok": false, "error": e }),
+            }
+        }
+        "gitlab" => {
+            let cid = cloud_auth::compose_gitlab_client_id(gl_store.as_deref());
+            match cloud_auth::GitLabProvider::device_auth_start(
+                &[
+                    "read_api",
+                    "read_user",
+                    "read_repository",
+                    "write_repository",
+                ],
+                cid.as_str(),
+            )
+            .await
+            {
+                Ok(c) => json!({
+                    "ok": true,
+                    "user_code": c.user_code,
+                    "verification_uri": c.verification_uri,
+                    "device_code": c.device_code,
+                    "interval": c.interval,
+                    "expires_in": c.expires_in,
+                }),
+                Err(e) => json!({ "ok": false, "error": e }),
+            }
+        }
+        _ => json!({ "ok": false, "error": "[CLOUD_AUTH_NETWORK] Unknown provider" }),
+    }
+}
+
+pub(crate) async fn handle_cloud_auth_connect_poll(app: &AppHandle, body: &Value) -> Value {
+    let (gh_store, gl_store) = store_engine::read_cloud_oauth_store_overrides(app);
+    let provider = body.get("provider").and_then(|v| v.as_str()).unwrap_or("");
+    let device_code = body
+        .get("device_code")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let store = cloud_auth::app_encrypted_credential_store(app);
+    let poll_result = match provider {
+        "github" => {
+            let cid = cloud_auth::compose_github_client_id(gh_store.as_deref());
+            cloud_auth::GitHubProvider::device_auth_poll(device_code, cid.as_str()).await
+        }
+        "gitlab" => {
+            let cid = cloud_auth::compose_gitlab_client_id(gl_store.as_deref());
+            cloud_auth::GitLabProvider::device_auth_poll(device_code, cid.as_str()).await
+        }
+        _ => Err("[CLOUD_AUTH_NETWORK] Unknown provider".to_string()),
+    };
+    match poll_result {
+        Ok(cloud_auth::PollResult::Pending) => json!({ "ok": true, "status": "pending" }),
+        Ok(cloud_auth::PollResult::Expired) => json!({ "ok": true, "status": "expired" }),
+        Ok(cloud_auth::PollResult::Denied) => json!({ "ok": true, "status": "denied" }),
+        Ok(cloud_auth::PollResult::Complete {
+            token,
+            username,
+            avatar_url,
+        }) => {
+            let cred = cloud_auth::StoredCredential {
+                token,
+                username: username.clone(),
+                avatar_url: avatar_url.clone(),
+                connected_at: cloud_auth::chrono_now(),
+                web_origin: None,
+            };
+            match store.save(provider, &cred) {
+                Ok(_) => {
+                    json!({ "ok": true, "status": "complete", "username": username, "avatar_url": avatar_url })
+                }
+                Err(e) => json!({ "ok": false, "error": e }),
+            }
+        }
+        Err(e) => json!({ "ok": false, "error": e }),
+    }
+}
+
+pub(crate) async fn handle_cloud_auth_connect_pat(app: &AppHandle, body: &Value) -> Value {
+    let provider = body.get("provider").and_then(|v| v.as_str()).unwrap_or("");
+    let token = body.get("token").and_then(|v| v.as_str()).unwrap_or("");
+    let host = body
+        .get("host")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty());
+    let store = cloud_auth::app_encrypted_credential_store(app);
+    let validate_result = match provider {
+        "github" => cloud_auth::GitHubProvider::validate_pat(token, host).await,
+        "gitlab" => cloud_auth::GitLabProvider::validate_pat(token, host).await,
+        _ => Err("[CLOUD_AUTH_NETWORK] Unknown provider".to_string()),
+    };
+    match validate_result {
+        Ok(cred) => {
+            let username = cred.username.clone();
+            let avatar_url = cred.avatar_url.clone();
+            match store.save(provider, &cred) {
+                Ok(_) => {
+                    json!({ "ok": true, "username": username, "avatar_url": avatar_url })
+                }
+                Err(e) => json!({ "ok": false, "error": e }),
+            }
+        }
+        Err(e) => json!({ "ok": false, "error": e }),
+    }
+}
+
+pub(crate) async fn handle_cloud_auth_disconnect(app: &AppHandle, body: &Value) -> Value {
+    let (_gh_store, gl_store) = store_engine::read_cloud_oauth_store_overrides(app);
+    let provider = body.get("provider").and_then(|v| v.as_str()).unwrap_or("");
+    let store = cloud_auth::app_encrypted_credential_store(app);
+    if let Ok(Some(cred)) = store.load(provider) {
+        let _ = match provider {
+            "github" => cloud_auth::GitHubProvider::revoke_token(&cred.token).await,
+            "gitlab" => {
+                let cid = cloud_auth::compose_gitlab_client_id(gl_store.as_deref());
+                cloud_auth::GitLabProvider::revoke_token(&cred.token, cid.as_str()).await
+            }
+            _ => Ok(()),
+        };
+    }
+    match store.delete(provider) {
+        Ok(_) => json!({ "ok": true }),
+        Err(e) => json!({ "ok": false, "error": e }),
+    }
+}
+
+pub(crate) async fn handle_cloud_auth_status(app: &AppHandle) -> Value {
+    let store = cloud_auth::app_encrypted_credential_store(app);
+    match store.load_all() {
+        Ok(accounts) => {
+            let arr: Vec<serde_json::Value> = accounts
+                .into_iter()
+                .map(|a| {
+                    json!({
+                        "provider": a.provider,
+                        "username": a.username,
+                        "avatar_url": a.avatar_url,
+                        "connected_at": a.connected_at,
+                    })
+                })
+                .collect();
+            json!({ "ok": true, "accounts": arr })
         }
         Err(e) => json!({ "ok": false, "error": e }),
     }
@@ -738,10 +1054,9 @@ mod merge_pr_url_tests {
 
     #[test]
     fn parses_gitlab_mr_url() {
-        let (origin, path, n) = parse_gitlab_mr_merge_params(
-            "https://gitlab.com/group/sub/-/merge_requests/7",
-        )
-        .unwrap();
+        let (origin, path, n) =
+            parse_gitlab_mr_merge_params("https://gitlab.com/group/sub/-/merge_requests/7")
+                .unwrap();
         assert_eq!(origin, "https://gitlab.com");
         assert_eq!(path, "group/sub");
         assert_eq!(n, 7);
