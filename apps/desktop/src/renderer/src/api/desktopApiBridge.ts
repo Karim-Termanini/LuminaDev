@@ -76,6 +76,7 @@ function createTauriDhApi(): DhApi {
     gitConfigSet: (payload) => tauriInvoke(IPC.gitConfigSet, payload),
     gitConfigSetKey: (payload) => tauriInvoke(IPC.gitConfigSetKey, payload),
     gitConfigList: (payload) => tauriInvoke(IPC.gitConfigList, payload),
+    gitDoctorScan: () => tauriInvoke(IPC.gitDoctorScan),
     sshGenerate: (payload) => tauriInvoke(IPC.sshGenerate, payload),
     sshGetPub: (payload) => tauriInvoke(IPC.sshGetPub, payload),
     sshTestGithub: (payload) => tauriInvoke(IPC.sshTestGithub, payload),
@@ -148,6 +149,10 @@ function createTauriDhApi(): DhApi {
     monitorSecurity: () => tauriInvoke(IPC.monitorSecurity),
     monitorSecurityDrilldown: () => tauriInvoke(IPC.monitorSecurityDrilldown),
     runtimeStatus: () => tauriInvoke(IPC.runtimeStatus),
+    runtimeInstalledVersions: (runtimeId: string) =>
+      tauriInvoke<{ ok: boolean; versions: Array<{ version: string; path: string }> }>(
+        IPC.runtimeInstalledVersions, { runtimeId }
+      ),
     getAvailableVersions: (runtimeId, method) =>
       tauriInvoke(IPC.runtimeGetVersions, { runtimeId, method }),
     runtimeSetActive: (payload) => tauriInvoke(IPC.runtimeSetActive, payload),
@@ -204,6 +209,5 @@ function createTauriDhApi(): DhApi {
 
 export function ensureDesktopApi(): void {
   if (!isTauriRuntime()) return
-  if (window.dh) return
   ;(window as Window).dh = createTauriDhApi()
 }

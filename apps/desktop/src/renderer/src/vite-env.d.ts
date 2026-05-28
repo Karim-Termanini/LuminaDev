@@ -40,9 +40,7 @@ declare global {
         protocol?: string
         networkMode?: string
       }) => Promise<unknown>
-      dockerInspect: (payload: {
-        id: string
-      }) => Promise<{
+      dockerInspect: (payload: { id: string }) => Promise<{
         ok: boolean
         data?: import('@linux-dev-home/shared').ContainerInspectData
         error?: string
@@ -115,9 +113,7 @@ declare global {
         url: string
         targetDir: string
       }) => Promise<{ ok: boolean; error?: string }>
-      gitStatus: (payload: {
-        repoPath: string
-      }) => Promise<{
+      gitStatus: (payload: { repoPath: string }) => Promise<{
         ok: boolean
         info: {
           branch: string
@@ -150,6 +146,19 @@ declare global {
       gitConfigList: (payload: {
         target: 'sandbox' | 'host'
       }) => Promise<{ ok: boolean; rows: Array<{ key: string; value: string }>; error?: string }>
+      gitDoctorScan: () => Promise<{
+        ok: true
+        gitVersion: string | null
+        healthScore: number
+        findings: Array<{
+          id: string
+          category: 'configuration' | 'security' | 'performance' | 'environment' | 'overview'
+          severity: 'critical' | 'warning' | 'info' | 'ok'
+          title: string
+          detail: string
+          fix?: { label: string; action?: string }
+        }>
+      }>
       sshGenerate: (payload: {
         target: 'sandbox' | 'host'
         email?: string
@@ -231,9 +240,7 @@ declare global {
       }) => Promise<{ ok: boolean; log: string[]; error?: string }>
       dockerCheckInstalled: () => Promise<{ docker: boolean; compose: boolean; buildx: boolean }>
       getHostDistro: () => Promise<string>
-      dockerSearch: (
-        term: string
-      ) => Promise<{
+      dockerSearch: (term: string) => Promise<{
         ok: boolean
         results: Array<{
           name: string
@@ -269,6 +276,7 @@ declare global {
       runtimeStatus: () => Promise<
         import('@linux-dev-home/shared').RuntimeStatusResponse & { ok: boolean; error?: string }
       >
+      runtimeInstalledVersions: (runtimeId: string) => Promise<{ ok: boolean; versions: Array<{ version: string; path: string }> }>
       getAvailableVersions: (
         runtimeId: string,
         method?: 'system' | 'local'
@@ -277,9 +285,7 @@ declare global {
         runtimeId: string
         path: string
       }) => Promise<{ ok: boolean; error?: string }>
-      checkDependencies: (
-        runtimeId: string
-      ) => Promise<{
+      checkDependencies: (runtimeId: string) => Promise<{
         ok: boolean
         dependencies: Array<{ name: string; status: string; ok: boolean }>
         error?: string
