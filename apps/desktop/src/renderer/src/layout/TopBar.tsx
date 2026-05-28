@@ -83,6 +83,7 @@ direction: 'ltr',
             <DashTab to="/dashboard" end label={t('topbar.main')} />
             <DashTab to="/dashboard/kernels" label={t('topbar.kernels')} />
             <DashTab to="/dashboard/logs" label={t('topbar.logs')} />
+            <DashTab to="/dashboard/widgets" label={t('topbar.widgets')} />
           </>
         ) : (
           <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>{t('topbar.overview')}</span>

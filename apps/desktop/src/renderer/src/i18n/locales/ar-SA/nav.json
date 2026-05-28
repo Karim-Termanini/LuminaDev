@@ -37,5 +37,6 @@
   "topbar.runtimes": "بيئات التشغيل",
   "topbar.maintenance": "الصيانة",
   "topbar.settings": "الإعدادات",
-  "topbar.linuxDevHome": "Linux Dev Home"
+  "topbar.linuxDevHome": "Linux Dev Home",
+  "topbar.widgets": "Widgets"
 }

@@ -37,5 +37,6 @@
   "topbar.runtimes": "Laufzeitumgebungen",
   "topbar.maintenance": "Wartung",
   "topbar.settings": "Einstellungen",
-  "topbar.linuxDevHome": "Linux Dev Home"
+  "topbar.linuxDevHome": "Linux Dev Home",
+  "topbar.widgets": "Widgets"
 }
