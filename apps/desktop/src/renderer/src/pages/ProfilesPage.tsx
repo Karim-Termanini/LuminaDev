@@ -142,25 +142,27 @@ export function ProfilesPage(): ReactElement {
     setProjectPaths(paths)
   }, []) // stable: only calls window.dh + setState setters
 
-  const checkRunning = useCallback(async (profileList: CustomProfileEntry[]) => {
-    if (profileList.length === 0) return
+  const checkRunning = useCallback(async (profileList: CustomProfileEntry[]): Promise<Set<string>> => {
+    if (profileList.length === 0) {
+      setRunningProfiles(new Set())
+      return new Set()
+    }
     try {
       const res = (await invoke('ipc_invoke', {
         channel: 'dh:profile:running-status',
         payload: { names: profileList.map((p) => p.name) },
       })) as { ok?: boolean; running?: string[] }
-      if (res.ok && res.running) {
-        setRunningProfiles(new Set(res.running))
-      } else {
-        setRunningProfiles(new Set())
-      }
+      const running = new Set<string>(res.ok && res.running ? res.running : [])
+      setRunningProfiles(running)
+      return running
     } catch {
-      /* ignore */
+      setRunningProfiles(new Set())
+      return new Set()
     }
   }, [])
 
-  const refreshRunning = useCallback(async () => {
-    await checkRunning(profiles)
+  const refreshRunning = useCallback(async (): Promise<Set<string>> => {
+    return checkRunning(profiles)
   }, [profiles, checkRunning])
 
   useEffect(() => {
@@ -738,10 +740,15 @@ export function ProfilesPage(): ReactElement {
                                   channel: 'dh:compose:down',
                                   payload: { profile: p.name },
                                 })) as { ok?: boolean; error?: string }
-                                await refreshRunning()
                                 if (r.ok) {
+                                  const nowRunning = await refreshRunning()
+                                  if (nowRunning.size === 0) {
+                                    await setAsActive('empty')
+                                  }
+                                  await refreshRunning()
                                   setStatus({ message: `${p.name} stopped.`, type: 'success' })
                                 } else {
+                                  await refreshRunning()
                                   setStatus({
                                     message: r.error || 'Failed to stop',
                                     type: 'warning',

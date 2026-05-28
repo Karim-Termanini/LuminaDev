@@ -1,27 +1,15 @@
 import { describe, expect, it } from 'vitest'
 
 import { humanizeDockerError } from './dockerError'
-import {
-  DOCKER_FLATPAK_SOCKET_HINT,
-  SSH_FLATPAK_HINT,
-  TERMINAL_OPEN_EXTERNAL_HINT,
-  TERMINAL_PTY_HINT,
-} from './environmentHints'
 
 describe('critical user-facing scenarios (e2e-lite)', () => {
   it('docker action failure maps to actionable message', () => {
     const msg = humanizeDockerError('[DOCKER_UNAVAILABLE] daemon socket not reachable')
     expect(msg).toContain('Docker daemon/socket unavailable')
-    expect(msg).toContain('/var/run/docker.sock')
-    expect(DOCKER_FLATPAK_SOCKET_HINT).toContain('session-bus')
   })
 
-  it('ssh page contains flatpak permission guidance', () => {
-    expect(SSH_FLATPAK_HINT).toContain('flatpak override --user --filesystem=~/.ssh')
-  })
-
-  it('terminal fallback guidance is explicit', () => {
-    expect(TERMINAL_PTY_HINT).toContain('Flatpak')
-    expect(TERMINAL_OPEN_EXTERNAL_HINT).toContain('Open external terminal')
+  it('docker install not supported message is explicit', () => {
+    const msg = humanizeDockerError('[DOCKER_INSTALL_NOT_SUPPORTED] use manual install')
+    expect(msg).toContain('not supported in this environment')
   })
 })

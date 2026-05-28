@@ -7,6 +7,7 @@ Status legend:
 - `live` = real backend behavior expected
 - `partial` = core behavior works, but one or more flows are simplified/limited
 - `stub` = placeholder/demo/static behavior, not production-complete
+- `redirect` = legacy route, automatically redirected to a primary route
 
 | Route | Status | Notes |
 | --- | --- | --- |
@@ -17,9 +18,11 @@ Status legend:
 | `/system` | partial | Metrics and monitor data are live; some sections still bounded snapshots. |
 | `/docker` | live | Main Docker slice (list/actions/logs/images/volumes/networks/cleanup/remap) is functional with guardrails. |
 | `/ssh` | partial | Core SSH key/test/setup flows work; advanced transfer/remote UX still evolving. |
-| `/git-config` | partial | Identity/behavior/security/inspector sections work via IPC; Git Doctor and backup/restore not yet implemented. |
-| `/git-vcs` | partial | **Local repo:** `dh:git:vcs:*` status, stage/unstage, diff (text + binary detection), commit, **fetch** (remote dropdown from remote-tracking refs, default `origin`, `--prune`) + pull/push (HTTPS via Cloud Git tokens + `GIT_ASKPASS`), branch list (locals + **remotes** via `for-each-ref`), checkout/create, **dirty-checkout modal** + **`dh:git:vcs:stash`** for stash-and-switch. **Integrate:** `dh:git:vcs:merge` (optional `--ff-only`), `dh:git:vcs:rebase`, `dh:git:vcs:merge-continue` / `dh:git:vcs:rebase-continue` / `dh:git:vcs:rebase-skip`, `dh:git:vcs:stash-pop`, `dh:git:vcs:merge-abort`, `dh:git:vcs:rebase-abort` (UI bar under sync). **Repo-scoped CI:** `dh:cloud:git:pipelines` with `repoPath` + `remote` lists recent runs for that repository on **github.com** (Actions), **GitHub Enterprise** (`https://HOST/api/v3/...`), **gitlab.com**, or **self-managed GitLab** (`{origin}/api/v4/...` from the clone URL). The VCS page infers GitHub vs GitLab token when the hostname is ambiguous but only one Cloud account is linked; when **both** are linked, the repo CI card offers an explicit **GitHub / GitLab** token toggle. **Provider rail:** GitHub vs GitLab columns (`dh:cloud:auth:status` + `dh:git:vcs:remotes` URLs) with the same scoped host accent token family used on `/cloud-git`. **Smart-Flow (v0):** top **status banner** on merge/rebase (`gitOperation` + `conflictFileCount` on `dh:git:vcs:status`); **Smart Push** runs **fetch** first and blocks push when `behind > 0` with an integration notice; merge bar buttons follow `gitOperation` (continue/abort only when relevant); **fast-forward only** defaults on for merges. **Conflict list (v0):** unmerged paths from status porcelain show as **conflict** rows (red accent, ⚠) in the file list. **Merge diff (v0):** `dh:git:vcs:diff` for unstaged paths uses `git diff --cc` then `git diff :2` when the plain diff is empty and `ls-files -u` shows the path. **Protected branch push:** common host stderr maps to **`[GIT_VCS_PROTECTED_BRANCH]`** with an amber notice (**Open Cloud Git**, **Dismiss**). **Git op errors:** **Copy raw error** copies the full bracketed IPC string. **Not yet:** three-way merge UI, PR/MR wizard from Lumina, branch-rename flow after protected push, and other advanced rebase controls in-app. |
-| `/registry` | stub | Route is a redirect to `/git?tab=vcs`; no dedicated registry page exists. |
+| `/git` | live | Primary Git hub — tabbed layout (**Config** = identity/behavior/security/inspector + Git Doctor; **VCS** = status/stage/diff/commit/branches/fetch/pull/push/merge/rebase/stash/CI per-repo + Smart-Flow v0 conflict banners; **Cloud Git** = GitHub/GitLab auth + activity dashboards). Replaces `/git-config`, `/git-vcs`, and `/cloud-git`. |
+| `/git-config` | redirect | → `/git?tab=config` |
+| `/git-vcs` | redirect | → `/git?tab=vcs` (see `/git` for full VCS feature list) |
+| `/cloud-git` | redirect | → `/git?tab=cloud` (see `/git` for full Cloud Git feature list) |
+| `/registry` | redirect | → `/git?tab=vcs` |
 | `/profiles` | partial | CRUD + duplicate + export/import; **Set Active** writes `active_profile` as `baseTemplate` (`ComposeProfile`). **On launch**: optional `composeUp` for active profile + dashboard `layoutGet`/`layoutSet` refresh (store `on_login_automation`, runner after wizard). Deeper preset/dashboard unification still evolving. |
 | `/terminal` | partial | Embedded terminal works; host/sandbox differences still affect behavior. |
 | `/runtimes` | partial | Status/version/deps/uninstall preview are live; install/update/remove backend is in active hardening. |

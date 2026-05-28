@@ -59,8 +59,8 @@ export function SshPage(): ReactElement {
   // --- File Transfer ---
   const [ftSession, setFtSession] = useState<Session | null>(null)
   const [ftDirection, setFtDirection] = useState<'upload' | 'download'>('upload')
-  const [ftLocalPaths, setFtLocalPaths] = useState<string[]>([])  // multiple selected files
-  const [ftLocalDestDir, setFtLocalDestDir] = useState('')         // destination folder for download
+  const [ftLocalPaths, setFtLocalPaths] = useState<string[]>([]) // multiple selected files
+  const [ftLocalDestDir, setFtLocalDestDir] = useState('') // destination folder for download
   const [ftRemotePath, setFtRemotePath] = useState('.')
   const [ftTool, setFtTool] = useState<'scp' | 'rsync'>('scp')
   const [ftStatus, setFtStatus] = useState('')
@@ -130,7 +130,7 @@ export function SshPage(): ReactElement {
         setPubKey('')
         setFingerprint('')
         if (res.error && !res.error.includes('SSH_NO_KEY')) {
-           setStatus(`❌ ${humanizeSshError(res.error, t)}`)
+          setStatus(`❌ ${humanizeSshError(res.error, t)}`)
         }
       }
     } catch (e) {
@@ -193,7 +193,7 @@ export function SshPage(): ReactElement {
         host: sess.host,
         port: sess.port,
         password,
-        publicKey: pubRes.pub.trim()
+        publicKey: pubRes.pub.trim(),
       })
 
       if (setupRes.ok) {
@@ -266,8 +266,14 @@ export function SshPage(): ReactElement {
     if (!editBmId || !editBmHost) return
     const next = bookmarks.map((b) =>
       b.id === editBmId
-        ? { ...b, name: editBmName.trim() || b.name, user: editBmUser.trim() || b.user, host: editBmHost.trim(), port: Number(editBmPort) || 22 }
-        : b,
+        ? {
+            ...b,
+            name: editBmName.trim() || b.name,
+            user: editBmUser.trim() || b.user,
+            host: editBmHost.trim(),
+            port: Number(editBmPort) || 22,
+          }
+        : b
     )
     void saveBookmarks(next)
     setEditBmId(null)
@@ -308,9 +314,7 @@ export function SshPage(): ReactElement {
       if (autoCloseTimer) clearTimeout(autoCloseTimer)
       autoCloseTimer = setTimeout(() => {
         setSessions((prev) =>
-          prev.map((s) =>
-            s.id === activeTermSession.id ? { ...s, status: 'connected' } : s,
-          ),
+          prev.map((s) => (s.id === activeTermSession.id ? { ...s, status: 'connected' } : s))
         )
         setActiveTermSession(null)
       }, 2000)
@@ -331,8 +335,8 @@ export function SshPage(): ReactElement {
     const handleExit = (): void => {
       setSessions((prev) =>
         prev.map((s) =>
-          s.id === activeTermSession.id ? { ...s, status: 'disconnected', termId: undefined } : s,
-        ),
+          s.id === activeTermSession.id ? { ...s, status: 'disconnected', termId: undefined } : s
+        )
       )
       setTimeout(() => setActiveTermSession(null), 1500)
     }
@@ -365,12 +369,19 @@ export function SshPage(): ReactElement {
       // Transfer sessions run SCP/rsync locally; SSH sessions connect to remote.
       const termCmd = activeTermSession.isTransfer ? 'bash' : 'ssh'
       const termArgs = activeTermSession.isTransfer
-        ? ['-c', `${transferCmd ?? 'echo "No transfer command"'}; echo; echo "[transfer done — closing in 2s]"; sleep 2`]
+        ? [
+            '-c',
+            `${transferCmd ?? 'echo "No transfer command"'}; echo; echo "[transfer done — closing in 2s]"; sleep 2`,
+          ]
         : [
-            '-o', 'StrictHostKeyChecking=no',
-            '-o', 'PubkeyAuthentication=no',
-            '-o', 'PasswordAuthentication=yes',
-            '-p', String(activeTermSession.port),
+            '-o',
+            'StrictHostKeyChecking=no',
+            '-o',
+            'PubkeyAuthentication=no',
+            '-o',
+            'PasswordAuthentication=yes',
+            '-p',
+            String(activeTermSession.port),
             `${activeTermSession.user}@${activeTermSession.host}`,
           ]
 
@@ -405,8 +416,8 @@ export function SshPage(): ReactElement {
         } else {
           setSessions((prev) =>
             prev.map((s) =>
-              s.id === activeTermSession.id ? { ...s, termId: res.id, status: 'connected' } : s,
-            ),
+              s.id === activeTermSession.id ? { ...s, termId: res.id, status: 'connected' } : s
+            )
           )
         }
       })()
@@ -451,7 +462,9 @@ export function SshPage(): ReactElement {
     if (sess.termId) {
       window.dh.terminalClose(sess.termId)
     }
-    setSessions((prev) => prev.map((s) => s.id === sess.id ? { ...s, status: 'disconnected', termId: undefined } : s))
+    setSessions((prev) =>
+      prev.map((s) => (s.id === sess.id ? { ...s, status: 'disconnected', termId: undefined } : s))
+    )
   }
 
   async function pickLocalFiles(): Promise<void> {
@@ -465,7 +478,10 @@ export function SshPage(): ReactElement {
   }
 
   async function browseRemote(path: string): Promise<void> {
-    if (!ftSession) { setFtStatus(t('ft.selectSession')); return }
+    if (!ftSession) {
+      setFtStatus(t('ft.selectSession'))
+      return
+    }
     setRemoteBrowsing(true)
     setFtStatus(t('ft.browsingRemote'))
     try {
@@ -473,11 +489,11 @@ export function SshPage(): ReactElement {
         user: ftSession.user,
         host: ftSession.host,
         port: ftSession.port,
-        remotePath: path || '.'
+        remotePath: path || '.',
       })
       if (res.ok) {
         // Filter out current dir marker, keep parent marker for navigation
-        const clean = res.entries.filter(e => e !== './' && e !== '.')
+        const clean = res.entries.filter((e) => e !== './' && e !== '.')
         setRemoteEntries(clean)
         setFtRemotePath(path)
         setFtStatus('')
@@ -490,26 +506,41 @@ export function SshPage(): ReactElement {
   }
 
   function runTransfer(): void {
-    if (!ftSession) { setFtStatus(t('ft.selectSession')); return }
+    if (!ftSession) {
+      setFtStatus(t('ft.selectSession'))
+      return
+    }
 
     const remote = `${ftSession.user}@${ftSession.host}`
     let cmd = ''
 
     if (ftDirection === 'upload') {
-      if (ftLocalPaths.length === 0) { setFtStatus(t('ft.selectFiles')); return }
-      if (!ftRemotePath.trim()) { setFtStatus(t('ft.selectRemoteDest')); return }
-      const files = ftLocalPaths.map(p => `"${p}"`).join(' ')
-      cmd = ftTool === 'scp'
-        ? `scp -P ${ftSession.port} -r ${files} ${remote}:${ftRemotePath}`
-        : `rsync -avz -e 'ssh -p ${ftSession.port}' ${files} ${remote}:${ftRemotePath}`
+      if (ftLocalPaths.length === 0) {
+        setFtStatus(t('ft.selectFiles'))
+        return
+      }
+      if (!ftRemotePath.trim()) {
+        setFtStatus(t('ft.selectRemoteDest'))
+        return
+      }
+      const files = ftLocalPaths.map((p) => `"${p}"`).join(' ')
+      cmd =
+        ftTool === 'scp'
+          ? `scp -P ${ftSession.port} -r ${files} ${remote}:${ftRemotePath}`
+          : `rsync -avz -e 'ssh -p ${ftSession.port}' ${files} ${remote}:${ftRemotePath}`
     } else {
-      if (!ftRemotePath.trim()) { setFtStatus(t('ft.selectRemoteSource')); return }
+      if (!ftRemotePath.trim()) {
+        setFtStatus(t('ft.selectRemoteSource'))
+        return
+      }
       const localDest = ftLocalDestDir || '.'
       // mkdir -p ensures destination directory exists before scp/rsync
       const mkdirPrefix = `mkdir -p "${localDest}" && `
-      cmd = mkdirPrefix + (ftTool === 'scp'
-        ? `scp -P ${ftSession.port} -r ${remote}:"${ftRemotePath}" "${localDest}"`
-        : `rsync -avz -e 'ssh -p ${ftSession.port}' ${remote}:"${ftRemotePath}" "${localDest}"`)
+      cmd =
+        mkdirPrefix +
+        (ftTool === 'scp'
+          ? `scp -P ${ftSession.port} -r ${remote}:"${ftRemotePath}" "${localDest}"`
+          : `rsync -avz -e 'ssh -p ${ftSession.port}' ${remote}:"${ftRemotePath}" "${localDest}"`)
     }
 
     const sId = Date.now().toString()
@@ -549,9 +580,6 @@ export function SshPage(): ReactElement {
           <div className="ssh-section-label">{t('page.sectionLabel')}</div>
           <h1 className="ssh-hero-title">{t('page.title')}</h1>
           <p className="ssh-hero-subtitle">{t('page.subtitle')}</p>
-          <p className="ssh-hero-subtitle" style={{ marginTop: 8 }}>
-            {t('flatpakHint')}
-          </p>
         </header>
 
         {/* Enable SSH on This Machine */}
@@ -561,14 +589,24 @@ export function SshPage(): ReactElement {
             <h2 className="ssh-section-title">{t('step0.title')}</h2>
             <p className="ssh-section-subtitle">
               <Trans t={t} i18nKey="step0.subtitle" components={{ em: <em /> }}>
-                Turn this machine into an SSH host. Other devices on your network can then connect to it. Skip if you only need to connect <em>to</em> remote servers.
+                Turn this machine into an SSH host. Other devices on your network can then connect
+                to it. Skip if you only need to connect <em>to</em> remote servers.
               </Trans>
             </p>
           </div>
           <div className="elevated-card" style={{ flexDirection: 'column', gap: 12 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 }}>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'flex-start',
+                gap: 16,
+              }}
+            >
               <div>
-                <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>{t('enable.title')}</div>
+                <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>
+                  {t('enable.title')}
+                </div>
                 <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>
                   {t('enable.desc')}
                 </div>
@@ -584,7 +622,19 @@ export function SshPage(): ReactElement {
               </button>
             </div>
             {enableLocalLog && (
-              <pre style={{ margin: 0, fontSize: 11, fontFamily: 'monospace', background: 'rgba(0, 0, 0, 0.2)', padding: '8px 12px', borderRadius: 6, border: '1px solid rgba(255, 255, 255, 0.08)', whiteSpace: 'pre-wrap', color: 'var(--text-muted)' }}>
+              <pre
+                style={{
+                  margin: 0,
+                  fontSize: 11,
+                  fontFamily: 'monospace',
+                  background: 'rgba(0, 0, 0, 0.2)',
+                  padding: '8px 12px',
+                  borderRadius: 6,
+                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  whiteSpace: 'pre-wrap',
+                  color: 'var(--text-muted)',
+                }}
+              >
                 {enableLocalLog}
               </pre>
             )}
@@ -601,15 +651,28 @@ export function SshPage(): ReactElement {
             <p className="ssh-section-subtitle">{t('step1.subtitle')}</p>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-
             <div className="elevated-card">
               <div style={stepCircle}>1</div>
               <div>
                 <h3 style={stepTitle}>{t('generate.title')}</h3>
                 <p style={stepText}>{t('generate.desc')}</p>
                 <div style={{ display: 'flex', gap: 8 }}>
-                  <input type="text" value={email} onChange={(e) => setEmail(e.target.value)} placeholder={t('generate.emailPlaceholder')} className="hp-input" style={{ flex: 1 }} />
-                  <button type="button" className="hp-btn hp-btn-primary" onClick={() => void generate()} disabled={busy}>{t('generate.btn')}</button>
+                  <input
+                    type="text"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder={t('generate.emailPlaceholder')}
+                    className="hp-input"
+                    style={{ flex: 1 }}
+                  />
+                  <button
+                    type="button"
+                    className="hp-btn hp-btn-primary"
+                    onClick={() => void generate()}
+                    disabled={busy}
+                  >
+                    {t('generate.btn')}
+                  </button>
                 </div>
               </div>
             </div>
@@ -620,31 +683,84 @@ export function SshPage(): ReactElement {
                 <h3 style={stepTitle}>{t('identity.title')}</h3>
                 <p style={stepText}>{t('identity.desc')}</p>
                 <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
-                  <button type="button" className="hp-btn" onClick={() => { void loadPub().then(copyPub) }} disabled={busy}>{t('identity.copyBtn')}</button>
-                  <button type="button" className="hp-btn" onClick={() => void testGithub()} disabled={busy}>{t('identity.testBtn')}</button>
+                  <button
+                    type="button"
+                    className="hp-btn"
+                    onClick={() => {
+                      void loadPub().then(copyPub)
+                    }}
+                    disabled={busy}
+                  >
+                    {t('identity.copyBtn')}
+                  </button>
+                  <button
+                    type="button"
+                    className="hp-btn"
+                    onClick={() => void testGithub()}
+                    disabled={busy}
+                  >
+                    {t('identity.testBtn')}
+                  </button>
                 </div>
                 {fingerprint && (
-                  <div style={{ marginTop: 12, fontSize: 12, padding: '8px 12px', background: 'var(--bg-input)', border: '1px solid var(--border)', borderRadius: 6 }}>
-                    <span style={{ color: 'var(--text-muted)', marginRight: 8 }}>{t('identity.fingerprint')}</span>
+                  <div
+                    style={{
+                      marginTop: 12,
+                      fontSize: 12,
+                      padding: '8px 12px',
+                      background: 'var(--bg-input)',
+                      border: '1px solid var(--border)',
+                      borderRadius: 6,
+                    }}
+                  >
+                    <span style={{ color: 'var(--text-muted)', marginRight: 8 }}>
+                      {t('identity.fingerprint')}
+                    </span>
                     <span className="mono">{fingerprint}</span>
                   </div>
                 )}
                 {testOk !== null && (
-                  <div style={{ marginTop: 8, fontSize: 12, padding: '8px 12px', background: testOk ? 'rgba(76, 175, 80, 0.1)' : 'rgba(244, 67, 54, 0.1)', border: '1px solid ' + (testOk ? 'var(--green)' : 'var(--red)'), borderRadius: 6, whiteSpace: 'pre-wrap' }}>
-                    <div style={{ fontWeight: 600, color: testOk ? 'var(--green)' : 'var(--red)', marginBottom: 4 }}>
+                  <div
+                    style={{
+                      marginTop: 8,
+                      fontSize: 12,
+                      padding: '8px 12px',
+                      background: testOk ? 'rgba(76, 175, 80, 0.1)' : 'rgba(244, 67, 54, 0.1)',
+                      border: '1px solid ' + (testOk ? 'var(--green)' : 'var(--red)'),
+                      borderRadius: 6,
+                      whiteSpace: 'pre-wrap',
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontWeight: 600,
+                        color: testOk ? 'var(--green)' : 'var(--red)',
+                        marginBottom: 4,
+                      }}
+                    >
                       {testOk ? t('identity.testSuccessLabel') : t('identity.testFailLabel')}
                     </div>
-                    <div className="mono" style={{ fontSize: 11 }}>{testResult}</div>
+                    <div className="mono" style={{ fontSize: 11 }}>
+                      {testResult}
+                    </div>
                   </div>
                 )}
                 {pubKey && <textarea readOnly value={pubKey} style={{ ...area, marginTop: 12 }} />}
               </div>
             </div>
-
           </div>
           {status && (
-            <div className={`hp-status-alert ${status.includes('✅') ? 'success' : status.includes('⚠') || status.includes('❌') ? 'warning' : ''}`} style={{ marginTop: 12 }}>
-              <span style={{ fontSize: 18 }}>{status.includes('✅') ? '✔' : status.includes('⚠') || status.includes('❌') ? '⚠' : 'ℹ'}</span>
+            <div
+              className={`hp-status-alert ${status.includes('✅') ? 'success' : status.includes('⚠') || status.includes('❌') ? 'warning' : ''}`}
+              style={{ marginTop: 12 }}
+            >
+              <span style={{ fontSize: 18 }}>
+                {status.includes('✅')
+                  ? '✔'
+                  : status.includes('⚠') || status.includes('❌')
+                    ? '⚠'
+                    : 'ℹ'}
+              </span>
               <span>{status}</span>
             </div>
           )}
@@ -659,7 +775,8 @@ export function SshPage(): ReactElement {
             <h2 className="ssh-section-title">{t('step2.title')}</h2>
             <p className="ssh-section-subtitle">
               <Trans t={t} i18nKey="step2.subtitle" components={{ strong: <strong /> }}>
-                Bookmark remote machines by label. Hit <strong>Connect</strong> to open a live shell, browse files, or push your public key automatically.
+                Bookmark remote machines by label. Hit <strong>Connect</strong> to open a live
+                shell, browse files, or push your public key automatically.
               </Trans>
             </p>
           </div>
@@ -674,22 +791,59 @@ export function SshPage(): ReactElement {
             }}
           >
             <div style={{ flex: '1 1 140px', minWidth: 0 }}>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>{t('bookmark.label')}</div>
-              <input value={newBmName} onChange={(e) => setNewBmName(e.target.value)} placeholder={t('bookmark.labelPlaceholder')} className="hp-input" style={{ width: '100%' }} />
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
+                {t('bookmark.label')}
+              </div>
+              <input
+                value={newBmName}
+                onChange={(e) => setNewBmName(e.target.value)}
+                placeholder={t('bookmark.labelPlaceholder')}
+                className="hp-input"
+                style={{ width: '100%' }}
+              />
             </div>
             <div style={{ flex: '1 1 100px', minWidth: 0 }}>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>{t('bookmark.user')}</div>
-              <input value={newBmUser} onChange={(e) => setNewBmUser(e.target.value)} placeholder={t('bookmark.userPlaceholder')} className="hp-input" style={{ width: '100%' }} />
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
+                {t('bookmark.user')}
+              </div>
+              <input
+                value={newBmUser}
+                onChange={(e) => setNewBmUser(e.target.value)}
+                placeholder={t('bookmark.userPlaceholder')}
+                className="hp-input"
+                style={{ width: '100%' }}
+              />
             </div>
             <div style={{ flex: '1.5 1 180px', minWidth: 0 }}>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>{t('bookmark.host')}</div>
-              <input value={newBmHost} onChange={(e) => setNewBmHost(e.target.value)} placeholder={t('bookmark.hostPlaceholder')} className="hp-input" style={{ width: '100%' }} />
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
+                {t('bookmark.host')}
+              </div>
+              <input
+                value={newBmHost}
+                onChange={(e) => setNewBmHost(e.target.value)}
+                placeholder={t('bookmark.hostPlaceholder')}
+                className="hp-input"
+                style={{ width: '100%' }}
+              />
             </div>
             <div style={{ flex: '0.5 1 80px', minWidth: 0 }}>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>{t('bookmark.port')}</div>
-              <input value={newBmPort} onChange={(e) => setNewBmPort(e.target.value)} placeholder={t('bookmark.portPlaceholder')} className="hp-input" style={{ width: '100%' }} />
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
+                {t('bookmark.port')}
+              </div>
+              <input
+                value={newBmPort}
+                onChange={(e) => setNewBmPort(e.target.value)}
+                placeholder={t('bookmark.portPlaceholder')}
+                className="hp-input"
+                style={{ width: '100%' }}
+              />
             </div>
-            <button type="button" className="hp-btn hp-btn-primary" style={{ minHeight: 38 }} onClick={addBookmark}>
+            <button
+              type="button"
+              className="hp-btn hp-btn-primary"
+              style={{ minHeight: 38 }}
+              onClick={addBookmark}
+            >
               {t('bookmark.addBtn')}
             </button>
           </div>
@@ -700,32 +854,74 @@ export function SshPage(): ReactElement {
             <div style={{ display: 'grid', gap: 8 }}>
               {bookmarks.map((bm) =>
                 editBmId === bm.id ? (
-                  <div key={bm.id} className="ssh-bookmark-item" style={{ flexDirection: 'column', gap: 12 }}>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'flex-end' }}>
+                  <div
+                    key={bm.id}
+                    className="ssh-bookmark-item"
+                    style={{ flexDirection: 'column', gap: 12 }}
+                  >
+                    <div
+                      style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'flex-end' }}
+                    >
                       <div style={{ flex: '1 1 120px', minWidth: 0 }}>
                         <div className="ssh-form-label">{t('bookmark.editLabel')}</div>
-                        <input value={editBmName} onChange={(e) => setEditBmName(e.target.value)} className="hp-input" style={{ width: '100%' }} />
+                        <input
+                          value={editBmName}
+                          onChange={(e) => setEditBmName(e.target.value)}
+                          className="hp-input"
+                          style={{ width: '100%' }}
+                        />
                       </div>
                       <div style={{ flex: '1 1 90px', minWidth: 0 }}>
                         <div className="ssh-form-label">{t('bookmark.editUser')}</div>
-                        <input value={editBmUser} onChange={(e) => setEditBmUser(e.target.value)} className="hp-input" style={{ width: '100%' }} />
+                        <input
+                          value={editBmUser}
+                          onChange={(e) => setEditBmUser(e.target.value)}
+                          className="hp-input"
+                          style={{ width: '100%' }}
+                        />
                       </div>
                       <div style={{ flex: '1.5 1 160px', minWidth: 0 }}>
                         <div className="ssh-form-label">{t('bookmark.editHost')}</div>
-                        <input value={editBmHost} onChange={(e) => setEditBmHost(e.target.value)} className="hp-input" style={{ width: '100%' }} />
+                        <input
+                          value={editBmHost}
+                          onChange={(e) => setEditBmHost(e.target.value)}
+                          className="hp-input"
+                          style={{ width: '100%' }}
+                        />
                       </div>
                       <div style={{ flex: '0.5 1 60px', minWidth: 0 }}>
                         <div className="ssh-form-label">{t('bookmark.editPort')}</div>
-                        <input value={editBmPort} onChange={(e) => setEditBmPort(e.target.value)} className="hp-input" style={{ width: '100%' }} />
+                        <input
+                          value={editBmPort}
+                          onChange={(e) => setEditBmPort(e.target.value)}
+                          className="hp-input"
+                          style={{ width: '100%' }}
+                        />
                       </div>
                     </div>
                     <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                      <button type="button" className="hp-btn" onClick={() => setEditBmId(null)}>{t('bookmark.cancelBtn')}</button>
-                      <button type="button" className="hp-btn hp-btn-primary" onClick={saveEditBookmark}>{t('bookmark.saveBtn')}</button>
+                      <button type="button" className="hp-btn" onClick={() => setEditBmId(null)}>
+                        {t('bookmark.cancelBtn')}
+                      </button>
+                      <button
+                        type="button"
+                        className="hp-btn hp-btn-primary"
+                        onClick={saveEditBookmark}
+                      >
+                        {t('bookmark.saveBtn')}
+                      </button>
                     </div>
                   </div>
                 ) : (
-                  <div key={bm.id} className="ssh-bookmark-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div
+                    key={bm.id}
+                    className="ssh-bookmark-item"
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                    }}
+                  >
                     <div>
                       <div className="ssh-bookmark-name">{bm.name}</div>
                       <div className="ssh-bookmark-info">
@@ -733,9 +929,23 @@ export function SshPage(): ReactElement {
                       </div>
                     </div>
                     <div style={{ display: 'flex', gap: 8 }}>
-                      <button type="button" className="hp-btn" onClick={() => handleConnect(bm)}>{t('bookmark.connectBtn')}</button>
-                      <button type="button" className="hp-btn" onClick={() => startEditBookmark(bm)}>{t('bookmark.editBtn')}</button>
-                      <button type="button" className="hp-btn hp-btn-danger" onClick={() => deleteBookmark(bm.id)}>{t('bookmark.removeBtn')}</button>
+                      <button type="button" className="hp-btn" onClick={() => handleConnect(bm)}>
+                        {t('bookmark.connectBtn')}
+                      </button>
+                      <button
+                        type="button"
+                        className="hp-btn"
+                        onClick={() => startEditBookmark(bm)}
+                      >
+                        {t('bookmark.editBtn')}
+                      </button>
+                      <button
+                        type="button"
+                        className="hp-btn hp-btn-danger"
+                        onClick={() => deleteBookmark(bm.id)}
+                      >
+                        {t('bookmark.removeBtn')}
+                      </button>
                     </div>
                   </div>
                 )
@@ -762,89 +972,114 @@ export function SshPage(): ReactElement {
         <div className="ssh-prereqs-accordion">
           <button
             type="button"
-            onClick={() => setShowPrereqs(v => !v)}
+            onClick={() => setShowPrereqs((v) => !v)}
             className="ssh-prereqs-button"
           >
             <span>{t('prereqs.title')}</span>
-            <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{showPrereqs ? '▲' : '▼'}</span>
+            <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+              {showPrereqs ? '▲' : '▼'}
+            </span>
           </button>
           {showPrereqs && (
             <div className="ssh-prereqs-content">
               <p style={{ margin: 0, color: 'var(--text-muted)', lineHeight: 1.6 }}>
                 <Trans t={t} i18nKey="prereqs.desc" components={{ b: <b /> }}>
-                  The <b>remote machine</b> must have SSH running and port 22 open before you can connect. Run the commands matching its distro:
+                  The <b>remote machine</b> must have SSH running and port 22 open before you can
+                  connect. Run the commands matching its distro:
                 </Trans>
               </p>
 
-              {([
-                {
-                  labelKey: 'prereqs.distroFedora',
-                  color: '#3b82f6',
-                  cmds: [
-                    'sudo systemctl enable --now sshd',
-                    'sudo firewall-cmd --add-service=ssh --permanent',
-                    'sudo firewall-cmd --reload',
-                  ],
-                },
-                {
-                  labelKey: 'prereqs.distroUbuntu',
-                  color: '#f97316',
-                  cmds: [
-                    'sudo systemctl enable --now ssh',
-                    'sudo ufw allow ssh',
-                    'sudo ufw enable',
-                  ],
-                },
-                {
-                  labelKey: 'prereqs.distroArch',
-                  color: '#1d9bf0',
-                  cmds: [
-                    'sudo systemctl enable --now sshd',
-                    'sudo ufw allow ssh',
-                    'sudo ufw enable',
-                    'sudo systemctl enable --now ufw',
-                  ],
-                },
-                {
-                  labelKey: 'prereqs.distroOpenSuse',
-                  color: '#22c55e',
-                  cmds: [
-                    'sudo systemctl enable --now sshd',
-                    'sudo firewall-cmd --add-service=ssh --permanent',
-                    'sudo firewall-cmd --reload',
-                  ],
-                },
-                {
-                  labelKey: 'prereqs.distroIptables',
-                  color: '#a855f7',
-                  cmds: [
-                    'sudo systemctl enable --now sshd',
-                    'sudo iptables -A INPUT -p tcp --dport 22 -j ACCEPT',
-                  ],
-                },
-              ] as const).map(({ labelKey, color, cmds }) => (
+              {(
+                [
+                  {
+                    labelKey: 'prereqs.distroFedora',
+                    color: '#3b82f6',
+                    cmds: [
+                      'sudo systemctl enable --now sshd',
+                      'sudo firewall-cmd --add-service=ssh --permanent',
+                      'sudo firewall-cmd --reload',
+                    ],
+                  },
+                  {
+                    labelKey: 'prereqs.distroUbuntu',
+                    color: '#f97316',
+                    cmds: [
+                      'sudo systemctl enable --now ssh',
+                      'sudo ufw allow ssh',
+                      'sudo ufw enable',
+                    ],
+                  },
+                  {
+                    labelKey: 'prereqs.distroArch',
+                    color: '#1d9bf0',
+                    cmds: [
+                      'sudo systemctl enable --now sshd',
+                      'sudo ufw allow ssh',
+                      'sudo ufw enable',
+                      'sudo systemctl enable --now ufw',
+                    ],
+                  },
+                  {
+                    labelKey: 'prereqs.distroOpenSuse',
+                    color: '#22c55e',
+                    cmds: [
+                      'sudo systemctl enable --now sshd',
+                      'sudo firewall-cmd --add-service=ssh --permanent',
+                      'sudo firewall-cmd --reload',
+                    ],
+                  },
+                  {
+                    labelKey: 'prereqs.distroIptables',
+                    color: '#a855f7',
+                    cmds: [
+                      'sudo systemctl enable --now sshd',
+                      'sudo iptables -A INPUT -p tcp --dport 22 -j ACCEPT',
+                    ],
+                  },
+                ] as const
+              ).map(({ labelKey, color, cmds }) => (
                 <div key={labelKey} className="ssh-prereqs-distro">
-                  <div className="ssh-prereqs-distro-title" style={{ color }}>▸ {t(labelKey)}</div>
-                  <pre className="ssh-prereqs-code">
-                    {cmds.join('\n')}
-                  </pre>
+                  <div className="ssh-prereqs-distro-title" style={{ color }}>
+                    ▸ {t(labelKey)}
+                  </div>
+                  <pre className="ssh-prereqs-code">{cmds.join('\n')}</pre>
                 </div>
               ))}
 
               <div className="ssh-prereqs-hint">
-                <Trans t={t} i18nKey="prereqs.localMachine" components={{ strong: <b className="ssh-prereqs-hint-strong" />, code: <span className="mono" /> }}>
-                  <strong>Local machine</strong> also needs <code>ssh</code> and <code>sshpass</code> installed.
+                <Trans
+                  t={t}
+                  i18nKey="prereqs.localMachine"
+                  components={{
+                    strong: <b className="ssh-prereqs-hint-strong" />,
+                    code: <span className="mono" />,
+                  }}
+                >
+                  <strong>Local machine</strong> also needs <code>ssh</code> and{' '}
+                  <code>sshpass</code> installed.
                 </Trans>
                 <br />
-                <Trans t={t} i18nKey="prereqs.fedoraInstall" components={{ code: <span className="mono" /> }}>
+                <Trans
+                  t={t}
+                  i18nKey="prereqs.fedoraInstall"
+                  components={{ code: <span className="mono" /> }}
+                >
                   Fedora: <code>sudo dnf install openssh sshpass</code>
                 </Trans>
                 <br />
-                <Trans t={t} i18nKey="prereqs.ubuntuInstall" components={{ code: <span className="mono" /> }}>
+                <Trans
+                  t={t}
+                  i18nKey="prereqs.ubuntuInstall"
+                  components={{ code: <span className="mono" /> }}
+                >
                   Ubuntu/Debian: <code>sudo apt install openssh-client sshpass</code>
                 </Trans>
                 <br />
-                <Trans t={t} i18nKey="prereqs.archInstall" components={{ code: <span className="mono" /> }}>
+                <Trans
+                  t={t}
+                  i18nKey="prereqs.archInstall"
+                  components={{ code: <span className="mono" /> }}
+                >
                   Arch: <code>sudo pacman -S openssh sshpass</code>
                 </Trans>
               </div>
@@ -853,9 +1088,7 @@ export function SshPage(): ReactElement {
         </div>
 
         {sessions.length === 0 ? (
-          <div className="ssh-empty-state">
-            {t('activity.empty')}
-          </div>
+          <div className="ssh-empty-state">{t('activity.empty')}</div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {sessions.map((sess) => (
@@ -863,11 +1096,24 @@ export function SshPage(): ReactElement {
                 <div className="ssh-session-header">
                   <div className="ssh-session-name">{sess.bmName}</div>
                   <div className="ssh-session-status">
-                    <div className="ssh-session-status-dot" style={{
-                      background: sess.status === 'connected' ? 'var(--green)' : sess.status === 'disconnected' ? 'var(--text-muted)' : 'var(--orange)',
-                      boxShadow: sess.status === 'connected' ? '0 0 8px var(--green)' : 'none'
-                    }} />
-                    <span style={{ textTransform: 'capitalize', color: sess.status === 'connected' ? 'var(--green)' : 'var(--text-muted)' }}>
+                    <div
+                      className="ssh-session-status-dot"
+                      style={{
+                        background:
+                          sess.status === 'connected'
+                            ? 'var(--green)'
+                            : sess.status === 'disconnected'
+                              ? 'var(--text-muted)'
+                              : 'var(--orange)',
+                        boxShadow: sess.status === 'connected' ? '0 0 8px var(--green)' : 'none',
+                      }}
+                    />
+                    <span
+                      style={{
+                        textTransform: 'capitalize',
+                        color: sess.status === 'connected' ? 'var(--green)' : 'var(--text-muted)',
+                      }}
+                    >
                       {sess.status}
                     </span>
                   </div>
@@ -883,25 +1129,55 @@ export function SshPage(): ReactElement {
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
                   {sess.status === 'connected' && (
                     <>
-                      <button type="button" className="hp-btn" style={{ padding: '4px 8px', fontSize: 11 }} onClick={() => resetFtState(sess, 'upload')}>
+                      <button
+                        type="button"
+                        className="hp-btn"
+                        style={{ padding: '4px 8px', fontSize: 11 }}
+                        onClick={() => resetFtState(sess, 'upload')}
+                      >
                         {t('session.uploadBtn')}
                       </button>
-                      <button type="button" className="hp-btn" style={{ padding: '4px 8px', fontSize: 11 }} onClick={() => resetFtState(sess, 'download')}>
+                      <button
+                        type="button"
+                        className="hp-btn"
+                        style={{ padding: '4px 8px', fontSize: 11 }}
+                        onClick={() => resetFtState(sess, 'download')}
+                      >
                         {t('session.downloadBtn')}
                       </button>
-                      <button type="button" className="hp-btn" style={{ padding: '4px 8px', fontSize: 11 }} onClick={() => setActiveTermSession(sess)}>
+                      <button
+                        type="button"
+                        className="hp-btn"
+                        style={{ padding: '4px 8px', fontSize: 11 }}
+                        onClick={() => setActiveTermSession(sess)}
+                      >
                         {t('session.terminalBtn')}
                       </button>
-                      <button type="button" className="hp-btn" style={{ padding: '4px 8px', fontSize: 11, color: 'var(--accent)' }} onClick={() => void setupKeysOnServer(sess)}>
+                      <button
+                        type="button"
+                        className="hp-btn"
+                        style={{ padding: '4px 8px', fontSize: 11, color: 'var(--accent)' }}
+                        onClick={() => void setupKeysOnServer(sess)}
+                      >
                         {t('session.enableAccessBtn')}
                       </button>
-                      <button type="button" className="hp-btn hp-btn-danger" style={{ padding: '4px 8px', fontSize: 11 }} onClick={() => handleDisconnect(sess)}>
+                      <button
+                        type="button"
+                        className="hp-btn hp-btn-danger"
+                        style={{ padding: '4px 8px', fontSize: 11 }}
+                        onClick={() => handleDisconnect(sess)}
+                      >
                         {t('session.disconnectBtn')}
                       </button>
                     </>
                   )}
                   {sess.status === 'disconnected' && (
-                    <button type="button" className="hp-btn" style={{ padding: '4px 8px', fontSize: 11, flex: 1 }} onClick={() => setSessions(prev => prev.filter(s => s.id !== sess.id))}>
+                    <button
+                      type="button"
+                      className="hp-btn"
+                      style={{ padding: '4px 8px', fontSize: 11, flex: 1 }}
+                      onClick={() => setSessions((prev) => prev.filter((s) => s.id !== sess.id))}
+                    >
                       {t('session.clearBtn')}
                     </button>
                   )}
@@ -926,34 +1202,50 @@ export function SshPage(): ReactElement {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               {/* Device Selector (in case user wants to switch within modal) */}
               <div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>{t('ft.connectedDevice')}</div>
-                <select 
-                  value={ftSession.id} 
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>
+                  {t('ft.connectedDevice')}
+                </div>
+                <select
+                  value={ftSession.id}
                   onChange={(e) => {
-                    const s = sessions.find(s => s.id === e.target.value)
+                    const s = sessions.find((s) => s.id === e.target.value)
                     if (s) resetFtState(s, ftDirection)
                   }}
                   className="hp-input"
                   style={{ cursor: 'pointer' }}
                 >
-                  {sessions.filter(s => s.status === 'connected').map(s => (
-                    <option key={s.id} value={s.id}>{s.bmName} ({s.user}@ {s.host})</option>
-                  ))}
+                  {sessions
+                    .filter((s) => s.status === 'connected')
+                    .map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.bmName} ({s.user}@ {s.host})
+                      </option>
+                    ))}
                 </select>
               </div>
 
               {/* Direction selector */}
               <div style={{ display: 'flex', gap: 8 }}>
-                <button type="button"
+                <button
+                  type="button"
                   className="hp-btn"
-                  style={{ flex: 1, background: ftDirection === 'upload' ? 'var(--accent)' : 'var(--bg-input)', color: ftDirection === 'upload' ? '#000' : 'var(--text)' }}
+                  style={{
+                    flex: 1,
+                    background: ftDirection === 'upload' ? 'var(--accent)' : 'var(--bg-input)',
+                    color: ftDirection === 'upload' ? '#000' : 'var(--text)',
+                  }}
                   onClick={() => setFtDirection('upload')}
                 >
                   {t('ft.uploadBtn')}
                 </button>
-                <button type="button"
+                <button
+                  type="button"
                   className="hp-btn"
-                  style={{ flex: 1, background: ftDirection === 'download' ? 'var(--accent)' : 'var(--bg-input)', color: ftDirection === 'download' ? '#000' : 'var(--text)' }}
+                  style={{
+                    flex: 1,
+                    background: ftDirection === 'download' ? 'var(--accent)' : 'var(--bg-input)',
+                    color: ftDirection === 'download' ? '#000' : 'var(--text)',
+                  }}
                   onClick={() => setFtDirection('download')}
                 >
                   {t('ft.downloadBtn')}
@@ -962,12 +1254,20 @@ export function SshPage(): ReactElement {
 
               {/* Tool selector */}
               <div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>{t('ft.toolLabel')}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>
+                  {t('ft.toolLabel')}
+                </div>
                 <div style={{ display: 'flex', gap: 8 }}>
-                  {(['scp', 'rsync'] as const).map(t => (
-                    <button key={t} type="button"
+                  {(['scp', 'rsync'] as const).map((t) => (
+                    <button
+                      key={t}
+                      type="button"
                       className="hp-btn"
-                      style={{ flex: 1, background: ftTool === t ? 'var(--accent)' : 'var(--bg-input)', color: ftTool === t ? '#000' : 'var(--text)' }}
+                      style={{
+                        flex: 1,
+                        background: ftTool === t ? 'var(--accent)' : 'var(--bg-input)',
+                        color: ftTool === t ? '#000' : 'var(--text)',
+                      }}
                       onClick={() => setFtTool(t)}
                     >
                       {t.toUpperCase()}
@@ -982,27 +1282,78 @@ export function SshPage(): ReactElement {
                   <>
                     <div style={{ fontSize: 13, fontWeight: 600 }}>{t('ft.step1Local')}</div>
                     <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-                      <button type="button" className="hp-btn hp-btn-primary" onClick={() => void pickLocalFiles()}>{t('ft.selectFilesBtn')}</button>
-                      <div style={{ flex: 1, fontSize: 12, color: 'var(--text-muted)', maxHeight: 60, overflowY: 'auto' }}>
-                        {ftLocalPaths.length === 0 ? t('ft.noFiles') : ftLocalPaths.map((p, i) => <div key={i}>{p.split("/").pop()}</div>)}
+                      <button
+                        type="button"
+                        className="hp-btn hp-btn-primary"
+                        onClick={() => void pickLocalFiles()}
+                      >
+                        {t('ft.selectFilesBtn')}
+                      </button>
+                      <div
+                        style={{
+                          flex: 1,
+                          fontSize: 12,
+                          color: 'var(--text-muted)',
+                          maxHeight: 60,
+                          overflowY: 'auto',
+                        }}
+                      >
+                        {ftLocalPaths.length === 0
+                          ? t('ft.noFiles')
+                          : ftLocalPaths.map((p, i) => <div key={i}>{p.split('/').pop()}</div>)}
                       </div>
                     </div>
-                    <div style={{ fontSize: 13, fontWeight: 600, marginTop: 8 }}>{t('ft.step2Remote')}</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, marginTop: 8 }}>
+                      {t('ft.step2Remote')}
+                    </div>
                     <div style={{ display: 'flex', gap: 8 }}>
-                      <input value={ftRemotePath} onChange={e => setFtRemotePath(e.target.value)} className="hp-input" style={{ flex: 1 }} placeholder={t('ft.remotePlaceholder')} />
-                      <button type="button" className="hp-btn" disabled={remoteBrowsing} onClick={() => void browseRemote(ftRemotePath || '~')}>{t('ft.browseBtn')}</button>
+                      <input
+                        value={ftRemotePath}
+                        onChange={(e) => setFtRemotePath(e.target.value)}
+                        className="hp-input"
+                        style={{ flex: 1 }}
+                        placeholder={t('ft.remotePlaceholder')}
+                      />
+                      <button
+                        type="button"
+                        className="hp-btn"
+                        disabled={remoteBrowsing}
+                        onClick={() => void browseRemote(ftRemotePath || '~')}
+                      >
+                        {t('ft.browseBtn')}
+                      </button>
                     </div>
                   </>
                 ) : (
                   <>
                     <div style={{ fontSize: 13, fontWeight: 600 }}>{t('ft.step1Remote')}</div>
                     <div style={{ display: 'flex', gap: 8 }}>
-                      <input value={ftRemotePath} onChange={e => setFtRemotePath(e.target.value)} className="hp-input" style={{ flex: 1 }} />
-                      <button type="button" className="hp-btn" disabled={remoteBrowsing} onClick={() => void browseRemote(ftRemotePath || '~')}>{t('ft.browseRemoteBtn')}</button>
+                      <input
+                        value={ftRemotePath}
+                        onChange={(e) => setFtRemotePath(e.target.value)}
+                        className="hp-input"
+                        style={{ flex: 1 }}
+                      />
+                      <button
+                        type="button"
+                        className="hp-btn"
+                        disabled={remoteBrowsing}
+                        onClick={() => void browseRemote(ftRemotePath || '~')}
+                      >
+                        {t('ft.browseRemoteBtn')}
+                      </button>
                     </div>
-                    <div style={{ fontSize: 13, fontWeight: 600, marginTop: 8 }}>{t('ft.step2Local')}</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, marginTop: 8 }}>
+                      {t('ft.step2Local')}
+                    </div>
                     <div style={{ display: 'flex', gap: 8 }}>
-                      <button type="button" className="hp-btn hp-btn-primary" onClick={() => void pickLocalDestDir()}>{t('ft.chooseFolderBtn')}</button>
+                      <button
+                        type="button"
+                        className="hp-btn hp-btn-primary"
+                        onClick={() => void pickLocalDestDir()}
+                      >
+                        {t('ft.chooseFolderBtn')}
+                      </button>
                       <div style={{ flex: 1, fontSize: 12, color: 'var(--text-muted)' }}>
                         {ftLocalDestDir || t('ft.defaultDir')}
                       </div>
@@ -1013,12 +1364,13 @@ export function SshPage(): ReactElement {
                 {/* Remote Browser results inside modal */}
                 {remoteEntries.length > 0 && (
                   <div className="ssh-remote-browser">
-                    {remoteEntries.map(entry => {
+                    {remoteEntries.map((entry) => {
                       const isDir = entry.endsWith('/') || entry === '../'
                       const cleanName = entry.replace(/\/$/, '')
 
                       return (
-                        <div key={entry}
+                        <div
+                          key={entry}
                           className="ssh-remote-entry"
                           onClick={() => {
                             if (entry === '../') {
@@ -1046,7 +1398,12 @@ export function SshPage(): ReactElement {
 
               {ftStatus && <div style={{ fontSize: 12, color: 'var(--accent)' }}>{ftStatus}</div>}
 
-              <button type="button" className="hp-btn hp-btn-primary" style={{ padding: '12px' }} onClick={runTransfer}>
+              <button
+                type="button"
+                className="hp-btn hp-btn-primary"
+                style={{ padding: '12px' }}
+                onClick={runTransfer}
+              >
                 {t('ft.startBtn')}
               </button>
             </div>
@@ -1059,8 +1416,14 @@ export function SshPage(): ReactElement {
         <div className="ssh-modal-overlay">
           <div className="ssh-modal">
             <div className="ssh-modal-header">
-              <div style={{ fontWeight: 600 }}>{t('terminal.title', { name: activeTermSession.bmName })}</div>
-              <button type="button" className="ssh-modal-close" onClick={() => setActiveTermSession(null)}>
+              <div style={{ fontWeight: 600 }}>
+                {t('terminal.title', { name: activeTermSession.bmName })}
+              </div>
+              <button
+                type="button"
+                className="ssh-modal-close"
+                onClick={() => setActiveTermSession(null)}
+              >
                 ×
               </button>
             </div>
@@ -1069,7 +1432,13 @@ export function SshPage(): ReactElement {
             </div>
             {!activeTermSession.isTransfer && (
               <div className="ssh-terminal-hint">
-                <Trans t={t} i18nKey="terminal.hint" components={{ code: <span className="mono" style={{ color: 'var(--accent)' }} /> }}>
+                <Trans
+                  t={t}
+                  i18nKey="terminal.hint"
+                  components={{
+                    code: <span className="mono" style={{ color: 'var(--accent)' }} />,
+                  }}
+                >
                   Type <code>exit</code> to end the session — window closes automatically
                 </Trans>
               </div>
@@ -1083,24 +1452,44 @@ export function SshPage(): ReactElement {
         <div className="ssh-modal-overlay">
           <div className="ssh-modal ssh-modal-password">
             <h2 className="ssh-modal-title">{t('password.title')}</h2>
-            <p className="ssh-modal-title" style={{ fontSize: 13, color: 'var(--text-muted)', margin: '0 0 16px 0', fontWeight: 400 }}>
-              <Trans t={t} i18nKey="password.desc" values={{ user: passModalSess.user, host: passModalSess.host }} components={{ b: <b /> }}>
+            <p
+              className="ssh-modal-title"
+              style={{
+                fontSize: 13,
+                color: 'var(--text-muted)',
+                margin: '0 0 16px 0',
+                fontWeight: 400,
+              }}
+            >
+              <Trans
+                t={t}
+                i18nKey="password.desc"
+                values={{ user: passModalSess.user, host: passModalSess.host }}
+                components={{ b: <b /> }}
+              >
                 Enter the password for <b>user@host</b> to enable the file browser.
               </Trans>
             </p>
             <input
               type="password"
               value={passInput}
-              onChange={e => setPassInput(e.target.value)}
+              onChange={(e) => setPassInput(e.target.value)}
               placeholder={t('password.placeholder')}
-              onKeyDown={e => e.key === 'Enter' && runSetupWithPassword()}
+              onKeyDown={(e) => e.key === 'Enter' && runSetupWithPassword()}
               className="hp-input"
               style={{ marginBottom: 20 }}
               autoFocus
             />
             <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
-              <button type="button" className="hp-btn" onClick={() => setPassModalSess(null)}>{t('password.cancelBtn')}</button>
-              <button type="button" className="hp-btn hp-btn-primary" onClick={runSetupWithPassword} disabled={!passInput || busy}>
+              <button type="button" className="hp-btn" onClick={() => setPassModalSess(null)}>
+                {t('password.cancelBtn')}
+              </button>
+              <button
+                type="button"
+                className="hp-btn hp-btn-primary"
+                onClick={runSetupWithPassword}
+                disabled={!passInput || busy}
+              >
                 {busy ? t('password.inProgress') : t('password.activateBtn')}
               </button>
             </div>

@@ -40,8 +40,6 @@ type CreateExample = {
 type InstallDistroId = 'ubuntu' | 'fedora' | 'arch'
 
 const DOCKER_ENGINE_INSTALL_DOCS = 'https://docs.docker.com/engine/install/'
-const DOCKER_FLATPAK_REPO_DOCS =
-  'https://github.com/Karim-Termanini/LuminaDev/blob/main/docs/DOCKER_FLATPAK.md'
 
 const CREATE_EXAMPLES: CreateExample[] = [
   {
@@ -188,7 +186,6 @@ export function DockerPage(): ReactElement {
   const [isLoadingTags, setIsLoadingTags] = useState(false)
   const [activeTermContainer, setActiveTermContainer] = useState<ContainerRow | null>(null)
   const [inspectRow, setInspectRow] = useState<ContainerRow | null>(null)
-  const [sessionKind, setSessionKind] = useState<'flatpak' | 'native' | 'unknown'>('unknown')
   const [remapContainerId, setRemapContainerId] = useState('')
   const [remapOldPort, setRemapOldPort] = useState('')
   const [remapNewPort, setRemapNewPort] = useState('')
@@ -306,13 +303,6 @@ export function DockerPage(): ReactElement {
         }
       })
       .catch(() => setHostDistroId('linux'))
-    void window.dh
-      .sessionInfo()
-      .then((s) => {
-        const info = s as SessionInfo
-        setSessionKind(info.kind === 'flatpak' ? 'flatpak' : 'native')
-      })
-      .catch(() => setSessionKind('unknown'))
     void refreshInstalledFeatures()
   }, [refreshInstalledFeatures])
 
@@ -1705,263 +1695,239 @@ export function DockerPage(): ReactElement {
               </div>
               <div className="hp-card">
                 <div style={{ fontWeight: 600, marginBottom: 8 }}>{t('ports.bindings')}</div>
-                {sessionKind === 'flatpak' ? (
-                  <div className="hp-status-alert warning" style={{ marginBottom: 0 }}>
-                    <span className="codicon codicon-tools" aria-hidden />
-                    <div>
-                      <div style={{ fontWeight: 600, marginBottom: 2 }}>
-                        {t('ports.notFlatpak')}
-                      </div>
-                      <div style={{ fontSize: 12 }}>
-                        Remap uses host Docker CLI. Use a native install session, or recreate the
-                        container manually with a new <span className="mono">-p</span> mapping.
-                      </div>
-                      <button
-                        type="button"
-                        className="hp-btn"
-                        style={{ marginTop: 10 }}
-                        onClick={() => void window.dh.openExternal(DOCKER_FLATPAK_REPO_DOCS)}
-                      >
-                        <span className="codicon codicon-link-external" aria-hidden /> Flatpak +
-                        Docker notes
-                      </button>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)' }}>
+                    {t('ports.remapDesc')}
+                  </p>
+                  {rows.length === 0 ? (
+                    <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>
+                      No containers yet.
                     </div>
-                  </div>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                    <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)' }}>
-                      {t('ports.remapDesc')}
-                    </p>
-                    {rows.length === 0 ? (
-                      <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>
-                        No containers yet.
-                      </div>
-                    ) : null}
-                    {rows.length > 0 ? (
-                      <>
-                        <label
-                          style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13 }}
+                  ) : null}
+                  {rows.length > 0 ? (
+                    <>
+                      <label
+                        style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13 }}
+                      >
+                        <span style={{ fontWeight: 600 }}>Container</span>
+                        <select
+                          className="hp-input"
+                          value={remapContainerId}
+                          onChange={(e) => {
+                            const nextId = e.target.value
+                            setRemapContainerId(nextId)
+                            const next = rows.find((r) => r.id === nextId)
+                            if (next) setRemapOldPort(extractFirstHostPort(next.ports))
+                          }}
+                          style={{
+                            width: '100%',
+                            background: '#1e1e1e',
+                            color: '#e8e8e8',
+                            border: '1px solid var(--border)',
+                            height: 38,
+                            appearance: 'none',
+                            padding: '0 12px',
+                          }}
                         >
-                          <span style={{ fontWeight: 600 }}>Container</span>
-                          <select
-                            className="hp-input"
-                            value={remapContainerId}
-                            onChange={(e) => {
-                              const nextId = e.target.value
-                              setRemapContainerId(nextId)
-                              const next = rows.find((r) => r.id === nextId)
-                              if (next) setRemapOldPort(extractFirstHostPort(next.ports))
-                            }}
-                            style={{
-                              width: '100%',
-                              background: '#1e1e1e',
-                              color: '#e8e8e8',
-                              border: '1px solid var(--border)',
-                              height: 38,
-                              appearance: 'none',
-                              padding: '0 12px',
-                            }}
-                          >
-                            {rows.map((r) => (
-                              <option
-                                key={r.id}
-                                value={r.id}
-                                style={{ background: '#1e1e1e', color: '#e8e8e8' }}
-                              >
-                                {r.name} ({r.id.slice(0, 12)}) — {r.ports}
-                                {extractFirstHostPort(r.ports) ? '' : ' (no host publish in ps)'}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                        {!remapTargetHasHostBinding ? (
-                          <div
+                          {rows.map((r) => (
+                            <option
+                              key={r.id}
+                              value={r.id}
+                              style={{ background: '#1e1e1e', color: '#e8e8e8' }}
+                            >
+                              {r.name} ({r.id.slice(0, 12)}) — {r.ports}
+                              {extractFirstHostPort(r.ports) ? '' : ' (no host publish in ps)'}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      {!remapTargetHasHostBinding ? (
+                        <div
+                          style={{
+                            display: 'flex',
+                            flexWrap: 'wrap',
+                            gap: 12,
+                            alignItems: 'flex-end',
+                          }}
+                        >
+                          <label
                             style={{
                               display: 'flex',
-                              flexWrap: 'wrap',
-                              gap: 12,
-                              alignItems: 'flex-end',
+                              flexDirection: 'column',
+                              gap: 6,
+                              fontSize: 13,
                             }}
                           >
-                            <label
-                              style={{
-                                display: 'flex',
-                                flexDirection: 'column',
-                                gap: 6,
-                                fontSize: 13,
-                              }}
-                            >
-                              <span style={{ fontWeight: 600 }}>Container port</span>
-                              <input
-                                className="hp-input"
-                                type="number"
-                                min={1}
-                                max={65535}
-                                value={remapContainerPort}
-                                onChange={(e) => setRemapContainerPort(e.target.value)}
-                                placeholder="e.g. 80"
-                                style={{ width: 100 }}
-                              />
-                            </label>
-                            <label
-                              style={{
-                                display: 'flex',
-                                flexDirection: 'column',
-                                gap: 6,
-                                fontSize: 13,
-                              }}
-                            >
-                              <span style={{ fontWeight: 600 }}>Host port</span>
-                              <input
-                                className="hp-input"
-                                type="number"
-                                min={1}
-                                max={65535}
-                                value={remapNewPort}
-                                onChange={(e) => setRemapNewPort(e.target.value)}
-                                placeholder="e.g. 8080"
-                                style={{ width: 100 }}
-                              />
-                            </label>
-                            <label
-                              style={{
-                                display: 'flex',
-                                flexDirection: 'column',
-                                gap: 6,
-                                fontSize: 13,
-                              }}
-                            >
-                              <span style={{ fontWeight: 600 }}>Protocol</span>
-                              <select
-                                className="hp-input"
-                                value={remapProtocol}
-                                onChange={(e) => setRemapProtocol(e.target.value as 'tcp' | 'udp')}
-                                style={{
-                                  width: 80,
-                                  background: '#1e1e1e',
-                                  color: '#e8e8e8',
-                                  border: '1px solid var(--border)',
-                                  height: 38,
-                                }}
-                              >
-                                <option value="tcp">tcp</option>
-                                <option value="udp">udp</option>
-                              </select>
-                            </label>
-                            <button
-                              type="button"
-                              className="hp-btn hp-btn-primary"
-                              disabled={remapBusy}
-                              onClick={() => void runRemapPort()}
-                            >
-                              {remapBusy ? 'Working…' : 'Add binding'}
-                            </button>
-                          </div>
-                        ) : (
-                          <div
+                            <span style={{ fontWeight: 600 }}>Container port</span>
+                            <input
+                              className="hp-input"
+                              type="number"
+                              min={1}
+                              max={65535}
+                              value={remapContainerPort}
+                              onChange={(e) => setRemapContainerPort(e.target.value)}
+                              placeholder="e.g. 80"
+                              style={{ width: 100 }}
+                            />
+                          </label>
+                          <label
                             style={{
                               display: 'flex',
-                              flexWrap: 'wrap',
-                              gap: 12,
-                              alignItems: 'flex-end',
+                              flexDirection: 'column',
+                              gap: 6,
+                              fontSize: 13,
                             }}
                           >
-                            <label
+                            <span style={{ fontWeight: 600 }}>Host port</span>
+                            <input
+                              className="hp-input"
+                              type="number"
+                              min={1}
+                              max={65535}
+                              value={remapNewPort}
+                              onChange={(e) => setRemapNewPort(e.target.value)}
+                              placeholder="e.g. 8080"
+                              style={{ width: 100 }}
+                            />
+                          </label>
+                          <label
+                            style={{
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: 6,
+                              fontSize: 13,
+                            }}
+                          >
+                            <span style={{ fontWeight: 600 }}>Protocol</span>
+                            <select
+                              className="hp-input"
+                              value={remapProtocol}
+                              onChange={(e) => setRemapProtocol(e.target.value as 'tcp' | 'udp')}
                               style={{
-                                display: 'flex',
-                                flexDirection: 'column',
-                                gap: 6,
-                                fontSize: 13,
+                                width: 80,
+                                background: '#1e1e1e',
+                                color: '#e8e8e8',
+                                border: '1px solid var(--border)',
+                                height: 38,
                               }}
                             >
-                              <span style={{ fontWeight: 600 }}>Current host port</span>
-                              <input
-                                className="hp-input"
-                                type="number"
-                                min={1}
-                                max={65535}
-                                placeholder="8080"
-                                value={remapOldPort}
-                                onChange={(e) => setRemapOldPort(e.target.value)}
-                                style={{ width: 120 }}
-                              />
-                            </label>
-                            <label
-                              style={{
-                                display: 'flex',
-                                flexDirection: 'column',
-                                gap: 6,
-                                fontSize: 13,
-                              }}
-                            >
-                              <span style={{ fontWeight: 600 }}>
-                                {t('ports.newHostPort')}{' '}
-                                <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>
-                                  ({t('ports.sameKeepPort')})
-                                </span>
+                              <option value="tcp">tcp</option>
+                              <option value="udp">udp</option>
+                            </select>
+                          </label>
+                          <button
+                            type="button"
+                            className="hp-btn hp-btn-primary"
+                            disabled={remapBusy}
+                            onClick={() => void runRemapPort()}
+                          >
+                            {remapBusy ? 'Working…' : 'Add binding'}
+                          </button>
+                        </div>
+                      ) : (
+                        <div
+                          style={{
+                            display: 'flex',
+                            flexWrap: 'wrap',
+                            gap: 12,
+                            alignItems: 'flex-end',
+                          }}
+                        >
+                          <label
+                            style={{
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: 6,
+                              fontSize: 13,
+                            }}
+                          >
+                            <span style={{ fontWeight: 600 }}>Current host port</span>
+                            <input
+                              className="hp-input"
+                              type="number"
+                              min={1}
+                              max={65535}
+                              placeholder="8080"
+                              value={remapOldPort}
+                              onChange={(e) => setRemapOldPort(e.target.value)}
+                              style={{ width: 120 }}
+                            />
+                          </label>
+                          <label
+                            style={{
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: 6,
+                              fontSize: 13,
+                            }}
+                          >
+                            <span style={{ fontWeight: 600 }}>
+                              {t('ports.newHostPort')}{' '}
+                              <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>
+                                ({t('ports.sameKeepPort')})
                               </span>
-                              <input
-                                className="hp-input"
-                                type="number"
-                                min={1}
-                                max={65535}
-                                placeholder="same or new"
-                                value={remapNewPort}
-                                onChange={(e) => setRemapNewPort(e.target.value)}
-                                style={{ width: 140 }}
-                              />
-                            </label>
-                            <label
-                              style={{
-                                display: 'flex',
-                                flexDirection: 'column',
-                                gap: 6,
-                                fontSize: 13,
-                                minWidth: 180,
-                              }}
-                            >
-                              <span style={{ fontWeight: 600 }}>Target network</span>
-                              <select
-                                className="hp-input"
-                                value={remapNetworkMode}
-                                onChange={(e) => setRemapNetworkMode(e.target.value)}
-                              >
-                                {networks.map((n) => (
-                                  <option key={n.name} value={n.name}>
-                                    {n.name}
-                                  </option>
-                                ))}
-                                {networks.length === 0 ? (
-                                  <option value="bridge">bridge</option>
-                                ) : null}
-                              </select>
-                            </label>
-                            <button
-                              type="button"
-                              className="hp-btn hp-btn-primary"
-                              disabled={remapBusy}
-                              onClick={() => void runRemapPort()}
-                            >
-                              {remapBusy ? t('ports.remapping') : t('ports.remap')}
-                            </button>
-                          </div>
-                        )}
-                        {remapFeedback ? (
-                          <div
-                            className={
-                              remapFeedback.startsWith('Remap finished')
-                                ? 'hp-status-alert success'
-                                : 'hp-status-alert warning'
-                            }
-                            style={{ fontSize: 13 }}
+                            </span>
+                            <input
+                              className="hp-input"
+                              type="number"
+                              min={1}
+                              max={65535}
+                              placeholder="same or new"
+                              value={remapNewPort}
+                              onChange={(e) => setRemapNewPort(e.target.value)}
+                              style={{ width: 140 }}
+                            />
+                          </label>
+                          <label
+                            style={{
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: 6,
+                              fontSize: 13,
+                              minWidth: 180,
+                            }}
                           >
-                            {remapFeedback}
-                          </div>
-                        ) : null}
-                      </>
-                    ) : null}
-                  </div>
-                )}
+                            <span style={{ fontWeight: 600 }}>Target network</span>
+                            <select
+                              className="hp-input"
+                              value={remapNetworkMode}
+                              onChange={(e) => setRemapNetworkMode(e.target.value)}
+                            >
+                              {networks.map((n) => (
+                                <option key={n.name} value={n.name}>
+                                  {n.name}
+                                </option>
+                              ))}
+                              {networks.length === 0 ? (
+                                <option value="bridge">bridge</option>
+                              ) : null}
+                            </select>
+                          </label>
+                          <button
+                            type="button"
+                            className="hp-btn hp-btn-primary"
+                            disabled={remapBusy}
+                            onClick={() => void runRemapPort()}
+                          >
+                            {remapBusy ? t('ports.remapping') : t('ports.remap')}
+                          </button>
+                        </div>
+                      )}
+                      {remapFeedback ? (
+                        <div
+                          className={
+                            remapFeedback.startsWith('Remap finished')
+                              ? 'hp-status-alert success'
+                              : 'hp-status-alert warning'
+                          }
+                          style={{ fontSize: 13 }}
+                        >
+                          {remapFeedback}
+                        </div>
+                      ) : null}
+                    </>
+                  ) : null}
+                </div>
               </div>
             </div>
           ) : null}
@@ -2154,75 +2120,32 @@ export function DockerPage(): ReactElement {
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
               {installStep === 0 && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  {sessionKind === 'flatpak' ? (
-                    <>
-                      <div className="hp-status-alert warning">
-                        <span className="codicon codicon-info" aria-hidden />
-                        <div>
-                          <div style={{ fontWeight: 600, marginBottom: 4 }}>
-                            {t('wizard.noFlatpak')}
-                          </div>
-                          <div style={{ fontSize: 13 }}>
-                            Package-manager install needs a native host session. Install Docker on
-                            the host, then reopen the app outside Flatpak or use documented socket
-                            overrides.
-                          </div>
+                  <>
+                    <div className="hp-status-alert success">
+                      <span className="codicon codicon-pass" aria-hidden />
+                      <div>
+                        <div style={{ fontWeight: 600, marginBottom: 4 }}>
+                          {t('wizard.available')}
+                        </div>
+                        <div style={{ fontSize: 13 }}>
+                          This build can run your distro&apos;s package steps (with{' '}
+                          <span className="mono">sudo</span>) for Docker Engine and selected
+                          components. You can still follow the official guide instead if you prefer.
                         </div>
                       </div>
-                      <div style={{ fontSize: 14, color: 'var(--text-muted)', lineHeight: 1.6 }}>
-                        Once Docker is installed and reachable from this sandbox, refresh — the
-                        panel will pick it up if the socket is exposed.
-                      </div>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                        <button
-                          type="button"
-                          className="hp-btn hp-btn-primary"
-                          onClick={() => void window.dh.openExternal(DOCKER_ENGINE_INSTALL_DOCS)}
-                        >
-                          <span className="codicon codicon-link-external" aria-hidden /> Official
-                          Docker install guide
-                        </button>
-                        <button
-                          type="button"
-                          className="hp-btn"
-                          onClick={() => void window.dh.openExternal(DOCKER_FLATPAK_REPO_DOCS)}
-                        >
-                          <span className="codicon codicon-link-external" aria-hidden /> This repo:
-                          Flatpak + Docker
-                        </button>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="hp-status-alert success">
-                        <span className="codicon codicon-pass" aria-hidden />
-                        <div>
-                          <div style={{ fontWeight: 600, marginBottom: 4 }}>
-                            {t('wizard.available')}
-                          </div>
-                          <div style={{ fontSize: 13 }}>
-                            This build can run your distro&apos;s package steps (with{' '}
-                            <span className="mono">sudo</span>) for Docker Engine and selected
-                            components. You can still follow the official guide instead if you
-                            prefer.
-                          </div>
-                        </div>
-                      </div>
-                      <div style={{ fontSize: 14, color: 'var(--text-muted)', lineHeight: 1.6 }}>
-                        {sessionKind === 'unknown'
-                          ? 'Session type could not be detected; if automated install fails, use the manual guide below.'
-                          : 'Continue to choose components and enter your sudo password on the next steps.'}
-                      </div>
-                      <button
-                        type="button"
-                        className="hp-btn"
-                        onClick={() => void window.dh.openExternal(DOCKER_ENGINE_INSTALL_DOCS)}
-                      >
-                        <span className="codicon codicon-link-external" aria-hidden /> Official
-                        Docker install guide (manual path)
-                      </button>
-                    </>
-                  )}
+                    </div>
+                    <div style={{ fontSize: 14, color: 'var(--text-muted)', lineHeight: 1.6 }}>
+                      Continue to choose components and enter your sudo password on the next steps.
+                    </div>
+                    <button
+                      type="button"
+                      className="hp-btn"
+                      onClick={() => void window.dh.openExternal(DOCKER_ENGINE_INSTALL_DOCS)}
+                    >
+                      <span className="codicon codicon-link-external" aria-hidden /> Official Docker
+                      install guide (manual path)
+                    </button>
+                  </>
                 </div>
               )}
 
@@ -2500,15 +2423,13 @@ export function DockerPage(): ReactElement {
                   <button className="hp-btn" onClick={() => setShowInstallModal(false)}>
                     Close
                   </button>
-                  {sessionKind !== 'flatpak' ? (
-                    <button
-                      type="button"
-                      className="hp-btn hp-btn-primary"
-                      onClick={() => setInstallStep(1)}
-                    >
-                      Continue to wizard
-                    </button>
-                  ) : null}
+                  <button
+                    type="button"
+                    className="hp-btn hp-btn-primary"
+                    onClick={() => setInstallStep(1)}
+                  >
+                    Continue to wizard
+                  </button>
                 </>
               )}
               {installStep === 1 && (

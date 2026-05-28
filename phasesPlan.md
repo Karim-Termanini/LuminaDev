@@ -7,30 +7,14 @@
 
 ---
 
-## 🎯 Immediate Sprint (from `thoghts.md`) — DO THIS NOW
+## 🎯 Immediate Sprint (from `docs/SMART_FLOW_VCS.md`) — DO THIS NOW
 
-**Critical paths only: Flatpak → Tests → Audit → Cross-distro → Release.**
+**Critical paths only: Tests → Audit → Cross-distro → Release. Distribution is exclusively via GitHub Releases.**
 Cosmetic work (theming, drag-drop polish) is blocked until after Day 10.
 
-### Days 1–2 — Flatpak Setup + Build
+### Days 1–2 — Release Setup
 
-- [x] `flatpak install flathub org.gnome.Platform//49 org.gnome.Sdk//49`
-- [x] `flatpak install flathub org.freedesktop.Sdk.Extension.rust-stable` (pinned in CI as `//25.08`)
-- [x] Manifest exists: `flatpak/io.github.karimodora.LinuxDevHome.tauri.yml` (GNOME Platform runtime + cargo module)
-- [x] Local build: `flatpak-builder --user --install --force-clean flatpak-build-tauri flatpak/io.github.karimodora.LinuxDevHome.tauri.yml --install-deps-from=flathub`
-- [x] Local run: `flatpak run io.github.karimodora.LinuxDevHome`
-- [x] Record all errors: permissions, missing deps, cargo offline issues
-- [x] Fix common issues:
-  - Docker socket → `--socket=session-bus` + `docker.sock` custom permission
-  - Host commands → `flatpak-spawn --host` in Rust (auto-wrapped host commands from Flatpak sessions)
-  - Rust deps → run `flatpak-cargo-generator` → `generated-sources.json` (`flatpak/generated-sources.json` tracked + generator script committed)
-
-Progress notes (2026-05-01):
-
-- `corepack enable` failed in Flatpak build (`EROFS`); fixed by switching manifest build commands to `npx pnpm@9.14.2 ...`.
-- `npx` fetch for `pnpm` initially failed with `EAI_AGAIN registry.npmjs.org`; fixed by adding module `build-args: --share=network` in `flatpak/io.github.karimodora.LinuxDevHome.tauri.yml`.
-- Build now passes end-to-end; app installs as `io.github.karimodora.LinuxDevHome` and basic runtime sanity check passes.
-- CI/runtime errors captured and addressed across sprint: `EROFS` (corepack write), `EAI_AGAIN` (network in Flatpak build), Flatpak system/user remote mismatch, extension ref ambiguity, Docker CLI/daemon availability in CI smoke tests, lint scope regressions, and GLib/pkg-config dependency gaps.
+Distribution: GitHub Releases only (AppImage). No package manager distribution in scope.
 
 ### Days 3–4 — Smoke Tests + Docker Integration Tests
 
@@ -45,7 +29,6 @@ Progress notes (2026-05-01):
 - [x] Add CI workflows (only if better than existing CIs):
   - [x] `ci.yml` — now runs Rust smoke tests (`docker_smoke`) + Job Runner tests before frontend/Tauri build on every PR/push
   - [x] `smoke-tests.yml` — Rust tests + Docker smoke + job runner
-  - [x] `flatpak.yml` — Flatpak build + bundle + basic run test
 
 Progress notes (2026-05-01):
 
@@ -66,7 +49,6 @@ Progress notes (2026-05-01):
   - runtime version token edge-cases (`lumina_*` helpers)
   - Docker prune preview response contract shape/types via `docker_prune_preview_payload(...)`
 - Added `.github/workflows/smoke-tests.yml` for dedicated Rust smoke/job-runner coverage.
-- Added `.github/workflows/flatpak.yml` for GNOME 49 Flatpak build + install + non-GUI runtime smoke.
 
 ### Day 5 — Deep Audit: Critical Paths
 
@@ -88,14 +70,14 @@ Progress notes (2026-05-01):
 
 ### Days 6–7 — Cross-Distro Testing + Bug Fixing
 
-Test native + Flatpak on: **Ubuntu/Pop!OS**, **Fedora**, **Arch Linux** (VM if needed).
+Test native on: **Ubuntu/Pop!OS**, **Fedora**, **Arch Linux** (VM if needed).
 
 Focus areas:
 
-- [x] Docker socket inside Flatpak (user-facing guidance hardened)
+- [x] Docker socket (user-facing guidance hardened)
 - [x] Runtime installation (especially Java on Fedora)
-- [x] Monitor metrics (`/proc` access in Flatpak)
-- [x] Terminal integration (fallback guidance hardened for Flatpak)
+- [x] Monitor metrics (`/proc` access)
+- [x] Terminal integration (fallback guidance hardened)
 
 Bug fixes priority (see Known Bugs table below):
 
@@ -104,11 +86,11 @@ Bug fixes priority (see Known Bugs table below):
 - [x] Bug #2 — `installedFeatures` refreshed post-install (Docker wizard)
 - [x] Bug #4 — Docker Hub official-image links normalized (`library/*` + bare names)
 Progress notes (2026-05-01, follow-up):
-- Hardened Flatpak Docker-socket guidance in renderer error contracts: `[DOCKER_UNAVAILABLE]` and `[DOCKER_PERMISSION_DENIED]` now append explicit `flatpak override` instructions for `/var/run/docker.sock` + `session-bus`.
-- Updated `EnvironmentBanner` Docker/Flatpak docs link to the current LuminaDev repository path.
-- Hardened terminal failure fallback copy to include Flatpak PTY focus guidance alongside external terminal fallback.
+- Hardened Docker-socket guidance in renderer error contracts: `[DOCKER_UNAVAILABLE]` and `[DOCKER_PERMISSION_DENIED]` now append explicit troubleshooting instructions.
+- Updated `EnvironmentBanner` Docker docs link to the current LuminaDev repository path.
+- Hardened terminal failure fallback copy to include PTY focus guidance alongside external terminal fallback.
 - Runtime install validation hardened for Fedora Java: expanded tests for DNF major-version package selection (`8/11/17/latest`) and existing install-path checks.
-- Monitor metrics hardened for Flatpak sessions: `/proc` reads now fallback to host-side reads through wrapped host execution when sandbox reads are unavailable.
+- Monitor metrics hardened: `/proc` reads now fallback to host-side reads through wrapped host execution when sandbox reads are unavailable.
 
 ### Days 8–9 — Polish + Documentation
 
@@ -120,13 +102,13 @@ Progress notes (2026-05-01, follow-up):
 Progress notes (2026-05-01, docs pass):
 
 - README now uses explicit `Current Status` and `Known Limitations` headings and documents the `lib.rs` monolith as a maintenance follow-up.
-- Added root `CONTRIBUTING.md` with setup, quality-gate commands, commit/PR rules, and Flatpak boundary references.
-- Cross-distro/UI bug loop includes fixed Docker wizard refresh, Docker Hub official-link normalization, and Flatpak-specific fallback guidance hardening.
+- Added root `CONTRIBUTING.md` with setup, quality-gate commands, commit/PR rules.
+- Cross-distro/UI bug loop includes fixed Docker wizard refresh, Docker Hub official-link normalization, and fallback guidance hardening.
 
 ### Day 10 — Internal Release
 
 - [x] Tag: `v0.2.0-alpha`
-- [x] GitHub Release (draft): AppImage if easy, Flatpak bundle if successful
+- [x] GitHub Release (draft): AppImage
 - [x] Clear install instructions + Known Issues list in release notes (draft: `docs/RELEASE_NOTES_v0.2.0-alpha.md`)
 
 ---
@@ -265,25 +247,9 @@ pub async fn ipc_invoke(channel: &str, payload: Value, state: AppState) -> Resul
 - 300–500 lines: Extract AppState helpers to `app_state.rs`
 - ≥ 500 lines: Audit for missed module boundaries
 
-### Proposed 6-Module Refactoring (Phase 16 follow-up)
+### Modularization ✅ DONE (Phase 16b)
 
-Current monolith → Extract into:
-
-- `utils.rs` — generic file/system/process utilities (no state)
-- `docker_ext.rs` — Docker + Compose orchestration
-- `terminal_pty.rs` — embedded terminal + PTY logic
-- `ssh_ext.rs` — SSH helpers + key generation
-- `git_parser.rs` — Git porcelain parsers (stateless)
-- `runtime_installer.rs` — OS package manager + privilege escalation
-
-**Refactoring order:** Extract in dependency order (utils → git_parser → docker_ext → terminal_pty → ssh_ext → runtime_installer). Per-step: `cargo check` + `cargo test --lib` + smoke-ci gate.
-
-**Verification after refactor:**
-
-- `cargo check` — compiles cleanly
-- `cargo test --lib` — all tests pass
-- `pnpm smoke` — full CI gate passes
-- All IPC contracts unchanged (no Zod schema changes)
+The 6-module proposal was superseded. Actual outcome: 30 top-level `.rs` files + `cloud_auth/` (7 sub-files) = 37 source files total. `lib.rs` is a thin 678-line dispatcher with zero business logic inline. See Phase 16b results above.
 
 ---
 
@@ -292,7 +258,7 @@ Current monolith → Extract into:
 - [x] Widget registry + `dashboard-layout.json` persisted in app data dir
 - [x] Responsive dashboard grid + "Add widget" + "Custom profile" entry points
 - [x] Job runner (`jobStart` / `jobsList` / `jobCancel`) with footer progress strip
-- [x] Session banner: Flatpak vs native + link to `docs/DOCKER_FLATPAK.md`
+- [x] Session banner: native app banner + link to docs
 - [x] Full Tauri migration (Stages 0–4): all IPC native Rust, Electron removed, CI green
 
 ---
@@ -303,13 +269,14 @@ Current monolith → Extract into:
 
 - [x] 9 preset profile cards on grid: Web Dev, Mobile, Game Dev, Infra/K8s, + 5 more (PROFILE_01–09)
 - [x] `CustomProfileWizardModal` — name → template → stacks → widgets → save to `custom_profiles` store
-- [x] Widget drag-and-drop reorder (HTML5, wired end-to-end in `DashboardWidgetDeck` + `DashboardWidgetsPage`)
+- [x] Widget drag-and-drop reorder (HTML5, wired in `DashboardWidgetDeck` rendered inside `DashboardMainPage`)
 - [x] Widget layout load/save via `layoutGet` / `layoutSet` IPC
-- [x] `DashboardWidgetsPage`, `DashboardKernelsPage`, `DashboardLogsPage` present and routed
+- [x] `DashboardKernelsPage`, `DashboardLogsPage` present and routed
+- [ ] `DashboardWidgetsPage` (`/dashboard/widgets`) — route exists, component renders "Coming Soon" stub only; widget management UI not yet built
 
 ### Verified missing (not Alpha scope)
 
-- [x] **Minimal compose stub per preset** — each `docker/compose/<profile>/docker-compose.yml` is a small Alpine `sleep infinity` service with a unique Compose `name:`; `dh:compose:up` resolves checkout, `LUMINA_DEV_COMPOSE_ROOT`, or bundled `docker/compose` (see `compose_profiles.rs` + `tauri.conf.json` `bundle.resources`).
+- [x] **Minimal compose stub per preset** — each `docker/compose/<profile>/docker-compose.yml` is a small Alpine `sleep infinity` service; project name set via `-p` CLI flag (no `name:` field in YAML); `dh:compose:up` resolves checkout, `LUMINA_DEV_COMPOSE_ROOT`, or bundled `docker/compose` (see `compose_profiles.rs` + `tauri.conf.json` `bundle.resources`).
 - [x] **Full stack definitions** — all 9 presets have `docker-compose.full.yml`: web-dev (nginx), infra (Traefik+Portainer+Prometheus), ai-ml (Jupyter+Ollama), data-science (Jupyter+Postgres), mobile (Appium+json-server), game-dev (Redis+game-server), docs (MkDocs), desktop-gui (Xpra), empty (Alpine workspace).
 - [x] Preset ↔ store: `active_profile` is a `ComposeProfile` id; dashboard + wizard + Profiles **Set Active** stay aligned
 
@@ -325,7 +292,7 @@ _On-login automation lives under **Phase 9** (not Phase 1)._
 - [x] Networks: list / create / remove
 - [x] Cleanup: prune preview + selective run
 - [x] Port remap: clone container with new `-p`, stop/remove original
-- [x] Install wizard: native (distro steps with sudo) / Flatpak (warning + links)
+- [x] Install wizard: native (distro steps with sudo)
 - [x] Docker Hub search + tag picker
 - [x] In-container terminal (`dockerTerminal` IPC)
 
@@ -342,7 +309,7 @@ Known issue addressed: install wizard now refreshes `installedFeatures` on open 
 - [x] `sshListDir` for remote directory browsing
 - [x] `sshEnableLocal` for local SSH daemon
 - [x] SSH bookmarks save/load from store
-- [x] Flatpak note in UI (`~/.ssh` needs `--filesystem=home`)
+- [x] SSH note in UI (`~/.ssh` needs filesystem access)
 
 ---
 
@@ -381,7 +348,9 @@ Missing: per-container stats stream, LAN discovery (intentional).
 - [x] `allVersions` detection for all runtimes
 - [x] Python filters EOL, PHP uses system packages
 
-Missing: real dep graph (`removableDeps` always empty), Ruby slow on Fedora.
+- [x] Real dep graph (`removableDeps`) — `runtime_preview_removable_deps()` runs real OS dry-runs (`apt-get -s`, `dnf --assumeno`, `pacman --print-format`, `zypper --dry-run`). ✅ FIXED
+
+Remaining: Ruby install slow on Fedora (intentional/known).
 
 ---
 
@@ -402,22 +371,26 @@ Missing: real dep graph (`removableDeps` always empty), Ruby slow on Fedora.
 
 ---
 
-## Phase 8 — Settings ⚠️ PARTIAL (UI exists; most settings are store-only — not enforced at runtime)
+## Phase 8 — Settings ✅ DONE (15 tabs shipped; 1 stub, Resources tab absent)
 
-**Goal:** Must implement a fully functional settings architecture with the exact specified tabs. All settings must persist correctly to the file system and immediately affect the app state.
+**`/settings` shell** — `SettingsShell.tsx` with category rail, `?tab=` URL param, and per-tab routed components. 15 tabs implemented:
 
-- [ ] **General:** UI for default startup behavior, window sizes, and telemetry toggles bound to a `settings.json` config store.
-- [ ] **Resources:** Sliders and inputs for defining strict CPU limits and RAM allocations that the engine respects during job execution.
-- [ ] **App Engine:** Advanced settings for configuring IPC timeouts, thread pool sizes, and daemon behaviors.
-- [ ] **Builder:** Paths to local toolchains (Cargo, Node, Python) and default registry mirrors.
-- [ ] **Extension:** A grid UI to enable/disable extensions, with real-time plugin loading/unloading capabilities.
-- [ ] **Update:** Toggles for checking for updates on startup, switching release channels (Stable/Alpha).
-- [ ] **Beta Features:** A dedicated panel for toggling experimental flags stored in `beta_features_state`.
-- [ ] **Notification:** Global muting, severity filters, and OS-native notification toggles.
-- [ ] **Shortcuts:** A full keybinding interceptor UI allowing custom shortcut mapping for all major app actions.
-- [ ] **Help & About:** Real dynamic version injection from `package.json`/Tauri config.
-- [ ] **Date and Time:** Dropdowns for 12h/24h formats and timezone overrides affecting all logs.
-- [ ] **Languages:** Real i18n integration supporting real-time language switching.
+- [x] **Personalization** — accent colour, theme tokens; `applyAppearanceAccent` / `syncAppearanceFromStore`
+- [x] **Remote** — SSH overview, terminal defaults
+- [x] **System** — host diagnostics, `/proc` info cards (`SettingsSystem.tsx` 598 lines)
+- [x] **Accounts** — Cloud Git linked accounts (GitHub / GitLab)
+- [x] **General** — startup behaviour, window size, telemetry toggles, projects home dir (`SettingsGeneral.tsx` 124 lines)
+- [x] **Update** — release channel (Stable/Alpha), check-on-startup toggle
+- [x] **Notification** — global mute, severity filters, OS notification toggles
+- [x] **Shortcuts** — keybinding interceptor UI, custom action mapping
+- [x] **Help & About** — dynamic version from Tauri config
+- [x] **Date & Time** — 12h/24h toggle, timezone override
+- [x] **Languages** — i18next language switcher (live, no reload)
+- [x] **App Engine** _(beta)_ — IPC timeout, thread pool, daemon auto-restart
+- [x] **Builder** _(beta)_ — toolchain paths (Cargo, Node, Python), registry mirrors
+- [x] **Beta Features** _(beta)_ — experimental flags via `beta_features_state` store
+- [⚠️] **Extension** _(beta)_ — tab exists, component renders "Coming Soon" stub; real plugin loading not yet built
+- [ ] **Resources** — CPU/RAM limit sliders tab **not present** (not in nav, no component); deferred post-Alpha
 
 ---
 
@@ -431,7 +404,7 @@ Missing: real dep graph (`removableDeps` always empty), Ruby slow on Fedora.
 - [x] **Workspace Context Binding:** Fluent Design UI modal to create/link projects and dynamically bind `${PROJECT_DIR}` to containers on restart.
 - [x] **Project Scaffolding Engine:** Advanced `npm`/`pip` dependency installer, dynamic `package.json`/`requirements.txt` generation, and real-time terminal UI progress streaming. Web-Dev and Data-Science are fully functional.
 - [x] **Expanded Environments:** Mobile scaffold (React Native + Flutter sub-templates via `scaffold_mobile_react_native` / `scaffold_mobile_flutter`) and AI/ML scaffold (`scaffold_ai_ml`: venv, Jupyter, Ollama, LangChain skeleton) fully implemented in `project_scaffold.rs`. DashboardMainPage create-project modal wired with mobile sub-template picker and `dh:project:scaffold` IPC calls for both mobile and ai-ml templates.
-- [x] **IDE Integration:** Dynamic editor detection (Native & Flatpak) and `ipc_invoke` routing for launching VS Code, Cursor, Neovim directly into the active container workspace.
+- [x] **IDE Integration:** Dynamic editor detection and `ipc_invoke` routing for launching VS Code, Cursor, Neovim directly into the active container workspace.
 
 ---
 
@@ -491,20 +464,6 @@ This phase turns the app into a true daily driver for software engineers managin
 
 ---
 
-## Phase 14 — Flatpak Release Gate 🔄 IN PROGRESS
-
-Flatpak runs with **full host permissions** — no sandbox isolation. Docker socket, SSH, PTY, and `/proc` all work without any `flatpak override` workarounds.
-
-- **Checklist**:
-  - [x] **Full host permissions**: `--filesystem=host`, `--device=all`, `--socket=session-bus`, `--socket=system-bus`, `--talk-name=org.freedesktop.Flatpak` in all three manifests.
-  - [ ] **AppStream Metadata**: `metainfo.xml` with license, summary, and screenshots.
-  - [ ] **Desktop Entry**: original icon assets and trademark-clean metadata.
-  - [ ] **Reproducible Build**: manifest builds successfully with `flatpak-builder` offline.
-  - [ ] **Cross-Distro Smoke**: verified on Fedora Silverblue and traditional distros.
-- **Maintenance**: regenerate Node sources after lockfile changes using `./flatpak/generate-node-sources.sh`.
-
----
-
 ## ✅ Phase 16 — System Readiness & Pre-Requisites Wizard (Installer) ✅ DONE
 
 **Goal:** Implement strict blocking "WinBoat" setup wizard philosophy. First window user sees on app launch. Main app shell **does not load** until all critical requirements pass.
@@ -539,7 +498,6 @@ Probe for **everything** required to run app. No shortcuts.
 - [x] Docker daemon running (not just installed)
 - [x] User in `docker` group (can run `docker ps` without sudo)
 - [x] `/var/run/docker.sock` readable
-- [x] Flatpak sandbox overrides (if running in Flatpak): `/var/run/docker.sock` accessible, session-bus available
 
 ### Active "Fix It" Buttons (Not Just "How?")
 
@@ -624,19 +582,18 @@ When user clicks "Install" / "Fix":
 
 ---
 
-### Phase 16 — lib.rs Monolith Refactoring
-**Status:** ✅ DONE  
-**Scope:** Decomposed 3,963-line `lib.rs` into 14 domain modules (308 non-test dispatcher lines).  
-**Details:** See [`docs/superpowers/plans/2026-05-27-phase16-refactor.md`](docs/superpowers/plans/2026-05-27-phase16-refactor.md)
+### Phase 16b — lib.rs Monolith Refactoring
+
+**Status:** ✅ DONE
+**Scope:** Decomposed 3,963-line `lib.rs` into 37 Rust source files (33 domain modules, 678-line dispatcher).
 
 **Results:**
-- `lib.rs`: 3,963 → 691 (82.6% reduction), 308 non-test dispatcher lines (8 over <300 target)
-- ipc_invoke: 52 clean delegation arms, zero business logic inline
-- 10 standalone functions extracted + 45 inline match arm blocks moved to domain modules
-- executor.rs deduplicated (was dead code)
-- cargo check: zero warnings, clippy: zero errors, 108/108 tests pass
-
----
+- `lib.rs`: 3,963 → 678 (82.9% reduction), 308 non-test dispatcher lines
+- ipc_invoke: 106 match-arm lines covering ~65 distinct channels (some arms use `|` multi-pattern), zero business logic inline
+- 37 Rust source files (`cloud_auth/` crate with 7 files; 2,303-line `runtime_jobs.rs` the largest module)
+- `executor.rs` (17 KB) actively used; exports `runtime_bash_user_step`, `sudo_bash_install_step`
+- Key large modules: `runtime_jobs.rs` (2,270 lines), `system_info.rs` (1,536 lines)
+- cargo check: zero warnings, clippy: zero errors; Rust unit test count not re-verified post-refactor
 
 ---
 
@@ -644,65 +601,17 @@ When user clicks "Install" / "Fix":
 
 Based on current app state (Phase 16 + Phase 7 complete), here's what remaining phases need:
 
-### Phase 8 — Settings
+### Phase 8 — Settings ✅ DONE
 
-**Depends on:** Phase 15 (theme system must be complete first)
+15 tabs shipped. See Phase 8 section above for per-tab detail. Remaining gaps: Resources tab absent, Extension tab is a stub.
 
-**Scope:** Full settings persistence architecture with tabs:
+### Phase 15 — Theme Rollout ✅ DONE
 
-- General: startup behavior, window size, telemetry
-- Resources: CPU/RAM limits, job execution tuning
-- App Engine: IPC timeouts, thread pools, daemon config
-- Builder: toolchain paths (Cargo, Node, Python), registry mirrors
-- Extension: enable/disable plugins, real-time loading
-- Update: release channel (Stable/Alpha), check-on-startup
-- Beta Features: experimental flags toggle
-- Notification: global mute, severity filters, OS notifications
-- Shortcuts: keybinding UI, custom action mapping
-- Help & About: dynamic version from package.json
-- Date/Time: 12h/24h, timezone
-- Languages: i18n real-time switching
+`theme-elevated.css` created; all 11 pages + 1 modal converted to elevated theme system. Dynamic theme swapping without reload is a post-Alpha enhancement.
 
-**Implementation:** New `/settings` page (or refactor existing), store in `settings.json`, IPC contract for `dh:settings:*` handlers.
+### Phase 9 — Profiles ✅ DONE
 
-### Phase 15 — Theme Rollout (Prerequisite for Phase 8)
-
-**Current state:** Maintenance + MonitorPage have elevated theme; others inline-only.
-
-**Scope:** Convert 11 remaining pages to elevated theme system:
-
-- Create `theme-elevated.css` shared utilities
-- Per-page CSS files with imports + class overrides
-- Light/Dark/HighContrast token system
-- Dynamic theme swapping without reload
-
-**Pages to convert:** Docker, GitConfig, Settings, Runtimes, Dashboard, Terminal, Registry, Profiles, Kernels, Logs, Modals.
-
-**Note:** Use new code-in-separate-files rule — no more monolithic refactoring.
-
-### Phase 14 — Flatpak Release Gate
-
-**Current state:** Full host permissions; local build works.
-
-**Scope:**
-
-- AppStream metadata (`metainfo.xml`): license, summary, screenshots
-- Desktop entry: icon assets, trademark-clean metadata
-- Reproducible build: manifest builds offline consistently
-- Cross-distro smoke: verified on Fedora Silverblue + traditional distros
-
-**Blocker:** Phase 15 (theme) should be done for polished release appearance.
-
-### Phase 9 — Profiles
-
-**Depends on:** Phase 8 (Settings must exist for profile env var storage)
-
-**Scope:** Real profile management (currently static templates only).
-
-- Data structure: robust JSON with creds, SSH keys, Compose config, env vars
-- Authentication: local user accounts, secure credential storage
-- Switching engine: tear-down + spin-up profile state atomically
-- Per-profile environment variables + Docker/service isolation
+~~**Depends on:** Phase 8 (Settings must exist for profile env var storage)~~ — **shipped without Phase 8**; profile env vars stored in `store.json` directly.
 
 **Note:** Profiles feed into Phase 16 installer (compose profile selection). Tight coupling.
 
@@ -739,17 +648,16 @@ Based on current app state (Phase 16 + Phase 7 complete), here's what remaining 
 ✅  Phase 5  — Monitor
 ✅  Phase 6  — Runtimes (17 languages)
 ✅  Phase 1  — Dashboard
-✅  SPRINT   — Flatpak + Tests + Audit + Cross-distro + v0.2.0-alpha (shipped)
+✅  SPRINT   — Tests + Audit + Cross-distro + v0.2.0-alpha (shipped)
 ✅  Phase 13 — Advanced CI & Environment Hardening
 ✅  Phase 12 — Cloud Git
 ✅  Phase 7  — Maintenance / Guardian
 ✅  Phase 16 — System Readiness & Pre-Requisites Wizard (Installer)
 ✅  Phase 15 — Theme Rollout (Elevated aesthetic)
-📋  Phase 8  — Settings
+✅  Phase 8  — Settings (15 tabs; Extension stub, Resources absent)
 ✅  Phase 9  — Profiles
 📋  Phase 11 — First-run Wizard (Merged into Phase 16)
 📋  UI/UX & Performance Debt
 📋  Phase 10 — Extensions (Plugin model v0, Dev API)
-🔄  Phase 14 — Flatpak Release Gate
-📋  Phase 16 — lib.rs Monolith Refactoring
+✅  Phase 16b — lib.rs Monolith Refactoring (37 source files, 678-line dispatcher)
 ```
