@@ -71,22 +71,30 @@ export function TopBar(): ReactElement {
   }, [q])
 
   const PAGES: ReadonlyArray<{ label: string; route: string; icon: string; keywords?: string[] }> = [
-    { label: 'Dashboard', route: '/dashboard', icon: 'dashboard', keywords: ['home', 'overview', 'widgets'] },
+    // Top-level pages
+    { label: 'Dashboard', route: '/dashboard', icon: 'dashboard', keywords: ['home', 'overview', 'main'] },
     { label: 'Monitor', route: '/system', icon: 'pulse', keywords: ['cpu', 'memory', 'disk', 'metrics', 'performance', 'processes', 'ports', 'system'] },
     { label: 'Docker', route: '/docker', icon: 'package', keywords: ['containers', 'images', 'volumes', 'networks', 'compose'] },
     { label: 'SSH', route: '/ssh', icon: 'key', keywords: ['keys', 'remote', 'secure shell', 'keygen'] },
-    { label: 'Git', route: '/git', icon: 'git-branch', keywords: ['version control', 'commit', 'push', 'pull', 'branch', 'vcs', 'cloud', 'github', 'gitlab', 'doctor'] },
+    { label: 'Git', route: '/git', icon: 'git-branch', keywords: ['version control', 'commit', 'push', 'pull', 'branch', 'vcs', 'cloud', 'github', 'gitlab'] },
     { label: 'Profiles', route: '/profiles', icon: 'account', keywords: ['workspace', 'switch', 'environment'] },
     { label: 'Terminal', route: '/terminal', icon: 'terminal', keywords: ['shell', 'bash', 'console', 'pty'] },
-    { label: 'Runtimes', route: '/runtimes', icon: 'zap', keywords: ['node', 'python', 'rust', 'go', 'java', 'php', 'ruby', 'bun', 'zig', 'dart', 'flutter', 'julia', 'install', 'sdk', 'languages'] },
-    { label: 'Maintenance', route: '/maintenance', icon: 'shield', keywords: ['health', 'guardian', 'cleanup', 'prune', 'logs'] },
-    // Settings top-level
+    { label: 'Runtimes', route: '/runtimes', icon: 'zap', keywords: ['node', 'python', 'rust', 'go', 'java', 'php', 'ruby', 'bun', 'zig', 'dart', 'flutter', 'julia', 'install', 'sdk'] },
+    { label: 'Maintenance', route: '/maintenance', icon: 'shield', keywords: ['health', 'guardian', 'cleanup', 'prune'] },
     { label: 'Settings', route: '/settings', icon: 'settings', keywords: ['preferences', 'config', 'configure', 'options'] },
-    // Settings tabs — deep links
+    // Dashboard sub-pages
+    { label: 'Dashboard → Kernels', route: '/dashboard/kernels', icon: 'server-process', keywords: ['kernel', 'kernels', 'services', 'jupyter', 'nginx', 'php-fpm', 'phpfpm', 'systemd', 'start', 'stop'] },
+    { label: 'Dashboard → Logs', route: '/dashboard/logs', icon: 'output', keywords: ['logs', 'log viewer', 'stream', 'container logs', 'job logs'] },
+    { label: 'Dashboard → Widgets', route: '/dashboard/widgets', icon: 'layout', keywords: ['widgets', 'widget gallery', 'dashboard layout', 'customize'] },
+    // Git sub-tabs
+    { label: 'Git → Version Control', route: '/git?tab=vcs', icon: 'source-control', keywords: ['vcs', 'commit', 'push', 'pull', 'branch', 'diff', 'merge', 'rebase', 'conflict'] },
+    { label: 'Git → Config', route: '/git?tab=config', icon: 'settings-gear', keywords: ['git config', 'identity', 'email', 'name', 'gpg', 'credential', 'doctor', 'diagnostics'] },
+    { label: 'Git → Cloud', route: '/git?tab=cloud', icon: 'github', keywords: ['github', 'gitlab', 'cloud git', 'pr', 'pull request', 'issues', 'pipeline', 'ci'] },
+    // Settings sub-tabs
     { label: 'Settings → Appearance', route: '/settings?tab=personalization', icon: 'color-mode', keywords: ['theme', 'accent', 'color', 'dark', 'light', 'personalization', 'appearance'] },
     { label: 'Settings → Remote', route: '/settings?tab=remote', icon: 'terminal-linux', keywords: ['ssh settings', 'terminal defaults', 'remote access'] },
     { label: 'Settings → System Info', route: '/settings?tab=system', icon: 'inspect', keywords: ['system info', 'host', 'environment', 'process env', 'hosts file'] },
-    { label: 'Settings → Accounts', route: '/settings?tab=accounts', icon: 'github', keywords: ['github', 'gitlab', 'login', 'oauth', 'token', 'cloud auth'] },
+    { label: 'Settings → Accounts', route: '/settings?tab=accounts', icon: 'github', keywords: ['login', 'oauth', 'token', 'cloud auth', 'accounts'] },
     { label: 'Settings → General', route: '/settings?tab=general', icon: 'settings', keywords: ['startup', 'projects home', 'wizard', 'general'] },
     { label: 'Settings → Updates', route: '/settings?tab=update', icon: 'arrow-circle-up', keywords: ['update', 'upgrade', 'version', 'release', 'check for updates'] },
     { label: 'Settings → Notifications', route: '/settings?tab=notification', icon: 'bell', keywords: ['alerts', 'mute', 'severity', 'notification'] },
@@ -94,7 +102,7 @@ export function TopBar(): ReactElement {
     { label: 'Settings → Help & About', route: '/settings?tab=help-about', icon: 'question', keywords: ['help', 'about', 'version', 'docs', 'support', 'info'] },
     { label: 'Settings → Date & Time', route: '/settings?tab=datetime', icon: 'calendar', keywords: ['timezone', 'clock', '12h', '24h', 'time', 'date'] },
     { label: 'Settings → Languages', route: '/settings?tab=languages', icon: 'globe', keywords: ['language', 'locale', 'translation', 'arabic', 'german', 'english'] },
-    { label: 'Settings → App Engine', route: '/settings?tab=app-engine', icon: 'server-process', keywords: ['ipc', 'timeout', 'thread pool', 'daemon', 'engine', 'performance settings'] },
+    { label: 'Settings → App Engine', route: '/settings?tab=app-engine', icon: 'server-process', keywords: ['ipc', 'timeout', 'thread pool', 'daemon', 'engine'] },
     { label: 'Settings → Builder', route: '/settings?tab=builder', icon: 'tools', keywords: ['toolchain', 'cargo', 'registry', 'mirror', 'builder'] },
     { label: 'Settings → Extensions', route: '/settings?tab=extension', icon: 'extensions', keywords: ['plugins', 'extensions', 'addon'] },
     { label: 'Settings → Beta Features', route: '/settings?tab=beta', icon: 'beaker', keywords: ['beta', 'experimental', 'flags', 'preview'] },
@@ -229,10 +237,6 @@ direction: 'ltr',
             id="cmd-palette"
             role="listbox"
             className="cmd-palette-panel"
-            onMouseDown={(e) => {
-              e.preventDefault()
-              if (blurTimerRef.current) clearTimeout(blurTimerRef.current)
-            }}
           >
             {paletteResults.length === 0 && q !== '' ? (
               <div className="cmd-palette-empty">No results for &ldquo;{q}&rdquo;</div>
@@ -247,7 +251,7 @@ direction: 'ltr',
                         role="option"
                         aria-selected={idx === paletteIdx}
                         className={`cmd-palette-item${idx === paletteIdx ? ' active' : ''}`}
-                        onClick={() => { navigate(item.route); onPaletteClose(); setQ('') }}
+                        onMouseDown={(e) => { e.preventDefault(); navigate(item.route); onPaletteClose(); setQ('') }}
                       >
                         <span className={`codicon codicon-${item.icon}`} aria-hidden />
                         <span className="cmd-palette-item-label">{item.label}</span>
@@ -264,7 +268,7 @@ direction: 'ltr',
                         role="option"
                         aria-selected={idx === paletteIdx}
                         className={`cmd-palette-item${idx === paletteIdx ? ' active' : ''}`}
-                        onClick={() => { navigate('/docker'); onPaletteClose(); setQ('') }}
+                        onMouseDown={(e) => { e.preventDefault(); navigate('/docker'); onPaletteClose(); setQ('') }}
                       >
                         <span className="codicon codicon-package" aria-hidden />
                         <span className="cmd-palette-item-label">{item.name}</span>
@@ -285,7 +289,7 @@ direction: 'ltr',
                         role="option"
                         aria-selected={idx === paletteIdx}
                         className={`cmd-palette-item${idx === paletteIdx ? ' active' : ''}`}
-                        onClick={() => { navigate('/runtimes'); onPaletteClose(); setQ('') }}
+                        onMouseDown={(e) => { e.preventDefault(); navigate('/runtimes'); onPaletteClose(); setQ('') }}
                       >
                         <span className="codicon codicon-zap" aria-hidden />
                         <span className="cmd-palette-item-label">{item.name}</span>
