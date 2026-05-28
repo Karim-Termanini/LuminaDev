@@ -354,6 +354,104 @@
   line-height: 1.5;
 }
 
+/* ── Kernel Cards Grid ── */
+.kernels-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.kernel-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.kernel-card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.kernel-card-label {
+  font-size: 14px;
+  font-weight: 600;
+  flex: 1;
+}
+
+.kernel-status-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+
+.kernel-status-active { background: rgba(0,230,118,0.12); color: var(--green); }
+.kernel-status-inactive { background: rgba(255,193,7,0.12); color: var(--yellow); }
+.kernel-status-failed { background: rgba(248,81,73,0.12); color: var(--red); }
+.kernel-status-unknown { background: rgba(128,128,128,0.12); color: var(--text-muted); }
+
+.kernel-card-unit {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: monospace;
+}
+
+.kernel-card-link-badge {
+  font-size: 11px;
+  color: var(--accent);
+  background: rgba(124,77,255,0.08);
+  border-radius: 4px;
+  padding: 2px 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kernel-card-error {
+  font-size: 11px;
+  color: var(--red);
+  background: rgba(248,81,73,0.08);
+  border-radius: 4px;
+  padding: 4px 8px;
+}
+
+.kernel-card-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.kernel-btn {
+  padding: 5px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  background: var(--bg-input);
+  color: var(--text);
+  transition: opacity 0.15s;
+}
+
+.kernel-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.kernel-btn-start { border-color: var(--green); color: var(--green); }
+.kernel-btn-start:hover:not(:disabled) { background: rgba(0,230,118,0.1); }
+.kernel-btn-stop:hover:not(:disabled) { background: rgba(248,81,73,0.1); color: var(--red); }
+.kernel-btn-open { border-color: var(--accent); color: var(--accent); }
+.kernel-btn-open:hover { background: rgba(124,77,255,0.1); }
+.kernel-btn-link { color: var(--text-muted); }
+.kernel-btn-link:hover { color: var(--text); }
+
 /* ── Light Theme Overrides ── */
 [data-theme="light"] .kernels-card-container {
   background: rgba(255, 255, 255, 0.75);

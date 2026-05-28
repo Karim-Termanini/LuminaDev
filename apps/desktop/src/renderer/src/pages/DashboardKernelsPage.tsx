@@ -4,25 +4,26 @@ import { useCallback, useEffect, useState } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
 import type { HostSecuritySnapshot, RuntimeStatus, HostPortRow } from '@linux-dev-home/shared'
 
-const UNITS = ['docker', 'ssh', 'nginx'] as const
 const REFRESH_MS = 30_000
 const HTTP_PORTS = new Set([80, 443, 3000, 3001, 4200, 5000, 5173, 8000, 8080, 8443, 9000])
 
-type Status = 'active' | 'inactive' | 'failed' | 'unknown'
-
-function statusColor(s?: string): string {
-  if (s === 'active') return 'var(--green)'
-  if (s === 'failed') return 'var(--red)'
-  if (s === 'inactive') return 'var(--yellow)'
-  return 'var(--text-muted)'
+type KernelDef = {
+  id: string
+  label: string
+  icon: string
+  systemdUnit: string
+  altUnits?: string[]
+  httpPort?: number
+  category: 'system' | 'dev'
 }
 
-function unitIcon(u: string): string {
-  if (u === 'docker') return 'codicon-package'
-  if (u === 'ssh') return 'codicon-key'
-  if (u === 'nginx') return 'codicon-server'
-  return 'codicon-circle'
-}
+const KERNEL_DEFS: KernelDef[] = [
+  { id: 'docker',  label: 'Docker',   icon: 'codicon-package', systemdUnit: 'docker',   category: 'system' },
+  { id: 'ssh',     label: 'SSH',      icon: 'codicon-key',     systemdUnit: 'sshd',     altUnits: ['ssh'], category: 'system' },
+  { id: 'nginx',   label: 'Nginx',    icon: 'codicon-server',  systemdUnit: 'nginx',    category: 'system' },
+  { id: 'jupyter', label: 'Jupyter',  icon: 'codicon-graph',   systemdUnit: 'jupyter',  altUnits: ['jupyter-notebook', 'jupyter-lab'], httpPort: 8888, category: 'dev' },
+  { id: 'phpfpm',  label: 'PHP-FPM',  icon: 'codicon-globe',   systemdUnit: 'php-fpm',  altUnits: ['php8.3-fpm', 'php8.2-fpm', 'php8.1-fpm', 'php-fpm8'], category: 'dev' },
+]
 
 function secOk(label: string, value: string): boolean {
   if (label === 'Firewall') return value === 'active'
@@ -31,6 +32,58 @@ function secOk(label: string, value: string): boolean {
   if (label === 'SSH Password Auth') return value === 'no'
   if (label === 'Failed Auth (24h)') return value === '0'
   return false
+}
+
+function KernelCard({
+  def, status, busy, error, linkedPath, onStart, onStop, onLink,
+}: {
+  def: KernelDef
+  status: string
+  busy: boolean
+  error: string
+  linkedPath?: string
+  onStart: () => void
+  onStop: () => void
+  onLink: () => void
+}): ReactElement {
+  const isActive = status === 'active'
+  const isInstalled = status !== 'unknown'
+  return (
+    <div className="kernel-card">
+      <div className="kernel-card-header">
+        <span className={`codicon ${def.icon}`} aria-hidden style={{ fontSize: 18, color: isActive ? 'var(--green)' : 'var(--text-muted)' }} />
+        <span className="kernel-card-label">{def.label}</span>
+        <span className={`kernel-status-badge kernel-status-${status}`}>{status.toUpperCase()}</span>
+      </div>
+      <div className="kernel-card-unit">systemd: {def.systemdUnit}</div>
+      {linkedPath && (
+        <div className="kernel-card-link-badge" title={linkedPath}>
+          <span className="codicon codicon-link" style={{ fontSize: 10 }} /> {linkedPath.split('/').slice(-2).join('/')}
+        </div>
+      )}
+      {error && <div className="kernel-card-error">{error}</div>}
+      <div className="kernel-card-actions">
+        {isInstalled && (
+          <>
+            <button type="button" className="kernel-btn kernel-btn-start" disabled={busy || isActive} onClick={onStart}>
+              {busy ? <span className="codicon codicon-loading codicon-modifier-spin" /> : 'Start'}
+            </button>
+            <button type="button" className="kernel-btn kernel-btn-stop" disabled={busy || !isActive} onClick={onStop}>
+              Stop
+            </button>
+          </>
+        )}
+        {def.httpPort && isActive && (
+          <button type="button" className="kernel-btn kernel-btn-open" onClick={() => void window.dh.openExternal(`http://localhost:${def.httpPort}`)}>
+            Open ↗
+          </button>
+        )}
+        <button type="button" className="kernel-btn kernel-btn-link" onClick={onLink}>
+          {linkedPath ? 'Relink' : 'Link Project'}
+        </button>
+      </div>
+    </div>
+  )
 }
 
 export function DashboardKernelsPage(): ReactElement {
@@ -42,8 +95,20 @@ export function DashboardKernelsPage(): ReactElement {
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null)
   const [busy, setBusy] = useState(false)
   const [runtimesLoaded, setRuntimesLoaded] = useState(false)
+  const [kernelLinks, setKernelLinks] = useState<Record<string, string>>({})
+  const [unitBusy, setUnitBusy] = useState<Record<string, boolean>>({})
+  const [unitError, setUnitError] = useState<Record<string, string>>({})
 
   const { t } = useTranslation('dashboard')
+
+  useEffect(() => {
+    window.dh.storeGet({ key: 'kernel_links' }).then((res: unknown) => {
+      const bag = res as { ok?: boolean; data?: unknown }
+      if (bag.ok && bag.data && typeof bag.data === 'object') {
+        setKernelLinks(bag.data as Record<string, string>)
+      }
+    }).catch(() => {})
+  }, [])
 
   const refresh = useCallback(async () => {
     setBusy(true)
@@ -64,18 +129,28 @@ export function DashboardKernelsPage(): ReactElement {
       if (rtRes.status === 'fulfilled' && rtRes.value && rtRes.value.runtimes) {
         setRuntimes(rtRes.value.runtimes)
       }
-setRuntimesLoaded(true)
+      setRuntimesLoaded(true)
       if (portsRes.status === 'fulfilled' && Array.isArray(portsRes.value)) {
         setPorts(portsRes.value)
       }
       const nextUnits: Record<string, string> = {}
       await Promise.all(
-        UNITS.map(async (unit) => {
+        KERNEL_DEFS.map(async (def) => {
           try {
-            const s = await window.dh.hostExec({ command: 'systemctl_is_active', unit })
-            nextUnits[unit] = s.ok ? String(s.result ?? 'unknown') : 'unknown'
+            const allUnits = [def.systemdUnit, ...(def.altUnits ?? [])]
+            if (allUnits.length > 1) {
+              const s = await window.dh.hostExec({
+                command: 'systemctl_is_active_fallback',
+                units: allUnits,
+              })
+              const bag = s as { ok: boolean; result?: string }
+              nextUnits[def.id] = bag.ok ? String(bag.result ?? 'unknown') : 'unknown'
+            } else {
+              const s = await window.dh.hostExec({ command: 'systemctl_is_active', unit: def.systemdUnit })
+              nextUnits[def.id] = (s as { ok: boolean; result?: string }).ok ? String((s as { ok: boolean; result?: string }).result ?? 'unknown') : 'unknown'
+            }
           } catch {
-            nextUnits[unit] = 'unknown'
+            nextUnits[def.id] = 'unknown'
           }
         })
       )
@@ -91,6 +166,56 @@ setRuntimesLoaded(true)
     const id = setInterval(() => void refresh(), REFRESH_MS)
     return () => clearInterval(id)
   }, [refresh])
+
+  const startUnit = useCallback(async (def: KernelDef) => {
+    setUnitBusy((prev) => ({ ...prev, [def.id]: true }))
+    setUnitError((prev) => ({ ...prev, [def.id]: '' }))
+    try {
+      const res = await window.dh.hostExec({
+        command: 'systemctl_start',
+        unit: def.systemdUnit,
+        user: def.category === 'dev',
+      })
+      const bag = res as { ok: boolean; error?: string }
+      if (!bag.ok) setUnitError((prev) => ({ ...prev, [def.id]: bag.error ?? 'Failed to start' }))
+      const s = await window.dh.hostExec({ command: 'systemctl_is_active', unit: def.systemdUnit })
+      setUnits((prev) => ({ ...prev, [def.id]: String((s as { ok: boolean; result?: string }).result ?? 'unknown') }))
+    } catch (e) {
+      setUnitError((prev) => ({ ...prev, [def.id]: e instanceof Error ? e.message : String(e) }))
+    } finally {
+      setUnitBusy((prev) => ({ ...prev, [def.id]: false }))
+    }
+  }, [])
+
+  const stopUnit = useCallback(async (def: KernelDef) => {
+    setUnitBusy((prev) => ({ ...prev, [def.id]: true }))
+    setUnitError((prev) => ({ ...prev, [def.id]: '' }))
+    try {
+      const res = await window.dh.hostExec({
+        command: 'systemctl_stop',
+        unit: def.systemdUnit,
+        user: def.category === 'dev',
+      })
+      const bag = res as { ok: boolean; error?: string }
+      if (!bag.ok) setUnitError((prev) => ({ ...prev, [def.id]: bag.error ?? 'Failed to stop' }))
+      const s = await window.dh.hostExec({ command: 'systemctl_is_active', unit: def.systemdUnit })
+      setUnits((prev) => ({ ...prev, [def.id]: String((s as { ok: boolean; result?: string }).result ?? 'unknown') }))
+    } catch (e) {
+      setUnitError((prev) => ({ ...prev, [def.id]: e instanceof Error ? e.message : String(e) }))
+    } finally {
+      setUnitBusy((prev) => ({ ...prev, [def.id]: false }))
+    }
+  }, [])
+
+  const linkProject = useCallback(async (def: KernelDef) => {
+    try {
+      const path = await window.dh.selectFolder()
+      if (!path || typeof path !== 'string') return
+      const next = { ...kernelLinks, [def.id]: path }
+      setKernelLinks(next)
+      await window.dh.storeSet({ key: 'kernel_links', data: next })
+    } catch { /* ignore */ }
+  }, [kernelLinks])
 
   const secItems = security
     ? [
@@ -134,43 +259,59 @@ setRuntimesLoaded(true)
         </div>
       </div>
 
+      {/* ── System Services ── */}
+      <section style={{ marginBottom: 24 }}>
+        <h3 style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', margin: '0 0 12px' }}>
+          System Services
+        </h3>
+        <div className="kernels-grid">
+          {KERNEL_DEFS.filter((d) => d.category === 'system').map((def) => (
+            <KernelCard
+              key={def.id}
+              def={def}
+              status={units[def.id] ?? 'unknown'}
+              busy={unitBusy[def.id] ?? false}
+              error={unitError[def.id] ?? ''}
+              linkedPath={kernelLinks[def.id]}
+              onStart={() => void startUnit(def)}
+              onStop={() => void stopUnit(def)}
+              onLink={() => void linkProject(def)}
+            />
+          ))}
+        </div>
+      </section>
+
+      {/* ── Development Kernels ── */}
+      <section>
+        <h3 style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', margin: '0 0 12px' }}>
+          Development Kernels
+        </h3>
+        <div className="kernels-grid">
+          {KERNEL_DEFS.filter((d) => d.category === 'dev').map((def) => (
+            <KernelCard
+              key={def.id}
+              def={def}
+              status={units[def.id] ?? 'unknown'}
+              busy={unitBusy[def.id] ?? false}
+              error={unitError[def.id] ?? ''}
+              linkedPath={kernelLinks[def.id]}
+              onStart={() => void startUnit(def)}
+              onStop={() => void stopUnit(def)}
+              onLink={() => void linkProject(def)}
+            />
+          ))}
+        </div>
+      </section>
+
       {/* ── Main Two-Column Grid ── */}
       <div className="kernels-dashboard-grid">
-        {/* Left Column: Services & Security */}
+        {/* Left Column: Runtimes & Security */}
         <div className="kernels-main-col">
-          {/* Services Section */}
-          <div className="kernels-card-container">
-            <div className="kernels-card-header-title">
-              <span className="codicon codicon-server-process" style={{ color: 'var(--accent)' }} />
-              {t('kernels.systemServices')}
-            </div>
-            <div className="kernels-services-grid">
-              {UNITS.map((u) => {
-                const val = units[u] as Status | undefined
-                const color = statusColor(val)
-                return (
-                  <div key={u} className="kernels-service-card" style={{ borderLeft: `3px solid ${color}` }}>
-                    <div className="kernels-service-card-top">
-                      <div className="kernels-service-icon-wrap">
-                        <span className={`codicon ${unitIcon(u)}`} />
-                      </div>
-                      <span className="kernels-status-dot" style={{ background: color }} />
-                    </div>
-                    <div className="kernels-service-name">{u}</div>
-                    <div className="kernels-service-value" style={{ color }}>
-                      {val || t('kernels.checking')}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-
           {/* Development Kernels & Toolchains */}
           <div className="kernels-card-container">
             <div className="kernels-card-header-title">
               <span className="codicon codicon-terminal" style={{ color: 'var(--accent)' }} />
-{t('kernels.devKernels')}
+              {t('kernels.devKernels')}
             </div>
             {runtimes.length > 0 ? (
               <div className="kernels-audit-list">
@@ -193,13 +334,13 @@ setRuntimesLoaded(true)
                         border: `1px solid ${r.installed ? 'rgba(63, 185, 80, 0.2)' : 'rgba(255, 255, 255, 0.08)'}`,
                       }}
                     >
-{r.installed ? t('kernels.active') : t('kernels.notInstalled')}
+                      {r.installed ? t('kernels.active') : t('kernels.notInstalled')}
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
-<div style={{ color: 'var(--text-muted)', fontSize: 12 }}>
+              <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>
                 {runtimesLoaded ? t('kernels.noRuntimes') : t('kernels.loadingRuntimes')}
               </div>
             )}
@@ -267,7 +408,7 @@ setRuntimesLoaded(true)
           <div className="kernels-card-container">
             <div className="kernels-card-header-title">
               <span className="codicon codicon-link-external" style={{ color: 'var(--accent)' }} />
-{t('kernels.activePortBindings')}
+              {t('kernels.activePortBindings')}
             </div>
             {ports.length > 0 ? (
               <div className="kernels-audit-list" style={{ maxHeight: 200, overflowY: 'auto' }}>
@@ -282,7 +423,7 @@ setRuntimesLoaded(true)
                       <span className="mono" style={{ fontWeight: 600 }}>:{p.port}</span>
                       <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 6 }}>({p.service})</span>
                     </div>
-{p.protocol === 'tcp' && HTTP_PORTS.has(p.port) ? (
+                    {p.protocol === 'tcp' && HTTP_PORTS.has(p.port) ? (
                       <a
                         href={`http://localhost:${p.port}`}
                         target="_blank"
@@ -296,7 +437,7 @@ setRuntimesLoaded(true)
                           textDecoration: 'none',
                         }}
                       >
-{t('kernels.openLink')}
+                        {t('kernels.openLink')}
                       </a>
                     ) : (
                       <div
@@ -307,7 +448,7 @@ setRuntimesLoaded(true)
                           border: '1px solid rgba(255, 255, 255, 0.08)',
                         }}
                       >
-{p.protocol.toUpperCase()}
+                        {p.protocol.toUpperCase()}
                       </div>
                     )}
                   </div>
@@ -315,7 +456,7 @@ setRuntimesLoaded(true)
               </div>
             ) : (
               <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)' }}>
-{t('kernels.noPorts')}
+                {t('kernels.noPorts')}
               </p>
             )}
           </div>
