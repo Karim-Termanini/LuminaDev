@@ -70,18 +70,35 @@ export function TopBar(): ReactElement {
     setPaletteIdx(0)
   }, [q])
 
-  const PAGES = [
-    { label: 'Dashboard', route: '/dashboard', icon: 'dashboard' },
-    { label: 'Monitor', route: '/system', icon: 'pulse' },
-    { label: 'Docker', route: '/docker', icon: 'package' },
-    { label: 'SSH', route: '/ssh', icon: 'key' },
-    { label: 'Git', route: '/git', icon: 'git-branch' },
-    { label: 'Profiles', route: '/profiles', icon: 'account' },
-    { label: 'Terminal', route: '/terminal', icon: 'terminal' },
-    { label: 'Runtimes', route: '/runtimes', icon: 'zap' },
-    { label: 'Maintenance', route: '/maintenance', icon: 'shield' },
-    { label: 'Settings', route: '/settings', icon: 'settings' },
-  ] as const
+  const PAGES: ReadonlyArray<{ label: string; route: string; icon: string; keywords?: string[] }> = [
+    { label: 'Dashboard', route: '/dashboard', icon: 'dashboard', keywords: ['home', 'overview', 'widgets'] },
+    { label: 'Monitor', route: '/system', icon: 'pulse', keywords: ['cpu', 'memory', 'disk', 'metrics', 'performance', 'processes', 'ports', 'system'] },
+    { label: 'Docker', route: '/docker', icon: 'package', keywords: ['containers', 'images', 'volumes', 'networks', 'compose'] },
+    { label: 'SSH', route: '/ssh', icon: 'key', keywords: ['keys', 'remote', 'secure shell', 'keygen'] },
+    { label: 'Git', route: '/git', icon: 'git-branch', keywords: ['version control', 'commit', 'push', 'pull', 'branch', 'vcs', 'cloud', 'github', 'gitlab', 'doctor'] },
+    { label: 'Profiles', route: '/profiles', icon: 'account', keywords: ['workspace', 'switch', 'environment'] },
+    { label: 'Terminal', route: '/terminal', icon: 'terminal', keywords: ['shell', 'bash', 'console', 'pty'] },
+    { label: 'Runtimes', route: '/runtimes', icon: 'zap', keywords: ['node', 'python', 'rust', 'go', 'java', 'php', 'ruby', 'bun', 'zig', 'dart', 'flutter', 'julia', 'install', 'sdk', 'languages'] },
+    { label: 'Maintenance', route: '/maintenance', icon: 'shield', keywords: ['health', 'guardian', 'cleanup', 'prune', 'logs'] },
+    // Settings top-level
+    { label: 'Settings', route: '/settings', icon: 'settings', keywords: ['preferences', 'config', 'configure', 'options'] },
+    // Settings tabs — deep links
+    { label: 'Settings → Appearance', route: '/settings?tab=personalization', icon: 'color-mode', keywords: ['theme', 'accent', 'color', 'dark', 'light', 'personalization', 'appearance'] },
+    { label: 'Settings → Remote', route: '/settings?tab=remote', icon: 'terminal-linux', keywords: ['ssh settings', 'terminal defaults', 'remote access'] },
+    { label: 'Settings → System Info', route: '/settings?tab=system', icon: 'inspect', keywords: ['system info', 'host', 'environment', 'process env', 'hosts file'] },
+    { label: 'Settings → Accounts', route: '/settings?tab=accounts', icon: 'github', keywords: ['github', 'gitlab', 'login', 'oauth', 'token', 'cloud auth'] },
+    { label: 'Settings → General', route: '/settings?tab=general', icon: 'settings', keywords: ['startup', 'projects home', 'wizard', 'general'] },
+    { label: 'Settings → Updates', route: '/settings?tab=update', icon: 'arrow-circle-up', keywords: ['update', 'upgrade', 'version', 'release', 'check for updates'] },
+    { label: 'Settings → Notifications', route: '/settings?tab=notification', icon: 'bell', keywords: ['alerts', 'mute', 'severity', 'notification'] },
+    { label: 'Settings → Shortcuts', route: '/settings?tab=shortcuts', icon: 'keyboard', keywords: ['keybindings', 'hotkeys', 'keyboard', 'shortcuts', 'ctrl', 'alt'] },
+    { label: 'Settings → Help & About', route: '/settings?tab=help-about', icon: 'question', keywords: ['help', 'about', 'version', 'docs', 'support', 'info'] },
+    { label: 'Settings → Date & Time', route: '/settings?tab=datetime', icon: 'calendar', keywords: ['timezone', 'clock', '12h', '24h', 'time', 'date'] },
+    { label: 'Settings → Languages', route: '/settings?tab=languages', icon: 'globe', keywords: ['language', 'locale', 'translation', 'arabic', 'german', 'english'] },
+    { label: 'Settings → App Engine', route: '/settings?tab=app-engine', icon: 'server-process', keywords: ['ipc', 'timeout', 'thread pool', 'daemon', 'engine', 'performance settings'] },
+    { label: 'Settings → Builder', route: '/settings?tab=builder', icon: 'tools', keywords: ['toolchain', 'cargo', 'registry', 'mirror', 'builder'] },
+    { label: 'Settings → Extensions', route: '/settings?tab=extension', icon: 'extensions', keywords: ['plugins', 'extensions', 'addon'] },
+    { label: 'Settings → Beta Features', route: '/settings?tab=beta', icon: 'beaker', keywords: ['beta', 'experimental', 'flags', 'preview'] },
+  ]
 
   const getCachedRuntimes = (): Array<{ name: string; version: string }> => {
     try {
@@ -102,7 +119,11 @@ export function TopBar(): ReactElement {
   const getPaletteResults = (query: string, containers: ContainerRow[]): PaletteResult[] => {
     const lq = query.toLowerCase()
     const results: PaletteResult[] = []
-    const matchedPages = PAGES.filter((p) => query === '' || p.label.toLowerCase().includes(lq))
+    const matchedPages = PAGES.filter((p) => {
+      if (query === '') return !p.route.includes('?') // empty query: top-level pages only
+      if (p.label.toLowerCase().includes(lq)) return true
+      return p.keywords?.some((kw) => kw.toLowerCase().includes(lq)) ?? false
+    })
     results.push(...matchedPages.map((p) => ({ kind: 'page' as const, label: p.label, route: p.route, icon: p.icon })))
     if (query !== '') {
       containers
