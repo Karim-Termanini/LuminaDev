@@ -2,7 +2,7 @@ name: Smoke Tests
 
 on:
   push:
-    branches: [main, 'phase-*', 'stabilization/*', 'feat/*', 'fix/*', 'chore/*']
+    branches: [main, 'phase-*', 'stabilization/*', 'feat/*', 'fix/*', 'chore/*', 'docs/*']
   pull_request:
     branches: [main]
 
