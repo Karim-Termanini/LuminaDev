@@ -15,7 +15,30 @@ async fn exec_docker_compose_in_dir(
   project_name: Option<&str>,
   extra_env: Option<HashMap<String, String>>,
 ) -> Result<(String, String), String> {
-  let mut compose_args: Vec<String> = vec!["compose".into(), "-f".into(), "docker-compose.yml".into()];
+  // Build args: "compose" [-p <name>] -f docker-compose.yml [overlay] <subcommand>
+  // -p flag takes highest precedence in all Docker Compose v2 versions,
+  // overriding the name: field in compose YAML (env var alone doesn't always win).
+  let mut compose_args: Vec<String> = vec!["compose".into()];
+  let sanitized_project = project_name.and_then(|pn| {
+    let trimmed = pn.trim();
+    if trimmed.is_empty() {
+      None
+    } else {
+      Some(
+        trimmed
+          .to_lowercase()
+          .chars()
+          .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '-' })
+          .collect::<String>(),
+      )
+    }
+  });
+  if let Some(ref pname) = sanitized_project {
+    compose_args.push("-p".into());
+    compose_args.push(pname.clone());
+  }
+  compose_args.push("-f".into());
+  compose_args.push("docker-compose.yml".into());
   if crate::compose_profiles::compose_full_overlay_enabled(compose_dir) {
     compose_args.push("-f".into());
     compose_args.push("docker-compose.full.yml".into());
@@ -26,16 +49,8 @@ async fn exec_docker_compose_in_dir(
   let fut = async {
     let mut cmd = Command::new("docker");
     cmd.current_dir(compose_dir).args(&compose_args);
-    if let Some(pn) = project_name {
-      let trimmed = pn.trim();
-      if !trimmed.is_empty() {
-        let sanitized = trimmed
-          .to_lowercase()
-          .chars()
-          .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '-' })
-          .collect::<String>();
-        cmd.env("COMPOSE_PROJECT_NAME", sanitized);
-      }
+    if let Some(ref pname) = sanitized_project {
+      cmd.env("COMPOSE_PROJECT_NAME", pname);
     }
     if let Some(env_map) = extra_env {
       for (k, v) in env_map {

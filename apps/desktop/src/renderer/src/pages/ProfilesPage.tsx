@@ -150,12 +150,9 @@ export function ProfilesPage(): ReactElement {
         payload: { names: profileList.map((p) => p.name) },
       })) as { ok?: boolean; running?: string[] }
       if (res.ok && res.running) {
-        const lower = res.running.map((n) => n.toLowerCase())
-        setRunningProfiles(
-          new Set(
-            profileList.filter((p) => lower.includes(p.name.toLowerCase())).map((p) => p.name)
-          )
-        )
+        setRunningProfiles(new Set(res.running))
+      } else {
+        setRunningProfiles(new Set())
       }
     } catch {
       /* ignore */
@@ -810,8 +807,8 @@ export function ProfilesPage(): ReactElement {
                             await setAsActive(p.name)
                             try {
                               const r = (await invoke('ipc_invoke', {
-                                channel: 'dh:profile:switch',
-                                payload: { to: p.name },
+                                channel: 'dh:compose:up',
+                                payload: { profile: p.name },
                               })) as { ok?: boolean; error?: string }
                               await refreshRunning()
                               if (r.ok) {

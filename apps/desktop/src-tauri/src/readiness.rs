@@ -29,7 +29,6 @@ pub struct SoftwareStatus {
     pub docker_version: String,
     pub in_docker_group: bool,
     pub kvm_supported: bool,
-    pub is_sandboxed: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -62,7 +61,12 @@ fn probe_hardware() -> HardwareStatus {
     if let Ok(content) = fs::read_to_string("/proc/cpuinfo") {
         cpu_cores = content.split("processor\t:").count() - 1;
         if let Some(line) = content.lines().find(|l| l.contains("model name")) {
-            cpu_model = line.split(':').nth(1).unwrap_or("Unknown").trim().to_string();
+            cpu_model = line
+                .split(':')
+                .nth(1)
+                .unwrap_or("Unknown")
+                .trim()
+                .to_string();
         }
     }
 
@@ -71,11 +75,19 @@ fn probe_hardware() -> HardwareStatus {
     if let Ok(content) = fs::read_to_string("/proc/meminfo") {
         for line in content.lines() {
             if line.starts_with("MemTotal:") {
-                let kb: f64 = line.split_whitespace().nth(1).and_then(|s| s.parse().ok()).unwrap_or(0.0);
+                let kb: f64 = line
+                    .split_whitespace()
+                    .nth(1)
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(0.0);
                 ram_total_gb = kb / 1024.0 / 1024.0;
             }
             if line.starts_with("MemAvailable:") {
-                let kb: f64 = line.split_whitespace().nth(1).and_then(|s| s.parse().ok()).unwrap_or(0.0);
+                let kb: f64 = line
+                    .split_whitespace()
+                    .nth(1)
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(0.0);
                 ram_free_gb = kb / 1024.0 / 1024.0;
             }
         }
@@ -119,7 +131,7 @@ fn probe_software() -> SoftwareStatus {
         .arg("--format")
         .arg("{{.Server.Version}}")
         .output();
-    
+
     let docker_installed = docker_version_out.is_ok();
     let (docker_running, docker_version) = if let Ok(out) = docker_version_out {
         let v = String::from_utf8_lossy(&out.stdout).trim().to_string();
@@ -136,7 +148,6 @@ fn probe_software() -> SoftwareStatus {
     };
 
     let kvm_supported = fs::metadata("/dev/kvm").is_ok();
-    let is_sandboxed = fs::metadata("/run/flatpak-info").is_ok();
 
     SoftwareStatus {
         docker_installed,
@@ -144,7 +155,6 @@ fn probe_software() -> SoftwareStatus {
         docker_version,
         in_docker_group,
         kvm_supported,
-        is_sandboxed,
     }
 }
 
@@ -167,7 +177,7 @@ async fn check_latency(url: &str) -> Option<u64> {
         .timeout(std::time::Duration::from_secs(3))
         .build()
         .ok()?;
-    
+
     if client.head(url).send().await.is_ok() {
         Some(start.elapsed().as_millis() as u64)
     } else {
@@ -177,25 +187,61 @@ async fn check_latency(url: &str) -> Option<u64> {
 
 pub fn probe_tools() -> ToolsStatus {
     ToolsStatus {
-        curl: Command::new("which").arg("curl").output().map(|o| o.status.success()).unwrap_or(false),
-        tar: Command::new("which").arg("tar").output().map(|o| o.status.success()).unwrap_or(false),
-        unzip: Command::new("which").arg("unzip").output().map(|o| o.status.success()).unwrap_or(false),
-        git: Command::new("which").arg("git").output().map(|o| o.status.success()).unwrap_or(false),
+        curl: Command::new("which")
+            .arg("curl")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false),
+        tar: Command::new("which")
+            .arg("tar")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false),
+        unzip: Command::new("which")
+            .arg("unzip")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false),
+        git: Command::new("which")
+            .arg("git")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false),
     }
 }
 
 fn detect_package_manager() -> Option<(&'static str, Vec<&'static str>)> {
     // Returns (pm_name, install_args) where install_args = [cmd, package_name]
-    if Command::new("which").arg("apt-get").output().map(|o| o.status.success()).unwrap_or(false) {
+    if Command::new("which")
+        .arg("apt-get")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+    {
         return Some(("apt", vec!["apt-get", "install", "-y"]));
     }
-    if Command::new("which").arg("dnf").output().map(|o| o.status.success()).unwrap_or(false) {
+    if Command::new("which")
+        .arg("dnf")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+    {
         return Some(("dnf", vec!["dnf", "install", "-y"]));
     }
-    if Command::new("which").arg("pacman").output().map(|o| o.status.success()).unwrap_or(false) {
+    if Command::new("which")
+        .arg("pacman")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+    {
         return Some(("pacman", vec!["pacman", "-S", "--noconfirm"]));
     }
-    if Command::new("which").arg("zypper").output().map(|o| o.status.success()).unwrap_or(false) {
+    if Command::new("which")
+        .arg("zypper")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+    {
         return Some(("zypper", vec!["zypper", "install", "-y"]));
     }
     None
@@ -238,9 +284,12 @@ pub async fn run_fix(id: &str) -> Result<(), String> {
             if status.success() {
                 Ok(())
             } else {
-                Err(format!("Failed to install {}: package manager returned error.", tool))
+                Err(format!(
+                    "Failed to install {}: package manager returned error.",
+                    tool
+                ))
             }
-        },
+        }
 
         // Docker daemon start
         "docker-start" => {
@@ -255,12 +304,14 @@ pub async fn run_fix(id: &str) -> Result<(), String> {
             } else {
                 Err("Failed to start docker service.".to_string())
             }
-        },
+        }
 
         // Add user to docker group
         "docker-group" => {
             let user = std::env::var("USER").unwrap_or_default();
-            if user.is_empty() { return Err("Could not detect current user.".to_string()); }
+            if user.is_empty() {
+                return Err("Could not detect current user.".to_string());
+            }
 
             let status = Command::new("pkexec")
                 .arg("usermod")
@@ -273,9 +324,12 @@ pub async fn run_fix(id: &str) -> Result<(), String> {
             if status.success() {
                 Ok(())
             } else {
-                Err("Failed to update group membership. User may need to log out and back in.".to_string())
+                Err(
+                    "Failed to update group membership. User may need to log out and back in."
+                        .to_string(),
+                )
             }
-        },
+        }
 
         _ => Err(format!("[UNKNOWN_FIX_ID] {}", id)),
     }

@@ -1,5 +1,4 @@
 # LUMINA_DEV_COMPOSE_FULL=1 overlay — empty/blank workspace
-name: lumina-empty
 
 services:
   workspace:

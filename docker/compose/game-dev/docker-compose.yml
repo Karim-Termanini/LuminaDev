@@ -1,5 +1,4 @@
 # LUMINA_DEV_COMPOSE_FULL=1 overlay — game dev stack
-name: lumina-game-dev
 
 services:
   redis:

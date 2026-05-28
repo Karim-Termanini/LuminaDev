@@ -91,16 +91,6 @@ pub(crate) fn docker_install_build_steps(
 }
 
 pub(crate) async fn docker_install_invoke(body: &Value) -> Value {
-    if std::env::var("FLATPAK_ID").is_ok() {
-        return json!({
-          "ok": false,
-          "log": vec![
-            "Blocked: Flatpak sandbox cannot run privileged host package managers (apt/dnf/pacman).".to_string()
-          ],
-          "error": "[DOCKER_INSTALL_FAILED] Install Docker on the host outside Flatpak (see https://docs.docker.com/engine/install/), grant socket access to this app, then retry."
-        });
-    }
-
     let distro = body
         .get("distro")
         .and_then(|v| v.as_str())
@@ -131,7 +121,6 @@ pub(crate) async fn docker_install_invoke(body: &Value) -> Value {
           "error": format!("[DOCKER_INSTALL_FAILED] Selected distro '{}' does not match host distro '{}'. Choose '{}' in the installer.", distro, host_distro_id, host_family),
         });
     }
-
 
     let requested_components: Vec<String> = body
         .get("components")

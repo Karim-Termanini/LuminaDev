@@ -1,5 +1,4 @@
 # LUMINA_DEV_COMPOSE_FULL=1 overlay — AI/ML dev stack
-name: lumina-ai-ml
 
 services:
   jupyter:

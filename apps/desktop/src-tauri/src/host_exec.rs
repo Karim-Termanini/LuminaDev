@@ -54,20 +54,8 @@ pub(crate) fn cmd_timeout_install_step() -> Duration {
     Duration::from_secs(900).max(get_global_ipc_timeout())
 }
 
-fn running_in_flatpak() -> bool {
-    std::env::var("FLATPAK_ID")
-        .map(|v| !v.trim().is_empty())
-        .unwrap_or(false)
-}
-
 fn host_command(cmd: &str, args: &[&str]) -> Command {
-    let mut command = if running_in_flatpak() && cmd != "flatpak-spawn" {
-        let mut wrapped = Command::new("flatpak-spawn");
-        wrapped.arg("--host").arg(cmd);
-        wrapped
-    } else {
-        Command::new(cmd)
-    };
+    let mut command = Command::new(cmd);
     command.args(args);
     command
 }
@@ -131,8 +119,6 @@ pub(crate) async fn exec_result(cmd: &str, args: &[&str]) -> Result<(String, Str
     exec_result_limit(cmd, args, limit).await
 }
 
-/// Like `exec_output_limit` but injects additional environment variables.
-/// In Flatpak sessions, env vars are passed via `flatpak-spawn --env=K=V` args.
 pub(crate) async fn exec_output_with_env(
     cmd: &str,
     args: &[&str],
@@ -146,15 +132,7 @@ pub(crate) async fn exec_output_with_env(
     let args_owned: Vec<String> = args.iter().map(|s| s.to_string()).collect();
     let cmd_owned = cmd.to_string();
     let fut = async move {
-        let mut command = if running_in_flatpak() && cmd_owned != "flatpak-spawn" {
-            let mut wrapped = Command::new("flatpak-spawn");
-            wrapped.arg("--host");
-            for (k, v) in &env_owned {
-                wrapped.arg(format!("--env={}={}", k, v));
-            }
-            wrapped.arg(&cmd_owned);
-            wrapped
-        } else {
+        let mut command = {
             let mut c = Command::new(&cmd_owned);
             for (k, v) in &env_owned {
                 c.env(k, v);
@@ -226,11 +204,6 @@ pub(crate) async fn read_proc_text(path: &str) -> String {
         if !text.trim().is_empty() {
             return text;
         }
-    }
-    if running_in_flatpak() {
-        return exec_output_limit("cat", &[path], cmd_timeout_short())
-            .await
-            .unwrap_or_default();
     }
     String::new()
 }

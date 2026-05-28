@@ -1,5 +1,4 @@
 # LUMINA_DEV_COMPOSE_FULL=1 overlay — realistic infra/k8s dev stack
-name: lumina-infra
 
 services:
   traefik:

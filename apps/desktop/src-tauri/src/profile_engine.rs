@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use tauri::{AppHandle, Emitter};
 
 use crate::host_exec::{
-    cmd_timeout_long, cmd_timeout_short, exec_output_limit, get_global_ipc_timeout,
+    cmd_timeout_long, cmd_timeout_short, exec_output_limit,
 };
 use crate::utils::{app_file, find_free_port, read_json};
 
@@ -161,51 +161,6 @@ pub(crate) async fn profile_switch(app: &AppHandle, body: &Value) -> Value {
     }
 
     let mut logs = String::new();
-
-    emit_step("Pausing other profiles...", 8);
-    if let Ok(ps_out) = exec_output_limit(
-        "docker",
-        &[
-            "ps",
-            "--filter",
-            "label=com.docker.compose.project",
-            "--format",
-            "{{.ID}}\t{{.Label \"com.docker.compose.project\"}}",
-        ],
-        cmd_timeout_short(),
-    )
-    .await
-    {
-        let ids_to_stop: Vec<String> = ps_out
-            .lines()
-            .filter_map(|line| {
-                let mut parts = line.splitn(2, '\t');
-                let id = parts.next()?.trim().to_string();
-                let project = parts.next()?.trim().to_string();
-                if project != to_profile {
-                    Some(id)
-                } else {
-                    None
-                }
-            })
-            .collect();
-        if !ids_to_stop.is_empty() {
-            let mut stop_args = vec!["stop".to_string()];
-            stop_args.extend(ids_to_stop);
-            let stop_refs: Vec<&str> = stop_args.iter().map(|s| s.as_str()).collect();
-            match exec_output_limit("docker", &stop_refs, get_global_ipc_timeout()).await {
-                Ok(out) => logs.push_str(&format!(
-                    "Paused other profile containers:\n{}\n",
-                    out.trim()
-                )),
-                Err(e) => logs.push_str(&format!(
-                    "Warning: could not pause other containers: {}\n",
-                    e.trim()
-                )),
-            }
-            tokio::time::sleep(std::time::Duration::from_millis(800)).await;
-        }
-    }
 
     if let Some(from) = from_profile {
         emit_step(&format!("Stopping {}...", from), 12);

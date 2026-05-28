@@ -1,5 +1,4 @@
 # LUMINA_DEV_COMPOSE_FULL=1 overlay — desktop GUI dev stack
-name: lumina-desktop-gui
 
 services:
   xpra:
