@@ -1,7 +1,7 @@
 {
   "page.sectionLabel": "PROFILES",
   "page.title": "Profile Engine Room",
-  "page.subtitle": "Build, edit, and manage custom profiles. To switch profiles, use the Dashboard command center. Here you can CRUD profiles, set global launch automation, and backup/sync your configuration.",
+  "page.subtitle": "Create and manage development environments. Start, stop, or edit any profile directly from this page.",
 
   "badge.active": "ACTIVE",
   "badge.noProject": "No project linked",

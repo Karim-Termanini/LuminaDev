@@ -1,7 +1,7 @@
 {
   "page.sectionLabel": "PROFILE",
   "page.title": "Profil-Manager",
-  "page.subtitle": "Erstelle, bearbeite und verwalte benutzerdefinierte Profile. Zum Wechseln der Profile verwende das Dashboard-Befehlszentrum. Hier kannst du Profile verwalten, globale Startautomatisierung einrichten und deine Konfiguration sichern/synchronisieren.",
+  "page.subtitle": "Entwicklungsumgebungen erstellen und verwalten. Profile direkt hier starten, stoppen oder bearbeiten.",
 
   "badge.active": "AKTIV",
   "badge.noProject": "Kein Projekt verknüpft",

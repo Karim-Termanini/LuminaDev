@@ -143,7 +143,7 @@ pub(crate) async fn profile_switch(app: &AppHandle, body: &Value) -> Value {
         );
     };
 
-    emit_step("Checking Docker...", 5);
+    emit_step("Checking Docker...", 3);
     match exec_output_limit(
         "docker",
         &["info", "--format", "{{.ServerVersion}}"],
@@ -162,7 +162,7 @@ pub(crate) async fn profile_switch(app: &AppHandle, body: &Value) -> Value {
 
     let mut logs = String::new();
 
-    emit_step("Pausing other profiles...", 20);
+    emit_step("Pausing other profiles...", 8);
     if let Ok(ps_out) = exec_output_limit(
         "docker",
         &[
@@ -208,7 +208,7 @@ pub(crate) async fn profile_switch(app: &AppHandle, body: &Value) -> Value {
     }
 
     if let Some(from) = from_profile {
-        emit_step(&format!("Stopping {}...", from), 35);
+        emit_step(&format!("Stopping {}...", from), 12);
         let from_template = resolve_profile_template(app, from);
         let from_dir = crate::compose_profiles::compose_profile_workdir(app, &from_template);
         if from_dir.is_dir() {
@@ -242,7 +242,7 @@ pub(crate) async fn profile_switch(app: &AppHandle, body: &Value) -> Value {
         });
     }
 
-    emit_step("Assigning ports...", 50);
+    emit_step("Assigning ports...", 15);
     if let Ok(store_path) = app_file(app, "store.json") {
         let mut store = read_json(&store_path);
         let mut changed = false;
@@ -271,7 +271,13 @@ pub(crate) async fn profile_switch(app: &AppHandle, body: &Value) -> Value {
         }
     }
 
-    emit_step(&format!("Starting {}...", to_profile), 65);
+    emit_step(
+        &format!(
+            "Starting {} (pulling images, building containers)...",
+            to_profile
+        ),
+        60,
+    );
     match crate::compose_engine::expose_exec_docker_compose_in_dir(
         &to_dir,
         &["up", "-d"],

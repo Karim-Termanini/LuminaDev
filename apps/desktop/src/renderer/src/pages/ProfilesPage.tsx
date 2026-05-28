@@ -58,6 +58,7 @@ export function ProfilesPage(): ReactElement {
   const [activeTab, setActiveTab] = useState<'builder' | 'automation' | 'backup'>('builder')
   const [activeProfileTemplate, setActiveProfileTemplate] = useState<string | null>(null)
   const [projectPaths, setProjectPaths] = useState<Record<string, string | null>>({})
+  const [runningProfiles, setRunningProfiles] = useState<Set<string>>(new Set())
 
   // Beginner vs Expert Mode states
   const [envMode, setEnvMode] = useState<'beginner' | 'expert'>('beginner')
@@ -140,6 +141,32 @@ export function ProfilesPage(): ReactElement {
     )
     setProjectPaths(paths)
   }, []) // stable: only calls window.dh + setState setters
+
+  const checkRunning = useCallback(async () => {
+    try {
+      // Query docker ps for container names containing profile names
+      const psRes = await invoke('ipc_invoke', {
+        channel: 'dh:host:exec',
+        payload: { command: 'maintenance_docker_ps_table' },
+      }) as { ok?: boolean; result?: string }
+      const running = new Set<string>()
+      if (psRes.ok && typeof psRes.result === 'string') {
+        const resultLower = psRes.result.toLowerCase()
+        for (const p of profiles) {
+          // Docker compose names containers as <project>-<service>-<n>
+          if (resultLower.includes(p.name.toLowerCase() + '-')) running.add(p.name)
+        }
+      }
+      setRunningProfiles(running)
+    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
+  }, [profiles])
+
+  useEffect(() => {
+    void checkRunning()
+  }, [checkRunning])
 
   const load = useCallback(async (): Promise<void> => {
     try {
@@ -509,6 +536,22 @@ export function ProfilesPage(): ReactElement {
                           className="row-title"
                           style={{ display: 'flex', alignItems: 'center', gap: 8 }}
                         >
+                          <span
+                            style={{
+                              display: 'inline-block',
+                              width: 10,
+                              height: 10,
+                              borderRadius: '50%',
+                              background: runningProfiles.has(p.name)
+                                ? 'var(--green)'
+                                : 'rgba(255,255,255,0.15)',
+                              border: runningProfiles.has(p.name)
+                                ? '2px solid var(--green)'
+                                : '2px solid rgba(255,255,255,0.2)',
+                              flexShrink: 0,
+                            }}
+                            title={runningProfiles.has(p.name) ? 'Running' : 'Stopped'}
+                          />
                           {p.name}
                           {activeProfileTemplate === p.name && (
                             <span
@@ -675,49 +718,78 @@ export function ProfilesPage(): ReactElement {
                     </div>
 
                     <div className="row-actions">
-                      {activeProfileTemplate === p.name ? (
-                        <button
-                          type="button"
-                          style={{
-                            padding: '8px 16px',
-                            borderRadius: 6,
-                            background: 'var(--green)',
-                            color: '#fff',
-                            border: 'none',
-                            fontWeight: 700,
-                            cursor: 'pointer',
-                            fontSize: 13,
-                            transition: 'all 0.2s ease',
-                          }}
-                          onClick={async () => {
-                            setStatus(null)
-                            try {
-                              const r = (await invoke('ipc_invoke', {
-                                channel: 'dh:profile:switch',
-                                payload: { to: p.name },
-                              })) as { ok?: boolean; error?: string }
-                              if (!r.ok) {
+                      {runningProfiles.has(p.name) ? (
+                        <>
+                          <button
+                            type="button"
+                            style={{
+                              padding: '8px 16px',
+                              borderRadius: 6,
+                              background: 'var(--red)',
+                              color: '#fff',
+                              border: 'none',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              fontSize: 13,
+                            }}
+                            onClick={async () => {
+                              setStatus(null)
+                              try {
+                                const r = (await invoke('ipc_invoke', {
+                                  channel: 'dh:compose:down',
+                                  payload: { profile: p.name },
+                                })) as { ok?: boolean; error?: string }
+                                await checkRunning()
+                                if (r.ok) {
+                                  setStatus({ message: `${p.name} stopped.`, type: 'success' })
+                                } else {
+                                  setStatus({
+                                    message: r.error || 'Failed to stop',
+                                    type: 'warning',
+                                  })
+                                }
+                              } catch (e) {
                                 setStatus({
-                                  message: r.error || 'Failed to restart',
+                                  message: e instanceof Error ? e.message : String(e),
                                   type: 'warning',
                                 })
-                              } else {
+                              }
+                            }}
+                          >
+                            <span
+                              className="codicon codicon-debug-stop"
+                              style={{ marginRight: 4 }}
+                            />
+                            Stop
+                          </button>
+                          <button
+                            type="button"
+                            className="row-btn"
+                            onClick={async () => {
+                              setStatus(null)
+                              try {
+                                const r = (await invoke('ipc_invoke', {
+                                  channel: 'dh:profile:switch',
+                                  payload: { to: p.name },
+                                })) as { ok?: boolean; error?: string }
+                                await checkRunning()
+                                if (!r.ok) {
+                                  setStatus({ message: r.error || 'Failed', type: 'warning' })
+                                } else {
+                                  setStatus({ message: `${p.name} restarted.`, type: 'success' })
+                                }
+                              } catch (e) {
                                 setStatus({
-                                  message: t('msg.restarted', { name: p.name }),
-                                  type: 'success',
+                                  message: e instanceof Error ? e.message : String(e),
+                                  type: 'warning',
                                 })
                               }
-                            } catch (e) {
-                              setStatus({
-                                message: e instanceof Error ? e.message : String(e),
-                                type: 'warning',
-                              })
-                            }
-                          }}
-                        >
-                          <span className="codicon codicon-sync" style={{ marginRight: 4 }} />
-                          {t('btn.restart')}
-                        </button>
+                            }}
+                          >
+                            <span className="codicon codicon-sync" style={{ marginRight: 4 }} />
+                            Restart
+                          </button>
+                        </>
                       ) : (
                         <button
                           type="button"
@@ -730,7 +802,6 @@ export function ProfilesPage(): ReactElement {
                             fontWeight: 700,
                             cursor: 'pointer',
                             fontSize: 13,
-                            transition: 'all 0.2s ease',
                           }}
                           onClick={async () => {
                             setStatus(null)
@@ -740,14 +811,12 @@ export function ProfilesPage(): ReactElement {
                                 channel: 'dh:profile:switch',
                                 payload: { to: p.name },
                               })) as { ok?: boolean; error?: string }
+                              await checkRunning()
                               if (r.ok) {
-                                setStatus({
-                                  message: t('msg.initialized', { name: p.name }),
-                                  type: 'success',
-                                })
+                                setStatus({ message: `${p.name} started.`, type: 'success' })
                               } else {
                                 setStatus({
-                                  message: r.error || 'Failed to initialize',
+                                  message: r.error || 'Failed to start',
                                   type: 'warning',
                                 })
                               }
@@ -760,7 +829,7 @@ export function ProfilesPage(): ReactElement {
                           }}
                         >
                           <span className="codicon codicon-play" style={{ marginRight: 4 }} />
-                          {t('btn.initialize')}
+                          Start
                         </button>
                       )}
                       <button type="button" className="row-btn" onClick={() => openEditModal(i)}>
