@@ -1,4 +1,4 @@
-import { ComposeProfileSchema, type JobSummary, type ContainerRow, type ComposeProfile } from '@linux-dev-home/shared'
+import { ComposeProfileSchema, type JobSummary, type ContainerRow } from '@linux-dev-home/shared'
 import './DashboardLogsPage.css'
 import type { ReactElement } from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
+import { listen } from '@tauri-apps/api/event'
 
 const profiles = ComposeProfileSchema.options
 
@@ -134,27 +135,8 @@ const { t } = useTranslation('dashboard')
   const terminalRef = useRef<Terminal | null>(null)
   const fitAddonRef = useRef<FitAddon | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
-const activeRef = useRef(false)
-
-  const writeLogs = useCallback((text: string, filter: string) => {
-    const term = terminalRef.current
-    if (!term) return
-
-    term.clear()
-    
-    const lines = text.split('\n')
-    const filteredLines = filter
-      ? lines.filter(line => line.toLowerCase().includes(filter.toLowerCase()))
-      : lines
-
-    if (filteredLines.length === 0) {
-term.write('\r\n' + t('logs.noLinesMatch') + '\r\n')
-    } else {
-      for (const line of filteredLines) {
-        term.write(colorizeLine(line) + '\r\n')
-      }
-    }
-  }, [t])
+  const streamIdRef = useRef<string | null>(null)
+  const unlistenRef = useRef<(() => void) | null>(null)
 
   const refreshJobs = useCallback(async () => {
     try {
@@ -179,102 +161,46 @@ term.write('\r\n' + t('logs.noLinesMatch') + '\r\n')
     }
   }, [])
 
-  const getUnifiedLogs = useCallback(async () => {
-let unified = `=== ${t('logs.unifiedFeedTitle')} ===\r\n\r\n`
-    
-    const composeResults = await Promise.all(
-      profiles.map(async (p) => {
-        try {
-          const res = await window.dh.composeLogs({ profile: p })
-          if (res.ok && res.log) {
-return `--- ${t('logs.composeProfileSection', { profile: p })} ---\r\n${res.log}\r\n`
-          }
-        } catch {
-          // ignore
-        }
-        return ''
-      })
-    )
-    unified += composeResults.filter(Boolean).join('\r\n')
+  const startStream = useCallback(async () => {
+    // Stop previous stream
+    if (streamIdRef.current) {
+      await window.dh.logStreamStop({ streamId: streamIdRef.current }).catch(() => {})
+      streamIdRef.current = null
+    }
+    if (unlistenRef.current) {
+      unlistenRef.current()
+      unlistenRef.current = null
+    }
 
-    const containerResults = await Promise.all(
-      containers.filter(c => c.state.toLowerCase() === 'running').map(async (c) => {
-        try {
-          const res = await window.dh.dockerLogs({ id: c.id, tail: 50 })
-          let logStr = ''
-          if (typeof res === 'string') {
-            logStr = res
-          } else if (res && typeof res === 'object' && 'ok' in res) {
-            const bag = res as { ok: boolean; text?: string }
-            if (bag.ok && bag.text) logStr = bag.text
-          }
-          if (logStr) {
-return `--- ${t('logs.containerSection', { name: c.name, image: c.image })} ---\r\n${logStr}\r\n`
-          }
-        } catch {
-          // ignore
-        }
-        return ''
-      })
-    )
-    unified += containerResults.filter(Boolean).join('\r\n')
+    const term = terminalRef.current
+    if (!term) return
+
+    term.write(`\r\n\x1b[90m--- ${activeSource.label} ---\x1b[0m\r\n`)
 
     try {
-      const list = (await window.dh.jobsList()) as JobSummary[]
-      if (Array.isArray(list) && list.length > 0) {
-unified += '\r\n--- ' + t('logs.backgroundJobsSection') + ' ---\r\n'
-        for (const j of list) {
-          if (j.logTail && j.logTail.length > 0) {
-            unified += `[${t('logs.jobEntryLabel', { kind: j.kind, state: j.state })}]\r\n` + j.logTail.join('\r\n') + '\r\n\r\n'
-          }
+      const res = await window.dh.logStreamStart({
+        source: activeSource.type as 'compose' | 'container' | 'unified',
+        id: activeSource.id,
+      })
+      if (!res.ok) return
+      streamIdRef.current = res.streamId
+
+      const unlisten = await listen<{ streamId: string; source: string; line: string }>(
+        'dh:log:line',
+        (event) => {
+          if (event.payload.streamId !== streamIdRef.current) return
+          const t = terminalRef.current
+          if (!t) return
+          const atBottom = t.buffer.active.viewportY >= t.buffer.active.length - t.rows - 1
+          t.write(colorizeLine(event.payload.line) + '\r\n')
+          if (atBottom) t.scrollToBottom()
         }
-      }
-    } catch {
-      // ignore
+      )
+      unlistenRef.current = unlisten
+    } catch (e) {
+      term.write(`\x1b[31m[stream error: ${e instanceof Error ? e.message : String(e)}]\x1b[0m\r\n`)
     }
-
-    return unified
-}, [containers, t])
-
-  const loadSourceLogs = useCallback(async () => {
-    let rawText = ''
-    if (activeSource.type === 'unified') {
-      rawText = await getUnifiedLogs()
-    } else if (activeSource.type === 'compose') {
-      try {
-        const res = await window.dh.composeLogs({ profile: activeSource.id as ComposeProfile })
-rawText = res.ok ? res.log || t('logs.noOutputYet') : res.error || t('logs.errorFetchingLogs')
-      } catch (e) {
-        rawText = t('logs.errorPrefix') + ' ' + (e instanceof Error ? e.message : String(e))
-      }
-    } else if (activeSource.type === 'container') {
-      try {
-        const res = await window.dh.dockerLogs({ id: activeSource.id!, tail: 200 })
-        if (typeof res === 'string') {
-rawText = res || t('logs.noOutputYet')
-        } else if (res && typeof res === 'object' && 'ok' in res) {
-          const bag = res as { ok: boolean; text?: string; error?: string }
-          rawText = bag.ok ? bag.text || t('logs.noOutputYet') : bag.error || t('logs.errorFetchingLogs')
-        } else {
-          rawText = t('logs.noOutputYet')
-        }
-      } catch (e) {
-        rawText = t('logs.errorPrefix') + ' ' + (e instanceof Error ? e.message : String(e))
-      }
-    } else if (activeSource.type === 'job') {
-      const job = jobs.find(j => j.id === activeSource.id)
-      if (job) {
-rawText = `=== ${t('logs.jobDetailHeader', { kind: job.kind, state: job.state })} ===\r\n` +
-          `${t('logs.jobProgress', { progress: job.progress })}\r\n\r\n` +
-          `--- ${t('logs.logsSection')} ---\r\n` +
-          (job.logTail || []).join('\r\n')
-      } else {
-        rawText = t('logs.jobNotFound', { id: activeSource.id })
-      }
-    }
-
-    writeLogs(rawText, searchText)
-}, [activeSource, searchText, jobs, getUnifiedLogs, writeLogs, t])
+  }, [activeSource])
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -329,23 +255,29 @@ rawText = `=== ${t('logs.jobDetailHeader', { kind: job.kind, state: job.state })
     }
   }, [])
 
+  // Stream: start on source change, stop on unmount
   useEffect(() => {
-    void loadSourceLogs()
-  }, [loadSourceLogs])
+    void startStream()
+    return () => {
+      if (streamIdRef.current) {
+        void window.dh.logStreamStop({ streamId: streamIdRef.current })
+        streamIdRef.current = null
+      }
+      if (unlistenRef.current) {
+        unlistenRef.current()
+        unlistenRef.current = null
+      }
+    }
+  }, [startStream])
 
-  useEffect(() => {
-    activeRef.current = jobs.some(j => j.state === 'running') || containers.some(c => c.state === 'running')
-  }, [jobs, containers])
-
+  // Poll jobs/containers for the sidebar source list (slower, 5s)
   useEffect(() => {
     void refreshJobs()
     void refreshContainers()
     const id = setInterval(() => {
-if (activeRef.current) {
-        void refreshJobs()
-        void refreshContainers()
-      }
-    }, 2000)
+      void refreshJobs()
+      void refreshContainers()
+    }, 5000)
     return () => clearInterval(id)
   }, [refreshJobs, refreshContainers])
 
@@ -462,7 +394,7 @@ setActiveSource({ type: 'unified', label: t('logs.unifiedLabel') })
                 <button
                   type="button"
                   className="logs-btn"
-                  onClick={() => void loadSourceLogs()}
+                  onClick={() => void startStream()}
                 >
                   <span className="codicon codicon-refresh" style={{ marginRight: 6 }} />
 {t('logs.refresh')}
