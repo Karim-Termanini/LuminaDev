@@ -15,7 +15,6 @@ import { useCallback, useEffect, useMemo, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { humanizeProfileError } from './profileError'
 import { DashboardWidgetDeck } from '../dashboard/DashboardWidgetDeck'
-import { AddWidgetModal } from '../dashboard/AddWidgetModal'
 import { useBetaFlags } from '../hooks/useBetaFlags'
 import { useTranslation } from 'react-i18next'
 
@@ -82,7 +81,6 @@ export function DashboardMainPage(): ReactElement {
   const [customProfiles, setCustomProfiles] = useState<CustomProfileEntry[]>([])
   const [confirmModalOpen, setConfirmModalOpen] = useState(false)
   const profileSelectionInitialized = useRef(false)
-  const [pickerOpen, setPickerOpen] = useState(false)
 
   const [projectPath, setProjectPath] = useState<string | null>(null)
   const [installedEditors, setInstalledEditors] = useState<Array<{ name: string; cmd: string }>>([])
@@ -338,6 +336,16 @@ export function DashboardMainPage(): ReactElement {
       })
     }
   }, [selectedProfileName])
+
+  // Reload layout when activeProfile changes
+  useEffect(() => {
+    if (!activeProfile) return
+    window.dh.layoutGet({ profile: activeProfile }).then((res) => {
+      if (res && (res as any).ok !== false) {
+        setProfileLayout((res as any).layout as DashboardLayoutFile)
+      }
+    }).catch(() => {/* non-fatal */})
+  }, [activeProfile])
 
   
   const handleLinkProject = async () => {
@@ -697,6 +705,42 @@ title: t('main.activity.jobPrefix', { kind: j.kind, state: j.state }),
               <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: 15, maxWidth: 600 }}>{selectedProfile.description}</p>
             </div>
 
+            {/* ── Widget Hero ── */}
+            <div className="dashboard-widget-hero">
+              {profileLayout && profileLayout.placements && profileLayout.placements.length > 0 ? (
+                <DashboardWidgetDeck
+                  layout={profileLayout}
+                  onRemove={(instanceId) => {
+                    const next = {
+                      ...profileLayout,
+                      placements: profileLayout.placements.filter((p) => p.instanceId !== instanceId)
+                    }
+                    setProfileLayout(next)
+                    void window.dh.layoutSet({ profile: activeProfile ?? 'web-dev', layout: next })
+                  }}
+                  onReorder={(fromId, toId) => {
+                    const fromIdx = profileLayout.placements.findIndex((p) => p.instanceId === fromId)
+                    const toIdx = profileLayout.placements.findIndex((p) => p.instanceId === toId)
+                    if (fromIdx === -1 || toIdx === -1) return
+                    const nextPlacements = [...profileLayout.placements]
+                    const [moved] = nextPlacements.splice(fromIdx, 1)
+                    nextPlacements.splice(toIdx, 0, moved)
+                    const next = { ...profileLayout, placements: nextPlacements }
+                    setProfileLayout(next)
+                    void window.dh.layoutSet({ profile: activeProfile ?? 'web-dev', layout: next })
+                  }}
+                />
+              ) : (
+                <div className="widget-empty-hero">
+                  <span className="codicon codicon-layout" aria-hidden />
+                  <p>No widgets configured for this profile.</p>
+                  <button type="button" onClick={() => navigate('/dashboard/widgets')}>
+                    Add Widgets →
+                  </button>
+                </div>
+              )}
+            </div>
+
             {/* Initialize Button */}
             <div style={{ marginTop: 24, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
               <button
@@ -800,48 +844,6 @@ title: t('main.activity.jobPrefix', { kind: j.kind, state: j.state }),
                     <DashboardMetricBar label={t('main.metrics.disk')} valueText={t('main.projectPath.freeGb', { free: m.diskFreeGb.toFixed(0) })} percent={diskUsedPct} />
                   </div>
                 </div>
-              </div>
-            )}
-            {activeProfile === selectedProfileName && profileLayout && (
-              <div style={{ marginTop: 32 }}>
-                <DashboardWidgetDeck
-                  layout={profileLayout}
-                  onRemove={(instanceId) => {
-                    const next = {
-                      ...profileLayout,
-                      placements: profileLayout.placements.filter((p) => p.instanceId !== instanceId)
-                    }
-                    window.dh.layoutSet({ profile: selectedProfileName, layout: next }).then((res) => {
-                      if (res.ok) setProfileLayout(next)
-                    })
-                  }}
-                  onReorder={(fromId, toId) => {
-                    const fromIdx = profileLayout.placements.findIndex((p) => p.instanceId === fromId)
-                    const toIdx = profileLayout.placements.findIndex((p) => p.instanceId === toId)
-                    if (fromIdx === -1 || toIdx === -1) return
-                    const nextPlacements = [...profileLayout.placements]
-                    const [moved] = nextPlacements.splice(fromIdx, 1)
-                    nextPlacements.splice(toIdx, 0, moved)
-                    const next = { ...profileLayout, placements: nextPlacements }
-                    window.dh.layoutSet({ profile: selectedProfileName, layout: next }).then((res) => {
-                      if (res.ok) setProfileLayout(next)
-                    })
-                  }}
-                  density="comfortable"
-heading={t('main.widgets.pinned')}
-                  onAdd={() => setPickerOpen(true)}
-                />
-                <AddWidgetModal
-                  open={pickerOpen}
-                  layout={profileLayout}
-                  onClose={() => setPickerOpen(false)}
-                  onSaved={async (next) => {
-                    const res = await window.dh.layoutSet({ profile: selectedProfileName, layout: next })
-                    if (res.ok) {
-                      setProfileLayout(next)
-                    }
-                  }}
-                />
               </div>
             )}
 

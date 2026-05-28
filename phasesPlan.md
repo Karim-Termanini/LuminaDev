@@ -1,5 +1,9 @@
 > [!IMPORTANT]
 > **Architectural Notice:** LuminaDev is a **Full Hosted** environment manager. It is explicitly **NOT isolated** and does not use strict sandboxing (like cgroups or Docker-based build isolation) by design.
+> 
+> **Design & Quality Standard:** Every modification, feature implementation, and user dialog/interaction must align with the technical efficiency, visual elegance, and premium user experience of **Microsoft Dev Home**.
+> 
+> **Target Audience & UX Philosophy:** LuminaDev is designed for both **absolute beginners** and **advanced/professional developers**. All interfaces, layout sequences, warning dialogs, and setup flows must cater to both: providing clear, automated, one-click solutions and helpful context for beginners, while offering deep configuration, logs, and raw control options for power users.
 
 # LuminaDev — Product Phases Plan
 
@@ -142,7 +146,8 @@ Progress notes (2026-05-01, docs pass):
 - ❌ Theme surface rollout across all routes (Maintenance theme is pilot; others wait)
 - ❌ Full-scope **Phase 10 Extensions** and **Phase 12 Cloud Git** (as originally scoped)
 - Phase **8 Settings**: first **hub** shipped on `/settings` (accent, SSH overview, read-only hosts/env); **hosts editor** and **profile env files** remain future work
-- ❌ Git Doctor, Policy Lock, Visual Change Preview
+- ❌ Policy Lock, Visual Change Preview
+- ✅ **Git Doctor** — shipped: scan card in Git Config Overview + Diagnostics tab with health ring, severity-classified findings, and one-click fixes
 
 _(Profiles **on-login** automation is **Phase 9** backlog, not “never do.”)_
 
@@ -247,9 +252,9 @@ pub async fn ipc_invoke(channel: &str, payload: Value, state: AppState) -> Resul
 - 300–500 lines: Extract AppState helpers to `app_state.rs`
 - ≥ 500 lines: Audit for missed module boundaries
 
-### Modularization ✅ DONE (Phase 16b)
+### Modularization ✅ DONE (Phase 17)
 
-The 6-module proposal was superseded. Actual outcome: 30 top-level `.rs` files + `cloud_auth/` (7 sub-files) = 37 source files total. `lib.rs` is a thin 678-line dispatcher with zero business logic inline. See Phase 16b results above.
+The 6-module proposal was superseded. Actual outcome: 30 top-level `.rs` files + `cloud_auth/` (7 sub-files) = 37 source files total. `lib.rs` is a thin 678-line dispatcher with zero business logic inline. See Phase 17 results above.
 
 ---
 
@@ -272,7 +277,7 @@ The 6-module proposal was superseded. Actual outcome: 30 top-level `.rs` files +
 - [x] Widget drag-and-drop reorder (HTML5, wired in `DashboardWidgetDeck` rendered inside `DashboardMainPage`)
 - [x] Widget layout load/save via `layoutGet` / `layoutSet` IPC
 - [x] `DashboardKernelsPage`, `DashboardLogsPage` present and routed
-- [ ] `DashboardWidgetsPage` (`/dashboard/widgets`) — route exists, component renders "Coming Soon" stub only; widget management UI not yet built
+- [x] `DashboardWidgetsPage` (`/dashboard/widgets`) — full widget catalog + placement management; built 2026-05-28
 
 ### Verified missing (not Alpha scope)
 
@@ -416,13 +421,13 @@ Remaining: Ruby install slow on Fedora (intentional/known).
 
 ---
 
-## Phase 11 — First-run Wizard 📋 PLANNED
+## Phase 11 — First-run Wizard ✅ DONE
+
+- [x] **Flow Control:** `App.tsx` chains two wizards sequentially: `readiness_wizard_complete` → `first_run_wizard_complete`. Readiness wizard runs first (full 8-step system check + onboarding). First-run wizard only fires if readiness was completed but first-run wasn't.
+- [x] **Content Scope:** 3-step lightweight wizard — theme picker (dark/light preview cards) → Git identity (name + email, both optional) → completion. Both steps skippable via "Skip for now" link.
+- [x] **Zero Duplication:** ReadinessWizardPage (Phase 16) remains the comprehensive path — 8 steps including system probes with auto-fix, theme, git, SSH, and profile picker. FirstRunWizardPage is the *sequential fallback* for when readiness is done but app onboarding wasn't finalized.
 
 **Goal:** Must execute strictly after Phase 16 (System Readiness/Installer) is 100% satisfied. Must be fully functional and avoid any duplicated setup steps.
-
-- [ ] **Flow Control:** Logic to check if Readiness is complete. If yes, proceed to First-run Wizard.
-- [ ] **Content Scope:** Strictly limited to application-specific onboarding (choosing an initial theme, setting up a Git identity).
-- [ ] **Zero Duplication:** Must not ask for or duplicate any setup steps already handled by the Readiness installer.
 
 ---
 
@@ -567,24 +572,35 @@ When user clicks "Install" / "Fix":
 | 15 | TopBar / ActiveJobsStrip | `j.progress` not clamped — can exceed 100% or render NaN | ✅ FIXED |
 | 16 | lib.rs layout_set | Default-profile branch stored entire body instead of layout value | ✅ FIXED |
 | 17 | lib.rs runtime:status | Join error silently drops probe entries | ✅ FIXED |
+| 18 | DashboardLogsPage | Search input rendered but non-functional | ✅ FIXED (2026-05-28) |
+| 19 | DashboardWidgetDeck | `link.workstation` routed to dead `/workstation` path | ✅ FIXED (2026-05-28) |
+| 20 | DashboardWidgetsPage | Profile hardcoded `'web-dev'` in `layoutGet`/`layoutSet` | ✅ FIXED (2026-05-28) |
+| 21 | TopBar | Runtime palette search used stale localStorage cache | ✅ FIXED (2026-05-28) |
+| 22 | ActiveJobsStrip | "Engine Connected" placebo text + hardcoded version | ✅ FIXED (2026-05-28) |
+| 23 | AppShell | Sidebar `status: 'live'` badges decorative (no health check) | ✅ FIXED (2026-05-28) |
+| 24 | AppShell | Docs link pointed to `github.com` instead of docs | ✅ FIXED (2026-05-28) |
+| 25 | TopBar | Palette hidden on non-dashboard pages (overflow clipping) | ✅ FIXED (2026-05-28) |
+| 26 | TopBar | Palette wouldn't reopen after Enter-navigate (stale focus) | ✅ FIXED (2026-05-28) |
+| 27 | TopBar | Dashboard sub-nav tabs tooltip blurriness (Logs, Widgets) due to subpixel transform offsets | ✅ FIXED (2026-05-28) |
+| 28 | AppShell / TopBar | Sidebar & Topbar icon tooltip blurriness due to dynamic-width fractional offsets | ✅ FIXED (2026-05-28) |
 
 ---
 
-## 🚨 UI/UX & Performance Debt 📋 PLANNED
+## 🚨 UI/UX & Performance Debt ✅ DONE (2026-05-28)
 
-- [ ] **Runtimes Page Optimization:** Profile the Tauri invoke calls causing the >1 minute load time. Implement lazy loading, caching of local package lists, or asynchronous background fetching.
-- [ ] **Dashboard - Main:** Wire up dynamic widget injection based on the user's active Profile layout configuration so it actually makes sense.
-- [ ] **Dashboard - Widgets:** Remove all mocked JSON files. Tie widgets directly to live system event emitters.
-- [ ] **Dashboard - Kernels:** Build a configuration grid that allows starting, stopping, and linking local development kernels (e.g., Jupyter, PHP-FPM).
-- [ ] **Dashboard - Logs:** Implement a unified log viewer using `xterm.js` that multiplexes stdout/stderr streams from all active background jobs and containers into a single searchable buffer.
-- [ ] **Global Navigation (Chrome) Fixes:** Define the specific Tauri commands (e.g., `open_terminal`, `show_notifications_panel`) that must be bound to the Top Bar buttons (Search, Notification, Terminal, Settings) and Left Sidebar buttons (Docs, Setup Wizard, Local User).
-- [x] **Bottom Bar:** Completely rip out the "Phase 0 task runner" and replace it with a clean, minimized status bar or remove it entirely if a replacement is unnecessary. ✅ FIXED
+- [x] **Runtimes Page Optimization:** Profile the Tauri invoke calls causing the >1 minute load time. Implement lazy loading, caching of local package lists, or asynchronous background fetching. ✅ DONE (2026-05-28) — 30s status cache, adaptive polling (800ms active, 3s idle), background refresh.
+- [x] **Dashboard - Main:** Wire up dynamic widget injection based on the user's active Profile layout configuration so it actually makes sense. ✅ DONE (2026-05-28) — `DashboardWidgetDeck` resolves widget types from shared registry, profile-driven layout.
+- [x] **Dashboard - Widgets:** Remove all mocked JSON files. Tie widgets directly to live system event emitters. ✅ DONE (2026-05-28) — zero mock files, all `layoutGet`/`layoutSet` are real IPC, profile reads from `active_profile` store.
+- [x] **Dashboard - Kernels:** Build a configuration grid that allows starting, stopping, and linking local development kernels (e.g., Jupyter, PHP-FPM). ✅ DONE (2026-05-28) — `KERNEL_DEFS` with Start/Stop/Open/Link via `hostExec`.
+- [x] **Dashboard - Logs:** Implement a unified log viewer using `xterm.js` that multiplexes stdout/stderr streams from all active background jobs and containers into a single searchable buffer. ✅ DONE (2026-05-28) — real xterm.js with multiplexed streams, functional line-buffer search filter.
+- [x] **Global Navigation (Chrome) Fixes:** Define the specific Tauri commands (e.g., `open_terminal`, `show_notifications_panel`) that must be bound to the Top Bar buttons (Search, Notification, Terminal, Settings) and Left Sidebar buttons (Docs, Setup Wizard, Local User). ✅ DONE (2026-05-28) — Search uses fuzzy-scored palette (pages/containers/runtimes/git repos via live IPC), Notifications poll `jobsList()`, Terminal/Settings navigate, Docs link fixed, Setup Wizard wired, Profile name from store, nav badges from engine health ping.
+- [x] **Bottom Bar:** Completely rip out the "Phase 0 task runner" and replace it with a clean, minimized status bar or remove it entirely if a replacement is unnecessary. ✅ FIXED (2026-05-28) — zero Phase 0/task runner references; `ActiveJobsStrip` shows real job data; status bar shows live `appInfo()` version and dynamic engine health indicator.
 
 ---
 
-### Phase 16b — lib.rs Monolith Refactoring
+### Phase 17 — lib.rs Monolith Refactoring
 
-**Status:** ✅ DONE
+**Status:** ✅ DONE (2026-05-28)
 **Scope:** Decomposed 3,963-line `lib.rs` into 37 Rust source files (33 domain modules, 678-line dispatcher).
 
 **Results:**
@@ -656,8 +672,9 @@ Based on current app state (Phase 16 + Phase 7 complete), here's what remaining 
 ✅  Phase 15 — Theme Rollout (Elevated aesthetic)
 ✅  Phase 8  — Settings (15 tabs; Extension stub, Resources absent)
 ✅  Phase 9  — Profiles
-📋  Phase 11 — First-run Wizard (Merged into Phase 16)
-📋  UI/UX & Performance Debt
-📋  Phase 10 — Extensions (Plugin model v0, Dev API)
-✅  Phase 16b — lib.rs Monolith Refactoring (37 source files, 678-line dispatcher)
+✅  Phase 11 — First-run Wizard (Merged into Phase 16)
+✅  UI/UX & Performance Debt (all 7 items, 2026-05-28)
+✅  Audit Fixes (9 defects squashed, fuzzy search shipped, 2026-05-28)
+📋  Phase 10 — Extensions (Plugin model v0, Dev API) (Deferred / Future Phase)
+✅  Phase 17  — lib.rs Monolith Refactoring (37 source files, 678-line dispatcher)
 ```

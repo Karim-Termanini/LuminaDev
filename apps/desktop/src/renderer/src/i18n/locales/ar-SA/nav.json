@@ -16,6 +16,7 @@
   "footer.linuxSession": "جلسة لينكس",
   "appTitle": "LuminaDev",
   "engineConnected": "محرك LuminaDev: متصل",
+  "engineDisconnected": "محرك LuminaDev: غير متصل",
   "ready": "جاهز.",
   "stop": "إيقاف",
   "jobs.count": "[{{count}} مهام]",
@@ -37,5 +38,10 @@
   "topbar.runtimes": "بيئات التشغيل",
   "topbar.maintenance": "الصيانة",
   "topbar.settings": "الإعدادات",
-  "topbar.linuxDevHome": "Linux Dev Home"
+  "topbar.linuxDevHome": "Linux Dev Home",
+  "topbar.widgets": "Widgets",
+  "topbar.mainTooltip": "لوحة التحكم الرئيسية وبطاقات الحالة السريعة",
+  "topbar.kernelsTooltip": "مراقبة المعالج الرسومي (GPU)، سلاسل الأدوات، خدمات النظام، والمنافذ المفتوحة",
+  "topbar.logsTooltip": "مستعرض السجلات ومخرجات العمليات النشطة",
+  "topbar.widgetsTooltip": "إدارة، تهيئة، وتخطيط عناصر واجهة لوحة التحكم"
 }

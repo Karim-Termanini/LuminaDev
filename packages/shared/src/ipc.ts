@@ -113,6 +113,30 @@ export type GitRemoteEntry = {
   fetchUrl: string
 }
 
+export type DoctorFindingCategory =
+  | 'configuration'
+  | 'security'
+  | 'performance'
+  | 'environment'
+  | 'overview'
+export type DoctorFindingSeverity = 'critical' | 'warning' | 'info' | 'ok'
+
+export type DoctorFinding = {
+  id: string
+  category: DoctorFindingCategory
+  severity: DoctorFindingSeverity
+  title: string
+  detail: string
+  fix?: { label: string; action?: string }
+}
+
+export type GitDoctorScanResponse = {
+  ok: true
+  gitVersion: string | null
+  healthScore: number
+  findings: DoctorFinding[]
+}
+
 export type HostPortRow = {
   protocol: 'tcp' | 'udp'
   port: number
@@ -171,6 +195,9 @@ export type RuntimeStatusResponse = {
   runtimes: RuntimeStatus[]
 }
 
+/** Store key `kernel_links`: maps kernel ID to linked project path. */
+export type KernelLinks = Record<string, string>
+
 export type PerfSnapshot = {
   startupMs: number
   rssMb: number
@@ -223,6 +250,7 @@ export const IPC = {
   openExternalTerminal: 'dh:terminal:openExternal',
   gitClone: 'dh:git:clone',
   gitStatus: 'dh:git:status',
+  gitDoctorScan: 'dh:git:doctor:scan',
   gitRecentList: 'dh:git:recent:list',
   gitRecentAdd: 'dh:git:recent:add',
   gitConfigSet: 'dh:git:config:set',
@@ -246,6 +274,8 @@ export const IPC = {
   jobStart: 'dh:job:start',
   jobsList: 'dh:job:list',
   jobCancel: 'dh:job:cancel',
+  logStreamStart: 'dh:log:stream:start',
+  logStreamStop: 'dh:log:stream:stop',
   dockerInstall: 'dh:docker:install',
   dockerCheckInstalled: 'dh:docker:check-installed',
   getHostDistro: 'dh:host:distro',
@@ -258,6 +288,7 @@ export const IPC = {
   monitorSecurity: 'dh:monitor:security',
   monitorSecurityDrilldown: 'dh:monitor:security-drilldown',
   runtimeStatus: 'dh:runtime:status',
+  runtimeInstalledVersions: 'dh:runtime:installed-versions',
   runtimeGetVersions: 'dh:runtime:get-versions',
   runtimeSetActive: 'dh:runtime:set-active',
   runtimeCheckDeps: 'dh:runtime:check-deps',

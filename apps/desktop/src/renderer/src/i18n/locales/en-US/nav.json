@@ -16,6 +16,7 @@
   "footer.linuxSession": "Linux session",
   "appTitle": "LuminaDev",
   "engineConnected": "LuminaDev Engine: Connected",
+  "engineDisconnected": "LuminaDev Engine: Disconnected",
   "ready": "Ready.",
   "stop": "STOP",
   "jobs.count": "[{{count}} Jobs]",
@@ -37,5 +38,10 @@
   "topbar.runtimes": "Runtimes",
   "topbar.maintenance": "Maintenance",
   "topbar.settings": "Settings",
-  "topbar.linuxDevHome": "Linux Dev Home"
+  "topbar.linuxDevHome": "Linux Dev Home",
+  "topbar.widgets": "Widgets",
+  "topbar.mainTooltip": "Overview dashboard and quick status cards",
+  "topbar.kernelsTooltip": "GPU monitoring, toolchains, system services, and open ports",
+  "topbar.logsTooltip": "Log viewer and active process outputs",
+  "topbar.widgetsTooltip": "Manage, configure, and layout dashboard widgets"
 }

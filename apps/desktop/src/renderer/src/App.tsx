@@ -19,12 +19,14 @@ import { MaintenancePage } from './pages/MaintenancePage'
 import { SettingsPage } from './pages/SettingsPage'
 import { SystemReadinessPage } from './pages/SystemReadinessPage'
 import { ReadinessWizardPage } from './pages/ReadinessWizardPage'
+import { FirstRunWizardPage } from './pages/FirstRunWizardPage'
 import { syncAppearanceFromStore } from './theme/applyAccent'
 import { useNotification } from './layout/NotificationProvider'
 
 export default function App(): ReactElement | null {
   const [ready, setReady] = useState(false)
   const [showReadinessWizard, setShowReadinessWizard] = useState(false)
+  const [showFirstRunWizard, setShowFirstRunWizard] = useState(false)
   const { showToast } = useNotification()
 
   useEffect(() => {
@@ -33,15 +35,24 @@ export default function App(): ReactElement | null {
       const completed = bag.ok ? bag.data === true : false
       if (!completed) {
         setShowReadinessWizard(true)
+        setReady(true)
+        return
       }
-      setReady(true)
+      // Readiness done — check if first-run wizard was completed
+      window.dh.storeGet({ key: 'first_run_wizard_complete' }).then((res2: unknown) => {
+        const bag2 = res2 as { ok?: boolean; data?: unknown }
+        if (!bag2.ok || bag2.data !== true) {
+          setShowFirstRunWizard(true)
+        }
+        setReady(true)
+      })
     })
   }, [])
 
   useEffect(() => {
-    if (!ready || showReadinessWizard) return
+    if (!ready || showReadinessWizard || showFirstRunWizard) return
     void syncAppearanceFromStore()
-  }, [ready, showReadinessWizard])
+  }, [ready, showReadinessWizard, showFirstRunWizard])
 
   useEffect(() => {
     // Startup check for updates if enabled in settings
@@ -69,6 +80,17 @@ export default function App(): ReactElement | null {
       <ReadinessWizardPage
         onComplete={() => {
           setShowReadinessWizard(false)
+          // After readiness, show first-run wizard
+          setShowFirstRunWizard(true)
+        }}
+      />
+    )
+  }
+  if (showFirstRunWizard) {
+    return (
+      <FirstRunWizardPage
+        onComplete={() => {
+          setShowFirstRunWizard(false)
           void syncAppearanceFromStore()
         }}
       />

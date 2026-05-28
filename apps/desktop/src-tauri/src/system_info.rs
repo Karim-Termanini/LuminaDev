@@ -321,6 +321,9 @@ pub(crate) async fn host_exec_handler(body: &Value) -> Value {
     match cmd {
         "nvidia_smi_short" => host_exec_nvidia_smi().await,
         "systemctl_is_active" => host_exec_systemctl_is_active(body).await,
+        "systemctl_start" => host_exec_systemctl_start(body).await,
+        "systemctl_stop" => host_exec_systemctl_stop(body).await,
+        "systemctl_is_active_fallback" => host_exec_systemctl_is_active_fallback(body).await,
         "maintenance_docker_system_df" => host_exec_docker_system_df().await,
         "maintenance_docker_ps_table" => host_exec_docker_ps_table().await,
         "maintenance_journalctl_docker" => host_exec_journalctl_docker().await,
@@ -381,6 +384,60 @@ async fn host_exec_systemctl_is_active(body: &Value) -> Value {
         Ok(out) => json!({ "ok": true, "result": out.trim() }),
         Err(_) => json!({ "ok": true, "result": "unknown" }),
     }
+}
+
+async fn host_exec_systemctl_start(body: &Value) -> Value {
+    let unit = body.get("unit").and_then(|v| v.as_str()).unwrap_or_default();
+    let user_mode = body.get("user").and_then(|v| v.as_bool()).unwrap_or(false);
+    if unit.is_empty() {
+        return json!({ "ok": false, "result": Value::Null, "error": "[HOST_EXEC_INVALID] Missing unit." });
+    }
+    let (cmd, args): (&str, Vec<&str>) = if user_mode {
+        ("systemctl", vec!["--user", "start", unit])
+    } else {
+        ("pkexec", vec!["systemctl", "start", unit])
+    };
+    match exec_output_limit(cmd, &args, cmd_timeout_short()).await {
+        Ok(_) => json!({ "ok": true, "result": "started" }),
+        Err(e) => json!({ "ok": false, "result": Value::Null, "error": format!("[SYSTEMCTL_START_FAILED] {}", e) }),
+    }
+}
+
+async fn host_exec_systemctl_stop(body: &Value) -> Value {
+    let unit = body.get("unit").and_then(|v| v.as_str()).unwrap_or_default();
+    let user_mode = body.get("user").and_then(|v| v.as_bool()).unwrap_or(false);
+    if unit.is_empty() {
+        return json!({ "ok": false, "result": Value::Null, "error": "[HOST_EXEC_INVALID] Missing unit." });
+    }
+    let (cmd, args): (&str, Vec<&str>) = if user_mode {
+        ("systemctl", vec!["--user", "stop", unit])
+    } else {
+        ("pkexec", vec!["systemctl", "stop", unit])
+    };
+    match exec_output_limit(cmd, &args, cmd_timeout_short()).await {
+        Ok(_) => json!({ "ok": true, "result": "stopped" }),
+        Err(e) => json!({ "ok": false, "result": Value::Null, "error": format!("[SYSTEMCTL_STOP_FAILED] {}", e) }),
+    }
+}
+
+async fn host_exec_systemctl_is_active_fallback(body: &Value) -> Value {
+    let units_val = body.get("units").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+    let units: Vec<String> = units_val.iter().filter_map(|v| v.as_str().map(String::from)).collect();
+    if units.is_empty() {
+        return json!({ "ok": false, "result": Value::Null, "error": "[HOST_EXEC_INVALID] Missing units array." });
+    }
+    for unit in &units {
+        match exec_output_limit("systemctl", &["is-active", unit.as_str()], cmd_timeout_short()).await {
+            Ok(out) => {
+                let status = out.trim();
+                if matches!(status, "active" | "failed" | "inactive") {
+                    return json!({ "ok": true, "result": status, "resolvedUnit": unit });
+                }
+            }
+            Err(_) => continue,
+        }
+    }
+    json!({ "ok": true, "result": "unknown", "resolvedUnit": Value::Null })
 }
 
 async fn host_exec_docker_system_df() -> Value {
