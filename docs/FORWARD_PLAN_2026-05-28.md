@@ -1,7 +1,7 @@
 # LuminaDev — Expert Forward Plan
 
-**Date:** 2026-05-28  
-**Branch at time of writing:** `docs/architectural-clarification` (35 commits, 112 files, 14 K+ insertions — pending merge)  
+**Date:** 2026-05-28 (updated same day after audit fixes)  
+**Branch at time of writing:** `main`  
 **Rust modules:** 39 source files · `lib.rs` 684 lines  
 **Smoke gate:** ✅ clean (typecheck + vitest + cargo test + clippy)
 
@@ -11,58 +11,62 @@
 
 | Area | Status | Detail |
 |---|---|---|
-| Phases 0–9, 12, 13, 15, 16, 16b | ✅ DONE | All verified against source |
+| Phases 0–9, 12, 13, 15, 16, 17 | ✅ DONE | All verified against source |
 | Phase 11 — First-run Wizard | ✅ DONE | Merged into Phase 16 (8-step unified installer) |
 | Phase 10 — Extensions | 📋 NEXT | Only remaining major planned phase |
-| UI/UX Debt — all 6 items | ✅ DONE | Completed 2026-05-28 (this branch) |
+| UI/UX Debt — all 6 items | ✅ DONE | Completed 2026-05-28 |
+| Audit defects — all 7 issues | ✅ FIXED | Fixed 2026-05-28 (see §Audit Fixes below) |
+| Smart Universal Search (fuzzy) | ✅ SHIPPED | Fuzzy-scored palette: pages, containers, runtimes, git repos |
 | Git Doctor | ✅ WIRED | `git_doctor.rs` (478 lines), dispatcher arm at `lib.rs:175` |
 | SettingsExtension tab | ⚠️ STUB | 12-line "Coming Soon" |
 | Per-container stats stream | ❌ MISSING | Phase 5 gap, never implemented |
-| DashboardWidgets profile binding | ⚠️ HARDCODED | `layoutGet/Set` uses literal `'web-dev'`, ignores active profile |
+| DashboardWidgets profile binding | ✅ FIXED | 2026-05-28 — now reads `active_profile` from store |
+| Status bar "Engine Connected" + version | ✅ FIXED | 2026-05-28 — live `appInfo()` IPC, dynamic health check |
+| Sidebar nav `status: 'live'` badges | ✅ FIXED | 2026-05-28 — derived from engine health ping |
+| Docs link | ✅ FIXED | 2026-05-28 — points to `docs.luminadev.app` |
+| DashboardLogs search input | ✅ FIXED | 2026-05-28 — functional line-buffer filter on xterm.js |
+| `link.workstation` widget dead route | ✅ FIXED | 2026-05-28 — routes to `/dashboard/logs` |
 | AppImage release pipeline | ❓ UNVERIFIED | Not confirmed working end-to-end on a clean machine |
 
 ---
 
-## P0 — Merge Current Branch (Immediate)
+## Audit Fixes (2026-05-28)
 
-35 commits of production-ready work on `docs/architectural-clarification`:
+Post-merge audit surfaced 7 defects — all fixed:
 
-- Runtimes page: `dh:runtime:installed-versions` on-demand channel; 30s status cache → page loads in <10 s
-- Dashboard-Main: `DashboardWidgetDeck` lifted to persistent hero section with empty-state CTA
-- Dashboard-Widgets: full widget catalog + placement management (replaced 15-line stub)
-- Dashboard-Kernels: `KERNEL_DEFS` with Jupyter/PHP-FPM; Start/Stop/Open/Link controls; 3 new Rust `host_exec` commands
-- Dashboard-Logs: live Tauri event streaming (`runtime_logs.rs`, `AppState.streams`); replaced poll-and-clear
-- Global Nav: Ctrl+K command palette with 30+ searchable entries (pages, settings tabs, git tabs, dashboard sub-pages, containers, runtimes)
-- Smoke gate: clean
+| # | Severity | Location | Issue | Fix |
+|---|----------|----------|-------|-----|
+| 1 | 🔴 | `DashboardLogsPage.tsx` | Search input non-functional | Line-buffer filter on xterm.js terminal |
+| 2 | 🔴 | `DashboardWidgetDeck.tsx` | `link.workstation` → `/workstation` dead route | Changed to `/dashboard/logs` |
+| 3 | 🟡 | `DashboardWidgetsPage.tsx` | Profile hardcoded `'web-dev'` | Fetches `active_profile` from store |
+| 4 | 🟡 | `TopBar.tsx` | Runtime search reads stale localStorage | Live IPC via `dh:runtime:status` |
+| 5 | 🟡 | `ActiveJobsStrip.tsx` | "Engine Connected" placebo + hardcoded version | Live `appInfo()` IPC, dynamic health check |
+| 6 | 🟡 | `AppShell.tsx` | Sidebar `status: 'live'` badges decorative | Derived from `appInfo()` health ping |
+| 7 | 🟡 | `AppShell.tsx` | Docs link → `github.com` | Changed to `docs.luminadev.app` |
 
-**Action:** Open PR → merge to `main`. Before merging, update `phasesPlan.md`:
-- Mark all 6 UI/UX debt items as `[x]`
-- Mark `DashboardWidgetsPage` stub line as `[x]`
-- Add Phase 17 section (this plan)
+**Bonus — Smart Universal Search:** Replaced substring matching with fuzzy scoring (character-order matching, consecutive/word-boundary/position bonuses). 4 search domains: pages, containers, runtimes, git repos. Results sorted by relevance.
 
----
-
-## P1 — Small Gaps (Days 1–5)
-
-### 1.1 Widget Profile Binding
-
-`DashboardWidgetsPage.tsx` and the hero section in `DashboardMainPage.tsx` hardcode `profile: 'web-dev'` in `layoutGet`/`layoutSet`. The active profile ID must come from the store.
-
-**Fix:**
-```ts
-// On mount in DashboardWidgetsPage, read active profile first:
-const activeProfile = await window.dh.storeGet({ key: 'active_profile' })
-const profileId = (activeProfile as { ok: boolean; data?: string }).data ?? 'web-dev'
-const layout = await window.dh.layoutGet({ profile: profileId })
-```
-
-Thread `activeProfile` state (already present in `DashboardMainPage`) down to the hero `DashboardWidgetDeck` render so `onRemove`/`onReorder` call `layoutSet` with the real profile key.
-
-**Files:** `DashboardMainPage.tsx`, `DashboardWidgetsPage.tsx`
+**Bonus — Palette bugs:** Fixed overflow clipping (`overflow: visible`), focus/blur race (sync open + ref guard), and re-open on typing after Enter-navigate.
 
 ---
 
-### 1.2 Log Stream Cleanup on App Shutdown
+## P0 — Merge Complete ✅
+
+Branch merged to `main`. Audit fixes + fuzzy search applied on top.
+
+---
+
+## P1 — Small Gaps
+
+### 1.1 Widget Profile Binding ✅ DONE (2026-05-28)
+
+`DashboardWidgetsPage.tsx` now fetches `active_profile` from `storeGet` on mount. `layoutGet`/`layoutSet` use the real profile key. Fallback to `'web-dev'` if store empty.
+
+**Files:** `DashboardWidgetsPage.tsx`
+
+---
+
+### 1.2 Log Stream Cleanup on App Shutdown ✅ DONE (2026-05-28)
 
 `AppState.streams` (`HashMap<String, AbortHandle>`) has no cleanup on window close. Streams running at shutdown are orphaned.
 
@@ -88,34 +92,29 @@ Also add a `streams.len() > 20` guard in `handle_log_stream_start` — clear old
 
 ---
 
-### 1.3 Command Palette Runtime Cache Pre-warm
+### 1.3 Command Palette Runtime Data ✅ DONE (2026-05-28)
 
-`getCachedRuntimes()` in `TopBar.tsx` reads from `dh:runtimes:status-cache:v1` (written by `RuntimesPage` on first visit). If the user opens the palette before visiting `/runtimes`, the runtimes section is empty.
+Replaced `localStorage` cache with live `dh:runtime:status` IPC call in `onPaletteOpen`. Runtimes are fetched fresh each time the palette opens — no cache pre-warm needed.
 
-**Fix:** In `AppShell.tsx`, on mount, fire a background `window.dh.runtimeStatus()` call and write the cache — same logic as `RuntimesPage`'s background refresh path. One call, ~4 s, completely background.
-
-```ts
-useEffect(() => {
-  void window.dh.runtimeStatus().then((res) => {
-    const r = res as { ok: boolean; runtimes: unknown[] }
-    if (r.ok) {
-      try { localStorage.setItem('dh:runtimes:status-cache:v1', JSON.stringify({ ts: Date.now(), runtimes: r.runtimes })) }
-      catch { /* ignore */ }
-    }
-  })
-}, [])
-```
-
-**Files:** `AppShell.tsx`
+**Files:** `TopBar.tsx`
 
 ---
 
-### 1.4 phasesPlan.md + AUDIT_2026-05.md Accuracy Pass
+### 1.4 phasesPlan.md + AUDIT_2026-05.md Accuracy Pass ✅ DONE (2026-05-28)
 
-- `phasesPlan.md` lines 580–586: mark all 6 UI/UX debt items as `[x]` DONE with date
-- `phasesPlan.md` line 280: `DashboardWidgetsPage` stub → mark `[x]` DONE
-- `AUDIT_2026-05.md` §13 priority table: update P2/P3 items now complete
-- Add Phase 17 entry in execution order
+- `phasesPlan.md` lines 580–586: marked all 6 UI/UX debt items as `[x]` DONE with date.
+- `phasesPlan.md` line 280: `DashboardWidgetsPage` stub → marked `[x]` DONE.
+- `AUDIT_2026-05.md` §13 priority table: updated P2/P3 items now complete (including verifying translation completeness and updating locale checks).
+- Added Phase 17 entry in execution order to deduplicate Phase 16 monolith refactoring.
+
+### 1.5 Sidebar Navigation Refactor (Persistent Collapsed State) ✅ DONE (2026-05-28)
+
+**Requirement:** The main left sidebar navigation must remain collapsed/closed permanently. The hover-to-expand/click-to-expand behavior must be completely removed.
+- Only navigation icons are visible at all times.
+- Hovering over any icon displays a clean, styled Microsoft Dev Home style tooltip.
+- All sidebar expansion toggle and open/close state logic in the React component has been removed.
+
+**Files:** `AppShell.tsx`, `AppShell.css`
 
 ---
 
@@ -211,28 +210,6 @@ Add `PluginManifest` Zod schema to `packages/shared/src/schemas.ts`.
 
 ---
 
-### 2.3 Terminal Multiplexer (Beta Flag → Real Implementation)
-
-`enable_experimental_terminal_multiplexer` is read by `TerminalPage.tsx:27` as `enableMultiplexer` but does nothing with it. The flag has been on the Beta Features settings screen and shown to users for multiple releases.
-
-`AppState.terminals` is already a `HashMap<String, TerminalSession>` — multiple sessions are architecturally supported.
-
-**Minimum viable multiplexer:**
-- When `enableMultiplexer` is true, render a tab bar above the xterm canvas
-- "+" button creates a new `dh:terminal:create` session, adds a tab
-- Click tab → switch active session (only one xterm shown at a time, others kept alive in state)
-- "×" on tab → `dh:terminal:close` that session, remove tab
-
-**State shape:**
-```ts
-const [sessions, setSessions] = useState<Array<{ id: string; title: string }>>([])
-const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
-```
-
-**Files:** `TerminalPage.tsx`, `TerminalPage.css`
-
----
-
 ## P3 — Phase 10 Extensions (Weeks 4–8)
 
 This is the only remaining planned phase from `phasesPlan.md`. Broken into three sub-phases:
@@ -312,7 +289,7 @@ On a clean Ubuntu 24.04 VM with only Rust + Node + system deps installed (no Lum
 ### Release Tag
 
 `v0.3.0-beta` after:
-- [ ] P1 complete (profile binding, stream cleanup, cache pre-warm)
+- [ ] P1 complete (profile binding, stream cleanup, cache pre-warm, sidebar refactor)
 - [ ] P2.1 complete (per-container stats)
 - [ ] P2.2 complete (SettingsExtension plugin browser)
 - [ ] AppImage verified on clean Ubuntu + Fedora
@@ -320,23 +297,9 @@ On a clean Ubuntu 24.04 VM with only Rust + Node + system deps installed (no Lum
 
 ---
 
-## Execution Order
-
-```text
-IMMEDIATE  → Open PR · merge docs/architectural-clarification → main
-Week 1     → P1.1 Widget profile binding
-Week 1     → P1.2 Log stream shutdown cleanup
-Week 1     → P1.3 Command palette runtime cache pre-warm
-Week 1     → P1.4 phasesPlan.md + AUDIT accuracy pass
-Week 2     → P2.1 Per-container stats stream
-Week 2     → P2.2 SettingsExtension plugin browser v0
-Week 3     → P2.3 Terminal multiplexer (beta flag → real tabs)
-Week 4     → P3/10a Plugin discovery + trust model
-Week 5–6   → P3/10b Widget dynamic loading
-Week 7–8   → P3/10c Developer API + example plugin
-Parallel   → P4 File extraction when touching each large file
-End of P3  → P5 Release gate → v0.3.0-beta tag
-```
+### 1.6 Sidebar and Topbar Hover Tooltip Blur Issue 📋 OPEN
+- **Issue:** Reverting to dynamic width tooltips with `translate3d(-50%, 0, 0)` causes the tooltip boxes to render at fractional pixel positions when their width in pixels is odd (determined by dynamic text length). This makes all hovered tooltips on the sidebar and topbar icons appear blurry or fuzzy.
+- **Proposed Solution:** Apply individual fixed even-width styles (e.g., `120px`, `160px`, `240px`) and integer-based negative margins (e.g., `margin-left: -60px`, `-80px`, `-120px`) with `transform: none` to all sidebar and topbar buttons, or implement a layout-based snapping wrapper that forces the browser to align tooltip boundaries to whole device pixels.
 
 ---
 
@@ -344,9 +307,30 @@ End of P3  → P5 Release gate → v0.3.0-beta tag
 
 | Item | Risk | Mitigation |
 |---|---|---|
+| Tooltip blurriness on Sidebar/TopBar | Medium — affects premium UX visual consistency | Implement fixed even-widths and integer-based margins, or dynamic snapping |
 | `lib.rs` at 684 lines (target: <678) | Medium — will grow with P2 channels | Extract `app_state.rs` if >700 |
 | `AppState.streams` no size cap | Low — dev use only currently | Add `len() > 20` guard in P1.2 |
-| Widget `layoutGet` hardcoded profile | High — breaks multi-profile UX | Fix in P1.1 (top priority) |
 | `DashboardWidgetDeck` HTML5 drag on Wayland | Low — Wayland WebView drag is flaky | Add mouse-event fallback if reports come in |
 | `runDiagnostics` in `GitConfigPage` never called | Low — suppressed with eslint comment | Wire to a "Quick Scan" button in GitDoctor panel, or remove in P4 file extraction |
 | `docker stats` per-container polling at 3s | Low — one docker subprocess per open container | Add AbortSignal on component unmount |
+
+---
+
+## Execution Order
+
+```text
+✅  IMMEDIATE → Merge branch + audit fixes + fuzzy search → main (DONE)
+✅  Week 1  → P1.1 Widget profile binding (DONE)
+✅  Week 1  → P1.3 Command palette runtime data (DONE — live IPC)
+✅  Week 1  → P1.2 Log stream shutdown cleanup (DONE — 2026-05-28)
+✅  Week 1  → P1.4 phasesPlan.md + AUDIT accuracy pass (DONE — 2026-05-28)
+✅  Week 1  → P1.5 Sidebar navigation refactor (collapsed state + tooltips) (DONE — 2026-05-28)
+📋  Week 1  → P1.6 Sidebar & Topbar tooltip blur fix
+📋  Week 2  → P2.1 Per-container stats stream
+📋  Week 2  → P2.2 SettingsExtension plugin browser v0
+📋  Week 3  → P3/10a Plugin discovery + trust model
+📋  Week 4–5 → P3/10b Widget dynamic loading
+📋  Week 6–7 → P3/10c Developer API + example plugin
+Parallel   → P4 File extraction when touching each large file
+End of P3  → P5 Release gate → v0.3.0-beta tag
+```

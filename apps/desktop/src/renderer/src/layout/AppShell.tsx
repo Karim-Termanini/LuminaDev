@@ -10,11 +10,8 @@ import { TopBar } from './TopBar'
 import { WidgetLayoutProvider } from './WidgetLayoutContext'
 import './AppShell.css'
 
-type RouteStatus = 'live' | 'partial' | 'stub'
-
 const DEFAULT_SHORTCUTS: Record<string, string> = {
   open_terminal: 'Ctrl+Alt+T',
-  toggle_sidebar: 'Ctrl+B',
   focus_search: 'Ctrl+K',
   go_dashboard: 'Alt+1',
   go_system: 'Alt+2',
@@ -26,34 +23,25 @@ const DEFAULT_SHORTCUTS: Record<string, string> = {
   go_settings: 'Ctrl+,',
 }
 
-type NavItem = { to: string; label: string; icon: string; status: RouteStatus }
-
-const statusStyles: Record<RouteStatus, { label: string; color: string; bg: string; border: string }> = {
-  live: { label: 'LIVE', color: 'var(--green)', bg: 'rgba(0, 230, 118, 0.1)', border: 'rgba(0, 230, 118, 0.25)' },
-  partial: { label: 'PARTIAL', color: 'var(--yellow)', bg: 'rgba(255, 193, 7, 0.1)', border: 'rgba(255, 193, 7, 0.25)' },
-  stub: { label: 'STUB', color: '#ff8a80', bg: 'rgba(255, 82, 82, 0.1)', border: 'rgba(255, 82, 82, 0.25)' },
-}
-
 export function AppShell({ children }: { children: ReactNode }): ReactElement {
   const navigate = useNavigate()
   const { t } = useTranslation('nav')
   const [profileName, setProfileName] = useState<string>('Local user')
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
-  const nav: NavItem[] = [
-    { to: '/dashboard', label: t('nav.dashboard'), icon: 'dashboard', status: 'live' as RouteStatus },
-    { to: '/system', label: t('nav.monitor'), icon: 'pulse', status: 'live' as RouteStatus },
-    { to: '/docker', label: t('nav.docker'), icon: 'package', status: 'live' as RouteStatus },
-    { to: '/ssh', label: t('nav.ssh'), icon: 'key', status: 'live' as RouteStatus },
-    { to: '/git', label: t('nav.git'), icon: 'git-branch', status: 'live' as RouteStatus },
-    { to: '/profiles', label: t('nav.profiles'), icon: 'account', status: 'live' as RouteStatus },
-    { to: '/terminal', label: t('nav.terminal'), icon: 'terminal', status: 'live' as RouteStatus },
-    { to: '/runtimes', label: t('nav.runtimes'), icon: 'zap', status: 'live' as RouteStatus },
-    { to: '/maintenance', label: t('nav.maintenance'), icon: 'shield', status: 'live' as RouteStatus },
-    { to: '/system-readiness', label: t('nav.readiness'), icon: 'checklist', status: 'live' as RouteStatus },
-    { to: '/settings', label: t('nav.settings'), icon: 'settings', status: 'live' as RouteStatus },
+  const navDefaults: Array<{ to: string; label: string; icon: string }> = [
+    { to: '/dashboard', label: t('nav.dashboard'), icon: 'dashboard' },
+    { to: '/system', label: t('nav.monitor'), icon: 'pulse' },
+    { to: '/docker', label: t('nav.docker'), icon: 'package' },
+    { to: '/ssh', label: t('nav.ssh'), icon: 'key' },
+    { to: '/git', label: t('nav.git'), icon: 'git-branch' },
+    { to: '/profiles', label: t('nav.profiles'), icon: 'account' },
+    { to: '/terminal', label: t('nav.terminal'), icon: 'terminal' },
+    { to: '/runtimes', label: t('nav.runtimes'), icon: 'zap' },
+    { to: '/maintenance', label: t('nav.maintenance'), icon: 'shield' },
+    { to: '/system-readiness', label: t('nav.readiness'), icon: 'checklist' },
+    { to: '/settings', label: t('nav.settings'), icon: 'settings' },
   ]
-  
+
   // High-reliability ref for event listener to access latest bindings without re-render
   const bindingsRef = useRef<Record<string, string>>(DEFAULT_SHORTCUTS)
 
@@ -65,8 +53,6 @@ export function AppShell({ children }: { children: ReactNode }): ReactElement {
       }
     })
   }, [])
-
-
 
   useEffect(() => {
     const ACTION_ROUTES: Record<string, string> = {
@@ -84,8 +70,12 @@ export function AppShell({ children }: { children: ReactNode }): ReactElement {
     const refreshBindings = (): void => {
       void window.dh.storeGet({ key: 'shortcuts_settings' }).then((res: unknown) => {
         const bag = res as { ok?: boolean; data?: unknown }
-        if (bag.ok && bag.data && typeof bag.data === 'object' && Object.keys(bag.data).length > 0) {
-          // Merge user bindings OVER defaults
+        if (
+          bag.ok &&
+          bag.data &&
+          typeof bag.data === 'object' &&
+          Object.keys(bag.data).length > 0
+        ) {
           bindingsRef.current = { ...DEFAULT_SHORTCUTS, ...(bag.data as Record<string, string>) }
         } else {
           bindingsRef.current = { ...DEFAULT_SHORTCUTS }
@@ -94,27 +84,24 @@ export function AppShell({ children }: { children: ReactNode }): ReactElement {
     }
 
     refreshBindings()
-    
+
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return
-      
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
+        return
+
       const parts: string[] = []
-      // Standardize modifier order: Ctrl+Alt+Shift+Meta (matches buildChord in SettingsShortcuts.tsx)
       if (e.ctrlKey) parts.push('Ctrl')
       if (e.altKey) parts.push('Alt')
       if (e.shiftKey) parts.push('Shift')
       if (e.metaKey) parts.push('Meta')
-      
+
       const keyName = e.key.length === 1 ? e.key.toUpperCase() : e.key
-      
-      // If the key pressed IS a modifier itself, don't build a chord
       if (['Control', 'Alt', 'Shift', 'Meta'].includes(e.key)) return
 
       parts.push(keyName)
       const combo = parts.join('+')
 
-      // Use a custom event to show keys on screen for debug
       window.dispatchEvent(new CustomEvent('dh:shortcut:debug', { detail: combo }))
 
       for (const [action, binding] of Object.entries(bindingsRef.current)) {
@@ -124,11 +111,9 @@ export function AppShell({ children }: { children: ReactNode }): ReactElement {
           const route = ACTION_ROUTES[action]
           if (route) {
             navigate(route)
-          } else if (action === 'toggle_sidebar') {
-             setSidebarCollapsed(prev => !prev)
           } else if (action === 'focus_search') {
-             const search = document.querySelector('.hp-search-input') as HTMLInputElement
-             if (search) search.focus()
+            const search = document.querySelector('.hp-search-input') as HTMLInputElement
+            if (search) search.focus()
           }
           break
         }
@@ -139,7 +124,7 @@ export function AppShell({ children }: { children: ReactNode }): ReactElement {
 
     window.addEventListener('keydown', onKey, true)
     window.addEventListener('dh:shortcuts:updated', onShortcutsUpdated)
-    
+
     return () => {
       window.removeEventListener('keydown', onKey, true)
       window.removeEventListener('dh:shortcuts:updated', onShortcutsUpdated)
@@ -148,70 +133,70 @@ export function AppShell({ children }: { children: ReactNode }): ReactElement {
 
   return (
     <div className="app-shell">
-      <aside className={`app-shell-nav ${sidebarCollapsed ? 'collapsed' : ''}`}>
-        <div className="app-shell-header">
-          <div className="app-shell-header-title">{t('appTitle')}</div>
-          <div className="mono app-shell-header-subtitle">{t('footer.linuxSession')}</div>
+      {/* Permanent icon-only sidebar — always collapsed, no expand/collapse behavior */}
+      <aside className="app-shell-nav">
+        {/* Header: icon-only brand mark with tooltip */}
+        <div className="app-shell-header" data-tooltip={t('appTitle')}>
+          <span className="codicon codicon-home" aria-hidden />
         </div>
+
         <nav className="app-shell-nav-list">
-          {nav.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              className={({ isActive }) => `app-shell-nav-item ${isActive ? 'active' : ''}`}
-            >
-              <span className={`codicon codicon-${item.icon}`} aria-hidden />
-              <span className="app-shell-nav-item-label">{item.label}</span>
-              <span
-                className={`mono app-shell-nav-item-status ${item.status}`}
-                title={`Route status: ${item.status}`}
+          {navDefaults.map((item) => (
+            <div key={item.to} className="app-shell-nav-item-wrap" data-tooltip={item.label}>
+              <NavLink
+                to={item.to}
+                className={({ isActive }) => `app-shell-nav-item${isActive ? ' active' : ''}`}
+                aria-label={item.label}
               >
-                {statusStyles[item.status].label}
-              </span>
-            </NavLink>
+                <span className={`codicon codicon-${item.icon}`} aria-hidden />
+              </NavLink>
+            </div>
           ))}
         </nav>
+
         <div className="app-shell-footer">
           <a
             href="#"
+            data-tooltip={t('footer.docs')}
             onClick={(e) => {
               e.preventDefault()
-              void window.dh.openExternal('https://github.com/')
+              void window.dh.openExternal('https://docs.luminadev.app')
             }}
             className="app-shell-footer-link"
+            aria-label={t('footer.docs')}
           >
             <span className="codicon codicon-book" aria-hidden />
-            {t('footer.docs')}
           </a>
           <a
             href="#"
+            data-tooltip={t('footer.setupWizard')}
             onClick={(e) => {
               e.preventDefault()
-              void window.dh.storeSet({
-                key: 'wizard_state',
-                data: { completed: false, showOnStartup: true, stepIndex: 0 },
-              })
+              void window.dh
+                .storeSet({
+                  key: 'wizard_state',
+                  data: { completed: false, showOnStartup: true, stepIndex: 0 },
+                })
                 .then(() => window.location.reload())
             }}
             className="app-shell-footer-link"
+            aria-label={t('footer.setupWizard')}
           >
             <span className="codicon codicon-wand" aria-hidden />
-            {t('footer.setupWizard')}
           </a>
           <div
             className="app-shell-profile-section"
+            data-tooltip={`${profileName} — ${t('footer.switchProfile')}`}
             onClick={() => navigate('/profiles')}
             role="button"
             tabIndex={0}
-            aria-label="Switch profile"
-            onKeyDown={(e) => { if (e.key === 'Enter') navigate('/profiles') }}
+            aria-label={t('footer.switchProfile')}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') navigate('/profiles')
+            }}
           >
             <div className="app-shell-profile-avatar">
               <span className="codicon codicon-account" aria-hidden />
-            </div>
-            <div className="app-shell-profile-info">
-              <div className="app-shell-profile-name">{profileName}</div>
-              <div className="app-shell-profile-session">{t('footer.switchProfile')}</div>
             </div>
           </div>
         </div>
@@ -234,40 +219,42 @@ function ShortcutVisualizer() {
   const [combo, setCombo] = useState<string | null>(null)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-   useEffect(() => {
-     const handler = (e: Event) => {
-       const customEvent = e as CustomEvent<string>;
-       setCombo(customEvent.detail);
-       if (timer.current) clearTimeout(timer.current)
-       timer.current = setTimeout(() => setCombo(null), 1500)
-     }
-     window.addEventListener('dh:shortcut:debug', handler)
-     return () => {
-       window.removeEventListener('dh:shortcut:debug', handler)
-       if (timer.current) clearTimeout(timer.current)
-     }
-   }, [])
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const customEvent = e as CustomEvent<string>
+      setCombo(customEvent.detail)
+      if (timer.current) clearTimeout(timer.current)
+      timer.current = setTimeout(() => setCombo(null), 1500)
+    }
+    window.addEventListener('dh:shortcut:debug', handler)
+    return () => {
+      window.removeEventListener('dh:shortcut:debug', handler)
+      if (timer.current) clearTimeout(timer.current)
+    }
+  }, [])
 
   if (!combo) return null
 
   return (
-    <div style={{
-      position: 'fixed',
-      bottom: 80,
-      left: '50%',
-      transform: 'translateX(-50%)',
-      background: 'rgba(0,0,0,0.85)',
-      color: '#fff',
-      padding: '10px 20px',
-      borderRadius: '30px',
-      zIndex: 100000,
-      fontSize: '14px',
-      fontWeight: 600,
-      fontFamily: 'monospace',
-      boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
-      pointerEvents: 'none',
-      border: '1px solid var(--accent)'
-    }}>
+    <div
+      style={{
+        position: 'fixed',
+        bottom: 80,
+        left: '50%',
+        transform: 'translateX(-50%)',
+        background: 'rgba(0,0,0,0.85)',
+        color: '#fff',
+        padding: '10px 20px',
+        borderRadius: '30px',
+        zIndex: 100000,
+        fontSize: '14px',
+        fontWeight: 600,
+        fontFamily: 'monospace',
+        boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
+        pointerEvents: 'none',
+        border: '1px solid var(--accent)',
+      }}
+    >
       {combo}
     </div>
   )

@@ -75,24 +75,36 @@ function colorizeLine(line: string): string {
   let formatted = line
 
   // Timestamps (dimmed)
-  const tsRegex = /^(\[?\d{4}-\d{2}-\d{2}[T\s]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2}|[A-Z]{3,4})?\]?)/i
+  const tsRegex =
+    /^(\[?\d{4}-\d{2}-\d{2}[T\s]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2}|[A-Z]{3,4})?\]?)/i
   formatted = formatted.replace(tsRegex, '\x1b[90m$1\x1b[0m')
 
   // Log levels
   formatted = formatted
-    .replace(/\b(ERROR|ERR|FATAL|FAIL|Failed|failed|critical|CRITICAL|Exception|exception)\b/g, '\x1b[1;31m$1\x1b[0m')
+    .replace(
+      /\b(ERROR|ERR|FATAL|FAIL|Failed|failed|critical|CRITICAL|Exception|exception)\b/g,
+      '\x1b[1;31m$1\x1b[0m'
+    )
     .replace(/\b(WARNING|WARN|warning|warn)\b/g, '\x1b[1;33m$1\x1b[0m')
     .replace(/\b(INFO|info|success|SUCCESS|OK|ok)\b/g, '\x1b[32m$1\x1b[0m')
     .replace(/\b(LOG|log|DEBUG|debug|trace|TRACE)\b/g, '\x1b[34m$1\x1b[0m')
 
   // Key-value pairs (e.g. status=active or db: postgres)
-  formatted = formatted.replace(/(\b[a-zA-Z_][a-zA-Z0-9_-]*\s*[:=]\s*)([^/\s][^\s]*)/g, (match, key, val) => {
-    if (val.startsWith('http') || val.startsWith('//') || key.toLowerCase().includes('http') || key.toLowerCase().includes('at')) {
-      return match
+  formatted = formatted.replace(
+    /(\b[a-zA-Z_][a-zA-Z0-9_-]*\s*[:=]\s*)([^/\s][^\s]*)/g,
+    (match, key, val) => {
+      if (
+        val.startsWith('http') ||
+        val.startsWith('//') ||
+        key.toLowerCase().includes('http') ||
+        key.toLowerCase().includes('at')
+      ) {
+        return match
+      }
+      const colorVal = /^\d+$/.test(val) ? `\x1b[36m${val}\x1b[0m` : `\x1b[32m${val}\x1b[0m`
+      return `\x1b[96m${key}\x1b[0m${colorVal}`
     }
-    const colorVal = /^\d+$/.test(val) ? `\x1b[36m${val}\x1b[0m` : `\x1b[32m${val}\x1b[0m`
-    return `\x1b[96m${key}\x1b[0m${colorVal}`
-  })
+  )
 
   // Underline URLs
   formatted = formatted.replace(/(https?:\/\/[^\s]+)/g, '\x1b[4;34m$1\x1b[0m')
@@ -122,12 +134,12 @@ function stateBorder(s: string): string {
 }
 
 export function DashboardLogsPage(): ReactElement {
-const { t } = useTranslation('dashboard')
+  const { t } = useTranslation('dashboard')
   const [activeSource, setActiveSource] = useState<{
     type: 'compose' | 'job' | 'unified' | 'container'
     id?: string
     label: string
-}>({ type: 'unified', label: t('logs.unifiedLabel') })
+  }>({ type: 'unified', label: t('logs.unifiedLabel') })
   const [searchText, setSearchText] = useState('')
   const [jobs, setJobs] = useState<JobSummary[]>([])
   const [containers, setContainers] = useState<ContainerRow[]>([])
@@ -137,6 +149,9 @@ const { t } = useTranslation('dashboard')
   const containerRef = useRef<HTMLDivElement>(null)
   const streamIdRef = useRef<string | null>(null)
   const unlistenRef = useRef<(() => void) | null>(null)
+  const linesRef = useRef<string[]>([])
+  const searchTextRef = useRef(searchText)
+  searchTextRef.current = searchText
 
   const refreshJobs = useCallback(async () => {
     try {
@@ -176,6 +191,8 @@ const { t } = useTranslation('dashboard')
     if (!term) return
 
     term.write(`\r\n\x1b[90m--- ${activeSource.label} ---\x1b[0m\r\n`)
+    // Clear line buffer when starting a fresh stream
+    linesRef.current.length = 0
 
     try {
       const res = await window.dh.logStreamStart({
@@ -191,9 +208,17 @@ const { t } = useTranslation('dashboard')
           if (event.payload.streamId !== streamIdRef.current) return
           const t = terminalRef.current
           if (!t) return
-          const atBottom = t.buffer.active.viewportY >= t.buffer.active.length - t.rows - 1
-          t.write(colorizeLine(event.payload.line) + '\r\n')
-          if (atBottom) t.scrollToBottom()
+          const line = event.payload.line
+          linesRef.current.push(line)
+          // Only write to terminal if not filtering, or if line matches search
+          if (
+            !searchTextRef.current ||
+            line.toLowerCase().includes(searchTextRef.current.toLowerCase())
+          ) {
+            const atBottom = t.buffer.active.viewportY >= t.buffer.active.length - t.rows - 1
+            t.write(colorizeLine(line) + '\r\n')
+            if (atBottom) t.scrollToBottom()
+          }
         }
       )
       unlistenRef.current = unlisten
@@ -217,13 +242,13 @@ const { t } = useTranslation('dashboard')
     const fitAddon = new FitAddon()
     term.loadAddon(fitAddon)
     term.open(containerRef.current)
-    
+
     // Slight delay to ensure parent container dimensions are populated
     setTimeout(() => {
       try {
         fitAddon.fit()
       } catch (err) {
-        console.warn("xterm fit error", err)
+        console.warn('xterm fit error', err)
       }
     }, 50)
 
@@ -243,7 +268,7 @@ const { t } = useTranslation('dashboard')
       try {
         fitAddon.fit()
       } catch (err) {
-        console.warn("xterm resize fit error", err)
+        console.warn('xterm resize fit error', err)
       }
     }
     window.addEventListener('resize', handleResize)
@@ -254,6 +279,24 @@ const { t } = useTranslation('dashboard')
       term.dispose()
     }
   }, [])
+
+  // Re-render terminal when search text changes (filter already-buffered lines)
+  useEffect(() => {
+    const term = terminalRef.current
+    if (!term) return
+    // Only re-render if we have buffered lines to filter
+    if (linesRef.current.length === 0) return
+
+    term.clear()
+    // Rewrite header
+    term.write(`\x1b[90m--- ${activeSource.label} ---\x1b[0m\r\n`)
+    const lq = searchText.toLowerCase()
+    for (const line of linesRef.current) {
+      if (!searchText || line.toLowerCase().includes(lq)) {
+        term.write(colorizeLine(line) + '\r\n')
+      }
+    }
+  }, [searchText, activeSource.label])
 
   // Stream: start on source change, stop on unmount
   useEffect(() => {
@@ -295,9 +338,7 @@ const { t } = useTranslation('dashboard')
             {t('logs.heroEyebrow')}
           </div>
           <h1 className="logs-title">{t('logs.heroTitle')}</h1>
-          <p className="logs-subtitle">
-{t('logs.heroSubtitle')}
-          </p>
+          <p className="logs-subtitle">{t('logs.heroSubtitle')}</p>
         </div>
       </div>
 
@@ -306,20 +347,44 @@ const { t } = useTranslation('dashboard')
         {/* Left Column: Compose Terminal */}
         <div className="logs-main-col">
           <div className="logs-card-container">
-            <div className="logs-card-header" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 12 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div
+              className="logs-card-header"
+              style={{ flexDirection: 'column', alignItems: 'stretch', gap: 12 }}
+            >
+              <div
+                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+              >
                 <div className="logs-card-header-title">
                   <span className="codicon codicon-terminal" style={{ color: 'var(--accent)' }} />
                   {activeSource.label}
                 </div>
               </div>
-              <div className="logs-controls" style={{ display: 'flex', gap: 12, alignItems: 'center', width: '100%', flexWrap: 'wrap' }}>
+              <div
+                className="logs-controls"
+                style={{
+                  display: 'flex',
+                  gap: 12,
+                  alignItems: 'center',
+                  width: '100%',
+                  flexWrap: 'wrap',
+                }}
+              >
                 {/* Search Input */}
                 <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
-                  <span className="codicon codicon-search" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontSize: 13 }} />
+                  <span
+                    className="codicon codicon-search"
+                    style={{
+                      position: 'absolute',
+                      left: 10,
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      color: 'var(--text-muted)',
+                      fontSize: 13,
+                    }}
+                  />
                   <input
                     type="text"
-placeholder={t('logs.searchPlaceholder')}
+                    placeholder={t('logs.searchPlaceholder')}
                     value={searchText}
                     onChange={(e) => setSearchText(e.target.value)}
                     style={{
@@ -336,7 +401,18 @@ placeholder={t('logs.searchPlaceholder')}
                     <button
                       type="button"
                       onClick={() => setSearchText('')}
-                      style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                      style={{
+                        position: 'absolute',
+                        right: 10,
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        background: 'none',
+                        border: 'none',
+                        color: 'var(--text-muted)',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                      }}
                     >
                       <span className="codicon codicon-close" style={{ fontSize: 12 }} />
                     </button>
@@ -347,43 +423,65 @@ placeholder={t('logs.searchPlaceholder')}
                 <div className="logs-select-wrapper" style={{ minWidth: 200 }}>
                   <select
                     className="logs-select"
-                    value={activeSource.type === 'unified' ? 'unified' : `${activeSource.type}:${activeSource.id}`}
+                    value={
+                      activeSource.type === 'unified'
+                        ? 'unified'
+                        : `${activeSource.type}:${activeSource.id}`
+                    }
                     onChange={(e) => {
                       const val = e.target.value
                       if (val === 'unified') {
-setActiveSource({ type: 'unified', label: t('logs.unifiedLabel') })
+                        setActiveSource({ type: 'unified', label: t('logs.unifiedLabel') })
                       } else {
                         const [type, ...rest] = val.split(':')
                         const id = rest.join(':')
                         if (type === 'compose') {
-                          setActiveSource({ type: 'compose', id, label: `${t('logs.composeLabel')}: ${id}` })
+                          setActiveSource({
+                            type: 'compose',
+                            id,
+                            label: `${t('logs.composeLabel')}: ${id}`,
+                          })
                         } else if (type === 'container') {
-                          const container = containers.find(c => c.id === id)
-                          setActiveSource({ type: 'container', id, label: `${t('logs.containerLabel')}: ${container?.name || id}` })
+                          const container = containers.find((c) => c.id === id)
+                          setActiveSource({
+                            type: 'container',
+                            id,
+                            label: `${t('logs.containerLabel')}: ${container?.name || id}`,
+                          })
                         } else if (type === 'job') {
-                          const job = jobs.find(j => j.id === id)
-                          setActiveSource({ type: 'job', id, label: `${t('logs.jobLabel')}: ${job?.kind || id}` })
+                          const job = jobs.find((j) => j.id === id)
+                          setActiveSource({
+                            type: 'job',
+                            id,
+                            label: `${t('logs.jobLabel')}: ${job?.kind || id}`,
+                          })
                         }
                       }
                     }}
                   >
-<option value="unified">{t('logs.unifiedLabel')}</option>
+                    <option value="unified">{t('logs.unifiedLabel')}</option>
                     <optgroup label={t('logs.composeProfilesGroup')}>
                       {profiles.map((p) => (
-                        <option key={p} value={`compose:${p}`}>{t('logs.composeLabel')}: {p}</option>
+                        <option key={p} value={`compose:${p}`}>
+                          {t('logs.composeLabel')}: {p}
+                        </option>
                       ))}
                     </optgroup>
                     {containers.length > 0 && (
                       <optgroup label={t('logs.activeContainersGroup')}>
                         {containers.map((c) => (
-                          <option key={c.id} value={`container:${c.id}`}>{t('logs.containerLabel')}: {c.name} ({c.state})</option>
+                          <option key={c.id} value={`container:${c.id}`}>
+                            {t('logs.containerLabel')}: {c.name} ({c.state})
+                          </option>
                         ))}
                       </optgroup>
                     )}
                     {jobs.length > 0 && (
-<optgroup label={t('logs.jobsGroup')}>
+                      <optgroup label={t('logs.jobsGroup')}>
                         {jobs.map((j) => (
-                          <option key={j.id} value={`job:${j.id}`}>{t('logs.jobLabel')}: {j.kind.replace(/_/g, ' ')} ({j.state})</option>
+                          <option key={j.id} value={`job:${j.id}`}>
+                            {t('logs.jobLabel')}: {j.kind.replace(/_/g, ' ')} ({j.state})
+                          </option>
                         ))}
                       </optgroup>
                     )}
@@ -391,17 +489,24 @@ setActiveSource({ type: 'unified', label: t('logs.unifiedLabel') })
                   <span className="codicon codicon-chevron-down logs-select-arrow" />
                 </div>
 
-                <button
-                  type="button"
-                  className="logs-btn"
-                  onClick={() => void startStream()}
-                >
+                <button type="button" className="logs-btn" onClick={() => void startStream()}>
                   <span className="codicon codicon-refresh" style={{ marginRight: 6 }} />
-{t('logs.refresh')}
+                  {t('logs.refresh')}
                 </button>
               </div>
             </div>
-            <div style={{ position: 'relative', width: '100%', height: 480, background: 'var(--bg-terminal, #1e1e1e)', borderRadius: 8, padding: 8, overflow: 'hidden', border: '1px solid var(--border)' }}>
+            <div
+              style={{
+                position: 'relative',
+                width: '100%',
+                height: 480,
+                background: 'var(--bg-terminal, #1e1e1e)',
+                borderRadius: 8,
+                padding: 8,
+                overflow: 'hidden',
+                border: '1px solid var(--border)',
+              }}
+            >
               <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
             </div>
           </div>
@@ -439,21 +544,27 @@ setActiveSource({ type: 'unified', label: t('logs.unifiedLabel') })
                 className="logs-status-badge"
                 style={{
                   color: runningJobs.length > 0 ? 'var(--accent)' : 'var(--text-muted)',
-                  background: runningJobs.length > 0 ? 'rgba(124, 77, 255, 0.12)' : 'rgba(128, 128, 128, 0.12)',
+                  background:
+                    runningJobs.length > 0
+                      ? 'rgba(124, 77, 255, 0.12)'
+                      : 'rgba(128, 128, 128, 0.12)',
                   border: `1px solid ${runningJobs.length > 0 ? 'rgba(124, 77, 255, 0.35)' : 'rgba(128, 128, 128, 0.3)'}`,
                 }}
               >
-                {runningJobs.length > 0 ? `${runningJobs.length} ${t('logs.active')}` : t('logs.idle')}
+                {runningJobs.length > 0
+                  ? `${runningJobs.length} ${t('logs.active')}`
+                  : t('logs.idle')}
               </span>
             </div>
 
             {allJobsDisplay.length === 0 ? (
               <div className="logs-empty-state">
-                <span className="codicon codicon-history" style={{ fontSize: 32, color: 'var(--text-muted)' }} />
+                <span
+                  className="codicon codicon-history"
+                  style={{ fontSize: 32, color: 'var(--text-muted)' }}
+                />
                 <p className="logs-empty-title">{t('logs.noJobsRecorded')}</p>
-                <p className="logs-empty-desc">
-                  {t('logs.noJobsDescription')}
-                </p>
+                <p className="logs-empty-desc">{t('logs.noJobsDescription')}</p>
               </div>
             ) : (
               <div className="logs-jobs-list">
@@ -462,10 +573,17 @@ setActiveSource({ type: 'unified', label: t('logs.unifiedLabel') })
                   return (
                     <div
                       key={j.id}
-onClick={() => setActiveSource({ type: 'job', id: j.id, label: `${t('logs.jobLabel')}: ${j.kind.replace(/_/g, ' ')}` })}
+                      onClick={() =>
+                        setActiveSource({
+                          type: 'job',
+                          id: j.id,
+                          label: `${t('logs.jobLabel')}: ${j.kind.replace(/_/g, ' ')}`,
+                        })
+                      }
                       className="logs-job-row"
                       style={{
-                        borderBottom: i < allJobsDisplay.length - 1 ? '1px solid var(--border)' : 'none',
+                        borderBottom:
+                          i < allJobsDisplay.length - 1 ? '1px solid var(--border)' : 'none',
                         cursor: 'pointer',
                         background: isActive ? 'rgba(124, 77, 255, 0.08)' : 'transparent',
                         padding: '12px 8px',
@@ -480,7 +598,8 @@ onClick={() => setActiveSource({ type: 'job', id: j.id, label: `${t('logs.jobLab
                             className="logs-job-dot"
                             style={{
                               background: stateColor(j.state),
-                              boxShadow: j.state === 'running' ? `0 0 6px ${stateColor(j.state)}` : 'none',
+                              boxShadow:
+                                j.state === 'running' ? `0 0 6px ${stateColor(j.state)}` : 'none',
                             }}
                           />
                           <span className="logs-job-kind">{j.kind.replace(/_/g, ' ')}</span>
@@ -496,7 +615,7 @@ onClick={() => setActiveSource({ type: 'job', id: j.id, label: `${t('logs.jobLab
                           {j.state}
                         </span>
                       </div>
-{j.logTail && j.logTail.length > 0 && (
+                      {j.logTail && j.logTail.length > 0 && (
                         <div className="logs-job-tail-snippet">
                           {j.logTail[j.logTail.length - 1]}
                         </div>

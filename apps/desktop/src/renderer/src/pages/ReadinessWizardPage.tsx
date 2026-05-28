@@ -30,7 +30,16 @@ type InstallProgress = {
 
 const TOTAL_STEPS = 8
 
-type ComposeProfile = 'web-dev' | 'data-science' | 'ai-ml' | 'mobile' | 'game-dev' | 'infra' | 'desktop-gui' | 'docs' | 'empty'
+type ComposeProfile =
+  | 'web-dev'
+  | 'data-science'
+  | 'ai-ml'
+  | 'mobile'
+  | 'game-dev'
+  | 'infra'
+  | 'desktop-gui'
+  | 'docs'
+  | 'empty'
 
 const STARTER_PROFILES: Array<{ id: ComposeProfile; label: string; icon: string }> = [
   { id: 'web-dev', label: 'Web Development', icon: '🌐' },
@@ -64,7 +73,9 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
   const [gitEmail, setGitEmail] = useState('')
   const [projectsDir, setProjectsDir] = useState('~/LuminaProjects')
   const [installationTasks, setInstallationTasks] = useState<InstallationTask[]>([])
-  const [installationStatus, setInstallationStatus] = useState<'not-started' | 'running' | 'complete' | 'error'>('not-started')
+  const [installationStatus, setInstallationStatus] = useState<
+    'not-started' | 'running' | 'complete' | 'error'
+  >('not-started')
   const [installationError, setInstallationError] = useState<string | null>(null)
   const [sshPublicKey, setSshPublicKey] = useState<string | null>(null)
   const [sshGenerating, setSshGenerating] = useState(false)
@@ -116,12 +127,22 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
     setInstallationStatus('running')
     setInstallationError(null)
 
-    type FinalizationTask = { id: string; label: string; status: 'pending' | 'running' | 'complete'; progress: number }
+    type FinalizationTask = {
+      id: string
+      label: string
+      status: 'pending' | 'running' | 'complete'
+      progress: number
+    }
     const tasks: FinalizationTask[] = [
       { id: 'git', label: t('wizard.install.taskGit'), status: 'pending', progress: 0 },
       { id: 'theme', label: t('wizard.install.taskTheme'), status: 'pending', progress: 0 },
       { id: 'profile', label: t('wizard.install.taskProfile'), status: 'pending', progress: 0 },
-      { id: 'projects-dir', label: t('wizard.install.taskProjectsDir'), status: 'pending', progress: 0 },
+      {
+        id: 'projects-dir',
+        label: t('wizard.install.taskProjectsDir'),
+        status: 'pending',
+        progress: 0,
+      },
       { id: 'complete', label: t('wizard.install.taskComplete'), status: 'pending', progress: 0 },
     ]
     setInstallationTasks(tasks)
@@ -217,7 +238,9 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
         description: t('wizard.prereqs.reqVirtDesc'),
         status: software.kvm_supported ? 'ok' : 'error',
         critical: software.kvm_supported,
-        value: software.kvm_supported ? t('wizard.prereqs.virtEnabled') : t('wizard.prereqs.virtNotAvailable'),
+        value: software.kvm_supported
+          ? t('wizard.prereqs.virtEnabled')
+          : t('wizard.prereqs.virtNotAvailable'),
       },
     ]
 
@@ -228,7 +251,9 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
         description: t('wizard.prereqs.reqDockerDesc'),
         status: software.docker_installed ? 'ok' : 'error',
         critical: true,
-        value: software.docker_installed ? software.docker_version : t('wizard.prereqs.dockerNotInstalled'),
+        value: software.docker_installed
+          ? software.docker_version
+          : t('wizard.prereqs.dockerNotInstalled'),
       },
       {
         id: 'git',
@@ -267,7 +292,9 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
         description: t('wizard.prereqs.reqDaemonDesc'),
         status: software.docker_running ? 'ok' : 'error',
         critical: true,
-        value: software.docker_running ? t('wizard.prereqs.daemonRunning') : t('wizard.prereqs.daemonNotRunning'),
+        value: software.docker_running
+          ? t('wizard.prereqs.daemonRunning')
+          : t('wizard.prereqs.daemonNotRunning'),
       },
       {
         id: 'group',
@@ -275,19 +302,25 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
         description: t('wizard.prereqs.reqGroupDesc'),
         status: software.in_docker_group ? 'ok' : 'warning',
         critical: true,
-        value: software.in_docker_group ? t('wizard.prereqs.groupYes') : t('wizard.prereqs.groupNo'),
+        value: software.in_docker_group
+          ? t('wizard.prereqs.groupYes')
+          : t('wizard.prereqs.groupNo'),
       },
     ]
 
     setCategories([
-      { title: t('wizard.prereqs.categoryHardware'), icon: 'circuit-board', requirements: hardwareReqs },
+      {
+        title: t('wizard.prereqs.categoryHardware'),
+        icon: 'circuit-board',
+        requirements: hardwareReqs,
+      },
       { title: t('wizard.prereqs.categoryTools'), icon: 'wrench', requirements: toolReqs },
       { title: t('wizard.prereqs.categoryDocker'), icon: 'package', requirements: dockerReqs },
     ])
   }
 
   const allCriticalMet = categories.every((cat) =>
-    cat.requirements.every((req) => !req.critical || req.status === 'ok'),
+    cat.requirements.every((req) => !req.critical || req.status === 'ok')
   )
 
   const canProceed = (): boolean => {
@@ -328,10 +361,15 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
     setProgress({ reqId, fixId, status: 'running', message: getProgressMessage(fixId) })
 
     try {
-      const res = (await window.dh.systemReadinessFix({ id: fixId })) as { ok: boolean; error?: string }
+      const res = (await window.dh.systemReadinessFix({ id: fixId })) as {
+        ok: boolean
+        error?: string
+      }
 
       if (res.ok) {
-        setProgress((p) => p ? { ...p, status: 'complete', message: t('wizard.progress.verifying') } : null)
+        setProgress((p) =>
+          p ? { ...p, status: 'complete', message: t('wizard.progress.verifying') } : null
+        )
         await new Promise((r) => setTimeout(r, 800))
         await runProbes()
         setProgress(null)
@@ -383,9 +421,16 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
     setSshGenerating(true)
     setSshError(null)
     try {
-      const genRes = (await window.dh.sshGenerate({ target: 'host' })) as { ok: boolean; error?: string }
+      const genRes = (await window.dh.sshGenerate({ target: 'host' })) as {
+        ok: boolean
+        error?: string
+      }
       if (genRes.ok) {
-        const pubRes = (await window.dh.sshGetPub({ target: 'host' })) as { ok: boolean; pub?: string; error?: string }
+        const pubRes = (await window.dh.sshGetPub({ target: 'host' })) as {
+          ok: boolean
+          pub?: string
+          error?: string
+        }
         if (pubRes.ok && pubRes.pub) {
           setSshPublicKey(pubRes.pub)
         } else {
@@ -452,9 +497,7 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
               </div>
               <h1 className="readiness-welcome-title">{t('wizard.welcome.title')}</h1>
               <p className="readiness-welcome-subtitle">{t('wizard.welcome.subtitle')}</p>
-              <p className="readiness-welcome-description">
-                {t('wizard.welcome.description')}
-              </p>
+              <p className="readiness-welcome-description">{t('wizard.welcome.description')}</p>
             </div>
           )}
 
@@ -495,7 +538,10 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
 
                       <div className="readiness-requirements">
                         {cat.requirements.map((req) => (
-                          <div key={req.id} className={`readiness-requirement readiness-requirement-${req.status}`}>
+                          <div
+                            key={req.id}
+                            className={`readiness-requirement readiness-requirement-${req.status}`}
+                          >
                             <div className="readiness-requirement-left">
                               <div
                                 className="readiness-requirement-icon"
@@ -507,7 +553,9 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
                                 <div className="readiness-requirement-label">{req.label}</div>
                                 <div className="readiness-requirement-desc">{req.description}</div>
                               </div>
-                              {req.value && <div className="readiness-requirement-value">{req.value}</div>}
+                              {req.value && (
+                                <div className="readiness-requirement-value">{req.value}</div>
+                              )}
                             </div>
 
                             {req.status !== 'ok' && (
@@ -544,7 +592,15 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
               )}
 
               {!loading && (
-                <div style={{ display: 'flex', gap: 12, marginTop: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    gap: 12,
+                    marginTop: 12,
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                  }}
+                >
                   <button
                     className="readiness-btn readiness-btn-install"
                     onClick={() => {
@@ -555,17 +611,20 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
                     title={t('wizard.prereqs.recheckTitle')}
                   >
                     {recheckLoading ? (
-                      <><span className="codicon codicon-loading codicon-modifier-spin" /> {t('wizard.prereqs.checking')}</>
+                      <>
+                        <span className="codicon codicon-loading codicon-modifier-spin" />{' '}
+                        {t('wizard.prereqs.checking')}
+                      </>
                     ) : (
-                      <><span className="codicon codicon-refresh" /> {t('wizard.prereqs.recheck')}</>
+                      <>
+                        <span className="codicon codicon-refresh" /> {t('wizard.prereqs.recheck')}
+                      </>
                     )}
                   </button>
                   {!allCriticalMet && (
                     <div className="readiness-prereqs-notice" style={{ margin: 0 }}>
                       <span className="codicon codicon-warning" />
-                      <div>
-                        {t('wizard.prereqs.notice')}
-                      </div>
+                      <div>{t('wizard.prereqs.notice')}</div>
                     </div>
                   )}
                 </div>
@@ -606,9 +665,7 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
 
               <div className="readiness-location-info">
                 <span className="codicon codicon-info" />
-                <div>
-                  {t('wizard.location.info')}
-                </div>
+                <div>{t('wizard.location.info')}</div>
               </div>
             </div>
           )}
@@ -680,9 +737,7 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
               ) : (
                 <div className="readiness-ssh-info">
                   <span className="codicon codicon-info" />
-                  <div>
-                    {t('wizard.ssh.whatIs')}
-                  </div>
+                  <div>{t('wizard.ssh.whatIs')}</div>
                 </div>
               )}
 
@@ -731,7 +786,9 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
                     onClick={() => setPickedProfile(profile.id)}
                   >
                     <span className="readiness-profile-icon">{profile.icon}</span>
-                    <span className="readiness-profile-label">{t(`wizard.profile.${profile.id}`)}</span>
+                    <span className="readiness-profile-label">
+                      {t(`wizard.profile.${profile.id}`)}
+                    </span>
                   </button>
                 ))}
               </div>
@@ -746,8 +803,12 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
                   <div className="readiness-install-success-icon">
                     <span className="codicon codicon-check-all" />
                   </div>
-                  <h2 className="readiness-install-complete-title">{t('wizard.install.completeTitle')}</h2>
-                  <p className="readiness-install-complete-subtitle">{t('wizard.install.completeSubtitle')}</p>
+                  <h2 className="readiness-install-complete-title">
+                    {t('wizard.install.completeTitle')}
+                  </h2>
+                  <p className="readiness-install-complete-subtitle">
+                    {t('wizard.install.completeSubtitle')}
+                  </p>
                   <p className="readiness-install-complete-message">
                     {t('wizard.install.completeMessage')}
                   </p>
@@ -757,7 +818,9 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
                   <div className="readiness-install-error-icon">
                     <span className="codicon codicon-error" />
                   </div>
-                  <h2 className="readiness-install-error-title">{t('wizard.install.failedTitle')}</h2>
+                  <h2 className="readiness-install-error-title">
+                    {t('wizard.install.failedTitle')}
+                  </h2>
                   <p className="readiness-install-error-message">{installationError}</p>
                   <button className="readiness-install-retry-btn" onClick={handleRetryInstallation}>
                     <span className="codicon codicon-refresh" />
@@ -771,7 +834,10 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
 
                   <div className="readiness-install-tasks">
                     {installationTasks.map((task) => (
-                      <div key={task.id} className={`readiness-install-task readiness-install-task-${task.status}`}>
+                      <div
+                        key={task.id}
+                        className={`readiness-install-task readiness-install-task-${task.status}`}
+                      >
                         <div className="readiness-install-task-header">
                           <div className="readiness-install-task-icon">
                             {task.status === 'complete' ? (
@@ -783,10 +849,15 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
                             )}
                           </div>
                           <div className="readiness-install-task-label">{task.label}</div>
-                          <div className="readiness-install-task-percent">{Math.round(task.progress)}%</div>
+                          <div className="readiness-install-task-percent">
+                            {Math.round(task.progress)}%
+                          </div>
                         </div>
                         <div className="readiness-install-task-bar">
-                          <div className="readiness-install-task-bar-fill" style={{ width: `${task.progress}%` }} />
+                          <div
+                            className="readiness-install-task-bar-fill"
+                            style={{ width: `${task.progress}%` }}
+                          />
                         </div>
                       </div>
                     ))}
@@ -810,7 +881,11 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
             className="readiness-btn-nav readiness-btn-back"
             onClick={handleBack}
             disabled={currentStep === 1 || currentStep === 8}
-            title={currentStep === 1 || currentStep === 8 ? t('wizard.footer.backDisabledTitle') : t('wizard.footer.backTitle')}
+            title={
+              currentStep === 1 || currentStep === 8
+                ? t('wizard.footer.backDisabledTitle')
+                : t('wizard.footer.backTitle')
+            }
           >
             <span className="codicon codicon-chevron-left" />
             {t('wizard.footer.back')}
@@ -830,7 +905,9 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
                     : t('wizard.footer.nextContinueTitle')
             }
           >
-            {currentStep === 8 && installationStatus === 'complete' ? t('wizard.footer.start') : t('wizard.footer.next')}
+            {currentStep === 8 && installationStatus === 'complete'
+              ? t('wizard.footer.start')
+              : t('wizard.footer.next')}
             <span className="codicon codicon-chevron-right" />
           </button>
         </div>
@@ -848,7 +925,10 @@ export function ReadinessWizardPage({ onComplete }: { onComplete: () => void }):
                 <h3 className="readiness-progress-title">{t('wizard.progress.failed')}</h3>
                 <p className="readiness-progress-error-message">{progress.error}</p>
                 <div className="readiness-progress-actions">
-                  <button className="readiness-progress-btn readiness-progress-btn-primary" onClick={() => void handleRetry()}>
+                  <button
+                    className="readiness-progress-btn readiness-progress-btn-primary"
+                    onClick={() => void handleRetry()}
+                  >
                     {t('wizard.progress.retry')}
                   </button>
                   <button className="readiness-progress-btn" onClick={handleDismissError}>

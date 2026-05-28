@@ -26,6 +26,7 @@ const CATALOG_GROUPS: Array<{ label: string; filter: (w: WidgetDefinition) => bo
 export function DashboardWidgetsPage(): ReactElement {
   const { t } = useTranslation('dashboard')
   const [layout, setLayout] = useState<DashboardLayoutFile | null>(null)
+  const [activeProfile, setActiveProfile] = useState<string>('web-dev')
   const [toast, setToast] = useState<Toast | null>(null)
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const dragItemRef = useRef<string | null>(null)
@@ -36,58 +37,85 @@ export function DashboardWidgetsPage(): ReactElement {
     toastTimerRef.current = setTimeout(() => setToast(null), 3000)
   }, [])
 
-  const saveLayout = useCallback(async (next: DashboardLayoutFile) => {
-    try {
-      await window.dh.layoutSet({ profile: 'web-dev', layout: next })
-    } catch {
-      showToast('Failed to save layout.')
-    }
-  }, [showToast])
+  const saveLayout = useCallback(
+    async (next: DashboardLayoutFile) => {
+      try {
+        await window.dh.layoutSet({ profile: activeProfile, layout: next })
+      } catch {
+        showToast('Failed to save layout.')
+      }
+    },
+    [showToast, activeProfile]
+  )
 
   useEffect(() => {
-    window.dh.layoutGet({ profile: 'web-dev' }).then((res) => {
-      if (res?.layout) {
-        setLayout(res.layout)
-      } else {
-        setLayout({ version: 1, placements: [] })
+    window.dh.storeGet({ key: 'active_profile' }).then((res: unknown) => {
+      const bag = res as { ok?: boolean; data?: unknown }
+      if (bag.ok && typeof bag.data === 'string' && bag.data.trim()) {
+        setActiveProfile(bag.data)
       }
-    }).catch(() => setLayout({ version: 1, placements: [] }))
+    })
   }, [])
 
-  const addWidget = useCallback((def: WidgetDefinition) => {
-    if (!layout) return
-    const instanceId = `${def.typeId}-${Date.now()}`
-    const placement: DashboardPlacement = { instanceId, widgetTypeId: def.typeId }
-    const next: DashboardLayoutFile = { ...layout, placements: [...layout.placements, placement] }
-    setLayout(next)
-    void saveLayout(next)
-    showToast(`"${def.title}" added to dashboard.`)
-  }, [layout, saveLayout, showToast])
+  useEffect(() => {
+    window.dh
+      .layoutGet({ profile: activeProfile })
+      .then((res) => {
+        if (res?.layout) {
+          setLayout(res.layout)
+        } else {
+          setLayout({ version: 1, placements: [] })
+        }
+      })
+      .catch(() => setLayout({ version: 1, placements: [] }))
+  }, [activeProfile])
 
-  const removeWidget = useCallback((instanceId: string) => {
-    if (!layout) return
-    const prev = layout
-    const next: DashboardLayoutFile = { ...layout, placements: layout.placements.filter((p) => p.instanceId !== instanceId) }
-    setLayout(next)
-    void saveLayout(next)
-    showToast('Widget removed.', () => {
-      setLayout(prev)
-      void saveLayout(prev)
-    })
-  }, [layout, saveLayout, showToast])
+  const addWidget = useCallback(
+    (def: WidgetDefinition) => {
+      if (!layout) return
+      const instanceId = `${def.typeId}-${Date.now()}`
+      const placement: DashboardPlacement = { instanceId, widgetTypeId: def.typeId }
+      const next: DashboardLayoutFile = { ...layout, placements: [...layout.placements, placement] }
+      setLayout(next)
+      void saveLayout(next)
+      showToast(`"${def.title}" added to dashboard.`)
+    },
+    [layout, saveLayout, showToast]
+  )
 
-  const reorderWidget = useCallback((fromId: string, toId: string) => {
-    if (!layout || fromId === toId) return
-    const fromIdx = layout.placements.findIndex((p) => p.instanceId === fromId)
-    const toIdx = layout.placements.findIndex((p) => p.instanceId === toId)
-    if (fromIdx === -1 || toIdx === -1) return
-    const nextPlacements = [...layout.placements]
-    const [moved] = nextPlacements.splice(fromIdx, 1)
-    nextPlacements.splice(toIdx, 0, moved)
-    const next: DashboardLayoutFile = { ...layout, placements: nextPlacements }
-    setLayout(next)
-    void saveLayout(next)
-  }, [layout, saveLayout])
+  const removeWidget = useCallback(
+    (instanceId: string) => {
+      if (!layout) return
+      const prev = layout
+      const next: DashboardLayoutFile = {
+        ...layout,
+        placements: layout.placements.filter((p) => p.instanceId !== instanceId),
+      }
+      setLayout(next)
+      void saveLayout(next)
+      showToast('Widget removed.', () => {
+        setLayout(prev)
+        void saveLayout(prev)
+      })
+    },
+    [layout, saveLayout, showToast]
+  )
+
+  const reorderWidget = useCallback(
+    (fromId: string, toId: string) => {
+      if (!layout || fromId === toId) return
+      const fromIdx = layout.placements.findIndex((p) => p.instanceId === fromId)
+      const toIdx = layout.placements.findIndex((p) => p.instanceId === toId)
+      if (fromIdx === -1 || toIdx === -1) return
+      const nextPlacements = [...layout.placements]
+      const [moved] = nextPlacements.splice(fromIdx, 1)
+      nextPlacements.splice(toIdx, 0, moved)
+      const next: DashboardLayoutFile = { ...layout, placements: nextPlacements }
+      setLayout(next)
+      void saveLayout(next)
+    },
+    [layout, saveLayout]
+  )
 
   const resetLayout = useCallback(() => {
     if (!layout) return
@@ -126,7 +154,10 @@ export function DashboardWidgetsPage(): ReactElement {
                 <p className="widgets-catalog-group-label">{group.label}</p>
                 {defs.map((def) => (
                   <div key={def.typeId} className="widgets-catalog-item">
-                    <span className={`codicon ${widgetIcon(def.typeId)} widgets-catalog-item-icon`} aria-hidden />
+                    <span
+                      className={`codicon ${widgetIcon(def.typeId)} widgets-catalog-item-icon`}
+                      aria-hidden
+                    />
                     <div className="widgets-catalog-item-info">
                       <p className="widgets-catalog-item-name">{def.title}</p>
                       <p className="widgets-catalog-item-desc">{def.description}</p>
@@ -160,15 +191,24 @@ export function DashboardWidgetsPage(): ReactElement {
             </div>
           ) : (
             layout.placements.map((placement) => {
-              const def = (WIDGET_DEFINITIONS as readonly WidgetDefinition[]).find((d) => d.typeId === placement.widgetTypeId)
+              const def = (WIDGET_DEFINITIONS as readonly WidgetDefinition[]).find(
+                (d) => d.typeId === placement.widgetTypeId
+              )
               return (
                 <div
                   key={placement.instanceId}
                   className="widgets-placement-item"
                   draggable
-                  onDragStart={() => { dragItemRef.current = placement.instanceId }}
-                  onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add('drag-over') }}
-                  onDragLeave={(e) => { e.currentTarget.classList.remove('drag-over') }}
+                  onDragStart={() => {
+                    dragItemRef.current = placement.instanceId
+                  }}
+                  onDragOver={(e) => {
+                    e.preventDefault()
+                    e.currentTarget.classList.add('drag-over')
+                  }}
+                  onDragLeave={(e) => {
+                    e.currentTarget.classList.remove('drag-over')
+                  }}
                   onDrop={(e) => {
                     e.preventDefault()
                     e.currentTarget.classList.remove('drag-over')
@@ -179,7 +219,9 @@ export function DashboardWidgetsPage(): ReactElement {
                   }}
                 >
                   <span className="codicon codicon-gripper widgets-placement-drag" aria-hidden />
-                  <span className="widgets-placement-name">{def?.title ?? placement.widgetTypeId}</span>
+                  <span className="widgets-placement-name">
+                    {def?.title ?? placement.widgetTypeId}
+                  </span>
                   <span className="widgets-placement-typeid">{placement.widgetTypeId}</span>
                   <button
                     type="button"

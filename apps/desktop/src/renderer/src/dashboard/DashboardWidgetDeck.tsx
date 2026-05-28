@@ -163,7 +163,7 @@ function WidgetTile(props: {
     case 'link.workstation':
       body = (
         <Link
-          to="/workstation"
+          to="/dashboard/logs"
           style={{ color: 'var(--accent)', fontWeight: 600, fontSize: fs(13) }}
         >
           Open workstation →

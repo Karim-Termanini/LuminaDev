@@ -64,8 +64,8 @@ mod readiness_ipc;
 mod store_engine;
 mod system_info;
 pub(crate) use system_info::startup_update_check;
-mod terminal_pty;
 mod runtime_logs;
+mod terminal_pty;
 
 #[tauri::command]
 async fn ipc_send(
@@ -226,7 +226,9 @@ async fn ipc_invoke(
         "dh:ssh:setup:remote:key" => system_info::handle_ssh_setup_remote_key(&body).await,
         "dh:ssh:enable:local" => system_info::handle_ssh_enable_local().await,
         "dh:runtime:status" => runtime_jobs::handle_runtime_status().await,
-        "dh:runtime:installed-versions" => runtime_jobs::handle_runtime_installed_versions(&body).await,
+        "dh:runtime:installed-versions" => {
+            runtime_jobs::handle_runtime_installed_versions(&body).await
+        }
         "dh:runtime:get-versions" => runtime_jobs::handle_runtime_get_versions(&body).await,
         "dh:runtime:check-deps" => runtime_jobs::handle_runtime_check_deps(&body).await,
         "dh:runtime:uninstall:preview" => {
@@ -243,7 +245,9 @@ async fn ipc_invoke(
         "dh:profile:running-status" => {
             system_info::handle_profile_running_status(&app, &body).await
         }
-        "dh:log:stream:start" => runtime_logs::handle_log_stream_start(app.clone(), &body, &state).await,
+        "dh:log:stream:start" => {
+            runtime_logs::handle_log_stream_start(app.clone(), &body, &state).await
+        }
         "dh:log:stream:stop" => runtime_logs::handle_log_stream_stop(&body, &state).await,
         _ => json!({ "ok": false, "error": format!("[UNKNOWN_CHANNEL] {}", channel) }),
     };
@@ -282,6 +286,18 @@ pub fn run() {
                 }
             }
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { .. } = event {
+                let app_handle = window.app_handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    let state = app_handle.state::<AppState>();
+                    let mut streams = state.streams.lock().await;
+                    for handle in streams.drain().map(|(_, h)| h) {
+                        handle.abort();
+                    }
+                });
+            }
         })
         .invoke_handler(tauri::generate_handler![ipc_invoke, ipc_send])
         .run(tauri::generate_context!())

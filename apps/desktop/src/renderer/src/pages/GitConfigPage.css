@@ -456,6 +456,16 @@
   }
 }
 
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
 /* Responsive */
 @media (max-width: 800px) {
   .git-config-two-col {

@@ -23,9 +23,24 @@ export const DockerCreateRequestSchema = z.object({
   image: z.string().min(1).max(256),
   name: z.string().trim().min(1).max(64),
   command: z.string().max(512).optional(),
-  ports: z.array(z.object({ hostPort: z.number().int().min(1).max(65535), containerPort: z.number().int().min(1).max(65535), protocol: z.enum(['tcp', 'udp']).optional() })).optional(),
+  ports: z
+    .array(
+      z.object({
+        hostPort: z.number().int().min(1).max(65535),
+        containerPort: z.number().int().min(1).max(65535),
+        protocol: z.enum(['tcp', 'udp']).optional(),
+      })
+    )
+    .optional(),
   env: z.array(z.string().min(1).max(1024)).optional(),
-  volumes: z.array(z.object({ hostPath: z.string().min(1).max(4096), containerPath: z.string().min(1).max(4096) })).optional(),
+  volumes: z
+    .array(
+      z.object({
+        hostPath: z.string().min(1).max(4096),
+        containerPath: z.string().min(1).max(4096),
+      })
+    )
+    .optional(),
   autoStart: z.boolean().optional(),
 })
 
@@ -274,7 +289,9 @@ export const LanguageSettingsSchema = z.object({
 export type LanguageSettings = z.infer<typeof LanguageSettingsSchema>
 
 /** Keys with typed payloads persisted under userData (`store_<key>.json`). */
-export const StoreDynamicKeySchema = z.string().regex(/^((project_dir_|python_version_|postgres_version_|node_version_).+)$/)
+export const StoreDynamicKeySchema = z
+  .string()
+  .regex(/^((project_dir_|python_version_|postgres_version_|node_version_).+)$/)
 
 export const StoreKeySchema = z.union([
   z.enum([
@@ -287,6 +304,7 @@ export const StoreKeySchema = z.union([
     'appearance',
     'cloud_oauth_clients',
     'readiness_wizard_complete',
+    'first_run_wizard_complete',
     'general_settings',
     'update_settings',
     'profile_credentials',
@@ -343,6 +361,10 @@ export const StoreSetRequestSchema = z.union([
   }),
   z.object({
     key: z.literal('readiness_wizard_complete'),
+    data: z.boolean(),
+  }),
+  z.object({
+    key: z.literal('first_run_wizard_complete'),
     data: z.boolean(),
   }),
   z.object({
@@ -425,6 +447,22 @@ export const GitConfigSetSchema = z.object({
 
 export const GitConfigListSchema = z.object({
   target: z.enum(['sandbox', 'host']),
+})
+
+export const GitDoctorScanResponseSchema = z.object({
+  ok: z.literal(true),
+  gitVersion: z.string().nullable(),
+  healthScore: z.number().int().min(0).max(100),
+  findings: z.array(
+    z.object({
+      id: z.string(),
+      category: z.enum(['configuration', 'security', 'performance', 'environment', 'overview']),
+      severity: z.enum(['critical', 'warning', 'info', 'ok']),
+      title: z.string(),
+      detail: z.string(),
+      fix: z.object({ label: z.string(), action: z.string().optional() }).optional(),
+    })
+  ),
 })
 
 export const SshGenerateSchema = z.object({
@@ -794,7 +832,6 @@ export const GitVcsResolveConflictRequestSchema = z.object({
   /** Whole-file resolution: 'ours' | 'theirs'. */
   resolution: z.enum(['ours', 'theirs']),
 })
-
 
 export type GitVcsResolveHunkRequest = z.infer<typeof GitVcsResolveHunkRequestSchema>
 export type GitVcsResolveConflictRequest = z.infer<typeof GitVcsResolveConflictRequestSchema>

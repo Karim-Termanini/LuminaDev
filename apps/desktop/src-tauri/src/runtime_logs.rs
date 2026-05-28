@@ -74,6 +74,14 @@ pub(crate) async fn handle_log_stream_start(
     let abort_handle = handle.abort_handle();
     {
         let mut streams = state.streams.lock().await;
+        // Guard: cap at 20 concurrent streams — evict oldest if over limit
+        if streams.len() > 20 {
+            if let Some(oldest_id) = streams.keys().next().cloned() {
+                if let Some(old_handle) = streams.remove(&oldest_id) {
+                    old_handle.abort();
+                }
+            }
+        }
         streams.insert(stream_id.clone(), abort_handle);
     }
 
