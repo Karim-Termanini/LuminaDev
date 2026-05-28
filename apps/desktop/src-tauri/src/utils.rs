@@ -4,6 +4,44 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Manager};
 
 // ============================================================================
+// Store Key Allow-list
+// ============================================================================
+
+pub(crate) fn is_allowed_store_key(key: &str) -> bool {
+  const ALLOWED_KEYS: &[&str] = &[
+    "custom_profiles",
+    "wizard_state",
+    "ssh_bookmarks",
+    "maintenance_state",
+    "active_profile",
+    "on_login_automation",
+    "appearance",
+    "cloud_oauth_clients",
+    "readiness_wizard_complete",
+    "general_settings",
+    "update_settings",
+    "profile_credentials",
+    "onboarding_profile",
+    "projects_home_dir",
+    "resources_settings",
+    "app_engine_settings",
+    "builder_settings",
+    "beta_features_state",
+    "notification_settings",
+    "shortcuts_settings",
+    "datetime_settings",
+    "language_settings",
+  ];
+  const DYNAMIC_PREFIXES: &[&str] = &[
+    "project_dir_",
+    "python_version_",
+    "postgres_version_",
+    "node_version_",
+  ];
+  ALLOWED_KEYS.contains(&key) || DYNAMIC_PREFIXES.iter().any(|prefix| key.starts_with(prefix))
+}
+
+// ============================================================================
 // Store/File Utilities
 // ============================================================================
 
@@ -289,5 +327,174 @@ mod tests {
     assert_eq!(calculate_limit_cores(64, 100), 64);
     assert_eq!(calculate_limit_cores(64, 200), 128);
   }
-}
 
+  #[test]
+  fn parse_size_mb_parses_common_units() {
+    assert_eq!(parse_size_mb("1gb"), 1024);
+    assert_eq!(parse_size_mb("512 mb"), 512);
+    assert_eq!(parse_size_mb("2048kb"), 2);
+    assert_eq!(parse_size_mb("1048576b"), 1);
+  }
+
+  #[test]
+  fn sanitize_docker_name_normalizes_and_limits() {
+    assert_eq!(sanitize_docker_name("My App/Name"), "My-App-Name");
+    assert_eq!(sanitize_docker_name("---bad"), "bad");
+    assert_eq!(sanitize_docker_name("////"), "remap");
+    let long = "a".repeat(300);
+    assert_eq!(sanitize_docker_name(&long).len(), 220);
+  }
+
+  #[test]
+  fn truncate_probe_output_caps_large_buffers() {
+    let short = "ok";
+    assert_eq!(truncate_probe_output(short), "ok");
+    let long = "x".repeat(50_100);
+    let out = truncate_probe_output(&long);
+    assert!(out.contains("(output truncated)"));
+    assert!(out.len() < long.len());
+  }
+
+  #[test]
+  fn disk_and_ss_parsers_extract_expected_values() {
+    assert!(is_physical_disk_name("sda"));
+    assert!(is_physical_disk_name("nvme0n1"));
+    assert!(!is_physical_disk_name("nvme0n1p1"));
+    assert_eq!(
+      ss_process_from_line("users:((\"docker-proxy\",pid=123,fd=4))"),
+      "docker-proxy"
+    );
+    assert_eq!(ss_process_from_line("no users payload"), "unknown");
+  }
+
+  #[test]
+  fn porcelain_parses_modified_staged() {
+    let input = "M  src/main.rs";
+    let (staged, unstaged) = parse_porcelain_v1(input);
+    assert_eq!(staged.len(), 1);
+    assert_eq!(staged[0]["status"], "M");
+    assert_eq!(staged[0]["path"], "src/main.rs");
+    assert_eq!(unstaged.len(), 0);
+  }
+
+  #[test]
+  fn porcelain_preserves_apps_prefix_worktree_modified() {
+    let input = " M apps/desktop/src/renderer/src/pages/GitVcsPage.tsx";
+    let (staged, unstaged) = parse_porcelain_v1(input);
+    assert_eq!(staged.len(), 0);
+    assert_eq!(unstaged.len(), 1);
+    assert_eq!(
+      unstaged[0]["path"],
+      "apps/desktop/src/renderer/src/pages/GitVcsPage.tsx"
+    );
+  }
+
+  #[test]
+  fn porcelain_parses_untracked() {
+    let input = "?? new_file.rs";
+    let (staged, unstaged) = parse_porcelain_v1(input);
+    assert_eq!(staged.len(), 0);
+    assert_eq!(unstaged.len(), 1);
+    assert_eq!(unstaged[0]["status"], "?");
+  }
+
+  #[test]
+  fn porcelain_parses_conflict() {
+    let input = "UU conflict.rs";
+    let (staged, unstaged) = parse_porcelain_v1(input);
+    assert_eq!(staged.len(), 0);
+    assert_eq!(unstaged.len(), 1);
+    assert_eq!(unstaged[0]["status"], "C");
+  }
+
+  #[test]
+  fn porcelain_parses_both_added_unmerged() {
+    let input = "AA both.rs";
+    let (staged, unstaged) = parse_porcelain_v1(input);
+    assert_eq!(staged.len(), 0);
+    assert_eq!(unstaged.len(), 1);
+    assert_eq!(unstaged[0]["status"], "C");
+    assert_eq!(unstaged[0]["path"], "both.rs");
+  }
+
+  #[test]
+  fn porcelain_parses_ud_unmerged() {
+    let input = "UD deleted-by-us.rs";
+    let (staged, unstaged) = parse_porcelain_v1(input);
+    assert_eq!(staged.len(), 0);
+    assert_eq!(unstaged.len(), 1);
+    assert_eq!(unstaged[0]["status"], "C");
+  }
+
+  #[test]
+  fn porcelain_parses_renamed() {
+    let input = "R  old_name.rs -> new_name.rs";
+    let (staged, unstaged) = parse_porcelain_v1(input);
+    assert_eq!(staged.len(), 1);
+    assert_eq!(staged[0]["status"], "R");
+    assert_eq!(staged[0]["path"], "new_name.rs");
+    assert_eq!(staged[0]["oldPath"], "old_name.rs");
+    assert_eq!(unstaged.len(), 0);
+  }
+
+  #[test]
+  fn porcelain_parses_staged_and_unstaged() {
+    let input = "MM src/lib.rs";
+    let (staged, unstaged) = parse_porcelain_v1(input);
+    assert_eq!(staged.len(), 1);
+    assert_eq!(staged[0]["status"], "M");
+    assert_eq!(unstaged.len(), 1);
+    assert_eq!(unstaged[0]["status"], "M");
+  }
+
+  #[test]
+  fn store_keys_allow_cloud_oauth_clients() {
+    assert!(is_allowed_store_key("cloud_oauth_clients"));
+  }
+
+  #[test]
+  fn store_keys_allow_active_profile() {
+    assert!(is_allowed_store_key("active_profile"));
+  }
+
+  #[test]
+  fn store_keys_allow_custom_profiles() {
+    assert!(is_allowed_store_key("custom_profiles"));
+  }
+
+  #[test]
+  fn store_keys_allow_dynamic_prefixes() {
+    assert!(is_allowed_store_key("project_dir_web-dev"));
+    assert!(is_allowed_store_key("python_version_data-science"));
+    assert!(is_allowed_store_key("postgres_version_ai-ml"));
+    assert!(is_allowed_store_key("node_version_mobile"));
+  }
+
+  #[test]
+  fn store_keys_reject_unknown_keys() {
+    assert!(!is_allowed_store_key("foo"));
+    assert!(!is_allowed_store_key("secret_data"));
+    assert!(!is_allowed_store_key(""));
+  }
+
+  #[test]
+  fn store_keys_reject_unknown_dynamic_prefixes() {
+    assert!(!is_allowed_store_key("unknown_prefix_web-dev"));
+    assert!(!is_allowed_store_key("secret_project_dir_web-dev"));
+  }
+
+  #[test]
+  fn store_keys_allow_all_configured_static_keys() {
+    for key in &[
+      "custom_profiles", "wizard_state", "ssh_bookmarks", "maintenance_state",
+      "active_profile", "on_login_automation", "appearance", "cloud_oauth_clients",
+      "readiness_wizard_complete", "general_settings", "update_settings",
+      "profile_credentials", "onboarding_profile", "projects_home_dir",
+      "resources_settings", "app_engine_settings", "builder_settings",
+      "beta_features_state", "notification_settings", "shortcuts_settings",
+      "datetime_settings", "language_settings",
+    ] {
+      assert!(is_allowed_store_key(key), "expected key '{}' to be allowed", key);
+    }
+  }
+}

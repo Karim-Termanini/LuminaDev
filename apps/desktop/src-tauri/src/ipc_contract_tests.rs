@@ -14,6 +14,8 @@ const CHANNELS_NOT_IN_DISPATCHER: &[&str] = &[
   "dh:dialog:folder",
   "dh:dialog:file:open",
   "dh:dialog:file:save",
+  "dh:terminal:data",  // Emitted event (PTY output stream), not inbound IPC
+  "dh:terminal:exit",  // Emitted event (PTY session ended), not inbound IPC
 ];
 
 fn channels_declared_in_ipc_ts() -> Vec<String> {
