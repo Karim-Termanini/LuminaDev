@@ -148,10 +148,10 @@ Frontend — `DockerPage.tsx` expanded container row:
 
 ---
 
-### 2.2 SettingsExtension — Plugin Browser v0 [مستقبلي / Future Phase]
+### 2.2 SettingsExtension — Plugin Browser v0 [FUTURE - POST-RELEASE]
 
 > [!NOTE]
-> **ملاحظة:** هذا القسم تم تأجيله للمستقبل بعد إطلاق النسخ الأساسية للتطبيق، وهو غير مشمول في خطة العمل الحالية.
+> **Deferred:** This section has been deferred to a future post-release phase and is not part of the current active scope.
 
 The 12-line stub needs a real surface that communicates Phase 10 value and gives plugin developers a path to install locally today, before the runtime loader exists.
 
@@ -213,10 +213,10 @@ Add `PluginManifest` Zod schema to `packages/shared/src/schemas.ts`.
 
 ---
 
-## P3 — Phase 10 Extensions [مستقبلي / Future Phase]
+## P3 — Phase 10 Extensions [FUTURE - POST-RELEASE]
 
 > [!NOTE]
-> **ملاحظة:** هذا القسم تم تأجيله للمستقبل بعد إطلاق النسخ الأساسية للتطبيق، وهو غير مشمول في خطة العمل الحالية.
+> **Deferred:** This section has been deferred to a future post-release phase and is not part of the current active scope.
 
 This is the only remaining planned phase from `phasesPlan.md`. Broken into three sub-phases:
 
