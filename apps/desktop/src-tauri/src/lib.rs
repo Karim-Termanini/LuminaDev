@@ -65,6 +65,7 @@ mod store_engine;
 mod system_info;
 pub(crate) use system_info::startup_update_check;
 mod terminal_pty;
+mod runtime_logs;
 
 #[tauri::command]
 async fn ipc_send(
@@ -242,6 +243,8 @@ async fn ipc_invoke(
         "dh:profile:running-status" => {
             system_info::handle_profile_running_status(&app, &body).await
         }
+        "dh:log:stream:start" => runtime_logs::handle_log_stream_start(app.clone(), &body, &state).await,
+        "dh:log:stream:stop" => runtime_logs::handle_log_stream_stop(&body, &state).await,
         _ => json!({ "ok": false, "error": format!("[UNKNOWN_CHANNEL] {}", channel) }),
     };
     Ok(res)
