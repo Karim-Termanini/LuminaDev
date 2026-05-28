@@ -1,27 +1,23 @@
-import type { SessionInfo } from '@linux-dev-home/shared'
 import type { ReactElement } from 'react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-const DOCS_DOCKER_FLATPAK =
-  'https://github.com/Karim-Termanini/LuminaDev/blob/main/docs/DOCKER_FLATPAK.md'
-
 export function EnvironmentBanner(): ReactElement {
   const { t } = useTranslation('common')
-  const [info, setInfo] = useState<SessionInfo | null>(null)
+  const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
     void (async () => {
       try {
-        const s = (await window.dh.sessionInfo()) as SessionInfo
-        setInfo(s)
+        await window.dh.sessionInfo()
+        setLoaded(true)
       } catch {
-        setInfo(null)
+        setLoaded(true)
       }
     })()
   }, [])
 
-  if (!info) {
+  if (!loaded) {
     return (
       <div
         style={{
@@ -37,9 +33,6 @@ export function EnvironmentBanner(): ReactElement {
       </div>
     )
   }
-
-  const label = info.kind === 'flatpak' ? t('envBanner.flatpakSession') : t('envBanner.nativeSession')
-  const tone = info.kind === 'flatpak' ? 'var(--orange)' : 'var(--green)'
 
   return (
     <div
@@ -57,35 +50,13 @@ export function EnvironmentBanner(): ReactElement {
     >
       <span
         className="codicon codicon-shield"
-        style={{ color: tone, fontSize: 16 }}
-        title={label}
+        style={{ color: 'var(--green)', fontSize: 16 }}
+        title={t('envBanner.nativeSession')}
         aria-hidden
       />
       <div style={{ flex: 1, minWidth: 200 }}>
-        <strong style={{ color: 'var(--text)' }}>{label}</strong>
-        {info.flatpakId ? (
-          <span className="mono" style={{ color: 'var(--text-muted)', marginLeft: 8, fontSize: 12 }}>
-            {info.flatpakId}
-          </span>
-        ) : null}
-        <div style={{ color: 'var(--text-muted)', marginTop: 4, maxWidth: 900 }}>{info.summary}</div>
+        <strong style={{ color: 'var(--text)' }}>{t('envBanner.nativeSession')}</strong>
       </div>
-      <button
-        type="button"
-        onClick={() => void window.dh.openExternal(DOCS_DOCKER_FLATPAK)}
-        style={{
-          border: '1px solid var(--border)',
-          background: 'var(--bg-input)',
-          color: 'var(--accent)',
-          borderRadius: 6,
-          padding: '6px 12px',
-          fontSize: 12,
-          fontWeight: 600,
-          cursor: 'pointer',
-        }}
-      >
-        {t('envBanner.dockerFlatpakNotes')}
-      </button>
     </div>
   )
 }

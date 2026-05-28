@@ -6,27 +6,16 @@ use tokio::process::Command;
 
 use crate::host_exec::{cmd_timeout_install_step, cmd_timeout_short, exec_output_limit};
 use crate::state::{self};
-use crate::utils::{app_file, calculate_limit_cores, read_json};
+use crate::utils::calculate_limit_cores;
 
-pub(crate) fn get_resource_limits(app: &tauri::AppHandle) -> (usize, usize, u64) {
-    let mut cpu_limit = 80;
-    let mut ram_limit_mb = 4096;
-    if let Ok(store_path) = app_file(app, "store.json") {
-        let store = read_json(&store_path);
-        if let Some(res) = store.get("resources_settings") {
-            if let Some(cpu) = res.get("cpuLimitPercent").and_then(|v| v.as_u64()) {
-                cpu_limit = cpu;
-            }
-            if let Some(ram) = res.get("ramLimitMb").and_then(|v| v.as_u64()) {
-                ram_limit_mb = ram;
-            }
-        }
-    }
+pub(crate) fn get_resource_limits(_app: &tauri::AppHandle) -> (usize, usize, u64) {
+    const CPU_LIMIT: u64 = 80;
+    const RAM_LIMIT_MB: u64 = 4096;
     let cores = std::thread::available_parallelism()
         .map(|n| n.get())
         .unwrap_or(4);
-    let limit_cores = calculate_limit_cores(cores, cpu_limit);
-    (limit_cores, cores, ram_limit_mb)
+    let limit_cores = calculate_limit_cores(cores, CPU_LIMIT);
+    (limit_cores, cores, RAM_LIMIT_MB)
 }
 
 /// Run a bootstrap script without elevation (writes under $HOME only).

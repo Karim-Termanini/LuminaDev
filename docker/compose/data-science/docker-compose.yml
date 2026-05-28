@@ -1,5 +1,4 @@
 # LUMINA_DEV_COMPOSE_FULL=1 overlay — data science stack
-name: lumina-data-science
 
 services:
   jupyter:

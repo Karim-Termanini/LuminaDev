@@ -3,8 +3,6 @@
 This checklist is the closure track for the "hype vs substance" concerns.
 It is intentionally limited to reliability, safety, process discipline, and truthful documentation.
 
-Execution split (Agent B vs Rust/IPC): [AGENT_WORK_PLAN.md](./AGENT_WORK_PLAN.md).
-
 Status legend:
 - `open` = not started
 - `in_progress` = actively being implemented
@@ -117,7 +115,7 @@ Stabilization is considered complete only when:
 ## Tauri Pre-Release Migration Track
 
 - **Living snapshot:** [STATUS.md](./STATUS.md) (stages table, PR roll-up, remaining work).
-- **Status:** `in_progress` — Rust IPC done; packaging/Flatpak deferred; no semver/release pressure until product-complete (see [AGENT_WORK_PLAN.md](./AGENT_WORK_PLAN.md))
+- **Status:** `in_progress` — Rust IPC done; packaging deferred; no semver/release pressure until product-complete
 - **Scope:** Replace Electron runtime shell with Tauri before first public release while preserving existing behavior.
 - **Stage 0 (baseline + freeze):** `done`
 - **Stage 1 (Tauri skeleton + API bridge):** `done`

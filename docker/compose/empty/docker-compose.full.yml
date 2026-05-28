@@ -1,8 +1,2 @@
-# LUMINA_DEV_COMPOSE_FULL=1 overlay — empty/blank workspace
-name: lumina-empty
-
-services:
-  workspace:
-    image: alpine:latest
-    command: ["sleep", "infinity"]
-    restart: unless-stopped
+# Empty workspace — no containers
+services: {}

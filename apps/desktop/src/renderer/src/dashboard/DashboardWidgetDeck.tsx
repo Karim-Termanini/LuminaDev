@@ -33,7 +33,10 @@ export function DashboardWidgetDeck(props: {
       >
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
           <h2 style={{ margin: 0, fontSize: comfortable ? 18 : 16, fontWeight: 700 }}>{heading}</h2>
-          <span className="mono" style={{ fontSize: comfortable ? 12 : 11, color: 'var(--text-muted)' }}>
+          <span
+            className="mono"
+            style={{ fontSize: comfortable ? 12 : 11, color: 'var(--text-muted)' }}
+          >
             {props.layout.placements.length} / 24
           </span>
         </div>
@@ -56,7 +59,7 @@ export function DashboardWidgetDeck(props: {
             }}
           >
             <span className="codicon codicon-add" style={{ fontSize: 12 }} />
-{t('widgets.addWidget')}
+            {t('widgets.addWidget')}
           </button>
         )}
       </div>
@@ -102,7 +105,14 @@ export function DashboardWidgetDeck(props: {
                 />
               ))}
             </div>
-            <p style={{ margin: 0, fontSize: comfortable ? 16 : 14, fontWeight: 700, color: 'var(--text)' }}>
+            <p
+              style={{
+                margin: 0,
+                fontSize: comfortable ? 16 : 14,
+                fontWeight: 700,
+                color: 'var(--text)',
+              }}
+            >
               {t('widgets.noPinned')}
             </p>
             <p
@@ -152,7 +162,10 @@ function WidgetTile(props: {
   switch (props.placement.widgetTypeId) {
     case 'link.workstation':
       body = (
-        <Link to="/workstation" style={{ color: 'var(--accent)', fontWeight: 600, fontSize: fs(13) }}>
+        <Link
+          to="/workstation"
+          style={{ color: 'var(--accent)', fontWeight: 600, fontSize: fs(13) }}
+        >
           Open workstation →
         </Link>
       )
@@ -166,7 +179,10 @@ function WidgetTile(props: {
       break
     case 'link.cloud-git':
       body = (
-        <Link to="/git?tab=cloud&provider=github" style={{ color: 'var(--accent)', fontWeight: 600, fontSize: fs(13) }}>
+        <Link
+          to="/git?tab=cloud&provider=github"
+          style={{ color: 'var(--accent)', fontWeight: 600, fontSize: fs(13) }}
+        >
           Open Cloud Git →
         </Link>
       )
@@ -179,17 +195,31 @@ function WidgetTile(props: {
       break
     case 'static.docker-permission-hint':
       body = (
-        <p style={{ margin: 0, fontSize: fs(13), color: 'var(--text-muted)', lineHeight: c ? 1.55 : 1.45 }}>
-          Grant Docker socket access for your Flatpak build, or run natively for full engine access. See the banner
-          link for details.
+        <p
+          style={{
+            margin: 0,
+            fontSize: fs(13),
+            color: 'var(--text-muted)',
+            lineHeight: c ? 1.55 : 1.45,
+          }}
+        >
+          Docker Engine runs natively with full host access. Use the Docker page to manage
+          containers, images, and volumes.
         </p>
       )
       break
     case 'static.host-trust-hint':
       body = (
-        <p style={{ margin: 0, fontSize: fs(13), color: 'var(--text-muted)', lineHeight: c ? 1.55 : 1.45 }}>
-          Prefer user-level installers (rustup, nvm, pipx) when sandboxed. System packages need a trusted host session
-          or elevated installer flows (planned).
+        <p
+          style={{
+            margin: 0,
+            fontSize: fs(13),
+            color: 'var(--text-muted)',
+            lineHeight: c ? 1.55 : 1.45,
+          }}
+        >
+          Prefer user-level installers (rustup, nvm, pipx). System packages need a trusted host
+          session or elevated installer flows (planned).
         </p>
       )
       break
@@ -232,9 +262,19 @@ function WidgetTile(props: {
         minHeight: c ? 200 : 120,
       }}
     >
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'flex-start' }}>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          gap: 8,
+          alignItems: 'flex-start',
+        }}
+      >
         <div>
-          <div className="mono" style={{ fontSize: c ? 11 : 10, color: 'var(--text-muted)', wordBreak: 'break-all' }}>
+          <div
+            className="mono"
+            style={{ fontSize: c ? 11 : 10, color: 'var(--text-muted)', wordBreak: 'break-all' }}
+          >
             {props.placement.instanceId}
           </div>
           <div style={{ fontWeight: 700, fontSize: c ? 18 : 15, marginTop: 4 }}>{title}</div>
@@ -257,7 +297,15 @@ function WidgetTile(props: {
           Remove
         </button>
       </div>
-      <p style={{ margin: 0, fontSize: fs(13), color: 'var(--text-muted)', flex: 1, lineHeight: c ? 1.5 : 1.4 }}>
+      <p
+        style={{
+          margin: 0,
+          fontSize: fs(13),
+          color: 'var(--text-muted)',
+          flex: 1,
+          lineHeight: c ? 1.5 : 1.4,
+        }}
+      >
         {desc}
       </p>
       {body}

@@ -1,5 +1,7 @@
 # Page Audit — Live vs Static vs Broken
 
+> **⚠️ STALE (2026-05-28):** This document has not been refreshed since the Phase 16 completion and Flatpak removal. Several `[!]` bugs below are already fixed in the current codebase. This file should be archived or fully re-audited before trusting its claims.
+
 Go through each section, run the app, verify the check. Mark `[x]` verified, `[!]` broken/needs fix, `[-]` intentionally static.
 
 ---
@@ -12,7 +14,7 @@ Go through each section, run the app, verify the check. Mark `[x]` verified, `[!
 - [ ] Custom profiles load from store (empty = "No custom profiles yet")
 - [ ] Compose profile buttons call `composeUp()` — need Docker running
 - [!] "planned" profile cards visible but disabled — intentional or remove?
-- [-] Update notification card is static ("Check Flathub…") — placeholder until ship
+- [-] Update notification card is static ("Check for updates…") — Flatpak abandoned, placeholder until ship
 
 **DashboardKernelsPage**
 - [ ] GPU label shows real GPU name or "GPU: unavailable"

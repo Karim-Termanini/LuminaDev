@@ -236,6 +236,9 @@ async fn ipc_invoke(
         "dh:monitor:security-drilldown" => system_info::handle_monitor_security_drilldown().await,
         "dh:metrics" => system_info::handle_metrics(&state).await,
         "dh:app:update:check" => system_info::app_update_check(&app, &body).await,
+        "dh:profile:running-status" => {
+            system_info::handle_profile_running_status(&app, &body).await
+        }
         _ => json!({ "ok": false, "error": format!("[UNKNOWN_CHANNEL] {}", channel) }),
     };
     Ok(res)
@@ -652,7 +655,6 @@ mod tests {
             "profile_credentials",
             "onboarding_profile",
             "projects_home_dir",
-            "resources_settings",
             "app_engine_settings",
             "builder_settings",
             "beta_features_state",

@@ -234,12 +234,6 @@ export const UpdateSettingsSchema = z.object({
 })
 export type UpdateSettings = z.infer<typeof UpdateSettingsSchema>
 
-export const ResourcesSettingsSchema = z.object({
-  cpuLimitPercent: z.number().int().min(10).max(100),
-  ramLimitMb: z.number().int().min(512).max(32768),
-})
-export type ResourcesSettings = z.infer<typeof ResourcesSettingsSchema>
-
 export const AppEngineSettingsSchema = z.object({
   ipcTimeoutMs: z.number().int().min(1000).max(120000),
   threadPoolSize: z.number().int().min(1).max(32),
@@ -298,7 +292,6 @@ export const StoreKeySchema = z.union([
     'profile_credentials',
     'onboarding_profile',
     'projects_home_dir',
-    'resources_settings',
     'app_engine_settings',
     'builder_settings',
     'beta_features_state',
@@ -371,10 +364,6 @@ export const StoreSetRequestSchema = z.union([
   z.object({
     key: z.literal('projects_home_dir'),
     data: z.string().min(1).max(4096),
-  }),
-  z.object({
-    key: z.literal('resources_settings'),
-    data: ResourcesSettingsSchema,
   }),
   z.object({
     key: z.literal('app_engine_settings'),

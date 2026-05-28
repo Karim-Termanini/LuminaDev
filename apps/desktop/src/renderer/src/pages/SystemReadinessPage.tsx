@@ -19,7 +19,6 @@ type ReadinessReport = {
     docker_version: string
     in_docker_group: boolean
     kvm_supported: boolean
-    is_sandboxed: boolean
   }
   network: {
     github_latency_ms: number | null
@@ -46,7 +45,10 @@ export function SystemReadinessPage(): ReactElement {
   const fetchReport = async () => {
     setLoading(true)
     try {
-      const res = (await window.dh.systemReadinessCheck()) as { ok: boolean; report: ReadinessReport }
+      const res = (await window.dh.systemReadinessCheck()) as {
+        ok: boolean
+        report: ReadinessReport
+      }
       if (res.ok) setReport(res.report)
     } catch (e) {
       console.error('Readiness check failed', e)
@@ -59,13 +61,20 @@ export function SystemReadinessPage(): ReactElement {
     void fetchReport()
   }, [])
 
-  const categories = useMemo(() => [
-    { id: 'hardware' as Category, label: t('system.categoryHardware'), icon: 'server' },
-    { id: 'docker' as Category, label: t('system.categoryDocker'), icon: 'package' },
-    { id: 'virtualization' as Category, label: t('system.categoryVirtualization'), icon: 'circuit-board' },
-    { id: 'network' as Category, label: t('system.categoryNetwork'), icon: 'globe' },
-    { id: 'tools' as Category, label: t('system.categoryTools'), icon: 'tools' },
-  ], [t])
+  const categories = useMemo(
+    () => [
+      { id: 'hardware' as Category, label: t('system.categoryHardware'), icon: 'server' },
+      { id: 'docker' as Category, label: t('system.categoryDocker'), icon: 'package' },
+      {
+        id: 'virtualization' as Category,
+        label: t('system.categoryVirtualization'),
+        icon: 'circuit-board',
+      },
+      { id: 'network' as Category, label: t('system.categoryNetwork'), icon: 'globe' },
+      { id: 'tools' as Category, label: t('system.categoryTools'), icon: 'tools' },
+    ],
+    [t]
+  )
 
   const renderHardware = () => {
     if (!report) return null
@@ -74,22 +83,30 @@ export function SystemReadinessPage(): ReactElement {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
         <h2 style={{ margin: 0 }}>{t('system.hardware.title')}</h2>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-          <StatCard label={t('system.hardware.cpuModel')} value={hardware.cpu_model} subValue={t('system.hardware.cores', { cores: hardware.cpu_cores })} />
+          <StatCard
+            label={t('system.hardware.cpuModel')}
+            value={hardware.cpu_model}
+            subValue={t('system.hardware.cores', { cores: hardware.cpu_cores })}
+          />
           <StatCard
             label={t('system.hardware.architecture')}
             value={hardware.architecture}
-            subValue={hardware.architecture === 'x86_64' ? t('system.hardware.supported') : t('system.hardware.unsupported')}
+            subValue={
+              hardware.architecture === 'x86_64'
+                ? t('system.hardware.supported')
+                : t('system.hardware.unsupported')
+            }
             status={hardware.architecture === 'x86_64' ? 'ok' : 'warning'}
           />
-          <StatCard 
-            label={t('system.hardware.ram')} 
-            value={t('system.hardware.ramValue', { gb: hardware.ram_total_gb.toFixed(1) })} 
+          <StatCard
+            label={t('system.hardware.ram')}
+            value={t('system.hardware.ramValue', { gb: hardware.ram_total_gb.toFixed(1) })}
             subValue={t('system.hardware.ramAvailable', { gb: hardware.ram_free_gb.toFixed(1) })}
             status={hardware.ram_total_gb < 4 ? 'warning' : 'ok'}
           />
-          <StatCard 
-            label={t('system.hardware.storage')} 
-            value={t('system.hardware.storageValue', { gb: hardware.disk_total_gb.toFixed(1) })} 
+          <StatCard
+            label={t('system.hardware.storage')}
+            value={t('system.hardware.storageValue', { gb: hardware.disk_total_gb.toFixed(1) })}
             subValue={t('system.hardware.storageFree', { gb: hardware.disk_free_gb.toFixed(1) })}
             status={hardware.disk_free_gb < 10 ? 'warning' : 'ok'}
           />
@@ -104,42 +121,58 @@ export function SystemReadinessPage(): ReactElement {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
         <h2 style={{ margin: 0 }}>{t('system.docker.title')}</h2>
-        <CheckRow 
-          label={t('system.docker.installed')} 
-          status={software.docker_installed} 
-          desc={software.docker_installed ? t('system.docker.version', { version: software.docker_version }) : t('system.docker.notFound')}
+        <CheckRow
+          label={t('system.docker.installed')}
+          status={software.docker_installed}
+          desc={
+            software.docker_installed
+              ? t('system.docker.version', { version: software.docker_version })
+              : t('system.docker.notFound')
+          }
         />
-        <CheckRow 
-          label={t('system.docker.daemon')} 
-          status={software.docker_running} 
-          desc={software.docker_running ? t('system.docker.running') : t('system.docker.notResponding')}
-          onFix={!software.docker_running ? async () => {
-            setFixing('docker-start')
-            try {
-              const res = await window.dh.systemReadinessFix({ id: 'docker-start' })
-              if (res.ok) await fetchReport()
-              else alert(res.error)
-            } finally {
-              setFixing(null)
-            }
-          } : undefined}
+        <CheckRow
+          label={t('system.docker.daemon')}
+          status={software.docker_running}
+          desc={
+            software.docker_running ? t('system.docker.running') : t('system.docker.notResponding')
+          }
+          onFix={
+            !software.docker_running
+              ? async () => {
+                  setFixing('docker-start')
+                  try {
+                    const res = await window.dh.systemReadinessFix({ id: 'docker-start' })
+                    if (res.ok) await fetchReport()
+                    else alert(res.error)
+                  } finally {
+                    setFixing(null)
+                  }
+                }
+              : undefined
+          }
           isFixing={fixing === 'docker-start'}
         />
-        <CheckRow 
-          label={t('system.docker.permissions')} 
-          status={software.in_docker_group} 
-          desc={software.in_docker_group ? t('system.docker.inGroup') : t('system.docker.missingPerms')}
-          onFix={!software.in_docker_group ? async () => {
-            setFixing('docker-group')
-            try {
-              const res = await window.dh.systemReadinessFix({ id: 'docker-group' })
-              if (res.ok) alert(t('system.docker.groupAdded'))
-              else alert(res.error)
-              await fetchReport()
-            } finally {
-              setFixing(null)
-            }
-          } : undefined}
+        <CheckRow
+          label={t('system.docker.permissions')}
+          status={software.in_docker_group}
+          desc={
+            software.in_docker_group ? t('system.docker.inGroup') : t('system.docker.missingPerms')
+          }
+          onFix={
+            !software.in_docker_group
+              ? async () => {
+                  setFixing('docker-group')
+                  try {
+                    const res = await window.dh.systemReadinessFix({ id: 'docker-group' })
+                    if (res.ok) alert(t('system.docker.groupAdded'))
+                    else alert(res.error)
+                    await fetchReport()
+                  } finally {
+                    setFixing(null)
+                  }
+                }
+              : undefined
+          }
           isFixing={fixing === 'docker-group'}
         />
       </div>
@@ -152,14 +185,12 @@ export function SystemReadinessPage(): ReactElement {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
         <h2 style={{ margin: 0 }}>{t('system.virt.title')}</h2>
-        <CheckRow 
-          label={t('system.virt.kvm')} 
-          status={software.kvm_supported} 
+        <CheckRow
+          label={t('system.virt.kvm')}
+          status={software.kvm_supported}
           desc={software.kvm_supported ? t('system.virt.available') : t('system.virt.notDetected')}
         />
-        <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>
-          {t('system.virt.hint')}
-        </p>
+        <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>{t('system.virt.hint')}</p>
       </div>
     )
   }
@@ -183,7 +214,13 @@ export function SystemReadinessPage(): ReactElement {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
         <h2 style={{ margin: 0 }}>{t('system.tools.title')}</h2>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 12 }}>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
+            gap: 12,
+          }}
+        >
           <ToolBadge label={t('system.tools.git')} status={tools.git} />
           <ToolBadge label={t('system.tools.curl')} status={tools.curl} />
           <ToolBadge label={t('system.tools.tar')} status={tools.tar} />
@@ -196,7 +233,10 @@ export function SystemReadinessPage(): ReactElement {
   return (
     <div className="elevated-page" style={{ display: 'flex', gap: 32, height: '100%' }}>
       <aside style={{ width: 240, display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <div className="mono" style={{ fontSize: 12, color: 'var(--text-muted)', padding: '0 12px 12px' }}>
+        <div
+          className="mono"
+          style={{ fontSize: 12, color: 'var(--text-muted)', padding: '0 12px 12px' }}
+        >
           {t('system.sidebarTitle')}
         </div>
         {categories.map((cat) => (
@@ -223,8 +263,8 @@ export function SystemReadinessPage(): ReactElement {
           </button>
         ))}
         <div style={{ marginTop: 'auto', padding: 12 }}>
-          <button 
-            className="hp-btn hp-btn-primary" 
+          <button
+            className="hp-btn hp-btn-primary"
             style={{ width: '100%', justifyContent: 'center' }}
             onClick={fetchReport}
             disabled={loading}
@@ -236,9 +276,23 @@ export function SystemReadinessPage(): ReactElement {
 
       <main style={{ flex: 1, ...GLASS, borderRadius: 24, padding: 32, overflow: 'auto' }}>
         {loading && !report ? (
-          <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16 }}>
-            <div className="codicon codicon-loading codicon-modifier-spin" style={{ fontSize: 32 }} />
-            <div className="mono" style={{ color: 'var(--text-muted)' }}>{t('system.loadingProbing')}</div>
+          <div
+            style={{
+              height: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexDirection: 'column',
+              gap: 16,
+            }}
+          >
+            <div
+              className="codicon codicon-loading codicon-modifier-spin"
+              style={{ fontSize: 32 }}
+            />
+            <div className="mono" style={{ color: 'var(--text-muted)' }}>
+              {t('system.loadingProbing')}
+            </div>
           </div>
         ) : (
           <>
@@ -254,10 +308,28 @@ export function SystemReadinessPage(): ReactElement {
   )
 }
 
-function StatCard({ label, value, subValue, status = 'ok' }: { label: string; value: string; subValue: string; status?: 'ok' | 'warning' | 'error' }) {
-  const color = status === 'ok' ? 'var(--green)' : status === 'warning' ? 'var(--orange)' : 'var(--red)'
+function StatCard({
+  label,
+  value,
+  subValue,
+  status = 'ok',
+}: {
+  label: string
+  value: string
+  subValue: string
+  status?: 'ok' | 'warning' | 'error'
+}) {
+  const color =
+    status === 'ok' ? 'var(--green)' : status === 'warning' ? 'var(--orange)' : 'var(--red)'
   return (
-    <div style={{ padding: 16, borderRadius: 16, border: '1px solid var(--border)', background: 'var(--bg-input)' }}>
+    <div
+      style={{
+        padding: 16,
+        borderRadius: 16,
+        border: '1px solid var(--border)',
+        background: 'var(--bg-input)',
+      }}
+    >
       <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>{label}</div>
       <div style={{ fontSize: 18, fontWeight: 700, color }}>{value}</div>
       <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>{subValue}</div>
@@ -265,16 +337,45 @@ function StatCard({ label, value, subValue, status = 'ok' }: { label: string; va
   )
 }
 
-function CheckRow({ label, status, desc, onFix, isFixing }: { label: string; status: boolean; desc: string; onFix?: () => void; isFixing?: boolean }) {
+function CheckRow({
+  label,
+  status,
+  desc,
+  onFix,
+  isFixing,
+}: {
+  label: string
+  status: boolean
+  desc: string
+  onFix?: () => void
+  isFixing?: boolean
+}) {
   const { t } = useTranslation('readiness')
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: 16, borderRadius: 16, border: '1px solid var(--border)' }}>
-      <div style={{ 
-        width: 32, height: 32, borderRadius: 16, 
-        background: status ? 'color-mix(in srgb, var(--green) 12%, transparent)' : 'color-mix(in srgb, var(--red) 12%, transparent)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        color: status ? 'var(--green)' : 'var(--red)'
-      }}>
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 16,
+        padding: 16,
+        borderRadius: 16,
+        border: '1px solid var(--border)',
+      }}
+    >
+      <div
+        style={{
+          width: 32,
+          height: 32,
+          borderRadius: 16,
+          background: status
+            ? 'color-mix(in srgb, var(--green) 12%, transparent)'
+            : 'color-mix(in srgb, var(--red) 12%, transparent)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: status ? 'var(--green)' : 'var(--red)',
+        }}
+      >
         {isFixing ? (
           <span className="codicon codicon-loading codicon-modifier-spin" />
         ) : (
@@ -286,7 +387,12 @@ function CheckRow({ label, status, desc, onFix, isFixing }: { label: string; sta
         <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>{desc}</div>
       </div>
       {onFix && (
-        <button className="hp-btn hp-btn-primary" onClick={onFix} style={{ fontSize: 12, padding: '4px 12px' }} disabled={isFixing}>
+        <button
+          className="hp-btn hp-btn-primary"
+          onClick={onFix}
+          style={{ fontSize: 12, padding: '4px 12px' }}
+          disabled={isFixing}
+        >
           {isFixing ? t('system.docker.fixing') : t('system.docker.fixIt')}
         </button>
       )}
@@ -297,17 +403,34 @@ function CheckRow({ label, status, desc, onFix, isFixing }: { label: string; sta
 function LatencyRow({ label, latency }: { label: string; latency: number | null }) {
   const { t } = useTranslation('readiness')
   const status = latency === null ? 'error' : latency > 500 ? 'warning' : 'ok'
-  const color = status === 'ok' ? 'var(--green)' : status === 'warning' ? 'var(--orange)' : 'var(--red)'
+  const color =
+    status === 'ok' ? 'var(--green)' : status === 'warning' ? 'var(--orange)' : 'var(--red)'
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '12px 16px' }}>
-      <div className="mono" style={{ width: 100 }}>{label}</div>
-      <div style={{ flex: 1, height: 4, background: 'var(--border)', borderRadius: 2, position: 'relative' }}>
+      <div className="mono" style={{ width: 100 }}>
+        {label}
+      </div>
+      <div
+        style={{
+          flex: 1,
+          height: 4,
+          background: 'var(--border)',
+          borderRadius: 2,
+          position: 'relative',
+        }}
+      >
         {latency !== null && (
-          <div style={{ 
-            position: 'absolute', left: 0, top: 0, bottom: 0, 
-            width: `${Math.min(latency / 10, 100)}%`, 
-            background: color, borderRadius: 2 
-          }} />
+          <div
+            style={{
+              position: 'absolute',
+              left: 0,
+              top: 0,
+              bottom: 0,
+              width: `${Math.min(latency / 10, 100)}%`,
+              background: color,
+              borderRadius: 2,
+            }}
+          />
         )}
       </div>
       <div className="mono" style={{ width: 80, textAlign: 'right', color }}>
@@ -319,15 +442,25 @@ function LatencyRow({ label, latency }: { label: string; latency: number | null 
 
 function ToolBadge({ label, status }: { label: string; status: boolean }) {
   return (
-    <div style={{ 
-      padding: '10px 14px', borderRadius: 12, 
-      border: '1px solid var(--border)',
-      display: 'flex', alignItems: 'center', gap: 10,
-      opacity: status ? 1 : 0.5,
-      background: status ? 'color-mix(in srgb, var(--green) 6%, transparent)' : 'transparent'
-    }}>
-      <span className={`codicon codicon-${status ? 'pass' : 'error'}`} style={{ color: status ? 'var(--green)' : 'var(--red)' }} />
-      <span className="mono" style={{ fontSize: 13 }}>{label}</span>
+    <div
+      style={{
+        padding: '10px 14px',
+        borderRadius: 12,
+        border: '1px solid var(--border)',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        opacity: status ? 1 : 0.5,
+        background: status ? 'color-mix(in srgb, var(--green) 6%, transparent)' : 'transparent',
+      }}
+    >
+      <span
+        className={`codicon codicon-${status ? 'pass' : 'error'}`}
+        style={{ color: status ? 'var(--green)' : 'var(--red)' }}
+      />
+      <span className="mono" style={{ fontSize: 13 }}>
+        {label}
+      </span>
     </div>
   )
 }

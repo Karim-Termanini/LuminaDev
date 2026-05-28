@@ -16,7 +16,6 @@ const mockDh = {
 ;(globalThis as any).window = { dh: mockDh }
 
 import { SettingsShell } from './SettingsShell'
-import { SettingsResources } from './SettingsResources'
 import { SettingsAppEngine } from './SettingsAppEngine'
 import { SettingsBuilder } from './SettingsBuilder'
 import { SettingsBetaFeatures } from './SettingsBetaFeatures'
@@ -31,22 +30,12 @@ function wrap(ui: React.ReactElement): string {
 }
 
 describe('SettingsShell', () => {
-  it('renders nav with 16 tabs', () => {
+  it('renders nav with tabs', () => {
     const html = wrap(<SettingsShell />)
     expect(html).toContain('Personalization')
-    expect(html).toContain('Resources')
     expect(html).toContain('Shortcuts')
     expect(html).toContain('Help &amp; About')
     expect(html).toContain('Languages')
-  })
-})
-
-describe('SettingsResources', () => {
-  it('renders CPU slider label', () => {
-    expect(wrap(<SettingsResources />)).toContain('CPU limit')
-  })
-  it('renders RAM label', () => {
-    expect(wrap(<SettingsResources />)).toContain('RAM allocation')
   })
 })
 

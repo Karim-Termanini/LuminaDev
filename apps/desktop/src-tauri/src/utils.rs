@@ -23,7 +23,6 @@ pub(crate) fn is_allowed_store_key(key: &str) -> bool {
     "profile_credentials",
     "onboarding_profile",
     "projects_home_dir",
-    "resources_settings",
     "app_engine_settings",
     "builder_settings",
     "beta_features_state",
@@ -490,7 +489,7 @@ mod tests {
       "active_profile", "on_login_automation", "appearance", "cloud_oauth_clients",
       "readiness_wizard_complete", "general_settings", "update_settings",
       "profile_credentials", "onboarding_profile", "projects_home_dir",
-      "resources_settings", "app_engine_settings", "builder_settings",
+      "app_engine_settings", "builder_settings",
       "beta_features_state", "notification_settings", "shortcuts_settings",
       "datetime_settings", "language_settings",
     ] {

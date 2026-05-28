@@ -70,7 +70,7 @@ All IPC responses use `{ ok: boolean; error?: string }` shape. Error strings are
 
 - `ipc.ts` — `IPC` const with all channel strings + TypeScript types
 - `schemas.ts` — Zod schemas for all request/response payloads
-- `foundation.ts` — `SessionKind` (flatpak vs native), `DashboardLayoutFile`, `JobStartRequest`
+- `foundation.ts` — `DashboardLayoutFile`, `JobStartRequest`
 - `widgetRegistry.ts` — registered widget types for dashboard
 
 ## Commit Rules
@@ -80,7 +80,3 @@ All IPC responses use `{ ok: boolean; error?: string }` shape. Error strings are
 - No direct commits to `main`; all changes via PR
 - If a change affects contracts or behavior, tests go in the same PR
 - No AI/tool names in branch names or commit messages
-
-## Flatpak Notes
-
-Flatpak sessions require host overrides for Docker socket, SSH paths, and terminal PTY. See `docs/DOCKER_FLATPAK.md` and `docs/PRIVILEGE_BOUNDARY_MATRIX.md`.

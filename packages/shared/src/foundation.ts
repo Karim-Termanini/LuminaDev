@@ -1,13 +1,8 @@
 import { z } from 'zod'
 
-/** Runtime session (Flatpak vs native install). */
-export const SessionKindSchema = z.enum(['flatpak', 'native'])
-export type SessionKind = z.infer<typeof SessionKindSchema>
-
+/** Runtime session info. */
 export const SessionInfoSchema = z.object({
-  kind: SessionKindSchema,
-  /** FLATPAK_ID when kind is flatpak */
-  flatpakId: z.string().max(256).optional(),
+  kind: z.literal('native'),
   /** Short hint for UI */
   summary: z.string().max(512),
 })
@@ -27,7 +22,13 @@ export type DashboardLayoutFile = z.infer<typeof DashboardLayoutFileSchema>
 export type DashboardPlacement = z.infer<typeof DashboardPlacementSchema>
 
 export const JobStartRequestSchema = z.object({
-  kind: z.enum(['demo_countdown', 'runtime_install', 'runtime_update', 'runtime_uninstall', 'install_deps']),
+  kind: z.enum([
+    'demo_countdown',
+    'runtime_install',
+    'runtime_update',
+    'runtime_uninstall',
+    'install_deps',
+  ]),
   /** Total duration for the demo job (default 4s). */
   durationMs: z.number().int().min(400).max(120_000).optional(),
   /** For runtime_install/runtime_update/runtime_uninstall/install_deps: e.g. 'node', 'rust', 'python' */

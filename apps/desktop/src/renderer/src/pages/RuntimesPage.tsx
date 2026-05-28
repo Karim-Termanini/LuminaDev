@@ -78,7 +78,6 @@ export function RuntimesPage(): ReactElement {
   const [selectedVersion, setSelectedVersion] = useState<string>('latest')
   const [versionsLoading, setVersionsLoading] = useState(false)
   const [addToPath, setAddToPath] = useState(true)
-  const [sudoPassword, setSudoPassword] = useState('')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [settingActivePath, setSettingActivePath] = useState<string | null>(null)
   const [removingVersionPath, setRemovingVersionPath] = useState<string | null>(null)
@@ -326,7 +325,6 @@ export function RuntimesPage(): ReactElement {
       method: installMethod,
       version: selectedVersion,
       addToPath,
-      sudoPassword,
     })
   }
 
@@ -337,7 +335,6 @@ export function RuntimesPage(): ReactElement {
       kind: 'runtime_update',
       runtimeId: selectedId,
       method: installMethod,
-      sudoPassword,
     })
   }
 
@@ -348,7 +345,6 @@ export function RuntimesPage(): ReactElement {
       runtimeId: selectedId,
       method: installMethod,
       removeMode,
-      sudoPassword,
     })
   }
 
@@ -775,22 +771,6 @@ export function RuntimesPage(): ReactElement {
                               </div>
                            </label>
                         </div>
-
-                        <div className="hp-card">
-                           <div style={{ fontWeight: 600, marginBottom: 6 }}>{t('wizConfig.sudoPassword')}</div>
-                           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 10 }}>
-                             {t('wizConfig.sudoDesc')}
-                           </div>
-                           <input
-                             type="password"
-                             placeholder={t('wizConfig.sudoPlaceholder')}
-                             value={sudoPassword}
-                             onChange={(e) => setSudoPassword(e.target.value)}
-                             style={{ width: '100%', boxSizing: 'border-box' }}
-                             className="hp-input"
-                             autoComplete="current-password"
-                           />
-                        </div>
                      </div>
                    )}
 
@@ -847,7 +827,7 @@ export function RuntimesPage(): ReactElement {
                                 {t('wizDeps.headerNote')}
                              </div>
                              <button 
-                              onClick={() => window.dh.jobStart({ kind: 'install_deps', runtimeId: selectedId, sudoPassword })}
+                              onClick={() => window.dh.jobStart({ kind: 'install_deps', runtimeId: selectedId })}
                                className="hp-btn" 
                                style={{ background: 'var(--accent)', color: 'white', border: 'none', padding: '6px 12px', fontSize: 11, fontWeight: 700 }}
                              >

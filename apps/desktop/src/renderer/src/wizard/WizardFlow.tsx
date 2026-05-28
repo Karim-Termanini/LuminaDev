@@ -1,7 +1,6 @@
 import {
   WizardStateStoreSchema,
   type ComposeProfile,
-  type SessionInfo,
   type WizardStateStore,
 } from '@linux-dev-home/shared'
 import type { ReactElement } from 'react'
@@ -15,9 +14,8 @@ export function WizardFlow({ onComplete }: { onComplete: () => void }): ReactEle
   const [step, setStep] = useState(0)
   const [hydrated, setHydrated] = useState(false)
   const exitingRef = useRef(false)
-  const [isFlatpak, setIsFlatpak] = useState(false)
   const [dockerOk, setDockerOk] = useState<boolean | null>(null)
-  
+
   const [gitName, setGitName] = useState('')
   const [gitEmail, setGitEmail] = useState('')
   const [target, setTarget] = useState<'sandbox' | 'host'>('sandbox')
@@ -28,8 +26,7 @@ export function WizardFlow({ onComplete }: { onComplete: () => void }): ReactEle
   const [pickedProfile, setPickedProfile] = useState<ComposeProfile | null>(null)
 
   useEffect(() => {
-    window.dh.sessionInfo().then((s: unknown) => setIsFlatpak((s as SessionInfo).kind === 'flatpak'))
-    window.dh.dockerList().then((res: unknown) => setDockerOk((res as {ok: boolean}).ok))
+    window.dh.dockerList().then((res: unknown) => setDockerOk((res as { ok: boolean }).ok))
   }, [])
 
   useEffect(() => {
@@ -93,7 +90,8 @@ export function WizardFlow({ onComplete }: { onComplete: () => void }): ReactEle
           if (prev.data.sshPubKey) draft.sshPubKey = prev.data.sshPubKey
           if (prev.data.sshKeyGenerated) draft.sshKeyGenerated = prev.data.sshKeyGenerated
         }
-        const starter = pickedProfile ?? (prev?.success ? prev.data.pickedStarterProfile : undefined)
+        const starter =
+          pickedProfile ?? (prev?.success ? prev.data.pickedStarterProfile : undefined)
         if (starter) draft.pickedStarterProfile = starter
 
         await window.dh.storeSet({
@@ -121,9 +119,14 @@ export function WizardFlow({ onComplete }: { onComplete: () => void }): ReactEle
         return (
           <>
             <h2>Welcome to HypeDevHome</h2>
-            <p>Let's set up your ultimate developer dashboard. This wizard will verify your environment and set up basic credentials.</p>
+            <p>
+              Let's set up your ultimate developer dashboard. This wizard will verify your
+              environment and set up basic credentials.
+            </p>
             <div style={actions}>
-              <button style={btnPrimary} onClick={() => setStep(1)}>Get Started →</button>
+              <button style={btnPrimary} onClick={() => setStep(1)}>
+                Get Started →
+              </button>
             </div>
           </>
         )
@@ -131,15 +134,13 @@ export function WizardFlow({ onComplete }: { onComplete: () => void }): ReactEle
         return (
           <>
             <h2>Environment Check</h2>
-            <p>You are running in <strong>{isFlatpak ? 'Flatpak (Isolated Sandbox)' : 'Native (Host)'}</strong> mode.</p>
-            {isFlatpak && (
-              <p style={{ color: 'var(--orange)' }}>
-                Since you are in a Flatpak, some tools (like Docker and system-wide Git) require explicit permissions. 
-                We provide a <strong>Dual Execution Strategy</strong>: you can choose to configure things isolated within the sandbox, or system-wide using the host.
-              </p>
-            )}
+            <p>
+              You are running in <strong>Native (Host)</strong> mode.
+            </p>
             <div style={actions}>
-              <button style={btnPrimary} onClick={() => setStep(2)}>Next</button>
+              <button style={btnPrimary} onClick={() => setStep(2)}>
+                Next
+              </button>
             </div>
           </>
         )
@@ -147,14 +148,16 @@ export function WizardFlow({ onComplete }: { onComplete: () => void }): ReactEle
         return (
           <>
             <h2>Docker Connectivity</h2>
-            {dockerOk === null ? <p>Checking Docker socket...</p> : dockerOk ? (
+            {dockerOk === null ? (
+              <p>Checking Docker socket...</p>
+            ) : dockerOk ? (
               <p style={{ color: 'var(--green)' }}>Docker daemon is reachable! 🎉</p>
             ) : (
               <div>
                 <p style={{ color: 'var(--red)' }}>Docker daemon could not be reached.</p>
                 <p style={{ color: 'var(--text-muted)' }}>
-                  No terminal steps required here. Open Docker page and use <strong>Install / Setup</strong>,
-                  then press <strong>Retry check</strong>.
+                  No terminal steps required here. Open Docker page and use{' '}
+                  <strong>Install / Setup</strong>, then press <strong>Retry check</strong>.
                 </p>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   <button
@@ -162,7 +165,9 @@ export function WizardFlow({ onComplete }: { onComplete: () => void }): ReactEle
                     style={btn}
                     onClick={() => {
                       setDockerOk(null)
-                      void window.dh.dockerList().then((res: unknown) => setDockerOk((res as { ok: boolean }).ok))
+                      void window.dh
+                        .dockerList()
+                        .then((res: unknown) => setDockerOk((res as { ok: boolean }).ok))
                     }}
                   >
                     Retry check
@@ -171,7 +176,9 @@ export function WizardFlow({ onComplete }: { onComplete: () => void }): ReactEle
               </div>
             )}
             <div style={actions}>
-              <button style={btnPrimary} onClick={() => setStep(3)}>Next</button>
+              <button style={btnPrimary} onClick={() => setStep(3)}>
+                Next
+              </button>
             </div>
           </>
         )
@@ -180,37 +187,44 @@ export function WizardFlow({ onComplete }: { onComplete: () => void }): ReactEle
           <>
             <h2>Git Setup</h2>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <input 
-                style={input} placeholder="Your Name" value={gitName} 
-                onChange={e => setGitName(e.target.value)} 
+              <input
+                style={input}
+                placeholder="Your Name"
+                value={gitName}
+                onChange={(e) => setGitName(e.target.value)}
               />
-              <input 
-                style={input} placeholder="your.email@example.com" value={gitEmail} 
-                onChange={e => setGitEmail(e.target.value)} 
+              <input
+                style={input}
+                placeholder="your.email@example.com"
+                value={gitEmail}
+                onChange={(e) => setGitEmail(e.target.value)}
               />
-              {isFlatpak && (
-                <div style={{ marginTop: 10 }}>
-                  <label style={{ marginRight: 10 }}>Target:</label>
-                  <select style={input} value={target} onChange={e => setTarget(e.target.value as 'sandbox'|'host')}>
-                    <option value="sandbox">Sandbox (Beginner - Isolated)</option>
-                    <option value="host">System-wide (Advanced - Host ~/.gitconfig)</option>
-                  </select>
-                </div>
-              )}
             </div>
             <div style={actions}>
-              <button style={btn} onClick={() => setStep(4)}>Skip</button>
-              <button style={btnPrimary} disabled={!gitName || !gitEmail || busy} onClick={async () => {
-                setBusy(true)
-                try {
-                  const res = await window.dh.gitConfigSet({ name: gitName, email: gitEmail, target })
-                  assertGitOk(res, 'Failed to apply git identity.')
-                  setStep(4)
-                } catch (e) {
-                  alert(humanizeGitError(e))
-                }
-                setBusy(false)
-              }}>Apply &amp; Next</button>
+              <button style={btn} onClick={() => setStep(4)}>
+                Skip
+              </button>
+              <button
+                style={btnPrimary}
+                disabled={!gitName || !gitEmail || busy}
+                onClick={async () => {
+                  setBusy(true)
+                  try {
+                    const res = await window.dh.gitConfigSet({
+                      name: gitName,
+                      email: gitEmail,
+                      target,
+                    })
+                    assertGitOk(res, 'Failed to apply git identity.')
+                    setStep(4)
+                  } catch (e) {
+                    alert(humanizeGitError(e))
+                  }
+                  setBusy(false)
+                }}
+              >
+                Apply &amp; Next
+              </button>
             </div>
           </>
         )
@@ -221,45 +235,63 @@ export function WizardFlow({ onComplete }: { onComplete: () => void }): ReactEle
             <p>Generate an Ed25519 SSH key to push to GitHub/GitLab.</p>
             {pubKey ? (
               <div>
-                <p style={{ color: 'var(--green)' }}>Key generated! Add this to your GitHub account:</p>
+                <p style={{ color: 'var(--green)' }}>
+                  Key generated! Add this to your GitHub account:
+                </p>
                 <pre style={pre}>{pubKey}</pre>
-                <p><i>We will add direct GitHub API Sync in Phase 12!</i></p>
+                <p>
+                  <i>We will add direct GitHub API Sync in Phase 12!</i>
+                </p>
               </div>
             ) : (
-              <p>Click below to generate a new keypair in <code>~/.ssh/id_ed25519</code></p>
+              <p>
+                Click below to generate a new keypair in <code>~/.ssh/id_ed25519</code>
+              </p>
             )}
             <div style={actions}>
-              {!pubKey && <button style={btn} onClick={() => setStep(5)}>Skip</button>}
+              {!pubKey && (
+                <button style={btn} onClick={() => setStep(5)}>
+                  Skip
+                </button>
+              )}
               {!pubKey ? (
-                <button style={btnPrimary} disabled={busy} onClick={async () => {
-                  setBusy(true)
-                  try {
-                    const genRes = await window.dh.sshGenerate({ target })
-                    assertSshOk(genRes, 'Failed to generate SSH key.')
-                    const pub = await window.dh.sshGetPub({ target })
-                    setPubKey(pub.ok ? pub.pub : '')
-                  } catch (e) {
-                    alert(humanizeSshError(e))
-                  }
-                  setBusy(false)
-                }}>Generate Key</button>
+                <button
+                  style={btnPrimary}
+                  disabled={busy}
+                  onClick={async () => {
+                    setBusy(true)
+                    try {
+                      const genRes = await window.dh.sshGenerate({ target })
+                      assertSshOk(genRes, 'Failed to generate SSH key.')
+                      const pub = await window.dh.sshGetPub({ target })
+                      setPubKey(pub.ok ? pub.pub : '')
+                    } catch (e) {
+                      alert(humanizeSshError(e))
+                    }
+                    setBusy(false)
+                  }}
+                >
+                  Generate Key
+                </button>
               ) : (
-                <button style={btnPrimary} onClick={() => setStep(5)}>Next</button>
+                <button style={btnPrimary} onClick={() => setStep(5)}>
+                  Next
+                </button>
               )}
             </div>
           </>
         )
       case 5: {
         const presets: Array<{ id: ComposeProfile; label: string; icon: string }> = [
-          { id: 'web-dev',     label: 'Web Development', icon: '🌐' },
-          { id: 'data-science', label: 'Data Science',   icon: '📊' },
-          { id: 'ai-ml',       label: 'AI / ML Local',   icon: '🤖' },
-          { id: 'mobile',      label: 'Mobile App Dev',  icon: '📱' },
-          { id: 'game-dev',    label: 'Game Dev',        icon: '🎮' },
-          { id: 'infra',       label: 'Infra / K8s',     icon: '🏗' },
-          { id: 'desktop-gui', label: 'Desktop Qt/GTK',  icon: '🖥' },
-          { id: 'docs',        label: 'Docs / Writing',  icon: '📝' },
-          { id: 'empty',       label: 'Empty Minimal',   icon: '⬜' },
+          { id: 'web-dev', label: 'Web Development', icon: '🌐' },
+          { id: 'data-science', label: 'Data Science', icon: '📊' },
+          { id: 'ai-ml', label: 'AI / ML Local', icon: '🤖' },
+          { id: 'mobile', label: 'Mobile App Dev', icon: '📱' },
+          { id: 'game-dev', label: 'Game Dev', icon: '🎮' },
+          { id: 'infra', label: 'Infra / K8s', icon: '🏗' },
+          { id: 'desktop-gui', label: 'Desktop Qt/GTK', icon: '🖥' },
+          { id: 'docs', label: 'Docs / Writing', icon: '📝' },
+          { id: 'empty', label: 'Empty Minimal', icon: '⬜' },
         ]
         return (
           <>
@@ -294,7 +326,9 @@ export function WizardFlow({ onComplete }: { onComplete: () => void }): ReactEle
               ))}
             </div>
             <div style={actions}>
-              <button style={btn} onClick={() => setStep(6)}>Skip</button>
+              <button style={btn} onClick={() => setStep(6)}>
+                Skip
+              </button>
               <button
                 style={btnPrimary}
                 disabled={busy}
@@ -303,7 +337,9 @@ export function WizardFlow({ onComplete }: { onComplete: () => void }): ReactEle
                     setBusy(true)
                     try {
                       await window.dh.storeSet({ key: 'active_profile', data: pickedProfile })
-                    } catch { /* best effort */ }
+                    } catch {
+                      /* best effort */
+                    }
                     setBusy(false)
                   }
                   setStep(6)
@@ -343,7 +379,9 @@ export function WizardFlow({ onComplete }: { onComplete: () => void }): ReactEle
               Show this wizard again next launch
             </label>
             <div style={actions}>
-              <button style={btnPrimary} onClick={handleComplete}>Finish &amp; Launch</button>
+              <button style={btnPrimary} onClick={handleComplete}>
+                Finish &amp; Launch
+              </button>
             </div>
           </>
         )
@@ -353,23 +391,42 @@ export function WizardFlow({ onComplete }: { onComplete: () => void }): ReactEle
   }
 
   return (
-    <div className="wizard-flow-overlay" style={{
-      position: 'fixed', inset: 0, background: 'var(--bg-base)', zIndex: 9999,
-      display: 'flex', alignItems: 'center', justifyContent: 'center'
-    }}>
-      <div style={{
-        width: 500, background: 'var(--bg-widget)', borderRadius: 12, padding: 30,
-        boxShadow: '0 20px 40px rgba(0,0,0,0.4)', border: '1px solid var(--border)'
-      }}>
+    <div
+      className="wizard-flow-overlay"
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'var(--bg-base)',
+        zIndex: 9999,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      <div
+        style={{
+          width: 500,
+          background: 'var(--bg-widget)',
+          borderRadius: 12,
+          padding: 30,
+          boxShadow: '0 20px 40px rgba(0,0,0,0.4)',
+          border: '1px solid var(--border)',
+        }}
+      >
         {renderStep()}
-        
+
         {/* Progress dots */}
         <div style={{ display: 'flex', gap: 6, justifyContent: 'center', marginTop: 40 }}>
-          {[0,1,2,3,4,5,6].map(i => (
-            <div key={i} style={{
-              width: 8, height: 8, borderRadius: 4,
-              background: i === step ? 'var(--accent)' : 'var(--border)'
-            }} />
+          {[0, 1, 2, 3, 4, 5, 6].map((i) => (
+            <div
+              key={i}
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: 4,
+                background: i === step ? 'var(--accent)' : 'var(--border)',
+              }}
+            />
           ))}
         </div>
       </div>
@@ -422,4 +479,3 @@ const pre = {
   wordBreak: 'break-all' as const,
   fontSize: 12,
 }
-

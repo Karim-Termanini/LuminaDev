@@ -58,6 +58,7 @@ export function ProfilesPage(): ReactElement {
   const [activeTab, setActiveTab] = useState<'builder' | 'automation' | 'backup'>('builder')
   const [activeProfileTemplate, setActiveProfileTemplate] = useState<string | null>(null)
   const [projectPaths, setProjectPaths] = useState<Record<string, string | null>>({})
+  const [runningProfiles, setRunningProfiles] = useState<Set<string>>(new Set())
 
   // Beginner vs Expert Mode states
   const [envMode, setEnvMode] = useState<'beginner' | 'expert'>('beginner')
@@ -141,6 +142,33 @@ export function ProfilesPage(): ReactElement {
     setProjectPaths(paths)
   }, []) // stable: only calls window.dh + setState setters
 
+  const checkRunning = useCallback(async (profileList: CustomProfileEntry[]): Promise<Set<string>> => {
+    if (profileList.length === 0) {
+      setRunningProfiles(new Set())
+      return new Set()
+    }
+    try {
+      const res = (await invoke('ipc_invoke', {
+        channel: 'dh:profile:running-status',
+        payload: { names: profileList.map((p) => p.name) },
+      })) as { ok?: boolean; running?: string[] }
+      const running = new Set<string>(res.ok && res.running ? res.running : [])
+      setRunningProfiles(running)
+      return running
+    } catch {
+      setRunningProfiles(new Set())
+      return new Set()
+    }
+  }, [])
+
+  const refreshRunning = useCallback(async (): Promise<Set<string>> => {
+    return checkRunning(profiles)
+  }, [profiles, checkRunning])
+
+  useEffect(() => {
+    void checkRunning(profiles)
+  }, [profiles, checkRunning])
+
   const load = useCallback(async (): Promise<void> => {
     try {
       const res = (await window.dh.storeGet({ key: 'custom_profiles' })) as {
@@ -190,15 +218,15 @@ export function ProfilesPage(): ReactElement {
     }
   }
 
-  async function setAsActive(template: ComposeProfile): Promise<void> {
+  async function setAsActive(name: string): Promise<void> {
     try {
-      const res = (await window.dh.storeSet({ key: 'active_profile', data: template })) as {
+      const res = (await window.dh.storeSet({ key: 'active_profile', data: name })) as {
         ok: boolean
         error?: string
       }
       if (res.ok) {
-        setActiveProfileTemplate(template)
-        setStatus({ message: t('msg.setActive', { template }), type: 'success' })
+        setActiveProfileTemplate(name)
+        setStatus({ message: t('msg.setActive', { template: name }), type: 'success' })
       } else {
         setStatus({ message: res.error || t('msg.setActiveFailed'), type: 'warning' })
       }
@@ -509,8 +537,24 @@ export function ProfilesPage(): ReactElement {
                           className="row-title"
                           style={{ display: 'flex', alignItems: 'center', gap: 8 }}
                         >
+                          <span
+                            style={{
+                              display: 'inline-block',
+                              width: 10,
+                              height: 10,
+                              borderRadius: '50%',
+                              background: runningProfiles.has(p.name)
+                                ? 'var(--green)'
+                                : 'rgba(255,255,255,0.15)',
+                              border: runningProfiles.has(p.name)
+                                ? '2px solid var(--green)'
+                                : '2px solid rgba(255,255,255,0.2)',
+                              flexShrink: 0,
+                            }}
+                            title={runningProfiles.has(p.name) ? 'Running' : 'Stopped'}
+                          />
                           {p.name}
-                          {activeProfileTemplate === p.baseTemplate && (
+                          {activeProfileTemplate === p.name && (
                             <span
                               style={{
                                 fontSize: 11,
@@ -539,6 +583,58 @@ export function ProfilesPage(): ReactElement {
                             }}
                           />
                           {p.baseTemplate}
+                          <span
+                            style={{
+                              display: 'inline-block',
+                              marginLeft: 8,
+                              fontSize: 10,
+                              fontWeight: 600,
+                              padding: '1px 6px',
+                              borderRadius: 10,
+                              background:
+                                (p.composeVariant ?? 'stub') === 'full'
+                                  ? 'rgba(124,77,255,0.15)'
+                                  : 'rgba(255,255,255,0.06)',
+                              border:
+                                (p.composeVariant ?? 'stub') === 'full'
+                                  ? '1px solid rgba(124,77,255,0.3)'
+                                  : '1px solid rgba(255,255,255,0.1)',
+                              color:
+                                (p.composeVariant ?? 'stub') === 'full'
+                                  ? 'var(--accent)'
+                                  : 'var(--text-muted)',
+                              cursor: 'pointer',
+                            }}
+                            title={
+                              (p.composeVariant ?? 'stub') === 'stub'
+                                ? t('btn.stackStubHint')
+                                : t('btn.stackFullHint')
+                            }
+                            onClick={() => {
+                              const next = profiles.map((prof, pi) =>
+                                pi === i
+                                  ? {
+                                      ...prof,
+                                      composeVariant: ((prof.composeVariant ?? 'stub') === 'stub'
+                                        ? 'full'
+                                        : 'stub') as 'stub' | 'full',
+                                    }
+                                  : prof
+                              )
+                              void save(
+                                next,
+                                t('msg.switchedStack', {
+                                  name: p.name,
+                                  variant:
+                                    (p.composeVariant ?? 'stub') === 'stub' ? 'full' : 'stub',
+                                })
+                              )
+                            }}
+                          >
+                            {(p.composeVariant ?? 'stub') === 'stub'
+                              ? t('btn.lite')
+                              : t('btn.full')}
+                          </span>
                         </p>
                         {projectPaths[p.baseTemplate] ? (
                           <p
@@ -623,45 +719,123 @@ export function ProfilesPage(): ReactElement {
                     </div>
 
                     <div className="row-actions">
-                      {/* Compose variant toggle */}
-                      <button
-                        type="button"
-                        className="row-btn"
-                        title={t('btn.switchStack.title', {
-                          variant: (p.composeVariant ?? 'stub') === 'stub' ? 'full' : 'stub',
-                        })}
-                        onClick={() => {
-                          const next = profiles.map((prof, pi) =>
-                            pi === i
-                              ? {
-                                  ...prof,
-                                  composeVariant: ((prof.composeVariant ?? 'stub') === 'stub'
-                                    ? 'full'
-                                    : 'stub') as 'stub' | 'full',
+                      {runningProfiles.has(p.name) ? (
+                        <>
+                          <button
+                            type="button"
+                            style={{
+                              padding: '8px 16px',
+                              borderRadius: 6,
+                              background: 'var(--red)',
+                              color: '#fff',
+                              border: 'none',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              fontSize: 13,
+                            }}
+                            onClick={async () => {
+                              setStatus(null)
+                              try {
+                                const r = (await invoke('ipc_invoke', {
+                                  channel: 'dh:compose:down',
+                                  payload: { profile: p.name },
+                                })) as { ok?: boolean; error?: string }
+                                if (r.ok) {
+                                  const nowRunning = await refreshRunning()
+                                  if (nowRunning.size === 0) {
+                                    await setAsActive('empty')
+                                  }
+                                  await refreshRunning()
+                                  setStatus({ message: `${p.name} stopped.`, type: 'success' })
+                                } else {
+                                  await refreshRunning()
+                                  setStatus({
+                                    message: r.error || 'Failed to stop',
+                                    type: 'warning',
+                                  })
                                 }
-                              : prof
-                          )
-                          void save(
-                            next,
-                            t('msg.switchedStack', {
-                              name: p.name,
-                              variant: (p.composeVariant ?? 'stub') === 'stub' ? 'full' : 'stub',
-                            })
-                          )
-                        }}
-                      >
-                        <span className="codicon codicon-layers" style={{ marginRight: 4 }} />
-                        {(p.composeVariant ?? 'stub') === 'stub' ? t('btn.lite') : t('btn.full')}
-                      </button>
-                      {activeProfileTemplate !== p.baseTemplate && (
+                              } catch (e) {
+                                setStatus({
+                                  message: e instanceof Error ? e.message : String(e),
+                                  type: 'warning',
+                                })
+                              }
+                            }}
+                          >
+                            <span
+                              className="codicon codicon-debug-stop"
+                              style={{ marginRight: 4 }}
+                            />
+                            Stop
+                          </button>
+                          <button
+                            type="button"
+                            className="row-btn"
+                            onClick={async () => {
+                              setStatus(null)
+                              try {
+                                const r = (await invoke('ipc_invoke', {
+                                  channel: 'dh:profile:switch',
+                                  payload: { to: p.name },
+                                })) as { ok?: boolean; error?: string }
+                                await refreshRunning()
+                                if (!r.ok) {
+                                  setStatus({ message: r.error || 'Failed', type: 'warning' })
+                                } else {
+                                  setStatus({ message: `${p.name} restarted.`, type: 'success' })
+                                }
+                              } catch (e) {
+                                setStatus({
+                                  message: e instanceof Error ? e.message : String(e),
+                                  type: 'warning',
+                                })
+                              }
+                            }}
+                          >
+                            <span className="codicon codicon-sync" style={{ marginRight: 4 }} />
+                            Restart
+                          </button>
+                        </>
+                      ) : (
                         <button
                           type="button"
-                          className="row-btn"
-                          title={t('btn.setActive.title')}
-                          onClick={() => void setAsActive(p.baseTemplate)}
+                          style={{
+                            padding: '8px 16px',
+                            borderRadius: 6,
+                            background: 'var(--accent)',
+                            color: '#fff',
+                            border: 'none',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            fontSize: 13,
+                          }}
+                          onClick={async () => {
+                            setStatus(null)
+                            await setAsActive(p.name)
+                            try {
+                              const r = (await invoke('ipc_invoke', {
+                                channel: 'dh:compose:up',
+                                payload: { profile: p.name },
+                              })) as { ok?: boolean; error?: string }
+                              await refreshRunning()
+                              if (r.ok) {
+                                setStatus({ message: `${p.name} started.`, type: 'success' })
+                              } else {
+                                setStatus({
+                                  message: r.error || 'Failed to start',
+                                  type: 'warning',
+                                })
+                              }
+                            } catch (e) {
+                              setStatus({
+                                message: e instanceof Error ? e.message : String(e),
+                                type: 'warning',
+                              })
+                            }
+                          }}
                         >
-                          <span className="codicon codicon-check" style={{ marginRight: 4 }} />
-                          {t('btn.setActive')}
+                          <span className="codicon codicon-play" style={{ marginRight: 4 }} />
+                          Start
                         </button>
                       )}
                       <button type="button" className="row-btn" onClick={() => openEditModal(i)}>

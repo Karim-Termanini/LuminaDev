@@ -29,19 +29,12 @@ pub(crate) fn app_info() -> Value {
 }
 
 pub(crate) fn session_info() -> Value {
-    let flatpak_id = std::env::var("FLATPAK_ID").ok();
-    let kind = if flatpak_id.is_some() {
-        "flatpak"
-    } else {
-        "native"
-    };
     json!({
       "ok": true,
       "mode": "tauri",
-      "kind": kind,
-      "flatpakId": flatpak_id,
+      "kind": "native",
       "platform": std::env::consts::OS,
-      "summary": format!("Tauri/{} ({})", kind, std::env::consts::OS)
+      "summary": format!("Tauri/native ({})", std::env::consts::OS)
     })
 }
 
@@ -237,15 +230,7 @@ pub(crate) async fn editor_list() -> Value {
     check_native() {
        if command -v "$2" >/dev/null 2>&1; then
          if [ "$editors" != "[" ]; then editors="$editors,"; fi
-         editors="$editors{\"name\":\"$1 (Native)\",\"cmd\":\"$2\"}"
-       fi
-    }
-    check_flatpak() {
-       if command -v flatpak >/dev/null 2>&1; then
-         if flatpak list | grep -iq "$2"; then
-           if [ "$editors" != "[" ]; then editors="$editors,"; fi
-           editors="$editors{\"name\":\"$1 (Flatpak)\",\"cmd\":\"flatpak run $2\"}"
-         fi
+         editors="$editors{\"name\":\"$1\",\"cmd\":\"$2\"}"
        fi
     }
     check_native "VS Code" "code"
@@ -255,10 +240,6 @@ pub(crate) async fn editor_list() -> Value {
     check_native "WebStorm" "webstorm"
     check_native "Eclipse" "eclipse"
     check_native "Antigravity" "antigravity"
-
-    check_flatpak "VS Code" "com.visualstudio.code"
-    check_flatpak "Cursor" "com.cursor.Cursor"
-    check_flatpak "IntelliJ IDEA" "com.jetbrains.IntelliJ-IDEA-Community"
     editors="$editors]"
     echo "$editors"
   "#;
@@ -514,7 +495,6 @@ fn host_exec_process_env() -> Value {
         "XDG_RUNTIME_DIR",
         "TERM",
         "COLORTERM",
-        "FLATPAK_ID",
         "PWD",
         "SSH_AUTH_SOCK",
     ];
@@ -541,12 +521,24 @@ async fn host_exec_write_hosts(body: &Value) -> Value {
         Some(c) => c.to_string(),
         None => return json!({ "ok": false, "error": "[HOST_EXEC_FAILED] missing content" }),
     };
-    let tmp = format!("/tmp/lumina_hosts_{}", std::process::id());
-    if let Err(e) = std::fs::write(&tmp, &content) {
-        return json!({ "ok": false, "error": format!("[HOST_EXEC_FAILED] {}", e) });
+    let mut named_tmp = match tempfile::NamedTempFile::new() {
+        Ok(t) => t,
+        Err(e) => {
+            return json!({ "ok": false, "error": format!("[HOST_EXEC_FAILED] tempfile: {}", e) })
+        }
+    };
+    if let Err(e) = std::io::Write::write_all(&mut named_tmp, content.as_bytes()) {
+        return json!({ "ok": false, "error": format!("[HOST_EXEC_FAILED] write: {}", e) });
     }
-    let result = exec_result_limit("sudo", &["cp", &tmp, "/etc/hosts"], cmd_timeout_short()).await;
-    let _ = std::fs::remove_file(&tmp);
+
+    let tmp_path = named_tmp.path().to_string_lossy().to_string();
+    let result = exec_result_limit(
+        "sudo",
+        &["cp", &tmp_path, "/etc/hosts"],
+        cmd_timeout_short(),
+    )
+    .await;
+
     match result {
         Ok(_) => json!({ "ok": true }),
         Err(e) => json!({ "ok": false, "error": format!("[HOST_EXEC_FAILED] {}", e) }),
@@ -1494,4 +1486,51 @@ pub(crate) async fn handle_metrics(state: &AppState) -> Value {
       },
       "systemd": systemd
     })
+}
+
+/// Returns which profile names from the given list have a running Docker Compose project.
+/// Uses `docker compose ls --format json` — the authoritative source of project state.
+pub(crate) async fn handle_profile_running_status(_app: &AppHandle, body: &Value) -> Value {
+    let names: Vec<String> = body
+        .get("names")
+        .and_then(|v| v.as_array())
+        .map(|a| a.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
+        .unwrap_or_default();
+    if names.is_empty() {
+        return json!({ "ok": true, "running": [] });
+    }
+
+    // Sanitize: same logic as compose_engine.rs so project names match exactly.
+    let sanitize = |s: &str| -> String {
+        s.trim()
+            .to_lowercase()
+            .chars()
+            .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '-' })
+            .collect()
+    };
+
+    // `docker compose ls --all --format json` lists every compose project Docker tracks.
+    // Output: [{"Name":"testeing","Status":"running(2)","ConfigFiles":"..."},...]
+    let ls_json = exec_output("docker", &["compose", "ls", "--all", "--format", "json"])
+        .await
+        .unwrap_or_default();
+
+    // Build a set of project names that are currently running.
+    let running_projects: std::collections::HashSet<String> =
+        serde_json::from_str::<Vec<Value>>(&ls_json)
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|v| {
+                let name = v.get("Name")?.as_str()?.to_string();
+                let status = v.get("Status")?.as_str()?.to_lowercase();
+                if status.contains("running") { Some(name) } else { None }
+            })
+            .collect();
+
+    let running: Vec<String> = names
+        .into_iter()
+        .filter(|n| running_projects.contains(&sanitize(n)))
+        .collect();
+
+    json!({ "ok": true, "running": running })
 }

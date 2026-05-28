@@ -308,6 +308,7 @@ export const IPC = {
   cloudGitMergePr: 'dh:cloud:git:merge-pr',
   appInfo: 'dh:app:info',
   appUpdateCheck: 'dh:app:update:check',
+  profileRunningStatus: 'dh:profile:running-status',
   profileCredentialsGet: 'dh:profile:credentials:get',
 } as const
 
