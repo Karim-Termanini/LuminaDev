@@ -31,8 +31,12 @@
   "backup.placeholder": "الصق مصفوفة JSON مثل [{\"name\":\"الذكاء الاصطناعي\",\"baseTemplate\":\"ai-ml\",\"envVars\":[]}]",
   "backup.coverage": "تغطية الملفات الشخصية",
 
+  "btn.initialize": "تهيئة",
+  "btn.restart": "إعادة تشغيل",
   "btn.lite": "خفيف",
   "btn.full": "كامل",
+  "btn.stackStubHint": "حزمة خفيفة — انقر لتفعيل compose الكامل",
+  "btn.stackFullHint": "حزمة Compose كاملة — انقر للتبديل إلى الخفيفة",
   "btn.setActive": "تعيين كنشط",
   "btn.setActive.title": "تعيين كملف شخصي نشط في لوحة التحكم",
   "btn.switchStack.title": "التبديل إلى حزمة Compose {{variant}}",
@@ -156,6 +160,8 @@
   "msg.exportFallback": "الحافظة غير متاحة؛ تم وضع JSON في مربع الاستيراد أدناه.",
   "msg.imported": "تم استيراد الملفات الشخصية.",
   "msg.cleared": "تم مسح جميع الملفات الشخصية.",
+  "msg.initialized": "تم تشغيل \"{{name}}\" بنجاح.",
+  "msg.restarted": "تم إعادة تشغيل \"{{name}}\".",
   "msg.switchedStack": "تم التبديل \"{{name}}\" إلى حزمة {{variant}}.",
 
   "preset.webPort": "منفذ الويب (PORT=3000)",

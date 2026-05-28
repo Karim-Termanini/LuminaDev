@@ -190,15 +190,15 @@ export function ProfilesPage(): ReactElement {
     }
   }
 
-  async function setAsActive(template: ComposeProfile): Promise<void> {
+  async function setAsActive(name: string): Promise<void> {
     try {
-      const res = (await window.dh.storeSet({ key: 'active_profile', data: template })) as {
+      const res = (await window.dh.storeSet({ key: 'active_profile', data: name })) as {
         ok: boolean
         error?: string
       }
       if (res.ok) {
-        setActiveProfileTemplate(template)
-        setStatus({ message: t('msg.setActive', { template }), type: 'success' })
+        setActiveProfileTemplate(name)
+        setStatus({ message: t('msg.setActive', { template: name }), type: 'success' })
       } else {
         setStatus({ message: res.error || t('msg.setActiveFailed'), type: 'warning' })
       }
@@ -510,7 +510,7 @@ export function ProfilesPage(): ReactElement {
                           style={{ display: 'flex', alignItems: 'center', gap: 8 }}
                         >
                           {p.name}
-                          {activeProfileTemplate === p.baseTemplate && (
+                          {activeProfileTemplate === p.name && (
                             <span
                               style={{
                                 fontSize: 11,
@@ -539,6 +539,58 @@ export function ProfilesPage(): ReactElement {
                             }}
                           />
                           {p.baseTemplate}
+                          <span
+                            style={{
+                              display: 'inline-block',
+                              marginLeft: 8,
+                              fontSize: 10,
+                              fontWeight: 600,
+                              padding: '1px 6px',
+                              borderRadius: 10,
+                              background:
+                                (p.composeVariant ?? 'stub') === 'full'
+                                  ? 'rgba(124,77,255,0.15)'
+                                  : 'rgba(255,255,255,0.06)',
+                              border:
+                                (p.composeVariant ?? 'stub') === 'full'
+                                  ? '1px solid rgba(124,77,255,0.3)'
+                                  : '1px solid rgba(255,255,255,0.1)',
+                              color:
+                                (p.composeVariant ?? 'stub') === 'full'
+                                  ? 'var(--accent)'
+                                  : 'var(--text-muted)',
+                              cursor: 'pointer',
+                            }}
+                            title={
+                              (p.composeVariant ?? 'stub') === 'stub'
+                                ? t('btn.stackStubHint')
+                                : t('btn.stackFullHint')
+                            }
+                            onClick={() => {
+                              const next = profiles.map((prof, pi) =>
+                                pi === i
+                                  ? {
+                                      ...prof,
+                                      composeVariant: ((prof.composeVariant ?? 'stub') === 'stub'
+                                        ? 'full'
+                                        : 'stub') as 'stub' | 'full',
+                                    }
+                                  : prof
+                              )
+                              void save(
+                                next,
+                                t('msg.switchedStack', {
+                                  name: p.name,
+                                  variant:
+                                    (p.composeVariant ?? 'stub') === 'stub' ? 'full' : 'stub',
+                                })
+                              )
+                            }}
+                          >
+                            {(p.composeVariant ?? 'stub') === 'stub'
+                              ? t('btn.lite')
+                              : t('btn.full')}
+                          </span>
                         </p>
                         {projectPaths[p.baseTemplate] ? (
                           <p
@@ -623,45 +675,92 @@ export function ProfilesPage(): ReactElement {
                     </div>
 
                     <div className="row-actions">
-                      {/* Compose variant toggle */}
-                      <button
-                        type="button"
-                        className="row-btn"
-                        title={t('btn.switchStack.title', {
-                          variant: (p.composeVariant ?? 'stub') === 'stub' ? 'full' : 'stub',
-                        })}
-                        onClick={() => {
-                          const next = profiles.map((prof, pi) =>
-                            pi === i
-                              ? {
-                                  ...prof,
-                                  composeVariant: ((prof.composeVariant ?? 'stub') === 'stub'
-                                    ? 'full'
-                                    : 'stub') as 'stub' | 'full',
-                                }
-                              : prof
-                          )
-                          void save(
-                            next,
-                            t('msg.switchedStack', {
-                              name: p.name,
-                              variant: (p.composeVariant ?? 'stub') === 'stub' ? 'full' : 'stub',
-                            })
-                          )
-                        }}
-                      >
-                        <span className="codicon codicon-layers" style={{ marginRight: 4 }} />
-                        {(p.composeVariant ?? 'stub') === 'stub' ? t('btn.lite') : t('btn.full')}
-                      </button>
-                      {activeProfileTemplate !== p.baseTemplate && (
+                      {activeProfileTemplate === p.name ? (
                         <button
                           type="button"
-                          className="row-btn"
-                          title={t('btn.setActive.title')}
-                          onClick={() => void setAsActive(p.baseTemplate)}
+                          style={{
+                            padding: '8px 16px',
+                            borderRadius: 6,
+                            background: 'var(--green)',
+                            color: '#fff',
+                            border: 'none',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            fontSize: 13,
+                            transition: 'all 0.2s ease',
+                          }}
+                          onClick={async () => {
+                            setStatus(null)
+                            try {
+                              const r = (await invoke('ipc_invoke', {
+                                channel: 'dh:profile:switch',
+                                payload: { to: p.name },
+                              })) as { ok?: boolean; error?: string }
+                              if (!r.ok) {
+                                setStatus({
+                                  message: r.error || 'Failed to restart',
+                                  type: 'warning',
+                                })
+                              } else {
+                                setStatus({
+                                  message: t('msg.restarted', { name: p.name }),
+                                  type: 'success',
+                                })
+                              }
+                            } catch (e) {
+                              setStatus({
+                                message: e instanceof Error ? e.message : String(e),
+                                type: 'warning',
+                              })
+                            }
+                          }}
                         >
-                          <span className="codicon codicon-check" style={{ marginRight: 4 }} />
-                          {t('btn.setActive')}
+                          <span className="codicon codicon-sync" style={{ marginRight: 4 }} />
+                          {t('btn.restart')}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          style={{
+                            padding: '8px 16px',
+                            borderRadius: 6,
+                            background: 'var(--accent)',
+                            color: '#fff',
+                            border: 'none',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            fontSize: 13,
+                            transition: 'all 0.2s ease',
+                          }}
+                          onClick={async () => {
+                            setStatus(null)
+                            await setAsActive(p.name)
+                            try {
+                              const r = (await invoke('ipc_invoke', {
+                                channel: 'dh:profile:switch',
+                                payload: { to: p.name },
+                              })) as { ok?: boolean; error?: string }
+                              if (r.ok) {
+                                setStatus({
+                                  message: t('msg.initialized', { name: p.name }),
+                                  type: 'success',
+                                })
+                              } else {
+                                setStatus({
+                                  message: r.error || 'Failed to initialize',
+                                  type: 'warning',
+                                })
+                              }
+                            } catch (e) {
+                              setStatus({
+                                message: e instanceof Error ? e.message : String(e),
+                                type: 'warning',
+                              })
+                            }
+                          }}
+                        >
+                          <span className="codicon codicon-play" style={{ marginRight: 4 }} />
+                          {t('btn.initialize')}
                         </button>
                       )}
                       <button type="button" className="row-btn" onClick={() => openEditModal(i)}>

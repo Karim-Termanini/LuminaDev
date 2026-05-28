@@ -31,8 +31,12 @@
   "backup.placeholder": "JSON-Array einfügen, z.B. [{\"name\":\"Mein KI\",\"baseTemplate\":\"ai-ml\",\"envVars\":[]}]",
   "backup.coverage": "Profilabdeckung",
 
+  "btn.initialize": "Initialisieren",
+  "btn.restart": "Neustart",
   "btn.lite": "LITE",
   "btn.full": "VOLL",
+  "btn.stackStubHint": "Leichter Stack — klicken für volles Compose",
+  "btn.stackFullHint": "Voller Compose-Stack — klicken für leichten Stack",
   "btn.setActive": "Als aktiv setzen",
   "btn.setActive.title": "Als aktives Profil im Dashboard festlegen",
   "btn.switchStack.title": "Zu {{variant}} Compose-Stack wechseln",
@@ -156,6 +160,8 @@
   "msg.exportFallback": "Zwischenablage nicht verfügbar; JSON unten im Importfeld eingefügt.",
   "msg.imported": "Profile importiert.",
   "msg.cleared": "Alle Profile gelöscht.",
+  "msg.initialized": "\"{{name}}\" erfolgreich gestartet.",
+  "msg.restarted": "\"{{name}}\" neu gestartet.",
   "msg.switchedStack": "\"{{name}}\" zu {{variant}}-Stack gewechselt.",
 
   "preset.webPort": "Web-Port (PORT=3000)",
