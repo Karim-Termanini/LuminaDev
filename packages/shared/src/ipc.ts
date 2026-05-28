@@ -195,6 +195,9 @@ export type RuntimeStatusResponse = {
   runtimes: RuntimeStatus[]
 }
 
+/** Store key `kernel_links`: maps kernel ID to linked project path. */
+export type KernelLinks = Record<string, string>
+
 export type PerfSnapshot = {
   startupMs: number
   rssMb: number
