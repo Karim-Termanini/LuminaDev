@@ -37,7 +37,7 @@ const NAV: ReadonlyArray<{ id: SettingsNavId; labelKey: string; hintKey: string;
   { id: 'languages', labelKey: 'shell.navLanguages', hintKey: 'shell.navLanguagesHint', icon: 'globe' },
   { id: 'app-engine', labelKey: 'shell.navAppEngine', hintKey: 'shell.navAppEngineHint', icon: 'server', beta: true },
   { id: 'builder', labelKey: 'shell.navBuilder', hintKey: 'shell.navBuilderHint', icon: 'tools', beta: true },
-  { id: 'extension', labelKey: 'shell.navExtension', hintKey: 'shell.navExtensionHint', icon: 'extensions', beta: true },
+  // { id: 'extension', labelKey: 'shell.navExtension', hintKey: 'shell.navExtensionHint', icon: 'extensions', beta: true },
   { id: 'beta', labelKey: 'shell.navBetaFeatures', hintKey: 'shell.navBetaFeaturesHint', icon: 'beaker', beta: true },
 ]
 

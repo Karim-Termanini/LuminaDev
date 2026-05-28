@@ -329,12 +329,14 @@ export function TopBar(): ReactElement {
         icon: 'tools',
         keywords: ['toolchain', 'cargo', 'registry', 'mirror', 'builder'],
       },
+      /*
       {
         label: 'Settings → Extensions',
         route: '/settings?tab=extension',
         icon: 'extensions',
         keywords: ['plugins', 'extensions', 'addon'],
       },
+      */
       {
         label: 'Settings → Beta Features',
         route: '/settings?tab=beta',

@@ -13,12 +13,12 @@
 |---|---|---|
 | Phases 0–9, 12, 13, 15, 16, 17 | ✅ DONE | All verified against source |
 | Phase 11 — First-run Wizard | ✅ DONE | Merged into Phase 16 (8-step unified installer) |
-| Phase 10 — Extensions | 📋 NEXT | Only remaining major planned phase |
+| Phase 10 — Extensions | 📋 FUTURE | Deferred/post-release; disabled in UI |
 | UI/UX Debt — all 6 items | ✅ DONE | Completed 2026-05-28 |
 | Audit defects — all 7 issues | ✅ FIXED | Fixed 2026-05-28 (see §Audit Fixes below) |
 | Smart Universal Search (fuzzy) | ✅ SHIPPED | Fuzzy-scored palette: pages, containers, runtimes, git repos |
 | Git Doctor | ✅ WIRED | `git_doctor.rs` (478 lines), dispatcher arm at `lib.rs:175` |
-| SettingsExtension tab | ⚠️ STUB | 12-line "Coming Soon" |
+| SettingsExtension tab | 🚫 DISABLED | Code preserved, navigation hidden |
 | Per-container stats stream | ❌ MISSING | Phase 5 gap, never implemented |
 | DashboardWidgets profile binding | ✅ FIXED | 2026-05-28 — now reads `active_profile` from store |
 | Status bar "Engine Connected" + version | ✅ FIXED | 2026-05-28 — live `appInfo()` IPC, dynamic health check |
@@ -148,7 +148,7 @@ Frontend — `DockerPage.tsx` expanded container row:
 
 ---
 
-### 2.2 SettingsExtension — Plugin Browser v0
+### 2.2 SettingsExtension — Plugin Browser v0 (Deferred / Future Phase)
 
 The 12-line stub needs a real surface that communicates Phase 10 value and gives plugin developers a path to install locally today, before the runtime loader exists.
 
@@ -210,7 +210,7 @@ Add `PluginManifest` Zod schema to `packages/shared/src/schemas.ts`.
 
 ---
 
-## P3 — Phase 10 Extensions (Weeks 4–8)
+## P3 — Phase 10 Extensions (Deferred / Future Phase)
 
 This is the only remaining planned phase from `phasesPlan.md`. Broken into three sub-phases:
 
@@ -291,7 +291,6 @@ On a clean Ubuntu 24.04 VM with only Rust + Node + system deps installed (no Lum
 `v0.3.0-beta` after:
 - [ ] P1 complete (profile binding, stream cleanup, cache pre-warm, sidebar refactor)
 - [ ] P2.1 complete (per-container stats)
-- [ ] P2.2 complete (SettingsExtension plugin browser)
 - [ ] AppImage verified on clean Ubuntu + Fedora
 - [ ] `pnpm smoke` green on all three test configs
 
@@ -326,10 +325,8 @@ On a clean Ubuntu 24.04 VM with only Rust + Node + system deps installed (no Lum
 ✅  Week 1  → P1.5 Sidebar navigation refactor (collapsed state + tooltips) (DONE — 2026-05-28)
 ✅  Week 1  → P1.6 Sidebar & Topbar tooltip blur fix (DONE — 2026-05-28)
 📋  Week 2  → P2.1 Per-container stats stream
-📋  Week 2  → P2.2 SettingsExtension plugin browser v0
-📋  Week 3  → P3/10a Plugin discovery + trust model
-📋  Week 4–5 → P3/10b Widget dynamic loading
-📋  Week 6–7 → P3/10c Developer API + example plugin
 Parallel   → P4 File extraction when touching each large file
-End of P3  → P5 Release gate → v0.3.0-beta tag
+End of P2  → P5 Release gate → v0.3.0-beta tag
+📋  FUTURE   → P2.2 SettingsExtension plugin browser v0 (Post-Release/Deferred)
+📋  FUTURE   → P3/Phase 10 Extensions (Discovery, Loading, Developer API) (Post-Release/Deferred)
 ```

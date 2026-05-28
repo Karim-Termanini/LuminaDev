@@ -675,6 +675,6 @@ Based on current app state (Phase 16 + Phase 7 complete), here's what remaining 
 ✅  Phase 11 — First-run Wizard (Merged into Phase 16)
 ✅  UI/UX & Performance Debt (all 7 items, 2026-05-28)
 ✅  Audit Fixes (9 defects squashed, fuzzy search shipped, 2026-05-28)
-📋  Phase 10 — Extensions (Plugin model v0, Dev API)
+📋  Phase 10 — Extensions (Plugin model v0, Dev API) (Deferred / Future Phase)
 ✅  Phase 17  — lib.rs Monolith Refactoring (37 source files, 678-line dispatcher)
 ```
