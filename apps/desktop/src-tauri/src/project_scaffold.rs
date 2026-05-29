@@ -1,8 +1,45 @@
 use serde_json::{json, Value};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Stdio;
+use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
 use tokio::io::AsyncBufReadExt;
+use tokio::sync::Mutex;
+
+use crate::utils::sanitize_compose_project_name;
+
+const CRAN_MIRROR: &str = "https://cloud.r-project.org";
+
+fn sanitize_r_package_name(name: &str) -> Option<String> {
+    let t = name.trim();
+    if t.is_empty()
+        || !t
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '.' || c == '_')
+    {
+        return None;
+    }
+    Some(t.to_string())
+}
+
+/// Non-interactive install script for Docker (CRAN mirror required).
+pub(crate) fn render_install_r_script(package_names: &[String]) -> String {
+    let mut pkgs: Vec<String> = package_names
+        .iter()
+        .filter_map(|n| sanitize_r_package_name(n))
+        .collect();
+    if pkgs.is_empty() {
+        pkgs.push("ggplot2".to_string());
+    }
+    let list = pkgs
+        .iter()
+        .map(|p| format!("\"{}\"", p))
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!(
+        "options(repos = c(CRAN = \"{CRAN_MIRROR}\"))\n\npkgs <- c({list})\ninstall.packages(pkgs, repos = getOption(\"repos\"), dependencies = TRUE)\n"
+    )
+}
 
 fn find_free_port(preferred: u16) -> u16 {
     for port in preferred..preferred.saturating_add(200) {
@@ -115,10 +152,11 @@ def load_data_from_db(query: str) -> pd.DataFrame:
 "#;
             let _ = std::fs::write(project_dir.join("src/data_loader.py"), data_loader);
 
-            // Generate requirements.txt
+            // Generate requirements.txt (Python packages only when toolchain is "both")
             let deps = options
                 .get("dependencies")
                 .and_then(|v| v.as_object())
+                .filter(|o| !o.is_empty())
                 .cloned()
                 .unwrap_or_default();
             let mut reqs = String::new();
@@ -156,20 +194,21 @@ load_data_from_db <- function(query) {
 "#;
             let _ = std::fs::write(project_dir.join("src/data_loader.R"), data_loader_r);
 
-            // Generate install.R
+            // Generate install.R (rDependencies when set; else dependencies for R-only projects)
             let deps = options
-                .get("dependencies")
+                .get("rDependencies")
                 .and_then(|v| v.as_object())
+                .filter(|o| !o.is_empty())
                 .cloned()
+                .or_else(|| {
+                    options
+                        .get("dependencies")
+                        .and_then(|v| v.as_object())
+                        .cloned()
+                })
                 .unwrap_or_default();
-            let mut reqs = String::new();
-            for (name, _) in deps.iter() {
-                reqs.push_str(&format!("install.packages(\"{}\")\n", name));
-            }
-            if reqs.is_empty() {
-                reqs.push_str("install.packages(\"tidyverse\")\n");
-            }
-            let _ = std::fs::write(project_dir.join("install.R"), reqs);
+            let r_names: Vec<String> = deps.keys().map(|k| k.to_string()).collect();
+            let _ = std::fs::write(project_dir.join("install.R"), render_install_r_script(&r_names));
         }
 
         let create_main = options
@@ -448,6 +487,206 @@ export default defineConfig({
     json!({ "ok": true, "path": expanded })
 }
 
+pub(crate) fn expand_tilde_path(path_str: &str) -> String {
+    if path_str.starts_with("~/") {
+        let home = std::env::var("HOME").unwrap_or_else(|_| "/root".to_string());
+        path_str.replacen("~/", &format!("{}/", home), 1)
+    } else {
+        path_str.to_string()
+    }
+}
+
+pub(crate) struct DepsInstallPlan {
+    pub container_name: String,
+    pub work_dir: &'static str,
+    pub run_pip: bool,
+    pub run_r: bool,
+}
+
+pub(crate) fn deps_install_plan(
+    template: &str,
+    toolchain: &str,
+    profile_name: &str,
+    project_dir: &Path,
+) -> Result<DepsInstallPlan, String> {
+    let compose_project = sanitize_compose_project_name(profile_name);
+    if compose_project.is_empty() {
+        return Err("[INSTALL_ERROR] Missing profile name for container lookup.".to_string());
+    }
+
+    let (service, work_dir, default_pip) = if template == "web-dev" {
+        ("node", "/app", true)
+    } else {
+        ("jupyter", "/home/jovyan/work", false)
+    };
+
+    let has_requirements = project_dir.join("requirements.txt").is_file();
+    let has_install_r = project_dir.join("install.R").is_file();
+
+    let run_pip = if template == "web-dev" {
+        true
+    } else {
+        matches!(toolchain, "python" | "both") && has_requirements
+    };
+    let run_r = has_install_r && matches!(toolchain, "r" | "both");
+
+    if !run_pip && !run_r {
+        if default_pip && template != "web-dev" && matches!(toolchain, "python" | "both") {
+            return Err(
+                "[INSTALL_ERROR] requirements.txt not found — recreate the project or add the file."
+                    .to_string(),
+            );
+        }
+        return Ok(DepsInstallPlan {
+            container_name: format!("{compose_project}-{service}-1"),
+            work_dir,
+            run_pip: false,
+            run_r: false,
+        });
+    }
+
+    Ok(DepsInstallPlan {
+        container_name: format!("{compose_project}-{service}-1"),
+        work_dir,
+        run_pip,
+        run_r,
+    })
+}
+
+async fn container_path_exists(container_name: &str, path: &str) -> bool {
+    tokio::process::Command::new("docker")
+        .args(["exec", container_name, "test", "-e", path])
+        .output()
+        .await
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
+/// FULL compose overlay used a named volume and hid host projects — copy scaffold files in when needed.
+async fn sync_project_into_container(
+    app: &AppHandle,
+    container_name: &str,
+    work_dir: &str,
+    project_dir: &Path,
+) -> Result<(), String> {
+    let work = work_dir.trim_end_matches('/');
+    let needs_req = project_dir.join("requirements.txt").is_file();
+    let needs_r = project_dir.join("install.R").is_file();
+    if !needs_req && !needs_r {
+        return Ok(());
+    }
+    let req_in_container = if needs_req {
+        container_path_exists(container_name, &format!("{work}/requirements.txt")).await
+    } else {
+        true
+    };
+    let r_in_container = if needs_r {
+        container_path_exists(container_name, &format!("{work}/install.R")).await
+    } else {
+        true
+    };
+    if req_in_container && r_in_container {
+        return Ok(());
+    }
+
+    let _ = app.emit(
+        "project-install-log",
+        "Copying project files into the workspace container...",
+    );
+    let src = format!("{}/.", project_dir.display());
+    let dest = format!("{container_name}:{work}/.");
+    let output = tokio::process::Command::new("docker")
+        .args(["cp", &src, &dest])
+        .output()
+        .await
+        .map_err(|e| format!("[INSTALL_ERROR] docker cp: {}", e))?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!(
+            "[INSTALL_ERROR] Could not copy project into container. {}",
+            stderr.trim()
+        ));
+    }
+    Ok(())
+}
+
+async fn push_install_log_line(tail: &Mutex<Vec<String>>, line: &str) {
+    let t = line.trim();
+    if t.is_empty() {
+        return;
+    }
+    let mut guard = tail.lock().await;
+    if guard.len() >= 24 {
+        guard.remove(0);
+    }
+    guard.push(t.to_string());
+}
+
+async fn run_docker_exec_logged(app: &AppHandle, args: &[&str]) -> Result<(), String> {
+    let mut child = tokio::process::Command::new("docker")
+        .args(args)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("[INSTALL_ERROR] {}", e))?;
+
+    let log_tail = Arc::new(Mutex::new(Vec::<String>::new()));
+
+    if let Some(stdout) = child.stdout.take() {
+        let app_clone = app.clone();
+        let tail = log_tail.clone();
+        tokio::spawn(async move {
+            let mut reader = tokio::io::BufReader::new(stdout).lines();
+            while let Ok(Some(line)) = reader.next_line().await {
+                push_install_log_line(&tail, &line).await;
+                let _ = app_clone.emit("project-install-log", &line);
+            }
+        });
+    }
+    if let Some(stderr) = child.stderr.take() {
+        let app_clone = app.clone();
+        let tail = log_tail.clone();
+        tokio::spawn(async move {
+            let mut reader = tokio::io::BufReader::new(stderr).lines();
+            while let Ok(Some(line)) = reader.next_line().await {
+                push_install_log_line(&tail, &line).await;
+                let _ = app_clone.emit("project-install-log", &line);
+            }
+        });
+    }
+
+    let status = child
+        .wait()
+        .await
+        .map_err(|e| format!("[INSTALL_ERROR] Wait failed: {}", e))?;
+    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+
+    if status.success() {
+        Ok(())
+    } else {
+        let guard = log_tail.lock().await;
+        let hint: String = guard
+            .iter()
+            .rev()
+            .take(6)
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+            .map(|s| s.as_str())
+            .collect::<Vec<_>>()
+            .join(" | ");
+        let detail = if hint.is_empty() {
+            "Check Docker logs.".to_string()
+        } else {
+            hint
+        };
+        Err(format!(
+            "[INSTALL_ERROR] Package install failed inside the container. {}",
+            detail
+        ))
+    }
+}
+
 pub async fn handle_project_install_deps(body: Value, app: AppHandle) -> Value {
     let project_name = body
         .get("projectName")
@@ -466,7 +705,7 @@ pub async fn handle_project_install_deps(body: Value, app: AppHandle) -> Value {
         .get("profileName")
         .and_then(|v| v.as_str())
         .unwrap_or("");
-    let container_prefix = if !profile_name_arg.is_empty() {
+    let profile_name = if !profile_name_arg.is_empty() {
         profile_name_arg.to_string()
     } else {
         let mut p_name = String::new();
@@ -483,33 +722,41 @@ pub async fn handle_project_install_deps(body: Value, app: AppHandle) -> Value {
         }
     };
 
-    let (container_name, work_dir, install_cmd, install_args) = if template == "web-dev" {
-        (
-            format!("{}-node-1", container_prefix),
-            "/app",
-            "npm",
-            vec!["install"],
-        )
+    let toolchain = body
+        .get("toolchain")
+        .and_then(|v| v.as_str())
+        .unwrap_or("python");
+
+    let project_dir = if let Some(path) = body.get("projectPath").and_then(|v| v.as_str()) {
+        PathBuf::from(expand_tilde_path(path))
     } else {
-        (
-            format!("{}-jupyter-1", container_prefix),
-            "/home/jovyan/work",
-            "pip",
-            vec!["install", "-r", "requirements.txt"],
-        )
+        let home = std::env::var("HOME").unwrap_or_else(|_| "/root".to_string());
+        let mut base = PathBuf::from(home).join("LuminaProjects");
+        if let Ok(store_path) = crate::app_file(&app, "store.json") {
+            let store = crate::read_json(&store_path);
+            if let Some(dir) = store.get("projects_home_dir").and_then(|v| v.as_str()) {
+                base = PathBuf::from(expand_tilde_path(dir));
+            }
+        }
+        base.join(&profile_name).join(project_name)
     };
 
-    // Check if this is a data-science project with an install.R (R toolchain)
-    let has_r_install = if template != "web-dev" {
-        let project_dir = std::path::Path::new(&std::env::var("HOME").unwrap_or_default())
-            .join("LuminaProjects")
-            .join(&container_prefix)
-            .join(project_name)
-            .join("install.R");
-        project_dir.exists()
-    } else {
-        false
+    let plan = match deps_install_plan(template, toolchain, &profile_name, &project_dir) {
+        Ok(p) => p,
+        Err(e) => return json!({ "ok": false, "error": e }),
     };
+
+    if !plan.run_pip && !plan.run_r {
+        return json!({
+            "ok": true,
+            "log": "No dependency install step required for this project."
+        });
+    }
+
+    let container_name = plan.container_name;
+    let work_dir = plan.work_dir;
+    let run_pip = plan.run_pip;
+    let run_r = plan.run_r;
 
     let fut = async {
         let _ = app.emit(
@@ -517,8 +764,9 @@ pub async fn handle_project_install_deps(body: Value, app: AppHandle) -> Value {
             &format!("Waiting for container '{}' to start...", container_name),
         );
 
-        // Wait up to 10 seconds for the container to become responsive
-        for _ in 0..10 {
+        // Wait up to ~2 minutes for the container to become responsive
+        let mut container_ready = false;
+        for _ in 0..60 {
             let out = tokio::process::Command::new("docker")
                 .args(["exec", &container_name, "echo", "ready"])
                 .output()
@@ -529,95 +777,81 @@ pub async fn handle_project_install_deps(body: Value, app: AppHandle) -> Value {
                     stderr: vec![],
                 });
             if out.status.success() {
+                container_ready = true;
                 let _ = app.emit("project-install-log", "Container is ready.");
                 break;
             }
-            tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
+            tokio::time::sleep(std::time::Duration::from_millis(2000)).await;
+        }
+        if !container_ready {
+            return Err(format!(
+                "[INSTALL_ERROR] Container '{}' is not running. Start the profile stack first, then retry.",
+                container_name
+            ));
         }
 
-        let mut full_args = vec!["exec", "-w", work_dir, &container_name, install_cmd];
-        full_args.extend(install_args);
+        sync_project_into_container(&app, &container_name, work_dir, &project_dir).await?;
 
-        let _ = app.emit(
-            "project-install-log",
-            &format!("Running '{}' inside container...", full_args.join(" ")),
-        );
-
-        let mut child = tokio::process::Command::new("docker")
-            .args(&full_args)
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .map_err(|e| format!("[INSTALL_ERROR] {}", e))?;
-
-        if let Some(stdout) = child.stdout.take() {
-            let app_clone = app.clone();
-            tokio::spawn(async move {
-                let mut reader = tokio::io::BufReader::new(stdout).lines();
-                while let Ok(Some(line)) = reader.next_line().await {
-                    let _ = app_clone.emit("project-install-log", &line);
-                }
-            });
+        if run_pip {
+            let pip_cmd = if template == "web-dev" {
+                "npm install"
+            } else {
+                "python -m pip install -r requirements.txt"
+            };
+            let _ = app.emit(
+                "project-install-log",
+                &format!("Running {pip_cmd} inside container..."),
+            );
+            let pip_args: Vec<String> = if template == "web-dev" {
+                vec![
+                    "exec".into(),
+                    "-w".into(),
+                    work_dir.into(),
+                    container_name.clone(),
+                    "npm".into(),
+                    "install".into(),
+                ]
+            } else {
+                vec![
+                    "exec".into(),
+                    "-w".into(),
+                    work_dir.into(),
+                    container_name.clone(),
+                    "python".into(),
+                    "-m".into(),
+                    "pip".into(),
+                    "install".into(),
+                    "-v".into(),
+                    "--progress-bar".into(),
+                    "on".into(),
+                    "-r".into(),
+                    "requirements.txt".into(),
+                ]
+            };
+            let pip_refs: Vec<&str> = pip_args.iter().map(String::as_str).collect();
+            run_docker_exec_logged(&app, &pip_refs).await?;
         }
-        if let Some(stderr) = child.stderr.take() {
-            let app_clone = app.clone();
-            tokio::spawn(async move {
-                let mut reader = tokio::io::BufReader::new(stderr).lines();
-                while let Ok(Some(line)) = reader.next_line().await {
-                    let _ = app_clone.emit("project-install-log", &line);
-                }
-            });
-        }
 
-        let status = child
-            .wait()
-            .await
-            .map_err(|e| format!("[INSTALL_ERROR] Wait failed: {}", e))?;
-        if !status.success() {
-            return Err("Failed to install dependencies".to_string());
-        }
-
-        // Run R package install if install.R exists (R toolchain)
-        if has_r_install {
+        if run_r {
             let _ = app.emit(
                 "project-install-log",
                 "Installing R packages from install.R...",
             );
-            let r_args = vec![
-                "exec",
-                "-w",
-                work_dir,
-                &container_name,
-                "Rscript",
-                "install.R",
+            let work = work_dir.trim_end_matches('/');
+            let r_expr = format!(
+                "options(repos=c(CRAN='{CRAN_MIRROR}')); source('{work}/install.R')"
+            );
+            let r_args = [
+                "exec".to_string(),
+                "-w".into(),
+                work_dir.into(),
+                container_name.clone(),
+                "Rscript".into(),
+                "-e".into(),
+                r_expr,
             ];
-            let mut r_child = tokio::process::Command::new("docker")
-                .args(&r_args)
-                .stdout(Stdio::piped())
-                .stderr(Stdio::piped())
-                .spawn()
-                .map_err(|e| format!("[INSTALL_ERROR] Rscript: {}", e))?;
-
-            if let Some(stdout) = r_child.stdout.take() {
-                let app_clone = app.clone();
-                tokio::spawn(async move {
-                    let mut reader = tokio::io::BufReader::new(stdout).lines();
-                    while let Ok(Some(line)) = reader.next_line().await {
-                        let _ = app_clone.emit("project-install-log", &line);
-                    }
-                });
-            }
-            if let Some(stderr) = r_child.stderr.take() {
-                let app_clone = app.clone();
-                tokio::spawn(async move {
-                    let mut reader = tokio::io::BufReader::new(stderr).lines();
-                    while let Ok(Some(line)) = reader.next_line().await {
-                        let _ = app_clone.emit("project-install-log", &line);
-                    }
-                });
-            }
-            // R package install is best-effort — don't fail the whole operation
-            let _ = r_child.wait().await;
+            let r_refs: Vec<&str> = r_args.iter().map(String::as_str).collect();
+            run_docker_exec_logged(&app, &r_refs).await?;
         }
 
         Ok((
@@ -626,7 +860,8 @@ pub async fn handle_project_install_deps(body: Value, app: AppHandle) -> Value {
         ))
     };
 
-    match tokio::time::timeout(std::time::Duration::from_secs(120), fut).await {
+    let install_timeout_secs = if run_pip && run_r { 900 } else { 300 };
+    match tokio::time::timeout(std::time::Duration::from_secs(install_timeout_secs), fut).await {
         Ok(Ok((stdout, _))) => json!({ "ok": true, "log": stdout }),
         Ok(Err(e)) => json!({ "ok": false, "error": e }),
         Err(_) => json!({ "ok": false, "error": "Timeout installing dependencies" }),
@@ -1503,12 +1738,9 @@ mod tests {
         assert!(!dir.path().join("main.py").exists());
         assert!(!dir.path().join("requirements.txt").exists());
 
-        // install.R has tidyverse
         let install_r = std::fs::read_to_string(dir.path().join("install.R")).unwrap();
-        assert!(
-            install_r.contains("tidyverse"),
-            "expected tidyverse in install.R"
-        );
+        assert!(install_r.contains("tidyverse"));
+        assert!(install_r.contains("cloud.r-project.org"));
 
         // VS Code extensions include R support
         let vscode = dir.path().join(".vscode").join("extensions.json");
@@ -1528,7 +1760,8 @@ mod tests {
             "template": "data-science",
             "options": {
                 "toolchain": "both",
-                "dependencies": { "pandas": "latest", "tidyverse": "latest" },
+                "dependencies": { "pandas": "latest" },
+                "rDependencies": { "tidyverse": "latest" },
                 "createMainScript": true,
                 "createNotebook": true
             }
@@ -1547,6 +1780,12 @@ mod tests {
         assert!(dir.path().join("src/data_loader.py").exists());
         assert!(dir.path().join("main.py").exists());
         assert!(dir.path().join("requirements.txt").exists());
+        let reqs = std::fs::read_to_string(dir.path().join("requirements.txt")).unwrap();
+        assert!(reqs.contains("pandas"));
+        assert!(!reqs.contains("tidyverse"));
+        let install_r = std::fs::read_to_string(dir.path().join("install.R")).unwrap();
+        assert!(install_r.contains("tidyverse"));
+        assert!(install_r.contains("cloud.r-project.org"));
 
         // R files also exist
         assert!(dir.path().join("src/db.R").exists());
@@ -1605,6 +1844,35 @@ mod tests {
         assert!(vscode.exists());
         let vscode_content = std::fs::read_to_string(vscode).unwrap();
         assert!(vscode_content.contains("dbaeumer.vscode-eslint"));
+    }
+
+    #[test]
+    fn deps_install_plan_r_toolchain_skips_pip() {
+        let dir = tempfile::TempDir::new().unwrap();
+        std::fs::write(dir.path().join("install.R"), "install.packages(\"tidyverse\")\n").unwrap();
+        let plan = deps_install_plan("data-science", "r", "My Lab", dir.path()).unwrap();
+        assert_eq!(plan.container_name, "my-lab-jupyter-1");
+        assert!(!plan.run_pip);
+        assert!(plan.run_r);
+    }
+
+    #[test]
+    fn deps_install_plan_python_toolchain_uses_pip() {
+        let dir = tempfile::TempDir::new().unwrap();
+        std::fs::write(dir.path().join("requirements.txt"), "pandas\n").unwrap();
+        let plan = deps_install_plan("data-science", "python", "lab", dir.path()).unwrap();
+        assert!(plan.run_pip);
+        assert!(!plan.run_r);
+    }
+
+    #[test]
+    fn deps_install_plan_both_toolchain_runs_pip_and_r() {
+        let dir = tempfile::TempDir::new().unwrap();
+        std::fs::write(dir.path().join("requirements.txt"), "pandas\n").unwrap();
+        std::fs::write(dir.path().join("install.R"), "install.packages(\"ggplot2\")\n").unwrap();
+        let plan = deps_install_plan("data-science", "both", "lab", dir.path()).unwrap();
+        assert!(plan.run_pip);
+        assert!(plan.run_r);
     }
 
     #[test]
@@ -1724,5 +1992,13 @@ mod tests {
         // Assert site name matches directory name dynamically
         let mkdocs_content = std::fs::read_to_string(dir.path().join("mkdocs.yml")).unwrap();
         assert!(mkdocs_content.contains("site_name:"));
+    }
+
+    #[test]
+    fn render_install_r_script_sets_cran_mirror() {
+        let script = render_install_r_script(&["ggplot2".to_string(), "dplyr".to_string()]);
+        assert!(script.contains("cloud.r-project.org"));
+        assert!(script.contains("\"ggplot2\""));
+        assert!(script.contains("install.packages(pkgs"));
     }
 }

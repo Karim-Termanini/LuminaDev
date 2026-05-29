@@ -19,50 +19,56 @@ import { useBetaFlags } from '../hooks/useBetaFlags'
 import { useTranslation } from 'react-i18next'
 
 import './DashboardPage.css'
+import {
+  dismissProfileSwitchError,
+  getProfileSwitchSnapshot,
+  initProfileSwitchProgress,
+  signalProfileSwitchDone,
+  signalProfileSwitchFailed,
+  signalProfileSwitchStarting,
+  signalProfileSwitchStep,
+  subscribeProfileSwitchState,
+} from './profileSwitchProgress'
+import { runBackgroundProjectSetup } from './projectBackgroundSetup'
+import { cancelProjectSetup, readSetupSession } from './projectSetupSession'
+import {
+  beginnerDepsSummaryKey,
+  dataScienceScaffoldOptions,
+  defaultBeginnerDataScienceDeps,
+  defaultExpertDataScienceDeps,
+  expertPythonPackages,
+  expertRPackages,
+  type DataScienceToolchain,
+} from './dataScienceCreateWizard'
 
-// Module-level switch state survives navigation (component unmount/remount)
-// Also persisted to localStorage so Profiles page can signal the Dashboard
-const SWITCH_KEY = 'dh:switch:pending'
-const _sw = { active: false, step: '', progress: 0, targetProfile: '' }
-let _swListeners: Array<() => void> = []
-function _swNotify() {
-  _swListeners.forEach((fn) => fn())
-}
-function _swSet(patch: Partial<typeof _sw>) {
-  Object.assign(_sw, patch)
-  if (_sw.active) {
-    try {
-      localStorage.setItem(
-        SWITCH_KEY,
-        JSON.stringify({ profile: _sw.targetProfile, ts: Date.now() })
-      )
-    } catch {
-      /* ignore */
-    }
-  } else {
-    try {
-      localStorage.removeItem(SWITCH_KEY)
-    } catch {
-      /* ignore */
-    }
+export {
+  signalProfileSwitchDone,
+  signalProfileSwitchFailed,
+  signalProfileSwitchStarting,
+} from './profileSwitchProgress'
+
+const PREFERRED_EDITOR_KEY = 'dh:preferred_editor_cmd'
+
+function pickPreferredEditorCmd(
+  editors: Array<{ name: string; cmd: string }>,
+  previous: string
+): string {
+  try {
+    const saved = localStorage.getItem(PREFERRED_EDITOR_KEY)
+    if (saved && editors.some((e) => e.cmd === saved)) return saved
+  } catch {
+    /* ignore */
   }
-  _swNotify()
+  if (previous && editors.some((e) => e.cmd === previous)) return previous
+  return editors[0]?.cmd ?? ''
 }
-// Exported so ProfilesPage can signal a switch is in progress
-export function signalProfileSwitchStarting(profileName: string): void {
-  _swSet({ active: true, step: 'Starting...', progress: 5, targetProfile: profileName })
-}
-export function signalProfileSwitchDone(): void {
-  _swSet({ active: false, step: '', progress: 0, targetProfile: '' })
-}
-export function signalProfileSwitchFailed(error: string): void {
-  _swSet({ active: false, step: error, progress: 100, targetProfile: '' })
-  setTimeout(() => signalProfileSwitchDone(), 8000)
-}
-function _swSubscribe(fn: () => void) {
-  _swListeners.push(fn)
-  return () => {
-    _swListeners = _swListeners.filter((l) => l !== fn)
+
+function persistPreferredEditorCmd(cmd: string): void {
+  if (!cmd) return
+  try {
+    localStorage.setItem(PREFERRED_EDITOR_KEY, cmd)
+  } catch {
+    /* ignore */
   }
 }
 
@@ -174,13 +180,10 @@ export function DashboardMainPage(): ReactElement {
   )
   const [jobs, setJobs] = useState<JobSummary[]>([])
   const [toast, setToast] = useState<Toast | null>(null)
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [profileLayout, setProfileLayout] = useState<DashboardLayoutFile | null>(null)
-  const [swState, setSwState] = useState({
-    active: _sw.active,
-    step: _sw.step,
-    progress: _sw.progress,
-    targetProfile: _sw.targetProfile,
-  })
+  const [swState, setSwState] = useState(getProfileSwitchSnapshot)
+  const [setupCancelling, setSetupCancelling] = useState(false)
   const [activeProfile, setActiveProfile] = useState<string | null>(null)
   const [selectedProfileName, setSelectedProfileName] = useState<string | null>(null)
   const [customProfiles, setCustomProfiles] = useState<CustomProfileEntry[]>([])
@@ -200,12 +203,19 @@ export function DashboardMainPage(): ReactElement {
   const [createProjectPostgresVer, setCreateProjectPostgresVer] = useState('16')
   const [createProjectDeps, setCreateProjectDeps] = useState<Record<string, string>>({})
   const [createProjectAutoInstall, setCreateProjectAutoInstall] = useState(true)
+  const [createProjectDepsMode, setCreateProjectDepsMode] = useState<'beginner' | 'expert'>(
+    'beginner'
+  )
   const [createProjectNotebook, setCreateProjectNotebook] = useState(true)
   const [createProjectMainPy, setCreateProjectMainPy] = useState(false)
   const [isScaffolding, setIsScaffolding] = useState(false)
   const [projectsHomeDir, setProjectsHomeDir] = useState('~/LuminaProjects')
   const [scaffoldProgress, setScaffoldProgress] = useState(0)
-  const [scaffoldStatusText, setScaffoldStatusText] = useState('Initializing...')
+  const scaffoldStatusText = useMemo(() => {
+    if (scaffoldProgress >= 100) return t('main.scaffold.finished')
+    if (scaffoldProgress >= 40) return t('main.scaffold.installingDeps')
+    return t('main.scaffold.startingDocker')
+  }, [scaffoldProgress, t])
   const [installLogs, setInstallLogs] = useState<string[]>([])
   const logsContainerRef = useRef<HTMLDivElement>(null)
   const [mobileSubTemplate, setMobileSubTemplate] = useState<'react-native' | 'flutter'>(
@@ -239,75 +249,11 @@ export function DashboardMainPage(): ReactElement {
   }, [])
 
   useEffect(() => {
-    // Restore pending switch from localStorage (survives hard refresh)
-    if (!_sw.active) {
-      try {
-        const raw = localStorage.getItem(SWITCH_KEY)
-        if (raw) {
-          const pending = JSON.parse(raw) as { profile: string; ts: number }
-          if (Date.now() - pending.ts < 120_000 && pending.profile) {
-            _swSet({
-              active: true,
-              step: 'Waiting for containers...',
-              progress: 10,
-              targetProfile: pending.profile,
-            })
-          } else {
-            localStorage.removeItem(SWITCH_KEY)
-          }
-        }
-      } catch {
-        /* ignore */
-      }
-    }
-    // Sync from module singleton on mount (survives navigation)
-    const unsub = _swSubscribe(() => setSwState({ ..._sw }))
-    setSwState({ ..._sw })
-
-    let unlisten: () => void
-    listen<{ step: string; progress: number }>('profile-switch-progress', (event) => {
-      _swSet({ step: event.payload.step, progress: event.payload.progress })
-    }).then((fn) => {
-      unlisten = fn
-    })
-    return () => {
-      unsub()
-      if (unlisten) unlisten()
-    }
+    initProfileSwitchProgress()
+    const unsub = subscribeProfileSwitchState(() => setSwState(getProfileSwitchSnapshot()))
+    setSwState(getProfileSwitchSnapshot())
+    return unsub
   }, [])
-
-  // Real polling: while switch active, check if compose containers are actually running
-  useEffect(() => {
-    if (!swState.active || !swState.targetProfile) return
-    let cancelled = false
-    const poll = async () => {
-      for (let attempt = 0; attempt < 30; attempt++) {
-        if (cancelled) return
-        try {
-          const res = (await invoke('ipc_invoke', {
-            channel: 'dh:profile:running-status',
-            payload: { names: [swState.targetProfile] },
-          })) as { ok?: boolean; running?: string[] }
-          if (res.ok && res.running && res.running.includes(swState.targetProfile)) {
-            _swSet({ progress: 100 })
-            setTimeout(() => signalProfileSwitchDone(), 500)
-            return
-          }
-        } catch {
-          /* ignore */
-        }
-        _swSet({ progress: Math.min(90, 10 + attempt * 3) })
-        await new Promise((r) => setTimeout(r, 3000))
-      }
-      // Timed out — mark as done anyway
-      _swSet({ progress: 100 })
-      setTimeout(() => signalProfileSwitchDone(), 500)
-    }
-    void poll()
-    return () => {
-      cancelled = true
-    }
-  }, [swState.active, swState.targetProfile])
 
   useEffect(() => {
     let interval: any
@@ -394,7 +340,7 @@ export function DashboardMainPage(): ReactElement {
         baseTemplate: 'empty',
       },
     ]
-  }, [customProfiles])
+  }, [customProfiles, t])
 
   const refresh = useCallback(async () => {
     try {
@@ -509,7 +455,7 @@ export function DashboardMainPage(): ReactElement {
       .then((res: any) => {
         if (res.ok && res.editors) {
           setInstalledEditors(res.editors)
-          if (res.editors.length > 0) setSelectedEditorCmd(res.editors[0].cmd)
+          setSelectedEditorCmd((prev) => pickPreferredEditorCmd(res.editors, prev))
         }
       })
       .catch(() => {})
@@ -573,6 +519,36 @@ export function DashboardMainPage(): ReactElement {
       })
   }, [activeProfile])
 
+  const showToast = (
+    message: string,
+    type: 'success' | 'error',
+    opts?: { persist?: boolean }
+  ): void => {
+    if (toastTimerRef.current) {
+      clearTimeout(toastTimerRef.current)
+      toastTimerRef.current = null
+    }
+    setToast({ type, message })
+    if (type === 'success' && !opts?.persist) {
+      toastTimerRef.current = setTimeout(() => setToast(null), 8000)
+    }
+  }
+
+  const handleCancelWorkspaceSetup = async (): Promise<void> => {
+    if (!selectedProfileName || setupCancelling) return
+    setSetupCancelling(true)
+    try {
+      await cancelProjectSetup(selectedProfileName)
+      showToast(t('main.toast.setupCancelled'), 'success')
+    } finally {
+      setSetupCancelling(false)
+    }
+  }
+
+  const activeSetupSession =
+    swState.active && !swState.failed && selectedProfileName ? readSetupSession() : null
+  const canCancelWorkspaceSetup = activeSetupSession?.profileName === selectedProfileName
+
   const handleLinkProject = async () => {
     if (!selectedProfileName) return
     try {
@@ -583,22 +559,61 @@ export function DashboardMainPage(): ReactElement {
           key: `project_dir_${selectedProfileName}`,
           data: selected,
         } as any)
-        setToast({ type: 'success', message: t('main.toast.linkedWorkspace') })
+        showToast(t('main.toast.linkedWorkspace'), 'success')
       }
     } catch {
       /* empty */
     }
   }
 
-  const handleOpenEditor = async () => {
-    if (!projectPath || !selectedEditorCmd) return
+  const openProjectInEditor = async (path: string, cmd: string): Promise<boolean> => {
+    if (!path || !cmd) return false
+    persistPreferredEditorCmd(cmd)
     const res = (await invoke('ipc_invoke', {
       channel: 'dh:editor:open',
-      payload: { path: projectPath, cmd: selectedEditorCmd },
-    })) as any
+      payload: { path, cmd },
+    })) as { ok?: boolean; error?: string }
     if (!res.ok) {
-      setToast({ type: 'error', message: res.error || t('main.toast.failedOpenIDE') })
+      showToast(res.error || t('main.toast.failedOpenIDE'), 'error', { persist: true })
+      return false
     }
+    return true
+  }
+
+  const handleOpenEditor = async () => {
+    if (!projectPath || !selectedEditorCmd) return
+    await openProjectInEditor(projectPath, selectedEditorCmd)
+  }
+
+  const closeCreateProjectModal = (): void => {
+    setIsScaffolding(false)
+    setCreateProjectModalOpen(false)
+    setCreateProjectStep(1)
+    setCreateProjectName('')
+    setCreateProjectToolchain('python')
+    setCreateProjectDepsMode('beginner')
+    setCreateProjectAutoInstall(true)
+    setMobileSubTemplate('react-native')
+    setInstallLogs([])
+  }
+
+  const maybeStartBackgroundSetup = (
+    projectPath: string,
+    template: 'data-science' | 'web-dev',
+    toolchain?: 'python' | 'r' | 'both'
+  ): void => {
+    if (!selectedProfileName) return
+    const name = createProjectName.trim()
+    showToast(t('main.toast.createdProject', { name }), 'success')
+    if (!createProjectAutoInstall) return
+    void runBackgroundProjectSetup({
+      profileName: selectedProfileName,
+      projectName: name,
+      projectPath,
+      template,
+      toolchain,
+      onToast: showToast,
+    })
   }
 
   const submitCreateProject = async () => {
@@ -617,12 +632,10 @@ export function DashboardMainPage(): ReactElement {
         payload: {
           path,
           template: 'data-science',
-          options: {
-            toolchain: createProjectToolchain,
-            dependencies: createProjectDeps,
+          options: dataScienceScaffoldOptions(createProjectToolchain, createProjectDeps, {
             createNotebook: createProjectNotebook,
             createMainScript: createProjectMainPy,
-          },
+          }),
         },
       })) as any
 
@@ -641,38 +654,11 @@ export function DashboardMainPage(): ReactElement {
           data: createProjectPostgresVer,
         } as any)
 
-        if (createProjectAutoInstall) {
-          setToast({ type: 'success', message: t('main.toast.installingDeps') })
-          setScaffoldStatusText(t('main.scaffold.startingDocker'))
-          // Ensure the containers are running so we can install deps
-          await invoke('ipc_invoke', {
-            channel: 'dh:profile:switch',
-            payload: { to: selectedProfileName },
-          })
-          setScaffoldStatusText(t('main.scaffold.installingDeps'))
-          const r: any = await invoke('ipc_invoke', {
-            channel: 'dh:project:install_deps',
-            payload: { projectName: name, profileName: selectedProfileName },
-          })
-          if (r.ok) {
-            setToast({ type: 'success', message: t('main.toast.depsInstalled') })
-            setScaffoldStatusText(t('main.scaffold.finished'))
-          } else {
-            setToast({ type: 'error', message: t('main.toast.failedDeps') })
-            setScaffoldStatusText(t('main.scaffold.failed'))
-          }
-        } else {
-          setToast({ type: 'success', message: t('main.toast.createdProject', { name }) })
+        closeCreateProjectModal()
+        if (selectedEditorCmd) {
+          void openProjectInEditor(res.path, selectedEditorCmd)
         }
-
-        setScaffoldProgress(100)
-        setTimeout(() => {
-          setIsScaffolding(false)
-          setCreateProjectModalOpen(false)
-          setCreateProjectStep(1)
-          setCreateProjectName('')
-          setCreateProjectToolchain('python')
-        }, 600)
+        maybeStartBackgroundSetup(res.path, 'data-science', createProjectToolchain)
       } else {
         setIsScaffolding(false)
         setToast({ type: 'error', message: res.error || t('main.toast.failedScaffold') })
@@ -705,37 +691,11 @@ export function DashboardMainPage(): ReactElement {
           data: createProjectPostgresVer,
         } as any)
 
-        if (createProjectAutoInstall) {
-          setToast({ type: 'success', message: t('main.toast.installingDeps') })
-          setScaffoldStatusText(t('main.scaffold.startingDocker'))
-          // Ensure the containers are running so we can install deps
-          await invoke('ipc_invoke', {
-            channel: 'dh:profile:switch',
-            payload: { to: selectedProfileName },
-          })
-          setScaffoldStatusText(t('main.scaffold.installingDeps'))
-          const r: any = await invoke('ipc_invoke', {
-            channel: 'dh:project:install_deps',
-            payload: { projectName: name, template: 'web-dev', profileName: selectedProfileName },
-          })
-          if (r.ok) {
-            setToast({ type: 'success', message: t('main.toast.depsInstalled') })
-            setScaffoldStatusText(t('main.scaffold.finished'))
-          } else {
-            setToast({ type: 'error', message: t('main.toast.failedDeps') })
-            setScaffoldStatusText(t('main.scaffold.failed'))
-          }
-        } else {
-          setToast({ type: 'success', message: t('main.toast.createdProject', { name }) })
+        closeCreateProjectModal()
+        if (selectedEditorCmd) {
+          void openProjectInEditor(res.path, selectedEditorCmd)
         }
-
-        setScaffoldProgress(100)
-        setTimeout(() => {
-          setIsScaffolding(false)
-          setCreateProjectModalOpen(false)
-          setCreateProjectStep(1)
-          setCreateProjectName('')
-        }, 600)
+        maybeStartBackgroundSetup(res.path, 'web-dev')
       } else {
         setIsScaffolding(false)
         setToast({ type: 'error', message: res.error || t('main.toast.failedScaffold') })
@@ -752,11 +712,7 @@ export function DashboardMainPage(): ReactElement {
           data: res.path,
         } as any)
         setToast({ type: 'success', message: t('main.toast.createdProject', { name }) })
-        setIsScaffolding(false)
-        setCreateProjectModalOpen(false)
-        setCreateProjectStep(1)
-        setCreateProjectName('')
-        setMobileSubTemplate('react-native')
+        closeCreateProjectModal()
       } else {
         setIsScaffolding(false)
         setToast({ type: 'error', message: res.error || t('main.toast.failedMobileScaffold') })
@@ -773,10 +729,7 @@ export function DashboardMainPage(): ReactElement {
           data: res.path,
         } as any)
         setToast({ type: 'success', message: t('main.toast.createdProject', { name }) })
-        setIsScaffolding(false)
-        setCreateProjectModalOpen(false)
-        setCreateProjectStep(1)
-        setCreateProjectName('')
+        closeCreateProjectModal()
       } else {
         setIsScaffolding(false)
         setToast({ type: 'error', message: res.error || t('main.toast.failedAIMLScaffold') })
@@ -793,10 +746,7 @@ export function DashboardMainPage(): ReactElement {
           data: res.path,
         } as any)
         setToast({ type: 'success', message: t('main.toast.createdProject', { name }) })
-        setIsScaffolding(false)
-        setCreateProjectModalOpen(false)
-        setCreateProjectStep(1)
-        setCreateProjectName('')
+        closeCreateProjectModal()
       } else {
         setIsScaffolding(false)
         setToast({ type: 'error', message: res.error || t('main.toast.failedDocsScaffold') })
@@ -813,10 +763,7 @@ export function DashboardMainPage(): ReactElement {
           data: res.path,
         } as any)
         setToast({ type: 'success', message: t('main.toast.createdProject', { name }) })
-        setIsScaffolding(false)
-        setCreateProjectModalOpen(false)
-        setCreateProjectStep(1)
-        setCreateProjectName('')
+        closeCreateProjectModal()
       } else {
         setIsScaffolding(false)
         setToast({ type: 'error', message: res.error || t('main.toast.failedCreateProject') })
@@ -827,19 +774,14 @@ export function DashboardMainPage(): ReactElement {
   async function handleConfirmSwitch(): Promise<void> {
     if (!selectedProfileName) return
     setConfirmModalOpen(false)
-    _swSet({
-      active: true,
-      step: t('main.switch.step.starting'),
-      progress: 0,
-      targetProfile: selectedProfileName ?? '',
-    })
+    signalProfileSwitchStarting(selectedProfileName, { skipPoll: true })
     const isRestart = activeProfile === selectedProfileName
-    setToast({
-      type: 'success',
-      message: isRestart
+    showToast(
+      isRestart
         ? t('main.toast.restarting', { name: selectedProfileName })
         : t('main.toast.switching', { name: selectedProfileName }),
-    })
+      'success'
+    )
 
     try {
       const r = await window.dh.profileSwitch({
@@ -847,60 +789,127 @@ export function DashboardMainPage(): ReactElement {
         to: selectedProfileName as ComposeProfile,
       })
       if (!r.ok) {
-        _swSet({ active: false, step: '', progress: 0, targetProfile: '' })
         const errMsg = r.error ?? r.log ?? 'Unknown error'
-        setToast({ type: 'error', message: humanizeProfileError(errMsg) })
+        signalProfileSwitchFailed(errMsg)
+        showToast(humanizeProfileError(errMsg), 'error', { persist: true })
         return
       }
-      // Poll until containers are actually running (Docker may be pulling images)
-      _swSet({
-        step: t('main.switch.step.waiting'),
-        progress: 30,
-        targetProfile: selectedProfileName ?? '',
-      })
-      let running = false
-      for (let attempt = 0; attempt < 10; attempt++) {
-        await new Promise((resolve) => setTimeout(resolve, 2000))
-        const statusRes = (await invoke('ipc_invoke', {
-          channel: 'dh:profile:running-status',
-          payload: { names: [selectedProfileName] },
-        })) as { ok?: boolean; running?: string[] }
-        if (statusRes.ok && statusRes.running && statusRes.running.includes(selectedProfileName)) {
-          running = true
-          break
-        }
-        _swSet({ progress: Math.min(90, 30 + attempt * 6) })
+      signalProfileSwitchStep('Stack running', 100)
+      setTimeout(() => signalProfileSwitchDone(), 800)
+      try {
+        await window.dh.storeSet({ key: 'active_profile', data: selectedProfileName })
+        setActiveProfile(selectedProfileName)
+      } catch {
+        setActiveProfile(selectedProfileName)
       }
-      _swSet({ active: false, step: '', progress: 0, targetProfile: '' })
-      if (running) {
-        try {
-          await window.dh.storeSet({ key: 'active_profile', data: selectedProfileName })
-          setActiveProfile(selectedProfileName)
-        } catch {
-          setActiveProfile(selectedProfileName)
-        }
-        setToast({
-          type: 'success',
-          message: t('main.toast.switched', { name: selectedProfileName }),
-        })
-        void refresh()
-        setTimeout(() => setToast(null), 2500)
-      } else {
-        setToast({
-          type: 'error',
-          message: t('main.toast.notRunning', { name: selectedProfileName }),
-        })
-      }
+      showToast(t('main.toast.switched', { name: selectedProfileName }), 'success')
+      void refresh()
     } catch (e) {
-      _swSet({ active: false, step: '', progress: 0, targetProfile: '' })
       const errMsg = e instanceof Error ? e.message : String(e)
-      setToast({ type: 'error', message: errMsg })
+      signalProfileSwitchFailed(errMsg)
+      showToast(errMsg, 'error', { persist: true })
     }
   }
 
   const selectedProfile = allProfiles.find((p) => p.name === selectedProfileName) ?? allProfiles[0]
   const isDataScience = selectedProfile?.baseTemplate === 'data-science'
   const isWebDev = selectedProfile?.baseTemplate === 'web-dev'
+
+  const dsNotebookLabel = (tc: DataScienceToolchain): string => {
+    if (tc === 'r') return t('main.createProject.generateNotebookR')
+    if (tc === 'both') return t('main.createProject.generateNotebookBoth')
+    return t('main.createProject.generateNotebook')
+  }
+
+  const dsMainScriptLabel = (tc: DataScienceToolchain): string => {
+    if (tc === 'r') return t('main.createProject.generateMainR')
+    if (tc === 'both') return t('main.createProject.generateMainBoth')
+    return t('main.createProject.generateMainPy')
+  }
+
+  const renderDataSciencePackageGrid = (packageNames: readonly string[]) => (
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+      {packageNames.map((dep) => (
+        <div
+          key={dep}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            background: Object.keys(createProjectDeps).includes(dep)
+              ? `${selectedProfile.accent}20`
+              : 'rgba(255,255,255,0.02)',
+            padding: '6px 12px',
+            borderRadius: 6,
+            border: `1px solid ${Object.keys(createProjectDeps).includes(dep) ? selectedProfile.accent : 'rgba(255,255,255,0.05)'}`,
+            transition: 'all 0.2s',
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={Object.keys(createProjectDeps).includes(dep)}
+            onChange={(e) => {
+              if (e.target.checked) setCreateProjectDeps({ ...createProjectDeps, [dep]: 'latest' })
+              else {
+                const newDeps = { ...createProjectDeps }
+                delete newDeps[dep]
+                setCreateProjectDeps(newDeps)
+              }
+            }}
+            style={{
+              width: 16,
+              height: 16,
+              accentColor: selectedProfile.accent,
+              cursor: 'pointer',
+              flexShrink: 0,
+            }}
+          />
+          <span
+            style={{
+              fontSize: 14,
+              color: Object.keys(createProjectDeps).includes(dep) ? '#fff' : 'var(--text-muted)',
+              flex: 1,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}
+          >
+            {dep}
+          </span>
+          {Object.keys(createProjectDeps).includes(dep) && (
+            <input
+              type="text"
+              placeholder="latest"
+              value={createProjectDeps[dep] === 'latest' ? '' : createProjectDeps[dep]}
+              onChange={(e) =>
+                setCreateProjectDeps({
+                  ...createProjectDeps,
+                  [dep]: e.target.value,
+                })
+              }
+              style={{
+                width: 55,
+                padding: '2px 6px',
+                fontSize: 12,
+                background: 'rgba(0,0,0,0.3)',
+                border: '1px solid rgba(255,255,255,0.1)',
+                color: '#fff',
+                borderRadius: 4,
+                outline: 'none',
+              }}
+            />
+          )}
+        </div>
+      ))}
+    </div>
+  )
+  const isProfileInitializing =
+    Boolean(selectedProfileName) &&
+    swState.active &&
+    swState.targetProfile === selectedProfileName
+  const isProfileReady =
+    Boolean(selectedProfileName) &&
+    activeProfile === selectedProfileName &&
+    !isProfileInitializing
 
   // Keep selectedProfileName in sync with what's actually displayed (guards against stale localStorage names)
   useEffect(() => {
@@ -1024,14 +1033,16 @@ export function DashboardMainPage(): ReactElement {
             display: 'flex',
             alignItems: 'center',
             gap: 8,
-            maxWidth: 320,
+            maxWidth: toast.type === 'error' ? 480 : 320,
           }}
         >
           <span
             className={`codicon ${toast.type === 'success' ? 'codicon-check' : 'codicon-error'}`}
             style={{ fontSize: 16, flexShrink: 0 }}
           />
-          <span style={{ flex: 1, wordBreak: 'break-word' }}>{toast.message}</span>
+          <span style={{ flex: 1, wordBreak: 'break-word', lineHeight: 1.45 }}>
+            {toast.message}
+          </span>
           <button
             type="button"
             onClick={() => setToast(null)}
@@ -1163,11 +1174,13 @@ export function DashboardMainPage(): ReactElement {
                 )}
                 {selectedProfile.status === 'planned'
                   ? t('main.btn.comingSoon')
-                  : activeProfile === selectedProfileName
-                    ? t('main.btn.currentlyActive')
-                    : activeProfile
-                      ? t('main.btn.switchToThis')
-                      : t('main.btn.initialize')}
+                  : isProfileInitializing
+                    ? t('main.btn.initializing')
+                    : activeProfile === selectedProfileName
+                      ? t('main.btn.currentlyActive')
+                      : activeProfile
+                        ? t('main.btn.switchToThis')
+                        : t('main.btn.initialize')}
               </button>
               {betaFlags['enable_profile_auto_switch'] && (
                 <div
@@ -1198,50 +1211,123 @@ export function DashboardMainPage(): ReactElement {
                   marginTop: 20,
                   padding: '16px 20px',
                   borderRadius: 10,
-                  background: 'rgba(0,0,0,0.35)',
-                  border: `1px solid ${selectedProfile.accent}44`,
+                  background: swState.failed ? 'rgba(180,40,40,0.15)' : 'rgba(0,0,0,0.35)',
+                  border: swState.failed
+                    ? '1px solid rgba(220,80,80,0.55)'
+                    : `1px solid ${selectedProfile.accent}44`,
                 }}
               >
                 <div
                   style={{
                     display: 'flex',
                     justifyContent: 'space-between',
-                    alignItems: 'center',
-                    marginBottom: 10,
+                    alignItems: 'flex-start',
+                    gap: 12,
+                    marginBottom: swState.failed ? 12 : 10,
                   }}
                 >
-                  <span style={{ fontSize: 13, fontWeight: 600, color: selectedProfile.accent }}>
-                    {swState.step || t('main.switch.step.starting')}
-                  </span>
-                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                    {Math.round(swState.progress)}%
-                  </span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    {swState.failed && (
+                      <div
+                        style={{
+                          fontSize: 11,
+                          fontWeight: 700,
+                          textTransform: 'uppercase',
+                          letterSpacing: 0.5,
+                          color: '#f87171',
+                          marginBottom: 6,
+                        }}
+                      >
+                        {t('main.switch.setupFailed')}
+                      </div>
+                    )}
+                    <span
+                      style={{
+                        fontSize: 13,
+                        fontWeight: 600,
+                        color: swState.failed ? '#fecaca' : selectedProfile.accent,
+                        lineHeight: 1.45,
+                        wordBreak: 'break-word',
+                        display: 'block',
+                      }}
+                    >
+                      {swState.step || t('main.switch.step.starting')}
+                    </span>
+                  </div>
+                  {!swState.failed && (
+                    <span style={{ fontSize: 12, color: 'var(--text-muted)', flexShrink: 0 }}>
+                      {Math.round(swState.progress)}%
+                    </span>
+                  )}
                 </div>
-                <div
-                  style={{
-                    width: '100%',
-                    height: 4,
-                    background: 'rgba(255,255,255,0.08)',
-                    borderRadius: 2,
-                    overflow: 'hidden',
-                  }}
-                >
+                {!swState.failed && (
                   <div
                     style={{
-                      width: `${swState.progress}%`,
-                      height: '100%',
-                      background: selectedProfile.accent,
+                      width: '100%',
+                      height: 4,
+                      background: 'rgba(255,255,255,0.08)',
                       borderRadius: 2,
-                      transition: 'width 0.4s ease-out',
-                      boxShadow: `0 0 8px ${selectedProfile.accent}80`,
+                      overflow: 'hidden',
                     }}
-                  />
-                </div>
+                  >
+                    <div
+                      style={{
+                        width: `${swState.progress}%`,
+                        height: '100%',
+                        background: selectedProfile.accent,
+                        borderRadius: 2,
+                        transition: 'width 0.4s ease-out',
+                        boxShadow: `0 0 8px ${selectedProfile.accent}80`,
+                      }}
+                    />
+                  </div>
+                )}
+                {!swState.failed && canCancelWorkspaceSetup && (
+                  <button
+                    type="button"
+                    disabled={setupCancelling}
+                    onClick={() => void handleCancelWorkspaceSetup()}
+                    style={{
+                      marginTop: 12,
+                      padding: '8px 14px',
+                      borderRadius: 6,
+                      border: '1px solid rgba(255,255,255,0.2)',
+                      background: 'rgba(180,40,40,0.25)',
+                      color: '#fecaca',
+                      fontSize: 13,
+                      fontWeight: 600,
+                      cursor: setupCancelling ? 'wait' : 'pointer',
+                      opacity: setupCancelling ? 0.7 : 1,
+                    }}
+                  >
+                    {setupCancelling
+                      ? t('main.switch.cancellingSetup')
+                      : t('main.switch.cancelSetup')}
+                  </button>
+                )}
+                {swState.failed && (
+                  <button
+                    type="button"
+                    onClick={() => dismissProfileSwitchError()}
+                    style={{
+                      padding: '8px 14px',
+                      borderRadius: 6,
+                      border: '1px solid rgba(255,255,255,0.2)',
+                      background: 'rgba(0,0,0,0.25)',
+                      color: '#fff',
+                      fontSize: 13,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {t('main.switch.dismissError')}
+                  </button>
+                )}
               </div>
             )}
 
             {/* Project Health Bar */}
-            {activeProfile === selectedProfileName && (
+            {isProfileReady && (
               <div style={{ marginTop: 24, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 {(
                   [
@@ -1342,8 +1428,19 @@ export function DashboardMainPage(): ReactElement {
               </div>
             )}
 
+            {isProfileInitializing && (
+              <div style={{ marginTop: 32 }}>
+                <div className="dashboard-widget">
+                  <h3 className="dashboard-widget-title">{t('main.metrics.title')}</h3>
+                  <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                    {t('main.metrics.pending')}
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Section 2: System Metrics (Live) - Moved Up */}
-            {activeProfile === selectedProfileName && m && (
+            {isProfileReady && m && (
               <div style={{ marginTop: 32 }}>
                 <div className="dashboard-widget">
                   <h3 className="dashboard-widget-title">{t('main.metrics.title')}</h3>
@@ -1374,8 +1471,19 @@ export function DashboardMainPage(): ReactElement {
               </div>
             )}
 
+            {isProfileInitializing && (
+              <div style={{ marginTop: 32 }}>
+                <div className="dashboard-widget">
+                  <h3 className="dashboard-widget-title">{t('main.workspace.title')}</h3>
+                  <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                    {t('main.workspace.pending')}
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Workspace & Project Management */}
-            {activeProfile === selectedProfileName && (
+            {isProfileReady && (
               <div style={{ marginTop: 32 }}>
                 <div className="dashboard-widget">
                   <h3 className="dashboard-widget-title">{t('main.workspace.title')}</h3>
@@ -1426,7 +1534,10 @@ export function DashboardMainPage(): ReactElement {
                             <button
                               onClick={() => {
                                 if (isDataScience) {
-                                  setCreateProjectDeps({ pandas: 'latest', numpy: 'latest' })
+                                  setCreateProjectDepsMode('beginner')
+                                  setCreateProjectDeps(
+                                    defaultBeginnerDataScienceDeps(createProjectToolchain)
+                                  )
                                 } else if (isWebDev) {
                                   setCreateProjectDeps({
                                     tailwindcss: 'latest',
@@ -1515,7 +1626,10 @@ export function DashboardMainPage(): ReactElement {
                         <div style={{ display: 'flex', gap: 12 }}>
                           <select
                             value={selectedEditorCmd}
-                            onChange={(e) => setSelectedEditorCmd(e.target.value)}
+                            onChange={(e) => {
+                              setSelectedEditorCmd(e.target.value)
+                              persistPreferredEditorCmd(e.target.value)
+                            }}
                             style={{
                               padding: '10px 14px',
                               borderRadius: 6,
@@ -1560,7 +1674,7 @@ export function DashboardMainPage(): ReactElement {
             )}
 
             {/* Git Status Panel */}
-            {activeProfile === selectedProfileName && projectPath && (
+            {isProfileReady && projectPath && (
               <div style={{ marginTop: 32 }}>
                 <div className="dashboard-widget">
                   <h3
@@ -1740,7 +1854,7 @@ export function DashboardMainPage(): ReactElement {
             )}
 
             {/* Active Jobs Panel */}
-            {activeProfile === selectedProfileName && jobs.some((j) => j.state === 'running') && (
+            {isProfileReady && jobs.some((j) => j.state === 'running') && (
               <div style={{ marginTop: 32 }}>
                 <div className="dashboard-widget">
                   <h3 className="dashboard-widget-title">{t('main.activeJobs.title')}</h3>
@@ -1827,7 +1941,7 @@ export function DashboardMainPage(): ReactElement {
             )}
 
             {/* Section 3: Analytics Grid (Activity + Container Status Side-by-Side) */}
-            {activeProfile === selectedProfileName && selectedProfileName && (
+            {isProfileReady && selectedProfileName && (
               <div
                 style={{
                   marginTop: 32,
@@ -2726,7 +2840,14 @@ export function DashboardMainPage(): ReactElement {
                             <button
                               key={tc}
                               type="button"
-                              onClick={() => setCreateProjectToolchain(tc)}
+                              onClick={() => {
+                                setCreateProjectToolchain(tc)
+                                setCreateProjectDeps(
+                                  createProjectDepsMode === 'beginner'
+                                    ? defaultBeginnerDataScienceDeps(tc)
+                                    : defaultExpertDataScienceDeps(tc)
+                                )
+                              }}
                               style={{
                                 flex: 1,
                                 padding: '10px 16px',
@@ -2939,7 +3060,7 @@ export function DashboardMainPage(): ReactElement {
                               style={{ width: 16, height: 16, accentColor: selectedProfile.accent }}
                             />
                             <span style={{ fontSize: 14 }}>
-                              {t('main.createProject.generateNotebook')}
+                              {dsNotebookLabel(createProjectToolchain)}
                             </span>
                           </label>
                           <label
@@ -2958,9 +3079,7 @@ export function DashboardMainPage(): ReactElement {
                               style={{ width: 16, height: 16, accentColor: selectedProfile.accent }}
                             />
                             <span style={{ fontSize: 14 }}>
-                              {createProjectToolchain === 'r'
-                                ? 'Generate main.R script'
-                                : t('main.createProject.generateMainPy')}
+                              {dsMainScriptLabel(createProjectToolchain)}
                             </span>
                           </label>
                         </>
@@ -2990,142 +3109,266 @@ export function DashboardMainPage(): ReactElement {
                     </div>
 
                     <div style={{ marginBottom: 20 }}>
-                      <strong
-                        style={{
-                          display: 'block',
-                          marginBottom: 12,
-                          fontSize: 12,
-                          textTransform: 'uppercase',
-                          letterSpacing: 1,
-                          color: 'var(--text-muted)',
-                        }}
-                      >
-                        {isDataScience
-                          ? createProjectToolchain === 'r'
-                            ? 'Core R Packages'
-                            : t('main.createProject.corePythonLibs')
-                          : t('main.createProject.coreNPMLibs')}
-                      </strong>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                        {(isDataScience
-                          ? createProjectToolchain === 'r'
-                            ? [
-                                'tidyverse',
-                                'caret',
-                                'tidymodels',
-                                'shiny',
-                                'ggplot2',
-                                'dplyr',
-                                'stringr',
-                                'lubridate',
-                              ]
-                            : createProjectToolchain === 'both'
-                              ? [
-                                  'pandas',
-                                  'numpy',
-                                  'scikit-learn',
-                                  'tidyverse',
-                                  'caret',
-                                  'reticulate',
-                                ]
-                              : [
-                                  'pandas',
-                                  'numpy',
-                                  'matplotlib',
-                                  'scikit-learn',
-                                  'tensorflow',
-                                  'torch',
-                                  'seaborn',
-                                  'sqlalchemy',
-                                ]
-                          : [
-                              'tailwindcss',
-                              'react-router-dom',
-                              'axios',
-                              'zod',
-                              'framer-motion',
-                              'lucide-react',
-                              'zustand',
-                              'react-query',
-                            ]
-                        ).map((dep) => (
-                          <div
-                            key={dep}
+                      {isDataScience && createProjectDepsMode === 'beginner' ? (
+                        <div
+                          style={{
+                            padding: 16,
+                            borderRadius: 8,
+                            border: `1px solid ${selectedProfile.accent}40`,
+                            background: `${selectedProfile.accent}12`,
+                          }}
+                        >
+                          <strong
                             style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: 8,
-                              background: Object.keys(createProjectDeps).includes(dep)
-                                ? `${selectedProfile.accent}20`
-                                : 'rgba(255,255,255,0.02)',
-                              padding: '6px 12px',
-                              borderRadius: 6,
-                              border: `1px solid ${Object.keys(createProjectDeps).includes(dep) ? selectedProfile.accent : 'rgba(255,255,255,0.05)'}`,
-                              transition: 'all 0.2s',
+                              display: 'block',
+                              marginBottom: 8,
+                              fontSize: 13,
+                              color: selectedProfile.accent,
                             }}
                           >
-                            <input
-                              type="checkbox"
-                              checked={Object.keys(createProjectDeps).includes(dep)}
-                              onChange={(e) => {
-                                if (e.target.checked)
-                                  setCreateProjectDeps({ ...createProjectDeps, [dep]: 'latest' })
-                                else {
-                                  const newDeps = { ...createProjectDeps }
-                                  delete newDeps[dep]
-                                  setCreateProjectDeps(newDeps)
-                                }
-                              }}
+                            {t('main.createProject.beginnerDepsTitle')}
+                          </strong>
+                          <p
+                            style={{
+                              margin: '0 0 12px',
+                              fontSize: 14,
+                              color: 'var(--text-muted)',
+                              lineHeight: 1.55,
+                            }}
+                          >
+                            {t(beginnerDepsSummaryKey(createProjectToolchain))}
+                          </p>
+                          <p
+                            style={{
+                              margin: '0 0 12px',
+                              fontSize: 12,
+                              color: 'var(--text-muted)',
+                              lineHeight: 1.5,
+                            }}
+                          >
+                            {t('main.createProject.beginnerDepsNote')}
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCreateProjectDepsMode('expert')
+                              setCreateProjectDeps(
+                                defaultExpertDataScienceDeps(createProjectToolchain)
+                              )
+                            }}
+                            style={{
+                              padding: 0,
+                              border: 'none',
+                              background: 'transparent',
+                              color: selectedProfile.accent,
+                              fontSize: 13,
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                              textDecoration: 'underline',
+                            }}
+                          >
+                            {t('main.createProject.showAdvancedPackages')}
+                          </button>
+                        </div>
+                      ) : isDataScience && createProjectToolchain === 'both' ? (
+                        <>
+                          <div
+                            style={{
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              marginBottom: 12,
+                            }}
+                          >
+                            <strong
                               style={{
-                                width: 16,
-                                height: 16,
-                                accentColor: selectedProfile.accent,
-                                cursor: 'pointer',
-                                flexShrink: 0,
-                              }}
-                            />
-                            <span
-                              style={{
-                                fontSize: 14,
-                                color: Object.keys(createProjectDeps).includes(dep)
-                                  ? '#fff'
-                                  : 'var(--text-muted)',
-                                flex: 1,
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
+                                fontSize: 12,
+                                textTransform: 'uppercase',
+                                letterSpacing: 1,
+                                color: 'var(--text-muted)',
                               }}
                             >
-                              {dep}
-                            </span>
-                            {Object.keys(createProjectDeps).includes(dep) && (
-                              <input
-                                type="text"
-                                placeholder="latest"
-                                value={
-                                  createProjectDeps[dep] === 'latest' ? '' : createProjectDeps[dep]
-                                }
-                                onChange={(e) =>
-                                  setCreateProjectDeps({
-                                    ...createProjectDeps,
-                                    [dep]: e.target.value,
-                                  })
-                                }
-                                style={{
-                                  width: 55,
-                                  padding: '2px 6px',
-                                  fontSize: 12,
-                                  background: 'rgba(0,0,0,0.3)',
-                                  border: '1px solid rgba(255,255,255,0.1)',
-                                  color: '#fff',
-                                  borderRadius: 4,
-                                  outline: 'none',
-                                }}
-                              />
-                            )}
+                              {t('main.createProject.corePythonLibs')}
+                            </strong>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setCreateProjectDepsMode('beginner')
+                                setCreateProjectDeps(
+                                  defaultBeginnerDataScienceDeps(createProjectToolchain)
+                                )
+                              }}
+                              style={{
+                                padding: 0,
+                                border: 'none',
+                                background: 'transparent',
+                                color: 'var(--text-muted)',
+                                fontSize: 12,
+                                cursor: 'pointer',
+                                textDecoration: 'underline',
+                              }}
+                            >
+                              {t('main.createProject.useRecommendedSet')}
+                            </button>
                           </div>
-                        ))}
-                      </div>
+                          {renderDataSciencePackageGrid(expertPythonPackages('both'))}
+                          <strong
+                            style={{
+                              display: 'block',
+                              marginTop: 20,
+                              marginBottom: 12,
+                              fontSize: 12,
+                              textTransform: 'uppercase',
+                              letterSpacing: 1,
+                              color: 'var(--text-muted)',
+                            }}
+                          >
+                            {t('main.createProject.coreBothR')}
+                          </strong>
+                          {renderDataSciencePackageGrid(expertRPackages('both'))}
+                        </>
+                      ) : (
+                        <>
+                          {isDataScience && (
+                            <div style={{ marginBottom: 12 }}>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setCreateProjectDepsMode('beginner')
+                                  setCreateProjectDeps(
+                                    defaultBeginnerDataScienceDeps(createProjectToolchain)
+                                  )
+                                }}
+                                style={{
+                                  padding: 0,
+                                  border: 'none',
+                                  background: 'transparent',
+                                  color: 'var(--text-muted)',
+                                  fontSize: 12,
+                                  cursor: 'pointer',
+                                  textDecoration: 'underline',
+                                }}
+                              >
+                                {t('main.createProject.useRecommendedSet')}
+                              </button>
+                            </div>
+                          )}
+                          <strong
+                            style={{
+                              display: 'block',
+                              marginBottom: 12,
+                              fontSize: 12,
+                              textTransform: 'uppercase',
+                              letterSpacing: 1,
+                              color: 'var(--text-muted)',
+                            }}
+                          >
+                            {isDataScience
+                              ? createProjectToolchain === 'r'
+                                ? t('main.createProject.coreRLibs')
+                                : t('main.createProject.corePythonLibs')
+                              : t('main.createProject.coreNPMLibs')}
+                          </strong>
+                          {isDataScience ? (
+                            renderDataSciencePackageGrid(
+                              createProjectToolchain === 'r'
+                                ? expertRPackages('r')
+                                : expertPythonPackages(createProjectToolchain)
+                            )
+                          ) : (
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                              {[
+                                'tailwindcss',
+                                'react-router-dom',
+                                'axios',
+                                'zod',
+                                'framer-motion',
+                                'lucide-react',
+                                'zustand',
+                                'react-query',
+                              ].map((dep) => (
+                                <div
+                                  key={dep}
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 8,
+                                    background: Object.keys(createProjectDeps).includes(dep)
+                                      ? `${selectedProfile.accent}20`
+                                      : 'rgba(255,255,255,0.02)',
+                                    padding: '6px 12px',
+                                    borderRadius: 6,
+                                    border: `1px solid ${Object.keys(createProjectDeps).includes(dep) ? selectedProfile.accent : 'rgba(255,255,255,0.05)'}`,
+                                  }}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={Object.keys(createProjectDeps).includes(dep)}
+                                    onChange={(e) => {
+                                      if (e.target.checked)
+                                        setCreateProjectDeps({
+                                          ...createProjectDeps,
+                                          [dep]: 'latest',
+                                        })
+                                      else {
+                                        const newDeps = { ...createProjectDeps }
+                                        delete newDeps[dep]
+                                        setCreateProjectDeps(newDeps)
+                                      }
+                                    }}
+                                    style={{
+                                      width: 16,
+                                      height: 16,
+                                      accentColor: selectedProfile.accent,
+                                    }}
+                                  />
+                                  <span style={{ fontSize: 14 }}>{dep}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </>
+                      )}
                     </div>
+
+                    {installedEditors.length > 0 && (
+                      <div style={{ marginBottom: 20 }}>
+                        <strong
+                          style={{
+                            display: 'block',
+                            marginBottom: 8,
+                            fontSize: 13,
+                            color: 'var(--text-muted)',
+                          }}
+                        >
+                          {t('main.createProject.preferredEditor')}
+                        </strong>
+                        <select
+                          value={selectedEditorCmd}
+                          onChange={(e) => {
+                            setSelectedEditorCmd(e.target.value)
+                            persistPreferredEditorCmd(e.target.value)
+                          }}
+                          style={{
+                            width: '100%',
+                            padding: '12px 16px',
+                            borderRadius: 8,
+                            border: '1px solid rgba(255,255,255,0.1)',
+                            background: 'rgba(0,0,0,0.2)',
+                            color: 'var(--text)',
+                            fontSize: 16,
+                            outline: 'none',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          {installedEditors.map((ed) => (
+                            <option key={ed.name} value={ed.cmd}>
+                              {ed.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
 
                     <div
                       style={{
@@ -3155,11 +3398,17 @@ export function DashboardMainPage(): ReactElement {
                       <p
                         style={{ margin: '6px 0 0 28px', fontSize: 12, color: 'var(--text-muted)' }}
                       >
-                        {t('main.createProject.autoInstallDesc', {
-                          lockfile: isDataScience
-                            ? t('main.createProject.requirementsTxt')
-                            : t('main.createProject.packageJson'),
-                        })}
+                        {isDataScience && createProjectDepsMode === 'beginner'
+                          ? t('main.createProject.autoInstallBeginner')
+                          : t('main.createProject.autoInstallDesc', {
+                              lockfile: isDataScience
+                                ? createProjectToolchain === 'both'
+                                  ? t('main.createProject.lockfileBoth')
+                                  : createProjectToolchain === 'r'
+                                    ? t('main.createProject.installR')
+                                    : t('main.createProject.requirementsTxt')
+                                : t('main.createProject.packageJson'),
+                            })}
                       </p>
                     </div>
                   </div>

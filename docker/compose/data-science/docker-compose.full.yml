@@ -8,7 +8,7 @@ services:
     environment:
       - JUPYTER_TOKEN=luminadev
     volumes:
-      - notebooks:/home/jovyan/work
+      - ${PROJECT_DIR:-~/LuminaProjects/data-science/default}:/home/jovyan/work
     restart: unless-stopped
 
   postgres:
@@ -23,5 +23,4 @@ services:
     restart: unless-stopped
 
 volumes:
-  notebooks:
   pg_data:

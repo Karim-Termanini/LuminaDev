@@ -90,6 +90,25 @@ pub fn truncate_probe_output(s: &str) -> String {
   format!("{head}\n… (output truncated)")
 }
 
+/// Matches `compose_engine` project name sanitization (`docker compose -p`).
+pub fn sanitize_compose_project_name(name: &str) -> String {
+  let trimmed = name.trim();
+  if trimmed.is_empty() {
+    return String::new();
+  }
+  trimmed
+    .to_lowercase()
+    .chars()
+    .map(|c| {
+      if c.is_alphanumeric() || c == '-' || c == '_' {
+        c
+      } else {
+        '-'
+      }
+    })
+    .collect()
+}
+
 pub fn sanitize_docker_name(s: &str) -> String {
   let mut out: String = s
     .chars()

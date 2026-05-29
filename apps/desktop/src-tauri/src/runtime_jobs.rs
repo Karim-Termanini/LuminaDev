@@ -11,6 +11,15 @@ use crate::runtime_packages::{
     runtime_system_package_available, runtime_system_packages,
 };
 use crate::runtime_versioning::{lumina_probe_meaningful_line, runtime_dnf_repoquery_versions};
+use crate::runtime_paths::{
+    lumina_version_dir_from_path, nvm_version_dir_from_path, path_home_before_marker,
+    path_segment_after_marker,
+};
+use crate::{
+    active_binary_script, list_installed_versions_script, list_mise_runtime_script,
+    parse_version_path_lines, status_probe_script,
+};
+use std::path::PathBuf;
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn runtime_job_execute(
@@ -957,7 +966,7 @@ fi"#;
                     "Starting new profile: {} (Project: {})...",
                     to_profile, project_dir
                 ));
-                let overlay = if compose_profiles::compose_full_overlay_enabled(&to_dir) {
+                let overlay = if compose_profiles::profile_wants_full_stack(&app, &to_profile, &to_dir) {
                     "-f docker-compose.yml -f docker-compose.full.yml"
                 } else {
                     "-f docker-compose.yml"
@@ -1198,6 +1207,30 @@ pub(crate) async fn runtime_set_active_invoke(body: &Value) -> Value {
                 .map(|_| ())
                 .map_err(|e| format!("[RUNTIME_SET_ACTIVE_FAILED] {}", e.trim()))
         }
+        "julia" => {
+            if !path.to_string_lossy().contains("/.juliaup/bin/julia") {
+                return json!({ "ok": false, "error": "[RUNTIME_SET_ACTIVE_FAILED] Unsupported Julia path (expected ~/.juliaup/bin/julia)." });
+            }
+            let channel = body
+                .get("version")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .trim()
+                .to_string();
+            if channel.is_empty() {
+                return json!({ "ok": false, "error": "[RUNTIME_SET_ACTIVE_FAILED] Julia channel name required (pass version)." });
+            }
+            let safe_channel = channel.replace('\'', "'\\''");
+            let cmd = format!(
+                "export PATH=\"$HOME/.juliaup/bin:$PATH\" \
+         && juliaup default '{}'",
+                safe_channel
+            );
+            exec_output_limit("bash", &["-lc", &cmd], cmd_timeout_short())
+                .await
+                .map(|_| ())
+                .map_err(|e| format!("[RUNTIME_SET_ACTIVE_FAILED] {}", e.trim()))
+        }
         "php" | "ruby" | "lua" | "r" => {
             let version = path
                 .parent()
@@ -1335,32 +1368,35 @@ pub(crate) async fn handle_runtime_status() -> Value {
     // (id, display name, primary command, args, fallback commands)
     // Use a login shell so ~/.bashrc / ~/.profile PATH additions are active
     // (covers juliaup, nvm, bun, pyenv, etc. installed to user home dirs).
-    let checks: &[(&str, &str, &str)] = &[
-        ("node",    "Node.js", "node --version"),
-        ("python",  "Python",  "python3 --version 2>&1 || python --version 2>&1"),
-        ("java",    "Java",    "java -version 2>&1"),
-        ("go",      "Go",      "go version"),
-        ("rust",    "Rust",    "rustc --version"),
-        ("php",     "PHP",     "export PATH=\"$HOME/.local/bin:$PATH\"; ([ -x \"$HOME/.local/bin/mise\" ] && eval \"$($HOME/.local/bin/mise activate bash)\" >/dev/null 2>&1 || true); php --version 2>&1 | head -1"),
-        ("ruby",    "Ruby",    "export PATH=\"$HOME/.local/bin:$PATH\"; ([ -x \"$HOME/.local/bin/mise\" ] && eval \"$($HOME/.local/bin/mise activate bash)\" >/dev/null 2>&1 || true); ruby --version"),
-        ("dotnet",  ".NET",    "dotnet --version 2>/dev/null || ~/.dotnet/dotnet --version 2>/dev/null"),
-        ("bun",     "Bun",     "bun --version 2>/dev/null || ~/.bun/bin/bun --version 2>/dev/null"),
-        ("zig",     "Zig",     "([ -x \"$HOME/.local/share/lumina/zig/current/zig\" ] && \"$HOME/.local/share/lumina/zig/current/zig\" version 2>&1) || (command -v zig >/dev/null 2>&1 && zig version 2>&1)"),
-        ("c_cpp",   "C/C++",   "gcc --version 2>&1 | head -1"),
-        ("matlab",  "Octave",  "octave --version 2>&1 | head -1"),
-        ("dart",    "Dart",    "dart --version 2>&1 | head -1 || $HOME/.dart/dart-sdk/bin/dart --version 2>&1 | head -1"),
-        ("flutter", "Flutter", "FOUND=0; for d in \"$HOME/.local/share/lumina/flutter/stable\" \"$HOME/.local/share/lumina/flutter/beta\" \"$HOME/.local/share/lumina/flutter/master\" \"$HOME/flutter\" \"$HOME/.flutter-sdk\"; do [ -x \"$d/bin/flutter\" ] && { cat \"$d/version\" 2>/dev/null | head -1 || echo installed; } && FOUND=1 && break; done; [ $FOUND -eq 0 ] && command -v snap >/dev/null 2>&1 && snap list flutter 2>/dev/null | awk 'NR>1{print $2}' || true"),
-        ("julia",   "Julia",   "export PATH=\"$HOME/.juliaup/bin:$PATH\"; julia --version 2>/dev/null || ~/.juliaup/bin/julia --version 2>/dev/null"),
-        ("lua",     "Lua",     "export PATH=\"$HOME/.local/bin:$PATH\"; ([ -x \"$HOME/.local/bin/mise\" ] && eval \"$($HOME/.local/bin/mise activate bash)\" >/dev/null 2>&1 || true); lua -v 2>&1 || lua5.4 -v 2>&1 || lua5.3 -v 2>&1"),
-        ("lisp",    "SBCL",    "sbcl --version"),
-        ("r",       "R",       "export PATH=\"$HOME/.local/bin:$PATH\"; ([ -x \"$HOME/.local/bin/mise\" ] && eval \"$($HOME/.local/bin/mise activate bash)\" >/dev/null 2>&1 || true); R --version 2>&1 | head -1"),
+    let checks: &[(&str, &str)] = &[
+        ("node", "Node.js"),
+        ("python", "Python"),
+        ("java", "Java"),
+        ("go", "Go"),
+        ("rust", "Rust"),
+        ("php", "PHP"),
+        ("ruby", "Ruby"),
+        ("dotnet", ".NET"),
+        ("bun", "Bun"),
+        ("zig", "Zig"),
+        ("c_cpp", "C/C++"),
+        ("matlab", "Octave"),
+        ("dart", "Dart"),
+        ("flutter", "Flutter"),
+        ("julia", "Julia"),
+        ("lua", "Lua"),
+        ("lisp", "SBCL"),
+        ("r", "R"),
     ];
 
     let mut tasks: Vec<(String, String, _)> = Vec::new();
-    for &(id, name, shell_cmd) in checks {
+    for &(id, name) in checks {
+        let shell_cmd = status_probe_script(id).unwrap_or_default();
+        if shell_cmd.is_empty() {
+            continue;
+        }
         let id = id.to_string();
         let name = name.to_string();
-        let shell_cmd = shell_cmd.to_string();
         let id_clone = id.clone();
         let name_clone = name.clone();
         tasks.push((
@@ -1392,6 +1428,94 @@ pub(crate) async fn handle_runtime_status() -> Value {
     json!({ "ok": true, "runtimes": runtimes })
 }
 
+async fn collect_discovered_tab_versions(script: String, versions: &mut Vec<Value>) {
+    if let Ok(raw) = exec_output_limit("bash", &["-lc", &script], cmd_timeout_short()).await {
+        for (v, p) in parse_version_path_lines(&raw) {
+            let label = flutter_or_short_label(&v);
+            if label != v {
+                versions.push(json!({ "version": v, "path": p, "label": label }));
+            } else {
+                versions.push(json!({ "version": v, "path": p }));
+            }
+        }
+    }
+}
+
+fn flutter_or_short_label(version: &str) -> String {
+    if version.starts_with("Flutter ") {
+        version
+            .strip_prefix("Flutter ")
+            .unwrap_or(version)
+            .split_whitespace()
+            .next()
+            .unwrap_or(version)
+            .to_string()
+    } else {
+        version.to_string()
+    }
+}
+
+async fn collect_rust_installed_versions(versions: &mut Vec<Value>) {
+    if let Ok(raw) = exec_output_limit(
+        "bash",
+        &["-lc", "unset RUSTUP_TOOLCHAIN; [ -x \"$HOME/.cargo/bin/rustup\" ] && \"$HOME/.cargo/bin/rustup\" toolchain list 2>/dev/null || true"],
+        cmd_timeout_short(),
+    )
+    .await
+    {
+        let home = std::env::var("HOME").unwrap_or_default();
+        for line in raw.lines() {
+            let Some((tc, is_default)) = parse_rustup_toolchain_line(line) else {
+                continue;
+            };
+            let rustc_bin = format!("{}/.rustup/toolchains/{}/bin/rustc", home, tc);
+            if !std::path::Path::new(&rustc_bin).exists() {
+                continue;
+            }
+            let label = exec_output_limit(
+                "bash",
+                &["-lc", &format!("\"{}\" --version 2>/dev/null | head -1", rustc_bin.replace('\"', "\\\""))],
+                cmd_timeout_short(),
+            )
+            .await
+            .ok()
+            .map(|s| rust_toolchain_display_label(&tc, s.trim()))
+            .unwrap_or_else(|| rust_toolchain_short_name(&tc));
+            versions.push(json!({
+                "version": tc,
+                "path": rustc_bin,
+                "label": label,
+                "isDefault": is_default,
+            }));
+        }
+    }
+}
+
+async fn collect_julia_installed_versions(versions: &mut Vec<Value>) {
+    if let Ok(raw) = exec_output_limit(
+        "bash",
+        &["-lc", "export PATH=\"$HOME/.juliaup/bin:$PATH\"; juliaup status 2>/dev/null | tail -n +3 || true"],
+        cmd_timeout_short(),
+    )
+    .await
+    {
+        let julia_bin = format!(
+            "{}/.juliaup/bin/julia",
+            std::env::var("HOME").unwrap_or_default()
+        );
+        for line in raw.lines() {
+            if let Some((channel, label, is_default)) = parse_juliaup_status_line(line) {
+                versions.push(json!({
+                    "version": channel,
+                    "path": julia_bin,
+                    "label": label,
+                    "isDefault": is_default,
+                }));
+            }
+        }
+    }
+}
+
 pub(crate) async fn handle_runtime_installed_versions(body: &Value) -> Value {
     let runtime_id = body
         .get("runtimeId")
@@ -1405,179 +1529,48 @@ pub(crate) async fn handle_runtime_installed_versions(body: &Value) -> Value {
     let mut versions: Vec<Value> = Vec::new();
 
     match runtime_id {
-        "node" => {
-            if let Ok(raw) = exec_output_limit(
-                "bash",
-                &["-lc", "if [ -d \"$HOME/.nvm/versions/node\" ]; then for d in \"$HOME/.nvm/versions/node\"/*; do [ -d \"$d\" ] || continue; b=$(basename \"$d\"); printf '%s\\t%s\\n' \"$b\" \"$d/bin/node\"; done; fi"],
-                cmd_timeout_short(),
-            ).await {
-                for line in raw.lines() {
-                    let mut parts = line.splitn(2, '\t');
-                    let v = parts.next().unwrap_or("").trim();
-                    let p = parts.next().unwrap_or("").trim();
-                    if !v.is_empty() && !p.is_empty() {
-                        versions.push(json!({ "version": v, "path": p }));
-                    }
-                }
-            }
-        }
-        "python" => {
-            if let Ok(raw) = exec_output_limit(
-                "bash",
-                &["-lc", "if [ -d \"$HOME/.pyenv/versions\" ]; then for d in \"$HOME/.pyenv/versions\"/*; do [ -d \"$d\" ] || continue; b=$(basename \"$d\"); printf '%s\\t%s\\n' \"$b\" \"$d/bin/python\"; done; fi"],
-                cmd_timeout_short(),
-            ).await {
-                for line in raw.lines() {
-                    let mut parts = line.splitn(2, '\t');
-                    let v = parts.next().unwrap_or("").trim();
-                    let p = parts.next().unwrap_or("").trim();
-                    if !v.is_empty() && !p.is_empty() {
-                        versions.push(json!({ "version": v, "path": p }));
-                    }
-                }
-            }
-        }
-        "java" => {
-            if let Ok(raw) = exec_output_limit(
-                "bash",
-                &["-lc", "if [ -d \"$HOME/.local/share/lumina/java\" ]; then for d in \"$HOME/.local/share/lumina/java\"/jdk-*; do [ -d \"$d\" ] || continue; b=$(basename \"$d\" | sed 's/^jdk-//'); printf '%s\\t%s\\n' \"$b\" \"$d/bin/java\"; done; fi"],
-                cmd_timeout_short(),
-            ).await {
-                for line in raw.lines() {
-                    let mut parts = line.splitn(2, '\t');
-                    let v = parts.next().unwrap_or("").trim();
-                    let p = parts.next().unwrap_or("").trim();
-                    if !v.is_empty() && !p.is_empty() {
-                        versions.push(json!({ "version": v, "path": p }));
-                    }
-                }
-            }
-        }
-        "go" => {
-            if let Ok(raw) = exec_output_limit(
-                "bash",
-                &["-lc", "if [ -d \"$HOME/.local/share/lumina/go\" ]; then for d in \"$HOME/.local/share/lumina/go\"/*; do [ -d \"$d\" ] || continue; b=$(basename \"$d\"); [ \"$b\" = \"current\" ] && continue; [ -x \"$d/bin/go\" ] || continue; ver=$(\"$d/bin/go\" version 2>/dev/null | awk '{print $3}' | sed 's/^go//'); printf '%s\\t%s\\n' \"$ver\" \"$d/bin/go\"; done; fi"],
-                cmd_timeout_short(),
-            ).await {
-                for line in raw.lines() {
-                    let mut parts = line.splitn(2, '\t');
-                    let v = parts.next().unwrap_or("").trim().trim_start_matches("go");
-                    let p = parts.next().unwrap_or("").trim();
-                    if !v.is_empty() && !p.is_empty() {
-                        versions.push(json!({ "version": v, "path": p }));
-                    }
-                }
-            }
-        }
-        "zig" => {
-            if let Ok(raw) = exec_output_limit(
-                "bash",
-                &["-lc", "if [ -d \"$HOME/.local/share/lumina/zig\" ]; then for d in \"$HOME/.local/share/lumina/zig\"/*; do [ -d \"$d\" ] || continue; b=$(basename \"$d\"); [ \"$b\" = \"current\" ] && continue; [ -x \"$d/zig\" ] || continue; ver=$(\"$d/zig\" version 2>/dev/null); printf '%s\\t%s\\n' \"$ver\" \"$d/zig\"; done; fi"],
-                cmd_timeout_short(),
-            ).await {
-                for line in raw.lines() {
-                    let mut parts = line.splitn(2, '\t');
-                    let v = parts.next().unwrap_or("").trim();
-                    let p = parts.next().unwrap_or("").trim();
-                    if !v.is_empty() && !p.is_empty() {
-                        versions.push(json!({ "version": v, "path": p }));
-                    }
-                }
-            }
-        }
+        "rust" => collect_rust_installed_versions(&mut versions).await,
+        "julia" => collect_julia_installed_versions(&mut versions).await,
         "bun" => {
             let bun_bin = format!("{}/.bun/bin/bun", std::env::var("HOME").unwrap_or_default());
             if std::path::Path::new(&bun_bin).exists() {
-                versions.push(json!({ "version": "installed", "path": bun_bin }));
+                versions.push(json!({ "version": "installed", "path": bun_bin, "isDefault": true }));
             }
         }
-        "rust" => {
-            if let Ok(raw) = exec_output_limit(
-                "bash",
-                &["-lc", "unset RUSTUP_TOOLCHAIN; [ -x \"$HOME/.cargo/bin/rustup\" ] && \"$HOME/.cargo/bin/rustup\" toolchain list 2>/dev/null || true"],
-                cmd_timeout_short(),
-            ).await {
-                let home = std::env::var("HOME").unwrap_or_default();
-                for line in raw.lines() {
-                    let tc = line.split_whitespace().next().unwrap_or("").trim();
-                    if tc.is_empty() { continue; }
-                    let rustc_bin = format!("{}/.rustup/toolchains/{}/bin/rustc", home, tc);
-                    let path_to_use = if std::path::Path::new(&rustc_bin).exists() {
-                        rustc_bin
-                    } else {
-                        format!("{}/.cargo/bin/rustc", home)
-                    };
-                    versions.push(json!({ "version": tc, "path": path_to_use }));
-                }
-            }
+        "php" => {
+            collect_discovered_tab_versions(list_mise_runtime_script("php", "php", "php"), &mut versions)
+                .await;
         }
-        "dart" => {
-            if let Ok(raw) = exec_output_limit(
-                "bash",
-                &["-lc", r#"FOUND=false; LDIR="$HOME/.local/share/lumina/dart"; if [ -d "$LDIR" ]; then for d in "$LDIR"/*; do [ -d "$d" ] || continue; b=$(basename "$d"); [ "$b" = "current" ] && continue; [ -x "$d/bin/dart" ] || continue; ver=$("$d/bin/dart" --version 2>&1 | awk '{print $4}'); printf '%s\t%s\n' "${ver:-$b}" "$d/bin/dart"; FOUND=true; done; fi; if ! $FOUND && [ -x "$HOME/.dart/dart-sdk/bin/dart" ]; then ver=$("$HOME/.dart/dart-sdk/bin/dart" --version 2>&1 | awk '{print $4}'); printf '%s\t%s\n' "${ver:-dart}" "$HOME/.dart/dart-sdk/bin/dart"; fi"#],
-                cmd_timeout_short(),
-            ).await {
-                for line in raw.lines() {
-                    let mut parts = line.splitn(2, '\t');
-                    let v = parts.next().unwrap_or("").trim();
-                    let p = parts.next().unwrap_or("").trim();
-                    if !v.is_empty() && !p.is_empty() {
-                        versions.push(json!({ "version": v, "path": p }));
-                    }
-                }
-            }
+        "ruby" => {
+            collect_discovered_tab_versions(list_mise_runtime_script("ruby", "ruby", "ruby"), &mut versions)
+                .await;
         }
-        "flutter" => {
-            if let Ok(raw) = exec_output_limit(
-                "bash",
-                &["-lc", r#"LDIR="$HOME/.local/share/lumina/flutter"; if [ -d "$LDIR" ]; then for d in "$LDIR"/*; do [ -d "$d" ] || continue; b=$(basename "$d"); [ "$b" = "current" ] && continue; [ -x "$d/bin/flutter" ] || continue; ver=$(cat "$d/version" 2>/dev/null | head -1); printf '%s\t%s\n' "${ver:-$b}" "$d/bin/flutter"; done; fi"#],
-                cmd_timeout_short(),
-            ).await {
-                for line in raw.lines() {
-                    let mut parts = line.splitn(2, '\t');
-                    let v = parts.next().unwrap_or("").trim();
-                    let p = parts.next().unwrap_or("").trim();
-                    if !v.is_empty() && !p.is_empty() {
-                        versions.push(json!({ "version": v, "path": p }));
-                    }
-                }
-            }
-        }
-        "julia" => {
-            if let Ok(raw) = exec_output_limit(
-                "bash",
-                &["-lc", "export PATH=\"$HOME/.juliaup/bin:$PATH\"; juliaup list 2>/dev/null | tail -n +2 || true"],
-                cmd_timeout_short(),
-            ).await {
-                for line in raw.lines().filter(|l| !l.trim().is_empty()) {
-                    let parts: Vec<&str> = line.split_whitespace().collect();
-                    let tag = parts.first().copied().unwrap_or("").trim_start_matches('*').trim();
-                    if tag.is_empty() { continue; }
-                    let julia_bin = format!("{}/.juliaup/bin/julia", std::env::var("HOME").unwrap_or_default());
-                    versions.push(json!({ "version": tag, "path": julia_bin }));
-                }
-            }
+        "lua" => {
+            collect_discovered_tab_versions(list_mise_runtime_script("lua", "lua", "lua"), &mut versions)
+                .await;
         }
         "r" => {
-            if let Ok(raw) = exec_output_limit(
-                "bash",
-                &["-lc", "export PATH=\"$HOME/.local/bin:$PATH\"; if [ -x \"$HOME/.local/bin/mise\" ]; then \"$HOME/.local/bin/mise\" ls r 2>/dev/null | awk '{print $2}' | grep -v '^$' | while read ver; do printf '%s\\t%s\\n' \"$ver\" \"$HOME/.local/share/mise/installs/r/$ver/bin/R\"; done; fi"],
-                cmd_timeout_short(),
-            ).await {
-                for line in raw.lines() {
-                    let mut parts = line.splitn(2, '\t');
-                    let v = parts.next().unwrap_or("").trim();
-                    let p = parts.next().unwrap_or("").trim();
-                    if !v.is_empty() && !p.is_empty() {
-                        versions.push(json!({ "version": v, "path": p }));
-                    }
-                }
+            collect_discovered_tab_versions(list_mise_runtime_script("r", "r", "R"), &mut versions)
+                .await;
+        }
+        id => {
+            if let Some(script) = list_installed_versions_script(id) {
+                collect_discovered_tab_versions(script, &mut versions).await;
             }
         }
-        _ => {
-            // Runtime not supported for version listing; return empty array
+    }
+
+    if runtime_id != "julia" && runtime_id != "rust" {
+        if let Some(active) = runtime_active_binary_path(runtime_id).await {
+            mark_default_installed_versions(&mut versions, &active);
         }
     }
+    if versions.is_empty() {
+        if let Some(entry) = probe_single_installed_version(runtime_id).await {
+            versions.push(entry);
+        }
+    }
+    ensure_single_installed_version_default(&mut versions);
 
     json!({ "ok": true, "versions": versions })
 }
@@ -2082,146 +2075,286 @@ pub(crate) async fn handle_runtime_remove_version(body: &Value) -> Value {
     let path_str = body
         .get("path")
         .and_then(|v| v.as_str())
-        .unwrap_or_default();
+        .unwrap_or_default()
+        .trim();
     if runtime_id.is_empty() || path_str.is_empty() {
-        json!({ "ok": false, "error": "[REMOVE_VERSION_FAILED] runtimeId and path required." })
-    } else {
-        let home = std::env::var("HOME").unwrap_or_default();
-        let lumina_base = format!("{}/.local/share/lumina/{}", home, runtime_id);
-        let mise_base = format!("{}/.local/share/mise/installs/{}", home, runtime_id);
-        let nvm_base = format!("{}/.nvm/versions/node", home);
-        let pyenv_base = format!("{}/.pyenv/versions", home);
-        let rustup_base = format!("{}/.rustup/toolchains", home);
+        return json!({ "ok": false, "error": "[REMOVE_VERSION_FAILED] runtimeId and path required." });
+    }
 
-        let rmrf_version_under = |base_s: &str| -> Value {
-            let base = std::path::Path::new(base_s);
-            let path = std::path::Path::new(path_str);
-            let mut cursor = path;
-            let mut version_dir: Option<std::path::PathBuf> = None;
-            loop {
-                match cursor.parent() {
-                    Some(p) if p == base => {
-                        version_dir = Some(cursor.to_path_buf());
-                        break;
-                    }
-                    Some(p) => {
-                        cursor = p;
-                    }
-                    None => break,
-                }
-            }
-            match version_dir {
-                Some(dir) if dir.is_dir() => match std::fs::remove_dir_all(&dir) {
-                    Ok(_) => json!({ "ok": true }),
-                    Err(e) => {
-                        json!({ "ok": false, "error": format!("[REMOVE_VERSION_FAILED] rm -rf: {}", e) })
-                    }
-                },
-                _ => {
-                    json!({ "ok": false, "error": "[REMOVE_VERSION_FAILED] could not resolve version directory." })
-                }
-            }
-        };
+    const NVM_MARKER: &str = "/.nvm/versions/node/";
+    const PYENV_MARKER: &str = "/.pyenv/versions/";
+    const RUSTUP_MARKER: &str = "/.rustup/toolchains/";
 
-        if path_str.starts_with(&lumina_base) {
-            rmrf_version_under(&lumina_base)
-        } else if path_str.starts_with(&nvm_base) {
-            let tag = std::path::Path::new(path_str)
-                .ancestors()
-                .find(|p| {
-                    p.parent()
-                        .map(|pp| pp == std::path::Path::new(&nvm_base))
-                        .unwrap_or(false)
-                })
-                .and_then(|p| p.file_name())
-                .map(|n| n.to_string_lossy().to_string())
-                .unwrap_or_else(|| version.clone());
-            if tag.is_empty() {
-                json!({ "ok": false, "error": "[REMOVE_VERSION_FAILED] could not determine nvm version tag." })
-            } else {
-                let cmd = format!(
-                    r#"export NVM_DIR="$HOME/.nvm"; [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"; nvm uninstall '{}' 2>&1"#,
-                    tag.replace('\'', "'\\''")
-                );
-                match exec_output_limit("bash", &["-c", &cmd], cmd_timeout_short()).await {
-                    Ok(_) => json!({ "ok": true }),
-                    Err(e) => {
-                        json!({ "ok": false, "error": format!("[REMOVE_VERSION_FAILED] nvm uninstall: {}", e.trim()) })
-                    }
-                }
-            }
-        } else if path_str.starts_with(&pyenv_base) {
-            let pyenv_version = std::path::Path::new(path_str)
-                .ancestors()
-                .find(|p| {
-                    p.parent()
-                        .map(|pp| pp == std::path::Path::new(&pyenv_base))
-                        .unwrap_or(false)
-                })
-                .and_then(|p| p.file_name())
-                .map(|n| n.to_string_lossy().to_string())
-                .unwrap_or_else(|| version.clone());
-            if pyenv_version.is_empty() {
-                json!({ "ok": false, "error": "[REMOVE_VERSION_FAILED] could not determine pyenv version." })
-            } else {
-                let cmd = format!(
-                    r#"export PYENV_ROOT="$HOME/.pyenv"; export PATH="$PYENV_ROOT/bin:$PATH"; eval "$(pyenv init -)" 2>/dev/null; pyenv uninstall -f '{}' 2>&1"#,
-                    pyenv_version.replace('\'', "'\\''")
-                );
-                match exec_output_limit("bash", &["-c", &cmd], cmd_timeout_short()).await {
-                    Ok(_) => json!({ "ok": true }),
-                    Err(e) => {
-                        json!({ "ok": false, "error": format!("[REMOVE_VERSION_FAILED] pyenv uninstall: {}", e.trim()) })
-                    }
-                }
-            }
-        } else if path_str.starts_with(&rustup_base) {
-            let toolchain = std::path::Path::new(path_str)
-                .ancestors()
-                .find(|p| {
-                    p.parent()
-                        .map(|pp| pp == std::path::Path::new(&rustup_base))
-                        .unwrap_or(false)
-                })
-                .and_then(|p| p.file_name())
-                .map(|n| n.to_string_lossy().to_string())
-                .unwrap_or_else(|| version.clone());
-            if toolchain.is_empty() {
-                json!({ "ok": false, "error": "[REMOVE_VERSION_FAILED] could not determine rustup toolchain name." })
-            } else {
-                let cmd = format!(
-                    "export PATH=\"$HOME/.cargo/bin:$PATH\"; rustup toolchain remove '{}' 2>&1",
-                    toolchain.replace('\'', "'\\''")
-                );
-                match exec_output_limit("bash", &["-c", &cmd], cmd_timeout_short()).await {
-                    Ok(_) => json!({ "ok": true }),
-                    Err(e) => {
-                        json!({ "ok": false, "error": format!("[REMOVE_VERSION_FAILED] rustup toolchain remove: {}", e.trim()) })
-                    }
-                }
-            }
-        } else if path_str.starts_with(&mise_base)
-            || matches!(runtime_id, "php" | "ruby" | "lua" | "r")
+    if path_str.contains(NVM_MARKER) {
+        let tag = path_segment_after_marker(path_str, NVM_MARKER).unwrap_or_else(|| version.clone());
+        if tag.is_empty() {
+            return json!({ "ok": false, "error": "[REMOVE_VERSION_FAILED] could not determine nvm version tag." });
+        }
+        let cmd = format!(
+            r#"export NVM_DIR="${{NVM_DIR:-$HOME/.nvm}}"; [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"; nvm uninstall '{}' 2>&1"#,
+            tag.replace('\'', "'\\''")
+        );
+        if exec_output_limit("bash", &["-lc", &cmd], cmd_timeout_short())
+            .await
+            .is_ok()
         {
-            if version.is_empty() {
-                json!({ "ok": false, "error": "[REMOVE_VERSION_FAILED] version required for mise-managed runtime." })
-            } else {
-                let cmd = format!(
-                    r#"MISE=$(command -v mise 2>/dev/null || echo "$HOME/.local/bin/mise"); export PATH="$HOME/.local/bin:$PATH"; "$MISE" uninstall {}@'{}' 2>&1"#,
-                    runtime_id,
-                    version.replace('\'', "'\\''")
-                );
-                match exec_output_limit("bash", &["-lc", &cmd], cmd_timeout_short()).await {
+            return json!({ "ok": true });
+        }
+        if let Some(dir) = nvm_version_dir_from_path(path_str) {
+            if dir.is_dir() {
+                return match std::fs::remove_dir_all(&dir) {
                     Ok(_) => json!({ "ok": true }),
-                    Err(e) => {
-                        json!({ "ok": false, "error": format!("[REMOVE_VERSION_FAILED] mise uninstall: {}", e.trim()) })
-                    }
-                }
+                    Err(e) => json!({
+                        "ok": false,
+                        "error": format!("[REMOVE_VERSION_FAILED] could not remove {}: {}", dir.display(), e)
+                    }),
+                };
             }
+        }
+        return json!({ "ok": false, "error": "[REMOVE_VERSION_FAILED] nvm uninstall failed and version directory was not found." });
+    }
+
+    if path_str.contains(PYENV_MARKER) {
+        let pyenv_version =
+            path_segment_after_marker(path_str, PYENV_MARKER).unwrap_or_else(|| version.clone());
+        if pyenv_version.is_empty() {
+            return json!({ "ok": false, "error": "[REMOVE_VERSION_FAILED] could not determine pyenv version." });
+        }
+        let cmd = format!(
+            r#"export PYENV_ROOT="$HOME/.pyenv"; export PATH="$PYENV_ROOT/bin:$PATH"; eval "$(pyenv init -)" 2>/dev/null; pyenv uninstall -f '{}' 2>&1"#,
+            pyenv_version.replace('\'', "'\\''")
+        );
+        return match exec_output_limit("bash", &["-lc", &cmd], cmd_timeout_short()).await {
+            Ok(_) => json!({ "ok": true }),
+            Err(e) => json!({ "ok": false, "error": format!("[REMOVE_VERSION_FAILED] pyenv uninstall: {}", e.trim()) }),
+        };
+    }
+
+    if path_str.contains(RUSTUP_MARKER) {
+        let toolchain =
+            path_segment_after_marker(path_str, RUSTUP_MARKER).unwrap_or_else(|| version.clone());
+        if toolchain.is_empty() {
+            return json!({ "ok": false, "error": "[REMOVE_VERSION_FAILED] could not determine rustup toolchain name." });
+        }
+        let cmd = format!(
+            "export PATH=\"$HOME/.cargo/bin:$PATH\"; rustup toolchain remove '{}' 2>&1",
+            toolchain.replace('\'', "'\\''")
+        );
+        return match exec_output_limit("bash", &["-lc", &cmd], cmd_timeout_short()).await {
+            Ok(_) => json!({ "ok": true }),
+            Err(e) => json!({ "ok": false, "error": format!("[REMOVE_VERSION_FAILED] rustup toolchain remove: {}", e.trim()) }),
+        };
+    }
+
+    let lumina_marker = format!("/.local/share/lumina/{}/", runtime_id);
+    if path_str.contains(&lumina_marker) {
+        if let Some(dir) = lumina_version_dir_from_path(path_str, runtime_id) {
+            if dir.is_dir() {
+                return match std::fs::remove_dir_all(&dir) {
+                    Ok(_) => json!({ "ok": true }),
+                    Err(e) => json!({
+                        "ok": false,
+                        "error": format!("[REMOVE_VERSION_FAILED] rm -rf: {}", e)
+                    }),
+                };
+            }
+        }
+        return json!({ "ok": false, "error": "[REMOVE_VERSION_FAILED] could not resolve version directory." });
+    }
+
+    let home = std::env::var("HOME").unwrap_or_default();
+    if path_str.contains("/.dart/dart-sdk") {
+        let dart_sdk = path_home_before_marker(path_str, "/.dart/dart-sdk")
+            .map(|h| h.join(".dart").join("dart-sdk"))
+            .unwrap_or_else(|| PathBuf::from(format!("{}/.dart/dart-sdk", home)));
+        return match std::fs::remove_dir_all(&dart_sdk) {
+            Ok(_) => json!({ "ok": true }),
+            Err(e) => json!({
+                "ok": false,
+                "error": format!("[REMOVE_VERSION_FAILED] could not remove Dart SDK: {}", e)
+            }),
+        };
+    }
+
+    if path_str.contains("/.flutter-sdk") || path_str.contains("/.flutter/") {
+        let flutter_dir = if path_str.contains("/.flutter-sdk") {
+            path_home_before_marker(path_str, "/.flutter-sdk")
+                .map(|h| h.join(".flutter-sdk"))
+                .unwrap_or_else(|| PathBuf::from(format!("{}/.flutter-sdk", home)))
         } else {
-            json!({ "ok": false, "error": "[REMOVE_VERSION_FAILED] path is not in a recognised version manager directory (lumina / nvm / pyenv / rustup / mise)." })
+            path_home_before_marker(path_str, "/.flutter/")
+                .map(|h| h.join(".flutter"))
+                .unwrap_or_else(|| PathBuf::from(format!("{}/.flutter", home)))
+        };
+        return match std::fs::remove_dir_all(&flutter_dir) {
+            Ok(_) => json!({ "ok": true }),
+            Err(e) => json!({
+                "ok": false,
+                "error": format!("[REMOVE_VERSION_FAILED] could not remove Flutter SDK: {}", e)
+            }),
+        };
+    }
+
+    if runtime_id == "julia" || path_str.contains("/.juliaup/") {
+        if version.is_empty() {
+            return json!({ "ok": false, "error": "[REMOVE_VERSION_FAILED] Julia channel name required." });
+        }
+        let cmd = format!(
+            r#"export PATH="$HOME/.juliaup/bin:$PATH"; juliaup remove '{}' 2>&1"#,
+            version.replace('\'', "'\\''")
+        );
+        return match exec_output_limit("bash", &["-lc", &cmd], cmd_timeout_short()).await {
+            Ok(_) => json!({ "ok": true }),
+            Err(e) => json!({ "ok": false, "error": format!("[REMOVE_VERSION_FAILED] juliaup remove: {}", e.trim()) }),
+        };
+    }
+
+    let mise_marker = format!("/.local/share/mise/installs/{}/", runtime_id);
+    if path_str.contains(&mise_marker) || matches!(runtime_id, "php" | "ruby" | "lua" | "r") {
+        let mise_version =
+            path_segment_after_marker(path_str, &mise_marker).unwrap_or_else(|| version.clone());
+        if mise_version.is_empty() {
+            return json!({ "ok": false, "error": "[REMOVE_VERSION_FAILED] version required for mise-managed runtime." });
+        }
+        let cmd = format!(
+            r#"MISE=$(command -v mise 2>/dev/null || echo "$HOME/.local/bin/mise"); export PATH="$HOME/.local/bin:$PATH"; "$MISE" uninstall {}@'{}' 2>&1"#,
+            runtime_id,
+            mise_version.replace('\'', "'\\''")
+        );
+        return match exec_output_limit("bash", &["-lc", &cmd], cmd_timeout_short()).await {
+            Ok(_) => json!({ "ok": true }),
+            Err(e) => json!({ "ok": false, "error": format!("[REMOVE_VERSION_FAILED] mise uninstall: {}", e.trim()) }),
+        };
+    }
+
+    json!({ "ok": false, "error": "[REMOVE_VERSION_FAILED] path is not in a recognised version manager directory (lumina / nvm / pyenv / rustup / juliaup / mise)." })
+}
+
+async fn runtime_active_binary_path(runtime_id: &str) -> Option<String> {
+    let script = active_binary_script(runtime_id)?;
+    let out = exec_output_limit("bash", &["-lc", &script], cmd_timeout_short())
+        .await
+        .ok()?;
+    let path = out.lines().find(|l| !l.trim().is_empty())?.trim().to_string();
+    if path.is_empty() {
+        None
+    } else {
+        Some(path)
+    }
+}
+
+fn paths_refer_to_same_binary(a: &str, b: &str) -> bool {
+    if a == b {
+        return true;
+    }
+    match (std::fs::canonicalize(a), std::fs::canonicalize(b)) {
+        (Ok(ca), Ok(cb)) => ca == cb,
+        _ => false,
+    }
+}
+
+fn mark_default_installed_versions(versions: &mut [Value], active_path: &str) {
+    for entry in versions.iter_mut() {
+        let Some(path) = entry.get("path").and_then(|v| v.as_str()) else {
+            continue;
+        };
+        if paths_refer_to_same_binary(path, active_path) {
+            if let Some(obj) = entry.as_object_mut() {
+                obj.insert("isDefault".to_string(), json!(true));
+            }
         }
     }
+}
+
+fn ensure_single_installed_version_default(versions: &mut [Value]) {
+    if versions.len() != 1 {
+        return;
+    }
+    let already = versions
+        .first()
+        .and_then(|v| v.get("isDefault").and_then(|x| x.as_bool()))
+        .unwrap_or(false);
+    if already {
+        return;
+    }
+    if let Some(obj) = versions[0].as_object_mut() {
+        obj.insert("isDefault".to_string(), json!(true));
+    }
+}
+
+fn parse_rustup_toolchain_line(line: &str) -> Option<(String, bool)> {
+    let trimmed = line.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    let is_default = trimmed.contains("(default)") || trimmed.contains(", default)");
+    let tc = trimmed.split('(').next()?.trim();
+    if tc.is_empty() {
+        None
+    } else {
+        Some((tc.to_string(), is_default))
+    }
+}
+
+fn rust_toolchain_short_name(tc: &str) -> String {
+    tc.split('-').next().unwrap_or(tc).to_string()
+}
+
+fn rust_toolchain_display_label(tc: &str, rustc_version_line: &str) -> String {
+    let channel = rust_toolchain_short_name(tc);
+    let ver = rustc_version_line
+        .trim()
+        .strip_prefix("rustc ")
+        .unwrap_or(rustc_version_line)
+        .split_whitespace()
+        .next()
+        .unwrap_or(channel.as_str());
+    format!("{} ({})", ver, channel)
+}
+
+async fn probe_single_installed_version(runtime_id: &str) -> Option<Value> {
+    let path = runtime_active_binary_path(runtime_id).await?;
+    let probe = status_probe_script(runtime_id)?;
+    let raw = exec_output_limit("bash", &["-lc", &probe], cmd_timeout_short())
+        .await
+        .ok()?;
+    let label = lumina_probe_meaningful_line(&raw, "");
+    if label.is_empty() {
+        return None;
+    }
+    Some(json!({
+        "version": "system",
+        "path": path,
+        "label": label,
+        "isDefault": true,
+    }))
+}
+
+/// Parse one line of `juliaup status` (installed channels only).
+fn parse_juliaup_status_line(line: &str) -> Option<(String, String, bool)> {
+    let trimmed = line.trim();
+    if trimmed.is_empty() || trimmed.chars().all(|c| c == '-') {
+        return None;
+    }
+    if trimmed.contains("Default") && trimmed.contains("Channel") {
+        return None;
+    }
+    let parts: Vec<&str> = trimmed.split_whitespace().collect();
+    if parts.is_empty() {
+        return None;
+    }
+    let (start, is_default) = if parts[0] == "*" {
+        (1, true)
+    } else {
+        (0, false)
+    };
+    if parts.len() <= start + 1 {
+        return None;
+    }
+    let channel = parts[start].to_string();
+    let version_raw = parts[start + 1];
+    let label = version_raw.split('+').next().unwrap_or(version_raw).to_string();
+    Some((channel, label, is_default))
 }
 
 pub(crate) async fn handle_job_cancel(state: &AppState, body: &Value) -> Value {
@@ -2263,6 +2396,75 @@ mod tests {
         assert!(!changed, "completed job should not be modified");
         assert_eq!(jobs[0]["state"], json!("completed"));
         assert_eq!(jobs[0]["logTail"], json!(["done"]));
+    }
+
+    #[test]
+    fn parse_juliaup_status_default_channel() {
+        let (channel, label, is_default) =
+            parse_juliaup_status_line("       *  1.6.7    1.6.7+0.x64.linux.gnu").unwrap();
+        assert_eq!(channel, "1.6.7");
+        assert_eq!(label, "1.6.7");
+        assert!(is_default);
+    }
+
+    #[test]
+    fn parse_juliaup_status_release_channel() {
+        let (channel, label, is_default) =
+            parse_juliaup_status_line("          release  1.12.6+0.x64.linux.gnu").unwrap();
+        assert_eq!(channel, "release");
+        assert_eq!(label, "1.12.6");
+        assert!(!is_default);
+    }
+
+    #[test]
+    fn parse_rustup_toolchain_active_default() {
+        let (tc, is_default) =
+            parse_rustup_toolchain_line("stable-x86_64-unknown-linux-gnu (active, default)").unwrap();
+        assert_eq!(tc, "stable-x86_64-unknown-linux-gnu");
+        assert!(is_default);
+    }
+
+    #[test]
+    fn parse_rustup_toolchain_beta_not_default() {
+        let (tc, is_default) =
+            parse_rustup_toolchain_line("beta-x86_64-unknown-linux-gnu").unwrap();
+        assert_eq!(tc, "beta-x86_64-unknown-linux-gnu");
+        assert!(!is_default);
+    }
+
+    #[test]
+    fn rust_toolchain_display_label_formats_channel() {
+        let label = rust_toolchain_display_label(
+            "stable-x86_64-unknown-linux-gnu",
+            "rustc 1.96.0 (ac68faa20 2026-05-25)",
+        );
+        assert_eq!(label, "1.96.0 (stable)");
+    }
+
+    #[test]
+    fn parse_juliaup_status_skips_separator() {
+        assert!(parse_juliaup_status_line("--------------------------------------------------").is_none());
+    }
+
+    #[test]
+    fn mark_default_installed_versions_by_path() {
+        let mut versions = vec![
+            json!({ "version": "3.12.0", "path": "/home/u/.pyenv/versions/3.12.0/bin/python" }),
+            json!({ "version": "3.14.5", "path": "/home/u/.pyenv/versions/3.14.5/bin/python" }),
+        ];
+        mark_default_installed_versions(
+            &mut versions,
+            "/home/u/.pyenv/versions/3.14.5/bin/python",
+        );
+        assert_eq!(versions[0].get("isDefault"), None);
+        assert_eq!(versions[1].get("isDefault"), Some(&json!(true)));
+    }
+
+    #[test]
+    fn ensure_single_installed_version_default_marks_lone_entry() {
+        let mut versions = vec![json!({ "version": "v25.2.0", "path": "/home/u/.nvm/versions/node/v25.2.0/bin/node" })];
+        ensure_single_installed_version_default(&mut versions);
+        assert_eq!(versions[0].get("isDefault"), Some(&json!(true)));
     }
 
     #[test]

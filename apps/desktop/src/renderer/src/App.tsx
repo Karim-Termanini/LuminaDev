@@ -22,12 +22,21 @@ import { ReadinessWizardPage } from './pages/ReadinessWizardPage'
 import { FirstRunWizardPage } from './pages/FirstRunWizardPage'
 import { syncAppearanceFromStore } from './theme/applyAccent'
 import { useNotification } from './layout/NotificationProvider'
+import { initProfileSwitchProgress } from './pages/profileSwitchProgress'
+import { resumeBackgroundProjectSetupIfNeeded } from './pages/projectBackgroundSetup'
 
 export default function App(): ReactElement | null {
   const [ready, setReady] = useState(false)
   const [showReadinessWizard, setShowReadinessWizard] = useState(false)
   const [showFirstRunWizard, setShowFirstRunWizard] = useState(false)
   const { showToast } = useNotification()
+
+  useEffect(() => {
+    initProfileSwitchProgress()
+    void resumeBackgroundProjectSetupIfNeeded((message, type, opts) => {
+      showToast(type === 'error' ? 'error' : 'success', message)
+    })
+  }, [showToast])
 
   useEffect(() => {
     window.dh.storeGet({ key: 'readiness_wizard_complete' }).then((res: unknown) => {

@@ -506,6 +506,8 @@ export const RuntimeGetVersionsRequestSchema = z.object({
 export const RuntimeSetActiveRequestSchema = z.object({
   runtimeId: z.string().min(1).max(64),
   path: z.string().min(1).max(4096),
+  /** Version manager channel/tag (e.g. juliaup channel) when path alone is ambiguous. */
+  version: z.string().max(128).optional(),
 })
 
 export const RuntimeCheckDepsRequestSchema = z.object({

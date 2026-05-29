@@ -293,7 +293,10 @@ declare global {
       >
       runtimeInstalledVersions: (
         runtimeId: string
-      ) => Promise<{ ok: boolean; versions: Array<{ version: string; path: string }> }>
+      ) => Promise<{
+        ok: boolean
+        versions: Array<{ version: string; path: string; label?: string; isDefault?: boolean }>
+      }>
       getAvailableVersions: (
         runtimeId: string,
         method?: 'system' | 'local'
@@ -301,6 +304,7 @@ declare global {
       runtimeSetActive: (payload: {
         runtimeId: string
         path: string
+        version?: string
       }) => Promise<{ ok: boolean; error?: string }>
       checkDependencies: (runtimeId: string) => Promise<{
         ok: boolean
