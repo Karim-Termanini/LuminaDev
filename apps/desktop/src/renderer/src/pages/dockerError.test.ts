@@ -26,6 +26,9 @@ describe('humanizeDockerError', () => {
       'install step failed'
     )
     expect(humanizeDockerError('[DOCKER_REMAP_FAILED] create failed')).toContain('remap')
+    expect(humanizeDockerError('[DOCKER_STATS_FAILED] command failed')).toContain(
+      'Failed to fetch container stats'
+    )
     expect(humanizeDockerError('[DOCKER_UNKNOWN] random low-level error')).toContain(
       'random low-level error'
     )

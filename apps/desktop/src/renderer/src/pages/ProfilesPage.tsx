@@ -46,6 +46,7 @@ export function ProfilesPage(): ReactElement {
   const [onLogin, setOnLogin] = useState<OnLoginAutomationStore>(() =>
     OnLoginAutomationStoreSchema.parse({})
   )
+  const [rowError, setRowError] = useState<Record<number, string>>({})
   const [editingProfileIdx, setEditingProfileIdx] = useState<number | null>(null)
   const [openDropdownIdx, setOpenDropdownIdx] = useState<number | null>(null)
   const [credInputId, setCredInputId] = useState('')
@@ -59,6 +60,7 @@ export function ProfilesPage(): ReactElement {
   const [activeProfileTemplate, setActiveProfileTemplate] = useState<string | null>(null)
   const [projectPaths, setProjectPaths] = useState<Record<string, string | null>>({})
   const [runningProfiles, setRunningProfiles] = useState<Set<string>>(new Set())
+  const [actionLoading, setActionLoading] = useState<Record<string, 'starting' | 'stopping' | 'restarting' | null>>({})
 
   // Beginner vs Expert Mode states
   const [envMode, setEnvMode] = useState<'beginner' | 'expert'>('beginner')
@@ -132,34 +134,37 @@ export function ProfilesPage(): ReactElement {
     await Promise.all(
       loadedProfiles.map(async (p) => {
         try {
-          const res = await storeGetAny({ key: `project_dir_${p.baseTemplate}` })
-          paths[p.baseTemplate] = res.ok && typeof res.data === 'string' ? res.data : null
+          const res = await storeGetAny({ key: `project_dir_${p.name}` })
+          paths[p.name] = res.ok && typeof res.data === 'string' ? res.data : null
         } catch {
-          paths[p.baseTemplate] = null
+          paths[p.name] = null
         }
       })
     )
     setProjectPaths(paths)
   }, []) // stable: only calls window.dh + setState setters
 
-  const checkRunning = useCallback(async (profileList: CustomProfileEntry[]): Promise<Set<string>> => {
-    if (profileList.length === 0) {
-      setRunningProfiles(new Set())
-      return new Set()
-    }
-    try {
-      const res = (await invoke('ipc_invoke', {
-        channel: 'dh:profile:running-status',
-        payload: { names: profileList.map((p) => p.name) },
-      })) as { ok?: boolean; running?: string[] }
-      const running = new Set<string>(res.ok && res.running ? res.running : [])
-      setRunningProfiles(running)
-      return running
-    } catch {
-      setRunningProfiles(new Set())
-      return new Set()
-    }
-  }, [])
+  const checkRunning = useCallback(
+    async (profileList: CustomProfileEntry[]): Promise<Set<string>> => {
+      if (profileList.length === 0) {
+        setRunningProfiles(new Set())
+        return new Set()
+      }
+      try {
+        const res = (await invoke('ipc_invoke', {
+          channel: 'dh:profile:running-status',
+          payload: { names: profileList.map((p) => p.name) },
+        })) as { ok?: boolean; running?: string[] }
+        const running = new Set<string>(res.ok && res.running ? res.running : [])
+        setRunningProfiles(running)
+        return running
+      } catch {
+        setRunningProfiles(new Set())
+        return new Set()
+      }
+    },
+    []
+  )
 
   const refreshRunning = useCallback(async (): Promise<Set<string>> => {
     return checkRunning(profiles)
@@ -636,7 +641,7 @@ export function ProfilesPage(): ReactElement {
                               : t('btn.full')}
                           </span>
                         </p>
-                        {projectPaths[p.baseTemplate] ? (
+                        {projectPaths[p.name] ? (
                           <p
                             className="row-subtitle mono"
                             style={{
@@ -650,7 +655,7 @@ export function ProfilesPage(): ReactElement {
                             }}
                           >
                             <span className="codicon codicon-folder" style={{ marginRight: 4 }} />
-                            {projectPaths[p.baseTemplate]}
+                            {projectPaths[p.name]}
                           </p>
                         ) : (
                           <p
@@ -733,11 +738,13 @@ export function ProfilesPage(): ReactElement {
                               cursor: 'pointer',
                               fontSize: 13,
                             }}
+                            disabled={!!actionLoading[p.name]}
                             onClick={async () => {
                               setStatus(null)
+                              setActionLoading((prev) => ({ ...prev, [p.name]: 'stopping' }))
                               try {
                                 const r = (await invoke('ipc_invoke', {
-                                  channel: 'dh:compose:down',
+                                  channel: 'dh:compose:stop',
                                   payload: { profile: p.name },
                                 })) as { ok?: boolean; error?: string }
                                 if (r.ok) {
@@ -759,20 +766,33 @@ export function ProfilesPage(): ReactElement {
                                   message: e instanceof Error ? e.message : String(e),
                                   type: 'warning',
                                 })
+                              } finally {
+                                setActionLoading((prev) => ({ ...prev, [p.name]: null }))
                               }
                             }}
                           >
-                            <span
-                              className="codicon codicon-debug-stop"
-                              style={{ marginRight: 4 }}
-                            />
-                            Stop
+                            {actionLoading[p.name] === 'stopping' ? (
+                              <>
+                                <span className="codicon codicon-loading codicon-modifier-spin" style={{ marginRight: 4 }} />
+                                Stopping...
+                              </>
+                            ) : (
+                              <>
+                                <span
+                                  className="codicon codicon-debug-stop"
+                                  style={{ marginRight: 4 }}
+                                />
+                                Stop
+                              </>
+                            )}
                           </button>
                           <button
                             type="button"
                             className="row-btn"
+                            disabled={!!actionLoading[p.name]}
                             onClick={async () => {
                               setStatus(null)
+                              setActionLoading((prev) => ({ ...prev, [p.name]: 'restarting' }))
                               try {
                                 const r = (await invoke('ipc_invoke', {
                                   channel: 'dh:profile:switch',
@@ -789,16 +809,28 @@ export function ProfilesPage(): ReactElement {
                                   message: e instanceof Error ? e.message : String(e),
                                   type: 'warning',
                                 })
+                              } finally {
+                                setActionLoading((prev) => ({ ...prev, [p.name]: null }))
                               }
                             }}
                           >
-                            <span className="codicon codicon-sync" style={{ marginRight: 4 }} />
-                            Restart
+                            {actionLoading[p.name] === 'restarting' ? (
+                              <>
+                                <span className="codicon codicon-loading codicon-modifier-spin" style={{ marginRight: 4 }} />
+                                Restarting...
+                              </>
+                            ) : (
+                              <>
+                                <span className="codicon codicon-sync" style={{ marginRight: 4 }} />
+                                Restart
+                              </>
+                            )}
                           </button>
                         </>
                       ) : (
                         <button
                           type="button"
+                          disabled={!!actionLoading[p.name]}
                           style={{
                             padding: '8px 16px',
                             borderRadius: 6,
@@ -806,41 +838,71 @@ export function ProfilesPage(): ReactElement {
                             color: '#fff',
                             border: 'none',
                             fontWeight: 700,
-                            cursor: 'pointer',
+                            cursor: actionLoading[p.name] ? 'not-allowed' : 'pointer',
                             fontSize: 13,
+                            opacity: actionLoading[p.name] ? 0.7 : 1,
                           }}
                           onClick={async () => {
                             setStatus(null)
+                            setRowError((prev) => {
+                              // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                              const { [i]: _dropped, ...rest } = prev
+                              return rest
+                            })
+                            setActionLoading((prev) => ({ ...prev, [p.name]: 'starting' }))
                             await setAsActive(p.name)
                             try {
                               const r = (await invoke('ipc_invoke', {
-                                channel: 'dh:compose:up',
-                                payload: { profile: p.name },
-                              })) as { ok?: boolean; error?: string }
+                                channel: 'dh:profile:switch',
+                                payload: { to: p.name },
+                              })) as { ok?: boolean; error?: string; log?: string }
                               await refreshRunning()
                               if (r.ok) {
                                 setStatus({ message: `${p.name} started.`, type: 'success' })
                               } else {
-                                setStatus({
-                                  message: r.error || 'Failed to start',
-                                  type: 'warning',
-                                })
+                                setRowError((prev) => ({
+                                  ...prev,
+                                  [i]: r.error || 'Failed to start',
+                                }))
                               }
                             } catch (e) {
-                              setStatus({
-                                message: e instanceof Error ? e.message : String(e),
-                                type: 'warning',
-                              })
+                              setRowError((prev) => ({
+                                ...prev,
+                                [i]: e instanceof Error ? e.message : String(e),
+                              }))
+                            } finally {
+                              setActionLoading((prev) => ({ ...prev, [p.name]: null }))
                             }
                           }}
                         >
-                          <span className="codicon codicon-play" style={{ marginRight: 4 }} />
-                          Start
+                          {actionLoading[p.name] === 'starting' ? (
+                            <>
+                              <span className="codicon codicon-loading codicon-modifier-spin" style={{ marginRight: 4 }} />
+                              Starting...
+                            </>
+                          ) : (
+                            <>
+                              <span className="codicon codicon-play" style={{ marginRight: 4 }} />
+                              Start
+                            </>
+                          )}
                         </button>
                       )}
                       <button type="button" className="row-btn" onClick={() => openEditModal(i)}>
                         {t('btn.edit')}
                       </button>
+                      {rowError[i] && (
+                        <span
+                          style={{
+                            fontSize: 12,
+                            color: 'var(--red)',
+                            maxWidth: 200,
+                            wordBreak: 'break-word',
+                          }}
+                        >
+                          {rowError[i]}
+                        </span>
+                      )}
                       <div style={{ position: 'relative' }}>
                         <button
                           type="button"

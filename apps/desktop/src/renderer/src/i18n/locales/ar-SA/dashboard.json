@@ -20,6 +20,7 @@
   "main.toast.failedScaffold": "فشل إنشاء الهيكل الأساسي",
   "main.toast.failedMobileScaffold": "فشل إنشاء هيكل المشروع المحمول",
   "main.toast.failedAIMLScaffold": "فشل إنشاء هيكل مشروع AI/ML",
+  "main.toast.failedDocsScaffold": "فشل إنشاء هيكل مشروع التوثيق",
   "main.toast.failedCreateProject": "فشل إنشاء المشروع",
   "main.toast.projectUnlinked": "تم فصل المشروع عن الملف الشخصي.",
   "main.toast.switching": "جارٍ التبديل إلى {{name}}…",

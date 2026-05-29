@@ -138,6 +138,7 @@ async fn ipc_invoke(
         "dh:compose:up" => compose_engine::docker_compose_up(&app, &body).await,
         "dh:compose:logs" => compose_engine::docker_compose_logs(&app, &body).await,
         "dh:compose:down" => compose_engine::docker_compose_down(&app, &body).await,
+        "dh:compose:stop" => compose_engine::docker_compose_stop(&app, &body).await,
         "dh:ports:suggest" => system_info::handle_ports_suggest(&app, &body).await,
         "dh:profile:switch" => profile_engine::profile_switch(&app, &body).await,
         "dh:profile:credentials:store" => {
@@ -161,6 +162,7 @@ async fn ipc_invoke(
         "dh:editor:open" => system_info::editor_open(&app, &body).await,
         "dh:project:ensure_dir" => system_info::handle_project_ensure_dir(&body),
         "dh:fs:exists" => system_info::handle_fs_exists(&body),
+        "dh:fs:open" => system_info::handle_fs_open(&body),
         "dh:project:scaffold" => project_scaffold::handle_project_scaffold(body).await,
         "dh:project:install_deps" => {
             project_scaffold::handle_project_install_deps(body, app.clone()).await
@@ -245,6 +247,7 @@ async fn ipc_invoke(
         "dh:profile:running-status" => {
             system_info::handle_profile_running_status(&app, &body).await
         }
+        "dh:docker:container:stats" => docker_engine::handle_container_stats(&body).await,
         "dh:log:stream:start" => {
             runtime_logs::handle_log_stream_start(app.clone(), &body, &state).await
         }

@@ -20,6 +20,7 @@
   "main.toast.failedScaffold": "Failed to scaffold project",
   "main.toast.failedMobileScaffold": "Failed to scaffold mobile project",
   "main.toast.failedAIMLScaffold": "Failed to scaffold AI/ML project",
+  "main.toast.failedDocsScaffold": "Failed to scaffold documentation project",
   "main.toast.failedCreateProject": "Failed to create project",
   "main.toast.projectUnlinked": "Project unlinked from profile.",
   "main.toast.switching": "Switching to {{name}}…",

@@ -510,6 +510,23 @@ export function DashboardMainPage(): ReactElement {
           setIsScaffolding(false)
           setToast({ type: 'error', message: res.error || t('main.toast.failedAIMLScaffold') })
        }
+     } else if (targetTemplate === 'docs') {
+       const res = await invoke('ipc_invoke', {
+         channel: 'dh:project:scaffold',
+         payload: { path, template: 'docs' }
+       }) as any
+       if (res.ok) {
+         setProjectPath(res.path)
+         await window.dh.storeSet({ key: `project_dir_${selectedProfileName}`, data: res.path } as any)
+         setToast({ type: 'success', message: t('main.toast.createdProject', { name }) })
+         setIsScaffolding(false)
+         setCreateProjectModalOpen(false)
+         setCreateProjectStep(1)
+         setCreateProjectName('')
+       } else {
+         setIsScaffolding(false)
+         setToast({ type: 'error', message: res.error || t('main.toast.failedDocsScaffold') })
+       }
      } else {
        const res = await invoke('ipc_invoke', { channel: 'dh:project:ensure_dir', payload: { path } }) as any
        if (res.ok) {

@@ -23,6 +23,7 @@ function createTauriDhApi(): DhApi {
     dockerRemapPort: (payload) => tauriInvoke(IPC.dockerRemapPort, payload),
     dockerInspect: (payload) => tauriInvoke(IPC.dockerInspect, payload),
     dockerReconfigure: (payload) => tauriInvoke(IPC.dockerReconfigure, payload),
+    dockerContainerStats: (payload) => tauriInvoke(IPC.dockerContainerStats, payload),
     dockerImagesList: () => tauriInvoke(IPC.dockerImagesList),
     dockerImageAction: (payload) => tauriInvoke(IPC.dockerImageAction, payload),
     dockerVolumesList: () => tauriInvoke(IPC.dockerVolumesList),
@@ -151,7 +152,8 @@ function createTauriDhApi(): DhApi {
     runtimeStatus: () => tauriInvoke(IPC.runtimeStatus),
     runtimeInstalledVersions: (runtimeId: string) =>
       tauriInvoke<{ ok: boolean; versions: Array<{ version: string; path: string }> }>(
-        IPC.runtimeInstalledVersions, { runtimeId }
+        IPC.runtimeInstalledVersions,
+        { runtimeId }
       ),
     getAvailableVersions: (runtimeId, method) =>
       tauriInvoke(IPC.runtimeGetVersions, { runtimeId, method }),
@@ -208,6 +210,7 @@ function createTauriDhApi(): DhApi {
       tauriInvoke<{ ok: boolean; streamId: string }>(IPC.logStreamStart, payload),
     logStreamStop: (payload: { streamId: string }) =>
       tauriInvoke<{ ok: boolean }>(IPC.logStreamStop, payload),
+    fsOpen: (payload: { path: string }) => tauriInvoke(IPC.fsOpen, payload),
   } satisfies DhApi
 }
 

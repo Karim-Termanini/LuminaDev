@@ -20,6 +20,7 @@
   "main.toast.failedScaffold": "Erstellen des Grundgerüsts fehlgeschlagen",
   "main.toast.failedMobileScaffold": "Erstellen des mobilen Projekts fehlgeschlagen",
   "main.toast.failedAIMLScaffold": "Erstellen des KI/ML-Projekts fehlgeschlagen",
+  "main.toast.failedDocsScaffold": "Erstellen des Dokumentationsprojekts fehlgeschlagen",
   "main.toast.failedCreateProject": "Projekterstellung fehlgeschlagen",
   "main.toast.projectUnlinked": "Projekt vom Profil getrennt.",
   "main.toast.switching": "Wechsle zu {{name}}…",

@@ -52,6 +52,15 @@ declare global {
         networkMode?: string
         restartPolicy?: string
       }) => Promise<unknown>
+      dockerContainerStats: (payload: { id: string }) => Promise<{
+        ok: boolean
+        cpuPct?: number
+        memMb?: number
+        memLimitMb?: number
+        netRxMb?: number
+        netTxMb?: number
+        error?: string
+      }>
       dockerImagesList: () => Promise<unknown>
       dockerImageAction: (payload: {
         id: string
@@ -276,7 +285,9 @@ declare global {
       runtimeStatus: () => Promise<
         import('@linux-dev-home/shared').RuntimeStatusResponse & { ok: boolean; error?: string }
       >
-      runtimeInstalledVersions: (runtimeId: string) => Promise<{ ok: boolean; versions: Array<{ version: string; path: string }> }>
+      runtimeInstalledVersions: (
+        runtimeId: string
+      ) => Promise<{ ok: boolean; versions: Array<{ version: string; path: string }> }>
       getAvailableVersions: (
         runtimeId: string,
         method?: 'system' | 'local'
@@ -559,6 +570,8 @@ declare global {
         id?: string
       }) => Promise<{ ok: boolean; streamId: string }>
       logStreamStop: (payload: { streamId: string }) => Promise<{ ok: boolean }>
+      /** Open a path in the system file manager (xdg-open). */
+      fsOpen: (payload: { path: string }) => Promise<{ ok: boolean }>
     }
   }
 }

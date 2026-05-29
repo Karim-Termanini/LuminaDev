@@ -167,5 +167,13 @@
   "network.descCustom": "Benutzerdefiniertes Netzwerk.",
   "ports.remap": "Port neu zuordnen",
   "ports.remapping": "Wird ausgeführt…",
-  "cleanup.runSelected": "Ausgewählte Bereinigung ausführen"
+  "cleanup.runSelected": "Ausgewählte Bereinigung ausführen",
+  "drawer.stats": "Statistiken",
+  "stats.empty": "Statistiken nur für laufende Container verfügbar.",
+  "stats.polling": "Aktualisiert alle 3 Sekunden",
+  "stats.fetchError": "Statistiken konnten nicht abgerufen werden",
+  "stats.netRx": "Netz Empfang",
+  "stats.netTx": "Netz Senden",
+  "stats.memory": "Speicher",
+  "stats.cpu": "CPU"
 }

@@ -14,7 +14,7 @@
 ## 🎯 Immediate Sprint (from `docs/SMART_FLOW_VCS.md`) — DO THIS NOW
 
 **Critical paths only: Tests → Audit → Cross-distro → Release. Distribution is exclusively via GitHub Releases.**
-Cosmetic work (theming, drag-drop polish) blocked until after Day 10.
+Cosmetic work (theming, drag-drop polish) is blocked until after Day 10.
 
 ### Days 1–2 — Release Setup
 
@@ -27,7 +27,7 @@ Distribution: GitHub Releases only (AppImage). No package manager distribution i
   - [x] Prune dry-run (images, volumes, build cache)
   - [x] Error case: Docker daemon not running
 - [x] Integration tests:
-  - [x] Job Runner with long task (Rust-side command loop simulation)
+  - [x] Job Runner with a long task (Rust-side command loop simulation)
   - [x] Streaming logs
   - [x] Cancellation
 - [x] Add CI workflows (only if better than existing CIs):
@@ -49,7 +49,7 @@ Progress notes (2026-05-01):
   - version/probe matching utilities and shell-noise filtering
   - package command builders, output truncation, repository-root discovery
 - Full Rust test suite now passes locally: `cd apps/desktop/src-tauri && cargo test -- --nocapture`.
-- Added second dedicated test module file: `apps/desktop/src-tauri/src/runtime_prune_contract_tests.rs`
+- Added a second dedicated test module file: `apps/desktop/src-tauri/src/runtime_prune_contract_tests.rs`
   - runtime version token edge-cases (`lumina_*` helpers)
   - Docker prune preview response contract shape/types via `docker_prune_preview_payload(...)`
 - Added `.github/workflows/smoke-tests.yml` for dedicated Rust smoke/job-runner coverage.
@@ -91,7 +91,7 @@ Bug fixes priority (see Known Bugs table below):
 - [x] Bug #4 — Docker Hub official-image links normalized (`library/*` + bare names)
 Progress notes (2026-05-01, follow-up):
 - Hardened Docker-socket guidance in renderer error contracts: `[DOCKER_UNAVAILABLE]` and `[DOCKER_PERMISSION_DENIED]` now append explicit troubleshooting instructions.
-- Updated `EnvironmentBanner` Docker docs link to current LuminaDev repository path.
+- Updated `EnvironmentBanner` Docker docs link to the current LuminaDev repository path.
 - Hardened terminal failure fallback copy to include PTY focus guidance alongside external terminal fallback.
 - Runtime install validation hardened for Fedora Java: expanded tests for DNF major-version package selection (`8/11/17/latest`) and existing install-path checks.
 - Monitor metrics hardened: `/proc` reads now fallback to host-side reads through wrapped host execution when sandbox reads are unavailable.
@@ -105,7 +105,7 @@ Progress notes (2026-05-01, follow-up):
 
 Progress notes (2026-05-01, docs pass):
 
-- README now uses explicit `Current Status` and `Known Limitations` headings and documents `lib.rs` monolith as maintenance follow-up.
+- README now uses explicit `Current Status` and `Known Limitations` headings and documents the `lib.rs` monolith as a maintenance follow-up.
 - Added root `CONTRIBUTING.md` with setup, quality-gate commands, commit/PR rules.
 - Cross-distro/UI bug loop includes fixed Docker wizard refresh, Docker Hub official-link normalization, and fallback guidance hardening.
 
@@ -136,7 +136,7 @@ Progress notes (2026-05-01, docs pass):
 
 - [x] **Static Analysis Quality Gate:**
 
-  - [x] Enforced `clippy -D warnings` and `cargo-audit` in `smoke` script.
+  - [x] Enforced `clippy -D warnings` and `cargo-audit` in the `smoke` script.
 
 ---
 
@@ -149,7 +149,7 @@ Progress notes (2026-05-01, docs pass):
 - ❌ Policy Lock, Visual Change Preview
 - ✅ **Git Doctor** — shipped: scan card in Git Config Overview + Diagnostics tab with health ring, severity-classified findings, and one-click fixes
 
-_(Profiles **on-login** automation is **Phase 9** backlog, not "never do.")_
+_(Profiles **on-login** automation is **Phase 9** backlog, not “never do.”)_
 
 ---
 
@@ -172,7 +172,7 @@ All five stabilization checklist items `done`. `pnpm smoke` green. See [`docs/ST
 
 ## 🏗️ Rust Backend Architecture Standards
 
-**CRITICAL:** `apps/desktop/src-tauri/src/lib.rs` must remain **thin Tauri entry point only**. All domain logic lives in dedicated modules. Current monolith (200KB+, 10K+ lines) refactored into modular structure.
+**CRITICAL:** `apps/desktop/src-tauri/src/lib.rs` must remain a **thin Tauri entry point only**. All domain logic lives in dedicated modules. Current monolith (200KB+, 10K+ lines) will be refactored into modular structure.
 
 ### Module Organization Rules
 
@@ -184,7 +184,7 @@ All five stabilization checklist items `done`. `pnpm smoke` green. See [`docs/ST
 - AppState struct definition
 - Module declarations (`mod utils; mod docker_ext; ...`)
 
-**Create new module when:**
+**Create a new module when:**
 
 - Logic > 200 lines → extract into module
 - Domain has 5+ related functions → create domain module (e.g., `docker_ext.rs` for all Docker ops)
@@ -254,7 +254,7 @@ pub async fn ipc_invoke(channel: &str, payload: Value, state: AppState) -> Resul
 
 ### Modularization ✅ DONE (Phase 17)
 
-6-module proposal superseded. Actual outcome: 30 top-level `.rs` files + `cloud_auth/` (7 sub-files) = 37 source files total. `lib.rs` is thin 678-line dispatcher with zero business logic inline. See Phase 17 results above.
+The 6-module proposal was superseded. Actual outcome: 30 top-level `.rs` files + `cloud_auth/` (7 sub-files) = 37 source files total. `lib.rs` is a thin 678-line dispatcher with zero business logic inline. See Phase 17 results above.
 
 ---
 
@@ -281,9 +281,9 @@ pub async fn ipc_invoke(channel: &str, payload: Value, state: AppState) -> Resul
 
 ### Verified missing (not Alpha scope)
 
-- [x] **Minimal compose stub per preset** — each `docker/compose/<profile>/docker-compose.yml` is small Alpine `sleep infinity` service; project name set via `-p` CLI flag (no `name:` field in YAML); `dh:compose:up` resolves checkout, `LUMINA_DEV_COMPOSE_ROOT`, or bundled `docker/compose` (see `compose_profiles.rs` + `tauri.conf.json` `bundle.resources`).
+- [x] **Minimal compose stub per preset** — each `docker/compose/<profile>/docker-compose.yml` is a small Alpine `sleep infinity` service; project name set via `-p` CLI flag (no `name:` field in YAML); `dh:compose:up` resolves checkout, `LUMINA_DEV_COMPOSE_ROOT`, or bundled `docker/compose` (see `compose_profiles.rs` + `tauri.conf.json` `bundle.resources`).
 - [x] **Full stack definitions** — all 9 presets have `docker-compose.full.yml`: web-dev (nginx), infra (Traefik+Portainer+Prometheus), ai-ml (Jupyter+Ollama), data-science (Jupyter+Postgres), mobile (Appium+json-server), game-dev (Redis+game-server), docs (MkDocs), desktop-gui (Xpra), empty (Alpine workspace).
-- [x] Preset ↔ store: `active_profile` is `ComposeProfile` id; dashboard + wizard + Profiles **Set Active** stay aligned
+- [x] Preset ↔ store: `active_profile` is a `ComposeProfile` id; dashboard + wizard + Profiles **Set Active** stay aligned
 
 _On-login automation lives under **Phase 9** (not Phase 1)._
 
@@ -301,7 +301,7 @@ _On-login automation lives under **Phase 9** (not Phase 1)._
 - [x] Docker Hub search + tag picker
 - [x] In-container terminal (`dockerTerminal` IPC)
 
-Known issue addressed: install wizard now refreshes `installedFeatures` on open and after successful install, so mid-session installs reflected without reload.
+Known issue addressed: install wizard now refreshes `installedFeatures` on open and after successful install, so mid-session installs are reflected without reload.
 
 ---
 
@@ -361,7 +361,7 @@ Remaining: Ruby install slow on Fedora (intentional/known).
 
 ## Phase 7 — Maintenance 🔄 ✅ DONE
 
-**Goal:** Process actual, real-time data for entire program (no mocks).
+**Goal:** Process actual, real-time data for the entire program (no mocks).
 
 - [x] **Backend Probes:** Real-time `/proc` queries: CPU %, memory, swap, disk, I/O, network, load, uptime. No hardcoded values.
 - [x] **Fleet Scanning:** Docker daemon (containers + systemd) + process list via `ps`. Real container/process health.
@@ -401,21 +401,21 @@ Remaining: Ruby install slow on Fedora (intentional/known).
 
 ## Phase 9 — Profiles ✅ DONE (`/profiles` engine room)
 
-**Goal:** Implement real profile management page with real accounts and ability to seamlessly switch between profiles. Complete removal of static placeholder profiles.
+**Goal:** Implement a real profile management page with real accounts and the ability to seamlessly switch between profiles. Complete removal of static placeholder profiles.
 
 - [x] **Data Structure:** Profiles are robust JSON with `name`, `baseTemplate`, `description`, `tags`, `composeVariant`, `envVars`, `sshKeyId`, `credentialIds`. Stored encrypted; UI has full CRUD wizard with chip tags and stack toggle.
 - [x] **Authentication:** Profile switching = user context switching. Credentials stored AES-256-GCM encrypted in `profile_credentials.enc`. No separate login flow needed.
-- [x] **Switching Engine:** Context-switching engine safely tears down one profile's state and spins up another's instantly from UI (`profileSwitch` IPC).
+- [x] **Switching Engine:** A context-switching engine that safely tears down one profile's state and spins up another's instantly from the UI (`profileSwitch` IPC).
 - [x] **Workspace Context Binding:** Fluent Design UI modal to create/link projects and dynamically bind `${PROJECT_DIR}` to containers on restart.
-- [x] **Project Scaffolding Engine:** Advanced `npm`/`pip` dependency installer, dynamic `package.json`/`requirements.txt` generation, and real-time terminal UI progress streaming. Web-Dev and Data-Science fully functional.
+- [x] **Project Scaffolding Engine:** Advanced `npm`/`pip` dependency installer, dynamic `package.json`/`requirements.txt` generation, and real-time terminal UI progress streaming. Web-Dev and Data-Science are fully functional.
 - [x] **Expanded Environments:** Mobile scaffold (React Native + Flutter sub-templates via `scaffold_mobile_react_native` / `scaffold_mobile_flutter`) and AI/ML scaffold (`scaffold_ai_ml`: venv, Jupyter, Ollama, LangChain skeleton) fully implemented in `project_scaffold.rs`. DashboardMainPage create-project modal wired with mobile sub-template picker and `dh:project:scaffold` IPC calls for both mobile and ai-ml templates.
-- [x] **IDE Integration:** Dynamic editor detection and `ipc_invoke` routing for launching VS Code, Cursor, Neovim directly into active container workspace.
+- [x] **IDE Integration:** Dynamic editor detection and `ipc_invoke` routing for launching VS Code, Cursor, Neovim directly into the active container workspace.
 
 ---
 
 ## Phase 10 — Extensions 📋 PLANNED (post-Alpha)
 
-- **Extension model v0**: "plugins" = **extra widgets + optional IPC namespaces** loaded from **signed/allowlisted** folder; no arbitrary binary download at first.
+- **Extension model v0**: “plugins” = **extra widgets + optional IPC namespaces** loaded from a **signed/allowlisted** folder; no arbitrary binary download at first.
 - **Developer API**: versioned API and lifecycle hooks for third-party widget development.
 - **Marketplace**: browsable directory for community-contributed extensions (post-v0 stability).
 
@@ -425,25 +425,25 @@ Remaining: Ruby install slow on Fedora (intentional/known).
 
 - [x] **Flow Control:** `App.tsx` chains two wizards sequentially: `readiness_wizard_complete` → `first_run_wizard_complete`. Readiness wizard runs first (full 8-step system check + onboarding). First-run wizard only fires if readiness was completed but first-run wasn't.
 - [x] **Content Scope:** 3-step lightweight wizard — theme picker (dark/light preview cards) → Git identity (name + email, both optional) → completion. Both steps skippable via "Skip for now" link.
-- [x] **Zero Duplication:** ReadinessWizardPage (Phase 16) remains comprehensive path — 8 steps including system probes with auto-fix, theme, git, SSH, and profile picker. FirstRunWizardPage is *sequential fallback* for when readiness done but app onboarding wasn't finalized.
+- [x] **Zero Duplication:** ReadinessWizardPage (Phase 16) remains the comprehensive path — 8 steps including system probes with auto-fix, theme, git, SSH, and profile picker. FirstRunWizardPage is the *sequential fallback* for when readiness is done but app onboarding wasn't finalized.
 
-**Goal:** Must execute strictly after Phase 16 (System Readiness/Installer) is 100% satisfied. Must be fully functional and avoid duplicated setup steps.
+**Goal:** Must execute strictly after Phase 16 (System Readiness/Installer) is 100% satisfied. Must be fully functional and avoid any duplicated setup steps.
 
 ---
 
 ## Phase 12 — Cloud Git (GitHub / GitLab) ✅ DONE
 
-Turns app into true daily driver for software engineers managing repositories and cloud source control platforms.
+This phase turns the app into a true daily driver for software engineers managing repositories and cloud source control platforms.
 
-- **Authentication** ✅: Encrypted store for tokens; device flow + PAT; optional OAuth client IDs via **Cloud Git → Advanced** / env / compile-time; dashboard **Cloud Git** link widget (`link.cloud-git`). Device-flow failure maps to `[CLOUD_AUTH_DEVICE_POLL_REJECTED]` with actionable guidance.
+- **Authentication** ✅: Encrypted store for tokens; device flow + PAT; optional OAuth client IDs via **Cloud Git → Advanced** / env / compile-time; dashboard **Cloud Git** link widget (`link.cloud-git`). Device-flow failure now maps to `[CLOUD_AUTH_DEVICE_POLL_REJECTED]` with actionable guidance.
 - **Interactive Version Control (Smart Workflow)** ✅:
   - **Smart Push/Sync**: Fetch-before-push; `behind > 0` blocks push with notice; protected-branch failures → `[GIT_VCS_PROTECTED_BRANCH]` + Cloud Git link; **Copy raw error** on panel.
-  - **Branch rename after protected-branch push**: Suggests new branch name, creates + pushes it, then opens PR/MR wizard automatically.
+  - **Branch rename after protected-branch push**: Suggests a new branch name, creates + pushes it, then opens PR/MR wizard automatically.
   - **Integrate Bar**: Guided UI for Merge, Rebase, and Stash (fast-forward defaults).
-  - **Conflict Resolution Studio**: 3-way merge view (Local / Incoming / Result) with Accept Current, Accept Incoming, Accept Both. No manual text editing.
+  - **Conflict Resolution Studio**: 3-way merge view (Local / Incoming / Result) with Accept Current, Accept Incoming, Accept Both. No manual text editing required.
   - **State Management**: Automatic handling of `MERGING` / `REBASING` states with Continue or Abort actions.
 - **Cloud Dashboards (API Integration)** ✅:
-  - **PR/MR Wizard**: Create PRs/MRs directly from app. Auto-fills title from branch name, visual branch picker, opens after protected-branch bypass flow. GitLab merge button removed from CI panel (policy always blocks it); "View on GitLab" link used.
+  - **PR/MR Wizard**: Create PRs/MRs directly from the app. Auto-fills title from branch name, visual branch picker, opens after protected-branch bypass flow. GitLab merge button removed from CI panel (policy always blocks it); "View on GitLab" link used instead.
   - **CI/CD Pipelines**: `GitVcsCiChecks` + `gitVcsRepoPipelines` — real-time status (GitHub Actions + GitLab CI) with 30s polling. GitHub-only server-side merge button.
   - **Issues Tracking**: Open issues across repos via `CloudGitActivityPanel`.
   - **Releases & Tags**: Latest releases per provider via `CloudGitActivityPanel`.
@@ -508,7 +508,7 @@ Probe for **everything** required to run app. No shortcuts.
 
 **Philosophy:** Direct action, not documentation.
 
-- [x] **One-Click Install:** Each missing dependency has "Install" button (not "How?").
+- [x] **One-Click Install:** Each missing dependency has an "Install" button (not "How?").
 - [x] **Command Execution:** Button triggers native OS package manager (apt, dnf, pacman, etc.) detection.
 - [x] **Privilege Escalation:** Uses `pkexec` (Polkit) to prompt for password securely. No forced terminal or manual CLI.
 - [x] **Special Cases:**
@@ -588,13 +588,13 @@ When user clicks "Install" / "Fix":
 
 ## 🚨 UI/UX & Performance Debt ✅ DONE (2026-05-28)
 
-- [x] **Runtimes Page Optimization:** Profile Tauri invoke calls causing >1 min load time. Implement lazy loading, caching of local package lists, or async background fetching. ✅ DONE (2026-05-28) — 30s status cache, adaptive polling (800ms active, 3s idle), background refresh.
-- [x] **Dashboard - Main:** Wire dynamic widget injection based on user's active Profile layout configuration. ✅ DONE (2026-05-28) — `DashboardWidgetDeck` resolves widget types from shared registry, profile-driven layout.
+- [x] **Runtimes Page Optimization:** Profile the Tauri invoke calls causing the >1 minute load time. Implement lazy loading, caching of local package lists, or asynchronous background fetching. ✅ DONE (2026-05-28) — 30s status cache, adaptive polling (800ms active, 3s idle), background refresh.
+- [x] **Dashboard - Main:** Wire up dynamic widget injection based on the user's active Profile layout configuration so it actually makes sense. ✅ DONE (2026-05-28) — `DashboardWidgetDeck` resolves widget types from shared registry, profile-driven layout.
 - [x] **Dashboard - Widgets:** Remove all mocked JSON files. Tie widgets directly to live system event emitters. ✅ DONE (2026-05-28) — zero mock files, all `layoutGet`/`layoutSet` are real IPC, profile reads from `active_profile` store.
-- [x] **Dashboard - Kernels:** Build configuration grid for starting, stopping, linking local development kernels (e.g., Jupyter, PHP-FPM). ✅ DONE (2026-05-28) — `KERNEL_DEFS` with Start/Stop/Open/Link via `hostExec`.
-- [x] **Dashboard - Logs:** Implement unified log viewer using `xterm.js` multiplexing stdout/stderr streams from all active background jobs and containers into single searchable buffer. ✅ DONE (2026-05-28) — real xterm.js with multiplexed streams, functional line-buffer search filter.
-- [x] **Global Navigation (Chrome) Fixes:** Define specific Tauri commands (e.g., `open_terminal`, `show_notifications_panel`) bound to Top Bar buttons (Search, Notification, Terminal, Settings) and Left Sidebar buttons (Docs, Setup Wizard, Local User). ✅ DONE (2026-05-28) — Search uses fuzzy-scored palette (pages/containers/runtimes/git repos via live IPC), Notifications poll `jobsList()`, Terminal/Settings navigate, Docs link fixed, Setup Wizard wired, Profile name from store, nav badges from engine health ping.
-- [x] **Bottom Bar:** Completely rip out "Phase 0 task runner" and replace with clean, minimized status bar or remove entirely if replacement unnecessary. ✅ FIXED (2026-05-28) — zero Phase 0/task runner references; `ActiveJobsStrip` shows real job data; status bar shows live `appInfo()` version and dynamic engine health indicator.
+- [x] **Dashboard - Kernels:** Build a configuration grid that allows starting, stopping, and linking local development kernels (e.g., Jupyter, PHP-FPM). ✅ DONE (2026-05-28) — `KERNEL_DEFS` with Start/Stop/Open/Link via `hostExec`.
+- [x] **Dashboard - Logs:** Implement a unified log viewer using `xterm.js` that multiplexes stdout/stderr streams from all active background jobs and containers into a single searchable buffer. ✅ DONE (2026-05-28) — real xterm.js with multiplexed streams, functional line-buffer search filter.
+- [x] **Global Navigation (Chrome) Fixes:** Define the specific Tauri commands (e.g., `open_terminal`, `show_notifications_panel`) that must be bound to the Top Bar buttons (Search, Notification, Terminal, Settings) and Left Sidebar buttons (Docs, Setup Wizard, Local User). ✅ DONE (2026-05-28) — Search uses fuzzy-scored palette (pages/containers/runtimes/git repos via live IPC), Notifications poll `jobsList()`, Terminal/Settings navigate, Docs link fixed, Setup Wizard wired, Profile name from store, nav badges from engine health ping.
+- [x] **Bottom Bar:** Completely rip out the "Phase 0 task runner" and replace it with a clean, minimized status bar or remove it entirely if a replacement is unnecessary. ✅ FIXED (2026-05-28) — zero Phase 0/task runner references; `ActiveJobsStrip` shows real job data; status bar shows live `appInfo()` version and dynamic engine health indicator.
 
 ---
 
@@ -619,11 +619,11 @@ Based on current app state (Phase 16 + Phase 7 complete), here's what remaining 
 
 ### Phase 8 — Settings ✅ DONE
 
-15 tabs shipped. See Phase 8 section above for per-tab detail. Remaining gaps: Resources tab absent, Extension tab is stub.
+15 tabs shipped. See Phase 8 section above for per-tab detail. Remaining gaps: Resources tab absent, Extension tab is a stub.
 
 ### Phase 15 — Theme Rollout ✅ DONE
 
-`theme-elevated.css` created; all 11 pages + 1 modal converted to elevated theme system. Dynamic theme swapping without reload is post-Alpha enhancement.
+`theme-elevated.css` created; all 11 pages + 1 modal converted to elevated theme system. Dynamic theme swapping without reload is a post-Alpha enhancement.
 
 ### Phase 9 — Profiles ✅ DONE
 

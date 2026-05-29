@@ -263,13 +263,7 @@ export function DockerPage(): ReactElement {
       if (imgRes.ok) setImages(imgRes.rows)
       if (netRes.ok) setNetworks(netRes.rows)
       if (volRes.ok) {
-        const vRows = volRes.rows as VolumeRow[]
-        const containers = d.rows as ContainerRow[]
-        const mapped = vRows.map((v) => {
-          const usedBy = containers.filter((c) => c.volumes?.includes(v.name)).map((c) => c.name)
-          return { ...v, usedBy }
-        })
-        setVolumes(mapped)
+        setVolumes(volRes.rows as VolumeRow[])
       }
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e)
@@ -2959,7 +2953,7 @@ type InspectDrawerProps = {
   onRefresh: () => Promise<void>
 }
 
-const DRAWER_TABS = ['info', 'ports', 'networks', 'env', 'volumes', 'logs'] as const
+const DRAWER_TABS = ['info', 'ports', 'networks', 'env', 'volumes', 'logs', 'stats'] as const
 type DrawerTab = (typeof DRAWER_TABS)[number]
 
 function portsFromRowDisplay(
@@ -3015,6 +3009,52 @@ function ContainerInspectDrawer({
   const [editNetwork, setEditNetwork] = useState(row.networks?.[0] ?? 'bridge')
   const [editRestart, setEditRestart] = useState('no')
   const [inspectVolumes, setInspectVolumes] = useState<string[]>(row.volumes ?? [])
+  const [stats, setStats] = useState<{
+    cpuPct: number
+    memMb: number
+    memLimitMb: number
+    netRxMb: number
+    netTxMb: number
+  } | null>(null)
+  const [statsError, setStatsError] = useState<string | null>(null)
+
+  const isRunning = row.state.toLowerCase() === 'running'
+
+  // Poll stats every 3s when stats tab is active and container is running
+  useEffect(() => {
+    if (drawerTab !== 'stats' || !isRunning) {
+      setStats(null)
+      setStatsError(null)
+      return
+    }
+    let cancelled = false
+    const poll = async () => {
+      try {
+        const res = await window.dh.dockerContainerStats({ id: row.id })
+        if (cancelled) return
+        if (res.ok && res.cpuPct !== undefined) {
+          setStats({
+            cpuPct: res.cpuPct,
+            memMb: res.memMb ?? 0,
+            memLimitMb: res.memLimitMb ?? 0,
+            netRxMb: res.netRxMb ?? 0,
+            netTxMb: res.netTxMb ?? 0,
+          })
+          setStatsError(null)
+        } else {
+          setStatsError(t('stats.fetchError'))
+        }
+      } catch (e) {
+        if (!cancelled) setStatsError(String(e))
+      }
+    }
+    poll()
+    const interval = setInterval(poll, 3000)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
+  }, [drawerTab, row.id, isRunning, t])
 
   useEffect(() => {
     let cancelled = false
@@ -3099,7 +3139,6 @@ function ContainerInspectDrawer({
     }
   }
 
-  const isRunning = row.state.toLowerCase() === 'running'
   const volumeMounts = inspectVolumes.length > 0 ? inspectVolumes : (row.volumes ?? [])
 
   const sectionLabels: Record<DrawerTab, string> = {
@@ -3109,6 +3148,7 @@ function ContainerInspectDrawer({
     env: t('drawer.env'),
     volumes: t('drawer.volumes'),
     logs: t('drawer.logs'),
+    stats: t('drawer.stats'),
   }
 
   return (
@@ -3518,6 +3558,113 @@ function ContainerInspectDrawer({
               >
                 {logs || (logsBusy ? 'Loading…' : 'No logs.')}
               </pre>
+            </div>
+          )}
+
+          {drawerTab === 'stats' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {!isRunning ? (
+                <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>{t('stats.empty')}</div>
+              ) : statsError ? (
+                <div style={{ fontSize: 13, color: 'var(--red)' }}>{statsError}</div>
+              ) : (
+                <>
+                  {/* CPU Bar */}
+                  <div>
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        marginBottom: 4,
+                        fontSize: 12,
+                      }}
+                    >
+                      <span style={{ color: 'var(--text-muted)' }}>{t('stats.cpu')}</span>
+                      <span className="mono">{(stats?.cpuPct ?? 0).toFixed(1)}%</span>
+                    </div>
+                    <div
+                      style={{
+                        background: 'var(--bg)',
+                        borderRadius: 4,
+                        height: 10,
+                        overflow: 'hidden',
+                      }}
+                    >
+                      <div
+                        style={{
+                          background: 'var(--accent)',
+                          height: '100%',
+                          borderRadius: 4,
+                          width: `${Math.min(stats?.cpuPct ?? 0, 100)}%`,
+                          transition: 'width 0.5s ease',
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Memory Bar */}
+                  <div>
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        marginBottom: 4,
+                        fontSize: 12,
+                      }}
+                    >
+                      <span style={{ color: 'var(--text-muted)' }}>{t('stats.memory')}</span>
+                      <span className="mono">
+                        {(stats?.memMb ?? 0).toFixed(0)} MB
+                        {(stats?.memLimitMb ?? 0) > 0
+                          ? ` / ${(stats?.memLimitMb ?? 0).toFixed(0)} MB`
+                          : ''}
+                      </span>
+                    </div>
+                    <div
+                      style={{
+                        background: 'var(--bg)',
+                        borderRadius: 4,
+                        height: 10,
+                        overflow: 'hidden',
+                      }}
+                    >
+                      <div
+                        style={{
+                          background: 'var(--green)',
+                          height: '100%',
+                          borderRadius: 4,
+                          width: `${(stats?.memLimitMb ?? 0) > 0 ? Math.min(((stats?.memMb ?? 0) / (stats?.memLimitMb ?? 1)) * 100, 100) : 0}%`,
+                          transition: 'width 0.5s ease',
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Network I/O */}
+                  <div style={{ display: 'flex', gap: 16 }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 2 }}>
+                        {t('stats.netRx')}
+                      </div>
+                      <div className="mono" style={{ fontSize: 13 }}>
+                        {(stats?.netRxMb ?? 0).toFixed(2)} MB
+                      </div>
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 2 }}>
+                        {t('stats.netTx')}
+                      </div>
+                      <div className="mono" style={{ fontSize: 13 }}>
+                        {(stats?.netTxMb ?? 0).toFixed(2)} MB
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                    {t('stats.polling')}
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>
