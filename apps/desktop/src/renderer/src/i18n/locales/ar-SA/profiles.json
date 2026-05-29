@@ -160,6 +160,7 @@
   "msg.exportFallback": "الحافظة غير متاحة؛ تم وضع JSON في مربع الاستيراد أدناه.",
   "msg.imported": "تم استيراد الملفات الشخصية.",
   "msg.cleared": "تم مسح جميع الملفات الشخصية.",
+  "msg.credSaveFailed": "فشل حفظ بيانات الاعتماد في المخزن الآمن.",
   "msg.initialized": "تم تشغيل \"{{name}}\" بنجاح.",
   "msg.restarted": "تم إعادة تشغيل \"{{name}}\".",
   "msg.switchedStack": "تم التبديل \"{{name}}\" إلى حزمة {{variant}}.",

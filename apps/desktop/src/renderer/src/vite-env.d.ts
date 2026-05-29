@@ -155,19 +155,25 @@ declare global {
       gitConfigList: (payload: {
         target: 'sandbox' | 'host'
       }) => Promise<{ ok: boolean; rows: Array<{ key: string; value: string }>; error?: string }>
-      gitDoctorScan: () => Promise<{
-        ok: true
-        gitVersion: string | null
-        healthScore: number
-        findings: Array<{
-          id: string
-          category: 'configuration' | 'security' | 'performance' | 'environment' | 'overview'
-          severity: 'critical' | 'warning' | 'info' | 'ok'
-          title: string
-          detail: string
-          fix?: { label: string; action?: string }
-        }>
-      }>
+      gitDoctorScan: () => Promise<
+        | {
+            ok: true
+            gitVersion: string | null
+            healthScore: number
+            findings: Array<{
+              id: string
+              category: 'configuration' | 'security' | 'performance' | 'environment' | 'overview'
+              severity: 'critical' | 'warning' | 'info' | 'ok'
+              title: string
+              detail: string
+              fix?: { label: string; action?: string }
+            }>
+          }
+        | {
+            ok: false
+            error: string
+          }
+      >
       sshGenerate: (payload: {
         target: 'sandbox' | 'host'
         email?: string

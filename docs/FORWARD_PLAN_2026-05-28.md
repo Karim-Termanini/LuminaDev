@@ -345,20 +345,20 @@ End of P2  → P5 Release gate → v0.3.0-beta tag
 The CodeRabbit review (recorded in [codeRabbit.md](file:///home/karimodora/Documents/GitHub/LuminaDev/codeRabbit.md)) has highlighted several security risks, logical bugs, and design inconsistencies. These have been prioritized into the following backlog:
 
 ### 6.1 Critical Security Remediation
-- [ ] **SshPage shell command injection** in scp/rsync (lines 370–375, 517–543). Escape user inputs (remote paths, ports, hosts) using custom shell quoting or avoid `bash -c` execution.
+- [x] **SshPage shell command injection** in scp/rsync (lines 370–375, 517–543). Escape user inputs (remote paths, ports, hosts) using custom shell quoting or avoid `bash -c` execution.
 
 ### 6.2 Major Logic & Feature Remediation
-- [ ] **ProfilesPage global credential deletion bug** (lines 2295–2301, 2411–2415). Ensure unlinking a credential from a profile does not delete it globally from store.
-- [ ] **ProfilesPage optimistic credential save** (lines 2240–2248, 2452–2459). Await and validate `profileCredentialsStore` response before updating the UI state.
-- [ ] **GitConfigPage backup file shape validation** (lines 2569–2574). Validate keys and types in JSON parser during `handleImport`.
-- [ ] **GitConfigPage gitDoctorScan response check** (lines 715–723). Check for `!res.ok` and handle the error shape correctly.
-- [ ] **RuntimesPage cache invalidation** (lines 152–165, 189–222). Clear or force-reload version cache when runtime versions are added or switched.
-- [ ] **FirstRunWizardPage route standard** (lines 6–227). Colocate contract/error helpers and add route test coverage.
-- [ ] **FirstRunWizardPage copy localization** (lines 118–120). Localize text copy and fix conditional completion summary.
+- [x] **ProfilesPage global credential deletion bug** (lines 2295–2301, 2411–2415). Ensure unlinking a credential from a profile does not delete it globally from store.
+- [x] **ProfilesPage optimistic credential save** (lines 2240–2248, 2452–2459). Await and validate `profileCredentialsStore` response before updating the UI state.
+- [x] **GitConfigPage backup file shape validation** (lines 2569–2574). Validate keys and types in JSON parser during `handleImport`.
+- [x] **GitConfigPage gitDoctorScan response check** (lines 715–723). Check for `!res.ok` and handle the error shape correctly.
+- [x] **RuntimesPage cache invalidation** (lines 152–165, 189–222). Clear or force-reload version cache when runtime versions are added or switched.
+- [x] **FirstRunWizardPage route standard** (lines 6–227). Colocate contract/error helpers and add route test coverage.
+- [x] **FirstRunWizardPage copy localization** (lines 118–120). Localize text copy and fix conditional completion summary.
 
 ### 6.3 Minor Cleanups & Edge Cases
-- [ ] **executor.rs resource limits** (lines 11–18). Remove unused `_app` param or restore `store.json` lookup.
-- [ ] **git_doctor.rs whitespace check** (line 235). Trim config values before comparing (e.g. `v.trim() != "true"`).
-- [ ] **runtime_logs.rs stream limit** (line 78). Fix off-by-one check to enforce a strict limit of 20 concurrent streams (`>= 20`).
-- [ ] **runtime_jobs.rs single-quote escape** (lines 921–961). Prevent command breakages in `PROJECT_DIR` paths by escaping single quotes.
+- [x] **executor.rs resource limits** (lines 11–18). Remove unused `_app` param or restore `store.json` lookup.
+- [x] **git_doctor.rs whitespace check** (line 235). Trim config values before comparing (e.g. `v.trim() != "true"`).
+- [x] **runtime_logs.rs stream limit** (line 78). Fix off-by-one check to enforce a strict limit of 20 concurrent streams (`>= 20`).
+- [x] **runtime_jobs.rs single-quote escape** (lines 921–961). Prevent command breakages in `PROJECT_DIR` paths by escaping single quotes.
 

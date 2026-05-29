@@ -18,6 +18,7 @@ pub(crate) fn is_allowed_store_key(key: &str) -> bool {
     "appearance",
     "cloud_oauth_clients",
     "readiness_wizard_complete",
+    "first_run_wizard_complete",
     "general_settings",
     "update_settings",
     "profile_credentials",
@@ -487,7 +488,7 @@ mod tests {
     for key in &[
       "custom_profiles", "wizard_state", "ssh_bookmarks", "maintenance_state",
       "active_profile", "on_login_automation", "appearance", "cloud_oauth_clients",
-      "readiness_wizard_complete", "general_settings", "update_settings",
+      "readiness_wizard_complete", "first_run_wizard_complete", "general_settings", "update_settings",
       "profile_credentials", "onboarding_profile", "projects_home_dir",
       "app_engine_settings", "builder_settings",
       "beta_features_state", "notification_settings", "shortcuts_settings",

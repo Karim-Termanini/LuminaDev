@@ -8,7 +8,7 @@ use crate::host_exec::{cmd_timeout_install_step, cmd_timeout_short, exec_output_
 use crate::state::{self};
 use crate::utils::calculate_limit_cores;
 
-pub(crate) fn get_resource_limits(_app: &tauri::AppHandle) -> (usize, usize, u64) {
+pub(crate) fn get_resource_limits() -> (usize, usize, u64) {
     const CPU_LIMIT: u64 = 80;
     const RAM_LIMIT_MB: u64 = 4096;
     let cores = std::thread::available_parallelism()
@@ -37,8 +37,8 @@ pub(crate) async fn runtime_bash_user_step(
         .env_remove("NPM_CONFIG_PREFIX");
 
     let mut prefixed_cmd;
-    if let Some(ref app_h) = app {
-        let (limit_cores, cores, ram_limit_mb) = get_resource_limits(app_h);
+    if app.is_some() {
+        let (limit_cores, cores, ram_limit_mb) = get_resource_limits();
         logs.push(format!(
       "[RESOURCE_ENFORCEMENT] Constraints: CPU Cores = {}/{} (nice 19, CARGO_BUILD_JOBS, MAKEFLAGS), RAM limit = {} MB (ulimit -v + runtime env vars), max processes = 512 (ulimit -u)",
       limit_cores, cores, ram_limit_mb
@@ -196,15 +196,13 @@ pub(crate) async fn sudo_bash_install_step(
     let mut limit_cores = 0;
     let mut cores = 0;
     let mut ram_limit_mb = 0;
-    let has_limits = if let Some(ref app_h) = app {
-        let (l_cores, c, r_limit) = get_resource_limits(app_h);
+    let has_limits = app.is_some();
+    if has_limits {
+        let (l_cores, c, r_limit) = get_resource_limits();
         limit_cores = l_cores;
         cores = c;
         ram_limit_mb = r_limit;
-        true
-    } else {
-        false
-    };
+    }
 
     let mut wrapped_cmd: String;
     let effective_cmd: &str = if has_limits {

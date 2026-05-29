@@ -77,6 +77,12 @@ export function SshPage(): ReactElement {
   const { t } = useTranslation('ssh')
   const connectedCount = sessions.filter((s) => s.status === 'connected').length
 
+  /** Safely single-quote a value for use in shell commands executed via bash -c.
+   *  Escapes internal single quotes using the standard '\'' pattern. */
+  function shQuote(v: string): string {
+    return `'${v.replace(/'/g, `'\\''`)}'`
+  }
+
   function setPendingTransferCmd(cmd: string): void {
     pendingTransferCmdRef.current = cmd
   }
@@ -511,7 +517,8 @@ export function SshPage(): ReactElement {
       return
     }
 
-    const remote = `${ftSession.user}@${ftSession.host}`
+    const remote = shQuote(`${ftSession.user}@${ftSession.host}`)
+    const port = String(ftSession.port)
     let cmd = ''
 
     if (ftDirection === 'upload') {
@@ -523,24 +530,26 @@ export function SshPage(): ReactElement {
         setFtStatus(t('ft.selectRemoteDest'))
         return
       }
-      const files = ftLocalPaths.map((p) => `"${p}"`).join(' ')
+      const files = ftLocalPaths.map((p) => shQuote(p)).join(' ')
+      const remoteDest = shQuote(`${ftRemotePath}`)
       cmd =
         ftTool === 'scp'
-          ? `scp -P ${ftSession.port} -r ${files} ${remote}:${ftRemotePath}`
-          : `rsync -avz -e 'ssh -p ${ftSession.port}' ${files} ${remote}:${ftRemotePath}`
+          ? `scp -P ${port} -r ${files} ${remote}:${remoteDest}`
+          : `rsync -avz -e ${shQuote(`ssh -p ${port}`)} ${files} ${remote}:${remoteDest}`
     } else {
       if (!ftRemotePath.trim()) {
         setFtStatus(t('ft.selectRemoteSource'))
         return
       }
       const localDest = ftLocalDestDir || '.'
+      const localDestQ = shQuote(localDest)
+      const remoteSrc = shQuote(`${ftRemotePath}`)
       // mkdir -p ensures destination directory exists before scp/rsync
-      const mkdirPrefix = `mkdir -p "${localDest}" && `
       cmd =
-        mkdirPrefix +
+        `mkdir -p ${localDestQ} && ` +
         (ftTool === 'scp'
-          ? `scp -P ${ftSession.port} -r ${remote}:"${ftRemotePath}" "${localDest}"`
-          : `rsync -avz -e 'ssh -p ${ftSession.port}' ${remote}:"${ftRemotePath}" "${localDest}"`)
+          ? `scp -P ${port} -r ${remote}:${remoteSrc} ${localDestQ}`
+          : `rsync -avz -e ${shQuote(`ssh -p ${port}`)} ${remote}:${remoteSrc} ${localDestQ}`)
     }
 
     const sId = Date.now().toString()

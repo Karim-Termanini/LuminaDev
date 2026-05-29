@@ -160,6 +160,7 @@
   "msg.exportFallback": "Zwischenablage nicht verfügbar; JSON unten im Importfeld eingefügt.",
   "msg.imported": "Profile importiert.",
   "msg.cleared": "Alle Profile gelöscht.",
+  "msg.credSaveFailed": "Anmeldedaten konnten nicht im sicheren Speicher gespeichert werden.",
   "msg.initialized": "\"{{name}}\" erfolgreich gestartet.",
   "msg.restarted": "\"{{name}}\" neu gestartet.",
   "msg.switchedStack": "\"{{name}}\" zu {{variant}}-Stack gewechselt.",

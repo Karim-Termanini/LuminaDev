@@ -232,7 +232,7 @@ async fn check_gpg() -> Vec<Finding> {
                 "GPG keys available",
                 "Secret GPG keys found — you can sign commits.",
             ));
-            if signing.map_or(true, |v| v != "true") {
+            if signing.map_or(true, |v| v.trim() != "true") {
                 findings.push(Finding {
                     id: "gpg-not-enabled".into(),
                     category: "security".into(),
