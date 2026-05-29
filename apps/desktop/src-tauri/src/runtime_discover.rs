@@ -11,9 +11,11 @@ const EMIT_FN: &str = r#"
 _emit_unique() {
   local v="$1" p="$2"
   [ -n "$v" ] && [ -n "$p" ] || return 0
-  case "|$_disc_seen|" in *"|$p|"*) return 0 ;; esac
-  _disc_seen="${_disc_seen}|$p"
-  printf '%s\t%s\n' "$v" "$p"
+  local rp
+  rp=$(readlink -f "$p" 2>/dev/null || echo "$p")
+  case "|$_disc_seen|" in *"|$rp|"*) return 0 ;; esac
+  _disc_seen="${_disc_seen}|$rp"
+  printf '%s\t%s\n' "$v" "$rp"
 }
 _disc_seen=""
 "#;
@@ -106,29 +108,37 @@ fi
         )),
         "java" => with_discover(
             r#"
+_java_row() {
+  local d="$1" fallback="$2"
+  [ -d "$d" ] || return 0
+  [ -x "$d/bin/java" ] || return 0
+  local base rp ver
+  base=$(basename "$d")
+  case "$base" in
+    java|jre|java-openjdk|jre-openjdk|java-latest-openjdk) return 0 ;;
+  esac
+  case "$base" in jre*) return 0 ;; esac
+  ver=$("$d/bin/java" -version 2>&1 | awk -F\" '/version/ {print $2; exit}')
+  [ -n "$ver" ] || ver="${fallback:-$base}"
+  rp=$(readlink -f "$d/bin/java" 2>/dev/null || echo "$d/bin/java")
+  _emit_unique "$ver" "$rp"
+}
 for d in "$HOME/.local/share/lumina/java"/jdk-*; do
-  [ -d "$d" ] || continue
-  [ -x "$d/bin/java" ] || continue
-  _emit_unique "$(basename "$d" | sed 's/^jdk-//')" "$d/bin/java"
+  _java_row "$d" "$(basename "$d" | sed 's/^jdk-//')"
 done
 if [ -d "$HOME/.sdkman/candidates/java" ]; then
   for d in "$HOME/.sdkman/candidates/java"/*; do
-    [ -d "$d" ] || continue
     [ "$d" = "$HOME/.sdkman/candidates/java/current" ] && continue
-    [ -x "$d/bin/java" ] || continue
-    _emit_unique "$(basename "$d")" "$d/bin/java"
+    _java_row "$d"
   done
 fi
 if [ -d "$HOME/.jdks" ]; then
   for d in "$HOME/.jdks"/*; do
-    [ -x "$d/bin/java" ] || continue
-    _emit_unique "$(basename "$d")" "$d/bin/java"
+    _java_row "$d"
   done
 fi
 for d in /usr/lib/jvm/* /usr/java/*; do
-  [ -d "$d" ] || continue
-  [ -x "$d/bin/java" ] || continue
-  _emit_unique "$(basename "$d")" "$d/bin/java"
+  _java_row "$d"
 done
 "#,
         ),
@@ -392,5 +402,14 @@ mod tests {
         let script = list_installed_versions_script("flutter").unwrap();
         assert!(script.contains("$HOME/flutter"));
         assert!(script.contains("command -v flutter"));
+    }
+
+    #[test]
+    fn java_script_skips_jre_aliases_and_uses_version_probe() {
+        let script = list_installed_versions_script("java").unwrap();
+        assert!(script.contains("jre*) return 0"));
+        assert!(script.contains("java-latest-openjdk"));
+        assert!(script.contains("-version 2>&1"));
+        assert!(script.contains("readlink -f"));
     }
 }
