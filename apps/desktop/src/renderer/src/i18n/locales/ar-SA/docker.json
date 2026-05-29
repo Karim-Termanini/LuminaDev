@@ -167,5 +167,13 @@
   "network.descCustom": "شبكة مخصصة أنشأها المستخدم.",
   "ports.remap": "إعادة تعيين المنفذ",
   "ports.remapping": "جاري التنفيذ…",
-  "cleanup.runSelected": "تشغيل التنظيف المحدد"
+  "cleanup.runSelected": "تشغيل التنظيف المحدد",
+  "drawer.stats": "الإحصائيات",
+  "stats.empty": "الإحصائيات متاحة فقط للحاويات قيد التشغيل.",
+  "stats.polling": "يتم التحديث كل 3 ثوانٍ",
+  "stats.fetchError": "تعذر جلب الإحصائيات",
+  "stats.netRx": "استقبال الشبكة",
+  "stats.netTx": "إرسال الشبكة",
+  "stats.memory": "الذاكرة",
+  "stats.cpu": "المعالج"
 }

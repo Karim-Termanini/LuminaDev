@@ -120,6 +120,22 @@ pub(crate) async fn docker_compose_down(app: &AppHandle, body: &Value) -> Value 
   }
 }
 
+/// Stop containers without removing them (docker compose stop).
+/// Use this for the UI "Stop" button so containers can be restarted without re-pulling images.
+pub(crate) async fn docker_compose_stop(app: &AppHandle, body: &Value) -> Value {
+  let profile = body.get("profile").and_then(|v| v.as_str()).unwrap_or("web-dev");
+  let template = crate::profile_engine::resolve_profile_template(app, profile);
+  let dir = crate::compose_profiles::compose_profile_workdir(app, &template);
+  if !dir.is_dir() {
+    json!({ "ok": false, "log": "", "error": format!("[DOCKER_COMPOSE_FAILED] missing compose directory: {} (set LUMINA_DEV_COMPOSE_ROOT or run from a checkout with docker/compose)", dir.display()) })
+  } else {
+    match exec_docker_compose_in_dir(&dir, &["stop"], cmd_timeout_long(), Some(profile), Some(crate::profile_engine::get_profile_extra_env(app, profile))).await {
+      Ok((stdout, stderr)) => json!({ "ok": true, "log": format!("{}{}", stdout, stderr) }),
+      Err(e) => json!({ "ok": false, "log": "", "error": format!("[DOCKER_COMPOSE_FAILED] {}", e.trim()) }),
+    }
+  }
+}
+
 pub(crate) async fn expose_exec_docker_compose_in_dir(
   compose_dir: &Path,
   compose_subargs: &[&str],

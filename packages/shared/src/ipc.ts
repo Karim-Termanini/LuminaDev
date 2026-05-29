@@ -230,12 +230,15 @@ export const IPC = {
   dockerRemapPort: 'dh:docker:remap-port',
   dockerInspect: 'dh:docker:inspect',
   dockerReconfigure: 'dh:docker:reconfigure',
+  dockerContainerStats: 'dh:docker:container:stats',
   /** Returns HostMetricsResponse (metrics + read-only systemd rows). */
   metrics: 'dh:metrics',
   hostExec: 'dh:host:exec',
   composeUp: 'dh:compose:up',
   composeLogs: 'dh:compose:logs',
   composeDown: 'dh:compose:down',
+  /** Stop containers without removing them (docker compose stop). */
+  composeStop: 'dh:compose:stop',
   profileSwitch: 'dh:profile:switch',
   profileCredentialsStore: 'dh:profile:credentials:store',
   profileCredentialsList: 'dh:profile:credentials:list',
@@ -341,6 +344,9 @@ export const IPC = {
   appUpdateCheck: 'dh:app:update:check',
   profileRunningStatus: 'dh:profile:running-status',
   profileCredentialsGet: 'dh:profile:credentials:get',
+  fsExists: 'dh:fs:exists',
+  /** Open a directory path in the system file manager (xdg-open). */
+  fsOpen: 'dh:fs:open',
 } as const
 
 export type DockerActionPayload = { id: string; action: DockerContainerAction }

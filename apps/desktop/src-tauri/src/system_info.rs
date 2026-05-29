@@ -951,6 +951,27 @@ pub(crate) fn handle_fs_exists(body: &Value) -> Value {
     }
 }
 
+/// Open a directory path in the system file manager (xdg-open on Linux).
+/// Fire-and-forget; always returns ok:true so the UI isn't blocked on the result.
+pub(crate) fn handle_fs_open(body: &Value) -> Value {
+    let path_str = body
+        .get("path")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default();
+    if path_str.is_empty() {
+        return json!({ "ok": false, "error": "[FS_OPEN_FAILED] Missing path." });
+    }
+    let expanded = if path_str.starts_with("~/") {
+        let home = std::env::var("HOME").unwrap_or_else(|_| "/root".to_string());
+        path_str.replacen("~/", &format!("{}/", home), 1)
+    } else {
+        path_str.to_string()
+    };
+    // Spawn xdg-open detached; ignore errors (file manager may not be installed)
+    let _ = std::process::Command::new("xdg-open").arg(&expanded).spawn();
+    json!({ "ok": true })
+}
+
 // ---------------------------------------------------------------------------
 // SSH handlers
 // ---------------------------------------------------------------------------
@@ -1580,7 +1601,7 @@ pub(crate) async fn handle_profile_running_status(_app: &AppHandle, body: &Value
             .filter_map(|v| {
                 let name = v.get("Name")?.as_str()?.to_string();
                 let status = v.get("Status")?.as_str()?.to_lowercase();
-                if status.contains("running") { Some(name) } else { None }
+                if status.contains("running") || status.contains("restarting") { Some(name) } else { None }
             })
             .collect();
 

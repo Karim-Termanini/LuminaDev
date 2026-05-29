@@ -23,6 +23,25 @@ describe('assertDockerOk', () => {
     )
   })
 
+  it('accepts valid container stats response', () => {
+    expect(() =>
+      assertDockerOk({
+        ok: true,
+        cpuPct: 2.5,
+        memMb: 10,
+        memLimitMb: 1989.63,
+        netRxMb: 0.0012,
+        netTxMb: 5.3,
+      })
+    ).not.toThrow()
+  })
+
+  it('throws for failed container stats', () => {
+    expect(() =>
+      assertDockerOk({ ok: false, error: '[DOCKER_STATS_FAILED] no such container' })
+    ).toThrow('[DOCKER_STATS_FAILED] no such container')
+  })
+
   it('throws when ok flag is missing', () => {
     expect(() => assertDockerOk({ error: 'x' }, 'Custom fallback')).toThrow(
       'Custom fallback (missing ok flag)'

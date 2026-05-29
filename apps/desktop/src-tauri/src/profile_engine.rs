@@ -124,8 +124,21 @@ pub(crate) fn get_profile_extra_env(app: &AppHandle, profile: &str) -> HashMap<S
 }
 
 pub(crate) async fn profile_switch(app: &AppHandle, body: &Value) -> Value {
-    let from_profile = body.get("from").and_then(|v| v.as_str());
+    let mut from_profile_str = body.get("from").and_then(|v| v.as_str()).map(|s| s.to_string());
     let to_profile = body.get("to").and_then(|v| v.as_str()).unwrap_or_default();
+
+    if from_profile_str.is_none() && !to_profile.is_empty() {
+        if let Ok(store_path) = app_file(app, "store.json") {
+            let store = read_json(&store_path);
+            if let Some(active) = store.get("active_profile").and_then(|v| v.as_str()) {
+                if active != to_profile {
+                    from_profile_str = Some(active.to_string());
+                }
+            }
+        }
+    }
+    let from_profile = from_profile_str.as_deref();
+
     let _env_vars = body
         .get("envVars")
         .and_then(|v| v.as_array())

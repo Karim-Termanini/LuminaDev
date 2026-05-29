@@ -24,5 +24,8 @@ export function humanizeDockerError(err: unknown): string {
   if (code === 'DOCKER_REMAP_FAILED') {
     return `Port remap (clone) failed. ${detail}`.trim()
   }
+  if (code === 'DOCKER_STATS_FAILED') {
+    return `Failed to fetch container stats. ${detail}`.trim()
+  }
   return detail || 'Docker operation failed.'
 }

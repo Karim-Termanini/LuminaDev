@@ -52,6 +52,20 @@ export const DockerVolumeCreateRequestSchema = z.object({
   name: z.string().trim().min(1).max(256),
 })
 
+export const DockerContainerStatsRequestSchema = z.object({
+  id: z.string().min(1).max(256),
+})
+
+export const DockerContainerStatsResponseSchema = z.object({
+  ok: z.boolean(),
+  cpuPct: z.number().optional(),
+  memMb: z.number().optional(),
+  memLimitMb: z.number().optional(),
+  netRxMb: z.number().optional(),
+  netTxMb: z.number().optional(),
+  error: z.string().optional(),
+})
+
 export const DockerNetworkCreateRequestSchema = z.object({
   name: z.string().trim().min(1).max(256),
 })
