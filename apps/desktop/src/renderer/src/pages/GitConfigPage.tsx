@@ -716,6 +716,10 @@ function GitDoctor({
     setPhase('scanning')
     try {
       const res = await window.dh.gitDoctorScan()
+      if (!res.ok) {
+        setPhase('error')
+        return
+      }
       setFindings(res.findings ?? [])
       setScore(res.healthScore ?? 0)
       setGitVer(res.gitVersion ?? null)
@@ -2148,6 +2152,10 @@ function DiagnosticsSection({
     setPhase('scanning')
     try {
       const res = await window.dh.gitDoctorScan()
+      if (!res.ok) {
+        setPhase('error')
+        return
+      }
       setFindings(res.findings ?? [])
       setScore(res.healthScore ?? 0)
       setPhase('done')
@@ -2566,11 +2574,18 @@ function BackupsSection({
 
   async function handleImport(): Promise<void> {
     try {
-      const parsed = JSON.parse(importText) as ConfigRow[]
+      const parsed: unknown = JSON.parse(importText)
       if (!Array.isArray(parsed)) throw new Error(t('config.backups.invalidFormat'))
       const keys: Record<string, string> = {}
-      parsed.forEach((r) => {
-        keys[r.key] = r.value
+      parsed.forEach((r, i) => {
+        if (r === null || typeof r !== 'object')
+          throw new Error(`${t('config.backups.invalidFormat')} Row ${i + 1} is not an object.`)
+        const row = r as Record<string, unknown>
+        if (typeof row.key !== 'string' || typeof row.value !== 'string')
+          throw new Error(
+            `${t('config.backups.invalidFormat')} Row ${i + 1} must have "key" and "value" as strings.`
+          )
+        keys[row.key] = row.value
       })
       await onApplyPreset({
         label: 'Imported Backup',

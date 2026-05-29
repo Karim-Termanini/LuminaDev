@@ -918,7 +918,8 @@ fi"#;
                     let from_dir = compose_profiles::compose_profile_workdir(&app, &from_profile);
                     if from_dir.is_dir() {
                         logs.push(format!("Stopping old profile: {}...", from_profile));
-                        let cmd = format!("cd '{}' && docker compose down", from_dir.display());
+                        let safe_from_dir = from_dir.display().to_string().replace('\'', "'\\''");
+                        let cmd = format!("cd '{}' && docker compose down", safe_from_dir);
                         let _ = runtime_bash_user_step(
                             &cmd,
                             &mut logs,
@@ -958,7 +959,9 @@ fi"#;
                     "-f docker-compose.yml"
                 };
                 // We do a pull first to show download progress, then up -d
-                let cmd = format!("export PROJECT_DIR='{}' && cd '{}' && docker compose --progress plain {} pull && docker compose {} up -d", project_dir, to_dir.display(), overlay, overlay);
+                let safe_project_dir = project_dir.replace('\'', "'\\''");
+                let safe_to_dir = to_dir.display().to_string().replace('\'', "'\\''");
+                let cmd = format!("export PROJECT_DIR='{}' && cd '{}' && docker compose --progress plain {} pull && docker compose {} up -d", safe_project_dir, safe_to_dir, overlay, overlay);
                 runtime_bash_user_step(
                     &cmd,
                     &mut logs,
@@ -1332,19 +1335,23 @@ pub(crate) async fn handle_runtime_status() -> Value {
         let shell_cmd = shell_cmd.to_string();
         let id_clone = id.clone();
         let name_clone = name.clone();
-        tasks.push((id_clone, name_clone, tokio::spawn(async move {
-            match exec_result_limit("bash", &["-lc", &shell_cmd], cmd_timeout_short()).await {
-                Ok((stdout, stderr)) => {
-                    let version = lumina_probe_meaningful_line(&stdout, &stderr);
-                    if version.is_empty() {
-                        json!({ "id": id, "name": name, "installed": false })
-                    } else {
-                        json!({ "id": id, "name": name, "installed": true, "version": version })
+        tasks.push((
+            id_clone,
+            name_clone,
+            tokio::spawn(async move {
+                match exec_result_limit("bash", &["-lc", &shell_cmd], cmd_timeout_short()).await {
+                    Ok((stdout, stderr)) => {
+                        let version = lumina_probe_meaningful_line(&stdout, &stderr);
+                        if version.is_empty() {
+                            json!({ "id": id, "name": name, "installed": false })
+                        } else {
+                            json!({ "id": id, "name": name, "installed": true, "version": version })
+                        }
                     }
+                    Err(_) => json!({ "id": id, "name": name, "installed": false }),
                 }
-                Err(_) => json!({ "id": id, "name": name, "installed": false }),
-            }
-        })));
+            }),
+        ));
     }
 
     let mut runtimes = Vec::new();

@@ -60,7 +60,9 @@ export function ProfilesPage(): ReactElement {
   const [activeProfileTemplate, setActiveProfileTemplate] = useState<string | null>(null)
   const [projectPaths, setProjectPaths] = useState<Record<string, string | null>>({})
   const [runningProfiles, setRunningProfiles] = useState<Set<string>>(new Set())
-  const [actionLoading, setActionLoading] = useState<Record<string, 'starting' | 'stopping' | 'restarting' | null>>({})
+  const [actionLoading, setActionLoading] = useState<
+    Record<string, 'starting' | 'stopping' | 'restarting' | null>
+  >({})
 
   // Beginner vs Expert Mode states
   const [envMode, setEnvMode] = useState<'beginner' | 'expert'>('beginner')
@@ -752,7 +754,6 @@ export function ProfilesPage(): ReactElement {
                                   if (nowRunning.size === 0) {
                                     await setAsActive('empty')
                                   }
-                                  await refreshRunning()
                                   setStatus({ message: `${p.name} stopped.`, type: 'success' })
                                 } else {
                                   await refreshRunning()
@@ -773,7 +774,10 @@ export function ProfilesPage(): ReactElement {
                           >
                             {actionLoading[p.name] === 'stopping' ? (
                               <>
-                                <span className="codicon codicon-loading codicon-modifier-spin" style={{ marginRight: 4 }} />
+                                <span
+                                  className="codicon codicon-loading codicon-modifier-spin"
+                                  style={{ marginRight: 4 }}
+                                />
                                 Stopping...
                               </>
                             ) : (
@@ -816,7 +820,10 @@ export function ProfilesPage(): ReactElement {
                           >
                             {actionLoading[p.name] === 'restarting' ? (
                               <>
-                                <span className="codicon codicon-loading codicon-modifier-spin" style={{ marginRight: 4 }} />
+                                <span
+                                  className="codicon codicon-loading codicon-modifier-spin"
+                                  style={{ marginRight: 4 }}
+                                />
                                 Restarting...
                               </>
                             ) : (
@@ -877,7 +884,10 @@ export function ProfilesPage(): ReactElement {
                         >
                           {actionLoading[p.name] === 'starting' ? (
                             <>
-                              <span className="codicon codicon-loading codicon-modifier-spin" style={{ marginRight: 4 }} />
+                              <span
+                                className="codicon codicon-loading codicon-modifier-spin"
+                                style={{ marginRight: 4 }}
+                              />
                               Starting...
                             </>
                           ) : (
@@ -2298,16 +2308,34 @@ export function ProfilesPage(): ReactElement {
                               <button
                                 type="button"
                                 style={{ ...btn, padding: '0 20px' }}
-                                onClick={() => {
+                                onClick={async () => {
                                   if (!credInputValue.trim()) return
-                                  const credIds = [...(wizardData.credentialIds || []), credInputId]
-                                  setWizardData({ ...wizardData, credentialIds: credIds })
-                                  void window.dh.profileCredentialsStore({
-                                    id: credInputId,
-                                    value: credInputValue.trim(),
-                                  })
-                                  setCredInputId('')
-                                  setCredInputValue('')
+                                  try {
+                                    const res = await window.dh.profileCredentialsStore({
+                                      id: credInputId,
+                                      value: credInputValue.trim(),
+                                    })
+                                    if (!res.ok) {
+                                      setStatus({
+                                        message: res.error || t('msg.credSaveFailed'),
+                                        type: 'warning',
+                                      })
+                                      return
+                                    }
+                                    const credIds = [
+                                      ...(wizardData.credentialIds || []),
+                                      credInputId,
+                                    ]
+                                    setWizardData({ ...wizardData, credentialIds: credIds })
+                                    setCredInputId('')
+                                    setCredInputValue('')
+                                  } catch (e) {
+                                    setStatus({
+                                      message:
+                                        e instanceof Error ? e.message : t('msg.credSaveFailed'),
+                                      type: 'warning',
+                                    })
+                                  }
                                 }}
                               >
                                 {t('wizard.cred.beginner.saveLink')}
@@ -2356,8 +2384,6 @@ export function ProfilesPage(): ReactElement {
                                     }}
                                     onClick={() => {
                                       const oldIds = wizardData.credentialIds || []
-                                      const cId = oldIds[i]
-                                      if (cId) void window.dh.profileCredentialsDelete({ id: cId })
                                       const credIds = oldIds.filter((_, idx) => idx !== i)
                                       setWizardData({ ...wizardData, credentialIds: credIds })
                                     }}
@@ -2471,13 +2497,11 @@ export function ProfilesPage(): ReactElement {
                                 style={{ ...btnSmallDanger, padding: '8px 16px' }}
                                 onClick={() => {
                                   const oldIds = wizardData.credentialIds || []
-                                  const cId = oldIds[ci]
-                                  if (cId) void window.dh.profileCredentialsDelete({ id: cId })
                                   const credIds = oldIds.filter((_, i) => i !== ci)
                                   setWizardData({ ...wizardData, credentialIds: credIds })
                                 }}
                               >
-                                Delete
+                                {t('btn.delete')}
                               </button>
                             </div>
                           ))}
@@ -2510,17 +2534,31 @@ export function ProfilesPage(): ReactElement {
                           <button
                             type="button"
                             style={{ ...btn, padding: '0 20px' }}
-                            onClick={() => {
+                            onClick={async () => {
                               if (!credInputId.trim() || !credInputValue.trim()) return
                               const cId = credInputId.trim()
-                              const credIds = [...(wizardData.credentialIds || []), cId]
-                              setWizardData({ ...wizardData, credentialIds: credIds })
-                              void window.dh.profileCredentialsStore({
-                                id: cId,
-                                value: credInputValue.trim(),
-                              })
-                              setCredInputId('')
-                              setCredInputValue('')
+                              try {
+                                const res = await window.dh.profileCredentialsStore({
+                                  id: cId,
+                                  value: credInputValue.trim(),
+                                })
+                                if (!res.ok) {
+                                  setStatus({
+                                    message: res.error || t('msg.credSaveFailed'),
+                                    type: 'warning',
+                                  })
+                                  return
+                                }
+                                const credIds = [...(wizardData.credentialIds || []), cId]
+                                setWizardData({ ...wizardData, credentialIds: credIds })
+                                setCredInputId('')
+                                setCredInputValue('')
+                              } catch (e) {
+                                setStatus({
+                                  message: e instanceof Error ? e.message : t('msg.credSaveFailed'),
+                                  type: 'warning',
+                                })
+                              }
                             }}
                           >
                             {t('btn.add')}

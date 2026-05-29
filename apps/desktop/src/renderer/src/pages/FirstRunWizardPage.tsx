@@ -2,6 +2,8 @@ import type { ReactElement } from 'react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import './FirstRunWizardPage.css'
+import { assertFirstRunWizardOk } from './firstRunWizardContract'
+import { humanizeFirstRunWizardError } from './firstRunWizardError'
 
 export function FirstRunWizardPage({ onComplete }: { onComplete: () => void }): ReactElement {
   const { t } = useTranslation('readiness')
@@ -22,21 +24,33 @@ export function FirstRunWizardPage({ onComplete }: { onComplete: () => void }): 
     setSaving(true)
     setError(null)
     try {
-      await window.dh.storeSet({ key: 'appearance', data: { theme } })
+      assertFirstRunWizardOk(
+        await window.dh.storeSet({ key: 'appearance', data: { theme } }),
+        'Failed to save theme.'
+      )
       if (gitName.trim()) {
-        await window.dh.gitConfigSetKey({ key: 'user.name', value: gitName.trim() })
+        assertFirstRunWizardOk(
+          await window.dh.gitConfigSetKey({ key: 'user.name', value: gitName.trim() }),
+          'Failed to set Git user name.'
+        )
       }
       if (gitEmail.trim()) {
-        await window.dh.gitConfigSetKey({ key: 'user.email', value: gitEmail.trim() })
+        assertFirstRunWizardOk(
+          await window.dh.gitConfigSetKey({ key: 'user.email', value: gitEmail.trim() }),
+          'Failed to set Git user email.'
+        )
       }
-      await window.dh.storeSet({ key: 'first_run_wizard_complete', data: true })
+      assertFirstRunWizardOk(
+        await window.dh.storeSet({ key: 'first_run_wizard_complete', data: true }),
+        'Failed to finalize wizard.'
+      )
       if (skipped) {
         onComplete()
       } else {
         setStep(3)
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      setError(humanizeFirstRunWizardError(e))
     } finally {
       setSaving(false)
     }
@@ -115,18 +129,16 @@ export function FirstRunWizardPage({ onComplete }: { onComplete: () => void }): 
             <p className="firstrun-subtitle">
               {t('wizard.config.hint')}
               <br />
-              <span style={{ fontSize: 13, opacity: 0.7 }}>
-                Optional — you can set this up later in Git Config if you prefer.
-              </span>
+              <span style={{ fontSize: 13, opacity: 0.7 }}>{t('wizard.config.hintOptional')}</span>
             </p>
 
             <div className="firstrun-git-form">
               <div className="firstrun-field">
-                <label className="firstrun-field-label">{t('wizard.config.namePlaceholder')}</label>
+                <label className="firstrun-field-label">{t('wizard.config.nameLabel')}</label>
                 <input
                   type="text"
                   className="firstrun-input"
-                  placeholder="Jane Doe"
+                  placeholder={t('wizard.config.namePlaceholder')}
                   value={gitName}
                   onChange={(e) => setGitName(e.target.value)}
                   disabled={saving}
@@ -135,12 +147,12 @@ export function FirstRunWizardPage({ onComplete }: { onComplete: () => void }): 
               </div>
               <div className="firstrun-field">
                 <label className="firstrun-field-label">
-                  {t('wizard.config.emailPlaceholder')}
+                  {t('wizard.config.emailLabel')}
                 </label>
                 <input
                   type="email"
                   className="firstrun-input"
-                  placeholder="jane@example.com"
+                  placeholder={t('wizard.config.emailPlaceholder')}
                   value={gitEmail}
                   onChange={(e) => setGitEmail(e.target.value)}
                   disabled={saving}
@@ -165,7 +177,13 @@ export function FirstRunWizardPage({ onComplete }: { onComplete: () => void }): 
             </div>
             <h1 className="firstrun-title">{t('wizard.install.completeTitle')}</h1>
             <p className="firstrun-subtitle">
-              {t('wizard.config.dark')} theme applied. Git identity configured. You're all set.
+              {theme === 'dark'
+                ? t('wizard.install.completeSummaryDark')
+                : t('wizard.install.completeSummaryLight')}
+              {gitName.trim() || gitEmail.trim()
+                ? t('wizard.install.completeSummaryGitDone')
+                : t('wizard.install.completeSummaryGitSkipped')}
+              {t('wizard.install.completeSummaryEnd')}
             </p>
 
             <button className="firstrun-start-btn" onClick={handleStart}>
@@ -191,9 +209,9 @@ export function FirstRunWizardPage({ onComplete }: { onComplete: () => void }): 
                 className="firstrun-btn-skip"
                 onClick={handleSkip}
                 disabled={saving}
-                title="Skip setup — you can configure everything later in Settings and Git Config"
+                title={t('wizard.footer.skipTitle')}
               >
-                Skip for now
+                {t('wizard.footer.skip')}
               </button>
             </div>
 
@@ -205,11 +223,11 @@ export function FirstRunWizardPage({ onComplete }: { onComplete: () => void }): 
               {saving ? (
                 <>
                   <span className="codicon codicon-loading codicon-modifier-spin" />
-                  Saving…
+                  {t('wizard.footer.saving')}
                 </>
               ) : step === 2 ? (
                 <>
-                  Finish
+                  {t('wizard.footer.finish')}
                   <span className="codicon codicon-chevron-right" />
                 </>
               ) : (

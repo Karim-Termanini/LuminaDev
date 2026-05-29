@@ -160,6 +160,7 @@
   "msg.exportFallback": "Clipboard unavailable; JSON put in import box below.",
   "msg.imported": "Profiles imported.",
   "msg.cleared": "All profiles cleared.",
+  "msg.credSaveFailed": "Failed to save credential to secure store.",
   "msg.initialized": "\"{{name}}\" started successfully.",
   "msg.restarted": "\"{{name}}\" restarted.",
   "msg.switchedStack": "\"{{name}}\" switched to {{variant}} stack.",

@@ -146,7 +146,7 @@ export function DashboardKernelsPage(): ReactElement {
               const bag = s as { ok: boolean; result?: string }
               nextUnits[def.id] = bag.ok ? String(bag.result ?? 'unknown') : 'unknown'
             } else {
-              const s = await window.dh.hostExec({ command: 'systemctl_is_active', unit: def.systemdUnit })
+              const s = await window.dh.hostExec({ command: 'systemctl_is_active', unit: def.systemdUnit, user: def.category === 'dev' })
               nextUnits[def.id] = (s as { ok: boolean; result?: string }).ok ? String((s as { ok: boolean; result?: string }).result ?? 'unknown') : 'unknown'
             }
           } catch {
@@ -178,7 +178,7 @@ export function DashboardKernelsPage(): ReactElement {
       })
       const bag = res as { ok: boolean; error?: string }
       if (!bag.ok) setUnitError((prev) => ({ ...prev, [def.id]: bag.error ?? 'Failed to start' }))
-      const s = await window.dh.hostExec({ command: 'systemctl_is_active', unit: def.systemdUnit })
+      const s = await window.dh.hostExec({ command: 'systemctl_is_active', unit: def.systemdUnit, user: def.category === 'dev' })
       setUnits((prev) => ({ ...prev, [def.id]: String((s as { ok: boolean; result?: string }).result ?? 'unknown') }))
     } catch (e) {
       setUnitError((prev) => ({ ...prev, [def.id]: e instanceof Error ? e.message : String(e) }))
@@ -198,7 +198,7 @@ export function DashboardKernelsPage(): ReactElement {
       })
       const bag = res as { ok: boolean; error?: string }
       if (!bag.ok) setUnitError((prev) => ({ ...prev, [def.id]: bag.error ?? 'Failed to stop' }))
-      const s = await window.dh.hostExec({ command: 'systemctl_is_active', unit: def.systemdUnit })
+      const s = await window.dh.hostExec({ command: 'systemctl_is_active', unit: def.systemdUnit, user: def.category === 'dev' })
       setUnits((prev) => ({ ...prev, [def.id]: String((s as { ok: boolean; result?: string }).result ?? 'unknown') }))
     } catch (e) {
       setUnitError((prev) => ({ ...prev, [def.id]: e instanceof Error ? e.message : String(e) }))
@@ -262,7 +262,7 @@ export function DashboardKernelsPage(): ReactElement {
       {/* ── System Services ── */}
       <section style={{ marginBottom: 24 }}>
         <h3 style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', margin: '0 0 12px' }}>
-          System Services
+          {t('kernels.systemServices')}
         </h3>
         <div className="kernels-grid">
           {KERNEL_DEFS.filter((d) => d.category === 'system').map((def) => (
@@ -284,7 +284,7 @@ export function DashboardKernelsPage(): ReactElement {
       {/* ── Development Kernels ── */}
       <section>
         <h3 style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', margin: '0 0 12px' }}>
-          Development Kernels
+          {t('kernels.devKernels')}
         </h3>
         <div className="kernels-grid">
           {KERNEL_DEFS.filter((d) => d.category === 'dev').map((def) => (

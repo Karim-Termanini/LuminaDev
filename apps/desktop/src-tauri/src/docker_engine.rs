@@ -228,7 +228,7 @@ pub(crate) async fn docker_logs(body: &Value) -> Value {
         .unwrap_or(200)
         .to_string();
     if id.is_empty() {
-        json!({ "ok": false, "log": "", "error": "[DOCKER_LOGS_FAILED] Missing id." })
+        json!({ "ok": false, "text": "", "error": "[DOCKER_LOGS_FAILED] Missing id." })
     } else {
         match exec_result("docker", &["logs", "--tail", &tail, id]).await {
             Ok((stdout, stderr)) => json!({ "ok": true, "text": format!("{}{}", stdout, stderr) }),
@@ -520,13 +520,14 @@ pub(crate) async fn docker_pull(body: &Value) -> Value {
 
 pub(crate) async fn docker_search(body: &Value) -> Value {
     let term = body.as_str().unwrap_or_default();
+    let encoded = urlencoding::encode(term);
     match exec_output_limit(
         "curl",
         &[
             "-fsSL",
             &format!(
                 "https://hub.docker.com/v2/search/repositories/?query={}&page_size=12",
-                term
+                encoded
             ),
         ],
         cmd_timeout_short(),

@@ -130,12 +130,17 @@ export type DoctorFinding = {
   fix?: { label: string; action?: string }
 }
 
-export type GitDoctorScanResponse = {
-  ok: true
-  gitVersion: string | null
-  healthScore: number
-  findings: DoctorFinding[]
-}
+export type GitDoctorScanResponse =
+  | {
+      ok: true
+      gitVersion: string | null
+      healthScore: number
+      findings: DoctorFinding[]
+    }
+  | {
+      ok: false
+      error: string
+    }
 
 export type HostPortRow = {
   protocol: 'tcp' | 'udp'
