@@ -295,25 +295,22 @@ pub(crate) async fn docker_image_action(body: &Value) -> Value {
 pub(crate) async fn docker_volumes_list() -> Value {
     // Build a map of volume_name -> Vec<container_name>
     let mut usage_map: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
-    match exec_output("docker", &["container", "ls", "-a", "--format", "{{.Names}}\t{{.Mounts}}", "--no-trunc"]).await {
-        Ok(out) => {
-            for line in out.lines() {
-                let parts: Vec<&str> = line.split('\t').collect();
-                if parts.len() == 2 {
-                    let container = parts[0].trim();
-                    let mounts_str = parts[1].trim();
-                    if !container.is_empty() && !mounts_str.is_empty() {
-                        for m in mounts_str.split(',') {
-                            let m = m.trim();
-                            if !m.is_empty() {
-                                usage_map.entry(m.to_string()).or_default().push(container.to_string());
-                            }
+    if let Ok(out) = exec_output("docker", &["container", "ls", "-a", "--format", "{{.Names}}\t{{.Mounts}}", "--no-trunc"]).await {
+        for line in out.lines() {
+            let parts: Vec<&str> = line.split('\t').collect();
+            if parts.len() == 2 {
+                let container = parts[0].trim();
+                let mounts_str = parts[1].trim();
+                if !container.is_empty() && !mounts_str.is_empty() {
+                    for m in mounts_str.split(',') {
+                        let m = m.trim();
+                        if !m.is_empty() {
+                            usage_map.entry(m.to_string()).or_default().push(container.to_string());
                         }
                     }
                 }
             }
         }
-        Err(_) => {}
     }
 
     match exec_output("docker", &["volume", "ls", "--format", "{{json .}}"]).await {
