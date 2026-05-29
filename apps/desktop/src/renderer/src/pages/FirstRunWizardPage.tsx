@@ -50,7 +50,13 @@ export function FirstRunWizardPage({ onComplete }: { onComplete: () => void }): 
         setStep(3)
       }
     } catch (e) {
-      setError(humanizeFirstRunWizardError(e))
+      if (skipped) {
+        // Skip is always dismissible — best-effort save, never block the user.
+        void window.dh.storeSet({ key: 'first_run_wizard_complete', data: true })
+        onComplete()
+      } else {
+        setError(humanizeFirstRunWizardError(e))
+      }
     } finally {
       setSaving(false)
     }
