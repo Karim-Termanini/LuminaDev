@@ -501,7 +501,10 @@ pub(crate) async fn runtime_job_execute(
                     .await
                     .map_err(|e| e.to_string())
                 }
-            } else if (runtime_id == "php" || runtime_id == "ruby" || runtime_id == "lua")
+            } else if (runtime_id == "php"
+                || runtime_id == "ruby"
+                || runtime_id == "lua"
+                || runtime_id == "r")
                 && method == "local"
             {
                 if runtime_id == "php" {
@@ -681,6 +684,7 @@ fi"#;
                             | "php"
                             | "ruby"
                             | "lua"
+                            | "r"
                     )
                     && !pkgs.is_empty()
                 {
@@ -1194,6 +1198,29 @@ pub(crate) async fn runtime_set_active_invoke(body: &Value) -> Value {
                 .map(|_| ())
                 .map_err(|e| format!("[RUNTIME_SET_ACTIVE_FAILED] {}", e.trim()))
         }
+        "php" | "ruby" | "lua" | "r" => {
+            let version = path
+                .parent()
+                .and_then(|p| p.parent())
+                .and_then(|p| p.file_name())
+                .and_then(|n| n.to_str())
+                .unwrap_or_default()
+                .to_string();
+            if version.is_empty() {
+                return json!({ "ok": false, "error": "[RUNTIME_SET_ACTIVE_FAILED] Could not resolve mise version from path." });
+            }
+            let safe_spec = format!("{}@{}", runtime_id, version).replace('\'', "'\\''");
+            let cmd = format!(
+                "export PATH=\"$HOME/.local/bin:$PATH\" \
+         && [ -x \"$HOME/.local/bin/mise\" ] \
+         && \"$HOME/.local/bin/mise\" use -g '{}'",
+                safe_spec
+            );
+            exec_output_limit("bash", &["-lc", &cmd], cmd_timeout_short())
+                .await
+                .map(|_| ())
+                .map_err(|e| format!("[RUNTIME_SET_ACTIVE_FAILED] {}", e.trim()))
+        }
         _ => {
             return json!({ "ok": false, "error": format!("[RUNTIME_SET_ACTIVE_FAILED] Switching active '{}' is not supported yet.", runtime_id) })
         }
@@ -1326,6 +1353,7 @@ pub(crate) async fn handle_runtime_status() -> Value {
         ("julia",   "Julia",   "export PATH=\"$HOME/.juliaup/bin:$PATH\"; julia --version 2>/dev/null || ~/.juliaup/bin/julia --version 2>/dev/null"),
         ("lua",     "Lua",     "export PATH=\"$HOME/.local/bin:$PATH\"; ([ -x \"$HOME/.local/bin/mise\" ] && eval \"$($HOME/.local/bin/mise activate bash)\" >/dev/null 2>&1 || true); lua -v 2>&1 || lua5.4 -v 2>&1 || lua5.3 -v 2>&1"),
         ("lisp",    "SBCL",    "sbcl --version"),
+        ("r",       "R",       "export PATH=\"$HOME/.local/bin:$PATH\"; ([ -x \"$HOME/.local/bin/mise\" ] && eval \"$($HOME/.local/bin/mise activate bash)\" >/dev/null 2>&1 || true); R --version 2>&1 | head -1"),
     ];
 
     let mut tasks: Vec<(String, String, _)> = Vec::new();
@@ -1530,6 +1558,22 @@ pub(crate) async fn handle_runtime_installed_versions(body: &Value) -> Value {
                 }
             }
         }
+        "r" => {
+            if let Ok(raw) = exec_output_limit(
+                "bash",
+                &["-lc", "export PATH=\"$HOME/.local/bin:$PATH\"; if [ -x \"$HOME/.local/bin/mise\" ]; then \"$HOME/.local/bin/mise\" ls r 2>/dev/null | awk '{print $2}' | grep -v '^$' | while read ver; do printf '%s\\t%s\\n' \"$ver\" \"$HOME/.local/share/mise/installs/r/$ver/bin/R\"; done; fi"],
+                cmd_timeout_short(),
+            ).await {
+                for line in raw.lines() {
+                    let mut parts = line.splitn(2, '\t');
+                    let v = parts.next().unwrap_or("").trim();
+                    let p = parts.next().unwrap_or("").trim();
+                    if !v.is_empty() && !p.is_empty() {
+                        versions.push(json!({ "version": v, "path": p }));
+                    }
+                }
+            }
+        }
         _ => {
             // Runtime not supported for version listing; return empty array
         }
@@ -1580,7 +1624,7 @@ pub(crate) async fn handle_runtime_get_versions(body: &Value) -> Value {
                     }
                 }
             }
-            "node" | "python" | "go" | "php" | "ruby" | "zig" | "lua" | "lisp" => {
+            "node" | "python" | "go" | "php" | "ruby" | "zig" | "lua" | "lisp" | "r" => {
                 versions.push("system (repo default)".into());
             }
             "bun" | "dart" | "flutter" | "julia" | "rust" => {
@@ -1865,6 +1909,7 @@ pub(crate) async fn handle_runtime_get_versions(body: &Value) -> Value {
         "flutter" => versions.extend(["stable".into(), "beta".into(), "master".into()]),
         "lua" => versions.extend(["5.4".into(), "5.3".into()]),
         "lisp" => versions.extend(["system (sbcl)".into()]),
+        "r" => versions.extend(["4.4".into(), "4.3".into(), "4.2".into()]),
         _ => {}
     }
     if versions.is_empty() {
@@ -1896,6 +1941,7 @@ pub(crate) async fn handle_runtime_check_deps(body: &Value) -> Value {
         "julia"   => vec![("julia", "export PATH=\"$HOME/.juliaup/bin:$PATH\"; julia --version 2>/dev/null || ~/.juliaup/bin/julia --version 2>/dev/null"), ("curl", "curl --version")],
         "lua"     => vec![("lua", "export PATH=\"$HOME/.local/bin:$PATH\"; ([ -x \"$HOME/.local/bin/mise\" ] && eval \"$($HOME/.local/bin/mise activate bash)\" >/dev/null 2>&1 || true); lua -v 2>&1 || lua5.4 -v 2>&1"), ("readline-devel (build dep)", "rpm -q readline-devel 2>/dev/null || dpkg -l libreadline-dev 2>/dev/null | grep -q '^ii' && echo ok || echo missing")],
         "lisp"    => vec![("sbcl", "sbcl --version")],
+        "r"       => vec![("R", "export PATH=\"$HOME/.local/bin:$PATH\"; ([ -x \"$HOME/.local/bin/mise\" ] && eval \"$($HOME/.local/bin/mise activate bash)\" >/dev/null 2>&1 || true); R --version 2>&1 | head -1")],
         _         => vec![],
     };
     let mut deps: Vec<Value> = Vec::new();
@@ -2154,7 +2200,9 @@ pub(crate) async fn handle_runtime_remove_version(body: &Value) -> Value {
                     }
                 }
             }
-        } else if path_str.starts_with(&mise_base) || matches!(runtime_id, "php" | "ruby" | "lua") {
+        } else if path_str.starts_with(&mise_base)
+            || matches!(runtime_id, "php" | "ruby" | "lua" | "r")
+        {
             if version.is_empty() {
                 json!({ "ok": false, "error": "[REMOVE_VERSION_FAILED] version required for mise-managed runtime." })
             } else {

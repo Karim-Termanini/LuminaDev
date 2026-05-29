@@ -47,6 +47,8 @@
   "lua.verify": "lua -v",
   "clisp.desc": "Common Lisp environment (SBCL) for symbolic programming and advanced macro systems.",
   "clisp.verify": "sbcl --version",
+  "r.desc": "R is a language and environment for statistical computing and graphics, widely used in data science and research.",
+  "r.verify": "R --version | head -1",
   "view.description": "Description",
   "view.visitWebsite": "Visit Official Website →",
   "view.detected": "Detected Installations",

@@ -64,6 +64,10 @@ pub(crate) fn runtime_system_packages(runtime_id: &str, pkg_mgr: &str) -> Vec<&'
         ("lisp", "dnf") => vec!["sbcl"],
         ("lisp", "pacman") => vec!["sbcl"],
         ("lisp", "zypper") => vec!["sbcl"],
+        ("r", "apt") => vec!["r-base", "r-base-dev"],
+        ("r", "dnf") => vec!["R", "R-devel"],
+        ("r", "pacman") => vec!["r"],
+        ("r", "zypper") => vec!["R-base", "R-base-devel"],
         _ => vec![],
     }
 }

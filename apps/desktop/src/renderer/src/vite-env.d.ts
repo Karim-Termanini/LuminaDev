@@ -80,7 +80,7 @@ declare global {
         images?: boolean
         volumes?: boolean
         networks?: boolean
-      }) => Promise<unknown>
+      }) => Promise<{ ok: boolean; error?: string }>
       metrics: () => Promise<
         import('@linux-dev-home/shared').HostMetricsResponse & { ok: boolean; error?: string }
       >

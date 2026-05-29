@@ -47,6 +47,8 @@
   "lua.verify": "lua -v",
   "clisp.desc": "بيئة Common Lisp (SBCL) للبرمجة الرمزية وأنظمة الماكرو المتقدمة.",
   "clisp.verify": "sbcl --version",
+  "r.desc": "R هي لغة وبيئة للحوسبة الإحصائية والرسوم البيانية، تُستخدم على نطاق واسع في علوم البيانات والبحث.",
+  "r.verify": "R --version | head -1",
   "view.description": "الوصف",
   "view.visitWebsite": "زيارة الموقع الرسمي ←",
   "view.detected": "التثبيتات المكتشفة",

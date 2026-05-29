@@ -24,6 +24,7 @@ const RUNTIME_DETAILS: Record<string, { website: string; icon: string }> = {
   julia: { website: 'https://julialang.org', icon: 'symbol-color' },
   lua: { website: 'https://www.lua.org', icon: 'symbol-variable' },
   lisp: { website: 'https://www.sbcl.org', icon: 'symbol-class' },
+  r: { website: 'https://www.r-project.org', icon: 'graph' },
 }
 
 const RUNTIME_LOCALE_KEY: Record<string, string> = {

@@ -9,8 +9,16 @@ import {
 import './ProfilesPage.css'
 import type { ReactElement } from 'react'
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
+
+const RUNNING_CACHE_KEY = 'dh:profiles:running-cache:v1'
+const RUNNING_CACHE_TTL = 30 * 1000 // 30 seconds
 import { invoke } from '@tauri-apps/api/core'
 import { Trans, useTranslation } from 'react-i18next'
+import {
+  signalProfileSwitchStarting,
+  signalProfileSwitchDone,
+  signalProfileSwitchFailed,
+} from './DashboardMainPage'
 
 const BASE_TEMPLATES = [
   'web-dev',
@@ -159,6 +167,17 @@ export function ProfilesPage(): ReactElement {
         })) as { ok?: boolean; running?: string[] }
         const running = new Set<string>(res.ok && res.running ? res.running : [])
         setRunningProfiles(running)
+        // Only cache non-empty results to avoid overwriting valid state with transient empty
+        if (running.size > 0) {
+          try {
+            localStorage.setItem(
+              RUNNING_CACHE_KEY,
+              JSON.stringify({ ts: Date.now(), running: [...running] })
+            )
+          } catch {
+            /* ignore */
+          }
+        }
         return running
       } catch {
         setRunningProfiles(new Set())
@@ -173,7 +192,36 @@ export function ProfilesPage(): ReactElement {
   }, [profiles, checkRunning])
 
   useEffect(() => {
+    // Serve cached running profiles instantly, then refresh in background
+    try {
+      const raw = localStorage.getItem(RUNNING_CACHE_KEY)
+      if (raw) {
+        const cached = JSON.parse(raw) as { ts: number; running: string[] }
+        if (Date.now() - cached.ts < RUNNING_CACHE_TTL && Array.isArray(cached.running)) {
+          setRunningProfiles(new Set(cached.running))
+        }
+      }
+    } catch {
+      /* ignore corrupt cache */
+    }
+    // Check for pending switch from Dashboard (survives navigation)
+    try {
+      const raw = localStorage.getItem('dh:switch:pending')
+      if (raw) {
+        const pending = JSON.parse(raw) as { profile: string; ts: number }
+        if (Date.now() - pending.ts < 120_000 && pending.profile) {
+          setActionLoading((prev) => ({ ...prev, [pending.profile]: 'starting' as const }))
+        }
+      }
+    } catch {
+      /* ignore */
+    }
     void checkRunning(profiles)
+    // Poll running status every 10s in case compose finishes while user is on the page
+    const interval = setInterval(() => {
+      void checkRunning(profiles)
+    }, 10_000)
+    return () => clearInterval(interval)
   }, [profiles, checkRunning])
 
   const load = useCallback(async (): Promise<void> => {
@@ -797,16 +845,35 @@ export function ProfilesPage(): ReactElement {
                             onClick={async () => {
                               setStatus(null)
                               setActionLoading((prev) => ({ ...prev, [p.name]: 'restarting' }))
+                              signalProfileSwitchStarting(p.name)
                               try {
                                 const r = (await invoke('ipc_invoke', {
                                   channel: 'dh:profile:switch',
                                   payload: { to: p.name },
                                 })) as { ok?: boolean; error?: string }
-                                await refreshRunning()
                                 if (!r.ok) {
-                                  setStatus({ message: r.error || 'Failed', type: 'warning' })
-                                } else {
+                                  const errMsg = r.error || 'Failed'
+                                  signalProfileSwitchFailed(errMsg)
+                                  setStatus({ message: errMsg, type: 'warning' })
+                                  return
+                                }
+                                // Poll running status — Docker may still be pulling images
+                                let runningNow = await refreshRunning()
+                                if (runningNow.size === 0) {
+                                  for (let attempt = 0; attempt < 5; attempt++) {
+                                    await new Promise((resolve) => setTimeout(resolve, 1500))
+                                    runningNow = await refreshRunning()
+                                    if (runningNow.size > 0) break
+                                  }
+                                }
+                                signalProfileSwitchDone()
+                                if (runningNow.size > 0) {
                                   setStatus({ message: `${p.name} restarted.`, type: 'success' })
+                                } else {
+                                  setStatus({
+                                    message: `${p.name} compose started but containers not running yet.`,
+                                    type: 'warning',
+                                  })
                                 }
                               } catch (e) {
                                 setStatus({
@@ -857,19 +924,38 @@ export function ProfilesPage(): ReactElement {
                               return rest
                             })
                             setActionLoading((prev) => ({ ...prev, [p.name]: 'starting' }))
+                            // Signal Dashboard immediately so it shows progress bar
+                            signalProfileSwitchStarting(p.name)
                             await setAsActive(p.name)
                             try {
                               const r = (await invoke('ipc_invoke', {
                                 channel: 'dh:profile:switch',
                                 payload: { to: p.name },
                               })) as { ok?: boolean; error?: string; log?: string }
-                              await refreshRunning()
-                              if (r.ok) {
+                              if (!r.ok) {
+                                const errMsg = r.error || r.log || 'Failed to start'
+                                signalProfileSwitchFailed(errMsg)
+                                setRowError((prev) => ({ ...prev, [i]: errMsg }))
+                                return
+                              }
+                              // Poll running status — Docker may still be pulling images
+                              let runningNow = await refreshRunning()
+                              if (runningNow.size === 0) {
+                                for (let attempt = 0; attempt < 5; attempt++) {
+                                  await new Promise((resolve) => setTimeout(resolve, 1500))
+                                  runningNow = await refreshRunning()
+                                  if (runningNow.size > 0) break
+                                }
+                              }
+                              // Only mark as active once containers are actually running
+                              if (runningNow.size > 0) {
+                                signalProfileSwitchDone()
                                 setStatus({ message: `${p.name} started.`, type: 'success' })
                               } else {
+                                signalProfileSwitchDone()
                                 setRowError((prev) => ({
                                   ...prev,
-                                  [i]: r.error || 'Failed to start',
+                                  [i]: 'Compose started but no containers are running yet. Check Docker logs.',
                                 }))
                               }
                             } catch (e) {
@@ -1279,6 +1365,48 @@ export function ProfilesPage(): ReactElement {
                         style={{ width: '100%' }}
                         autoFocus
                       />
+                      {duplicateProfileName && (
+                        <div
+                          style={{
+                            marginTop: 8,
+                            padding: '10px 12px',
+                            borderRadius: 8,
+                            background: 'rgba(255,180,0,0.08)',
+                            border: '1px solid rgba(255,180,0,0.25)',
+                          }}
+                        >
+                          <p
+                            style={{
+                              margin: '0 0 8px',
+                              fontSize: 12,
+                              color: 'var(--yellow)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 4,
+                            }}
+                          >
+                            <span className="codicon codicon-warning" />
+                            {t('wizard.general.nameDuplicateWarning', { name: duplicateProfileName })}
+                          </p>
+                          <button
+                            type="button"
+                            className="dev-home-btn"
+                            style={{ fontSize: 12, padding: '6px 12px', margin: 0 }}
+                            onClick={() =>
+                              setWizardData({
+                                ...wizardData,
+                                name: suggestUniqueProfileName(
+                                  wizardData.name,
+                                  profiles,
+                                  editingProfileIdx
+                                ),
+                              })
+                            }
+                          >
+                            {t('wizard.general.suggestUniqueName')}
+                          </button>
+                        </div>
+                      )}
                     </div>
 
                     <div style={{ marginBottom: 20 }}>

@@ -558,6 +558,7 @@ function fixActionToHandler(
       return () => {
         void onSetKey('fetch.prune', 'true')
       }
+    case 'git-config-set':
     case 'set-default-branch':
       return () => {
         void onSetKey('init.defaultbranch', 'main')
@@ -1014,11 +1015,9 @@ function GitDoctor({
                               flexShrink: 0,
                               borderRadius: 6,
                             }}
-                            onClick={() => {
-                              handler()
-                              setTimeout(() => {
-                                void runScan()
-                              }, 600)
+                            onClick={async () => {
+                              await handler()
+                              void runScan()
                             }}
                           >
                             {f.fix!.label}
@@ -2455,11 +2454,9 @@ function DiagnosticsSection({
                             flexShrink: 0,
                             borderRadius: 6,
                           }}
-                          onClick={() => {
-                            handler()
-                            setTimeout(() => {
-                              void runScan()
-                            }, 600)
+                          onClick={async () => {
+                            await handler()
+                            void runScan()
                           }}
                         >
                           {f.fix!.label}

@@ -2,9 +2,7 @@ use serde_json::{json, Value};
 use std::collections::HashMap;
 use tauri::{AppHandle, Emitter};
 
-use crate::host_exec::{
-    cmd_timeout_long, cmd_timeout_short, exec_output_limit,
-};
+use crate::host_exec::{cmd_timeout_long, cmd_timeout_short, exec_output_limit};
 use crate::utils::{app_file, find_free_port, read_json};
 
 pub(crate) fn resolve_profile_template(app: &AppHandle, profile: &str) -> String {
@@ -124,7 +122,10 @@ pub(crate) fn get_profile_extra_env(app: &AppHandle, profile: &str) -> HashMap<S
 }
 
 pub(crate) async fn profile_switch(app: &AppHandle, body: &Value) -> Value {
-    let mut from_profile_str = body.get("from").and_then(|v| v.as_str()).map(|s| s.to_string());
+    let mut from_profile_str = body
+        .get("from")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
     let to_profile = body.get("to").and_then(|v| v.as_str()).unwrap_or_default();
 
     if from_profile_str.is_none() && !to_profile.is_empty() {
@@ -246,12 +247,13 @@ pub(crate) async fn profile_switch(app: &AppHandle, body: &Value) -> Value {
         ),
         60,
     );
+    let env_vars = get_profile_extra_env(app, to_profile);
     match crate::compose_engine::expose_exec_docker_compose_in_dir(
         &to_dir,
         &["up", "-d"],
         cmd_timeout_long(),
         Some(to_profile),
-        Some(get_profile_extra_env(app, to_profile)),
+        Some(env_vars.clone()),
     )
     .await
     {
@@ -274,8 +276,91 @@ pub(crate) async fn profile_switch(app: &AppHandle, body: &Value) -> Value {
             json!({ "ok": true, "log": logs })
         }
         Err(e) => {
-            logs.push_str(&format!("Failed to start new profile: {}\n", e.trim()));
-            json!({ "ok": false, "log": logs, "error": format!("[PROFILE_SWITCH_FAILED] {}", e.trim()) })
+            let err_str = e.trim().to_string();
+            // Auto-retry on port conflict: reassign conflicting ports and try once more
+            if err_str.contains("port is already allocated") {
+                logs.push_str(&format!(
+                    "Port conflict detected, reassigning ports...\n{}",
+                    err_str
+                ));
+                if let Ok(store_path) = app_file(app, "store.json") {
+                    let mut store = read_json(&store_path);
+                    let mut changed = false;
+                    // Extract the port number from the error message
+                    let port_specs: &[(&str, u16)] = match to_template.as_str() {
+                        "data-science" => &[("jupyter_port", 8888), ("postgres_port", 54320)],
+                        "web-dev" => &[
+                            ("node_port", 3000),
+                            ("node_hmr_port", 5173),
+                            ("postgres_port", 54321),
+                        ],
+                        _ => &[],
+                    };
+                    for (store_key_suffix, _preferred) in port_specs {
+                        let store_key = format!("{}_{}", store_key_suffix, to_profile);
+                        if let Some(port) = store.get(&store_key).and_then(|v| v.as_u64()) {
+                            // Check if this port is in the error (likely the culprit)
+                            if err_str.contains(&port.to_string()) {
+                                let free = find_free_port(port as u16 + 1);
+                                logs.push_str(&format!(
+                                    "Reassigning {}: {} -> {}\n",
+                                    store_key, port, free
+                                ));
+                                store[&store_key] = serde_json::json!(free);
+                                changed = true;
+                            }
+                        }
+                    }
+                    if changed {
+                        let _ = std::fs::write(
+                            &store_path,
+                            serde_json::to_string_pretty(&store).unwrap_or_default(),
+                        );
+                        // Retry with new ports
+                        let env_vars_retry = get_profile_extra_env(app, to_profile);
+                        match crate::compose_engine::expose_exec_docker_compose_in_dir(
+                            &to_dir,
+                            &["up", "-d"],
+                            cmd_timeout_long(),
+                            Some(to_profile),
+                            Some(env_vars_retry),
+                        )
+                        .await
+                        {
+                            Ok((stdout, stderr)) => {
+                                logs.push_str(&format!(
+                                    "Started new profile (retry):\n{}{}\n",
+                                    stdout, stderr
+                                ));
+                                if let Ok(store_path) = app_file(app, "store.json") {
+                                    let mut store = read_json(&store_path);
+                                    if let Some(map) = store.as_object_mut() {
+                                        map.insert(
+                                            "active_profile".to_string(),
+                                            serde_json::json!(to_profile),
+                                        );
+                                    }
+                                    let _ = std::fs::write(
+                                        &store_path,
+                                        serde_json::to_string_pretty(&store).unwrap_or_default(),
+                                    );
+                                }
+                                emit_step("Done", 100);
+                                return json!({ "ok": true, "log": logs });
+                            }
+                            Err(e2) => {
+                                logs.push_str(&format!("Retry also failed: {}\n", e2.trim()));
+                                return json!({ "ok": false, "log": logs, "error": format!("[PROFILE_SWITCH_FAILED] {}", e2.trim()) });
+                            }
+                        }
+                    }
+                }
+                logs.push_str(&format!("Failed to start new profile: {}\n", err_str));
+                json!({ "ok": false, "log": logs, "error": format!("[PROFILE_SWITCH_FAILED] {}", err_str) })
+            } else {
+                logs.push_str(&format!("Failed to start new profile: {}\n", err_str));
+                json!({ "ok": false, "log": logs, "error": format!("[PROFILE_SWITCH_FAILED] {}", err_str) })
+            }
         }
     }
 }

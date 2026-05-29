@@ -40,11 +40,11 @@ pub(crate) async fn runtime_bash_user_step(
     if app.is_some() {
         let (limit_cores, cores, ram_limit_mb) = get_resource_limits();
         logs.push(format!(
-      "[RESOURCE_ENFORCEMENT] Constraints: CPU Cores = {}/{} (nice 19, CARGO_BUILD_JOBS, MAKEFLAGS), RAM limit = {} MB (ulimit -v + runtime env vars), max processes = 512 (ulimit -u)",
+      "[RESOURCE_ENFORCEMENT] Constraints: CPU Cores = {}/{} (nice 19, CARGO_BUILD_JOBS, MAKEFLAGS), RAM limit = {} MB (ulimit -v + runtime env vars), max processes = 4096 (ulimit -u)",
       limit_cores, cores, ram_limit_mb
     ));
         prefixed_cmd = format!(
-            "ulimit -v {} 2>/dev/null; ulimit -u 512 2>/dev/null; ",
+            "ulimit -v {} 2>/dev/null; ulimit -u 4096 2>/dev/null; ",
             ram_limit_mb.saturating_mul(1024)
         );
         prefixed_cmd.push_str(cmd);
@@ -207,11 +207,11 @@ pub(crate) async fn sudo_bash_install_step(
     let mut wrapped_cmd: String;
     let effective_cmd: &str = if has_limits {
         logs.push(format!(
-      "[RESOURCE_ENFORCEMENT] Constraints: CPU Cores = {}/{} (nice 19, CARGO_BUILD_JOBS, MAKEFLAGS), RAM limit = {} MB (ulimit -v + runtime env vars), max processes = 512 (ulimit -u)",
+      "[RESOURCE_ENFORCEMENT] Constraints: CPU Cores = {}/{} (nice 19, CARGO_BUILD_JOBS, MAKEFLAGS), RAM limit = {} MB (ulimit -v + runtime env vars), max processes = 4096 (ulimit -u)",
       limit_cores, cores, ram_limit_mb
     ));
         wrapped_cmd = format!(
-            "ulimit -v {} 2>/dev/null; ulimit -u 512 2>/dev/null; ",
+            "ulimit -v {} 2>/dev/null; ulimit -u 4096 2>/dev/null; ",
             ram_limit_mb.saturating_mul(1024)
         );
         wrapped_cmd.push_str(cmd);
