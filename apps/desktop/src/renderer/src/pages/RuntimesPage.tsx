@@ -179,23 +179,19 @@ export function RuntimesPage(): ReactElement {
     }
   }, [selectedId, t])
 
-  const loadInstalledVersions = useCallback(
-    async (runtimeId: string) => {
-      if (installedVersionsCache[runtimeId]) return
-      setLoadingInstalledVersions(true)
-      try {
-        const res = await window.dh.runtimeInstalledVersions(runtimeId)
-        if (res.ok) {
-          setInstalledVersionsCache((prev) => ({ ...prev, [runtimeId]: res.versions }))
-        }
-      } catch {
-        // user can still install with 'latest'
-      } finally {
-        setLoadingInstalledVersions(false)
+  const loadInstalledVersions = useCallback(async (runtimeId: string) => {
+    setLoadingInstalledVersions(true)
+    try {
+      const res = await window.dh.runtimeInstalledVersions(runtimeId)
+      if (res.ok) {
+        setInstalledVersionsCache((prev) => ({ ...prev, [runtimeId]: res.versions }))
       }
-    },
-    [installedVersionsCache]
-  )
+    } catch {
+      // user can still install with 'latest'
+    } finally {
+      setLoadingInstalledVersions(false)
+    }
+  }, [])
 
   const refreshStatus = useCallback(async (background = false) => {
     if (!background) setIsRefreshing(true)
@@ -235,19 +231,15 @@ export function RuntimesPage(): ReactElement {
       try {
         const res = await window.dh.runtimeSetActive({ runtimeId: selectedId, path })
         assertRuntimeOk(res, t('page.errorActive'))
-        setInstalledVersionsCache((prev) => {
-          const next = { ...prev }
-          delete next[selectedId]
-          return next
-        })
         await refreshStatus()
+        void loadInstalledVersions(selectedId)
       } catch (e) {
         setErrorMessage(humanizeRuntimeError(e))
       } finally {
         setSettingActivePath(null)
       }
     },
-    [refreshStatus, selectedId, t]
+    [refreshStatus, selectedId, t, loadInstalledVersions]
   )
 
   const removeVersion = useCallback(
@@ -258,19 +250,15 @@ export function RuntimesPage(): ReactElement {
       try {
         const res = await window.dh.runtimeRemoveVersion({ runtimeId: selectedId, version, path })
         assertRuntimeOk(res, t('page.errorRemove'))
-        setInstalledVersionsCache((prev) => {
-          const next = { ...prev }
-          delete next[selectedId]
-          return next
-        })
         await refreshStatus()
+        void loadInstalledVersions(selectedId)
       } catch (e) {
         setErrorMessage(humanizeRuntimeError(e))
       } finally {
         setRemovingVersionPath(null)
       }
     },
-    [refreshStatus, selectedId, t]
+    [refreshStatus, selectedId, t, loadInstalledVersions]
   )
 
   // Mount-only: serve cached status instantly, then refresh in background
@@ -329,14 +317,10 @@ export function RuntimesPage(): ReactElement {
     ) {
       void refreshStatus()
       void refreshDeps()
-      setInstalledVersionsCache((prev) => {
-        const next = { ...prev }
-        delete next[selectedId]
-        return next
-      })
+      void loadInstalledVersions(selectedId)
     }
     prevJobStateRef.current = currentState
-  }, [activeJob?.state, refreshStatus, refreshDeps])
+  }, [activeJob?.state, refreshStatus, refreshDeps, loadInstalledVersions, selectedId])
 
   const installInProgress = activeJob?.state === 'running'
   const isUninstallJob = activeJob?.kind === `uninstall_${selectedId}`
@@ -411,6 +395,10 @@ export function RuntimesPage(): ReactElement {
     setSelectedVersion('latest')
     void loadVersionsForRuntime(selectedId, installMethod, true)
   }, [selectedId, installMethod, loadVersionsForRuntime])
+
+  useEffect(() => {
+    void loadInstalledVersions(selectedId)
+  }, [selectedId, loadInstalledVersions])
 
   useEffect(() => {
     if (displayedVersions.length === 0) return

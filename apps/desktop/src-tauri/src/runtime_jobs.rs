@@ -240,7 +240,7 @@ pub(crate) async fn runtime_job_execute(
                  SAFE_VER=$(printf '%s' "$DETECTED_VER" | tr '/ ' '__')
                  TARGET_DIR="$LUMINA_JAVA_DIR/jdk-$SAFE_VER"
                  if [ ! -d "$TARGET_DIR" ]; then mv "$TMP_EXTRACT" "$TARGET_DIR"; else rm -rf "$TMP_EXTRACT"; fi
-                 ln -s "$TARGET_DIR" "$LUMINA_JAVA_DIR/current"
+                 ln -sfn "$TARGET_DIR" "$LUMINA_JAVA_DIR/current"
                  for f in "$HOME/.bashrc" "$HOME/.bash_profile" "$HOME/.profile"; do
                    if [ -f "$f" ] && ! grep -q 'lumina-java' "$f"; then
                      printf '\n# lumina-java\nexport JAVA_HOME="$HOME/.local/share/lumina/java/current"\nexport PATH="$JAVA_HOME/bin:$PATH"\n' >> "$f"
