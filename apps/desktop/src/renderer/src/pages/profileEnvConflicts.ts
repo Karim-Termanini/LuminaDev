@@ -424,43 +424,22 @@ export function generateUniqueEnvVars(
   currentVars: ProfileEnvVar[],
   runtimePorts: RuntimeAssignedPort[] = []
 ): ProfileEnvVar[] {
-  const used = collectUsedPorts(profiles, editingIdx, runtimePorts)
-  const slug = profileName.trim() || 'profile'
-  const portOffset = Math.abs(hashString(slug)) % 50
-  const result: ProfileEnvVar[] = []
-
-  for (const ev of currentVars) {
-    if (!isPortSensitiveKey(ev.key)) {
-      result.push({ ...ev })
-      continue
-    }
-
-    const port = parsePortFromEnv(ev.key, ev.value)
-    if (port === null) {
-      result.push({ ...ev })
-      continue
-    }
-
-    if (!used.has(port)) {
-      used.add(port)
-      result.push({ ...ev })
-      continue
-    }
-
-    const bases = TEMPLATE_PORT_BASES[template] ?? []
-    const baseEntry = bases.find((b) => b.key.toUpperCase() === ev.key.toUpperCase())
-    const preferred = (baseEntry?.base ?? port) + portOffset
-    const free = nextFreePort(preferred, used)
-    used.add(free)
-
-    if (ev.key.toUpperCase() === 'DATABASE_URL') {
-      result.push({ key: ev.key, value: buildDatabaseUrl(template, free) })
-    } else {
-      result.push({ key: ev.key, value: String(free) })
-    }
-  }
-
-  return syncDatabaseUrlWithPostgres(result, template)
+  const presets = getTemplateEnvPresets(
+    template,
+    profileName,
+    profiles,
+    editingIdx,
+    runtimePorts
+  )
+  const presetKeys = new Set(presets.map((p) => p.key.toUpperCase()))
+  const nonPort = currentVars.filter(
+    (v) => !isPortSensitiveKey(v.key) && !presetKeys.has(v.key.toUpperCase())
+  )
+  const merged = [
+    ...nonPort,
+    ...presets.map((p) => ({ key: p.key, value: p.value })),
+  ]
+  return syncDatabaseUrlWithPostgres(merged, template)
 }
 
 export function suggestUniqueProfileName(

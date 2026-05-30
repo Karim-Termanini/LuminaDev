@@ -55,6 +55,51 @@ pub(crate) async fn runtime_dnf_repoquery_versions(package: &str, limit: usize) 
     .collect()
 }
 
+/// Distro-aware package version discovery for system-install version pickers.
+pub(crate) async fn runtime_repoquery_versions(
+    pkg_mgr: &str,
+    package: &str,
+    limit: usize,
+) -> Vec<String> {
+    match pkg_mgr {
+        "dnf" => runtime_dnf_repoquery_versions(package, limit).await,
+        "apt" => {
+            let safe_pkg = package.replace('\'', "'\\''");
+            let cmd = format!(
+                "command -v apt-cache >/dev/null 2>&1 && apt-cache madison '{}' 2>/dev/null | awk '{{print $3}}' | sort -Vu | tail -n {}",
+                safe_pkg, limit
+            );
+            exec_output_limit("bash", &["-lc", &cmd], cmd_timeout_short())
+                .await
+                .unwrap_or_default()
+                .lines()
+                .map(|l| l.trim().to_string())
+                .filter(|l| !l.is_empty())
+                .collect()
+        }
+        "pacman" => {
+            let safe_pkg = package.replace('\'', "'\\''");
+            let cmd = format!(
+                "command -v pacman >/dev/null 2>&1 && pacman -Si '{}' 2>/dev/null | awk -F': ' '/^Version/ {{print $2; exit}}'",
+                safe_pkg
+            );
+            exec_output_limit("bash", &["-lc", &cmd], cmd_timeout_short())
+                .await
+                .ok()
+                .map(|v| {
+                    let v = v.trim().to_string();
+                    if v.is_empty() {
+                        vec![]
+                    } else {
+                        vec![v]
+                    }
+                })
+                .unwrap_or_default()
+        }
+        _ => vec![],
+    }
+}
+
 /// Compare a UI-selected version token against a one-line tool probe.
 pub(crate) fn lumina_version_token_matches_probe_line(requested_token: &str, probe_line: &str) -> bool {
   let token = requested_token.trim();

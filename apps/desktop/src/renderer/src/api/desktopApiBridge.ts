@@ -37,15 +37,15 @@ function createTauriDhApi(): DhApi {
     dockerCleanupRun: (payload) => tauriInvoke(IPC.dockerCleanupRun, payload),
     metrics: () => tauriInvoke(IPC.metrics),
     hostExec: (payload) => tauriInvoke(IPC.hostExec, payload),
-    composeUp: (payload: { profile: import('@linux-dev-home/shared').ComposeProfile }) =>
+    composeUp: (payload: { profile: string }) =>
       tauriInvoke(IPC.composeUp, payload),
-    composeLogs: (payload: { profile: import('@linux-dev-home/shared').ComposeProfile }) =>
+    composeLogs: (payload: { profile: string }) =>
       tauriInvoke(IPC.composeLogs, payload),
-    composeDown: (payload: { profile: import('@linux-dev-home/shared').ComposeProfile }) =>
+    composeDown: (payload: { profile: string }) =>
       tauriInvoke(IPC.composeDown, payload),
     profileSwitch: (payload: {
-      from?: import('@linux-dev-home/shared').ComposeProfile
-      to: import('@linux-dev-home/shared').ComposeProfile
+      from?: string
+      to: string
       envVars?: Array<{ key: string; value: string }>
     }) => tauriInvoke(IPC.profileSwitch, payload),
     profileCredentialsStore: (payload: { id: string; value: string }) =>

@@ -126,6 +126,42 @@ describe('profileEnvConflicts', () => {
     expect(db).toContain(`:${pg}/`)
   })
 
+  it('generateUniqueEnvVars avoids ports reserved by another profile runtime assignment', () => {
+    const testing11: CustomProfileEntry = {
+      name: 'testing11',
+      baseTemplate: 'data-science',
+      envVars: [
+        { key: 'JUPYTER_PORT', value: '8888' },
+        { key: 'POSTGRES_PORT', value: '54320' },
+        {
+          key: 'DATABASE_URL',
+          value: 'postgresql://postgres:luminadev@localhost:54320/datasci',
+        },
+      ],
+    }
+    const runtime = runtimePortsFromSuggest('testing11', { jupyter: 8888, postgres: 54320 })
+    const unique = generateUniqueEnvVars(
+      'data-science',
+      'Lab Two',
+      [testing11],
+      null,
+      [
+        { key: 'JUPYTER_PORT', value: '8888' },
+        { key: 'POSTGRES_PORT', value: '54320' },
+        {
+          key: 'DATABASE_URL',
+          value: 'postgresql://postgres:luminadev@localhost:54320/datasci',
+        },
+        { key: 'NODE_ENV', value: 'development' },
+      ],
+      runtime
+    )
+    expect(unique.find((v) => v.key === 'JUPYTER_PORT')?.value).not.toBe('8888')
+    expect(unique.find((v) => v.key === 'POSTGRES_PORT')?.value).not.toBe('54320')
+    expect(unique.find((v) => v.key === 'NODE_ENV')?.value).toBe('development')
+    expect(findEnvConflicts([testing11], unique, null, runtime)).toHaveLength(0)
+  })
+
   it('builds template presets with non-colliding ports', () => {
     const presets = getTemplateEnvPresets('web-dev', 'Side Project', existing, null)
     const nodePort = Number.parseInt(presets.find((p) => p.key === 'NODE_PORT')?.value ?? '', 10)

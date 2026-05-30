@@ -20,6 +20,7 @@ import {
   SshGenerateSchema,
   StoreSetRequestSchema,
 } from '../src/schemas'
+import { isStoredActiveProfileValid, resolveActiveProfileName } from '../src/activeProfile'
 
 describe('schemas', () => {
   it('rejects arbitrary host exec', () => {
@@ -234,6 +235,16 @@ describe('schemas', () => {
     expect(parseStoredActiveProfile('desktop-qt')).toBe('desktop-gui')
     expect(parseStoredActiveProfile('typo')).toBe('typo')
     expect(parseStoredActiveProfile(null)).toBe(null)
+  })
+
+  it('resolveActiveProfileName maps template ids to custom profiles', () => {
+    const custom = [{ name: 'My Web', baseTemplate: 'web-dev' as const }]
+    expect(resolveActiveProfileName('web-dev', custom)).toBe('My Web')
+    expect(resolveActiveProfileName('My Web', custom)).toBe('My Web')
+    expect(resolveActiveProfileName('web-dev', [])).toBe(null)
+    expect(resolveActiveProfileName('orphan', custom)).toBe(null)
+    expect(isStoredActiveProfileValid('web-dev', custom)).toBe(true)
+    expect(isStoredActiveProfileValid('orphan', custom)).toBe(false)
   })
 
   it('parseSshBookmarks returns [] on invalid data', () => {

@@ -257,10 +257,20 @@ fi
         ),
         "c_cpp" => with_discover(
             r#"
+_ccpp_version() {
+  local rp="$1"
+  local ver
+  ver=$(LC_ALL=C "$rp" -dumpfullversion 2>/dev/null | head -1)
+  [ -n "$ver" ] || ver=$(LC_ALL=C "$rp" -dumpversion 2>/dev/null | head -1)
+  [ -n "$ver" ] || ver=$("$rp" --version 2>/dev/null | head -1)
+  printf '%s' "$ver"
+}
 for bin in gcc g++ clang clang++; do
   p=$(command -v "$bin" 2>/dev/null) || continue
   rp=$(readlink -f "$p" 2>/dev/null || echo "$p")
-  ver=$("$rp" --version 2>/dev/null | head -1)
+  case "$(basename "$rp")" in ccache|distcc) continue ;; esac
+  ver=$(_ccpp_version "$rp")
+  case "$ver" in *ccache*|*distcc*) continue ;; esac
   _emit_unique "${ver:-$bin}" "$rp"
 done
 "#,
@@ -347,7 +357,16 @@ readlink -f "$(command -v flutter 2>/dev/null)" 2>/dev/null"#,
         ),
         "lisp" => with_preamble(r#"readlink -f "$(command -v sbcl 2>/dev/null)" 2>/dev/null"#),
         "r" => with_preamble(r#"readlink -f "$(command -v R 2>/dev/null)" 2>/dev/null"#),
-        "c_cpp" => with_preamble(r#"readlink -f "$(command -v gcc 2>/dev/null)" 2>/dev/null"#),
+        "c_cpp" => with_preamble(
+            r#"
+for bin in gcc /usr/bin/gcc /usr/libexec/ccache/gcc; do
+  p=$(command -v "$bin" 2>/dev/null) || { [ -x "$bin" ] && p="$bin" || continue; }
+  rp=$(readlink -f "$p" 2>/dev/null || echo "$p")
+  case "$(basename "$rp")" in ccache|distcc) continue ;; esac
+  [ -x "$rp" ] && readlink -f "$rp" && exit 0
+done
+"#,
+        ),
         "matlab" => with_preamble(r#"readlink -f "$(command -v octave 2>/dev/null)" 2>/dev/null"#),
         "dotnet" => with_preamble(
             r#"readlink -f "$(command -v dotnet 2>/dev/null || echo "$HOME/.dotnet/dotnet")" 2>/dev/null"#,

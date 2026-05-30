@@ -5,6 +5,7 @@
   "main.btn.initialize": "INITIALISIEREN",
   "main.btn.switchToThis": "HIERZU WECHSELN",
   "main.btn.currentlyActive": "🟢 AKTIV",
+  "main.btn.startStack": "STACK STARTEN",
   "main.btn.initializing": "STACK WIRD GESTARTET…",
   "main.metrics.pending": "Host-Metriken erscheinen, wenn der Stack fertig gestartet ist.",
   "main.workspace.pending": "Projekt verknüpfen oder erstellen, sobald der Stack läuft.",

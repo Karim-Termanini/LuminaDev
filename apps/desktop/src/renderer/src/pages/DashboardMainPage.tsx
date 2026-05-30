@@ -4,6 +4,10 @@ import {
   type ContainerRow,
   type HostMetricsResponse,
   parseStoredActiveProfile,
+  resolveActiveProfileName,
+  isStoredActiveProfileValid,
+  containerBelongsToComposeProject,
+  isContainerRunningState,
   type CustomProfileEntry,
   type JobSummary,
 } from '@linux-dev-home/shared'
@@ -28,6 +32,12 @@ import {
   subscribeProfileSwitchState,
 } from './profileSwitchProgress'
 import { runBackgroundProjectSetup } from './projectBackgroundSetup'
+import {
+  ACTIVE_PROFILE_CHANGED_EVENT,
+  broadcastActiveProfileChange,
+  readDashboardSelectedProfile,
+  syncDashboardSelectedProfile,
+} from '../lib/activeProfileSync'
 import { cancelProjectSetup, readSetupSession } from './projectSetupSession'
 import {
   beginnerDepsSummaryKey,
@@ -186,6 +196,7 @@ export function DashboardMainPage(): ReactElement {
   const [customProfiles, setCustomProfiles] = useState<CustomProfileEntry[]>([])
   const [confirmModalOpen, setConfirmModalOpen] = useState(false)
   const profileSelectionInitialized = useRef(false)
+  const lastSyncedActiveRef = useRef<string | null>(null)
 
   const [projectPath, setProjectPath] = useState<string | null>(null)
   const [installedEditors, setInstalledEditors] = useState<Array<{ name: string; cmd: string }>>([])
@@ -324,19 +335,7 @@ export function DashboardMainPage(): ReactElement {
       }
     })
     if (customDefs.length > 0) return customDefs
-    // Fallback until the user creates and switches to a real profile
-    return [
-      {
-        name: 'empty',
-        title: 'Empty Minimal',
-        description: t('profile.emptyDesc'),
-        icon: 'blank',
-        accent: 'var(--text-muted)',
-        status: 'live' as ProfileDef['status'],
-        isCustom: false,
-        baseTemplate: 'empty',
-      },
-    ]
+    return []
   }, [customProfiles, t])
 
   const refresh = useCallback(async () => {
@@ -391,15 +390,20 @@ export function DashboardMainPage(): ReactElement {
         ok: boolean
         data?: unknown
       }
-      const parsed = ap.ok ? parseStoredActiveProfile(ap.data) : null
-      if (parsed !== null) {
-        // Only validate against loaded list; if list is empty we keep the stored value
-        const exists =
-          customProfilesList.length === 0 || customProfilesList.some((p) => p.name === parsed)
-        if (exists) {
-          setActiveProfile(parsed)
+      const raw = ap.ok ? parseStoredActiveProfile(ap.data) : null
+      if (customProfilesList.length === 0) {
+        if (raw !== null) {
+          await window.dh.storeDelete({ key: 'active_profile' })
+        }
+        setActiveProfile(null)
+      } else if (raw !== null) {
+        const resolved = resolveActiveProfileName(raw, customProfilesList)
+        if (resolved !== null && isStoredActiveProfileValid(raw, customProfilesList)) {
+          setActiveProfile(resolved)
+          if (resolved !== raw && customProfilesList.length > 0) {
+            await window.dh.storeSet({ key: 'active_profile', data: resolved })
+          }
         } else {
-          // Profile was deleted, clear it from store & state
           await window.dh.storeDelete({ key: 'active_profile' })
           setActiveProfile(null)
         }
@@ -464,24 +468,49 @@ export function DashboardMainPage(): ReactElement {
     return () => clearInterval(id)
   }, [refresh])
 
-  // Set initial selected profile once — runs when profiles first load, never again
+  // Keep dashboard selection aligned with store `active_profile` (authoritative over localStorage).
   useEffect(() => {
-    if (profileSelectionInitialized.current || allProfiles.length === 0) return
-    profileSelectionInitialized.current = true
-    const saved = localStorage.getItem('dashboard-selected-profile')
-    if (saved && allProfiles.some((p) => p.name === saved)) {
-      setSelectedProfileName(saved)
-    } else {
-      setSelectedProfileName(activeProfile || allProfiles[0]?.name || null)
+    if (allProfiles.length === 0) return
+    const names = new Set(allProfiles.map((p) => p.name))
+
+    if (activeProfile && names.has(activeProfile)) {
+      if (lastSyncedActiveRef.current !== activeProfile) {
+        lastSyncedActiveRef.current = activeProfile
+        setSelectedProfileName(activeProfile)
+        syncDashboardSelectedProfile(activeProfile)
+      }
+      if (!profileSelectionInitialized.current) profileSelectionInitialized.current = true
+      return
+    }
+
+    if (!profileSelectionInitialized.current) {
+      profileSelectionInitialized.current = true
+      const saved = readDashboardSelectedProfile()
+      const next =
+        (saved && names.has(saved) ? saved : null) ??
+        allProfiles[0]?.name ??
+        null
+      if (next) setSelectedProfileName(next)
     }
   }, [allProfiles, activeProfile])
 
-  // Save selected profile to localStorage
   useEffect(() => {
     if (selectedProfileName) {
-      localStorage.setItem('dashboard-selected-profile', selectedProfileName)
+      syncDashboardSelectedProfile(selectedProfileName)
     }
   }, [selectedProfileName])
+
+  useEffect(() => {
+    const onActiveProfileChanged = (event: Event): void => {
+      const name = (event as CustomEvent<string>).detail
+      if (!name || !allProfiles.some((p) => p.name === name)) return
+      lastSyncedActiveRef.current = name
+      setActiveProfile(name)
+      setSelectedProfileName(name)
+    }
+    window.addEventListener(ACTIVE_PROFILE_CHANGED_EVENT, onActiveProfileChanged)
+    return () => window.removeEventListener(ACTIVE_PROFILE_CHANGED_EVENT, onActiveProfileChanged)
+  }, [allProfiles])
 
   const showToast = (
     message: string,
@@ -749,8 +778,8 @@ export function DashboardMainPage(): ReactElement {
 
     try {
       const r = await window.dh.profileSwitch({
-        from: (activeProfile as ComposeProfile) ?? undefined,
-        to: selectedProfileName as ComposeProfile,
+        from: activeProfile ?? undefined,
+        to: selectedProfileName,
       })
       if (!r.ok) {
         const errMsg = r.error ?? r.log ?? 'Unknown error'
@@ -763,8 +792,10 @@ export function DashboardMainPage(): ReactElement {
       try {
         await window.dh.storeSet({ key: 'active_profile', data: selectedProfileName })
         setActiveProfile(selectedProfileName)
+        broadcastActiveProfileChange(selectedProfileName)
       } catch {
         setActiveProfile(selectedProfileName)
+        broadcastActiveProfileChange(selectedProfileName)
       }
       showToast(t('main.toast.switched', { name: selectedProfileName }), 'success')
       void refresh()
@@ -870,10 +901,6 @@ export function DashboardMainPage(): ReactElement {
     Boolean(selectedProfileName) &&
     swState.active &&
     swState.targetProfile === selectedProfileName
-  const isProfileReady =
-    Boolean(selectedProfileName) &&
-    activeProfile === selectedProfileName &&
-    !isProfileInitializing
 
   // Keep selectedProfileName in sync with what's actually displayed (guards against stale localStorage names)
   useEffect(() => {
@@ -890,11 +917,21 @@ export function DashboardMainPage(): ReactElement {
     if (!m || m.diskTotalGb <= 0) return 0
     return Math.min(100, Math.max(0, ((m.diskTotalGb - m.diskFreeGb) / m.diskTotalGb) * 100))
   }, [m])
-  const activeContainers = useMemo(() => {
+  const profileContainers = useMemo(() => {
     if (!docker || !docker.ok || !selectedProfileName) return []
-    const search = selectedProfileName.toLowerCase().replace(/[^a-z0-9_-]/g, '')
-    return docker.rows.filter((c) => c.name.toLowerCase().includes(search))
+    return docker.rows.filter((c) =>
+      containerBelongsToComposeProject(c.name, selectedProfileName)
+    )
   }, [docker, selectedProfileName])
+  const runningProfileContainers = useMemo(() => {
+    return profileContainers.filter((c) => isContainerRunningState(c.state))
+  }, [profileContainers])
+  const profileStackRunning = useMemo(() => {
+    return runningProfileContainers.length > 0
+  }, [runningProfileContainers])
+  const isProfileActiveInStore = Boolean(selectedProfileName) && activeProfile === selectedProfileName
+  const isProfileReady =
+    isProfileActiveInStore && profileStackRunning && !isProfileInitializing
 
   const activityData = useMemo(() => {
     return metricsHistory.map((item, idx) => ({
@@ -908,7 +945,7 @@ export function DashboardMainPage(): ReactElement {
   }, [metricsHistory, t])
 
   const resourceAllocation = useMemo(() => {
-    if (activeContainers.length === 0) {
+    if (profileContainers.length === 0) {
       return [
         { label: t('main.resourceAllocation.running'), value: 0, color: 'var(--green)' },
         { label: t('main.resourceAllocation.exited'), value: 0, color: 'var(--text-muted)' },
@@ -918,7 +955,7 @@ export function DashboardMainPage(): ReactElement {
     let running = 0
     let exited = 0
     let paused = 0
-    for (const c of activeContainers) {
+    for (const c of profileContainers) {
       const state = c.state.toLowerCase()
       if (state.includes('running') || state.includes('up')) {
         running++
@@ -933,7 +970,7 @@ export function DashboardMainPage(): ReactElement {
       { label: t('main.resourceAllocation.exited'), value: exited, color: 'var(--text-muted)' },
       { label: t('main.resourceAllocation.paused'), value: paused, color: 'var(--yellow)' },
     ]
-  }, [activeContainers, t])
+  }, [profileContainers, t])
 
   const liveEvents = useMemo(() => {
     if (jobs.length === 0) {
@@ -1066,20 +1103,23 @@ export function DashboardMainPage(): ReactElement {
                 onClick={() => setConfirmModalOpen(true)}
                 disabled={
                   (swState.active && swState.targetProfile === selectedProfileName) ||
-                  activeProfile === selectedProfileName
+                  (isProfileActiveInStore && profileStackRunning)
                 }
                 style={{
                   padding: '12px 24px',
                   borderRadius: 8,
                   border: 'none',
                   background:
-                    activeProfile === selectedProfileName ? 'var(--green)' : selectedProfile.accent,
+                    isProfileActiveInStore && profileStackRunning
+                      ? 'var(--green)'
+                      : selectedProfile.accent,
                   color: '#fff',
                   fontWeight: 600,
                   fontSize: 15,
-                  cursor: activeProfile === selectedProfileName ? 'default' : 'pointer',
+                  cursor:
+                    isProfileActiveInStore && profileStackRunning ? 'default' : 'pointer',
                   opacity:
-                    activeProfile === selectedProfileName
+                    isProfileActiveInStore && profileStackRunning
                       ? 0.6
                       : swState.active && swState.targetProfile === selectedProfileName
                         ? 0.8
@@ -1100,11 +1140,13 @@ export function DashboardMainPage(): ReactElement {
                   ? t('main.btn.comingSoon')
                   : isProfileInitializing
                     ? t('main.btn.initializing')
-                    : activeProfile === selectedProfileName
+                    : isProfileActiveInStore && profileStackRunning
                       ? t('main.btn.currentlyActive')
-                      : activeProfile
-                        ? t('main.btn.switchToThis')
-                        : t('main.btn.initialize')}
+                      : isProfileActiveInStore
+                        ? t('main.btn.startStack')
+                        : activeProfile
+                          ? t('main.btn.switchToThis')
+                          : t('main.btn.initialize')}
               </button>
               {betaFlags['enable_profile_auto_switch'] && (
                 <div
@@ -1268,13 +1310,9 @@ export function DashboardMainPage(): ReactElement {
                     {
                       label: t('main.health.services'),
                       status:
-                        activeContainers.length === 0
+                        profileContainers.length === 0
                           ? 'unknown'
-                          : activeContainers.some(
-                                (c) =>
-                                  c.state.toLowerCase().includes('running') ||
-                                  c.state.toLowerCase().includes('up')
-                              )
+                          : runningProfileContainers.length > 0
                             ? 'ok'
                             : 'warn',
                     },
@@ -1898,7 +1936,7 @@ export function DashboardMainPage(): ReactElement {
                   >
                     {t('main.containers.title')}
                   </h3>
-                  {activeContainers.length > 0 ? (
+                  {profileContainers.length > 0 ? (
                     <div style={{ overflowX: 'auto' }}>
                       <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
                         <thead>
@@ -1936,7 +1974,7 @@ export function DashboardMainPage(): ReactElement {
                           </tr>
                         </thead>
                         <tbody>
-                          {activeContainers.map((row) => (
+                          {profileContainers.map((row) => (
                             <tr key={row.id} style={{ borderBottom: '1px solid var(--border)' }}>
                               <td style={{ padding: '8px 12px' }}>{row.name}</td>
                               <td
@@ -1996,11 +2034,9 @@ export function DashboardMainPage(): ReactElement {
                     {t('main.services.title')}
                   </h3>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    {activeContainers.length > 0 ? (
-                      activeContainers.map((c) => {
-                        const isRunning =
-                          c.state.toLowerCase().includes('running') ||
-                          c.state.toLowerCase().includes('up')
+                    {runningProfileContainers.length > 0 ? (
+                      runningProfileContainers.map((c) => {
+                        const isRunning = isContainerRunningState(c.state)
                         const isPending = c.state.toLowerCase().includes('restarting')
                         const dotColor = isRunning
                           ? 'var(--green)'

@@ -1,13 +1,80 @@
 use crate::host_exec::{cmd_timeout_short, exec_output_limit, exec_result_limit};
 
+/// Runtimes surfaced on `/runtimes` — used by install-matrix coverage tests.
+#[cfg(test)]
+pub(crate) const RUNTIME_IDS: &[&str] = &[
+    "node", "python", "java", "go", "rust", "php", "ruby", "dotnet", "bun", "zig", "c_cpp",
+    "matlab", "dart", "flutter", "julia", "lua", "lisp", "r",
+];
+
 pub(crate) fn runtime_pkg_mgr(distro: &str) -> &'static str {
-    match distro {
-        "ubuntu" | "debian" | "linuxmint" | "pop" | "elementary" | "raspbian" => "apt",
-        "fedora" | "rhel" | "centos" | "rocky" | "alma" | "amzn" => "dnf",
-        "arch" | "manjaro" | "endeavouros" | "garuda" => "pacman",
+    match distro.trim().to_lowercase().as_str() {
+        "ubuntu" | "debian" | "linuxmint" | "pop" | "elementary" | "raspbian" | "zorin"
+        | "neon" | "kubuntu" | "xubuntu" | "lubuntu" => "apt",
+        "fedora" | "rhel" | "centos" | "rocky" | "alma" | "amzn" | "nobara" | "ultramarine"
+        | "azurelinux" | "centos_stream" | "mageia" => "dnf",
+        "arch" | "manjaro" | "endeavouros" | "garuda" | "cachyos" | "archcraft" => "pacman",
         "opensuse" | "opensuse-leap" | "opensuse-tumbleweed" | "sles" => "zypper",
-        _ => "apt",
+        _ => "unknown",
     }
+}
+
+pub(crate) fn runtime_pkg_mgr_or_default(distro: &str) -> &'static str {
+    let mgr = runtime_pkg_mgr(distro);
+    if mgr == "unknown" {
+        "apt"
+    } else {
+        mgr
+    }
+}
+
+pub(crate) fn runtime_parse_os_release(content: &str) -> (String, String) {
+    let mut id = "unknown".to_string();
+    let mut id_like = String::new();
+    for line in content.lines() {
+        if let Some(rest) = line.strip_prefix("ID=") {
+            id = rest.trim_matches('"').trim().to_lowercase();
+        } else if let Some(rest) = line.strip_prefix("ID_LIKE=") {
+            id_like = rest.trim_matches('"').trim().to_lowercase();
+        }
+    }
+    (id, id_like)
+}
+
+/// Resolve distro id for package-manager mapping (handles ID_LIKE for spins/remixes).
+pub(crate) fn runtime_resolve_distro_id(id: &str, id_like: &str) -> String {
+    let id = id.trim().to_lowercase();
+    if runtime_pkg_mgr(&id) != "unknown" {
+        return id;
+    }
+    for token in id_like.split_whitespace() {
+        let t = token.trim_matches('"').trim();
+        if !t.is_empty() && runtime_pkg_mgr(t) != "unknown" {
+            return t.to_string();
+        }
+    }
+    id
+}
+
+pub(crate) fn runtime_read_host_distro() -> (String, String) {
+    let content = std::fs::read_to_string("/etc/os-release").unwrap_or_default();
+    let (id, id_like) = runtime_parse_os_release(&content);
+    let resolved = runtime_resolve_distro_id(&id, &id_like);
+    let pkg_mgr = runtime_pkg_mgr_or_default(&resolved);
+    (resolved, pkg_mgr.to_string())
+}
+
+/// True when system packages exist or the runtime has a dedicated local installer path.
+#[cfg(test)]
+pub(crate) fn runtime_install_supported(runtime_id: &str, pkg_mgr: &str) -> bool {
+    if !runtime_system_packages(runtime_id, pkg_mgr).is_empty() {
+        return true;
+    }
+    matches!(
+        runtime_id,
+        "node" | "python" | "go" | "zig" | "rust" | "bun" | "dart" | "flutter" | "julia"
+            | "java" | "dotnet" | "php" | "ruby" | "lua" | "r"
+    )
 }
 
 pub(crate) fn runtime_system_packages(runtime_id: &str, pkg_mgr: &str) -> Vec<&'static str> {
@@ -298,9 +365,41 @@ mod tests {
     fn distro_pkg_manager_mapping_is_stable() {
         assert_eq!(runtime_pkg_mgr("ubuntu"), "apt");
         assert_eq!(runtime_pkg_mgr("fedora"), "dnf");
+        assert_eq!(runtime_pkg_mgr("nobara"), "dnf");
         assert_eq!(runtime_pkg_mgr("arch"), "pacman");
         assert_eq!(runtime_pkg_mgr("opensuse"), "zypper");
-        assert_eq!(runtime_pkg_mgr("unknown-distro"), "apt");
+        assert_eq!(runtime_pkg_mgr("unknown-distro"), "unknown");
+        assert_eq!(runtime_pkg_mgr_or_default("unknown-distro"), "apt");
+    }
+
+    #[test]
+    fn distro_resolution_uses_id_like_for_spins() {
+        assert_eq!(
+            runtime_resolve_distro_id("nobara", "rhel fedora"),
+            "nobara"
+        );
+        assert_eq!(
+            runtime_resolve_distro_id("custom-spin", "fedora"),
+            "fedora"
+        );
+        assert_eq!(
+            runtime_resolve_distro_id("custom-spin", "arch"),
+            "arch"
+        );
+    }
+
+    #[test]
+    fn install_matrix_covers_all_runtimes_on_primary_distros() {
+        for pkg_mgr in ["apt", "dnf", "pacman"] {
+            for runtime_id in RUNTIME_IDS {
+                assert!(
+                    runtime_install_supported(runtime_id, pkg_mgr),
+                    "runtime '{}' must be installable on {}",
+                    runtime_id,
+                    pkg_mgr
+                );
+            }
+        }
     }
 
     #[test]

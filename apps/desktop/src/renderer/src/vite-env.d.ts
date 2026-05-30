@@ -1,7 +1,6 @@
 /// <reference types="vite/client" />
 
 import type {
-  ComposeProfile,
   HostPortRow,
   HostSysInfo,
 } from '@linux-dev-home/shared'
@@ -85,17 +84,17 @@ declare global {
       >
       hostExec: (payload: unknown) => Promise<{ ok: boolean; result: unknown; error?: string }>
       composeUp: (payload: {
-        profile: ComposeProfile
+        profile: string
       }) => Promise<{ ok: boolean; log: string; error?: string }>
       composeLogs: (payload: {
-        profile: ComposeProfile
+        profile: string
       }) => Promise<{ ok: boolean; log: string; error?: string }>
       composeDown: (payload: {
-        profile: ComposeProfile
+        profile: string
       }) => Promise<{ ok: boolean; log: string; error?: string }>
       profileSwitch: (payload: {
-        from?: ComposeProfile
-        to: ComposeProfile
+        from?: string
+        to: string
         envVars?: Array<{ key: string; value: string }>
       }) => Promise<{ ok: boolean; log?: string; error?: string }>
       profileCredentialsStore: (payload: {

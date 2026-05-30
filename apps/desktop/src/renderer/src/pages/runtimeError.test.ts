@@ -9,6 +9,13 @@ describe('humanizeRuntimeError', () => {
     expect(humanizeRuntimeError('[RUNTIME_INVALID_VERSION] invalid')).toContain('not available')
   })
 
+  it('maps install and verify failure codes', () => {
+    expect(humanizeRuntimeError('[RUNTIME_INSTALL_FAILED] dnf failed')).toContain(
+      'Runtime installation failed'
+    )
+    expect(humanizeRuntimeError('[RUNTIME_VERIFY_FAILED] missing')).toContain('not found on PATH')
+  })
+
   it('falls back to raw text', () => {
     expect(humanizeRuntimeError('plain error')).toBe('plain error')
   })

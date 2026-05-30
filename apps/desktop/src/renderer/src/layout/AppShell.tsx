@@ -7,6 +7,7 @@ import { ActiveJobsStrip } from './ActiveJobsStrip'
 import { EnvironmentBanner } from './EnvironmentBanner'
 import { OnLoginAutomationRunner } from './OnLoginAutomationRunner'
 import { TopBar } from './TopBar'
+import { openSetupWizard } from '../lib/setupWizard'
 import './AppShell.css'
 
 const DEFAULT_SHORTCUTS: Record<string, string> = {
@@ -171,12 +172,7 @@ export function AppShell({ children }: { children: ReactNode }): ReactElement {
             data-tooltip={t('footer.setupWizard')}
             onClick={(e) => {
               e.preventDefault()
-              void window.dh
-                .storeSet({
-                  key: 'wizard_state',
-                  data: { completed: false, showOnStartup: true, stepIndex: 0 },
-                })
-                .then(() => window.location.reload())
+              void openSetupWizard()
             }}
             className="app-shell-footer-link"
             aria-label={t('footer.setupWizard')}

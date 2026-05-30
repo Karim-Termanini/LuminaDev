@@ -1008,19 +1008,40 @@ pub(crate) async fn handle_ssh_generate(body: &Value) -> Value {
         .collect();
     let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
     let ssh_dir = format!("{}/.ssh", home);
-    let key_path = format!("{}/{}", ssh_dir, safe_name);
     let _ = std::fs::create_dir_all(&ssh_dir);
-    match exec_output(
-        "ssh-keygen",
-        &["-t", "ed25519", "-C", email, "-f", &key_path, "-N", ""],
-    )
-    .await
-    {
-        Ok(_) => json!({ "ok": true, "keyName": safe_name }),
-        Err(e) => {
-            json!({ "ok": false, "error": format!("[SSH_GENERATE_FAILED] {}", e.trim()) })
+
+    for attempt in 0..20u32 {
+        let candidate = if attempt == 0 {
+            safe_name.clone()
+        } else {
+            format!("{}_{}", safe_name, attempt + 1)
+        };
+        let key_path = format!("{}/{}", ssh_dir, candidate);
+        let pub_path = format!("{}.pub", key_path);
+        if std::path::Path::new(&key_path).exists() {
+            if std::path::Path::new(&pub_path).exists() {
+                return json!({ "ok": true, "keyName": candidate });
+            }
+            continue;
+        }
+        match exec_output(
+            "ssh-keygen",
+            &["-t", "ed25519", "-C", email, "-f", &key_path, "-N", ""],
+        )
+        .await
+        {
+            Ok(_) => return json!({ "ok": true, "keyName": candidate }),
+            Err(e) => {
+                let msg = e.trim();
+                if msg.contains("exists") || msg.contains("File exists") {
+                    continue;
+                }
+                return json!({ "ok": false, "error": format!("[SSH_GENERATE_FAILED] {}", msg) });
+            }
         }
     }
+
+    json!({ "ok": false, "error": "[SSH_GENERATE_FAILED] No unused key filename available." })
 }
 
 pub(crate) async fn handle_ssh_get_pub() -> Value {
@@ -1579,7 +1600,7 @@ pub(crate) async fn handle_metrics(state: &AppState) -> Value {
 
 use crate::utils::sanitize_compose_project_name;
 
-async fn running_compose_project_names() -> std::collections::HashSet<String> {
+pub(crate) async fn running_compose_project_names() -> std::collections::HashSet<String> {
     let ls_json = exec_output("docker", &["compose", "ls", "--all", "--format", "json"])
         .await
         .unwrap_or_default();

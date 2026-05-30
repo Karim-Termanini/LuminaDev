@@ -317,7 +317,8 @@ mod tests {
     use super::*;
     use crate::docker_ext::docker_install_build_steps;
     use crate::runtime_packages::{
-        pkg_remove_cmd, pkg_upgrade_cmd, runtime_java_system_packages_for_version, runtime_pkg_mgr,
+        pkg_remove_cmd, pkg_upgrade_cmd, runtime_java_system_packages_for_version,
+        runtime_pkg_mgr, runtime_pkg_mgr_or_default,
     };
     use crate::runtime_versioning::{
         lumina_dotnet_install_channel, lumina_first_version_token, lumina_probe_meaningful_line,
@@ -444,7 +445,8 @@ mod tests {
         assert_eq!(runtime_pkg_mgr("fedora"), "dnf");
         assert_eq!(runtime_pkg_mgr("arch"), "pacman");
         assert_eq!(runtime_pkg_mgr("opensuse"), "zypper");
-        assert_eq!(runtime_pkg_mgr("unknown-distro"), "apt");
+        assert_eq!(runtime_pkg_mgr("unknown-distro"), "unknown");
+        assert_eq!(runtime_pkg_mgr_or_default("unknown-distro"), "apt");
     }
 
     #[test]
