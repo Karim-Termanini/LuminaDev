@@ -540,6 +540,15 @@ declare global {
         resolution: 'ours' | 'theirs' | 'both' | 'manual'
         mergedContent?: string
       }) => Promise<{ ok: boolean; error?: string }>
+      editorList: () => Promise<{
+        ok: boolean
+        editors?: Array<{ name: string; cmd: string }>
+        error?: string
+      }>
+      editorOpen: (payload: {
+        path: string
+        cmd: string
+      }) => Promise<{ ok: boolean; error?: string }>
       cloudGitCreatePr: (payload: {
         provider: 'github' | 'gitlab'
         repoPath: string

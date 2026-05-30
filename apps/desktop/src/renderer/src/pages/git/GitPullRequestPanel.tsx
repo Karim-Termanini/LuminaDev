@@ -1,11 +1,11 @@
 import type { ReactElement } from 'react'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { humanizeCloudAuthError } from '../cloudAuthError'
 import { cloudProviderLabel } from '../gitAssistantCloud'
+import { guessDefaultBaseBranch } from '../gitAssistantDefaultBranch'
 import {
-  DEFAULT_PULL_REQUEST_BASE,
   hostNewPullRequestUrl,
   isDefaultIntegrationBranch,
 } from '../gitAssistantPullRequestUrl'
@@ -14,7 +14,9 @@ import type { HostRepoLink } from '../gitAssistantRemoteUrl'
 export type GitPullRequestPanelProps = {
   repoPath: string
   branch: string
-  hostLink: HostRepoLink
+  branchNames: string[]
+  hostLink: HostRepoLink | null
+  cloudConnected: boolean
   ahead: number | null
   behind: number | null
   busy: boolean
@@ -24,22 +26,25 @@ export type GitPullRequestPanelProps = {
 export function GitPullRequestPanel({
   repoPath,
   branch,
+  branchNames,
   hostLink,
+  cloudConnected,
   ahead,
   behind,
   busy,
   suggestedTitle,
-}: GitPullRequestPanelProps): ReactElement | null {
+}: GitPullRequestPanelProps): ReactElement {
   const { t } = useTranslation('git')
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
   const [prBusy, setPrBusy] = useState(false)
   const [prError, setPrError] = useState<string | null>(null)
 
-  const host = cloudProviderLabel(hostLink.provider)
   const head = branch.trim()
-  const base = DEFAULT_PULL_REQUEST_BASE
-  const compareUrl = hostNewPullRequestUrl(hostLink, head, base)
+  const base = useMemo(() => guessDefaultBaseBranch(branchNames), [branchNames])
+  const host = hostLink ? cloudProviderLabel(hostLink.provider) : 'GitHub'
+  const compareUrl = hostLink ? hostNewPullRequestUrl(hostLink, head, base) : null
+  const onIntegrationBranch = isDefaultIntegrationBranch(head)
 
   useEffect(() => {
     setTitle(suggestedTitle.trim() || head)
@@ -47,11 +52,45 @@ export function GitPullRequestPanel({
     setPrError(null)
   }, [suggestedTitle, head, repoPath])
 
-  if (!head || isDefaultIntegrationBranch(head) || !compareUrl) return null
+  if (!head) {
+    return (
+      <div className="git-assistant-pr-panel">
+        <p className="hp-muted" style={{ margin: 0, fontSize: 12 }}>
+          {t('assistant.pr.noBranch')}
+        </p>
+      </div>
+    )
+  }
+
+  if (onIntegrationBranch) {
+    return (
+      <div className="git-assistant-pr-panel">
+        <div className="git-assistant-pr-panel-head">
+          <span className="codicon codicon-git-pull-request" aria-hidden />
+          <div>
+            <div className="git-assistant-pr-panel-title">{t('assistant.pr.title')}</div>
+            <p className="hp-muted" style={{ margin: 0, fontSize: 12, lineHeight: 1.5 }}>
+              {t('assistant.pr.onDefaultBranch', { branch: head, base })}
+            </p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (!hostLink || !compareUrl) {
+    return (
+      <div className="git-assistant-pr-panel">
+        <p className="hp-muted" style={{ margin: 0, fontSize: 12 }}>
+          {t('assistant.share.noRemote')}
+        </p>
+      </div>
+    )
+  }
 
   const unpushed = ahead != null && ahead > 0
-  const behindMain = behind != null && behind > 0
-  const canCreate = !unpushed && !busy && !prBusy
+  const behindBase = behind != null && behind > 0
+  const canCreate = cloudConnected && !unpushed && !busy && !prBusy
 
   const openCompare = (): void => {
     void window.dh.openExternal(compareUrl)
@@ -81,9 +120,7 @@ export function GitPullRequestPanel({
         return
       }
       const raw = res.error ?? t('assistant.pr.createFailed')
-      if (raw.includes('[CLOUD_GIT_PR_EXISTS]') && compareUrl) {
-        openCompare()
-      }
+      if (raw.includes('[CLOUD_GIT_PR_EXISTS]')) openCompare()
       setPrError(humanizeCloudAuthError(new Error(raw)))
     } catch (e) {
       setPrError(humanizeCloudAuthError(e))
@@ -110,9 +147,15 @@ export function GitPullRequestPanel({
         </p>
       ) : null}
 
-      {behindMain ? (
+      {behindBase ? (
         <p className="hp-muted git-assistant-pr-hint" role="status">
           {t('assistant.pr.behindBase', { count: behind, base })}
+        </p>
+      ) : null}
+
+      {!cloudConnected ? (
+        <p className="hp-muted git-assistant-pr-hint" role="status">
+          {t('assistant.pr.connectCloud')}
         </p>
       ) : null}
 
