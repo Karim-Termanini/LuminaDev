@@ -327,18 +327,27 @@ export const IPC = {
   gitVcsBranches: 'dh:git:vcs:branches',
   gitVcsCheckout: 'dh:git:vcs:checkout',
   gitVcsStash: 'dh:git:vcs:stash',
+  /** @deprecated Pro Git UI removed — use editor/terminal. Handler kept for tests. */
   gitVcsMerge: 'dh:git:vcs:merge',
+  /** @deprecated Pro Git UI removed — use editor/terminal. */
   gitVcsRebase: 'dh:git:vcs:rebase',
+  /** @deprecated Pro Git UI removed — use editor/terminal. */
   gitVcsStashPop: 'dh:git:vcs:stash-pop',
   gitVcsMergeAbort: 'dh:git:vcs:merge-abort',
   gitVcsRebaseAbort: 'dh:git:vcs:rebase-abort',
   gitVcsMergeContinue: 'dh:git:vcs:merge-continue',
   gitVcsRebaseContinue: 'dh:git:vcs:rebase-continue',
+  /** @deprecated Pro Git UI removed — use editor/terminal. */
   gitVcsRebaseSkip: 'dh:git:vcs:rebase-skip',
+  /** @deprecated Pro Git UI removed — use editor/terminal. */
   gitVcsRenameBranch: 'dh:git:vcs:rename-branch',
+  /** @deprecated Pro Git UI removed — resolve in editor. */
   gitVcsConflictDiff: 'dh:git:vcs:conflict-diff',
+  /** @deprecated Pro Git UI removed — resolve in editor. */
   gitVcsConflictHunks: 'dh:git:vcs:conflict-hunks',
+  /** @deprecated Pro Git UI removed — resolve in editor. */
   gitVcsResolveConflict: 'dh:git:vcs:resolve-conflict',
+  /** @deprecated Pro Git UI removed — resolve in editor. */
   gitVcsResolveHunk: 'dh:git:vcs:resolve-hunk',
   cloudGitCreatePr: 'dh:cloud:git:create-pr',
   cloudGitGetPrChecks: 'dh:cloud:git:get-pr-checks',

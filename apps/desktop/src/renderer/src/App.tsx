@@ -124,10 +124,10 @@ export default function App(): ReactElement | null {
         <Route path="/docker" element={<DockerPage />} />
         <Route path="/ssh" element={<SshPage />} />
         <Route path="/git" element={<DeveloperGitPage />} />
-        <Route path="/git-config" element={<Navigate to="/git?tab=config" replace />} />
-        <Route path="/git-vcs" element={<Navigate to="/git?tab=vcs" replace />} />
-        <Route path="/cloud-git" element={<Navigate to="/git?tab=cloud" replace />} />
-        <Route path="/registry" element={<Navigate to="/git?tab=vcs" replace />} />
+        <Route path="/git-config" element={<Navigate to="/git" replace />} />
+        <Route path="/git-vcs" element={<Navigate to="/git" replace />} />
+        <Route path="/cloud-git" element={<Navigate to="/git" replace />} />
+        <Route path="/registry" element={<Navigate to="/git" replace />} />
         <Route path="/profiles" element={<ProfilesPage />} />
         <Route path="/terminal" element={<TerminalPage />} />
         <Route path="/runtimes" element={<RuntimesPage />} />

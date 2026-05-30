@@ -1,0 +1,60 @@
+import { describe, expect, it } from 'vitest'
+import { computeGitAssistantNextAction } from './gitAssistantNextAction'
+
+const base = () => ({
+  githubConnected: true,
+  repoPathTrimmed: '/home/me/proj',
+  gitOperation: 'none' as const,
+  conflictFileCount: 0,
+  stagedCount: 0,
+  unstagedCount: 0,
+  ahead: null as number | null,
+  behind: null as number | null,
+  commitMessageTrimmed: '',
+})
+
+describe('computeGitAssistantNextAction', () => {
+  it('open project when no repo', () => {
+    expect(computeGitAssistantNextAction({ ...base(), repoPathTrimmed: '' })).toBe('open_project')
+  })
+
+  it('connect github when ahead but not connected', () => {
+    expect(
+      computeGitAssistantNextAction({
+        ...base(),
+        githubConnected: false,
+        ahead: 1,
+        behind: 0,
+      }),
+    ).toBe('connect_github')
+  })
+
+  it('does not block local idle workflow when github disconnected', () => {
+    expect(computeGitAssistantNextAction({ ...base(), githubConnected: false })).toBe(null)
+  })
+
+  it('commit when dirty even if github disconnected', () => {
+    expect(
+      computeGitAssistantNextAction({
+        ...base(),
+        githubConnected: false,
+        stagedCount: 1,
+        commitMessageTrimmed: 'fix: local only',
+      }),
+    ).toBe('commit')
+  })
+
+  it('open editor when conflicts', () => {
+    expect(computeGitAssistantNextAction({ ...base(), conflictFileCount: 1 })).toBe('open_editor')
+  })
+
+  it('push when ahead and github connected', () => {
+    expect(
+      computeGitAssistantNextAction({
+        ...base(),
+        ahead: 2,
+        behind: 0,
+      }),
+    ).toBe('push')
+  })
+})

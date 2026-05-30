@@ -197,10 +197,9 @@ export function TopBar(): ReactElement {
         icon: 'output',
         keywords: ['logs', 'log viewer', 'stream', 'container logs', 'job logs'],
       },
-      // Git sub-tabs
       {
-        label: 'Git → Version Control',
-        route: '/git?tab=vcs',
+        label: 'Git Assistant',
+        route: '/git',
         icon: 'source-control',
         keywords: [
           'vcs',
@@ -208,40 +207,14 @@ export function TopBar(): ReactElement {
           'push',
           'pull',
           'branch',
-          'diff',
-          'merge',
-          'rebase',
-          'conflict',
-        ],
-      },
-      {
-        label: 'Git → Config',
-        route: '/git?tab=config',
-        icon: 'settings-gear',
-        keywords: [
           'git config',
           'identity',
-          'email',
-          'name',
-          'gpg',
           'credential',
-          'doctor',
-          'diagnostics',
-        ],
-      },
-      {
-        label: 'Git → Cloud',
-        route: '/git?tab=cloud',
-        icon: 'github',
-        keywords: [
           'github',
           'gitlab',
-          'cloud git',
-          'pr',
-          'pull request',
-          'issues',
-          'pipeline',
-          'ci',
+          'clone',
+          'save',
+          'snapshot',
         ],
       },
       // Settings sub-tabs
@@ -515,7 +488,7 @@ export function TopBar(): ReactElement {
       if (item.kind === 'page') navigate(item.route)
       else if (item.kind === 'container') navigate('/docker')
       else if (item.kind === 'runtime') navigate('/runtimes')
-      else if (item.kind === 'repo') navigate('/git?tab=vcs')
+      else if (item.kind === 'repo') navigate(`/git?repoPath=${encodeURIComponent(item.path)}`)
       onPaletteClose()
       setQ('')
     } else if (e.key === 'Escape') {
@@ -707,7 +680,7 @@ export function TopBar(): ReactElement {
                           className={`cmd-palette-item${idx === paletteIdx ? ' active' : ''}`}
                           onMouseDown={(e) => {
                             e.preventDefault()
-                            navigate('/git?tab=vcs')
+                            navigate(`/git?repoPath=${encodeURIComponent(item.path)}`)
                             onPaletteClose()
                             setQ('')
                           }}

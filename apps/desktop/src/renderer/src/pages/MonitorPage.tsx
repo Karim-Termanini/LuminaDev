@@ -664,7 +664,7 @@ export function MonitorPage(): ReactElement {
                   <MonitorGitScoreTile title={t('config.compatibility')} score={gitCompatibilityScore(gitCfg)} subtitle={t('config.compatibility_sub')} />
                 </div>
                 <Link
-                  to="/git?tab=config"
+                  to="/git"
                   className="hp-btn hp-btn-primary"
                   style={{
                     fontSize: 13,
