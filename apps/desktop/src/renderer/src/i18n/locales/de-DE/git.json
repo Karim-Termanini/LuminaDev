@@ -255,6 +255,7 @@
   "toolbar.switchToSimple": "Zur einfacheren Standardansicht zurück",
   "toolbar.simpleModeHint": "Einfachere Standardansicht — Pro-Modus in Einstellungen → Beta-Funktionen aktivieren.",
   "toolbar.checkRemote": "Remote prüfen",
+
   "flow.title.default": "Git-Workflow auf dieser Seite",
   "flow.title.simple": "Nächster Schritt",
   "flow.title.conflicts": "Du hast Merge-Konflikte",
@@ -293,6 +294,7 @@
   "page.title": "Git VCS",
   "page.subtitle": "Status, Diffs, Stage, Commit, Fetch, Pull, Push, Merge, Rebase und Stash Pop. HTTPS-Remotes verwenden Tokens aus <link>Verbundene Konten</link>.",
   "page.subtitleSimple": "Dateien bearbeiten, committen wenn bereit, dann Pull oder Push zum Sync. Pro-Modus aktivieren (oben rechts) für Fetch, Integrieren, CI und PR/MR.",
+
   "ciChecks.loadingChecks": "Checks werden geladen…",
   "ciChecks.hasConflicts": "Dieser Branch hat Konflikte",
   "ciChecks.someChecksIncomplete": "Einige Checks wurden noch nicht abgeschlossen",

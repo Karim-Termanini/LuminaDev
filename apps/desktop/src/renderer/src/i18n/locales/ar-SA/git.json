@@ -255,6 +255,7 @@
   "toolbar.switchToSimple": "العودة للتخطيط الافتراضي الأبسط",
   "toolbar.simpleModeHint": "عرض افتراضي أبسط — فعل الوضع المتقدم من الإعدادات → الميزات التجريبية.",
   "toolbar.checkRemote": "فحص البعيد",
+
   "flow.title.default": "سير عمل Git في هذه الصفحة",
   "flow.title.simple": "الخطوة التالية",
   "flow.title.conflicts": "لديك تعارضات دمج",
@@ -293,6 +294,7 @@
   "page.title": "Git VCS",
   "page.subtitle": "الحالة، الفروق، المرحلة، الإيداع، الجلب، السحب، الدفع، الدمج، إعادة الترتيب، واستخراج التخزين. النقاط البعيدة HTTPS تستخدم الرموز من <link>الحسابات المتصلة</link>.",
   "page.subtitleSimple": "حرّر الملفات، أودع عندما تكون جاهزاً، ثم اسحب أو ادفع للمزامنة. انقر تفعيل الوضع المتقدم (أعلى اليمين) لجلب ودمج وCI وPR/MR.",
+
   "ciChecks.loadingChecks": "جارٍ تحميل الفحوصات…",
   "ciChecks.hasConflicts": "هذا الفرع لديه تعارضات",
   "ciChecks.someChecksIncomplete": "لم تكتمل بعض الفحوصات بعد",
