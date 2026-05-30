@@ -31,6 +31,7 @@ pub(crate) fn is_allowed_store_key(key: &str) -> bool {
     "shortcuts_settings",
     "datetime_settings",
     "language_settings",
+    "dh:preferred_editor_cmd",
   ];
   const DYNAMIC_PREFIXES: &[&str] = &[
     "project_dir_",
@@ -511,7 +512,7 @@ mod tests {
       "profile_credentials", "onboarding_profile", "projects_home_dir",
       "app_engine_settings", "builder_settings",
       "beta_features_state", "notification_settings", "shortcuts_settings",
-      "datetime_settings", "language_settings",
+      "datetime_settings", "language_settings", "dh:preferred_editor_cmd",
     ] {
       assert!(is_allowed_store_key(key), "expected key '{}' to be allowed", key);
     }

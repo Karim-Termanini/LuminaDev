@@ -341,6 +341,7 @@ export const StoreKeySchema = z.union([
     'shortcuts_settings',
     'datetime_settings',
     'language_settings',
+    'dh:preferred_editor_cmd',
   ]),
   StoreDynamicKeySchema,
 ])
@@ -471,6 +472,11 @@ export const GitConfigSetSchema = z.object({
 
 export const GitConfigListSchema = z.object({
   target: z.enum(['sandbox', 'host']),
+})
+
+export const GitConfigSetKeySchema = z.object({
+  key: z.string().min(1).max(128),
+  value: z.string().max(4096).optional(),
 })
 
 export const GitDoctorScanResponseSchema = z.union([

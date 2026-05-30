@@ -552,9 +552,13 @@
   "assistant.behind.dismiss": "Später",
   "assistant.push.success": "An Remote gesendet. Auf {{host}} öffnen für PR oder Review.",
   "assistant.push.dismiss": "Schließen",
+  "assistant.pr.noBranch": "Projekt öffnen, um einen Pull Request zu erstellen.",
+  "assistant.pr.onDefaultBranch": "Sie sind auf {{branch}}. Wechseln Sie im Bereich Branch zu einem Feature-Branch, dann PR nach {{base}}.",
+  "assistant.pr.connectCloud": "GitHub oder GitLab in den Einstellungen verbinden, um den PR hier zu erstellen.",
   "assistant.pr.title": "Pull Request",
   "assistant.pr.subtitle": "{{head}} in {{base}} auf {{host}} zusammenführen.",
   "assistant.pr.pushFirst": "Zuerst Commits pushen, dann den Pull Request erstellen.",
+  "assistant.pr.noUpstream": "Dieser Branch ist noch nicht auf origin. Mit Upstream pushen (z. B. git push -u origin <branch>), dann PR erstellen oder vergleichen.",
   "assistant.pr.behindBase": "{{base}} hat {{count}} Commit(s), die Sie noch nicht haben. Zuerst Pull.",
   "assistant.pr.titleLabel": "Titel",
   "assistant.pr.titlePlaceholder": "Kurze Zusammenfassung",
@@ -563,5 +567,9 @@
   "assistant.pr.titleRequired": "Titel für den Pull Request eingeben.",
   "assistant.pr.createFailed": "Pull Request konnte nicht erstellt werden.",
   "assistant.pr.create": "Auf {{host}} erstellen",
-  "assistant.pr.openCompare": "Vergleichsseite auf {{host}} öffnen"
+  "assistant.pr.openCompare": "Vergleichsseite auf {{host}} öffnen",
+  "assistant.pr.openedInBrowser": "Im Browser auf {{host}} geöffnet.",
+  "assistant.pr.openLinkManually": "Falls nichts erscheint: unten „Link erneut öffnen“.",
+  "assistant.pr.retryOpenLink": "Link erneut öffnen",
+  "assistant.pr.wrongProvider": "Remote ist {{host}}, verbunden ist {{connected}}. {{host}} unter Einstellungen → Verknüpfte Konten verbinden."
 }

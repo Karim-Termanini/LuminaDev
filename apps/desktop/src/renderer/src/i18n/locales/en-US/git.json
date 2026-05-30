@@ -549,9 +549,13 @@
   "assistant.behind.dismiss": "Not now",
   "assistant.push.success": "Sent to the remote. Open on {{host}} to review or open a pull request.",
   "assistant.push.dismiss": "Dismiss",
+  "assistant.pr.noBranch": "Open a project to create a pull request.",
+  "assistant.pr.onDefaultBranch": "You are on {{branch}}. Use the Branch section to switch to a feature branch, then create a pull request into {{base}}.",
+  "assistant.pr.connectCloud": "Connect GitHub or GitLab in Settings to create the pull request from here.",
   "assistant.pr.title": "Pull request",
   "assistant.pr.subtitle": "Merge {{head}} into {{base}} on {{host}}.",
   "assistant.pr.pushFirst": "Push your commits first, then create the pull request.",
+  "assistant.pr.noUpstream": "This branch is not on origin yet. Push with upstream (e.g. git push -u origin <branch>), then create or compare the pull request.",
   "assistant.pr.behindBase": "{{base}} has {{count}} commit(s) you do not have yet. Pull first so the PR stays mergeable.",
   "assistant.pr.titleLabel": "Title",
   "assistant.pr.titlePlaceholder": "Short summary of your changes",
@@ -560,5 +564,9 @@
   "assistant.pr.titleRequired": "Add a title for the pull request.",
   "assistant.pr.createFailed": "Could not create the pull request.",
   "assistant.pr.create": "Create on {{host}}",
-  "assistant.pr.openCompare": "Open compare page on {{host}}"
+  "assistant.pr.openCompare": "Open compare page on {{host}}",
+  "assistant.pr.openedInBrowser": "Opened in your browser on {{host}}.",
+  "assistant.pr.openLinkManually": "Use “Open link again” below if nothing appeared.",
+  "assistant.pr.retryOpenLink": "Open link again",
+  "assistant.pr.wrongProvider": "Remote is {{host}} but the connected account is {{connected}}. Connect {{host}} under Settings → Connected accounts."
 }

@@ -691,6 +691,7 @@ mod tests {
             "shortcuts_settings",
             "datetime_settings",
             "language_settings",
+            "dh:preferred_editor_cmd",
         ] {
             assert!(
                 is_allowed_store_key(key),

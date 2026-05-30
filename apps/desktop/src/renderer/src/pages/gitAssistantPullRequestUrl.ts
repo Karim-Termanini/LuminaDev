@@ -2,12 +2,12 @@ import type { HostRepoLink } from './gitAssistantRemoteUrl'
 
 export const DEFAULT_PULL_REQUEST_BASE = 'main'
 
-const DEFAULT_BRANCH_NAMES = new Set(['main', 'master', 'develop'])
+const INTEGRATION_HEAD_BRANCHES = new Set(['main', 'master'])
 
-/** True when the current branch should not be offered as a PR head (merge into default instead). */
+/** True when checked out branch is the usual integration target (cannot PR into itself). */
 export function isDefaultIntegrationBranch(branch: string): boolean {
   const name = branch.trim().toLowerCase()
-  return DEFAULT_BRANCH_NAMES.has(name)
+  return INTEGRATION_HEAD_BRANCHES.has(name)
 }
 
 /** Browser URL to start a new PR/MR (base ← head). */

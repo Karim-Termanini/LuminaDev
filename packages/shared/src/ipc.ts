@@ -349,6 +349,8 @@ export const IPC = {
   gitVcsResolveConflict: 'dh:git:vcs:resolve-conflict',
   /** @deprecated Pro Git UI removed — resolve in editor. */
   gitVcsResolveHunk: 'dh:git:vcs:resolve-hunk',
+  editorList: 'dh:editor:list',
+  editorOpen: 'dh:editor:open',
   cloudGitCreatePr: 'dh:cloud:git:create-pr',
   cloudGitGetPrChecks: 'dh:cloud:git:get-pr-checks',
   cloudGitMergePr: 'dh:cloud:git:merge-pr',

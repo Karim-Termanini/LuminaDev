@@ -772,6 +772,8 @@ export function GitAssistantPage(): ReactElement {
                       <GitShareOnlinePanel
                         repoPath={repoPath}
                         branch={branch}
+                        branchNames={branches.map((b) => b.name).filter(Boolean)}
+                        cloudProvider={connectProvider}
                         cloudConnected={cloudConnected}
                         ahead={ahead}
                         behind={behind}
