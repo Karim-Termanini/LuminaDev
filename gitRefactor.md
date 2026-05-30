@@ -26,7 +26,6 @@ Every UI string changes. No technical jargon as primary text.
 | Git Config      | Your Git identity (setup once) |
 | Cloud tab       | Connect GitHub                 |
 | Remote          | Your online copy               |
-| Fetch           | Check for updates              |
 
 *If GitLab support exists: "Send to remote"
 

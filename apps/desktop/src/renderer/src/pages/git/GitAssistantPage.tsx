@@ -15,6 +15,7 @@ import { GitNextStepCard } from './GitNextStepCard'
 import { GitProgressRail } from './GitProgressRail'
 import { GitProjectBar } from './GitProjectBar'
 import { GitBehindRemoteModal } from './GitBehindRemoteModal'
+import { GitRemoteUpdatesBanner } from './GitRemoteUpdatesBanner'
 import { GitSaveShareBar } from './GitSaveShareBar'
 import { GitSetupChecklist } from './GitSetupChecklist'
 import { GitPostPushBanner } from './GitPostPushBanner'
@@ -28,6 +29,7 @@ import { GitVcsDirtyCheckoutModal } from '../GitVcsDirtyCheckoutModal'
 import { cloudProviderLabel, hasCloudGitConnected, preferredCloudProvider } from '../gitAssistantCloud'
 import { branchWebUrl, hostRepoWebLink } from '../gitAssistantRemoteUrl'
 import { computeGitAssistantNextAction } from '../gitAssistantNextAction'
+import { fetchOriginQuiet } from '../gitAssistantRemoteSync'
 import { computeGitProgressRail } from '../gitAssistantProgressRail'
 import type { GitProgressStep } from '../gitAssistantProgressRail'
 import { evaluateGitSetupChecklist, isGitSetupComplete } from '../gitAssistantSetup'
@@ -177,7 +179,7 @@ export function GitAssistantPage(): ReactElement {
     setSearchParams(next, { replace: true })
   }, [searchParams, setSearchParams, repoPath, persistRepoChoice])
 
-  const refreshStatus = useCallback(async () => {
+  const refreshStatus = useCallback(async (options?: { fetchRemote?: boolean }) => {
     const path = repoPath.trim()
     statusTargetRef.current = path
     if (!path) {
@@ -192,6 +194,10 @@ export function GitAssistantPage(): ReactElement {
       setBranches([])
       setRemoteHost(null)
       return
+    }
+    if (options?.fetchRemote) {
+      await fetchOriginQuiet(path)
+      if (statusTargetRef.current !== path) return
     }
     const [st, br] = await Promise.all([
       window.dh.gitVcsStatus({ repoPath: path }),
@@ -249,7 +255,7 @@ export function GitAssistantPage(): ReactElement {
     let alive = true
     setBusy(true)
     setOpErrorRaw(null)
-    void refreshStatus()
+    void refreshStatus({ fetchRemote: true })
       .catch((e) => {
         if (alive && statusTargetRef.current === path) {
           setOpErrorRaw(e instanceof Error ? e.message : String(e))
@@ -267,7 +273,7 @@ export function GitAssistantPage(): ReactElement {
   useEffect(() => {
     const onVisible = (): void => {
       if (document.visibilityState !== 'visible' || !repoPath.trim()) return
-      void refreshStatus()
+      void refreshStatus({ fetchRemote: true })
         .then(() => {
           if (conflictFileCount > 0 || gitOperation !== 'none') {
             setEditorRefreshHint(true)
@@ -483,8 +489,7 @@ export function GitAssistantPage(): ReactElement {
     setOpErrorRaw(null)
     setPostPush(null)
     try {
-      const fetchRes = await window.dh.gitVcsFetch({ repoPath: path, remote: 'origin' })
-      assertGitVcsOk(fetchRes)
+      await fetchOriginQuiet(path)
       const st = await window.dh.gitVcsStatus({ repoPath: path })
       assertGitVcsOk(st)
       if (st.behind != null && st.behind > 0) {
@@ -728,6 +733,13 @@ export function GitAssistantPage(): ReactElement {
               />
               <div ref={saveRef as React.RefObject<HTMLDivElement>} className="git-assistant-save-grid">
                 <div className="git-assistant-save-main">
+                  {showPull ? (
+                    <GitRemoteUpdatesBanner
+                      behind={behind ?? 0}
+                      busy={busy}
+                      onGetLatest={() => void runPull()}
+                    />
+                  ) : null}
                   <GitSaveShareBar
                     message={commitMessage}
                     onMessageChange={setCommitMessage}
