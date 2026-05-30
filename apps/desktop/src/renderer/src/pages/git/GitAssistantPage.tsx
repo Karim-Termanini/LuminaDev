@@ -774,7 +774,9 @@ export function GitAssistantPage(): ReactElement {
                         branch={branch}
                         cloudConnected={cloudConnected}
                         ahead={ahead}
+                        behind={behind}
                         busy={busy}
+                        suggestedPrTitle={commitMessage.trim() || branch}
                       />
                     )}
                   </div>
