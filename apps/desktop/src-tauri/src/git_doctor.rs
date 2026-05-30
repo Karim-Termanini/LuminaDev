@@ -275,16 +275,19 @@ async fn check_gpg() -> Vec<Finding> {
 /// Check 6: SSH keys
 async fn check_ssh() -> Vec<Finding> {
     let home = std::env::var("HOME").unwrap_or_else(|_| "/root".into());
-    let ssh_dir = format!("{home}/.ssh");
+    let ssh_dir = std::path::Path::new(&home).join(".ssh");
 
-    let keys = exec_output(
-        "sh",
-        &["-c", &format!("ls {ssh_dir}/id_* 2>/dev/null || true")],
-    )
-    .await
-    .unwrap_or_default();
+    let has_keys = match std::fs::read_dir(&ssh_dir) {
+        Ok(entries) => entries.filter_map(|e| e.ok()).any(|e| {
+            e.file_name()
+                .to_str()
+                .map(|n| n.starts_with("id_") && !n.ends_with(".pub"))
+                .unwrap_or(false)
+        }),
+        Err(_) => false,
+    };
 
-    if keys.trim().is_empty() {
+    if !has_keys {
         vec![Finding {
             id: "no-ssh".into(),
             category: "security".into(),
@@ -295,9 +298,17 @@ async fn check_ssh() -> Vec<Finding> {
             fix_action: None,
         }]
     } else {
-        let key_list: Vec<&str> = keys
-            .lines()
-            .filter(|l| !l.is_empty() && !l.ends_with(".pub"))
+        let key_list: Vec<String> = std::fs::read_dir(&ssh_dir)
+            .into_iter()
+            .flatten()
+            .filter_map(|e| e.ok())
+            .filter(|e| {
+                e.file_name()
+                    .to_str()
+                    .map(|n| n.starts_with("id_") && !n.ends_with(".pub"))
+                    .unwrap_or(false)
+            })
+            .filter_map(|e| e.file_name().to_str().map(|s| s.to_string()))
             .collect();
         if key_list.is_empty() {
             vec![Finding {
@@ -447,24 +458,32 @@ pub(crate) async fn handle_doctor_scan() -> Value {
     // Get git version first (needed for version badge), then run all checks in parallel
     let (git_version, mut findings) = check_git_version().await;
 
-    let (config, creds, ssl, gpg, ssh, lfs, perf, hooks) = tokio::join!(
-        check_config(),
-        check_credentials(),
-        check_ssl(),
-        check_gpg(),
-        check_ssh(),
-        check_lfs(),
-        check_performance(),
-        check_hooks(),
-    );
-    findings.extend(config);
-    findings.extend(creds);
-    findings.extend(ssl);
-    findings.extend(gpg);
-    findings.extend(ssh);
-    findings.extend(lfs);
-    findings.extend(perf);
-    findings.extend(hooks);
+    // If Git is not available, skip config-dependent checks to avoid noise
+    if git_version.is_none() {
+        // Still run non-git checks: SSH, GPG
+        let (gpg, ssh) = tokio::join!(check_gpg(), check_ssh());
+        findings.extend(gpg);
+        findings.extend(ssh);
+    } else {
+        let (config, creds, ssl, gpg, ssh, lfs, perf, hooks) = tokio::join!(
+            check_config(),
+            check_credentials(),
+            check_ssl(),
+            check_gpg(),
+            check_ssh(),
+            check_lfs(),
+            check_performance(),
+            check_hooks(),
+        );
+        findings.extend(config);
+        findings.extend(creds);
+        findings.extend(ssl);
+        findings.extend(gpg);
+        findings.extend(ssh);
+        findings.extend(lfs);
+        findings.extend(perf);
+        findings.extend(hooks);
+    }
 
     let score = calc_score(&findings);
     let findings_json: Vec<Value> = findings.into_iter().map(|f| f.into_value()).collect();

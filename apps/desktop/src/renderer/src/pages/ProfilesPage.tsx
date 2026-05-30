@@ -9,8 +9,65 @@ import {
 import './ProfilesPage.css'
 import type { ReactElement } from 'react'
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
+
+const RUNNING_CACHE_KEY = 'dh:profiles:running-cache:v1'
+const RUNNING_CACHE_TTL = 30 * 1000 // 30 seconds
 import { invoke } from '@tauri-apps/api/core'
 import { Trans, useTranslation } from 'react-i18next'
+import {
+  PROFILE_SWITCH_STORAGE_KEY,
+  signalProfileSwitchDone,
+  signalProfileSwitchFailed,
+  signalProfileSwitchStarting,
+} from './profileSwitchProgress'
+import { cancelProjectSetup, invalidateSetupRuns, readSetupSession } from './projectSetupSession'
+import {
+  beginnerBundleLabelKey,
+  beginnerOptionalEnvPresets,
+  envPresetsFromPortSuggest,
+  findEnvConflicts,
+  generateUniqueEnvVars,
+  getTemplateEnvPresets,
+  isBeginnerBundleApplied,
+  mergeEnvPresetBundle,
+  partitionBeginnerEnvPresets,
+  runtimePortsFromSuggest,
+  suggestUniqueProfileName,
+  syncDatabaseUrlWithPostgres,
+  type RuntimeAssignedPort,
+} from './profileEnvConflicts'
+
+type PortsSuggestResponse = { ok?: boolean; ports?: Record<string, number> }
+
+async function invokePortsSuggest(
+  template: ComposeProfile,
+  profile: string
+): Promise<Record<string, number> | null> {
+  const res = (await invoke('ipc_invoke', {
+    channel: 'dh:ports:suggest',
+    payload: { template, profile },
+  })) as PortsSuggestResponse
+  return res.ok && res.ports ? res.ports : null
+}
+
+async function fetchRuntimePortsForProfiles(
+  profileList: CustomProfileEntry[],
+  excludeIdx: number | null,
+  current?: { template: ComposeProfile; profileName: string }
+): Promise<{ others: RuntimeAssignedPort[]; suggested: Record<string, number> | null }> {
+  const others: RuntimeAssignedPort[] = []
+  await Promise.all(
+    profileList.map(async (p, idx) => {
+      if (excludeIdx !== null && idx === excludeIdx) return
+      const ports = await invokePortsSuggest(p.baseTemplate, p.name)
+      if (ports) others.push(...runtimePortsFromSuggest(p.name, ports))
+    })
+  )
+  const suggested = current
+    ? await invokePortsSuggest(current.template, current.profileName)
+    : null
+  return { others, suggested }
+}
 
 const BASE_TEMPLATES = [
   'web-dev',
@@ -81,6 +138,10 @@ export function ProfilesPage(): ReactElement {
   // Env bulk input
   const [envBulkInput, setEnvBulkInput] = useState('')
   const [tagInput, setTagInput] = useState('')
+  const [otherRuntimePorts, setOtherRuntimePorts] = useState<RuntimeAssignedPort[]>([])
+  const [wizardSuggestedPorts, setWizardSuggestedPorts] = useState<Record<string, number> | null>(
+    null
+  )
 
   const detectLocalSshKey = useCallback(async () => {
     setDetectingSsh(true)
@@ -115,6 +176,35 @@ export function ProfilesPage(): ReactElement {
       void loadExistingCredentials()
     }
   }, [wizardStep, detectLocalSshKey, loadExistingCredentials])
+
+  useEffect(() => {
+    if (!wizardData?.name.trim()) {
+      setOtherRuntimePorts([])
+      setWizardSuggestedPorts(null)
+      return
+    }
+    let cancelled = false
+    void (async () => {
+      try {
+        const { others, suggested } = await fetchRuntimePortsForProfiles(
+          profiles,
+          editingProfileIdx,
+          { template: wizardData.baseTemplate, profileName: wizardData.name.trim() }
+        )
+        if (cancelled) return
+        setOtherRuntimePorts(others)
+        setWizardSuggestedPorts(suggested)
+      } catch {
+        if (!cancelled) {
+          setOtherRuntimePorts([])
+          setWizardSuggestedPorts(null)
+        }
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [wizardData, profiles, editingProfileIdx])
 
   const loadExtras = useCallback(async (loadedProfiles: CustomProfileEntry[]): Promise<void> => {
     // Load active profile template
@@ -159,6 +249,17 @@ export function ProfilesPage(): ReactElement {
         })) as { ok?: boolean; running?: string[] }
         const running = new Set<string>(res.ok && res.running ? res.running : [])
         setRunningProfiles(running)
+        // Only cache non-empty results to avoid overwriting valid state with transient empty
+        if (running.size > 0) {
+          try {
+            localStorage.setItem(
+              RUNNING_CACHE_KEY,
+              JSON.stringify({ ts: Date.now(), running: [...running] })
+            )
+          } catch {
+            /* ignore */
+          }
+        }
         return running
       } catch {
         setRunningProfiles(new Set())
@@ -173,7 +274,36 @@ export function ProfilesPage(): ReactElement {
   }, [profiles, checkRunning])
 
   useEffect(() => {
+    // Serve cached running profiles instantly, then refresh in background
+    try {
+      const raw = localStorage.getItem(RUNNING_CACHE_KEY)
+      if (raw) {
+        const cached = JSON.parse(raw) as { ts: number; running: string[] }
+        if (Date.now() - cached.ts < RUNNING_CACHE_TTL && Array.isArray(cached.running)) {
+          setRunningProfiles(new Set(cached.running))
+        }
+      }
+    } catch {
+      /* ignore corrupt cache */
+    }
+    // Check for pending switch from Dashboard (survives navigation)
+    try {
+      const raw = localStorage.getItem(PROFILE_SWITCH_STORAGE_KEY)
+      if (raw) {
+        const pending = JSON.parse(raw) as { profile: string; ts: number }
+        if (Date.now() - pending.ts < 120_000 && pending.profile) {
+          setActionLoading((prev) => ({ ...prev, [pending.profile]: 'starting' as const }))
+        }
+      }
+    } catch {
+      /* ignore */
+    }
     void checkRunning(profiles)
+    // Poll running status every 10s in case compose finishes while user is on the page
+    const interval = setInterval(() => {
+      void checkRunning(profiles)
+    }, 10_000)
+    return () => clearInterval(interval)
   }, [profiles, checkRunning])
 
   const load = useCallback(async (): Promise<void> => {
@@ -287,9 +417,70 @@ export function ProfilesPage(): ReactElement {
   async function duplicateAt(idx: number): Promise<void> {
     const p = profiles[idx]
     if (!p) return
-    const next = [...profiles, { ...p, name: `${p.name} Copy` }]
+    const copyName = suggestUniqueProfileName(`${p.name} Copy`, profiles, null)
+    let runtimePorts: RuntimeAssignedPort[] = []
+    try {
+      const { others } = await fetchRuntimePortsForProfiles(profiles, null)
+      runtimePorts = others
+    } catch {
+      /* use env-only collision avoidance */
+    }
+    const uniqueEnv = generateUniqueEnvVars(
+      p.baseTemplate,
+      copyName,
+      profiles,
+      null,
+      p.envVars ?? [],
+      runtimePorts
+    )
+    const next = [...profiles, { ...p, name: copyName, envVars: uniqueEnv }]
     await save(next, t('msg.duplicated'))
   }
+
+  const envConflicts = useMemo(() => {
+    if (!wizardData) return []
+    return findEnvConflicts(
+      profiles,
+      wizardData.envVars ?? [],
+      editingProfileIdx,
+      otherRuntimePorts
+    )
+  }, [profiles, wizardData, editingProfileIdx, otherRuntimePorts])
+
+  const templateEnvPresets = useMemo(() => {
+    if (!wizardData) return []
+    if (wizardSuggestedPorts && Object.keys(wizardSuggestedPorts).length > 0) {
+      return envPresetsFromPortSuggest(wizardData.baseTemplate, wizardSuggestedPorts)
+    }
+    return getTemplateEnvPresets(
+      wizardData.baseTemplate,
+      wizardData.name,
+      profiles,
+      editingProfileIdx,
+      otherRuntimePorts
+    )
+  }, [wizardData, profiles, editingProfileIdx, otherRuntimePorts, wizardSuggestedPorts])
+
+  const beginnerRecommendedPresets = useMemo(() => {
+    return partitionBeginnerEnvPresets(templateEnvPresets).recommended
+  }, [templateEnvPresets])
+
+  const duplicateProfileName = useMemo(() => {
+    if (!wizardData?.name.trim()) return null
+    const match = profiles.find(
+      (p, idx) =>
+        p.name.trim().toLowerCase() === wizardData.name.trim().toLowerCase() &&
+        idx !== editingProfileIdx
+    )
+    return match?.name ?? null
+  }, [profiles, wizardData, editingProfileIdx])
+
+  const wizardNextBlocked = useMemo(() => {
+    if (!wizardData?.name.trim()) return true
+    if (wizardStep === 1 && duplicateProfileName) return true
+    if (wizardStep === 3 && envConflicts.length > 0) return true
+    return false
+  }, [wizardData, wizardStep, duplicateProfileName, envConflicts.length])
 
   function openCreateModal(): void {
     setIsCreatingProfile(true)
@@ -333,6 +524,30 @@ export function ProfilesPage(): ReactElement {
       setStatus({ message: t('msg.nameRequired'), type: 'warning' })
       return
     }
+    if (duplicateProfileName) {
+      setStatus({ message: t('msg.duplicateName'), type: 'warning' })
+      return
+    }
+    let runtimeForSave = otherRuntimePorts
+    if (wizardData.name.trim()) {
+      try {
+        const { others } = await fetchRuntimePortsForProfiles(profiles, editingProfileIdx)
+        runtimeForSave = others
+      } catch {
+        /* keep cached ports from wizard session */
+      }
+    }
+    const saveConflicts = findEnvConflicts(
+      profiles,
+      wizardData.envVars ?? [],
+      editingProfileIdx,
+      runtimeForSave
+    )
+    if (saveConflicts.length > 0) {
+      setStatus({ message: t('msg.envConflicts'), type: 'warning' })
+      setWizardStep(3)
+      return
+    }
     const finalData = { ...wizardData, name: wizardData.name.trim() }
 
     let next: CustomProfileEntry[]
@@ -348,6 +563,8 @@ export function ProfilesPage(): ReactElement {
     setWizardData(null)
     setIsCreatingProfile(false)
     setEditingProfileIdx(null)
+    setOtherRuntimePorts([])
+    setWizardSuggestedPorts(null)
   }
 
   async function exportJson(): Promise<void> {
@@ -744,6 +961,8 @@ export function ProfilesPage(): ReactElement {
                             onClick={async () => {
                               setStatus(null)
                               setActionLoading((prev) => ({ ...prev, [p.name]: 'stopping' }))
+                              const hasSetup = readSetupSession()?.profileName === p.name
+                              if (hasSetup) invalidateSetupRuns()
                               try {
                                 const r = (await invoke('ipc_invoke', {
                                   channel: 'dh:compose:stop',
@@ -761,6 +980,9 @@ export function ProfilesPage(): ReactElement {
                                     message: r.error || 'Failed to stop',
                                     type: 'warning',
                                   })
+                                }
+                                if (hasSetup) {
+                                  await cancelProjectSetup(p.name)
                                 }
                               } catch (e) {
                                 setStatus({
@@ -797,17 +1019,21 @@ export function ProfilesPage(): ReactElement {
                             onClick={async () => {
                               setStatus(null)
                               setActionLoading((prev) => ({ ...prev, [p.name]: 'restarting' }))
+                              signalProfileSwitchStarting(p.name, { skipPoll: true })
                               try {
                                 const r = (await invoke('ipc_invoke', {
                                   channel: 'dh:profile:switch',
                                   payload: { to: p.name },
                                 })) as { ok?: boolean; error?: string }
-                                await refreshRunning()
                                 if (!r.ok) {
-                                  setStatus({ message: r.error || 'Failed', type: 'warning' })
-                                } else {
-                                  setStatus({ message: `${p.name} restarted.`, type: 'success' })
+                                  const errMsg = r.error || 'Failed'
+                                  signalProfileSwitchFailed(errMsg)
+                                  setStatus({ message: errMsg, type: 'warning' })
+                                  return
                                 }
+                                signalProfileSwitchDone()
+                                void refreshRunning()
+                                setStatus({ message: `${p.name} restarted.`, type: 'success' })
                               } catch (e) {
                                 setStatus({
                                   message: e instanceof Error ? e.message : String(e),
@@ -857,21 +1083,23 @@ export function ProfilesPage(): ReactElement {
                               return rest
                             })
                             setActionLoading((prev) => ({ ...prev, [p.name]: 'starting' }))
+                            // Signal Dashboard immediately so it shows progress bar
+                            signalProfileSwitchStarting(p.name, { skipPoll: true })
                             await setAsActive(p.name)
                             try {
                               const r = (await invoke('ipc_invoke', {
                                 channel: 'dh:profile:switch',
                                 payload: { to: p.name },
                               })) as { ok?: boolean; error?: string; log?: string }
-                              await refreshRunning()
-                              if (r.ok) {
-                                setStatus({ message: `${p.name} started.`, type: 'success' })
-                              } else {
-                                setRowError((prev) => ({
-                                  ...prev,
-                                  [i]: r.error || 'Failed to start',
-                                }))
+                              if (!r.ok) {
+                                const errMsg = r.error || r.log || 'Failed to start'
+                                signalProfileSwitchFailed(errMsg)
+                                setRowError((prev) => ({ ...prev, [i]: errMsg }))
+                                return
                               }
+                              signalProfileSwitchDone()
+                              void refreshRunning()
+                              setStatus({ message: `${p.name} started.`, type: 'success' })
                             } catch (e) {
                               setRowError((prev) => ({
                                 ...prev,
@@ -1279,6 +1507,48 @@ export function ProfilesPage(): ReactElement {
                         style={{ width: '100%' }}
                         autoFocus
                       />
+                      {duplicateProfileName && (
+                        <div
+                          style={{
+                            marginTop: 8,
+                            padding: '10px 12px',
+                            borderRadius: 8,
+                            background: 'rgba(255,180,0,0.08)',
+                            border: '1px solid rgba(255,180,0,0.25)',
+                          }}
+                        >
+                          <p
+                            style={{
+                              margin: '0 0 8px',
+                              fontSize: 12,
+                              color: 'var(--yellow)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 4,
+                            }}
+                          >
+                            <span className="codicon codicon-warning" />
+                            {t('wizard.general.nameDuplicateWarning', { name: duplicateProfileName })}
+                          </p>
+                          <button
+                            type="button"
+                            className="dev-home-btn"
+                            style={{ fontSize: 12, padding: '6px 12px', margin: 0 }}
+                            onClick={() =>
+                              setWizardData({
+                                ...wizardData,
+                                name: suggestUniqueProfileName(
+                                  wizardData.name,
+                                  profiles,
+                                  editingProfileIdx
+                                ),
+                              })
+                            }
+                          >
+                            {t('wizard.general.suggestUniqueName')}
+                          </button>
+                        </div>
+                      )}
                     </div>
 
                     <div style={{ marginBottom: 20 }}>
@@ -1777,6 +2047,83 @@ export function ProfilesPage(): ReactElement {
                       </div>
                     </div>
 
+                    {envConflicts.length > 0 && (
+                      <div
+                        style={{
+                          marginBottom: 16,
+                          padding: '12px 14px',
+                          borderRadius: 8,
+                          background: 'rgba(255,180,0,0.08)',
+                          border: '1px solid rgba(255,180,0,0.25)',
+                        }}
+                      >
+                        <p
+                          style={{
+                            margin: '0 0 8px',
+                            fontSize: 13,
+                            fontWeight: 600,
+                            color: 'var(--yellow)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 6,
+                          }}
+                        >
+                          <span className="codicon codicon-warning" />
+                          {t('wizard.env.conflict.title')}
+                        </p>
+                        <ul
+                          style={{
+                            margin: '0 0 10px',
+                            paddingLeft: 18,
+                            fontSize: 12,
+                            color: 'var(--text-muted)',
+                            lineHeight: 1.5,
+                          }}
+                        >
+                          {envConflicts.map((c, ci) => (
+                            <li key={`${c.key}-${c.value}-${c.otherProfileName}-${ci}`}>
+                              {c.reason === 'internal'
+                                ? t('wizard.env.conflict.internal', {
+                                    port: c.value,
+                                    key: c.key,
+                                  })
+                                : c.reason === 'duplicate'
+                                  ? t('wizard.env.conflict.duplicate', {
+                                      key: c.key,
+                                      value: c.value,
+                                      profile: c.otherProfileName,
+                                    })
+                                  : t('wizard.env.conflict.port', {
+                                      port: c.value,
+                                      profile: c.otherProfileName,
+                                      key: c.key,
+                                    })}
+                            </li>
+                          ))}
+                        </ul>
+                        <button
+                          type="button"
+                          className="dev-home-btn"
+                          style={{ fontSize: 12, padding: '6px 12px', margin: 0 }}
+                          onClick={() =>
+                            setWizardData({
+                              ...wizardData,
+                              envVars: generateUniqueEnvVars(
+                                wizardData.baseTemplate,
+                                wizardData.name,
+                                profiles,
+                                editingProfileIdx,
+                                wizardData.envVars ?? [],
+                                otherRuntimePorts
+                              ),
+                            })
+                          }
+                        >
+                          {t('wizard.env.generateUnique')}
+                        </button>
+                      </div>
+                    )}
+
                     {envMode === 'beginner' ? (
                       <div>
                         {/* Friendly Beginner Explanation */}
@@ -1810,30 +2157,74 @@ export function ProfilesPage(): ReactElement {
                           {t('wizard.env.beginner.desc')}
                         </div>
 
-                        {/* Quick Presets Buttons */}
+                        {beginnerRecommendedPresets.length > 0 && (
+                          <div style={{ marginBottom: 20 }}>
+                            <button
+                              type="button"
+                              className="dev-home-btn"
+                              style={{
+                                fontSize: 13,
+                                padding: '10px 16px',
+                                margin: 0,
+                                width: '100%',
+                                maxWidth: 420,
+                                borderColor: isBeginnerBundleApplied(
+                                  wizardData.envVars ?? [],
+                                  beginnerRecommendedPresets
+                                )
+                                  ? 'var(--green)'
+                                  : 'var(--accent)',
+                                background: isBeginnerBundleApplied(
+                                  wizardData.envVars ?? [],
+                                  beginnerRecommendedPresets
+                                )
+                                  ? 'rgba(76, 175, 80, 0.08)'
+                                  : 'rgba(124, 77, 255, 0.08)',
+                              }}
+                              onClick={() => {
+                                const applied = isBeginnerBundleApplied(
+                                  wizardData.envVars ?? [],
+                                  beginnerRecommendedPresets
+                                )
+                                const merged = mergeEnvPresetBundle(
+                                  wizardData.envVars ?? [],
+                                  beginnerRecommendedPresets,
+                                  !applied
+                                )
+                                setWizardData({
+                                  ...wizardData,
+                                  envVars: syncDatabaseUrlWithPostgres(
+                                    merged,
+                                    wizardData.baseTemplate
+                                  ),
+                                })
+                              }}
+                            >
+                              {isBeginnerBundleApplied(
+                                wizardData.envVars ?? [],
+                                beginnerRecommendedPresets
+                              )
+                                ? '✓ '
+                                : '+ '}
+                              {t(beginnerBundleLabelKey(wizardData.baseTemplate))}
+                            </button>
+                          </div>
+                        )}
+
                         <div style={{ marginBottom: 20 }}>
                           <label
                             style={{
                               display: 'block',
-                              fontSize: 13,
+                              fontSize: 12,
                               fontWeight: 600,
-                              marginBottom: 10,
+                              marginBottom: 8,
                               color: 'var(--text-muted)',
                             }}
                           >
-                            {t('wizard.env.beginner.presets')}
+                            {t('wizard.env.beginner.optionalTitle')}
                           </label>
                           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                            {[
-                              { key: 'PORT', value: '3000', label: t('preset.webPort') },
-                              { key: 'NODE_ENV', value: 'development', label: t('preset.devMode') },
-                              { key: 'DEBUG', value: '*', label: t('preset.debugLogs') },
-                              {
-                                key: 'DATABASE_URL',
-                                value: 'postgresql://postgres:postgres@db:5432/db',
-                                label: t('preset.defaultDb'),
-                              },
-                            ].map((preset) => {
+                            {beginnerOptionalEnvPresets().map((preset) => {
                               const alreadyAdded = (wizardData.envVars || []).some(
                                 (v) => v.key === preset.key
                               )
@@ -1850,85 +2241,47 @@ export function ProfilesPage(): ReactElement {
                                     background: alreadyAdded
                                       ? 'rgba(76, 175, 80, 0.08)'
                                       : 'transparent',
-                                    color: alreadyAdded ? 'var(--green)' : 'var(--text)',
                                   }}
                                   onClick={() => {
                                     if (alreadyAdded) {
-                                      // Remove
-                                      const vars = (wizardData.envVars || []).filter(
-                                        (v) => v.key !== preset.key
-                                      )
-                                      setWizardData({ ...wizardData, envVars: vars })
+                                      setWizardData({
+                                        ...wizardData,
+                                        envVars: (wizardData.envVars || []).filter(
+                                          (v) => v.key !== preset.key
+                                        ),
+                                      })
                                     } else {
-                                      // Add
-                                      const vars = [
-                                        ...(wizardData.envVars || []),
-                                        { key: preset.key, value: preset.value },
-                                      ]
-                                      setWizardData({ ...wizardData, envVars: vars })
+                                      setWizardData({
+                                        ...wizardData,
+                                        envVars: [
+                                          ...(wizardData.envVars || []),
+                                          { key: preset.key, value: preset.value },
+                                        ],
+                                      })
                                     }
                                   }}
                                 >
-                                  {alreadyAdded ? '✓ ' : '+ '} {preset.label}
+                                  {alreadyAdded ? '✓ ' : '+ '}
+                                  {t(preset.labelKey)}
                                 </button>
                               )
                             })}
                           </div>
                         </div>
 
-                        {/* Current List Display */}
                         {(wizardData.envVars || []).length > 0 && (
-                          <div
+                          <p
                             style={{
-                              background: 'rgba(0,0,0,0.15)',
-                              border: '1px solid var(--border)',
-                              borderRadius: 8,
-                              padding: 12,
+                              margin: 0,
+                              fontSize: 12,
+                              color: 'var(--text-muted)',
+                              lineHeight: 1.5,
                             }}
                           >
-                            <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>
-                              {t('wizard.env.beginner.currentVars')}
-                            </div>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                              {(wizardData.envVars || []).map((ev, i) => (
-                                <div
-                                  key={i}
-                                  style={{
-                                    display: 'flex',
-                                    justifyContent: 'space-between',
-                                    alignItems: 'center',
-                                    fontSize: 12,
-                                    fontFamily: 'monospace',
-                                    background: 'rgba(0,0,0,0.1)',
-                                    padding: '4px 8px',
-                                    borderRadius: 4,
-                                  }}
-                                >
-                                  <span>
-                                    {ev.key} = {ev.value}
-                                  </span>
-                                  <button
-                                    type="button"
-                                    style={{
-                                      background: 'transparent',
-                                      border: 'none',
-                                      color: 'var(--red)',
-                                      cursor: 'pointer',
-                                      fontSize: 12,
-                                    }}
-                                    onClick={() => {
-                                      const vars = (wizardData.envVars || []).filter(
-                                        (_, idx) => idx !== i
-                                      )
-                                      setWizardData({ ...wizardData, envVars: vars })
-                                    }}
-                                  >
-                                    ✕
-                                  </button>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
+                            {t('wizard.env.beginner.summary', {
+                              count: (wizardData.envVars || []).length,
+                            })}
+                          </p>
                         )}
                       </div>
                     ) : (
@@ -2746,6 +3099,8 @@ export function ProfilesPage(): ReactElement {
                     setWizardData(null)
                     setIsCreatingProfile(false)
                     setEditingProfileIdx(null)
+                    setOtherRuntimePorts([])
+                    setWizardSuggestedPorts(null)
                   }}
                 >
                   {t('btn.cancel')}
@@ -2765,7 +3120,7 @@ export function ProfilesPage(): ReactElement {
                       type="button"
                       className="dev-home-btn"
                       style={{ padding: '10px 24px', margin: 0 }}
-                      disabled={!wizardData.name.trim()}
+                      disabled={wizardNextBlocked}
                       onClick={() => setWizardStep(wizardStep + 1)}
                     >
                       {t('btn.next')}

@@ -64,6 +64,10 @@ pub(crate) fn runtime_system_packages(runtime_id: &str, pkg_mgr: &str) -> Vec<&'
         ("lisp", "dnf") => vec!["sbcl"],
         ("lisp", "pacman") => vec!["sbcl"],
         ("lisp", "zypper") => vec!["sbcl"],
+        ("r", "apt") => vec!["r-base", "r-base-dev"],
+        ("r", "dnf") => vec!["R", "R-devel"],
+        ("r", "pacman") => vec!["r"],
+        ("r", "zypper") => vec!["R-base", "R-base-devel"],
         _ => vec![],
     }
 }
@@ -114,6 +118,17 @@ pub(crate) fn runtime_java_system_packages_for_version(
         },
         _ => vec!["default-jdk".to_string()],
     }
+}
+
+/// Point `alternatives` at the JDK shipped by an RPM (Fedora/RHEL).
+pub(crate) fn runtime_dnf_java_alternatives_cmd(pkg: &str) -> String {
+    format!(
+        "JAVA_BIN=$(rpm -ql {pkg} 2>/dev/null | awk '/\\/bin\\/java$/'\"'\"'{{print; exit}}'\"'\"') ; \
+         JAVAC_BIN=$(rpm -ql {pkg} 2>/dev/null | awk '/\\/bin\\/javac$/'\"'\"'{{print; exit}}'\"'\"') ; \
+         [ -n \"$JAVA_BIN\" ] && alternatives --set java \"$JAVA_BIN\" || true ; \
+         [ -n \"$JAVAC_BIN\" ] && alternatives --set javac \"$JAVAC_BIN\" || true",
+        pkg = pkg
+    )
 }
 
 pub(crate) async fn runtime_dnf_package_available(pkg: &str) -> bool {

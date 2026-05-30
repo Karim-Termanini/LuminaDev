@@ -1,6 +1,5 @@
 use serde_json::{json, Value};
 use std::ffi::OsStr;
-use std::path::Path;
 use std::time::Instant;
 use tauri::{AppHandle, Emitter, Manager, State};
 use uuid::Uuid;
@@ -35,6 +34,11 @@ pub(crate) use runtime_versioning::{
 mod runtime_paths;
 pub(crate) use runtime_paths::{
     lumina_home_dir, lumina_path_must_be_under_home, lumina_replace_symlink,
+};
+mod runtime_discover;
+pub(crate) use runtime_discover::{
+    active_binary_script, list_installed_versions_script, list_mise_runtime_script,
+    parse_version_path_lines, status_probe_script,
 };
 mod runtime_verify;
 pub(crate) use runtime_verify::runtime_append_verify;

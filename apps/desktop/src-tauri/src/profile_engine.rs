@@ -2,10 +2,19 @@ use serde_json::{json, Value};
 use std::collections::HashMap;
 use tauri::{AppHandle, Emitter};
 
-use crate::host_exec::{
-    cmd_timeout_long, cmd_timeout_short, exec_output_limit,
-};
+use crate::host_exec::{cmd_timeout_long, cmd_timeout_short, exec_output_limit};
 use crate::utils::{app_file, find_free_port, read_json};
+
+pub(crate) fn format_profile_switch_error(raw: &str) -> String {
+    let mut s = raw.trim();
+    while let Some(rest) = s.strip_prefix("[PROFILE_SWITCH_FAILED]") {
+        s = rest.trim();
+    }
+    if s.is_empty() {
+        s = "docker compose up failed";
+    }
+    format!("[PROFILE_SWITCH_FAILED] {}", s)
+}
 
 pub(crate) fn resolve_profile_template(app: &AppHandle, profile: &str) -> String {
     let profile = profile.trim();
@@ -80,7 +89,10 @@ pub(crate) fn get_profile_extra_env(app: &AppHandle, profile: &str) -> HashMap<S
             .and_then(|v| v.as_str());
         if let Some(dir_str) = proj_dir {
             if !dir_str.is_empty() {
-                env.insert("PROJECT_DIR".to_string(), dir_str.to_string());
+                env.insert(
+                    "PROJECT_DIR".to_string(),
+                    crate::project_scaffold::expand_tilde_path(dir_str),
+                );
             }
         }
 
@@ -124,7 +136,10 @@ pub(crate) fn get_profile_extra_env(app: &AppHandle, profile: &str) -> HashMap<S
 }
 
 pub(crate) async fn profile_switch(app: &AppHandle, body: &Value) -> Value {
-    let mut from_profile_str = body.get("from").and_then(|v| v.as_str()).map(|s| s.to_string());
+    let mut from_profile_str = body
+        .get("from")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
     let to_profile = body.get("to").and_then(|v| v.as_str()).unwrap_or_default();
 
     if from_profile_str.is_none() && !to_profile.is_empty() {
@@ -180,12 +195,15 @@ pub(crate) async fn profile_switch(app: &AppHandle, body: &Value) -> Value {
         let from_template = resolve_profile_template(app, from);
         let from_dir = crate::compose_profiles::compose_profile_workdir(app, &from_template);
         if from_dir.is_dir() {
+            let use_full_from =
+                crate::compose_profiles::profile_wants_full_stack(app, from, &from_dir);
             match crate::compose_engine::expose_exec_docker_compose_in_dir(
                 &from_dir,
                 &["stop"],
                 cmd_timeout_long(),
                 Some(from),
                 Some(get_profile_extra_env(app, from)),
+                use_full_from,
             )
             .await
             {
@@ -221,6 +239,7 @@ pub(crate) async fn profile_switch(app: &AppHandle, body: &Value) -> Value {
                 ("node_hmr_port", 5173),
                 ("postgres_port", 54321),
             ],
+            "ai-ml" => &[("jupyter_port", 18888), ("ollama_port", 11434)],
             _ => &[],
         };
         for (store_key_suffix, preferred) in port_specs {
@@ -239,24 +258,54 @@ pub(crate) async fn profile_switch(app: &AppHandle, body: &Value) -> Value {
         }
     }
 
+    let use_full_stack = crate::compose_profiles::profile_wants_full_stack(app, to_profile, &to_dir);
     emit_step(
         &format!(
             "Starting {} (pulling images, building containers)...",
             to_profile
         ),
-        60,
+        18,
     );
-    match crate::compose_engine::expose_exec_docker_compose_in_dir(
+    let env_vars = get_profile_extra_env(app, to_profile);
+    match crate::compose_engine::exec_docker_compose_up_streaming(
+        app,
         &to_dir,
-        &["up", "-d"],
-        cmd_timeout_long(),
-        Some(to_profile),
-        Some(get_profile_extra_env(app, to_profile)),
+        to_profile,
+        Some(env_vars.clone()),
+        use_full_stack,
     )
     .await
     {
-        Ok((stdout, stderr)) => {
-            logs.push_str(&format!("Started new profile:\n{}{}\n", stdout, stderr));
+        Ok(extra_log) => {
+            if !extra_log.is_empty() {
+                logs.push_str(&extra_log);
+            }
+            emit_step("Verifying containers are running...", 71);
+            let mut running = false;
+            for attempt in 0..45 {
+                if crate::system_info::is_compose_profile_running(to_profile).await {
+                    running = true;
+                    break;
+                }
+                let pct = 71u8.saturating_add(((attempt + 1) * 8 / 45).min(8));
+                emit_step(
+                    &format!(
+                        "Waiting for containers to start ({}/45)...",
+                        attempt + 1
+                    ),
+                    pct,
+                );
+                tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+            }
+            if !running {
+                logs.push_str("Compose up finished but no running containers were detected.\n");
+                return json!({
+                    "ok": false,
+                    "log": logs,
+                    "error": "[PROFILE_SWITCH_FAILED] Stack started but containers are not running. Enable FULL stack on the profile or check Docker logs."
+                });
+            }
+            logs.push_str("Containers are running.\n");
             if let Ok(store_path) = app_file(app, "store.json") {
                 let mut store = read_json(&store_path);
                 if !store.is_object() {
@@ -270,12 +319,97 @@ pub(crate) async fn profile_switch(app: &AppHandle, body: &Value) -> Value {
                     serde_json::to_string_pretty(&store).unwrap_or_default(),
                 );
             }
-            emit_step("Done", 100);
+            emit_step("Stack is running", 80);
             json!({ "ok": true, "log": logs })
         }
         Err(e) => {
-            logs.push_str(&format!("Failed to start new profile: {}\n", e.trim()));
-            json!({ "ok": false, "log": logs, "error": format!("[PROFILE_SWITCH_FAILED] {}", e.trim()) })
+            let err_str = e.trim().to_string();
+            // Auto-retry on port conflict: reassign conflicting ports and try once more
+            if err_str.contains("port is already allocated") {
+                logs.push_str(&format!(
+                    "Port conflict detected, reassigning ports...\n{}",
+                    err_str
+                ));
+                if let Ok(store_path) = app_file(app, "store.json") {
+                    let mut store = read_json(&store_path);
+                    let mut changed = false;
+                    // Extract the port number from the error message
+                    let port_specs: &[(&str, u16)] = match to_template.as_str() {
+                        "data-science" => &[("jupyter_port", 8888), ("postgres_port", 54320)],
+                        "web-dev" => &[
+                            ("node_port", 3000),
+                            ("node_hmr_port", 5173),
+                            ("postgres_port", 54321),
+                        ],
+                        _ => &[],
+                    };
+                    for (store_key_suffix, _preferred) in port_specs {
+                        let store_key = format!("{}_{}", store_key_suffix, to_profile);
+                        if let Some(port) = store.get(&store_key).and_then(|v| v.as_u64()) {
+                            // Check if this port is in the error (likely the culprit)
+                            if err_str.contains(&port.to_string()) {
+                                let free = find_free_port(port as u16 + 1);
+                                logs.push_str(&format!(
+                                    "Reassigning {}: {} -> {}\n",
+                                    store_key, port, free
+                                ));
+                                store[&store_key] = serde_json::json!(free);
+                                changed = true;
+                            }
+                        }
+                    }
+                    if changed {
+                        let _ = std::fs::write(
+                            &store_path,
+                            serde_json::to_string_pretty(&store).unwrap_or_default(),
+                        );
+                        // Retry with new ports
+                        let env_vars_retry = get_profile_extra_env(app, to_profile);
+                        match crate::compose_engine::exec_docker_compose_up_streaming(
+                            app,
+                            &to_dir,
+                            to_profile,
+                            Some(env_vars_retry),
+                            use_full_stack,
+                        )
+                        .await
+                        {
+                            Ok(_) => {
+                                if crate::system_info::is_compose_profile_running(to_profile).await {
+                                    if let Ok(store_path) = app_file(app, "store.json") {
+                                        let mut store = read_json(&store_path);
+                                        if let Some(map) = store.as_object_mut() {
+                                            map.insert(
+                                                "active_profile".to_string(),
+                                                serde_json::json!(to_profile),
+                                            );
+                                        }
+                                        let _ = std::fs::write(
+                                            &store_path,
+                                            serde_json::to_string_pretty(&store)
+                                                .unwrap_or_default(),
+                                        );
+                                    }
+                                    emit_step("Stack is running", 80);
+                                    return json!({ "ok": true, "log": logs });
+                                }
+                                logs.push_str(
+                                    "Retry up succeeded but containers are still not running.\n",
+                                );
+                            }
+                            Err(e2) => {
+                                logs.push_str(&format!("Retry also failed: {}\n", e2.trim()));
+                                return json!({ "ok": false, "log": logs, "error": format_profile_switch_error(&e2) });
+                            }
+                        }
+                    }
+                }
+                logs.push_str(&format!("Failed to start new profile: {}\n", err_str));
+                json!({ "ok": false, "log": logs, "error": format_profile_switch_error(&err_str) })
+            } else {
+                logs.push_str(&format!("Failed to start new profile: {}\n", err_str));
+                json!({ "ok": false, "log": logs, "error": format_profile_switch_error(&err_str) })
+            }
         }
     }
 }

@@ -888,7 +888,7 @@ pub(crate) async fn handle_ports_suggest(app: &AppHandle, body: &Value) -> Value
                 "jupyter".into(),
                 (*existing
                     .get("jupyter_port")
-                    .unwrap_or(&(find_free_port(8888) as u64)))
+                    .unwrap_or(&(find_free_port(18888) as u64)))
                 .into(),
             );
             ports.insert(
@@ -1566,6 +1566,35 @@ pub(crate) async fn handle_metrics(state: &AppState) -> Value {
     })
 }
 
+use crate::utils::sanitize_compose_project_name;
+
+async fn running_compose_project_names() -> std::collections::HashSet<String> {
+    let ls_json = exec_output("docker", &["compose", "ls", "--all", "--format", "json"])
+        .await
+        .unwrap_or_default();
+    serde_json::from_str::<Vec<Value>>(&ls_json)
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|v| {
+            let name = v.get("Name")?.as_str()?;
+            let status = v.get("Status")?.as_str()?.to_lowercase();
+            if status.contains("running") || status.contains("restarting") {
+                Some(sanitize_compose_project_name(name))
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+pub(crate) async fn is_compose_profile_running(profile_name: &str) -> bool {
+    let key = sanitize_compose_project_name(profile_name);
+    if key.is_empty() {
+        return false;
+    }
+    running_compose_project_names().await.contains(&key)
+}
+
 /// Returns which profile names from the given list have a running Docker Compose project.
 /// Uses `docker compose ls --format json` — the authoritative source of project state.
 pub(crate) async fn handle_profile_running_status(_app: &AppHandle, body: &Value) -> Value {
@@ -1578,36 +1607,11 @@ pub(crate) async fn handle_profile_running_status(_app: &AppHandle, body: &Value
         return json!({ "ok": true, "running": [] });
     }
 
-    // Sanitize: same logic as compose_engine.rs so project names match exactly.
-    let sanitize = |s: &str| -> String {
-        s.trim()
-            .to_lowercase()
-            .chars()
-            .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '-' })
-            .collect()
-    };
-
-    // `docker compose ls --all --format json` lists every compose project Docker tracks.
-    // Output: [{"Name":"testeing","Status":"running(2)","ConfigFiles":"..."},...]
-    let ls_json = exec_output("docker", &["compose", "ls", "--all", "--format", "json"])
-        .await
-        .unwrap_or_default();
-
-    // Build a set of project names that are currently running.
-    let running_projects: std::collections::HashSet<String> =
-        serde_json::from_str::<Vec<Value>>(&ls_json)
-            .unwrap_or_default()
-            .into_iter()
-            .filter_map(|v| {
-                let name = v.get("Name")?.as_str()?.to_string();
-                let status = v.get("Status")?.as_str()?.to_lowercase();
-                if status.contains("running") || status.contains("restarting") { Some(name) } else { None }
-            })
-            .collect();
+    let running_projects = running_compose_project_names().await;
 
     let running: Vec<String> = names
         .into_iter()
-        .filter(|n| running_projects.contains(&sanitize(n)))
+        .filter(|n| running_projects.contains(&sanitize_compose_project_name(n)))
         .collect();
 
     json!({ "ok": true, "running": running })

@@ -24,6 +24,7 @@ const RUNTIME_DETAILS: Record<string, { website: string; icon: string }> = {
   julia: { website: 'https://julialang.org', icon: 'symbol-color' },
   lua: { website: 'https://www.lua.org', icon: 'symbol-variable' },
   lisp: { website: 'https://www.sbcl.org', icon: 'symbol-class' },
+  r: { website: 'https://www.r-project.org', icon: 'graph' },
 }
 
 const RUNTIME_LOCALE_KEY: Record<string, string> = {
@@ -35,6 +36,65 @@ const RUNTIME_LOCALE_KEY: Record<string, string> = {
 const UPDATE_OUTCOME_STORAGE_KEY = 'dh:runtimes:update-outcomes:v1'
 const STATUS_CACHE_KEY = 'dh:runtimes:status-cache:v1'
 const STATUS_CACHE_TTL = 30 * 1000
+const VERSIONS_CACHE_KEY = 'dh:runtimes:versions-cache:v1'
+const VERSIONS_CACHE_TTL = 5 * 60 * 1000 // 5 minutes
+
+type InstalledVersionRow = {
+  version: string
+  path: string
+  label?: string
+  javaHome?: string
+  isDefault?: boolean
+}
+
+/** Strip redundant runtime name prefixes from probe output for display. */
+function formatRuntimeVersionDisplay(runtimeId: string, raw: string | undefined): string {
+  if (!raw) return ''
+  const v = raw.trim()
+  switch (runtimeId) {
+    case 'python':
+      return v.replace(/^Python\s+/i, '')
+    case 'julia':
+      return v.replace(/^julia version\s+/i, '')
+    case 'java': {
+      const quoted = v.match(/"([^"]+)"/)
+      if (quoted) return quoted[1]
+      return v
+    }
+    case 'go':
+      return v.replace(/^go version go/i, 'go').replace(/\s+linux\/\S+$/, '').trim() || v
+    case 'php':
+      return v.replace(/^PHP\s+/i, '').replace(/\s+\(.*$/, '').trim()
+    case 'rust':
+      return v.replace(/^rustc\s+/, '').replace(/\s+\([^)]*\)\s*$/, '').trim() || v
+    case 'lua':
+      return v.replace(/^Lua\s+/i, '').replace(/\s+Copyright.*$/i, '').trim()
+    case 'r': {
+      const m = v.match(/R version ([\d.]+)/i)
+      if (m) return m[1]
+      return v.replace(/^R version\s+/i, '').replace(/\s+--.*$/, '').trim()
+    }
+    case 'c_cpp':
+      return v.replace(/^gcc\s+\(GCC\)\s+/i, '').replace(/\s+\(.*$/, '').trim()
+    case 'lisp':
+      return v.replace(/^SBCL\s+/i, '').trim()
+    case 'dart':
+      return v.replace(/^Dart SDK version:\s*/i, '').split(/\s+/)[0] || v
+    case 'flutter':
+      return v.replace(/^Flutter\s+/i, '').split(/\s+/)[0] || v
+    default:
+      return v
+  }
+}
+
+function installedVersionLabel(runtimeId: string, row: InstalledVersionRow): string {
+  if (row.label) return row.label
+  return formatRuntimeVersionDisplay(runtimeId, row.version)
+}
+
+function installedVersionKey(row: InstalledVersionRow): string {
+  return `${row.path}\0${row.version}`
+}
 
 /** Prefer a sensible default when the version API returns many entries (e.g. Node: first LTS row). */
 function pickDefaultRuntimeVersion(runtimeId: string, versions: string[]): string {
@@ -95,12 +155,10 @@ export function RuntimesPage(): ReactElement {
   const [settingActivePath, setSettingActivePath] = useState<string | null>(null)
   const [removingVersionPath, setRemovingVersionPath] = useState<string | null>(null)
   const [installedVersionsCache, setInstalledVersionsCache] = useState<
-    Record<string, Array<{ version: string; path: string }>>
+    Record<string, InstalledVersionRow[]>
   >({})
   const [loadingInstalledVersions, setLoadingInstalledVersions] = useState(false)
 
-  const VERSIONS_CACHE_KEY = 'dh:runtimes:versions-cache:v1'
-  const VERSIONS_CACHE_TTL = 5 * 60 * 1000 // 5 minutes
   const loadVersionsForRuntime = useCallback(
     async (runtimeId: string, method: 'system' | 'local', resetDefault: boolean) => {
       const cacheKey = `${runtimeId}:${method}`
@@ -132,7 +190,7 @@ export function RuntimesPage(): ReactElement {
         const res = await window.dh.getAvailableVersions(runtimeId, method)
         assertRuntimeOk(res, t('page.errorFetch'))
         const vs = res.versions
-        setAvailableVersions(vs)
+        setAvailableVersions(vs.length > 0 ? vs : ['latest'])
         if (vs.length === 0) return
         if (resetDefault) {
           setSelectedVersion(pickDefaultRuntimeVersion(runtimeId, vs))
@@ -159,8 +217,8 @@ export function RuntimesPage(): ReactElement {
         setVersionsLoading(false)
       }
     },
-    []
-  ) // eslint-disable-line react-hooks/exhaustive-deps
+    [t]
+  )
 
   /** Same as load but for the currently selected runtime (wizard Refresh button). */
   const refreshVersionsList = useCallback(
@@ -179,23 +237,23 @@ export function RuntimesPage(): ReactElement {
     }
   }, [selectedId, t])
 
-  const loadInstalledVersions = useCallback(
-    async (runtimeId: string) => {
-      if (installedVersionsCache[runtimeId]) return
-      setLoadingInstalledVersions(true)
-      try {
-        const res = await window.dh.runtimeInstalledVersions(runtimeId)
-        if (res.ok) {
-          setInstalledVersionsCache((prev) => ({ ...prev, [runtimeId]: res.versions }))
-        }
-      } catch {
-        // user can still install with 'latest'
-      } finally {
-        setLoadingInstalledVersions(false)
+  const installedVersionsCacheRef = useRef(installedVersionsCache)
+  installedVersionsCacheRef.current = installedVersionsCache
+
+  const loadInstalledVersions = useCallback(async (runtimeId: string, force = false) => {
+    if (!force && installedVersionsCacheRef.current[runtimeId]) return
+    setLoadingInstalledVersions(true)
+    try {
+      const res = await window.dh.runtimeInstalledVersions(runtimeId)
+      if (res.ok) {
+        setInstalledVersionsCache((prev) => ({ ...prev, [runtimeId]: res.versions }))
       }
-    },
-    [installedVersionsCache]
-  )
+    } catch {
+      // user can still install with 'latest'
+    } finally {
+      setLoadingInstalledVersions(false)
+    }
+  }, [])
 
   const refreshStatus = useCallback(async (background = false) => {
     if (!background) setIsRefreshing(true)
@@ -229,11 +287,11 @@ export function RuntimesPage(): ReactElement {
   }, [])
 
   const setRuntimeActive = useCallback(
-    async (path: string) => {
-      setSettingActivePath(path)
+    async (path: string, version?: string) => {
+      setSettingActivePath(installedVersionKey({ path, version: version ?? path }))
       setErrorMessage(null)
       try {
-        const res = await window.dh.runtimeSetActive({ runtimeId: selectedId, path })
+        const res = await window.dh.runtimeSetActive({ runtimeId: selectedId, path, version })
         assertRuntimeOk(res, t('page.errorActive'))
         setInstalledVersionsCache((prev) => {
           const next = { ...prev }
@@ -241,36 +299,37 @@ export function RuntimesPage(): ReactElement {
           return next
         })
         await refreshStatus()
+        await loadInstalledVersions(selectedId, true)
       } catch (e) {
         setErrorMessage(humanizeRuntimeError(e))
       } finally {
         setSettingActivePath(null)
       }
     },
-    [refreshStatus, selectedId, t]
+    [refreshStatus, selectedId, t, loadInstalledVersions]
   )
 
   const removeVersion = useCallback(
     async (version: string, path: string) => {
       if (!window.confirm(t('page.removeConfirm', { id: selectedId, version }))) return
-      setRemovingVersionPath(path)
+      setRemovingVersionPath(installedVersionKey({ path, version }))
       setErrorMessage(null)
       try {
         const res = await window.dh.runtimeRemoveVersion({ runtimeId: selectedId, version, path })
         assertRuntimeOk(res, t('page.errorRemove'))
-        setInstalledVersionsCache((prev) => {
-          const next = { ...prev }
-          delete next[selectedId]
-          return next
-        })
+        setInstalledVersionsCache((prev) => ({
+          ...prev,
+          [selectedId]: (prev[selectedId] ?? []).filter((v) => v.path !== path),
+        }))
         await refreshStatus()
+        await loadInstalledVersions(selectedId, true)
       } catch (e) {
         setErrorMessage(humanizeRuntimeError(e))
       } finally {
         setRemovingVersionPath(null)
       }
     },
-    [refreshStatus, selectedId, t]
+    [refreshStatus, selectedId, t, loadInstalledVersions]
   )
 
   // Mount-only: serve cached status instantly, then refresh in background
@@ -329,14 +388,10 @@ export function RuntimesPage(): ReactElement {
     ) {
       void refreshStatus()
       void refreshDeps()
-      setInstalledVersionsCache((prev) => {
-        const next = { ...prev }
-        delete next[selectedId]
-        return next
-      })
+      void loadInstalledVersions(selectedId, true)
     }
     prevJobStateRef.current = currentState
-  }, [activeJob?.state, refreshStatus, refreshDeps])
+  }, [activeJob?.state, refreshStatus, refreshDeps, loadInstalledVersions, selectedId])
 
   const installInProgress = activeJob?.state === 'running'
   const isUninstallJob = activeJob?.kind === `uninstall_${selectedId}`
@@ -373,7 +428,10 @@ export function RuntimesPage(): ReactElement {
   )
 
   const rtLocaleKey = RUNTIME_LOCALE_KEY[selectedId] ?? selectedId
-  const suggestVerifyCmd = t(rtLocaleKey + '.verify')
+  const jobRuntimeId =
+    (activeJob as JobSummary & { runtimeId?: string })?.runtimeId ?? selectedId
+  const verifyLocaleKey = RUNTIME_LOCALE_KEY[jobRuntimeId] ?? jobRuntimeId
+  const suggestVerifyCmd = t(verifyLocaleKey + '.verify')
   const progressAction = isUninstallJob ? 'Removing' : isUpdateJob ? 'Updating' : 'Installing'
   const lastJobTail = activeJob?.logTail ?? []
   const logHasVerifyOk = lastJobTail.some((l) => /VERIFY OK/i.test(l))
@@ -407,10 +465,29 @@ export function RuntimesPage(): ReactElement {
   }, [updateOutcome, selectedId])
 
   useEffect(() => {
-    setAvailableVersions([])
-    setSelectedVersion('latest')
+    void loadInstalledVersions(selectedId)
+  }, [selectedId, loadInstalledVersions])
+
+  useEffect(() => {
+    if (!showWizard || wizardStep !== 1) return
     void loadVersionsForRuntime(selectedId, installMethod, true)
-  }, [selectedId, installMethod, loadVersionsForRuntime])
+  }, [showWizard, wizardStep, selectedId, installMethod, loadVersionsForRuntime])
+
+  const detectedVersions = useMemo(() => {
+    const cached = installedVersionsCache[selectedId]
+    if (cached !== undefined && cached.length > 0) return cached
+    if (selectedRuntime?.installed && selectedRuntime.version) {
+      return [
+        {
+          version: selectedRuntime.version,
+          path: selectedRuntime.path ?? '',
+          label: formatRuntimeVersionDisplay(selectedId, selectedRuntime.version),
+          isDefault: true,
+        },
+      ]
+    }
+    return cached ?? []
+  }, [installedVersionsCache, selectedId, selectedRuntime])
 
   useEffect(() => {
     if (displayedVersions.length === 0) return
@@ -425,8 +502,8 @@ export function RuntimesPage(): ReactElement {
     setSelectedId(id)
     setShowWizard(true)
     setWizardStep(1)
-    void loadVersionsForRuntime(id, installMethod, true)
-    void loadInstalledVersions(id)
+    void loadVersionsForRuntime(id, installMethod, false)
+    void loadInstalledVersions(id, true)
   }
 
   const runInstall = async () => {
@@ -589,7 +666,9 @@ export function RuntimesPage(): ReactElement {
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 14, fontWeight: 600 }}>{r.name}</div>
                 <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
-                  {r.installed ? r.version : t('page.notInstalled')}
+                  {r.installed
+                    ? formatRuntimeVersionDisplay(r.id, r.version)
+                    : t('page.notInstalled')}
                 </div>
               </div>
               {r.installed && (
@@ -690,7 +769,9 @@ export function RuntimesPage(): ReactElement {
                     </span>
                     {selectedRuntime.installed && (
                       <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-                        {t('page.version', { v: selectedRuntime.version })}
+                        {t('page.version', {
+                          v: formatRuntimeVersionDisplay(selectedId, selectedRuntime.version),
+                        })}
                       </span>
                     )}
                   </div>
@@ -792,8 +873,7 @@ export function RuntimesPage(): ReactElement {
               </a>
             </div>
 
-            {selectedRuntime.installed &&
-              (installedVersionsCache[selectedId] || selectedRuntime.allVersions) && (
+            {selectedRuntime.installed && detectedVersions.length > 0 && (
                 <div style={{ marginTop: 40 }}>
                   <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>
                     {t('view.detected')}
@@ -805,13 +885,16 @@ export function RuntimesPage(): ReactElement {
                           className="codicon codicon-loading codicon-modifier-spin"
                           style={{ marginRight: 6 }}
                         />
-                        Loading installed versions...
+                        {t('view.loadingDetected')}
                       </div>
                     ) : (
-                      (installedVersionsCache[selectedId] ?? selectedRuntime.allVersions ?? []).map(
-                        (v, i) => (
+                      detectedVersions.map((v) => {
+                        const rowKey = installedVersionKey(v)
+                        const displayLabel = installedVersionLabel(selectedId, v)
+                        const isActive = v.isDefault === true
+                        return (
                           <div
-                            key={i}
+                            key={rowKey}
                             style={{
                               display: 'flex',
                               justifyContent: 'space-between',
@@ -824,21 +907,50 @@ export function RuntimesPage(): ReactElement {
                           >
                             <div>
                               <div style={{ fontSize: 14, fontWeight: 700 }}>
-                                {t('page.version', { v: v.version })}
+                                {selectedId === 'java' && v.label
+                                  ? v.label
+                                  : t('page.version', { v: displayLabel })}
                               </div>
-                              <div
-                                style={{
-                                  fontSize: 11,
-                                  color: 'var(--text-muted)',
-                                  marginTop: 2,
-                                  fontFamily: 'monospace',
-                                }}
-                              >
-                                {v.path}
-                              </div>
+                              {selectedId === 'java' && (
+                                <div
+                                  style={{
+                                    fontSize: 11,
+                                    color: 'var(--text-muted)',
+                                    marginTop: 2,
+                                    fontFamily: 'monospace',
+                                  }}
+                                >
+                                  JAVA_HOME={v.javaHome ?? v.path.replace(/\/bin\/java$/, '')}
+                                </div>
+                              )}
+                              {selectedId !== 'java' && (
+                                <div
+                                  style={{
+                                    fontSize: 11,
+                                    color: 'var(--text-muted)',
+                                    marginTop: 2,
+                                    fontFamily: 'monospace',
+                                  }}
+                                >
+                                  {v.path}
+                                </div>
+                              )}
+                              {selectedId === 'java' && (
+                                <div
+                                  style={{
+                                    fontSize: 10,
+                                    color: 'var(--text-muted)',
+                                    marginTop: 2,
+                                    fontFamily: 'monospace',
+                                    opacity: 0.75,
+                                  }}
+                                >
+                                  {v.path}
+                                </div>
+                              )}
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                              {v.path === selectedRuntime.path && (
+                              {isActive && (
                                 <span
                                   style={{
                                     fontSize: 10,
@@ -853,11 +965,13 @@ export function RuntimesPage(): ReactElement {
                                   {t('page.active')}
                                 </span>
                               )}
-                              {v.path !== selectedRuntime.path && (
+                              {!isActive && (
                                 <button
                                   type="button"
-                                  onClick={() => void setRuntimeActive(v.path)}
-                                  disabled={installInProgress || settingActivePath === v.path}
+                                  onClick={() => void setRuntimeActive(v.path, v.version)}
+                                  disabled={
+                                    installInProgress || settingActivePath === rowKey
+                                  }
                                   style={{
                                     fontSize: 11,
                                     fontWeight: 800,
@@ -867,14 +981,14 @@ export function RuntimesPage(): ReactElement {
                                     background: 'rgba(255,255,255,0.04)',
                                     color: 'var(--text-main)',
                                     cursor:
-                                      installInProgress || settingActivePath === v.path
+                                      installInProgress || settingActivePath === rowKey
                                         ? 'default'
                                         : 'pointer',
                                     opacity:
-                                      installInProgress || settingActivePath === v.path ? 0.55 : 1,
+                                      installInProgress || settingActivePath === rowKey ? 0.55 : 1,
                                   }}
                                 >
-                                  {settingActivePath === v.path
+                                  {settingActivePath === rowKey
                                     ? t('view.switching')
                                     : t('view.switch')}
                                 </button>
@@ -884,13 +998,13 @@ export function RuntimesPage(): ReactElement {
                                 onClick={() => void removeVersion(v.version, v.path)}
                                 disabled={
                                   installInProgress ||
-                                  removingVersionPath === v.path ||
-                                  v.path === selectedRuntime.path
+                                  removingVersionPath === rowKey ||
+                                  isActive
                                 }
                                 title={
-                                  v.path === selectedRuntime.path
+                                  isActive
                                     ? t('view.cannotRemoveActive')
-                                    : t('page.removeVersion', { v: v.version })
+                                    : t('page.removeVersion', { v: displayLabel })
                                 }
                                 style={{
                                   fontSize: 11,
@@ -899,32 +1013,29 @@ export function RuntimesPage(): ReactElement {
                                   borderRadius: 10,
                                   border: '1px solid rgba(255,82,82,0.3)',
                                   background: 'rgba(255,82,82,0.08)',
-                                  color:
-                                    v.path === selectedRuntime.path
-                                      ? 'var(--text-muted)'
-                                      : '#ff5252',
+                                  color: isActive ? 'var(--text-muted)' : '#ff5252',
                                   cursor:
                                     installInProgress ||
-                                    removingVersionPath === v.path ||
-                                    v.path === selectedRuntime.path
+                                    removingVersionPath === rowKey ||
+                                    isActive
                                       ? 'default'
                                       : 'pointer',
                                   opacity:
                                     installInProgress ||
-                                    removingVersionPath === v.path ||
-                                    v.path === selectedRuntime.path
+                                    removingVersionPath === rowKey ||
+                                    isActive
                                       ? 0.4
                                       : 1,
                                 }}
                               >
-                                {removingVersionPath === v.path
+                                {removingVersionPath === rowKey
                                   ? t('view.removing')
                                   : t('view.remove')}
                               </button>
                             </div>
                           </div>
                         )
-                      )
+                      })
                     )}
                   </div>
                 </div>

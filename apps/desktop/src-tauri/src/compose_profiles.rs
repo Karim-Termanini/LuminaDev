@@ -4,6 +4,8 @@ use std::path::{Path, PathBuf};
 
 use tauri::{AppHandle, Manager};
 
+use crate::utils::{app_file, read_json};
+
 /// Walk up from `start` until `docker/compose` exists (dev / source checkout).
 pub(crate) fn find_repo_root(start: &Path) -> PathBuf {
   let mut cur = start.to_path_buf();
@@ -27,16 +29,38 @@ pub(crate) fn find_repo_root(start: &Path) -> PathBuf {
 ///
 /// When `LUMINA_DEV_COMPOSE_FULL` is `1`/`true`/`yes` and `docker-compose.full.yml` exists in the profile dir,
 /// `docker compose` runs with both `-f docker-compose.yml` and `-f docker-compose.full.yml` (merged stack).
-pub(crate) fn compose_full_overlay_enabled(compose_dir: &Path) -> bool {
-  if !compose_dir.join("docker-compose.full.yml").is_file() {
-    return false;
-  }
+pub(crate) fn compose_full_overlay_from_env() -> bool {
   std::env::var("LUMINA_DEV_COMPOSE_FULL")
     .map(|s| {
       let t = s.trim();
       t == "1" || t.eq_ignore_ascii_case("true") || t.eq_ignore_ascii_case("yes")
     })
     .unwrap_or(false)
+}
+
+pub(crate) fn compose_dir_has_full_overlay_file(compose_dir: &Path) -> bool {
+  compose_dir.join("docker-compose.full.yml").is_file()
+}
+
+/// Merge `composeVariant: full` from the profile store with `LUMINA_DEV_COMPOSE_FULL`.
+pub(crate) fn profile_wants_full_stack(app: &AppHandle, profile: &str, compose_dir: &Path) -> bool {
+  if !compose_dir_has_full_overlay_file(compose_dir) {
+    return false;
+  }
+  if compose_full_overlay_from_env() {
+    return true;
+  }
+  if let Ok(store_path) = app_file(app, "store.json") {
+    let store = read_json(&store_path);
+    if let Some(custom_profiles) = store.get("custom_profiles").and_then(|v| v.as_array()) {
+      for p in custom_profiles {
+        if p.get("name").and_then(|v| v.as_str()) == Some(profile) {
+          return p.get("composeVariant").and_then(|v| v.as_str()) == Some("full");
+        }
+      }
+    }
+  }
+  false
 }
 
 pub(crate) fn compose_profile_workdir(app: &AppHandle, profile: &str) -> PathBuf {
@@ -84,9 +108,9 @@ mod tests {
   fn compose_full_overlay_requires_file() {
     let base = std::env::temp_dir().join(format!("lumina-compose-overlay-{}", Uuid::new_v4()));
     std::fs::create_dir_all(&base).expect("dir");
-    assert!(!super::compose_full_overlay_enabled(&base));
+    assert!(!super::compose_dir_has_full_overlay_file(&base));
     std::fs::write(base.join("docker-compose.full.yml"), "services: {}\n").expect("write");
-    assert!(!super::compose_full_overlay_enabled(&base));
+    assert!(super::compose_dir_has_full_overlay_file(&base));
     let _ = std::fs::remove_dir_all(&base);
   }
 

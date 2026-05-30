@@ -463,21 +463,27 @@ export const GitConfigListSchema = z.object({
   target: z.enum(['sandbox', 'host']),
 })
 
-export const GitDoctorScanResponseSchema = z.object({
-  ok: z.literal(true),
-  gitVersion: z.string().nullable(),
-  healthScore: z.number().int().min(0).max(100),
-  findings: z.array(
-    z.object({
-      id: z.string(),
-      category: z.enum(['configuration', 'security', 'performance', 'environment', 'overview']),
-      severity: z.enum(['critical', 'warning', 'info', 'ok']),
-      title: z.string(),
-      detail: z.string(),
-      fix: z.object({ label: z.string(), action: z.string().optional() }).optional(),
-    })
-  ),
-})
+export const GitDoctorScanResponseSchema = z.union([
+  z.object({
+    ok: z.literal(true),
+    gitVersion: z.string().nullable(),
+    healthScore: z.number().int().min(0).max(100),
+    findings: z.array(
+      z.object({
+        id: z.string(),
+        category: z.enum(['configuration', 'security', 'performance', 'environment', 'overview']),
+        severity: z.enum(['critical', 'warning', 'info', 'ok']),
+        title: z.string(),
+        detail: z.string(),
+        fix: z.object({ label: z.string(), action: z.string().optional() }).optional(),
+      })
+    ),
+  }),
+  z.object({
+    ok: z.literal(false),
+    error: z.string().min(1),
+  }),
+])
 
 export const SshGenerateSchema = z.object({
   target: z.enum(['sandbox', 'host']),
@@ -500,6 +506,8 @@ export const RuntimeGetVersionsRequestSchema = z.object({
 export const RuntimeSetActiveRequestSchema = z.object({
   runtimeId: z.string().min(1).max(64),
   path: z.string().min(1).max(4096),
+  /** Version manager channel/tag (e.g. juliaup channel) when path alone is ambiguous. */
+  version: z.string().max(128).optional(),
 })
 
 export const RuntimeCheckDepsRequestSchema = z.object({
