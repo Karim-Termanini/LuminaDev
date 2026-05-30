@@ -39,7 +39,7 @@
   "beta.labelAutoSwitchProfile": "Automatisches Profilwechsel bei Projektverzeichnisänderung",
   "beta.descAutoSwitchProfile": "",
   "beta.labelGitVcsProMode": "Git VCS Pro-Modus",
-  "beta.descGitVcsProMode": "Zeige alle Git VCS-Steuerelemente (Integrationsleiste, CI, PR-Assistenten, Protected Branch). Wenn deaktiviert, verwendet VCS einen einfacheren Standardablauf.",
+  "beta.descGitVcsProMode": "Schaltet volle Git-VCS-Steuerung frei (Fetch, Integrieren, CI, PR/MR). Der VCS-Tab bleibt im einfachen Modus, bis du Pro mit dem Reagenzglas umschaltest.",
   "beta.loadFailed": "Flags konnten nicht geladen werden",
   "beta.saveFailed": "Flag konnte nicht gespeichert werden",
   "builder.cargoPath": "Cargo-Pfad",

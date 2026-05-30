@@ -19,11 +19,6 @@ const Flags = [
     labelKey: 'beta.labelAutoSwitchProfile',
     descKey: 'beta.descAutoSwitchProfile',
   },
-  {
-    key: 'enable_git_vcs_pro_mode',
-    labelKey: 'beta.labelGitVcsProMode',
-    descKey: 'beta.descGitVcsProMode',
-  },
 ]
 
 export const SettingsBetaFeatures: React.FC = () => {
