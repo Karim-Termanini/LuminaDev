@@ -144,7 +144,7 @@ Progress notes (2026-05-01, docs pass):
 
 - ❌ Drag-and-drop polish (basic HTML5 reorder already works — good enough)
 - ❌ Theme surface rollout across all routes (Maintenance theme is pilot; others wait)
-- ❌ Full-scope **Phase 12 Cloud Git** (as originally scoped) — core shipped; notification inbox still out
+- ❌ Full-scope **Phase 12 Cloud Git** (as originally scoped) — core shipped; legacy pro UI retired in Git Assistant sprint (G1); notification inbox still out
 - Phase **8 Settings**: first **hub** shipped on `/settings`; **hosts editor** and **profile env files** remain future work
 - ❌ **Extensions / plugin marketplace** — **removed from scope** (2026-05-29)
 - ❌ **Dashboard widget catalog/deck** — **removed from scope** (2026-05-29)
@@ -345,19 +345,24 @@ Missing: LAN discovery (intentional). **Per-container stats stream:** ✅ shippe
 
 ---
 
-## Phase 6 — Runtimes 🔄 PARTIAL (`/runtimes` → `partial`)
+## Phase 6 — Runtimes 📋 SIMPLIFYING (`/runtimes` → `partial`)
 
-17 runtimes: Node, Python, Go, Rust, Java, Bun, Zig, Dart, Flutter, Julia, PHP, Ruby, Lua, .NET, C/C++, Octave, SBCL
+~~17 runtimes: Node, Python, Go, Rust, Java, Bun, Zig, Dart, Flutter, Julia, PHP, Ruby, Lua, .NET, C/C++, Octave, SBCL~~
+
+**R1–R3 sprint (2026-05-31):** Simplifying from 18 runtimes to 7. See [`docs/MASTER_PLAN.md`](docs/MASTER_PLAN.md) §14.
+
+**Keeping (7):** Node.js, Python, Java, Go, Rust, PHP, .NET/C#
+
+**Removing (11):** Ruby, Bun, Zig, C/C++, MATLAB/Octave, Dart, Flutter, Julia, Lua, Lisp (SBCL), R
 
 - [x] Local + system install methods per runtime
 - [x] Real streaming progress (BufReader live)
 - [x] `check-deps`, `uninstall-preview`, `remove-version`
 - [x] `allVersions` detection for all runtimes
 - [x] Python filters EOL, PHP uses system packages
+- [x] Real dep graph (`removableDeps`) — `runtime_preview_removable_deps()`. ✅ FIXED
 
-- [x] Real dep graph (`removableDeps`) — `runtime_preview_removable_deps()` runs real OS dry-runs (`apt-get -s`, `dnf --assumeno`, `pacman --print-format`, `zypper --dry-run`). ✅ FIXED
-
-Remaining: Ruby install slow on Fedora (intentional/known).
+Remaining: Ruby install slow on Fedora (removed — Ruby no longer in scope).
 
 ---
 
@@ -435,19 +440,20 @@ Plugin marketplace, signed extensions, and Settings Extension tab are **not part
 
 Turns app into true daily driver for software engineers managing repositories and cloud source control platforms.
 
-- **Authentication** ✅: Encrypted store for tokens; device flow + PAT; optional OAuth client IDs via **Cloud Git → Advanced** / env / compile-time. Device-flow failure maps to `[CLOUD_AUTH_DEVICE_POLL_REJECTED]` with actionable guidance.
+- **Authentication** ✅: Encrypted store for tokens; device flow + PAT; optional OAuth client IDs via **Settings → Connected accounts** / env / compile-time. Device-flow failure maps to `[CLOUD_AUTH_DEVICE_POLL_REJECTED]` with actionable guidance.
 - **Interactive Version Control (Smart Workflow)** ✅:
-  - **Smart Push/Sync**: Fetch-before-push; `behind > 0` blocks push with notice; protected-branch failures → `[GIT_VCS_PROTECTED_BRANCH]` + Cloud Git link; **Copy raw error** on panel.
-  - **Branch rename after protected-branch push**: Suggests new branch name, creates + pushes it, then opens PR/MR wizard automatically.
+  - **Smart Push/Sync**: Fetch-before-push; `behind > 0` blocks push with notice; protected-branch failures → `[GIT_VCS_PROTECTED_BRANCH]` + Cloud Git link.
   - **Integrate Bar**: Guided UI for Merge, Rebase, and Stash (fast-forward defaults).
-  - **Conflict Resolution Studio**: 3-way merge view (Local / Incoming / Result) with Accept Current, Accept Incoming, Accept Both. No manual text editing.
+  - **Conflict Resolution Studio**: 3-way merge view (Local / Incoming / Result) with Accept Current, Accept Incoming, Accept Both.
   - **State Management**: Automatic handling of `MERGING` / `REBASING` states with Continue or Abort actions.
 - **Cloud Dashboards (API Integration)** ✅:
-  - **PR/MR Wizard**: Create PRs/MRs directly from app. Auto-fills title from branch name, visual branch picker, opens after protected-branch bypass flow. GitLab merge button removed from CI panel (policy always blocks it); "View on GitLab" link used.
-  - **CI/CD Pipelines**: `GitVcsCiChecks` + `gitVcsRepoPipelines` — real-time status (GitHub Actions + GitLab CI) with 30s polling. GitHub-only server-side merge button.
+  - **PR/MR Wizard**: Create PRs/MRs directly from app. Auto-fills title from branch name, visual branch picker, opens after protected-branch bypass flow.
+  - **CI/CD Pipelines**: `GitVcsCiChecks` + `gitVcsRepoPipelines` — real-time status (GitHub Actions + GitLab CI) with 30s polling.
   - **Issues Tracking**: Open issues across repos via `CloudGitActivityPanel`.
   - **Releases & Tags**: Latest releases per provider via `CloudGitActivityPanel`.
 - **Dashboard Widgets** — **removed** (2026-05-29). Use `/git` recents and Cloud Git activity instead.
+
+> **Git Assistant replaces legacy pro UI (2026-05-31):** The pro Git surface (tabbed hub, integrate bar, conflict studio, CI panel, config dashboard) was deleted in the Git Assistant sprint (G1). All VCS/cloud IPC channels kept for contract tests. Single-page beginner UX on `/git` covers setup → open → save → share. See [`docs/MASTER_PLAN.md`](docs/MASTER_PLAN.md) §6.
 
 ---
 
@@ -550,6 +556,8 @@ When user clicks "Install" / "Fix":
 ---
 
 ## Known Bugs
+
+> **Git Assistant G2 audit (2026-05-31):** 12 engineering fixes verified in full audit pass (63 files, 40+ tests). Zero known blockers remain on `/git`. Remaining code-quality items (6 missing IPC constants, dead code, schema gaps) documented in [`docs/MASTER_PLAN.md`](docs/MASTER_PLAN.md) §6.
 
 | # | Page | Bug | Status |
 |---|------|-----|--------|
