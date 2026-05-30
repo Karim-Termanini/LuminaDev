@@ -120,6 +120,17 @@ pub(crate) fn runtime_java_system_packages_for_version(
     }
 }
 
+/// Point `alternatives` at the JDK shipped by an RPM (Fedora/RHEL).
+pub(crate) fn runtime_dnf_java_alternatives_cmd(pkg: &str) -> String {
+    format!(
+        "JAVA_BIN=$(rpm -ql {pkg} 2>/dev/null | awk '/\\/bin\\/java$/'\"'\"'{{print; exit}}'\"'\"') ; \
+         JAVAC_BIN=$(rpm -ql {pkg} 2>/dev/null | awk '/\\/bin\\/javac$/'\"'\"'{{print; exit}}'\"'\"') ; \
+         [ -n \"$JAVA_BIN\" ] && alternatives --set java \"$JAVA_BIN\" || true ; \
+         [ -n \"$JAVAC_BIN\" ] && alternatives --set javac \"$JAVAC_BIN\" || true",
+        pkg = pkg
+    )
+}
+
 pub(crate) async fn runtime_dnf_package_available(pkg: &str) -> bool {
     let cmd = format!("dnf -q list --available '{}' >/dev/null 2>&1", pkg);
     exec_result_limit("bash", &["-lc", &cmd], cmd_timeout_short())

@@ -230,7 +230,7 @@ const PRESETS: Preset[] = [
 
 // ─── Suggestions ──────────────────────────────────────────────────────────────
 
-type Suggestion = { text: string; priority: 'high' | 'medium'; action?: () => void }
+type Suggestion = { text: string; priority: 'high' | 'medium'; action?: () => Promise<void> }
 
 function buildSuggestions(
   cfg: Map<string, string>,
@@ -249,7 +249,9 @@ function buildSuggestions(
     out.push({
       priority: 'high',
       text: 'No credential helper set. Git will prompt for password on every push.',
-      action: () => void onSetKey('credential.helper', 'store'),
+      action: async () => {
+        await onSetKey('credential.helper', 'store')
+      },
     })
   else if (/store/.test(helper))
     out.push({
@@ -265,19 +267,25 @@ function buildSuggestions(
     out.push({
       priority: 'medium',
       text: 'Enable fetch.prune to auto-delete stale remote-tracking branches.',
-      action: () => void onSetKey('fetch.prune', 'true'),
+      action: async () => {
+        await onSetKey('fetch.prune', 'true')
+      },
     })
   if (!cfg.get('init.defaultbranch'))
     out.push({
       priority: 'medium',
       text: 'Set init.defaultBranch to "main" so new repos use a consistent default branch.',
-      action: () => void onSetKey('init.defaultbranch', 'main'),
+      action: async () => {
+        await onSetKey('init.defaultbranch', 'main')
+      },
     })
   if (!cfg.get('core.preloadindex'))
     out.push({
       priority: 'medium',
       text: 'Enable core.preloadindex for faster git status on large repos.',
-      action: () => void onSetKey('core.preloadindex', 'true'),
+      action: async () => {
+        await onSetKey('core.preloadindex', 'true')
+      },
     })
   return out
 }
@@ -378,7 +386,7 @@ function SecurityRow({
   label: string
   level: SecurityLevel
   description: string
-  action?: () => void
+  action?: () => Promise<void>
   actionLabel?: string
 }): ReactElement {
   const chip: Record<SecurityLevel, { bg: string; color: string; text: string }> = {
@@ -423,7 +431,9 @@ function SecurityRow({
           type="button"
           className="hp-btn"
           style={{ fontSize: 11, padding: '3px 10px' }}
-          onClick={action}
+          onClick={async () => {
+            await action()
+          }}
         >
           {actionLabel}
         </button>
@@ -536,36 +546,36 @@ const CATEGORY_ICONS: Record<string, string> = {
 function fixActionToHandler(
   action: string | undefined,
   onSetKey: (k: string, v?: string) => Promise<void>
-): (() => void) | undefined {
+): (() => Promise<void>) | undefined {
   switch (action) {
     case 'set-credential-cache':
-      return () => {
-        void onSetKey('credential.helper', 'cache --timeout=3600')
+      return async () => {
+        await onSetKey('credential.helper', 'cache --timeout=3600')
       }
     case 'enable-ssl':
-      return () => {
-        void onSetKey('http.sslverify', 'true')
+      return async () => {
+        await onSetKey('http.sslverify', 'true')
       }
     case 'enable-gpg-sign':
-      return () => {
-        void onSetKey('commit.gpgsign', 'true')
+      return async () => {
+        await onSetKey('commit.gpgsign', 'true')
       }
     case 'enable-preload':
-      return () => {
-        void onSetKey('core.preloadindex', 'true')
+      return async () => {
+        await onSetKey('core.preloadindex', 'true')
       }
     case 'enable-prune':
-      return () => {
-        void onSetKey('fetch.prune', 'true')
+      return async () => {
+        await onSetKey('fetch.prune', 'true')
       }
     case 'git-config-set':
     case 'set-default-branch':
-      return () => {
-        void onSetKey('init.defaultbranch', 'main')
+      return async () => {
+        await onSetKey('init.defaultbranch', 'main')
       }
     case 'set-credential-store':
-      return () => {
-        void onSetKey('credential.helper', 'store')
+      return async () => {
+        await onSetKey('credential.helper', 'store')
       }
     default:
       return undefined
@@ -1221,7 +1231,9 @@ function OverviewSection({
                     type="button"
                     className="hp-btn"
                     style={{ fontSize: 11, padding: '3px 10px' }}
-                    onClick={s.action}
+                    onClick={async () => {
+                      await s.action?.()
+                    }}
                   >
                     {t('config.suggestions.fix')}
                   </button>
@@ -1587,7 +1599,7 @@ function SecuritySection({
                 ? `${t('config.security.usingHelper')} ${helper}`
                 : t('config.security.noHelper')
             }
-            action={!helper ? () => void onSetKey('credential.helper', 'store') : undefined}
+            action={!helper ? async () => { await onSetKey('credential.helper', 'store') } : undefined}
             actionLabel={t('config.security.setBasicStore')}
           />
           <SecurityRow
@@ -1598,7 +1610,7 @@ function SecuritySection({
                 ? `${t('config.security.gpgEnabled')}${signingKey ? ` (key: ${signingKey.slice(0, 12)}…)` : ''}.`
                 : t('config.security.gpgDisabled')
             }
-            action={!gpgSign ? () => void onSetKey('commit.gpgsign', 'true') : undefined}
+            action={!gpgSign ? async () => { await onSetKey('commit.gpgsign', 'true') } : undefined}
             actionLabel={t('config.security.enableSigning')}
           />
           <SecurityRow
@@ -1607,7 +1619,7 @@ function SecuritySection({
             description={
               sslVerify ? t('config.security.sslEnabled') : t('config.security.sslDisabled')
             }
-            action={!sslVerify ? () => void onSetKey('http.sslverify', 'true') : undefined}
+            action={!sslVerify ? async () => { await onSetKey('http.sslverify', 'true') } : undefined}
             actionLabel={t('config.security.reenableSsl')}
           />
           <SecurityRow
@@ -1645,7 +1657,7 @@ function SecuritySection({
             className="hp-btn"
             style={{ padding: '10px 16px' }}
             disabled={busy}
-            onClick={() => void onSetKey('commit.gpgsign', gpgSign ? 'false' : 'true')}
+            onClick={async () => { await onSetKey('commit.gpgsign', gpgSign ? 'false' : 'true') }}
           >
             {gpgSign ? t('config.security.disableSigning') : t('config.security.enableSigning')}
           </button>
@@ -1654,7 +1666,7 @@ function SecuritySection({
             className="hp-btn"
             style={{ padding: '10px 16px' }}
             disabled={busy}
-            onClick={() => void onSetKey('http.sslverify', sslVerify ? 'false' : 'true')}
+            onClick={async () => { await onSetKey('http.sslverify', sslVerify ? 'false' : 'true') }}
           >
             {sslVerify ? t('config.security.disableSSL') : t('config.security.restoreSSL')}
           </button>

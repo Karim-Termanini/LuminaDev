@@ -108,37 +108,53 @@ fi
         )),
         "java" => with_discover(
             r#"
-_java_row() {
-  local d="$1" fallback="$2"
+_java_dev_emit() {
+  local ver="$1" p="$2" label="$3" home="$4"
+  [ -n "$ver" ] && [ -n "$p" ] && [ -n "$label" ] && [ -n "$home" ] || return 0
+  case "|$_java_homes|" in *"|$home|"*) return 0 ;; esac
+  _java_homes="${_java_homes}|$home"
+  printf '%s\t%s\t%s\t%s\n' "$ver" "$p" "$label" "$home"
+}
+_java_homes=""
+
+_java_dev_row() {
+  local d="$1" fallback="${2:-}"
   [ -d "$d" ] || return 0
   [ -x "$d/bin/java" ] || return 0
-  local base rp ver
+  [ -x "$d/bin/javac" ] || return 0
+  local base home ver label p
   base=$(basename "$d")
+  [ "$base" = "current" ] && return 0
   case "$base" in
-    java|jre|java-openjdk|jre-openjdk|java-latest-openjdk) return 0 ;;
+    java|jre|java-openjdk|jre-openjdk) return 0 ;;
   esac
-  case "$base" in jre*) return 0 ;; esac
+  case "$base" in
+    java-[0-9]|java-[0-9][0-9]) return 0 ;;
+    jre*) return 0 ;;
+  esac
+  home=$(readlink -f "$d" 2>/dev/null || echo "$d")
   ver=$("$d/bin/java" -version 2>&1 | awk -F\" '/version/ {print $2; exit}')
   [ -n "$ver" ] || ver="${fallback:-$base}"
-  rp=$(readlink -f "$d/bin/java" 2>/dev/null || echo "$d/bin/java")
-  _emit_unique "$ver" "$rp"
+  label="JDK $ver"
+  p="$home/bin/java"
+  _java_dev_emit "$ver" "$p" "$label" "$home"
 }
 for d in "$HOME/.local/share/lumina/java"/jdk-*; do
-  _java_row "$d" "$(basename "$d" | sed 's/^jdk-//')"
+  _java_dev_row "$d" "$(basename "$d" | sed 's/^jdk-//')"
 done
 if [ -d "$HOME/.sdkman/candidates/java" ]; then
   for d in "$HOME/.sdkman/candidates/java"/*; do
     [ "$d" = "$HOME/.sdkman/candidates/java/current" ] && continue
-    _java_row "$d"
+    _java_dev_row "$d"
   done
 fi
 if [ -d "$HOME/.jdks" ]; then
   for d in "$HOME/.jdks"/*; do
-    _java_row "$d"
+    _java_dev_row "$d"
   done
 fi
 for d in /usr/lib/jvm/* /usr/java/*; do
-  _java_row "$d"
+  _java_dev_row "$d"
 done
 "#,
         ),
@@ -367,18 +383,26 @@ if [ -n "$p" ]; then d=$(dirname "$(dirname "$(readlink -f "$p")")"); cat "$d/ve
     })
 }
 
-pub(crate) fn parse_version_path_lines(raw: &str) -> Vec<(String, String)> {
+pub(crate) fn parse_version_path_lines(raw: &str) -> Vec<(String, String, Option<String>, Option<String>)> {
     let mut out = Vec::new();
     let mut seen = std::collections::HashSet::new();
     for line in raw.lines() {
-        let mut parts = line.splitn(2, '\t');
+        let mut parts = line.splitn(4, '\t');
         let v = parts.next().unwrap_or("").trim();
         let p = parts.next().unwrap_or("").trim();
+        let label = parts
+            .next()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty());
+        let java_home = parts
+            .next()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty());
         if v.is_empty() || p.is_empty() {
             continue;
         }
         if seen.insert(p.to_string()) {
-            out.push((v.to_string(), p.to_string()));
+            out.push((v.to_string(), p.to_string(), label, java_home));
         }
     }
     out
@@ -398,6 +422,18 @@ mod tests {
     }
 
     #[test]
+    fn parse_reads_optional_label_column() {
+        let raw = "25.0.3\t/usr/lib/jvm/java-25-openjdk/bin/java\tJDK 25.0.3\t/usr/lib/jvm/java-25-openjdk\n";
+        let rows = parse_version_path_lines(raw);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].2.as_deref(), Some("JDK 25.0.3"));
+        assert_eq!(
+            rows[0].3.as_deref(),
+            Some("/usr/lib/jvm/java-25-openjdk")
+        );
+    }
+
+    #[test]
     fn flutter_script_includes_home_flutter() {
         let script = list_installed_versions_script("flutter").unwrap();
         assert!(script.contains("$HOME/flutter"));
@@ -405,11 +441,11 @@ mod tests {
     }
 
     #[test]
-    fn java_script_skips_jre_aliases_and_uses_version_probe() {
+    fn java_script_is_developer_focused_jdk_only() {
         let script = list_installed_versions_script("java").unwrap();
+        assert!(script.contains("JDK $ver"));
+        assert!(script.contains("[ -x \"$d/bin/javac\" ]"));
         assert!(script.contains("jre*) return 0"));
-        assert!(script.contains("java-latest-openjdk"));
-        assert!(script.contains("-version 2>&1"));
-        assert!(script.contains("readlink -f"));
+        assert!(!script.contains("JDK compiler"));
     }
 }

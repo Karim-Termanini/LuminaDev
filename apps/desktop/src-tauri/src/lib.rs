@@ -1,6 +1,5 @@
 use serde_json::{json, Value};
 use std::ffi::OsStr;
-use std::path::Path;
 use std::time::Instant;
 use tauri::{AppHandle, Emitter, Manager, State};
 use uuid::Uuid;

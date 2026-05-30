@@ -100,7 +100,7 @@ pub fn sanitize_compose_project_name(name: &str) -> String {
     .to_lowercase()
     .chars()
     .map(|c| {
-      if c.is_alphanumeric() || c == '-' || c == '_' {
+      if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
         c
       } else {
         '-'

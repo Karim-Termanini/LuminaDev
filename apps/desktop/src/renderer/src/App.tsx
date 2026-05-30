@@ -33,7 +33,7 @@ export default function App(): ReactElement | null {
 
   useEffect(() => {
     initProfileSwitchProgress()
-    void resumeBackgroundProjectSetupIfNeeded((message, type, opts) => {
+    void resumeBackgroundProjectSetupIfNeeded((message, type) => {
       showToast(type === 'error' ? 'error' : 'success', message)
     })
   }, [showToast])

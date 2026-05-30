@@ -266,25 +266,34 @@ pub(crate) async fn exec_docker_compose_up_streaming(
     .map_err(|e| format!("[EXEC_ERROR] {}", e))?;
 
   let stream_state = Arc::new(ComposeUpStreamState::new(app.clone()));
-  if let Some(stderr) = child.stderr.take() {
+  let stderr_handle = if let Some(stderr) = child.stderr.take() {
     let state = stream_state.clone();
-    tokio::spawn(async move {
+    Some(tokio::spawn(async move {
       stream_compose_output(stderr, state).await;
-    });
-  }
-  if let Some(stdout) = child.stdout.take() {
+    }))
+  } else {
+    None
+  };
+  let stdout_handle = if let Some(stdout) = child.stdout.take() {
     let state = stream_state.clone();
-    tokio::spawn(async move {
+    Some(tokio::spawn(async move {
       stream_compose_output(stdout, state).await;
-    });
-  }
+    }))
+  } else {
+    None
+  };
 
   let status = tokio::time::timeout(cmd_timeout_long(), child.wait())
     .await
     .map_err(|_| "[HOST_COMMAND_TIMEOUT] docker compose up".to_string())?
     .map_err(|e| format!("[EXEC_ERROR] {}", e))?;
 
-  tokio::time::sleep(Duration::from_millis(200)).await;
+  if let Some(h) = stderr_handle {
+    let _ = h.await;
+  }
+  if let Some(h) = stdout_handle {
+    let _ = h.await;
+  }
 
   if status.success() {
     Ok(String::new())

@@ -159,12 +159,12 @@ export function parsePortFromEnv(key: string, value: string): number | null {
     const match = value.match(/@(?:[^:/@]+|\[[^\]]+\]):(\d{2,5})(?:\/|$)/)
     if (match) {
       const n = Number.parseInt(match[1], 10)
-      return Number.isFinite(n) ? n : null
+      return Number.isFinite(n) && n > 0 && n <= 65535 ? n : null
     }
     const hostMatch = value.match(/:(\d{2,5})(?:\/|$)/)
     if (hostMatch) {
       const n = Number.parseInt(hostMatch[1], 10)
-      return Number.isFinite(n) ? n : null
+      return Number.isFinite(n) && n > 0 && n <= 65535 ? n : null
     }
     return 5432
   }
@@ -204,10 +204,11 @@ export function runtimePortsFromSuggest(
 export function nextFreePort(preferred: number, used: Set<number>): number {
   let candidate = preferred
   for (let i = 0; i < 500; i++) {
+    if (candidate > 65535) candidate = 1024
     if (!used.has(candidate)) return candidate
     candidate += 1
   }
-  return preferred + 500
+  return Math.min(preferred + 500, 65535)
 }
 
 function pushConflict(

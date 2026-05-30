@@ -36,18 +36,21 @@ const RUNTIME_LOCALE_KEY: Record<string, string> = {
 const UPDATE_OUTCOME_STORAGE_KEY = 'dh:runtimes:update-outcomes:v1'
 const STATUS_CACHE_KEY = 'dh:runtimes:status-cache:v1'
 const STATUS_CACHE_TTL = 30 * 1000
+const VERSIONS_CACHE_KEY = 'dh:runtimes:versions-cache:v1'
+const VERSIONS_CACHE_TTL = 5 * 60 * 1000 // 5 minutes
 
 type InstalledVersionRow = {
   version: string
   path: string
   label?: string
+  javaHome?: string
   isDefault?: boolean
 }
 
 /** Strip redundant runtime name prefixes from probe output for display. */
 function formatRuntimeVersionDisplay(runtimeId: string, raw: string | undefined): string {
   if (!raw) return ''
-  let v = raw.trim()
+  const v = raw.trim()
   switch (runtimeId) {
     case 'python':
       return v.replace(/^Python\s+/i, '')
@@ -156,8 +159,6 @@ export function RuntimesPage(): ReactElement {
   >({})
   const [loadingInstalledVersions, setLoadingInstalledVersions] = useState(false)
 
-  const VERSIONS_CACHE_KEY = 'dh:runtimes:versions-cache:v1'
-  const VERSIONS_CACHE_TTL = 5 * 60 * 1000 // 5 minutes
   const loadVersionsForRuntime = useCallback(
     async (runtimeId: string, method: 'system' | 'local', resetDefault: boolean) => {
       const cacheKey = `${runtimeId}:${method}`
@@ -216,8 +217,8 @@ export function RuntimesPage(): ReactElement {
         setVersionsLoading(false)
       }
     },
-    []
-  ) // eslint-disable-line react-hooks/exhaustive-deps
+    [t]
+  )
 
   /** Same as load but for the currently selected runtime (wizard Refresh button). */
   const refreshVersionsList = useCallback(
@@ -318,7 +319,7 @@ export function RuntimesPage(): ReactElement {
         assertRuntimeOk(res, t('page.errorRemove'))
         setInstalledVersionsCache((prev) => ({
           ...prev,
-          [selectedId]: (prev[selectedId] ?? []).filter((v) => v.version !== version),
+          [selectedId]: (prev[selectedId] ?? []).filter((v) => v.path !== path),
         }))
         await refreshStatus()
         await loadInstalledVersions(selectedId, true)
@@ -887,7 +888,7 @@ export function RuntimesPage(): ReactElement {
                         {t('view.loadingDetected')}
                       </div>
                     ) : (
-                      detectedVersions.map((v, i) => {
+                      detectedVersions.map((v) => {
                         const rowKey = installedVersionKey(v)
                         const displayLabel = installedVersionLabel(selectedId, v)
                         const isActive = v.isDefault === true
@@ -906,18 +907,47 @@ export function RuntimesPage(): ReactElement {
                           >
                             <div>
                               <div style={{ fontSize: 14, fontWeight: 700 }}>
-                                {t('page.version', { v: displayLabel })}
+                                {selectedId === 'java' && v.label
+                                  ? v.label
+                                  : t('page.version', { v: displayLabel })}
                               </div>
-                              <div
-                                style={{
-                                  fontSize: 11,
-                                  color: 'var(--text-muted)',
-                                  marginTop: 2,
-                                  fontFamily: 'monospace',
-                                }}
-                              >
-                                {v.path}
-                              </div>
+                              {selectedId === 'java' && (
+                                <div
+                                  style={{
+                                    fontSize: 11,
+                                    color: 'var(--text-muted)',
+                                    marginTop: 2,
+                                    fontFamily: 'monospace',
+                                  }}
+                                >
+                                  JAVA_HOME={v.javaHome ?? v.path.replace(/\/bin\/java$/, '')}
+                                </div>
+                              )}
+                              {selectedId !== 'java' && (
+                                <div
+                                  style={{
+                                    fontSize: 11,
+                                    color: 'var(--text-muted)',
+                                    marginTop: 2,
+                                    fontFamily: 'monospace',
+                                  }}
+                                >
+                                  {v.path}
+                                </div>
+                              )}
+                              {selectedId === 'java' && (
+                                <div
+                                  style={{
+                                    fontSize: 10,
+                                    color: 'var(--text-muted)',
+                                    marginTop: 2,
+                                    fontFamily: 'monospace',
+                                    opacity: 0.75,
+                                  }}
+                                >
+                                  {v.path}
+                                </div>
+                              )}
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                               {isActive && (

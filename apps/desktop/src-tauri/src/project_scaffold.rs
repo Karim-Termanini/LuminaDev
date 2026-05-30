@@ -514,10 +514,10 @@ pub(crate) fn deps_install_plan(
         return Err("[INSTALL_ERROR] Missing profile name for container lookup.".to_string());
     }
 
-    let (service, work_dir, default_pip) = if template == "web-dev" {
-        ("node", "/app", true)
+    let (service, work_dir) = if template == "web-dev" {
+        ("node", "/app")
     } else {
-        ("jupyter", "/home/jovyan/work", false)
+        ("jupyter", "/home/jovyan/work")
     };
 
     let has_requirements = project_dir.join("requirements.txt").is_file();
@@ -531,7 +531,7 @@ pub(crate) fn deps_install_plan(
     let run_r = has_install_r && matches!(toolchain, "r" | "both");
 
     if !run_pip && !run_r {
-        if default_pip && template != "web-dev" && matches!(toolchain, "python" | "both") {
+        if template != "web-dev" && matches!(toolchain, "python" | "both") && !has_requirements {
             return Err(
                 "[INSTALL_ERROR] requirements.txt not found — recreate the project or add the file."
                     .to_string(),

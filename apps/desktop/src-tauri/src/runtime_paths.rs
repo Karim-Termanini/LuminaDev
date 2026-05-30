@@ -64,6 +64,41 @@ pub(crate) fn lumina_version_dir_from_path(path: &str, runtime_id: &str) -> Opti
   )
 }
 
+/// Resolve a Java `bin/java` path for set-active (Lumina, SDKMAN, JetBrains `.jdks`, or system JVM).
+pub(crate) fn validate_java_binary_path(path_raw: &str, home: &Path) -> Result<PathBuf, String> {
+  use std::ffi::OsStr;
+  let path = PathBuf::from(path_raw);
+  if !path.is_absolute() {
+    return Err("[RUNTIME_SET_ACTIVE_FAILED] Java path must be absolute.".to_string());
+  }
+  if path.file_name() != Some(OsStr::new("java")) {
+    return Err("[RUNTIME_SET_ACTIVE_FAILED] Expected path ending in bin/java.".to_string());
+  }
+  if path.parent().and_then(|p| p.file_name()) != Some(OsStr::new("bin")) {
+    return Err("[RUNTIME_SET_ACTIVE_FAILED] Expected path ending in bin/java.".to_string());
+  }
+  let abs = std::fs::canonicalize(&path)
+    .map_err(|e| format!("[RUNTIME_SET_ACTIVE_FAILED] Invalid path: {}", e))?;
+  let allowed = [
+    home.join(".local/share/lumina/java"),
+    home.join(".sdkman/candidates/java"),
+    home.join(".jdks"),
+    PathBuf::from("/usr/lib/jvm"),
+    PathBuf::from("/usr/java"),
+  ];
+  if !allowed.iter().any(|prefix| abs.starts_with(prefix)) {
+    return Err(
+      "[RUNTIME_SET_ACTIVE_FAILED] Unsupported Java path (expected Lumina, SDKMAN, .jdks, or /usr/lib/jvm)."
+        .to_string(),
+    );
+  }
+  Ok(abs)
+}
+
+pub(crate) fn java_home_from_binary(path: &Path) -> Option<PathBuf> {
+  path.parent().and_then(|bin| bin.parent()).map(Path::to_path_buf)
+}
+
 #[cfg(unix)]
 pub(crate) fn lumina_replace_symlink(link: &Path, target: &Path) -> Result<(), String> {
   if let Err(e) = std::fs::remove_file(link) {

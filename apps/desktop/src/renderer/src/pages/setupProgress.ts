@@ -20,11 +20,18 @@ export function progressFromInstallLog(raw: string, current: number): number {
     return Math.min(INSTALL_PROGRESS_END, next)
   }
 
-  const dlMatch = line.match(/([\d.]+)\s*\/\s*([\d.]+)\s*(k|M|G)?i?B/i)
+  const dlMatch = line.match(/([\d.]+)\s*(k|M|G)?i?B\s*\/\s*([\d.]+)\s*(k|M|G)?i?B/i)
   if (dlMatch) {
-    const cur = Number.parseFloat(dlMatch[1])
-    const total = Number.parseFloat(dlMatch[2])
-    if (total > 0) {
+    const scale = (n: number, unit?: string) => {
+      const u = unit?.toLowerCase()?.[0]
+      if (u === 'g') return n * 1024 * 1024 * 1024
+      if (u === 'm') return n * 1024 * 1024
+      if (u === 'k') return n * 1024
+      return n
+    }
+    const cur = scale(Number.parseFloat(dlMatch[1]), dlMatch[2])
+    const total = scale(Number.parseFloat(dlMatch[3]), dlMatch[4])
+    if (total > 0 && Number.isFinite(cur) && Number.isFinite(total)) {
       const frac = cur / total
       next = Math.max(
         next,

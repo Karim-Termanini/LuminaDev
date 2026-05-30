@@ -131,7 +131,8 @@ function _swRestoreFromStorage(): void {
       progress: typeof pending.progress === 'number' ? pending.progress : 10,
       failed: Boolean(pending.failed),
     })
-    _swSkipPoll = _sw.failed || true
+    // Restored state never auto-polls; resumeBackgroundProjectSetup re-drives the poll.
+    _swSkipPoll = true
     _swPersist()
   } catch {
     /* ignore */

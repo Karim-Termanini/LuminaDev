@@ -7,19 +7,28 @@ use crate::host_exec::{
     get_global_daemon_auto_restart, get_global_thread_pool_size,
 };
 use crate::runtime_packages::{
-    runtime_java_system_packages_for_version, runtime_pkg_mgr, runtime_preview_removable_deps,
-    runtime_system_package_available, runtime_system_packages,
+    runtime_dnf_java_alternatives_cmd, runtime_java_system_packages_for_version, runtime_pkg_mgr,
+    runtime_preview_removable_deps, runtime_system_package_available, runtime_system_packages,
 };
 use crate::runtime_versioning::{lumina_probe_meaningful_line, runtime_dnf_repoquery_versions};
 use crate::runtime_paths::{
-    lumina_version_dir_from_path, nvm_version_dir_from_path, path_home_before_marker,
-    path_segment_after_marker,
+    java_home_from_binary, lumina_version_dir_from_path, nvm_version_dir_from_path,
+    path_home_before_marker, path_segment_after_marker, validate_java_binary_path,
 };
 use crate::{
     active_binary_script, list_installed_versions_script, list_mise_runtime_script,
     parse_version_path_lines, status_probe_script,
 };
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+
+const LOCAL_INSTALL_RUNTIMES: &[&str] = &[
+    "node", "python", "go", "zig", "rust", "bun", "dart", "flutter", "julia", "php", "ruby", "lua",
+    "r",
+];
+
+fn runtime_supports_local_install(runtime_id: &str) -> bool {
+    LOCAL_INSTALL_RUNTIMES.contains(&runtime_id)
+}
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn runtime_job_execute(
@@ -325,13 +334,8 @@ pub(crate) async fn runtime_job_execute(
                                     ))
                                 } else {
                                     if pkg_mgr == "dnf" {
-                                        let alt_cmd = format!(
-                        "JAVA_BIN=$(rpm -ql {pkg} 2>/dev/null | awk '/\\/bin\\/java$/'\"'\"'{{print; exit}}'\"'\"') ; \
-                         JAVAC_BIN=$(rpm -ql {pkg} 2>/dev/null | awk '/\\/bin\\/javac$/'\"'\"'{{print; exit}}'\"'\"') ; \
-                         [ -n \"$JAVA_BIN\" ] && alternatives --set java \"$JAVA_BIN\" || true ; \
-                         [ -n \"$JAVAC_BIN\" ] && alternatives --set javac \"$JAVAC_BIN\" || true",
-                        pkg = pkg
-                      );
+                                        let alt_cmd =
+                                            runtime_dnf_java_alternatives_cmd(&pkg);
                                         let _ = sudo_bash_install_step(
                                             &alt_cmd,
                                             password_opt,
@@ -679,22 +683,7 @@ fi"#;
             } else {
                 let pkgs = runtime_system_packages(&runtime_id, pkg_mgr);
                 if method.trim() == "local"
-                    && !matches!(
-                        runtime_id.as_str(),
-                        "node"
-                            | "python"
-                            | "go"
-                            | "zig"
-                            | "rust"
-                            | "bun"
-                            | "dart"
-                            | "flutter"
-                            | "julia"
-                            | "php"
-                            | "ruby"
-                            | "lua"
-                            | "r"
-                    )
+                    && !runtime_supports_local_install(&runtime_id)
                     && !pkgs.is_empty()
                 {
                     Err(format!(
@@ -791,6 +780,58 @@ fi"#;
                     }
                     Err(e) => Err(format!("[RUNTIME_UPDATE_FAILED] {}", e.trim())),
                 }
+            } else if runtime_id == "java" && method.trim() == "local" {
+                let major = exec_output_limit(
+                    "bash",
+                    &["-lc", r#"[ -x "$HOME/.local/share/lumina/java/current/bin/java" ] && "$HOME/.local/share/lumina/java/current/bin/java" -version 2>&1 | awk -F\" '/version/ {split($2,v,"."); print v[1]; exit}'"#],
+                    cmd_timeout_short(),
+                )
+                .await
+                .ok()
+                .map(|s| s.trim().to_string())
+                .and_then(|s| s.parse::<u32>().ok())
+                .or_else(|| runtime_java_major(&version))
+                .unwrap_or(21);
+                logs.push(format!(
+                    "Refreshing local Java {} from Adoptium and switching active…",
+                    major
+                ));
+                let cmd = format!(
+                    r#"set -e
+                 LUMINA_JAVA_DIR="$HOME/.local/share/lumina/java"
+                 mkdir -p "$LUMINA_JAVA_DIR"
+                 TMP_JAVA="/tmp/lumina-java-{major}.tar.gz"
+                 curl -fsSL "https://api.adoptium.net/v3/binary/latest/{major}/ga/linux/x64/jdk/hotspot/normal/eclipse" -o "$TMP_JAVA"
+                 TMP_EXTRACT="$LUMINA_JAVA_DIR/.tmp-jdk-{major}-$$"
+                 rm -rf "$TMP_EXTRACT"
+                 mkdir -p "$TMP_EXTRACT"
+                 tar -xzf "$TMP_JAVA" -C "$TMP_EXTRACT" --strip-components=1
+                 rm -f "$TMP_JAVA"
+                 DETECTED_VER=$("$TMP_EXTRACT/bin/java" -version 2>&1 | awk -F\" '/version/ {{print $2; exit}}')
+                 [ -n "$DETECTED_VER" ] || DETECTED_VER="{major}"
+                 SAFE_VER=$(printf '%s' "$DETECTED_VER" | tr '/ ' '__')
+                 TARGET_DIR="$LUMINA_JAVA_DIR/jdk-$SAFE_VER"
+                 if [ ! -d "$TARGET_DIR" ]; then mv "$TMP_EXTRACT" "$TARGET_DIR"; else rm -rf "$TMP_EXTRACT"; fi
+                 ln -sfn "$TARGET_DIR" "$LUMINA_JAVA_DIR/current"
+                 "$LUMINA_JAVA_DIR/current/bin/java" -version 2>&1 | head -1"#,
+                    major = major
+                );
+                match runtime_bash_user_step(
+                    &cmd,
+                    &mut logs,
+                    Some(app.clone()),
+                    Some(job_id.clone()),
+                    10,
+                    90,
+                )
+                .await
+                {
+                    Ok(()) => {
+                        logs.push("update finished successfully".to_string());
+                        Ok(())
+                    }
+                    Err(e) => Err(format!("[RUNTIME_UPDATE_FAILED] {}", e)),
+                }
             } else {
                 let pkgs = runtime_system_packages(&runtime_id, pkg_mgr);
                 if pkgs.is_empty() {
@@ -817,17 +858,36 @@ fi"#;
                     {
                         Ok(()) => {
                             let combined = logs.join("\n").to_lowercase();
-                            if combined.contains("nothing to do")
+                            let already_latest = combined.contains("nothing to do")
                                 || combined.contains("0 upgraded")
                                 || combined.contains("nothing to upgrade")
-                                || combined.contains("there is nothing to do")
-                            {
+                                || combined.contains("there is nothing to do");
+                            if already_latest {
                                 logs.push(
                                     "already latest — package manager reports nothing to upgrade."
                                         .to_string(),
                                 );
                             } else {
                                 logs.push("update finished successfully".to_string());
+                                if runtime_id == "java" && pkg_mgr == "dnf" {
+                                    if let Some(pkg) = pkgs.first() {
+                                        logs.push(
+                                            "Switching default Java to the upgraded package…"
+                                                .to_string(),
+                                        );
+                                        let alt_cmd = runtime_dnf_java_alternatives_cmd(pkg);
+                                        let _ = sudo_bash_install_step(
+                                            &alt_cmd,
+                                            password_opt,
+                                            &mut logs,
+                                            Some(app.clone()),
+                                            Some(job_id.clone()),
+                                            88,
+                                            95,
+                                        )
+                                        .await;
+                                    }
+                                }
                             }
                             Ok(())
                         }
@@ -1006,7 +1066,10 @@ fi"#;
         }
         drop(jobs);
 
-        if matches!(kind.as_str(), "runtime_install" | "install_deps") {
+        if matches!(
+            kind.as_str(),
+            "runtime_install" | "install_deps" | "runtime_update"
+        ) {
             runtime_append_verify(&runtime_id, &effective_verify_method, &version, &mut logs).await;
         }
     }
@@ -1071,6 +1134,114 @@ pub(crate) fn cancel_runtime_job(jobs: &mut [Value], id: &str) -> bool {
     false
 }
 
+async fn runtime_set_java_active(home: &Path, path_raw: &str) -> Value {
+    let path = match validate_java_binary_path(path_raw, home) {
+        Ok(p) => p,
+        Err(e) => return json!({ "ok": false, "error": e }),
+    };
+    let path_str = path.to_string_lossy().to_string();
+    let safe_java = path_str.replace('\'', "'\\''");
+
+    let res: Result<(), String> = if path_str.contains("/.local/share/lumina/java/") {
+        let Some(jdk_dir) = java_home_from_binary(&path) else {
+            return json!({ "ok": false, "error": "[RUNTIME_SET_ACTIVE_FAILED] Could not resolve Java install directory." });
+        };
+        let link = home.join(".local/share/lumina/java/current");
+        lumina_replace_symlink(&link, &jdk_dir)
+    } else if path_str.contains("/.sdkman/candidates/java/") {
+        let Some(version_id) = path
+            .parent()
+            .and_then(|p| p.parent())
+            .and_then(|d| d.file_name())
+            .and_then(|s| s.to_str())
+            .map(str::to_string)
+        else {
+            return json!({ "ok": false, "error": "[RUNTIME_SET_ACTIVE_FAILED] Could not resolve SDKMAN Java version id." });
+        };
+        let safe_ver = version_id.replace('\'', "'\\''");
+        let cmd = format!(
+            "export SDKMAN_DIR=\"$HOME/.sdkman\" \
+             && [ -s \"$SDKMAN_DIR/bin/sdkman-init.sh\" ] && . \"$SDKMAN_DIR/bin/sdkman-init.sh\" \
+             && sdk default java '{safe_ver}'"
+        );
+        exec_output_limit("bash", &["-lc", &cmd], cmd_timeout_short())
+            .await
+            .map(|_| ())
+            .map_err(|e| format!("[RUNTIME_SET_ACTIVE_FAILED] {}", e.trim()))
+    } else if path_str.contains("/.jdks/") {
+        let Some(jdk_dir) = java_home_from_binary(&path) else {
+            return json!({ "ok": false, "error": "[RUNTIME_SET_ACTIVE_FAILED] Could not resolve JetBrains JDK directory." });
+        };
+        let safe_home = jdk_dir.to_string_lossy().replace('\'', "'\\''");
+        let cmd = format!(
+            "set -e \
+             && ENV_FILE=\"$HOME/.config/lumina/active-java.env\" \
+             && mkdir -p \"$HOME/.config/lumina\" \
+             && printf 'export JAVA_HOME=%s\\nexport PATH=\"$JAVA_HOME/bin:$PATH\"\\n' '{safe_home}' > \"$ENV_FILE\" \
+             && MARKER=\"# lumina-active-java\" \
+             && for f in \"$HOME/.bashrc\" \"$HOME/.zshrc\" \"$HOME/.profile\"; do \
+                  [ -f \"$f\" ] || continue; \
+                  grep -q \"$MARKER\" \"$f\" && continue; \
+                  printf '\\n%s\\n[ -f \"$HOME/.config/lumina/active-java.env\" ] && . \"$HOME/.config/lumina/active-java.env\"  %s\\n' \"$MARKER\" \"$MARKER\" >> \"$f\"; \
+                done"
+        );
+        exec_output_limit("bash", &["-lc", &cmd], cmd_timeout_short())
+            .await
+            .map(|_| ())
+            .map_err(|e| format!("[RUNTIME_SET_ACTIVE_FAILED] {}", e.trim()))
+    } else if path_str.starts_with("/usr/lib/jvm/") || path_str.starts_with("/usr/java/") {
+        let jdk_dir = java_home_from_binary(&path).unwrap_or_else(|| path.clone());
+        let javac = jdk_dir.join("bin/javac");
+        let cmd = if javac.exists() {
+            let safe_javac = javac.to_string_lossy().replace('\'', "'\\''");
+            format!(
+                "alternatives --set java '{safe_java}' && alternatives --set javac '{safe_javac}'"
+            )
+        } else {
+            format!("alternatives --set java '{safe_java}'")
+        };
+        let mut logs = Vec::new();
+        sudo_bash_install_step(&cmd, None, &mut logs, None, None, 0, 100)
+            .await
+            .map_err(|e| format!("[RUNTIME_SET_ACTIVE_FAILED] {}", e))
+    } else {
+        Err("[RUNTIME_SET_ACTIVE_FAILED] Unsupported Java path.".to_string())
+    };
+
+    match res {
+        Ok(()) => json!({ "ok": true }),
+        Err(e) => json!({ "ok": false, "error": e }),
+    }
+}
+
+async fn runtime_set_julia_active(body: &Value, path: &Path) -> Value {
+    if !path.to_string_lossy().contains("/.juliaup/bin/julia") {
+        return json!({ "ok": false, "error": "[RUNTIME_SET_ACTIVE_FAILED] Unsupported Julia path (expected ~/.juliaup/bin/julia)." });
+    }
+    let channel = body
+        .get("version")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+    if channel.is_empty() {
+        return json!({ "ok": false, "error": "[RUNTIME_SET_ACTIVE_FAILED] Julia channel name required (pass version)." });
+    }
+    let safe_channel = channel.replace('\'', "'\\''");
+    let cmd = format!(
+        "export PATH=\"$HOME/.juliaup/bin:$PATH\" \
+         && juliaup default '{}'",
+        safe_channel
+    );
+    match exec_output_limit("bash", &["-lc", &cmd], cmd_timeout_short()).await {
+        Ok(_) => json!({ "ok": true }),
+        Err(e) => json!({
+            "ok": false,
+            "error": format!("[RUNTIME_SET_ACTIVE_FAILED] {}", e.trim())
+        }),
+    }
+}
+
 pub(crate) async fn runtime_set_active_invoke(body: &Value) -> Value {
     // ...
 
@@ -1093,10 +1264,18 @@ pub(crate) async fn runtime_set_active_invoke(body: &Value) -> Value {
         Err(e) => return json!({ "ok": false, "error": e }),
     };
 
+    if runtime_id == "java" {
+        return runtime_set_java_active(&home, path_raw).await;
+    }
+
     let path = match lumina_path_must_be_under_home(&home, Path::new(path_raw)) {
         Ok(p) => p,
         Err(e) => return json!({ "ok": false, "error": e }),
     };
+
+    if runtime_id == "julia" {
+        return runtime_set_julia_active(body, &path).await;
+    }
 
     let safe_path = path.to_string_lossy().replace('\'', "'\\''");
 
@@ -1152,20 +1331,6 @@ pub(crate) async fn runtime_set_active_invoke(body: &Value) -> Value {
             let link = home.join(".local/share/lumina/go/current");
             lumina_replace_symlink(&link, ver_dir)
         }
-        "java" => {
-            if !path.ends_with(Path::new("bin/java"))
-                || !path
-                    .to_string_lossy()
-                    .contains("/.local/share/lumina/java/jdk-")
-            {
-                return json!({ "ok": false, "error": "[RUNTIME_SET_ACTIVE_FAILED] Unsupported Java path (expected ~/.local/share/lumina/java/jdk-*/bin/java)." });
-            }
-            let Some(jdk_dir) = path.parent().and_then(|p| p.parent()) else {
-                return json!({ "ok": false, "error": "[RUNTIME_SET_ACTIVE_FAILED] Could not resolve Java install directory." });
-            };
-            let link = home.join(".local/share/lumina/java/current");
-            lumina_replace_symlink(&link, jdk_dir)
-        }
         "zig" => {
             if path.file_name() != Some(OsStr::new("zig"))
                 || !path.to_string_lossy().contains("/.local/share/lumina/zig/")
@@ -1201,30 +1366,6 @@ pub(crate) async fn runtime_set_active_invoke(body: &Value) -> Value {
          && command -v rustup >/dev/null 2>&1 \
          && rustup default '{}'",
                 safe_tc
-            );
-            exec_output_limit("bash", &["-lc", &cmd], cmd_timeout_short())
-                .await
-                .map(|_| ())
-                .map_err(|e| format!("[RUNTIME_SET_ACTIVE_FAILED] {}", e.trim()))
-        }
-        "julia" => {
-            if !path.to_string_lossy().contains("/.juliaup/bin/julia") {
-                return json!({ "ok": false, "error": "[RUNTIME_SET_ACTIVE_FAILED] Unsupported Julia path (expected ~/.juliaup/bin/julia)." });
-            }
-            let channel = body
-                .get("version")
-                .and_then(|v| v.as_str())
-                .unwrap_or_default()
-                .trim()
-                .to_string();
-            if channel.is_empty() {
-                return json!({ "ok": false, "error": "[RUNTIME_SET_ACTIVE_FAILED] Julia channel name required (pass version)." });
-            }
-            let safe_channel = channel.replace('\'', "'\\''");
-            let cmd = format!(
-                "export PATH=\"$HOME/.juliaup/bin:$PATH\" \
-         && juliaup default '{}'",
-                safe_channel
             );
             exec_output_limit("bash", &["-lc", &cmd], cmd_timeout_short())
                 .await
@@ -1430,15 +1571,30 @@ pub(crate) async fn handle_runtime_status() -> Value {
 
 async fn collect_discovered_tab_versions(script: String, versions: &mut Vec<Value>) {
     if let Ok(raw) = exec_output_limit("bash", &["-lc", &script], cmd_timeout_short()).await {
-        for (v, p) in parse_version_path_lines(&raw) {
-            let label = flutter_or_short_label(&v);
-            if label != v {
-                versions.push(json!({ "version": v, "path": p, "label": label }));
+        for (v, p, explicit_label, java_home) in parse_version_path_lines(&raw) {
+            let mut row = json!({ "version": v, "path": p });
+            if let Some(label) = explicit_label {
+                row["label"] = json!(label);
             } else {
-                versions.push(json!({ "version": v, "path": p }));
+                let label = flutter_or_short_label(&v);
+                if label != v {
+                    row["label"] = json!(label);
+                }
             }
+            if let Some(home) = java_home {
+                row["javaHome"] = json!(home);
+            }
+            versions.push(row);
         }
     }
+}
+
+fn sort_java_developer_versions(versions: &mut [Value]) {
+    versions.sort_by(|a, b| {
+        let va = a.get("version").and_then(|v| v.as_str()).unwrap_or("");
+        let vb = b.get("version").and_then(|v| v.as_str()).unwrap_or("");
+        vb.cmp(va)
+    });
 }
 
 fn flutter_or_short_label(version: &str) -> String {
@@ -1558,6 +1714,10 @@ pub(crate) async fn handle_runtime_installed_versions(body: &Value) -> Value {
                 collect_discovered_tab_versions(script, &mut versions).await;
             }
         }
+    }
+
+    if runtime_id == "java" {
+        sort_java_developer_versions(&mut versions);
     }
 
     if runtime_id != "julia" && runtime_id != "rust" {
@@ -2253,15 +2413,45 @@ fn paths_refer_to_same_binary(a: &str, b: &str) -> bool {
     }
 }
 
+fn active_match_score(path: &str, active_path: &str, label: Option<&str>) -> Option<u8> {
+    if path != active_path && !paths_refer_to_same_binary(path, active_path) {
+        return None;
+    }
+    if path == active_path {
+        return Some(0);
+    }
+    let rank = match label {
+        Some(l) if l.starts_with("JDK ") && !l.starts_with("JDK compiler") => 1,
+        Some(l) if l.starts_with("System default") => 2,
+        Some(l) if l.starts_with("JRE ") => 3,
+        Some(l) if l.starts_with("JDK compiler") => 4,
+        _ => 5,
+    };
+    Some(rank)
+}
+
 fn mark_default_installed_versions(versions: &mut [Value], active_path: &str) {
-    for entry in versions.iter_mut() {
+    let mut best: Option<(usize, u8)> = None;
+    for (i, entry) in versions.iter().enumerate() {
         let Some(path) = entry.get("path").and_then(|v| v.as_str()) else {
             continue;
         };
-        if paths_refer_to_same_binary(path, active_path) {
-            if let Some(obj) = entry.as_object_mut() {
-                obj.insert("isDefault".to_string(), json!(true));
-            }
+        let label = entry.get("label").and_then(|v| v.as_str());
+        let Some(score) = active_match_score(path, active_path, label) else {
+            continue;
+        };
+        if best.map(|(_, s)| score < s).unwrap_or(true) {
+            best = Some((i, score));
+        }
+    }
+    for entry in versions.iter_mut() {
+        if let Some(obj) = entry.as_object_mut() {
+            obj.remove("isDefault");
+        }
+    }
+    if let Some((i, _)) = best {
+        if let Some(obj) = versions[i].as_object_mut() {
+            obj.insert("isDefault".to_string(), json!(true));
         }
     }
 }

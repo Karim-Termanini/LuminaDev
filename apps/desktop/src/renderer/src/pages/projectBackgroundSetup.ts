@@ -61,11 +61,15 @@ function friendlyInstallStep(raw: string): string {
 }
 
 async function isProfileRunning(profileName: string): Promise<boolean> {
-  const res = (await invoke('ipc_invoke', {
-    channel: 'dh:profile:running-status',
-    payload: { names: [profileName] },
-  })) as { ok?: boolean; running?: string[] }
-  return Boolean(res.ok && res.running?.includes(profileName))
+  try {
+    const res = (await invoke('ipc_invoke', {
+      channel: 'dh:profile:running-status',
+      payload: { names: [profileName] },
+    })) as { ok?: boolean; running?: string[] }
+    return Boolean(res.ok && res.running?.includes(profileName))
+  } catch {
+    return false
+  }
 }
 
 /** Waits until Docker reports the profile stack as running (or times out). */
