@@ -52,8 +52,9 @@
   "integrate.current": "(current)",
   "integrate.branchLabel": "Branch or remote ref to merge or rebase with",
   "provider.cloudGit": "Cloud Git",
+  "provider.connectInSettings": "Connect",
   "provider.signedInAs": "Signed in as",
-  "provider.notConnected": "Not connected — HTTPS sync needs a token in Cloud Git.",
+  "provider.notConnected": "Not connected — add a token in Settings → Connected accounts.",
   "provider.noRepo": "Open a repository below to list remotes for this host.",
   "provider.noRemotes": "No remotes in this repo point here (SSH/HTTPS URL detection).",
   "provider.fetchUsing": "Fetch uses remote \"{{remote}}\" on this host.",
@@ -246,6 +247,8 @@
   "toolbar.createMr": "Create Merge Request",
   "toolbar.prCreated": "Pull request created →",
   "toolbar.mrCreated": "Merge request created →",
+  "toolbar.proMode": "Pro mode",
+  "toolbar.simpleModeHint": "Simpler default — enable Pro mode in Settings → Beta Features for full controls.",
 
   "flow.title.default": "Git workflow on this page",
   "flow.title.conflicts": "You have merge conflicts",
@@ -280,7 +283,7 @@
 
   "page.worktreeLabel": "GIT.WORKTREE",
   "page.title": "Git VCS",
-  "page.subtitle": "Status, diffs, stage, commit, fetch, pull, push, merge, rebase, and stash pop. HTTPS remotes use credentials from <link>Cloud Git</link>.",
+  "page.subtitle": "Status, diffs, stage, commit, fetch, pull, push, merge, rebase, and stash pop. HTTPS remotes use tokens from <link>Connected accounts</link>.",
 
   "ciChecks.loadingChecks": "Loading checks…",
   "ciChecks.hasConflicts": "This branch has conflicts",

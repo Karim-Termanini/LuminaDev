@@ -25,7 +25,7 @@ impl GitHubProvider {
     pub async fn device_auth_start(scopes: &[&str], client_id: &str) -> Result<DeviceAuthChallenge, String> {
         if oauth_client_id_unconfigured(client_id) {
             return Err(
-                "[CLOUD_AUTH_OAUTH_NOT_CONFIGURED] GitHub device flow needs a registered OAuth app client ID. Add it under Cloud Git → Advanced (saved locally), set environment variable LUMINA_GITHUB_OAUTH_CLIENT_ID, compile with that var, replace GITHUB_OAUTH_CLIENT_ID in cloud_auth/mod.rs, or use a personal access token."
+                "[CLOUD_AUTH_OAUTH_NOT_CONFIGURED] GitHub device flow needs a registered OAuth app client ID. Add it under Settings → Connected accounts → Advanced (saved locally), set environment variable LUMINA_GITHUB_OAUTH_CLIENT_ID, compile with that var, replace GITHUB_OAUTH_CLIENT_ID in cloud_auth/mod.rs, or use a personal access token."
                     .to_string(),
             );
         }
@@ -86,7 +86,7 @@ impl GitHubProvider {
                 "[CLOUD_AUTH_DEVICE_POLL_REJECTED] GitHub token step returned error `{}`. {}",
                 e,
                 if desc.is_empty() {
-                    "If this mentions the client or redirect URL, create a GitHub OAuth App (Device flow) and set its Client ID under Cloud Git → Advanced, or use a personal access token instead."
+                    "If this mentions the client or redirect URL, create a GitHub OAuth App (Device flow) and set its Client ID under Settings → Connected accounts → Advanced, or use a personal access token instead."
                         .to_string()
                 } else {
                     desc.to_string()
@@ -712,7 +712,7 @@ impl GitHubProvider {
             return Err("[CLOUD_AUTH_INVALID_TOKEN] GitHub token is invalid or expired.".to_string());
         }
         if resp.status() == 403 {
-            return Err("[CLOUD_GIT_INSUFFICIENT_SCOPE] Your GitHub token lacks the 'repo' scope needed to create pull requests. Reconnect in Cloud Git with a token that has the 'repo' scope enabled.".to_string());
+            return Err("[CLOUD_GIT_INSUFFICIENT_SCOPE] Your GitHub token lacks the 'repo' scope needed to create pull requests. Reconnect in Settings → Connected accounts with a token that has the 'repo' scope enabled.".to_string());
         }
         if resp.status() == 422 {
             return Err("[CLOUD_GIT_PR_EXISTS] A pull request for this branch already exists.".to_string());

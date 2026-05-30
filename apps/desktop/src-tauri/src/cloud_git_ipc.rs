@@ -35,7 +35,7 @@ async fn prs(app: &AppHandle, body: &Value) -> Value {
         Ok(None) => {
             return json!({
                 "ok": false,
-                "error": "[CLOUD_AUTH_NOT_CONNECTED] Connect this provider in Cloud Git first."
+                "error": "[CLOUD_AUTH_NOT_CONNECTED] Connect this provider in Settings → Connected accounts first."
             });
         }
         Err(e) => return json!({ "ok": false, "error": e }),
@@ -93,7 +93,7 @@ async fn review_requests(app: &AppHandle, body: &Value) -> Value {
         Ok(None) => {
             return json!({
                 "ok": false,
-                "error": "[CLOUD_AUTH_NOT_CONNECTED] Connect this provider in Cloud Git first."
+                "error": "[CLOUD_AUTH_NOT_CONNECTED] Connect this provider in Settings → Connected accounts first."
             });
         }
         Err(e) => return json!({ "ok": false, "error": e }),
@@ -153,7 +153,7 @@ async fn pipelines(app: &AppHandle, body: &Value) -> Value {
         Ok(None) => {
             return json!({
                 "ok": false,
-                "error": "[CLOUD_AUTH_NOT_CONNECTED] Connect this provider in Cloud Git first."
+                "error": "[CLOUD_AUTH_NOT_CONNECTED] Connect this provider in Settings → Connected accounts first."
             });
         }
         Err(e) => return json!({ "ok": false, "error": e }),
@@ -280,7 +280,7 @@ async fn issues(app: &AppHandle, body: &Value) -> Value {
         Ok(None) => {
             return json!({
                 "ok": false,
-                "error": "[CLOUD_AUTH_NOT_CONNECTED] Connect this provider in Cloud Git first."
+                "error": "[CLOUD_AUTH_NOT_CONNECTED] Connect this provider in Settings → Connected accounts first."
             });
         }
         Err(e) => return json!({ "ok": false, "error": e }),
@@ -374,7 +374,7 @@ async fn create_pr(app: &AppHandle, body: &Value) -> Value {
     let cred = match store.load(provider) {
         Ok(Some(c)) => c,
         Ok(None) => {
-            return json!({ "ok": false, "error": "[CLOUD_AUTH_NOT_CONNECTED] Connect this provider in Cloud Git first." })
+            return json!({ "ok": false, "error": "[CLOUD_AUTH_NOT_CONNECTED] Connect this provider in Settings → Connected accounts first." })
         }
         Err(e) => return json!({ "ok": false, "error": e }),
     };
@@ -692,7 +692,7 @@ async fn merge_pr(app: &AppHandle, body: &Value) -> Value {
         Ok(None) => {
             return json!({
                 "ok": false,
-                "error": "[CLOUD_AUTH_NOT_CONNECTED] Connect this provider in Cloud Git first."
+                "error": "[CLOUD_AUTH_NOT_CONNECTED] Connect this provider in Settings → Connected accounts first."
             });
         }
         Err(e) => return json!({ "ok": false, "error": e }),
@@ -808,7 +808,7 @@ async fn releases(app: &AppHandle, body: &Value) -> Value {
         Ok(None) => {
             return json!({
                 "ok": false,
-                "error": "[CLOUD_AUTH_NOT_CONNECTED] Connect this provider in Cloud Git first."
+                "error": "[CLOUD_AUTH_NOT_CONNECTED] Connect this provider in Settings → Connected accounts first."
             });
         }
         Err(e) => return json!({ "ok": false, "error": e }),

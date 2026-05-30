@@ -1,7 +1,12 @@
 {
   "page.title": "Cloud Git",
-  "page.desc": "Choose a provider below. Each tab scopes the layout and accent to that host—PRs and CI views will follow the same pattern. Tokens are stored locally for HTTPS Git on the Git VCS page.",
+  "page.desc": "PRs, merge requests, CI, and assigned issues scoped to your connected account. Switch provider tabs to match GitHub or GitLab.",
   "page.loading": "Loading…",
+  "page.notConnectedShort": "Offline",
+  "page.notConnectedTitle": "{{label}} not connected",
+  "page.notConnectedDesc": "Connect this provider in Settings → Connected accounts to load activity and enable HTTPS Git.",
+  "page.connectInSettings": "Connect in Settings",
+  "page.manageAccount": "Manage account",
   "provider.github": "GitHub",
   "provider.gitlab": "GitLab",
   "provider.connected": "Connected · HTTPS ready",

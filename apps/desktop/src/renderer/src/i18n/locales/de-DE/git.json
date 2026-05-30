@@ -52,8 +52,9 @@
   "integrate.current": "(aktuell)",
   "integrate.branchLabel": "Branch oder Remote-Ref zum Mergen oder Rebasieren",
   "provider.cloudGit": "Cloud Git",
+  "provider.connectInSettings": "Verbinden",
   "provider.signedInAs": "Angemeldet als",
-  "provider.notConnected": "Nicht verbunden — HTTPS-Sync benötigt ein Token in Cloud Git.",
+  "provider.notConnected": "Nicht verbunden — Token unter Einstellungen → Verbundene Konten hinzufügen.",
   "provider.noRepo": "Repository unten öffnen, um Remotes für diesen Host anzuzeigen.",
   "provider.noRemotes": "Keine Remotes in diesem Repo zeigen hierher (SSH/HTTPS-URL-Erkennung).",
   "provider.fetchUsing": "Fetch verwendet Remote \"{{remote}}\" auf diesem Host.",
@@ -246,6 +247,8 @@
   "toolbar.createMr": "Merge Request erstellen",
   "toolbar.prCreated": "Pull Request erstellt →",
   "toolbar.mrCreated": "Merge Request erstellt →",
+  "toolbar.proMode": "Pro-Modus",
+  "toolbar.simpleModeHint": "Einfachere Standardansicht — Pro-Modus in Einstellungen → Beta-Funktionen aktivieren.",
 
   "flow.title.default": "Git-Workflow auf dieser Seite",
   "flow.title.conflicts": "Du hast Merge-Konflikte",
@@ -280,7 +283,7 @@
 
   "page.worktreeLabel": "GIT.WORKTREE",
   "page.title": "Git VCS",
-  "page.subtitle": "Status, Diffs, Stage, Commit, Fetch, Pull, Push, Merge, Rebase und Stash Pop. HTTPS-Remotes verwenden Anmeldedaten aus <link>Cloud Git</link>.",
+  "page.subtitle": "Status, Diffs, Stage, Commit, Fetch, Pull, Push, Merge, Rebase und Stash Pop. HTTPS-Remotes verwenden Tokens aus <link>Verbundene Konten</link>.",
 
   "ciChecks.loadingChecks": "Checks werden geladen…",
   "ciChecks.hasConflicts": "Dieser Branch hat Konflikte",

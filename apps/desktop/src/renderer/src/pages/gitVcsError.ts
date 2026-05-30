@@ -57,7 +57,7 @@ export function humanizeGitVcsError(err: unknown): string {
   if (code === 'GIT_VCS_INTEGRATION_REQUIRED')
     return `Integration required — after a quick fetch, your branch is behind the remote. Pull or merge the latest changes, then push again. ${detail}`.trim()
   if (code === 'GIT_VCS_AUTH_FAILED')
-    return `Could not authenticate with this remote. Connect GitHub or GitLab in Cloud Git, then retry. ${detail}`.trim()
+    return `Could not authenticate with this remote. Connect GitHub or GitLab in Settings → Connected accounts, then retry. ${detail}`.trim()
   if (code === 'GIT_VCS_DIFF_TOO_LARGE')
     return 'This file is too large to preview here — open it in your code editor.'
   if (code === 'GIT_VCS_NETWORK')

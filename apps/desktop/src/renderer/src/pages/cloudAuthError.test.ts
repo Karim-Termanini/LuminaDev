@@ -19,12 +19,20 @@ describe('humanizeCloudAuthError', () => {
   it('humanizes CLOUD_AUTH_INVALID_TOKEN', () => {
     const msg = humanizeCloudAuthError(new Error('[CLOUD_AUTH_INVALID_TOKEN] token rejected'))
     expect(msg).toContain('token rejected')
-    expect(msg).toContain('Account & security')
+    expect(msg).toContain('Connected accounts')
+  })
+
+  it('rewrites legacy Cloud Git auth paths in backend detail', () => {
+    const msg = humanizeCloudAuthError(
+      new Error('[CLOUD_AUTH_NOT_CONNECTED] Connect this provider in Cloud Git first.'),
+    )
+    expect(msg).toContain('Settings → Connected accounts')
+    expect(msg).not.toContain('Cloud Git first')
   })
 
   it('humanizes CLOUD_AUTH_NOT_CONNECTED', () => {
     const msg = humanizeCloudAuthError(
-      new Error('[CLOUD_AUTH_NOT_CONNECTED] Connect this provider in Cloud Git first.'),
+      new Error('[CLOUD_AUTH_NOT_CONNECTED] Connect this provider in Settings first.'),
     )
     expect(msg).toContain('Connect this provider')
   })
@@ -51,7 +59,7 @@ describe('humanizeCloudAuthError', () => {
 
   it('humanizes CLOUD_AUTH_DEVICE_FLOW_DISABLED', () => {
     const msg = humanizeCloudAuthError(
-      new Error('[CLOUD_AUTH_DEVICE_FLOW_DISABLED] Use a PAT on the Cloud Git page.'),
+      new Error('[CLOUD_AUTH_DEVICE_FLOW_DISABLED] Use a PAT in Settings instead.'),
     )
     expect(msg).toContain('Use a PAT')
   })

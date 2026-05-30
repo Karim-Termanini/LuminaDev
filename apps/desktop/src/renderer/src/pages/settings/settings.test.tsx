@@ -9,7 +9,15 @@ const mockDh = {
   storeSet: vi.fn().mockResolvedValue({ ok: true }),
   cloudAuthStatus: vi.fn().mockResolvedValue({ ok: true, accounts: [] }),
   hostExec: vi.fn().mockResolvedValue({ ok: true, result: '' }),
-  appInfo: vi.fn().mockResolvedValue({ ok: true, version: '0.2.0', buildDate: '2026-05-25', rustVersion: 'rustc 1.79', platform: 'linux' }),
+  appInfo: vi
+    .fn()
+    .mockResolvedValue({
+      ok: true,
+      version: '0.2.0',
+      buildDate: '2026-05-25',
+      rustVersion: 'rustc 1.79',
+      platform: 'linux',
+    }),
   selectFolder: vi.fn().mockResolvedValue(null),
 }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -24,18 +32,28 @@ import { SettingsShortcuts, buildChord } from './SettingsShortcuts'
 import { SettingsHelpAbout } from './SettingsHelpAbout'
 import { SettingsDateTime } from './SettingsDateTime'
 import { SettingsLanguages } from './SettingsLanguages'
+import { SettingsSystem } from './SettingsSystem'
 
 function wrap(ui: React.ReactElement): string {
-  return renderToStaticMarkup(<I18nProvider><MemoryRouter>{ui}</MemoryRouter></I18nProvider>)
+  return renderToStaticMarkup(
+    <I18nProvider>
+      <MemoryRouter>{ui}</MemoryRouter>
+    </I18nProvider>
+  )
 }
 
+describe('SettingsNotification', () => {
+  it('OS native notifications toggle is disabled', () => {
+    expect(wrap(<SettingsNotification />)).toContain('disabled')
+  })
+})
+
 describe('SettingsShell', () => {
-  it('renders nav with tabs', () => {
+  it('renders grouped nav rail', () => {
     const html = wrap(<SettingsShell />)
+    expect(html).toContain('Settings')
     expect(html).toContain('Personalization')
-    expect(html).toContain('Shortcuts')
-    expect(html).toContain('Help &amp; About')
-    expect(html).toContain('Languages')
+    expect(html).toContain('Connectivity')
   })
 })
 
@@ -56,27 +74,25 @@ describe('SettingsBetaFeatures', () => {
     const html = wrap(<SettingsBetaFeatures />)
     expect(html).toContain('Terminal multiplexer')
     expect(html).toContain('commit suggestions')
-  })
-})
-
-describe('SettingsNotification', () => {
-  it('renders global mute label', () => {
-    expect(wrap(<SettingsNotification />)).toContain('Global mute')
-  })
-  it('OS native notifications toggle is disabled', () => {
-    expect(wrap(<SettingsNotification />)).toContain('disabled')
+    expect(html).toContain('Git VCS Pro mode')
   })
 })
 
 describe('buildChord', () => {
   it('builds ctrl+shift+x', () => {
-    expect(buildChord({ ctrlKey: true, shiftKey: true, altKey: false, metaKey: false, key: 'x' })).toBe('Ctrl+Shift+X')
+    expect(
+      buildChord({ ctrlKey: true, shiftKey: true, altKey: false, metaKey: false, key: 'x' })
+    ).toBe('Ctrl+Shift+X')
   })
   it('builds alt+1', () => {
-    expect(buildChord({ ctrlKey: false, shiftKey: false, altKey: true, metaKey: false, key: '1' })).toBe('Alt+1')
+    expect(
+      buildChord({ ctrlKey: false, shiftKey: false, altKey: true, metaKey: false, key: '1' })
+    ).toBe('Alt+1')
   })
   it('ignores bare modifier press', () => {
-    expect(buildChord({ ctrlKey: true, shiftKey: false, altKey: false, metaKey: false, key: 'Control' })).toBe(null)
+    expect(
+      buildChord({ ctrlKey: true, shiftKey: false, altKey: false, metaKey: false, key: 'Control' })
+    ).toBe(null)
   })
 })
 
@@ -113,5 +129,16 @@ describe('SettingsLanguages', () => {
     const html = wrap(<SettingsLanguages />)
     expect(html).toContain('English')
     expect(html).toContain('German')
+  })
+})
+
+describe('SettingsSystem', () => {
+  it('renders diagnostics sub-nav and overview sections', () => {
+    const html = wrap(<SettingsSystem />)
+    expect(html).toContain('Diagnostics')
+    expect(html).toContain('Edit hosts')
+    expect(html).toContain('Shell profile')
+    expect(html).toContain('Hosts file')
+    expect(html).toContain('Environment')
   })
 })

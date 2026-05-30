@@ -38,7 +38,6 @@ Phases **0–17** shipped per `phasesPlan.md`.
 - Dashboard widgets — deck, layout IPC, `/dashboard/widgets` route
 
 **Still partial** ([`ROUTE_STATUS.md`](./ROUTE_STATUS.md)):
-- Settings hosts/env file editing
 - Runtimes install matrix hardening
 - Profiles ↔ dashboard unification
 - AppImage E2E on clean VM

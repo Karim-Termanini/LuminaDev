@@ -100,7 +100,7 @@ pub async fn git_network_with_auth(
             store.load("github").ok().flatten().map(|c| c.token)
         };
         let token = token.ok_or_else(|| {
-            "[GIT_VCS_AUTH_FAILED] No stored token for this remote. Connect your account in Cloud Git.".to_string()
+            "[GIT_VCS_AUTH_FAILED] No stored token for this remote. Connect your account in Settings → Connected accounts.".to_string()
         })?;
 
         let script_name = format!("git-askpass-{}.sh", uuid::Uuid::new_v4());

@@ -1,6 +1,7 @@
 import type { ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useI18nBridge } from '../../i18n/I18nContext'
+import { SettingsCard, SettingsRow, SettingsStack } from './SettingsUi'
 
 export function SettingsLanguages(): ReactElement {
   const { t, i18n } = useTranslation('settings')
@@ -14,30 +15,22 @@ export function SettingsLanguages(): ReactElement {
   ]
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <p className="hp-muted" style={{ margin: 0, fontSize: 13 }}>
-        {t('languages.description')}
-      </p>
-      <div>
-        <label style={{ display: 'block', fontWeight: 600, fontSize: 14, marginBottom: 8 }}>
-          {t('languages.displayLanguage')}
-        </label>
-        <select
-          className="hp-input"
-          style={{ fontSize: 13, width: 240 }}
-          value={currentLocale}
-          onChange={(e) => void setLocale(e.target.value)}
-        >
-          {languages.map((l) => (
-            <option key={l.value} value={l.value}>
-              {l.label}
-            </option>
-          ))}
-        </select>
-      </div>
-      <p style={{ margin: 0, fontSize: 11, color: 'var(--text-muted)' }}>
-        {t('languages.restartNote')}
-      </p>
-    </div>
+    <SettingsStack>
+      <SettingsCard description={t('languages.description')}>
+        <SettingsRow label={t('languages.displayLanguage')} last>
+          <select
+            className="hp-input"
+            style={{ fontSize: 13, minWidth: 200 }}
+            value={currentLocale}
+            onChange={(e) => void setLocale(e.target.value)}
+          >
+            {languages.map((l) => (
+              <option key={l.value} value={l.value}>{l.label}</option>
+            ))}
+          </select>
+        </SettingsRow>
+      </SettingsCard>
+      <p className="settings-feedback settings-feedback-muted" style={{ margin: 0 }}>{t('languages.restartNote')}</p>
+    </SettingsStack>
   )
 }

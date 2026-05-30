@@ -26,7 +26,7 @@
 | Priority | Item | Status |
 | --- | --- | --- |
 | P0 | AppImage release pipeline E2E on clean VM | ❓ Unverified |
-| P2 | Settings hosts/env file editing | 📋 Planned |
+| P2 | Settings hosts/env file editing | ✅ Done (System tab: pkexec hosts write, ~/.profile editor) |
 | P2 | Runtimes install matrix hardening | 📋 Planned |
 | P2 | Git VCS polish / simple mode | 📋 Planned |
 
