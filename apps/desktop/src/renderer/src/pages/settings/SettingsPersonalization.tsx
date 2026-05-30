@@ -4,6 +4,13 @@ import { parseAppearance } from '@linux-dev-home/shared'
 import { applyAppearanceAccent, applyTheme, DEFAULT_ACCENT_HEX } from '../../theme/applyAccent'
 import { assertSettingsOk } from '../settingsContract'
 import { useTranslation } from 'react-i18next'
+import {
+  SettingsActions,
+  SettingsCard,
+  SettingsFeedback,
+  SettingsSegmented,
+  SettingsStack,
+} from './SettingsUi'
 
 const ACCENT_PRESETS: ReadonlyArray<{ labelKey: string; hex: string }> = [
   { labelKey: 'personalization.accentViolet', hex: '#7c4dff' },
@@ -63,53 +70,59 @@ export function SettingsPersonalization(): ReactElement {
     }
   }
 
+  const msgTone = accentMsg && (accentMsg.toLowerCase().includes('could not') || accentMsg.toLowerCase().includes('failed'))
+    ? 'error'
+    : 'success'
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '14px 0', borderBottom: '1px solid var(--border)' }}>
-        <div>
-          <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>{t('personalization.colorTheme')}</div>
-          <p className="hp-muted" style={{ margin: 0, maxWidth: 360 }}>{t('personalization.colorThemeDesc')}</p>
+    <SettingsStack>
+      <SettingsCard title={t('personalization.colorTheme')} description={t('personalization.colorThemeDesc')}>
+        <div style={{ padding: '12px 0 4px', display: 'flex', justifyContent: 'flex-end' }}>
+          <SettingsSegmented
+            value={themeMode}
+            options={[
+              { value: 'dark', label: t('personalization.dark'), icon: 'moon' },
+              { value: 'light', label: t('personalization.light'), icon: 'sun' },
+            ]}
+            onChange={(mode) => {
+              setThemeMode(mode)
+              applyTheme(mode)
+            }}
+          />
         </div>
-        <div style={{ display: 'flex', gap: 10 }}>
-          {(['dark', 'light'] as const).map((mode) => (
-            <button key={mode} type="button"
-              onClick={() => { setThemeMode(mode); applyTheme(mode) }}
-              style={{ padding: '8px 20px', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: 13,
-                border: themeMode === mode ? '2px solid var(--accent)' : '1px solid var(--border)',
-                background: themeMode === mode ? 'var(--accent-dim)' : 'var(--bg-input)',
-                color: themeMode === mode ? 'var(--accent)' : 'var(--text)', transition: 'all 0.15s ease' }}>
-              <span className={`codicon codicon-${mode === 'dark' ? 'moon' : 'sun'}`} style={{ marginRight: 6 }} aria-hidden />
-              {mode === 'dark' ? t('personalization.dark') : t('personalization.light')}
-            </button>
-          ))}
+      </SettingsCard>
+      <SettingsCard title={t('personalization.accentColor')} description={t('personalization.accentColorDesc')}>
+        <div style={{ padding: '12px 0 4px', display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'flex-end', alignItems: 'center' }}>
+            {ACCENT_PRESETS.map((p) => (
+              <button
+                key={p.hex}
+                type="button"
+                title={t(p.labelKey)}
+                className={`settings-color-swatch${accentDraft.toLowerCase() === p.hex ? ' active' : ''}`}
+                style={{ background: p.hex }}
+                onClick={() => setAccentDraft(p.hex)}
+              />
+            ))}
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-muted)' }}>
+              {t('personalization.custom')}
+              <input
+                type="color"
+                value={accentDraft}
+                onChange={(ev) => setAccentDraft(ev.target.value)}
+                style={{ width: 40, height: 36, padding: 0, border: '1px solid var(--border)', borderRadius: 8, cursor: 'pointer', background: 'transparent' }}
+              />
+            </label>
         </div>
-      </div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '14px 0', borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }}>
-        <div>
-          <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>{t('personalization.accentColor')}</div>
-          <p className="hp-muted" style={{ margin: 0, maxWidth: 360 }}>{t('personalization.accentColorDesc')}</p>
-        </div>
-        <div className="hp-row-wrap" style={{ gap: 10 }}>
-          {ACCENT_PRESETS.map((p) => (
-            <button key={p.hex} type="button" title={t(p.labelKey)} onClick={() => setAccentDraft(p.hex)}
-              style={{ width: 40, height: 40, borderRadius: 10, cursor: 'pointer', background: p.hex,
-                border: accentDraft.toLowerCase() === p.hex ? '2px solid var(--text)' : '1px solid var(--border)',
-                boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.15)' }} />
-          ))}
-          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 10, fontSize: 13, color: 'var(--text-muted)', paddingLeft: 4 }}>
-            {t('personalization.custom')}
-            <input type="color" value={accentDraft} onChange={(ev) => setAccentDraft(ev.target.value)}
-              style={{ width: 44, height: 40, padding: 0, border: '1px solid var(--border)', borderRadius: 10, cursor: 'pointer', background: 'var(--bg-input)' }} />
-          </label>
-        </div>
-      </div>
-      <div className="hp-row-wrap">
-        <button type="button" className="hp-btn hp-btn-primary" disabled={accentBusy} onClick={() => void saveAccent()}>{t('personalization.save')}</button>
-        <button type="button" className="hp-btn" disabled={accentBusy} onClick={() => void resetAccent()}>{t('personalization.resetToDefault')}</button>
-      </div>
-      {accentMsg ? (
-        <div className={`hp-status-alert ${accentMsg.toLowerCase().includes('could not') || accentMsg.toLowerCase().includes('failed') ? 'error' : 'success'}`} style={{ marginTop: 4 }}>{accentMsg}</div>
-      ) : null}
-    </div>
+      </SettingsCard>
+      <SettingsActions>
+        <button type="button" className="hp-btn hp-btn-primary" disabled={accentBusy} onClick={() => void saveAccent()}>
+          {t('personalization.save')}
+        </button>
+        <button type="button" className="hp-btn" disabled={accentBusy} onClick={() => void resetAccent()}>
+          {t('personalization.resetToDefault')}
+        </button>
+      </SettingsActions>
+      {accentMsg ? <SettingsFeedback tone={msgTone}>{accentMsg}</SettingsFeedback> : null}
+    </SettingsStack>
   )
 }

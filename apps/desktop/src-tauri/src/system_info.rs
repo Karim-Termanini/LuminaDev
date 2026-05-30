@@ -578,6 +578,9 @@ async fn host_exec_write_hosts(body: &Value) -> Value {
         Some(c) => c.to_string(),
         None => return json!({ "ok": false, "error": "[HOST_EXEC_FAILED] missing content" }),
     };
+    if content.chars().count() > 48_000 {
+        return json!({ "ok": false, "error": "[HOST_EXEC_FAILED] content too large" });
+    }
     let mut named_tmp = match tempfile::NamedTempFile::new() {
         Ok(t) => t,
         Err(e) => {
@@ -589,16 +592,24 @@ async fn host_exec_write_hosts(body: &Value) -> Value {
     }
 
     let tmp_path = named_tmp.path().to_string_lossy().to_string();
+    // pkexec shows a native polkit dialog; long timeout for user auth.
     let result = exec_result_limit(
-        "sudo",
+        "pkexec",
         &["cp", &tmp_path, "/etc/hosts"],
-        cmd_timeout_short(),
+        cmd_timeout_long(),
     )
     .await;
 
     match result {
         Ok(_) => json!({ "ok": true }),
-        Err(e) => json!({ "ok": false, "error": format!("[HOST_EXEC_FAILED] {}", e) }),
+        Err(e) => {
+            let msg = e.trim().to_string();
+            if msg.contains("126") || msg.to_lowercase().contains("dismissed") {
+                json!({ "ok": false, "error": "[HOST_EXEC_CANCELLED] authentication cancelled" })
+            } else {
+                json!({ "ok": false, "error": format!("[HOST_EXEC_FAILED] {}", msg) })
+            }
+        }
     }
 }
 

@@ -1,64 +1,107 @@
 import type { ReactElement } from 'react'
-import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
-import type { ConnectedAccount } from '@linux-dev-home/shared'
+import { useEffect, useMemo, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
+import type { CloudAuthProvider } from '@linux-dev-home/shared'
 import { useTranslation } from 'react-i18next'
+
+import { CloudAuthProviderPanel } from '../CloudAuthProviderPanel'
+import { CLOUD_AUTH_PROVIDERS } from '../cloudAuthMeta'
+import { CLOUD_GIT_PROVIDER_THEME, type CloudGitProviderId } from '../cloudGitTheme'
+import { useCloudAuth } from '../useCloudAuth'
+import { SettingsCard, SettingsFeedback, SettingsSegmented, SettingsStack } from './SettingsUi'
+
+function parseProvider(raw: string | null): CloudGitProviderId {
+  return raw === 'gitlab' ? 'gitlab' : 'github'
+}
 
 export function SettingsAccounts(): ReactElement {
   const { t } = useTranslation('settings')
-  const [accounts, setAccounts] = useState<ConnectedAccount[]>([])
-  const [loading, setLoading] = useState(true)
-  const [err, setErr] = useState<string | null>(null)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [activeProvider, setActiveProvider] = useState<CloudGitProviderId>(() => parseProvider(searchParams.get('provider')))
+  const auth = useCloudAuth(activeProvider)
 
   useEffect(() => {
-    let cancelled = false
-    setLoading(true)
-    setErr(null)
-    void window.dh.cloudAuthStatus()
-      .then((res) => {
-        if (cancelled) return
-        if (!res.ok || !res.accounts) {
-          setAccounts([])
-          if (!res.ok && res.error) setErr(res.error)
-          return
-        }
-        setAccounts(res.accounts)
-      })
-      .catch((e: unknown) => { if (!cancelled) setErr(e instanceof Error ? e.message : String(e)) })
-      .finally(() => { if (!cancelled) setLoading(false) })
-    return () => { cancelled = true }
-  }, [])
+    const next = parseProvider(searchParams.get('provider'))
+    setActiveProvider((cur) => (cur === next ? cur : next))
+  }, [searchParams])
+
+  useEffect(() => {
+    if (auth.deviceFlow) setActiveProvider(auth.deviceFlow.provider)
+  }, [auth.deviceFlow])
+
+  const byProvider = useMemo(() => {
+    const map = new Map<CloudAuthProvider, (typeof auth.accounts)[number]>()
+    for (const a of auth.accounts) map.set(a.provider, a)
+    return map
+  }, [auth.accounts])
+
+  function selectProvider(provider: CloudGitProviderId): void {
+    setActiveProvider(provider)
+    const next = new URLSearchParams(searchParams)
+    next.set('tab', 'accounts')
+    next.set('provider', provider)
+    setSearchParams(next, { replace: true })
+  }
+
+  const deviceFlowLocksTabs = auth.deviceFlow !== null
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <p className="hp-muted" style={{ margin: 0, fontSize: 13, lineHeight: 1.5 }}>
-        {t('accounts.description')}
-      </p>
-      {loading ? <p className="hp-muted" style={{ margin: 0, fontSize: 13 }}>{t('accounts.loading')}</p> : null}
-      {!loading && err ? <div className="hp-status-alert error" style={{ fontSize: 13 }}>{err}</div> : null}
-      {!loading && !err && accounts.length === 0 ? <p className="hp-muted" style={{ margin: 0, fontSize: 13 }}>{t('accounts.noAccounts')}</p> : null}
-      {!loading && accounts.length > 0 ? (
-        <ul style={{ margin: 0, paddingLeft: 20, fontSize: 13, lineHeight: 1.65, color: 'var(--text)' }}>
-          {accounts.map((a) => (
-            <li key={`${a.provider}:${a.username}`}>
-              <span className="mono">{a.provider}</span> — {a.username}
-              <Link to={`/git?tab=cloud&provider=${a.provider}`} className="mono"
-                style={{ marginLeft: 8, color: 'var(--accent)', textDecoration: 'none', fontSize: 12 }}>{t('accounts.openLink')}</Link>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          <Link to="/git?tab=cloud&provider=github" className="hp-btn hp-btn-primary" style={{ fontSize: 13, textDecoration: 'none' }}>
-            <span className="codicon codicon-github" aria-hidden /> {t('accounts.githubTab')}
-          </Link>
-          <Link to="/git?tab=cloud&provider=gitlab" className="hp-btn" style={{ fontSize: 13, textDecoration: 'none' }}>
-            <span className="codicon codicon-source-control" aria-hidden /> {t('accounts.gitlabTab')}
-          </Link>
-          <Link to="/git?tab=cloud" className="hp-btn" style={{ fontSize: 13, textDecoration: 'none' }}>
-            <span className="codicon codicon-arrow-right" aria-hidden /> {t('accounts.manageOnCloudGit')}
-          </Link>
+    <SettingsStack>
+      <div className="settings-accounts-glance" role="list" aria-label={t('accounts.glanceLabel')}>
+        {CLOUD_AUTH_PROVIDERS.map((id) => {
+          const acct = byProvider.get(id)
+          const theme = CLOUD_GIT_PROVIDER_THEME[id]
+          const active = activeProvider === id
+          return (
+            <button
+              key={id}
+              type="button"
+              role="listitem"
+              className={`settings-accounts-glance-chip${active ? ' is-active' : ''}${acct ? ' is-connected' : ''}`}
+              disabled={deviceFlowLocksTabs && auth.deviceFlow?.provider !== id}
+              onClick={() => selectProvider(id)}
+              style={{ '--glance-accent': theme.accent } as React.CSSProperties}
+            >
+              <span className={`codicon codicon-${id === 'github' ? 'github' : 'source-control'}`} aria-hidden />
+              <span className="settings-accounts-glance-name">{t(id === 'github' ? 'accounts.githubLabel' : 'accounts.gitlabLabel')}</span>
+              <span className="settings-accounts-glance-status">
+                {acct ? acct.username : t('accounts.notConnected')}
+              </span>
+            </button>
+          )
+        })}
       </div>
-    </div>
+
+      <SettingsSegmented
+        value={activeProvider}
+        options={CLOUD_AUTH_PROVIDERS.map((id) => ({
+          value: id,
+          label: t(id === 'github' ? 'accounts.githubLabel' : 'accounts.gitlabLabel'),
+          icon: id === 'github' ? 'github' : 'source-control',
+        }))}
+        onChange={(id) => {
+          if (deviceFlowLocksTabs && auth.deviceFlow?.provider !== id) return
+          selectProvider(id)
+        }}
+      />
+
+      <SettingsCard className="settings-accounts-auth-card">
+        {auth.loading ? <SettingsFeedback tone="muted">{t('accounts.loading')}</SettingsFeedback> : null}
+        {!auth.loading ? (
+          <CloudAuthProviderPanel provider={activeProvider} auth={auth} showAdvanced />
+        ) : null}
+      </SettingsCard>
+
+      <SettingsCard title={t('accounts.workflowsTitle')} description={t('accounts.workflowsDesc')}>
+        <Link
+          to={`/git?tab=cloud&provider=${activeProvider}`}
+          className="hp-btn hp-btn-primary settings-accounts-cloud-link"
+          style={{ textDecoration: 'none' }}
+        >
+          <span className="codicon codicon-cloud" aria-hidden />
+          {t('accounts.openCloudGit')}
+        </Link>
+      </SettingsCard>
+    </SettingsStack>
   )
 }

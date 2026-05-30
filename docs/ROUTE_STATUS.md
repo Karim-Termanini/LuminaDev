@@ -28,7 +28,7 @@ Status legend:
 | `/terminal` | partial | Embedded terminal works; host/sandbox differences still affect behavior. |
 | `/runtimes` | partial | Status/version/deps/uninstall preview are live; install/update/remove backend is in active hardening. |
 | `/maintenance` | partial | Guardian + diagnostics + host probes. **Tasks**: user checklist on Overview + full editor on Schedule. **Git backups** on **Git Config → Backups**. No arbitrary host shell or full remediation. |
-| `/settings` | partial | Personalization, SSH overview, system diagnostics, accounts, general, update, notifications, shortcuts, help, datetime, languages, app engine, builder, beta flags. **Not yet:** hosts file editing, profile-scoped env files + diff-before-apply. **Extension tab removed** — not in scope. |
+| `/settings` | partial | Personalization, SSH overview, **System tab**: `/etc/hosts` read/edit (pkexec + diff-before-apply), process env diagnostics, `~/.profile` export editor (diff-before-apply), accounts, general, update, notifications, shortcuts, help, datetime, languages, app engine, builder, beta flags. **Extension tab removed** — not in scope. |
 
 ## Update Rule
 

@@ -1,104 +1,120 @@
 # LuminaDev
 
-Linux developer workstation dashboard, focused on safe click-first flows for Docker, system visibility, and local machine setup.
+Linux developer workstation dashboard — click-first flows for Docker, Git, profiles, runtimes, system visibility, and local environment setup.
 
-> **Runtime:** Tauri-only desktop app. All `ipc_invoke` channels run Rust-native; Electron and Node bridge removed. Distribution target: **GitHub Releases (AppImage)** — Flatpak abandoned.
+**Stack:** Tauri 2 + React renderer + Rust IPC backend. Shared contracts in `@linux-dev-home/shared` (Zod + TypeScript types).
 
-## Current Status
+**Distribution:** Native builds only. Target is **GitHub Releases (AppImage)**. Flatpak was abandoned (2026-05-28).
 
-This project is in active development. Features below are split by maturity:
+---
 
-- **Implemented (verified)**:
-  - Docker: containers, images, volumes, networks, cleanup, port remap, per-container stats.
-  - Unified `/git` hub (Config, VCS, Cloud tabs) with Smart-Flow VCS (Smart Push, conflict studio, PR wizard).
-  - Maintenance / Guardian, Monitor metrics, Profiles CRUD + scaffolding, 14 Settings tabs.
-  - System Readiness wizard (Phase 16), elevated theme on primary routes.
-  - Typed IPC via `@linux-dev-home/shared` (Zod + Rust validation).
-- **Partial / evolving**:
-  - Settings: hosts file editing and profile-scoped env files not implemented ([`ROUTE_STATUS.md`](docs/ROUTE_STATUS.md)).
-  - Runtimes install/update matrix hardening.
-  - AppImage release pipeline E2E on clean VM ([`MASTER_PLAN.md`](docs/MASTER_PLAN.md)).
-- **Out of scope (removed 2026-05-29)**:
-  - Settings Extension tab / plugin marketplace (Phase 10).
-  - Dashboard widget catalog, deck, and layout IPC.
+## What works today
+
+| Area | Maturity | Summary |
+| --- | --- | --- |
+| [`/docker`](docs/ROUTE_STATUS.md) | **live** | Containers, images, volumes, networks, cleanup, port remap, per-container stats |
+| [`/git`](docs/ROUTE_STATUS.md) | **live** | Unified hub — Config, VCS (Smart-Flow), Cloud Git |
+| [`/dashboard`](docs/ROUTE_STATUS.md) | partial | Profile preset grid, metrics strip, kernels/logs sub-routes |
+| [`/profiles`](docs/ROUTE_STATUS.md) | partial | CRUD, compose variants, scaffolding (incl. data-science Python/R/both) |
+| [`/runtimes`](docs/ROUTE_STATUS.md) | partial | 17 language toolchains — status, install, uninstall preview |
+| [`/ssh`](docs/ROUTE_STATUS.md) | partial | Keygen, GitHub test, remote setup, bookmarks |
+| [`/system`](docs/ROUTE_STATUS.md) | partial | CPU/RAM/disk metrics, processes, security snapshot |
+| [`/maintenance`](docs/ROUTE_STATUS.md) | partial | Guardian health score, diagnostics bundle, scheduled tasks |
+| [`/settings`](docs/ROUTE_STATUS.md) | partial | 14 tabs (personalization, accounts, shortcuts, …) |
+| [`/terminal`](docs/ROUTE_STATUS.md) | partial | Embedded shell (line-buffered, not full PTY) |
+
+Route-level detail: [`docs/ROUTE_STATUS.md`](docs/ROUTE_STATUS.md).
+
+**Removed from scope (2026-05-29):** Settings Extension tab / plugin marketplace; dashboard widget catalog and layout IPC.
+
+---
+
+## Prerequisites
+
+- Node.js 20+
+- pnpm 9 (`corepack enable`)
+- Rust stable + [Tauri v2 Linux deps](https://v2.tauri.app/start/prerequisites/)
+- Docker (optional — compose profiles and Docker panel)
+
+---
+
+## Quick start
+
+```bash
+pnpm install
+pnpm dev          # Tauri dev (Rust + Vite)
+pnpm smoke        # Full CI gate: typecheck, test, lint, cargo test/clippy
+```
+
+Other scripts:
+
+```bash
+pnpm test         # Vitest (shared + desktop)
+pnpm typecheck    # TypeScript across workspace
+pnpm lint         # ESLint
+pnpm build        # Renderer bundle + compose profiles
+pnpm --filter desktop build:tauri   # Production desktop bundle
+pnpm pack:linux   # Linux packaging helper
+```
+
+---
+
+## Monorepo layout
+
+```
+apps/desktop/          Tauri app — src-tauri/ (Rust), renderer/ (React)
+packages/shared/       IPC channel names, Zod schemas, shared types
+docker/compose/        Bundled compose profiles (web-dev, data-science, …)
+```
+
+Rust backend: ~37 domain modules; `lib.rs` is a thin IPC dispatcher only. See [`CLAUDE.md`](CLAUDE.md) for architecture and agent guidance.
+
+---
+
+## Quality gate
+
+All PRs must pass **`pnpm smoke`** before merge.
+
+- Destructive flows (Docker prune, runtime uninstall, profile teardown) require confirmation and tested `[ERROR_CODE]` errors.
+- No regression on live/partial routes without test updates.
+- Docs use **Implemented / Partial / Planned / Out of scope** only.
+- Conventional Commits; one coherent intent per commit — see [`CONTRIBUTING.md`](CONTRIBUTING.md) and [`docs/COMMIT_QUALITY_RULES.md`](docs/COMMIT_QUALITY_RULES.md).
+
+---
 
 ## Documentation
 
-| Doc | Purpose |
+| Document | Purpose |
 | --- | --- |
-| [`phasesPlan.md`](phasesPlan.md) | Phase-by-phase history and checklists |
-| [`docs/MASTER_PLAN.md`](docs/MASTER_PLAN.md) | Unified active plan + backlog |
-| [`docs/AUDIT.md`](docs/AUDIT.md) | Consolidated audit + page QA checklist |
-| [`docs/ROUTE_STATUS.md`](docs/ROUTE_STATUS.md) | Route live / partial / stub matrix |
+| [`phasesPlan.md`](phasesPlan.md) | Phase history, architecture rules, known-bugs table |
+| [`docs/MASTER_PLAN.md`](docs/MASTER_PLAN.md) | Active backlog and release priorities |
+| [`docs/AUDIT.md`](docs/AUDIT.md) | Consolidated audit + manual QA checklist |
 | [`docs/STATUS.md`](docs/STATUS.md) | Release track snapshot |
 | [`docs/STABILIZATION_CHECKLIST.md`](docs/STABILIZATION_CHECKLIST.md) | Stabilization gate evidence |
-| [`docs/SMART_FLOW_VCS.md`](docs/SMART_FLOW_VCS.md) | Git VCS Smart-Flow blueprint |
-| [`CLAUDE.md`](CLAUDE.md) | Agent / contributor architecture guide |
+| [`docs/SMART_FLOW_VCS.md`](docs/SMART_FLOW_VCS.md) | Git Smart-Flow VCS blueprint |
+| [`docs/APP_CREATION_PLAYBOOK.md`](docs/APP_CREATION_PLAYBOOK.md) | Engineering lessons / incident log |
+| [`docs/INSTALL_TEST.md`](docs/INSTALL_TEST.md) | Native / AppImage install verification |
 
-## Quality Gate Policy
+---
 
-All changes must pass the full CI gate before merge. Gate runs are enforced on every PR:
+## Known limitations
 
-1. `pnpm smoke` (typecheck + test + lint) must pass.
-2. Destructive actions (Docker prune/remove, runtime uninstall, profile teardown) must keep confirmation + tested error handling.
-3. No feature regression on existing live/partial routes without corresponding test updates.
-4. Documentation must use `Implemented / Partial / Planned / Out of scope` wording only.
-5. Commit hygiene: no micro-churn commits; each commit must represent one reviewable change with a descriptive message.
+- Embedded terminal is line-buffered — interactive TUI apps (vim, htop) may not work; use external terminal fallback.
+- Runtime install and some Docker flows need Polkit/sudo on the host.
+- AppImage E2E verification on a clean VM is not yet signed off ([`docs/MASTER_PLAN.md`](docs/MASTER_PLAN.md)).
 
-## Known Limitations
+---
 
-- **Security boundaries:** Some cleanup operations require manual host steps or Polkit (`pkexec`) for privilege escalation.
-- **Terminal:** Line-buffered shell in embedded terminal — not a full PTY (interactive apps like vim may not work).
-- **Backend:** ~37 Rust modules; `lib.rs` is a thin IPC dispatcher (~680 lines).
-
-## 🛠️ Prerequisites
-
-- **Node.js 20+**
-- **pnpm** 9 (`corepack enable` recommended)
-- **Docker** (optional, for compose stacks and the Docker panel)
-- **Tauri (default dev):** Rust stable + WebKit/GTK dev packages (see [Tauri v2 prerequisites](https://v2.tauri.app/start/prerequisites/)).
-
-## 🚀 Getting Started
-
-1. **Install dependencies:**
-   ```bash
-   pnpm install
-   ```
-
-2. **Development scripts:**
-   ```bash
-   pnpm dev          # Tauri dev (Rust + Vite renderer)
-   pnpm test         # Unit tests (shared + desktop)
-   pnpm typecheck    # TypeScript validation
-   pnpm lint         # ESLint
-   pnpm build        # Renderer bundle + copy compose profiles (CI / Docker friendly)
-   pnpm --filter desktop build:tauri   # Full desktop app bundle (Rust + frontend)
-   ```
-
-## 🐳 Docker CI Image
+## Docker CI image
 
 ```bash
 docker build -f docker/Dockerfile .
 ```
-The image runs tests, typecheck, lint, and production build inside Node 20.
 
-## Stabilization & Quality
-
-- Gate: `pnpm smoke` (typecheck + test + lint + Rust tests/clippy)
-- Tracker: [`docs/STABILIZATION_CHECKLIST.md`](docs/STABILIZATION_CHECKLIST.md)
-- Audit record: [`docs/AUDIT.md`](docs/AUDIT.md)
-- Engineering playbook: [`docs/APP_CREATION_PLAYBOOK.md`](docs/APP_CREATION_PLAYBOOK.md)
-- Commit rules: [`docs/COMMIT_QUALITY_RULES.md`](docs/COMMIT_QUALITY_RULES.md)
-
-## 🌳 Monorepo Layout
-
-- `apps/desktop` — Tauri + React UI (Rust backend, WebKit renderer; Electron removed in v0.2.0-alpha)
-- `packages/shared` — Shared types, IPC channel names, Zod schemas
-- `docker/compose/*` — Bundled `docker compose` profiles
-
-## 📜 License
-
-MIT — see [LICENSE](LICENSE).
+Runs workspace typecheck, tests, lint, and production build inside Node 20.
 
 ---
-*Built with ❤️ for the Linux Developer Community.*
+
+## License
+
+MIT — see [LICENSE](LICENSE).

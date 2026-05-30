@@ -20,7 +20,7 @@ impl GitLabProvider {
     pub async fn device_auth_start(scopes: &[&str], client_id: &str) -> Result<DeviceAuthChallenge, String> {
         if oauth_client_id_unconfigured(client_id) {
             return Err(
-                "[CLOUD_AUTH_OAUTH_NOT_CONFIGURED] GitLab device flow needs a registered OAuth app (device grant enabled). Add the client ID under Cloud Git → Advanced (saved locally), set LUMINA_GITLAB_OAUTH_CLIENT_ID, compile with that var, replace GITLAB_OAUTH_CLIENT_ID in cloud_auth/mod.rs, or use a personal access token."
+                "[CLOUD_AUTH_OAUTH_NOT_CONFIGURED] GitLab device flow needs a registered OAuth app (device grant enabled). Add the client ID under Settings → Connected accounts → Advanced (saved locally), set LUMINA_GITLAB_OAUTH_CLIENT_ID, compile with that var, replace GITLAB_OAUTH_CLIENT_ID in cloud_auth/mod.rs, or use a personal access token."
                     .to_string(),
             );
         }
@@ -735,7 +735,7 @@ impl GitLabProvider {
             }
 
             if !has_api_scope {
-                return Err("[CLOUD_GIT_INSUFFICIENT_SCOPE] Your GitLab token lacks the 'api' scope needed to create merge requests. Reconnect in Cloud Git with a token that has the 'api' scope enabled.".to_string());
+                return Err("[CLOUD_GIT_INSUFFICIENT_SCOPE] Your GitLab token lacks the 'api' scope needed to create merge requests. Reconnect in Settings → Connected accounts with a token that has the 'api' scope enabled.".to_string());
             } else {
                 return Err("[CLOUD_GIT_PERMISSION_DENIED] GitLab denied creation (403). Your token has the 'api' scope, but you may lack 'Developer' or higher permissions in this specific project.".to_string());
             }

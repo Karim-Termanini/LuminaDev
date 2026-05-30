@@ -3,6 +3,7 @@ import type { ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 
+import { settingsAccountsHref } from './settingsAccountsHref'
 import { classifyGitRemoteUrl, truncateMiddleUrl, type GitProviderFamily } from './gitVcsProviderHost'
 
 const CARD: React.CSSProperties = {
@@ -130,12 +131,12 @@ function ProviderCard(props: {
           <span style={{ fontWeight: 700, fontSize: 15, letterSpacing: 0.02 }}>{title}</span>
         </div>
         <Link
-          to={`/git?tab=cloud&provider=${provider}`}
+          to={account ? `/git?tab=cloud&provider=${provider}` : settingsAccountsHref(provider)}
           className="mono"
           onClick={(e) => e.stopPropagation()}
           style={{ fontSize: 11, color: 'var(--cg-accent, var(--accent))', textDecoration: 'none', flexShrink: 0 }}
         >
-          {t('provider.cloudGit')}
+          {account ? t('provider.cloudGit') : t('provider.connectInSettings')}
         </Link>
       </div>
       <div style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.45 }}>

@@ -3,6 +3,14 @@ import type { ReactElement } from 'react'
 import { useEffect, useState } from 'react'
 import { assertSettingsOk } from '../settingsContract'
 import { useTranslation } from 'react-i18next'
+import {
+  SettingsActions,
+  SettingsCard,
+  SettingsFeedback,
+  SettingsRow,
+  SettingsStack,
+  SettingsToggle,
+} from './SettingsUi'
 
 type UpdateSettings = { releaseChannel: string; checkOnStartup: boolean; lastChecked?: number }
 const DEFAULTS: UpdateSettings = { releaseChannel: 'stable', checkOnStartup: true }
@@ -45,7 +53,6 @@ export function SettingsUpdate(): ReactElement {
         const { updateAvailable, latestVersion, currentVersion } = res
         if (updateAvailable) {
           setMsg({ text: t('update.available', { latestVersion: latestVersion ?? '?', currentVersion: currentVersion ?? '?' }), type: 'info' })
-          // Optionally save lastChecked
           const newData = { ...settings, lastChecked: Date.now() }
           setSettings(newData)
           await window.dh.storeSet({ key: 'update_settings', data: newData })
@@ -63,49 +70,50 @@ export function SettingsUpdate(): ReactElement {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      <div style={{ paddingTop: 8 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-          <div>
-            <div style={{ fontWeight: 600, fontSize: 14 }}>{t('update.softwareUpdate')}</div>
-            <p className="hp-muted" style={{ margin: '4px 0 0', fontSize: 12 }}>{t('update.checkDesc')}</p>
-          </div>
-          <button type="button" className="hp-btn" onClick={() => void checkForUpdates()} disabled={checking} style={{ fontSize: 13, padding: '6px 12px' }}>
+    <SettingsStack>
+      <SettingsCard title={t('update.softwareUpdate')} description={t('update.checkDesc')}>
+        <SettingsRow label={t('update.checkNow')} description={t('update.checkDesc')} last>
+          <button type="button" className="hp-btn" onClick={() => void checkForUpdates()} disabled={checking}>
             {checking ? t('update.checking') : t('update.checkNow')}
           </button>
-        </div>
-        
-        <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 10 }}>{t('update.releaseChannel')}</div>
-        <select value={settings.releaseChannel} onChange={(e) => setSettings((p) => ({ ...p, releaseChannel: e.target.value }))} className="hp-input" style={{ fontSize: 13, width: 240 }}>
-          <option value="stable">{t('update.stable')}</option>
-          <option value="alpha">{t('update.alpha')}</option>
-        </select>
-      </div>
-      <div style={{ paddingTop: 0 }}>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
-          <input type="checkbox" checked={settings.checkOnStartup} onChange={(e) => setSettings((p) => ({ ...p, checkOnStartup: e.target.checked }))} />
-          <span style={{ fontSize: 13 }}>{t('update.checkOnStartup')}</span>
-        </label>
-      </div>
-      <div style={{ paddingTop: 0 }}>
+        </SettingsRow>
+      </SettingsCard>
+      <SettingsCard title={t('update.releaseChannel')}>
+        <SettingsRow label={t('update.releaseChannel')} last>
+          <select
+            value={settings.releaseChannel}
+            onChange={(e) => setSettings((p) => ({ ...p, releaseChannel: e.target.value }))}
+            className="hp-input"
+            style={{ fontSize: 13, minWidth: 160 }}
+          >
+            <option value="stable">{t('update.stable')}</option>
+            <option value="alpha">{t('update.alpha')}</option>
+          </select>
+        </SettingsRow>
+      </SettingsCard>
+      <SettingsCard>
+        <SettingsRow label={t('update.checkOnStartup')} last>
+          <SettingsToggle
+            checked={settings.checkOnStartup}
+            onChange={(v) => setSettings((p) => ({ ...p, checkOnStartup: v }))}
+          />
+        </SettingsRow>
+      </SettingsCard>
+      <p className="settings-feedback settings-feedback-muted" style={{ margin: 0 }}>
         {settings.lastChecked
-          ? <p className="hp-muted" style={{ margin: 0, fontSize: 12 }}>{t('update.lastChecked', { date: new Date(settings.lastChecked).toLocaleString() })}</p>
-          : <p className="hp-muted" style={{ margin: 0, fontSize: 12 }}>{t('update.neverChecked')}</p>}
-      </div>
-      <div style={{ paddingTop: 8 }}>
-        <button type="button" className="hp-btn hp-btn-primary" onClick={() => void save()} disabled={busy} style={{ fontSize: 13, padding: '8px 16px' }}>
+          ? t('update.lastChecked', { date: new Date(settings.lastChecked).toLocaleString() })
+          : t('update.neverChecked')}
+      </p>
+      <SettingsActions>
+        <button type="button" className="hp-btn hp-btn-primary" onClick={() => void save()} disabled={busy}>
           {busy ? t('update.saving') : t('update.save')}
         </button>
-        {msg ? (
-          <p style={{ 
-            margin: '12px 0 0', 
-            fontSize: 13, 
-            color: msg.type === 'error' ? 'var(--red)' : msg.type === 'success' ? 'var(--green)' : 'var(--accent)' 
-          }}>
-            {msg.text}
-          </p>
-        ) : null}
-      </div>
-    </div>
+      </SettingsActions>
+      {msg ? (
+        <SettingsFeedback tone={msg.type === 'error' ? 'error' : msg.type === 'success' ? 'success' : 'info'}>
+          {msg.text}
+        </SettingsFeedback>
+      ) : null}
+    </SettingsStack>
   )
 }

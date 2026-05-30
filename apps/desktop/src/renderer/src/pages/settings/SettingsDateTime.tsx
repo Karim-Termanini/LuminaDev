@@ -3,6 +3,14 @@ import { useEffect, useMemo, useState } from 'react'
 import type { DateTimeSettings } from '@linux-dev-home/shared'
 import { assertSettingsOk } from '../settingsContract'
 import { useTranslation } from 'react-i18next'
+import {
+  SettingsActions,
+  SettingsCard,
+  SettingsFeedback,
+  SettingsRow,
+  SettingsSegmented,
+  SettingsStack,
+} from './SettingsUi'
 
 const DEFAULTS: DateTimeSettings = {
   format: '24h',
@@ -53,39 +61,50 @@ export function SettingsDateTime(): ReactElement {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      <div>
-        <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 10 }}>{t('dateTime.timeFormat')}</div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          {(['12h', '24h'] as const).map((f) => (
-            <button key={f} type="button" onClick={() => setSettings((p) => ({ ...p, format: f }))}
-              style={{ padding: '8px 20px', borderRadius: 8, cursor: 'pointer', fontWeight: 600, fontSize: 13,
-                border: settings.format === f ? '2px solid var(--accent)' : '1px solid var(--border)',
-                background: settings.format === f ? 'var(--accent-dim)' : 'var(--bg-input)',
-                color: settings.format === f ? 'var(--accent)' : 'var(--text)' }}>
-              {f === '12h' ? t('dateTime.twelveHour') : t('dateTime.twentyFourHour')}
-            </button>
-          ))}
+    <SettingsStack>
+      <SettingsCard title={t('dateTime.timeFormat')}>
+        <div style={{ padding: '12px 0 4px', display: 'flex', justifyContent: 'flex-end' }}>
+          <SettingsSegmented
+            value={settings.format}
+            options={[
+              { value: '12h', label: t('dateTime.twelveHour') },
+              { value: '24h', label: t('dateTime.twentyFourHour') },
+            ]}
+            onChange={(f) => setSettings((p) => ({ ...p, format: f }))}
+          />
         </div>
-      </div>
-      <div>
-        <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 8 }}>{t('dateTime.timezone')}</div>
-        <input type="search" className="hp-input" placeholder={t('dateTime.filterTimezones')} value={tzFilter}
-          onChange={(e) => setTzFilter(e.target.value)} style={{ marginBottom: 8, fontSize: 13, width: '100%', maxWidth: 360 }} />
-        <select value={settings.timezone} onChange={(e) => setSettings((p) => ({ ...p, timezone: e.target.value }))}
-          className="hp-input" style={{ fontSize: 13, width: '100%', maxWidth: 360 }}>
+      </SettingsCard>
+      <SettingsCard title={t('dateTime.timezone')}>
+        <SettingsRow label={t('dateTime.filterTimezones')} last>
+          <input
+            type="search"
+            className="hp-input"
+            placeholder={t('dateTime.filterTimezones')}
+            value={tzFilter}
+            onChange={(e) => setTzFilter(e.target.value)}
+            style={{ fontSize: 13, minWidth: 220 }}
+          />
+        </SettingsRow>
+        <select
+          value={settings.timezone}
+          onChange={(e) => setSettings((p) => ({ ...p, timezone: e.target.value }))}
+          className="hp-input"
+          style={{ fontSize: 13, width: '100%', marginBottom: 8 }}
+        >
           {filteredTz.map((tz) => <option key={tz} value={tz}>{tz}</option>)}
         </select>
-        <p className="hp-muted" style={{ margin: '6px 0 0', fontSize: 12 }}>
+        <p className="settings-feedback settings-feedback-muted" style={{ margin: 0 }}>
           {t('dateTime.timezonesShown', { count: filteredTz.length, total: allTimezones.length })}
         </p>
-      </div>
-      <div>
-        <button type="button" className="hp-btn hp-btn-primary" onClick={() => void save()} disabled={busy} style={{ fontSize: 13, padding: '8px 16px' }}>
+      </SettingsCard>
+      <SettingsActions>
+        <button type="button" className="hp-btn hp-btn-primary" onClick={() => void save()} disabled={busy}>
           {busy ? t('dateTime.saving') : t('dateTime.save')}
         </button>
-        {msg ? <p style={{ margin: '8px 0 0', fontSize: 12, color: msg === t('dateTime.saved') ? 'var(--green)' : 'var(--red)' }}>{msg}</p> : null}
-      </div>
-    </div>
+      </SettingsActions>
+      {msg ? (
+        <SettingsFeedback tone={msg === t('dateTime.saved') ? 'success' : 'error'}>{msg}</SettingsFeedback>
+      ) : null}
+    </SettingsStack>
   )
 }

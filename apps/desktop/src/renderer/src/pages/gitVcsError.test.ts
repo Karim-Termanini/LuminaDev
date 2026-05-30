@@ -56,7 +56,7 @@ describe('humanizeGitVcsError', () => {
   })
 
   it('humanizes GIT_VCS_AUTH_FAILED', () => {
-    expect(humanizeGitVcsError(new Error('[GIT_VCS_AUTH_FAILED] 403'))).toContain('Cloud Git')
+    expect(humanizeGitVcsError(new Error('[GIT_VCS_AUTH_FAILED] 403'))).toContain('Connected accounts')
   })
 
   it('humanizes GIT_VCS_DIFF_TOO_LARGE', () => {

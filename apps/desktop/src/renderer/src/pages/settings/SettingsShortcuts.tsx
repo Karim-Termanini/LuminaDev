@@ -3,6 +3,13 @@ import { useEffect, useState } from 'react'
 import type { ShortcutsSettings } from '@linux-dev-home/shared'
 import { assertSettingsOk } from '../settingsContract'
 import { useTranslation } from 'react-i18next'
+import {
+  SettingsActions,
+  SettingsCard,
+  SettingsDataTable,
+  SettingsFeedback,
+  SettingsStack,
+} from './SettingsUi'
 
 const MODIFIER_KEYS = new Set(['Control', 'Shift', 'Alt', 'Meta', 'OS'])
 
@@ -72,9 +79,7 @@ export function SettingsShortcuts(): ReactElement {
     setBusy(true)
     setMsg(null)
     try {
-      // Ensure we are sending the full current bindings object
       assertSettingsOk(await window.dh.storeSet({ key: 'shortcuts_settings', data: bindings }))
-      // Dispatches a native window event that AppShell is listening for
       window.dispatchEvent(new CustomEvent('dh:shortcuts:updated'))
       setMsg(t('shortcuts.saved'))
       setTimeout(() => setMsg(null), 3000)
@@ -86,47 +91,52 @@ export function SettingsShortcuts(): ReactElement {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <p className="hp-muted" style={{ margin: 0, fontSize: 13 }}>
-        {t('shortcuts.instructions')}
-      </p>
-      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-        <thead>
-          <tr style={{ borderBottom: '1px solid var(--border)' }}>
-            <th style={{ textAlign: 'left', padding: '8px 12px', fontSize: 12, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{t('shortcuts.action')}</th>
-            <th style={{ textAlign: 'left', padding: '8px 12px', fontSize: 12, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{t('shortcuts.binding')}</th>
-            <th style={{ width: 80 }} />
-          </tr>
-        </thead>
-        <tbody>
-          {DEFAULT_ACTIONS.map((action) => (
-            <tr key={action.key} style={{ borderBottom: '1px solid var(--border)' }}>
-              <td style={{ padding: '12px 12px', fontSize: 14 }}>{t(action.labelKey)}</td>
-              <td style={{ padding: '12px 12px' }}>
-                {recording === action.key ? (
-                  <span style={{ fontSize: 12, color: 'var(--accent)', fontStyle: 'italic' }}>{t('shortcuts.pressKeys')}</span>
-                ) : (
-                  <span className="mono" style={{ fontSize: 12, padding: '3px 8px', borderRadius: 4, background: 'var(--bg-input)', border: '1px solid var(--border)' }}>
-                    {bindings[action.key] ?? action.defaultBinding}
-                  </span>
-                )}
-              </td>
-              <td style={{ padding: '12px 12px', textAlign: 'right' }}>
-                <button type="button" className="hp-btn" style={{ fontSize: 12, padding: '4px 10px' }}
-                  onClick={() => setRecording(recording === action.key ? null : action.key)}>
-                  {recording === action.key ? t('shortcuts.cancel') : t('shortcuts.record')}
-                </button>
-              </td>
+    <SettingsStack>
+      <SettingsCard description={t('shortcuts.instructions')}>
+        <SettingsDataTable>
+          <thead>
+            <tr>
+              <th>{t('shortcuts.action')}</th>
+              <th>{t('shortcuts.binding')}</th>
+              <th style={{ width: 88 }} />
             </tr>
-          ))}
-        </tbody>
-      </table>
-      <div>
-        <button type="button" className="hp-btn hp-btn-primary" onClick={() => void save()} disabled={busy || !!recording} style={{ fontSize: 13, padding: '8px 16px' }}>
+          </thead>
+          <tbody>
+            {DEFAULT_ACTIONS.map((action) => (
+              <tr key={action.key}>
+                <td>{t(action.labelKey)}</td>
+                <td>
+                  {recording === action.key ? (
+                    <span style={{ fontSize: 12, color: 'var(--accent)', fontStyle: 'italic' }}>{t('shortcuts.pressKeys')}</span>
+                  ) : (
+                    <span className="mono" style={{ fontSize: 12, padding: '3px 8px', borderRadius: 6, background: 'var(--bg-input)', border: '1px solid var(--border)' }}>
+                      {bindings[action.key] ?? action.defaultBinding}
+                    </span>
+                  )}
+                </td>
+                <td style={{ textAlign: 'right' }}>
+                  <button
+                    type="button"
+                    className="hp-btn"
+                    style={{ fontSize: 12, padding: '4px 10px' }}
+                    onClick={() => setRecording(recording === action.key ? null : action.key)}
+                  >
+                    {recording === action.key ? t('shortcuts.cancel') : t('shortcuts.record')}
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </SettingsDataTable>
+      </SettingsCard>
+      <SettingsActions>
+        <button type="button" className="hp-btn hp-btn-primary" onClick={() => void save()} disabled={busy || !!recording}>
           {busy ? t('shortcuts.saving') : t('shortcuts.saveAll')}
         </button>
-        {msg ? <p style={{ margin: '8px 0 0', fontSize: 12, color: msg === t('shortcuts.saved') ? 'var(--green)' : 'var(--red)' }}>{msg}</p> : null}
-      </div>
-    </div>
+      </SettingsActions>
+      {msg ? (
+        <SettingsFeedback tone={msg === t('shortcuts.saved') ? 'success' : 'error'}>{msg}</SettingsFeedback>
+      ) : null}
+    </SettingsStack>
   )
 }

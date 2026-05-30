@@ -4,18 +4,28 @@ export function isCloudAuthOauthNotConfigured(err: unknown): boolean {
   return raw.includes('[CLOUD_AUTH_OAUTH_NOT_CONFIGURED]')
 }
 
+/** Normalize legacy backend copy that still references Cloud Git for auth. */
+function normalizeAuthDetail(detail: string): string {
+  return detail
+    .replace(/Cloud Git → Advanced/g, 'Settings → Connected accounts → Advanced')
+    .replace(/Connect this provider in Cloud Git first\.?/gi, 'Connect this provider in Settings → Connected accounts first.')
+    .replace(/Connect your account in Cloud Git\.?/gi, 'Connect your account in Settings → Connected accounts.')
+    .replace(/Reconnect in Cloud Git/gi, 'Reconnect in Settings → Connected accounts')
+    .replace(/Account & security/gi, 'Connected accounts')
+}
+
 export function humanizeCloudAuthError(err: unknown): string {
   const raw = err instanceof Error ? err.message : String(err)
   const match = raw.match(/^\[([A-Z_]+)\]\s*(.*)$/)
   const code = match?.[1] ?? ''
-  const detail = (match?.[2] ?? raw).trim()
+  const detail = normalizeAuthDetail((match?.[2] ?? raw).trim())
   if (code === 'CLOUD_AUTH_INVALID_TOKEN') {
     const head = (detail || 'Token is invalid or expired').trim().replace(/\s*\.\s*$/, '')
     const sentence = head.endsWith('.') ? head : `${head}.`
-    return `${sentence} Reconnect in Cloud Git under Account & security with a new token.`.trim()
+    return `${sentence} Reconnect in Settings → Connected accounts with a new token.`.trim()
   }
   if (code === 'CLOUD_AUTH_NOT_CONNECTED') {
-    return (detail || 'Connect this provider in Cloud Git first.').trim()
+    return (detail || 'Connect this provider in Settings → Connected accounts first.').trim()
   }
   if (code === 'CLOUD_AUTH_OAUTH_NOT_CONFIGURED') {
     return `${detail || 'Device sign-in is not configured for this build.'}`.trim()
@@ -24,12 +34,12 @@ export function humanizeCloudAuthError(err: unknown): string {
     return `The provider refused device sign-in (this is usually a bad or missing OAuth client ID, or the app is not allowed to use the device flow). ${detail}`.trim()
   }
   if (code === 'CLOUD_AUTH_DEVICE_FLOW_DISABLED') {
-    return (detail || 'Use a personal access token on the Cloud Git page instead.').trim()
+    return (detail || 'Use a personal access token in Settings → Connected accounts instead.').trim()
   }
   if (code === 'CLOUD_AUTH_DEVICE_POLL_REJECTED') {
     return (
       detail ||
-      'GitHub rejected the token step after browser authorization. Register a Device-flow OAuth app Client ID under Cloud Git → Advanced, or connect with a PAT.'
+      'GitHub rejected the token step after browser authorization. Register a Device-flow OAuth app Client ID under Connected accounts → Advanced, or connect with a PAT.'
     ).trim()
   }
   if (code === 'CLOUD_AUTH_NETWORK') {

@@ -1,7 +1,12 @@
 {
   "page.title": "سحابة Git",
-  "page.desc": "اختر مزوداً أدناه. كل علامة تبويب تحدد نطاق التخطيط واللون لذلك المضيف — ستتبع طلبات السحب وعروض CI نفس النمط. يتم تخزين الرموز محلياً لـ HTTPS Git في صفحة Git VCS.",
+  "page.desc": "طلبات السحب وطلبات الدمج وCI والم issues المعينة لحسابك المتصل. بدّل علامات التبويب بين GitHub وGitLab.",
   "page.loading": "جارٍ التحميل…",
+  "page.notConnectedShort": "غير متصل",
+  "page.notConnectedTitle": "{{label}} غير متصل",
+  "page.notConnectedDesc": "اربط هذا المزود في الإعدادات → الحسابات المتصلة لتحميل النشاط وتفعيل HTTPS Git.",
+  "page.connectInSettings": "الربط في الإعدادات",
+  "page.manageAccount": "إدارة الحساب",
   "provider.github": "GitHub",
   "provider.gitlab": "GitLab",
   "provider.connected": "متصل · HTTPS جاهز",

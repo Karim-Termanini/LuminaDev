@@ -46,6 +46,31 @@ describe('schemas', () => {
     })
   })
 
+  it('accepts settings write host exec payloads', () => {
+    expect(
+      HostExecRequestSchema.parse({ command: 'settings_write_hosts', content: '127.0.0.1 localhost\n' }),
+    ).toEqual({
+      command: 'settings_write_hosts',
+      content: '127.0.0.1 localhost\n',
+    })
+    expect(HostExecRequestSchema.parse({ command: 'settings_read_profile_env' })).toEqual({
+      command: 'settings_read_profile_env',
+    })
+    expect(
+      HostExecRequestSchema.parse({
+        command: 'settings_write_profile_env',
+        action: 'set',
+        key: 'NODE_ENV',
+        value: 'development',
+      }),
+    ).toEqual({
+      command: 'settings_write_profile_env',
+      action: 'set',
+      key: 'NODE_ENV',
+      value: 'development',
+    })
+  })
+
   it('accepts docker logs with bounds', () => {
     expect(DockerLogsRequestSchema.parse({ id: 'abc', tail: 100 })).toEqual({
       id: 'abc',

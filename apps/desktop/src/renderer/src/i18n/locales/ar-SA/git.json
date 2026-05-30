@@ -52,8 +52,9 @@
   "integrate.current": "(الحالي)",
   "integrate.branchLabel": "الفرع أو المرجع البعيد للدمج أو إعادة الترتيب",
   "provider.cloudGit": "Git السحابي",
+  "provider.connectInSettings": "ربط",
   "provider.signedInAs": "مسجل دخولاً بـ",
-  "provider.notConnected": "غير متصل — مزامنة HTTPS تحتاج رمزاً في Git السحابي.",
+  "provider.notConnected": "غير متصل — أضف رمزاً في الإعدادات → الحسابات المتصلة.",
   "provider.noRepo": "افتح مستودعاً أدناه لعرض النقاط البعيدة لهذا المضيف.",
   "provider.noRemotes": "لا توجد نقاط بعيدة في هذا المستودع تشير هنا (اكتشاف SSH/HTTPS).",
   "provider.fetchUsing": "الجلب يستخدم النقطة البعيدة \"{{remote}}\" على هذا المضيف.",
@@ -246,6 +247,8 @@
   "toolbar.createMr": "إنشاء طلب دمج",
   "toolbar.prCreated": "تم إنشاء طلب السحب ←",
   "toolbar.mrCreated": "تم إنشاء طلب الدمج ←",
+  "toolbar.proMode": "الوضع المتقدم",
+  "toolbar.simpleModeHint": "عرض افتراضي أبسط — فعل الوضع المتقدم من الإعدادات → الميزات التجريبية.",
 
   "flow.title.default": "سير عمل Git في هذه الصفحة",
   "flow.title.conflicts": "لديك تعارضات دمج",
@@ -280,7 +283,7 @@
 
   "page.worktreeLabel": "شجرة عمل GIT",
   "page.title": "Git VCS",
-  "page.subtitle": "الحالة، الفروق، المرحلة، الإيداع، الجلب، السحب، الدفع، الدمج، إعادة الترتيب، واستخراج التخزين. النقاط البعيدة HTTPS تستخدم بيانات الاعتماد من <link>Git السحابي</link>.",
+  "page.subtitle": "الحالة، الفروق، المرحلة، الإيداع، الجلب، السحب، الدفع، الدمج، إعادة الترتيب، واستخراج التخزين. النقاط البعيدة HTTPS تستخدم الرموز من <link>الحسابات المتصلة</link>.",
 
   "ciChecks.loadingChecks": "جارٍ تحميل الفحوصات…",
   "ciChecks.hasConflicts": "هذا الفرع لديه تعارضات",

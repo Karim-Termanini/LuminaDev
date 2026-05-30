@@ -1,4 +1,10 @@
-import type { BranchEntry, ConnectedAccount, FileEntry, GitRemoteEntry, GitRepoEntry } from '@linux-dev-home/shared'
+import type {
+  BranchEntry,
+  ConnectedAccount,
+  FileEntry,
+  GitRemoteEntry,
+  GitRepoEntry,
+} from '@linux-dev-home/shared'
 import type { CSSProperties, ReactElement } from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
@@ -26,6 +32,7 @@ import { computeGitVcsNextAction, nextActionButtonStyle } from './gitVcsNextActi
 import { GitVcsStateBanner, type GitVcsOperation } from './GitVcsStateBanner'
 import { assertGitRecentList } from './registryContract'
 import { CLOUD_GIT_PROVIDER_THEME } from './cloudGitTheme'
+import { settingsAccountsHref } from './settingsAccountsHref'
 import { fetchRemoteOptions } from './gitVcsFetchRemotes'
 import { classifyGitRemoteUrl, resolvePipelineProvider } from './gitVcsProviderHost'
 import {
@@ -44,6 +51,29 @@ export function GitVcsPage(): ReactElement {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const betaFlags = useBetaFlags()
+  const [proMode, setProMode] = useState(false)
+  const [proModeToggling, setProModeToggling] = useState(false)
+
+  // Sync local proMode state from beta flags on mount
+  useEffect(() => {
+    setProMode(!!betaFlags['enable_git_vcs_pro_mode'])
+  }, [betaFlags])
+
+  const toggleProMode = async () => {
+    const next = !proMode
+    setProModeToggling(true)
+    try {
+      const res = await window.dh.storeSet({
+        key: 'beta_features_state',
+        data: { enable_git_vcs_pro_mode: next },
+      })
+      if (res.ok) {
+        setProMode(next)
+      }
+    } finally {
+      setProModeToggling(false)
+    }
+  }
   const [recents, setRecents] = useState<GitRepoEntry[]>([])
   const [repoPath, setRepoPath] = useState('')
   const [branch, setBranch] = useState('')
@@ -87,7 +117,7 @@ export function GitVcsPage(): ReactElement {
   const fetchRemoteNames = useMemo(() => fetchRemoteOptions(branches), [branches])
   const localBranchNames = useMemo(
     () => new Set(branches.filter((b) => !b.remote).map((b) => b.name)),
-    [branches],
+    [branches]
   )
   const activeFetchRemoteName = fetchRemoteNames.includes(fetchRemote)
     ? fetchRemote
@@ -113,13 +143,13 @@ export function GitVcsPage(): ReactElement {
     (provider: 'github' | 'gitlab') => {
       const candidates = gitRemotes.filter((r) => classifyGitRemoteUrl(r.fetchUrl) === provider)
       if (candidates.length === 0) {
-        void navigate(`/git?tab=cloud&provider=${provider}`)
+        void navigate(settingsAccountsHref(provider))
         return
       }
       const pick = candidates.find((r) => r.name === 'origin') ?? candidates[0]
       setFetchRemote(pick.name)
     },
-    [gitRemotes, navigate, setFetchRemote],
+    [gitRemotes, navigate, setFetchRemote]
   )
 
   const closeDirtyCheckoutModal = useCallback(() => setDirtyCheckout(null), [])
@@ -150,7 +180,8 @@ export function GitVcsPage(): ReactElement {
 
   useEffect(() => {
     void window.dh.cloudAuthStatus().then((res) => {
-      if (res.ok && Array.isArray(res.accounts)) setCloudAccounts(res.accounts as ConnectedAccount[])
+      if (res.ok && Array.isArray(res.accounts))
+        setCloudAccounts(res.accounts as ConnectedAccount[])
       else setCloudAccounts([])
     })
   }, [])
@@ -179,7 +210,7 @@ export function GitVcsPage(): ReactElement {
         /* recents best-effort */
       }
     },
-    [closeDirtyCheckoutModal, loadRecents],
+    [closeDirtyCheckoutModal, loadRecents]
   )
 
   useEffect(() => {
@@ -203,7 +234,10 @@ export function GitVcsPage(): ReactElement {
     setSearchParams(next, { replace: true })
   }, [searchParams, setSearchParams, repoPath, persistRepoChoice])
 
-  const refreshStatus = useCallback(async (): Promise<{ staged: FileEntry[]; unstaged: FileEntry[] }> => {
+  const refreshStatus = useCallback(async (): Promise<{
+    staged: FileEntry[]
+    unstaged: FileEntry[]
+  }> => {
     if (!repoPath.trim()) {
       setBranch('')
       setAhead(null)
@@ -269,13 +303,13 @@ export function GitVcsPage(): ReactElement {
       setSelected(null)
       try {
         const lists = await refreshStatus()
-        
+
         // Extract conflicted files (status === 'C')
         const conflicts = [
-          ...lists.staged.filter(f => f.status === 'C').map(f => f.path),
-          ...lists.unstaged.filter(f => f.status === 'C').map(f => f.path),
+          ...lists.staged.filter((f) => f.status === 'C').map((f) => f.path),
+          ...lists.unstaged.filter((f) => f.status === 'C').map((f) => f.path),
         ]
-        
+
         setConflictedFiles(conflicts)
         setSelected((prev) => reconcileGitVcsSelection(prev, lists.staged, lists.unstaged))
       } catch (e) {
@@ -314,7 +348,7 @@ export function GitVcsPage(): ReactElement {
         await window.dh.storeSet({ key: key as any, data: snap as any })
       }
     },
-    [repoPath, branch],
+    [repoPath, branch]
   )
 
   const removeTrackingSlot = useCallback(
@@ -327,11 +361,13 @@ export function GitVcsPage(): ReactElement {
         return next
       })
     },
-    [persistTrackingState],
+    [persistTrackingState]
   )
 
   useEffect(() => {
-    setFetchRemote((cur) => (fetchRemoteNames.includes(cur) ? cur : fetchRemoteNames[0] ?? 'origin'))
+    setFetchRemote((cur) =>
+      fetchRemoteNames.includes(cur) ? cur : (fetchRemoteNames[0] ?? 'origin')
+    )
   }, [repoPath, fetchRemoteNames])
 
   useEffect(() => {
@@ -364,7 +400,7 @@ export function GitVcsPage(): ReactElement {
         setDiffBinary(false)
       }
     },
-    [repoPath],
+    [repoPath]
   )
 
   useEffect(() => {
@@ -387,7 +423,11 @@ export function GitVcsPage(): ReactElement {
     setBusy(true)
     setOpErrorRaw(null)
     try {
-      const r = await window.dh.gitVcsStage({ repoPath: repoPath.trim(), filePaths: [], stageAll: true })
+      const r = await window.dh.gitVcsStage({
+        repoPath: repoPath.trim(),
+        filePaths: [],
+        stageAll: true,
+      })
       assertGitVcsOk(r)
       const lists = await refreshStatus()
       setSelected((prev) => reconcileGitVcsSelection(prev, lists.staged, lists.unstaged))
@@ -496,7 +536,9 @@ export function GitVcsPage(): ReactElement {
         const listsEnsure = await refreshStatus()
         stagedFiles = listsEnsure.staged
         unstagedFiles = listsEnsure.unstaged
-        setSelected((prev) => reconcileGitVcsSelection(prev, listsEnsure.staged, listsEnsure.unstaged))
+        setSelected((prev) =>
+          reconcileGitVcsSelection(prev, listsEnsure.staged, listsEnsure.unstaged)
+        )
         if (listsEnsure.staged.length === 0) {
           throw new Error('[GIT_VCS_NO_STAGED] ')
         }
@@ -511,7 +553,9 @@ export function GitVcsPage(): ReactElement {
         setCommitMessage('')
         setSoftSuccessNotice('Commit created.')
       }
-      setSelected((prev) => (stillDirty ? reconcileGitVcsSelection(prev, lists.staged, lists.unstaged) : null))
+      setSelected((prev) =>
+        stillDirty ? reconcileGitVcsSelection(prev, lists.staged, lists.unstaged) : null
+      )
     } catch (e) {
       setOpErrorRaw(e instanceof Error ? e.message : String(e))
       try {
@@ -576,7 +620,7 @@ export function GitVcsPage(): ReactElement {
       const behind = st.behind
       if (behind != null && behind > 0) {
         setOpErrorRaw(
-          `[GIT_VCS_INTEGRATION_REQUIRED] Remote "${activeFetchRemoteName}" has ${behind} commit(s) not in your branch yet.`,
+          `[GIT_VCS_INTEGRATION_REQUIRED] Remote "${activeFetchRemoteName}" has ${behind} commit(s) not in your branch yet.`
         )
         const lists = await refreshStatus()
         setSelected((prev) => reconcileGitVcsSelection(prev, lists.staged, lists.unstaged))
@@ -628,7 +672,11 @@ export function GitVcsPage(): ReactElement {
     setOpErrorRaw(null)
     closeDirtyCheckoutModal()
     try {
-      const r = await window.dh.gitVcsCheckout({ repoPath: repoPath.trim(), branch: name, create: false })
+      const r = await window.dh.gitVcsCheckout({
+        repoPath: repoPath.trim(),
+        branch: name,
+        create: false,
+      })
       assertGitVcsOk(r)
       const lists = await refreshStatus()
       setSelected((prev) => reconcileGitVcsSelection(prev, lists.staged, lists.unstaged))
@@ -722,11 +770,16 @@ export function GitVcsPage(): ReactElement {
       const r = await window.dh.gitVcsMergeContinue({ repoPath: repoPath.trim() })
       assertGitVcsOk(r)
       const out =
-        r && typeof r === 'object' && 'output' in r && typeof (r as { output?: unknown }).output === 'string'
+        r &&
+        typeof r === 'object' &&
+        'output' in r &&
+        typeof (r as { output?: unknown }).output === 'string'
           ? String((r as { output: string }).output).trim()
           : ''
       setSoftSuccessNotice(
-        out ? `Merge concluded. ${out.slice(0, 280)}${out.length > 280 ? '…' : ''}` : 'Merge concluded.',
+        out
+          ? `Merge concluded. ${out.slice(0, 280)}${out.length > 280 ? '…' : ''}`
+          : 'Merge concluded.'
       )
       const lists = await refreshStatus()
       setSelected((prev) => reconcileGitVcsSelection(prev, lists.staged, lists.unstaged))
@@ -745,11 +798,16 @@ export function GitVcsPage(): ReactElement {
       const r = await window.dh.gitVcsRebaseContinue({ repoPath: repoPath.trim() })
       assertGitVcsOk(r)
       const out =
-        r && typeof r === 'object' && 'output' in r && typeof (r as { output?: unknown }).output === 'string'
+        r &&
+        typeof r === 'object' &&
+        'output' in r &&
+        typeof (r as { output?: unknown }).output === 'string'
           ? String((r as { output: string }).output).trim()
           : ''
       setSoftSuccessNotice(
-        out ? `Rebase continued. ${out.slice(0, 280)}${out.length > 280 ? '…' : ''}` : 'Rebase continued.',
+        out
+          ? `Rebase continued. ${out.slice(0, 280)}${out.length > 280 ? '…' : ''}`
+          : 'Rebase continued.'
       )
       const lists = await refreshStatus()
       setSelected((prev) => reconcileGitVcsSelection(prev, lists.staged, lists.unstaged))
@@ -829,13 +887,15 @@ export function GitVcsPage(): ReactElement {
     const name = protectedBypassDraft.trim() || suggestBypassBranchName(branch, localBranchNames)
     if (!isPlausibleGitBranchName(name)) {
       setProtectedFlowActive(true)
-      setOpErrorRaw('[GIT_VCS_BRANCH_NAME_INVALID] Use a valid branch name (no spaces or odd characters).')
+      setOpErrorRaw(
+        '[GIT_VCS_BRANCH_NAME_INVALID] Use a valid branch name (no spaces or odd characters).'
+      )
       return
     }
     if (localBranchNames.has(name)) {
       setProtectedFlowActive(true)
       setOpErrorRaw(
-        `[GIT_VCS_BRANCH_NAME_TAKEN] A local branch named "${name}" already exists — choose another name.`,
+        `[GIT_VCS_BRANCH_NAME_TAKEN] A local branch named "${name}" already exists — choose another name.`
       )
       return
     }
@@ -888,16 +948,21 @@ export function GitVcsPage(): ReactElement {
       errCode === 'GIT_VCS_BRANCH_NAME_INVALID')
   const pushRejectedNotice = errCode === 'GIT_VCS_PUSH_REJECTED'
   const softGitNotice =
-    integrationNotice ||
-    protectedBranchNotice ||
-    protectedBypassPanel ||
-    pushRejectedNotice
+    integrationNotice || protectedBranchNotice || protectedBypassPanel || pushRejectedNotice
   const opErrorDisplay = opErrorRaw ? humanizeGitVcsError(new Error(opErrorRaw)) : null
   const activeFetchRemoteUrl = gitRemotes.find((r) => r.name === activeFetchRemoteName)?.fetchUrl
-  const activeFetchProvider = activeFetchRemoteUrl ? classifyGitRemoteUrl(activeFetchRemoteUrl) : 'other'
+  const activeFetchProvider = activeFetchRemoteUrl
+    ? classifyGitRemoteUrl(activeFetchRemoteUrl)
+    : 'other'
   const cloudGitTabForRemote = activeFetchProvider === 'gitlab' ? 'gitlab' : 'github'
-  const ghLinked = useMemo(() => cloudAccounts.some((a) => a.provider === 'github'), [cloudAccounts])
-  const glLinked = useMemo(() => cloudAccounts.some((a) => a.provider === 'gitlab'), [cloudAccounts])
+  const ghLinked = useMemo(
+    () => cloudAccounts.some((a) => a.provider === 'github'),
+    [cloudAccounts]
+  )
+  const glLinked = useMemo(
+    () => cloudAccounts.some((a) => a.provider === 'gitlab'),
+    [cloudAccounts]
+  )
   const ambiguousPipelineHost =
     !!activeFetchRemoteUrl && activeFetchProvider === 'other' && ghLinked && glLinked
 
@@ -918,7 +983,8 @@ export function GitVcsPage(): ReactElement {
 
   /** Only the host that matches the selected fetch remote — avoids GitHub checks while you are on GitLab (both can stay tracked in store). */
   const trackedPrRenderSlots = useMemo(() => {
-    if (activeFetchPipelineProvider !== 'github' && activeFetchPipelineProvider !== 'gitlab') return []
+    if (activeFetchPipelineProvider !== 'github' && activeFetchPipelineProvider !== 'gitlab')
+      return []
     const provider = activeFetchPipelineProvider
     const entry = trackingPrByHost[provider]
     if (!entry) return []
@@ -953,10 +1019,11 @@ export function GitVcsPage(): ReactElement {
       ahead,
       behind,
       commitMessage,
-    ],
+    ]
   )
 
-  const vcsTheme = activeFetchProvider === 'other' ? null : CLOUD_GIT_PROVIDER_THEME[activeFetchProvider]
+  const vcsTheme =
+    activeFetchProvider === 'other' ? null : CLOUD_GIT_PROVIDER_THEME[activeFetchProvider]
   const vcsScopedStyle = vcsTheme
     ? ({
         '--cg-accent': vcsTheme.accent,
@@ -970,9 +1037,15 @@ export function GitVcsPage(): ReactElement {
 
   if (emptyRepo && recents.length === 0) {
     return (
-      <div className="elevated-page" style={{ maxWidth: 960, margin: '0 auto', padding: '24px 16px', ...vcsScopedStyle }}>
+      <div
+        className="elevated-page"
+        style={{ maxWidth: 960, margin: '0 auto', padding: '24px 16px', ...vcsScopedStyle }}
+      >
         <header style={{ marginBottom: 28 }}>
-          <div className="mono" style={{ color: 'var(--cg-accent, var(--accent))', fontSize: 12, marginBottom: 8 }}>
+          <div
+            className="mono"
+            style={{ color: 'var(--cg-accent, var(--accent))', fontSize: 12, marginBottom: 8 }}
+          >
             GIT.WORKTREE
           </div>
           <h1 style={{ margin: 0, fontSize: 26, fontWeight: 700 }}>Git VCS</h1>
@@ -980,13 +1053,35 @@ export function GitVcsPage(): ReactElement {
             Stage, review diffs, commit, and sync branches — all against your local Git checkout.
           </p>
         </header>
-        <GitVcsProviderRail
-          accounts={cloudAccounts}
-          remotes={gitRemotes}
-          activeFetchRemote={activeFetchRemoteName}
-          hasRepo={false}
-          onActivateProvider={activateGitProvider}
-        />
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            marginBottom: 8,
+            flexWrap: 'wrap',
+          }}
+        >
+          <button
+            type="button"
+            className="hp-btn"
+            disabled={proModeToggling}
+            onClick={() => void toggleProMode()}
+            title={proMode ? 'Switch to simple mode' : t('toolbar.simpleModeHint')}
+          >
+            <span className="codicon codicon-beaker" style={{ marginRight: 5 }} />
+            {proMode ? `${t('toolbar.proMode')} on` : `${t('toolbar.proMode')} off`}
+          </button>
+        </div>
+        {proMode ? (
+          <GitVcsProviderRail
+            accounts={cloudAccounts}
+            remotes={gitRemotes}
+            activeFetchRemote={activeFetchRemoteName}
+            hasRepo={false}
+            onActivateProvider={activateGitProvider}
+          />
+        ) : null}
         <div
           style={{
             ...GLASS,
@@ -1000,9 +1095,14 @@ export function GitVcsPage(): ReactElement {
           <div style={{ fontSize: 48, marginBottom: 16, opacity: 0.85 }} aria-hidden>
             <span className="codicon codicon-git-branch" />
           </div>
-          <h2 style={{ margin: '0 0 12px', fontSize: 20, fontWeight: 600 }}>Pick a repository to start</h2>
-          <p style={{ color: 'var(--text-muted)', fontSize: 14, lineHeight: 1.55, marginBottom: 24 }}>
-            Open any local Git folder. Recently opened repos will appear in the picker for quick access.
+          <h2 style={{ margin: '0 0 12px', fontSize: 20, fontWeight: 600 }}>
+            Pick a repository to start
+          </h2>
+          <p
+            style={{ color: 'var(--text-muted)', fontSize: 14, lineHeight: 1.55, marginBottom: 24 }}
+          >
+            Open any local Git folder. Recently opened repos will appear in the picker for quick
+            access.
           </p>
           <button type="button" className="hp-btn hp-btn-primary" onClick={() => void openFolder()}>
             Open folder…
@@ -1025,22 +1125,39 @@ export function GitVcsPage(): ReactElement {
       }}
     >
       <header>
-        <div className="mono" style={{ color: 'var(--cg-accent, var(--accent))', fontSize: 12, marginBottom: 6 }}>
+        <div
+          className="mono"
+          style={{ color: 'var(--cg-accent, var(--accent))', fontSize: 12, marginBottom: 6 }}
+        >
           {t('page.worktreeLabel')}
         </div>
         <h1 style={{ margin: 0, fontSize: 24, fontWeight: 700 }}>{t('page.title')}</h1>
         <p style={{ color: 'var(--text-muted)', marginTop: 6, maxWidth: 720, lineHeight: 1.5 }}>
-          <Trans i18nKey="page.subtitle" ns="git" t={t} components={{ link: <Link to="/git?tab=cloud&provider=github" style={{ color: 'var(--cg-accent, var(--accent))' }} /> }} />
+          <Trans
+            i18nKey="page.subtitle"
+            ns="git"
+            t={t}
+            components={{
+              link: (
+                <Link
+                  to="/settings?tab=accounts&provider=github"
+                  style={{ color: 'var(--cg-accent, var(--accent))' }}
+                />
+              ),
+            }}
+          />
         </p>
       </header>
 
-      <GitVcsProviderRail
-        accounts={cloudAccounts}
-        remotes={gitRemotes}
-        activeFetchRemote={activeFetchRemoteName}
-        hasRepo={!!repoPath.trim()}
-        onActivateProvider={activateGitProvider}
-      />
+      {proMode ? (
+        <GitVcsProviderRail
+          accounts={cloudAccounts}
+          remotes={gitRemotes}
+          activeFetchRemote={activeFetchRemoteName}
+          hasRepo={!!repoPath.trim()}
+          onActivateProvider={activateGitProvider}
+        />
+      ) : null}
 
       <GitVcsRepoPicker
         value={repoPath}
@@ -1115,7 +1232,12 @@ export function GitVcsPage(): ReactElement {
               >
                 Pull latest
               </button>
-              <button type="button" className="hp-btn" disabled={busy} onClick={() => void runFetch()}>
+              <button
+                type="button"
+                className="hp-btn"
+                disabled={busy}
+                onClick={() => void runFetch()}
+              >
                 Fetch only
               </button>
               <button type="button" className="hp-btn" onClick={() => setOpErrorRaw(null)}>
@@ -1141,7 +1263,7 @@ export function GitVcsPage(): ReactElement {
               </button>
             </div>
           ) : null}
-          {protectedBypassPanel ? (
+          {proMode && protectedBypassPanel ? (
             <div
               style={{
                 display: 'flex',
@@ -1154,11 +1276,15 @@ export function GitVcsPage(): ReactElement {
               <p className="hp-muted" style={{ margin: 0, fontSize: 12, lineHeight: 1.5 }}>
                 Move your commits to a <strong>new local branch</strong>, push it to{' '}
                 <span className="mono">{activeFetchRemoteName}</span>, then open the{' '}
-                {activeFetchProvider === 'gitlab' ? 'merge request' : 'pull request'} wizard (title and target branch
-                are prefilled).
+                {activeFetchProvider === 'gitlab' ? 'merge request' : 'pull request'} wizard (title
+                and target branch are prefilled).
               </p>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
-                <label htmlFor="git-vcs-protected-branch-input" className="mono" style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                <label
+                  htmlFor="git-vcs-protected-branch-input"
+                  className="mono"
+                  style={{ fontSize: 12, color: 'var(--text-muted)' }}
+                >
                   New branch
                 </label>
                 <input
@@ -1183,8 +1309,14 @@ export function GitVcsPage(): ReactElement {
                 >
                   Create branch, push, open {activeFetchProvider === 'gitlab' ? 'MR' : 'PR'}
                 </button>
-                {activeFetchProvider !== 'other' && cloudAccounts.some((a) => a.provider === activeFetchProvider) ? (
-                  <button type="button" className="hp-btn" disabled={busy} onClick={openPrWizardFromProtectedNotice}>
+                {activeFetchProvider !== 'other' &&
+                cloudAccounts.some((a) => a.provider === activeFetchProvider) ? (
+                  <button
+                    type="button"
+                    className="hp-btn"
+                    disabled={busy}
+                    onClick={openPrWizardFromProtectedNotice}
+                  >
                     Open {activeFetchProvider === 'gitlab' ? 'MR' : 'PR'} wizard only
                   </button>
                 ) : null}
@@ -1195,7 +1327,12 @@ export function GitVcsPage(): ReactElement {
                 >
                   Open Cloud Git
                 </Link>
-                <button type="button" className="hp-btn" onClick={() => setOpErrorRaw(null)} disabled={busy}>
+                <button
+                  type="button"
+                  className="hp-btn"
+                  onClick={() => setOpErrorRaw(null)}
+                  disabled={busy}
+                >
                   Dismiss
                 </button>
               </div>
@@ -1207,8 +1344,12 @@ export function GitVcsPage(): ReactElement {
             </div>
           ) : null}
           {authBanner ? (
-            <Link to="/git?tab=cloud&provider=github" className="hp-btn hp-btn-primary" style={{ textDecoration: 'none' }}>
-              Connect in Cloud Git
+            <Link
+              to={settingsAccountsHref('github')}
+              className="hp-btn hp-btn-primary"
+              style={{ textDecoration: 'none' }}
+            >
+              Connect in Settings
             </Link>
           ) : null}
           {opErrorRaw?.trim() ? (
@@ -1222,12 +1363,20 @@ export function GitVcsPage(): ReactElement {
                 Copy raw error
               </button>
               {rawErrorCopyHint === 'copied' ? (
-                <span className="mono" style={{ fontSize: 12, color: 'var(--text-muted)' }} aria-live="polite">
+                <span
+                  className="mono"
+                  style={{ fontSize: 12, color: 'var(--text-muted)' }}
+                  aria-live="polite"
+                >
                   Copied
                 </span>
               ) : null}
               {rawErrorCopyHint === 'failed' ? (
-                <span className="mono" style={{ fontSize: 12, color: '#ff8a80' }} aria-live="polite">
+                <span
+                  className="mono"
+                  style={{ fontSize: 12, color: '#ff8a80' }}
+                  aria-live="polite"
+                >
                   Clipboard unavailable
                 </span>
               ) : null}
@@ -1285,7 +1434,10 @@ export function GitVcsPage(): ReactElement {
                 {ahead === 0 && behind === 0 ? t('toolbar.upToDate') : ''}
               </span>
             ) : (
-              <span className="mono" style={{ fontSize: 12, color: 'var(--text-muted)', opacity: 0.6 }}>
+              <span
+                className="mono"
+                style={{ fontSize: 12, color: 'var(--text-muted)', opacity: 0.6 }}
+              >
                 {t('toolbar.noUpstream')}
               </span>
             )}
@@ -1313,7 +1465,12 @@ export function GitVcsPage(): ReactElement {
                 ))}
               </select>
             ) : null}
-            <button type="button" className="hp-btn" disabled={busy} onClick={() => void runFetch()}>
+            <button
+              type="button"
+              className="hp-btn"
+              disabled={busy}
+              onClick={() => void runFetch()}
+            >
               {t('toolbar.fetch')}
             </button>
             <button
@@ -1334,23 +1491,44 @@ export function GitVcsPage(): ReactElement {
             >
               {t('toolbar.push')}
             </button>
-            {activeFetchProvider !== 'other' && cloudAccounts.some((a) => a.provider === activeFetchProvider) ? (
+            {proMode &&
+            activeFetchProvider !== 'other' &&
+            cloudAccounts.some((a) => a.provider === activeFetchProvider) ? (
               <button
                 type="button"
                 className="hp-btn"
                 disabled={busy}
-                title={activeFetchProvider === 'gitlab' ? t('toolbar.createMr') : t('toolbar.createPr')}
-                onClick={() => { setLastCreatedPrUrl(null); setPrWizardOpen(true) }}
+                title={
+                  activeFetchProvider === 'gitlab' ? t('toolbar.createMr') : t('toolbar.createPr')
+                }
+                onClick={() => {
+                  setLastCreatedPrUrl(null)
+                  setPrWizardOpen(true)
+                }}
               >
-                <span className="codicon codicon-git-pull-request" style={{ fontSize: 13, marginRight: 4 }} aria-hidden />
+                <span
+                  className="codicon codicon-git-pull-request"
+                  style={{ fontSize: 13, marginRight: 4 }}
+                  aria-hidden
+                />
                 {activeFetchProvider === 'gitlab' ? t('toolbar.newMr') : t('toolbar.newPr')}
               </button>
             ) : null}
+            <button
+              type="button"
+              className="hp-btn"
+              disabled={proModeToggling}
+              onClick={() => void toggleProMode()}
+              title={proMode ? 'Switch to simple mode' : t('toolbar.simpleModeHint')}
+            >
+              <span className="codicon codicon-beaker" style={{ marginRight: 5 }} />
+              {proMode ? `${t('toolbar.proMode')} on` : `${t('toolbar.proMode')} off`}
+            </button>
           </div>
 
           <div
             style={
-              ciHostRail
+              proMode && ciHostRail
                 ? {
                     display: 'grid',
                     gridTemplateColumns: 'minmax(0, 1fr) minmax(280px, 380px)',
@@ -1361,167 +1539,220 @@ export function GitVcsPage(): ReactElement {
             }
           >
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
-          {!ciHostRail &&
-            trackedPrRenderSlots.map(({ provider, remote, reference, url }) => (
-              <GitVcsCiChecks
-                key={provider}
-                provider={provider}
-                repoPath={repoPath.trim()}
-                remote={remote}
-                reference={reference}
-                prUrl={url}
-                onResolveConflicts={(base) => void handleResolveRemoteConflicts(base, remote)}
-                onClose={() => removeTrackingSlot(provider)}
-              />
-            ))}
+              {proMode &&
+                !ciHostRail &&
+                trackedPrRenderSlots.map(({ provider, remote, reference, url }) => (
+                  <GitVcsCiChecks
+                    key={provider}
+                    provider={provider}
+                    repoPath={repoPath.trim()}
+                    remote={remote}
+                    reference={reference}
+                    prUrl={url}
+                    onResolveConflicts={(base) => void handleResolveRemoteConflicts(base, remote)}
+                    onClose={() => removeTrackingSlot(provider)}
+                  />
+                ))}
 
-          {lastCreatedPrUrl ? (
-            <div style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span className="codicon codicon-check" style={{ color: '#69f0ae' }} aria-hidden />
-              <a href={lastCreatedPrUrl} target="_blank" rel="noreferrer" style={{ color: 'var(--cg-accent, var(--accent))' }}>
-                {activeFetchProvider === 'gitlab' ? t('toolbar.mrCreated') : t('toolbar.prCreated')}
-              </a>
-              <button type="button" className="hp-btn" style={{ fontSize: 11, padding: '1px 6px' }} onClick={() => setLastCreatedPrUrl(null)}>
-                ✕
-              </button>
-            </div>
-          ) : null}
+              {proMode && lastCreatedPrUrl ? (
+                <div style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span
+                    className="codicon codicon-check"
+                    style={{ color: '#69f0ae' }}
+                    aria-hidden
+                  />
+                  <a
+                    href={lastCreatedPrUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{ color: 'var(--cg-accent, var(--accent))' }}
+                  >
+                    {activeFetchProvider === 'gitlab'
+                      ? t('toolbar.mrCreated')
+                      : t('toolbar.prCreated')}
+                  </a>
+                  <button
+                    type="button"
+                    className="hp-btn"
+                    style={{ fontSize: 11, padding: '1px 6px' }}
+                    onClick={() => setLastCreatedPrUrl(null)}
+                  >
+                    ✕
+                  </button>
+                </div>
+              ) : null}
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 12 }}>
-            {softSuccessNotice && (
-              <div style={{ padding: '8px 12px', background: 'rgba(105, 240, 174, 0.1)', borderLeft: '3px solid #69f0ae', borderRadius: 4, fontSize: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span>{softSuccessNotice}</span>
-                <button type="button" className="hp-btn hp-btn-ghost hp-btn-xs" onClick={() => setSoftSuccessNotice(null)}>✕</button>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 12 }}>
+                {softSuccessNotice && (
+                  <div
+                    style={{
+                      padding: '8px 12px',
+                      background: 'rgba(105, 240, 174, 0.1)',
+                      borderLeft: '3px solid #69f0ae',
+                      borderRadius: 4,
+                      fontSize: 12,
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <span>{softSuccessNotice}</span>
+                    <button
+                      type="button"
+                      className="hp-btn hp-btn-ghost hp-btn-xs"
+                      onClick={() => setSoftSuccessNotice(null)}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                )}
+                {proMode ? (
+                  <div style={{ display: 'flex', gap: 12 }}>
+                    <button
+                      type="button"
+                      className="hp-btn hp-btn-primary"
+                      onClick={() => setIntegrateWizardOpen(true)}
+                      disabled={busy}
+                      style={{ flex: 1 }}
+                    >
+                      <span className="codicon codicon-git-merge" style={{ marginRight: 8 }} />
+                      {t('toolbar.integrate')}
+                    </button>
+                    {gitOperation !== 'none' && (
+                      <>
+                        <button
+                          type="button"
+                          className="hp-btn hp-btn-primary"
+                          onClick={() =>
+                            gitOperation === 'merging' ? runMergeContinue() : runRebaseContinue()
+                          }
+                          disabled={busy || conflictFileCount > 0}
+                          style={nextActionButtonStyle(nextGitAction, 'continue_merge', {})}
+                        >
+                          Continue
+                        </button>
+                        <button
+                          type="button"
+                          className="hp-btn hp-btn-danger"
+                          onClick={() =>
+                            gitOperation === 'merging' ? runMergeAbort() : runRebaseAbort()
+                          }
+                          disabled={busy}
+                        >
+                          Abort
+                        </button>
+                      </>
+                    )}
+                    <button
+                      type="button"
+                      className="hp-btn"
+                      onClick={() => runStashPop()}
+                      disabled={busy}
+                      title="Pop last stash"
+                    >
+                      <span className="codicon codicon-archive" />
+                    </button>
+                  </div>
+                ) : null}
               </div>
-            )}
-            <div style={{ display: 'flex', gap: 12 }}>
-              <button 
-                type="button" 
-                className="hp-btn hp-btn-primary" 
-                onClick={() => setIntegrateWizardOpen(true)}
-                disabled={busy}
-                style={{ flex: 1 }}
-              >
-                <span className="codicon codicon-git-merge" style={{ marginRight: 8 }} />
-                {t('toolbar.integrate')}
-              </button>
-              {gitOperation !== 'none' && (
-                 <>
-                   <button
-                     type="button"
-                     className="hp-btn hp-btn-primary"
-                     onClick={() => gitOperation === 'merging' ? runMergeContinue() : runRebaseContinue()}
-                     disabled={busy || conflictFileCount > 0}
-                     style={nextActionButtonStyle(nextGitAction, 'continue_merge', {})}
-                   >
-                     Continue
-                   </button>
-                   <button 
-                     type="button" 
-                     className="hp-btn hp-btn-danger" 
-                     onClick={() => gitOperation === 'merging' ? runMergeAbort() : runRebaseAbort()}
-                     disabled={busy}
-                   >
-                     Abort
-                   </button>
-                 </>
-              )}
-              <button 
-                type="button" 
-                className="hp-btn" 
-                onClick={() => runStashPop()}
-                disabled={busy}
-                title="Pop last stash"
-              >
-                <span className="codicon codicon-archive" />
-              </button>
-            </div>
-          </div>
 
-          {!ciHostRail ? (
-            <GitVcsRepoPipelines
-              repoPath={repoPath.trim()}
-              remoteName={activeFetchRemoteName}
-              provider={activeFetchPipelineProvider}
-              ambiguousHost={ambiguousPipelineHost}
-              onAmbiguousTokenChange={setAmbiguousCiToken}
-            />
-          ) : null}
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(260px, 34%) 1fr', gap: 16, minHeight: 360 }}>
-            <div
-              style={{
-                border: '1px solid var(--border)',
-                borderRadius: 12,
-                padding: 12,
-                background: 'var(--bg-panel)',
-                overflow: 'auto',
-              }}
-            >
-              <GitVcsFileList
-                staged={staged}
-                unstaged={unstaged}
-                selected={selected}
-                busy={busy}
-                onSelect={(path, st) => setSelected({ path, staged: st })}
-                onStage={(paths) => void runStage(paths)}
-                onStageEntireTree={() => void runStageEntireTree()}
-                onUnstage={(paths) => void runUnstage(paths)}
-              />
-            </div>
-            <GitVcsDiffPanel
-                fileLabel={selected ? `${selected.path}${selected.staged ? ' (staged)' : ''}` : null}
-                diff={diffText}
-                binary={diffBinary}
-              />
-          </div>
-
-          <GitVcsCommitBar
-            message={commitMessage}
-            onMessageChange={setCommitMessage}
-            onCommit={(live) => void runCommit(live)}
-            busy={busy}
-            disabled={staged.length === 0 && unstaged.length === 0}
-            emphasizeCommit={
-              nextGitAction === 'commit' ? 'commit' : nextGitAction === 'commit_message' ? 'commit_message' : null
-            }
-            showAiSuggest={!!betaFlags['enable_ai_commit_suggestions']}
-          />
-          </div>
-          {ciHostRail ? (
-            <aside
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 16,
-                position: 'sticky',
-                top: 12,
-                alignSelf: 'start',
-                minWidth: 0,
-              }}
-            >
-              {trackedPrRenderSlots.map(({ provider, remote, reference, url }) => (
-                <GitVcsCiChecks
-                  key={provider}
-                  provider={provider}
+              {proMode && !ciHostRail ? (
+                <GitVcsRepoPipelines
                   repoPath={repoPath.trim()}
-                  remote={remote}
-                  reference={reference}
-                  prUrl={url}
-                  onResolveConflicts={(base) => void handleResolveRemoteConflicts(base, remote)}
-                  onClose={() => removeTrackingSlot(provider)}
+                  remoteName={activeFetchRemoteName}
+                  provider={activeFetchPipelineProvider}
+                  ambiguousHost={ambiguousPipelineHost}
+                  onAmbiguousTokenChange={setAmbiguousCiToken}
                 />
-              ))}
-              <GitVcsRepoPipelines
-                repoPath={repoPath.trim()}
-                remoteName={activeFetchRemoteName}
-                provider={activeFetchPipelineProvider}
-                ambiguousHost={ambiguousPipelineHost}
-                onAmbiguousTokenChange={setAmbiguousCiToken}
+              ) : null}
+
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'minmax(260px, 34%) 1fr',
+                  gap: 16,
+                  minHeight: 360,
+                }}
+              >
+                <div
+                  style={{
+                    border: '1px solid var(--border)',
+                    borderRadius: 12,
+                    padding: 12,
+                    background: 'var(--bg-panel)',
+                    overflow: 'auto',
+                  }}
+                >
+                  <GitVcsFileList
+                    staged={staged}
+                    unstaged={unstaged}
+                    selected={selected}
+                    busy={busy}
+                    onSelect={(path, st) => setSelected({ path, staged: st })}
+                    onStage={(paths) => void runStage(paths)}
+                    onStageEntireTree={() => void runStageEntireTree()}
+                    onUnstage={(paths) => void runUnstage(paths)}
+                  />
+                </div>
+                <GitVcsDiffPanel
+                  fileLabel={
+                    selected ? `${selected.path}${selected.staged ? ' (staged)' : ''}` : null
+                  }
+                  diff={diffText}
+                  binary={diffBinary}
+                />
+              </div>
+
+              <GitVcsCommitBar
+                message={commitMessage}
+                onMessageChange={setCommitMessage}
+                onCommit={(live) => void runCommit(live)}
+                busy={busy}
+                disabled={staged.length === 0 && unstaged.length === 0}
+                emphasizeCommit={
+                  nextGitAction === 'commit'
+                    ? 'commit'
+                    : nextGitAction === 'commit_message'
+                      ? 'commit_message'
+                      : null
+                }
+                showAiSuggest={!!betaFlags['enable_ai_commit_suggestions']}
               />
-            </aside>
-          ) : null}
-        </div>
+            </div>
+            {proMode && ciHostRail ? (
+              <aside
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 16,
+                  position: 'sticky',
+                  top: 12,
+                  alignSelf: 'start',
+                  minWidth: 0,
+                }}
+              >
+                {trackedPrRenderSlots.map(({ provider, remote, reference, url }) => (
+                  <GitVcsCiChecks
+                    key={provider}
+                    provider={provider}
+                    repoPath={repoPath.trim()}
+                    remote={remote}
+                    reference={reference}
+                    prUrl={url}
+                    onResolveConflicts={(base) => void handleResolveRemoteConflicts(base, remote)}
+                    onClose={() => removeTrackingSlot(provider)}
+                  />
+                ))}
+                <GitVcsRepoPipelines
+                  repoPath={repoPath.trim()}
+                  remoteName={activeFetchRemoteName}
+                  provider={activeFetchPipelineProvider}
+                  ambiguousHost={ambiguousPipelineHost}
+                  onAmbiguousTokenChange={setAmbiguousCiToken}
+                />
+              </aside>
+            ) : null}
+          </div>
         </div>
       )}
 
@@ -1577,13 +1808,18 @@ export function GitVcsPage(): ReactElement {
           setBusy(true)
           setGitOperation(method === 'merge' ? 'merging' : 'rebasing')
           try {
-            const res = method === 'merge' 
-              ? await window.dh.gitVcsMerge({ repoPath: repoPath.trim(), branch: targetRef, ffOnly: false })
-              : await window.dh.gitVcsRebase({ repoPath: repoPath.trim(), onto: targetRef })
-            
+            const res =
+              method === 'merge'
+                ? await window.dh.gitVcsMerge({
+                    repoPath: repoPath.trim(),
+                    branch: targetRef,
+                    ffOnly: false,
+                  })
+                : await window.dh.gitVcsRebase({ repoPath: repoPath.trim(), onto: targetRef })
+
             if (!res.ok) {
-              const isConflict = res.error?.includes('CONFLICT') || 
-                                res.error?.includes('unmerged files')
+              const isConflict =
+                res.error?.includes('CONFLICT') || res.error?.includes('unmerged files')
               if (isConflict) {
                 setIntegrateWizardOpen(false)
                 setConflictWizardOpen(true)
@@ -1598,7 +1834,9 @@ export function GitVcsPage(): ReactElement {
                   : activeFetchProvider === 'github'
                     ? ' Push to GitHub, then merge the PR on the web when you want it closed on the server.'
                     : ''
-              setSoftSuccessNotice(`Successfully ${method}d ${targetRef} into your branch.${hostHint}`)
+              setSoftSuccessNotice(
+                `Successfully ${method}d ${targetRef} into your branch.${hostHint}`
+              )
             }
           } finally {
             setBusy(false)

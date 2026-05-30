@@ -107,10 +107,22 @@ export const HostExecRequestSchema = z.object({
     'settings_read_hosts',
     /** Allowlisted `std::env` keys from the app process (not a login shell); bounded text. */
     'settings_process_env',
+    /** Write `/etc/hosts` via elevated copy (pkexec); `content` required. */
+    'settings_write_hosts',
+    /** Read `~/.profile` export lines for Settings profile env editor. */
+    'settings_read_profile_env',
+    /** Set/remove one `export KEY=VALUE` line in `~/.profile`; `action`, `key`, `value` required for set. */
+    'settings_write_profile_env',
   ] as const),
   unit: z.string().max(128).optional(),
+  user: z.boolean().optional(),
   distro: z.enum(['ubuntu', 'fedora', 'arch']).optional(),
   stepIndex: z.number().int().min(0).max(8).optional(),
+  /** Full `/etc/hosts` body for `settings_write_hosts` (bounded server-side too). */
+  content: z.string().max(48_000).optional(),
+  action: z.enum(['set', 'remove']).optional(),
+  key: z.string().trim().min(1).max(256).optional(),
+  value: z.string().max(8192).optional(),
 })
 
 export const ComposeProfileSchema = z.enum([

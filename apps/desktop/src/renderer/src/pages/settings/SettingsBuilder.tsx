@@ -3,23 +3,48 @@ import { useEffect, useState } from 'react'
 import type { BuilderSettings } from '@linux-dev-home/shared'
 import { assertSettingsOk } from '../settingsContract'
 import { useTranslation } from 'react-i18next'
+import {
+  SettingsActions,
+  SettingsCard,
+  SettingsFeedback,
+  SettingsRow,
+  SettingsStack,
+} from './SettingsUi'
 
 const DEFAULTS: BuilderSettings = { cargoPath: '', nodePath: '', pythonPath: '', registryMirror: 'https://registry.npmjs.org' }
 
-function PathRow({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }): ReactElement {
+function PathRow({
+  label,
+  value,
+  onChange,
+  last,
+}: {
+  label: string
+  value: string
+  onChange: (v: string) => void
+  last?: boolean
+}): ReactElement {
   const { t } = useTranslation('settings')
   return (
-    <div>
-      <label style={{ display: 'block', fontWeight: 600, fontSize: 14, marginBottom: 8 }}>{label}</label>
-      <div style={{ display: 'flex', gap: 8 }}>
-        <input type="text" className="hp-input" style={{ flex: 1, fontSize: 13 }}
-          value={value} onChange={(e) => onChange(e.target.value)} placeholder={t('builder.autoDetect')} />
-        <button type="button" className="hp-btn" style={{ padding: '8px 12px' }}
-          onClick={() => { void window.dh.selectFolder().then((p) => { if (p) onChange(p) }) }}>
+    <SettingsRow label={label} last={last}>
+      <div style={{ display: 'flex', gap: 8, minWidth: 280, flex: '1 1 280px', justifyContent: 'flex-end' }}>
+        <input
+          type="text"
+          className="hp-input"
+          style={{ flex: 1, fontSize: 13, minWidth: 160 }}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={t('builder.autoDetect')}
+        />
+        <button
+          type="button"
+          className="hp-btn"
+          onClick={() => { void window.dh.selectFolder().then((p) => { if (p) onChange(p) }) }}
+        >
           <span className="codicon codicon-folder-open" aria-hidden />
         </button>
       </div>
-    </div>
+    </SettingsRow>
   )
 }
 
@@ -52,22 +77,30 @@ export function SettingsBuilder(): ReactElement {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      <PathRow label={t('builder.cargoPath')} value={settings.cargoPath} onChange={(v) => setSettings((p) => ({ ...p, cargoPath: v }))} />
-      <PathRow label={t('builder.nodePath')} value={settings.nodePath} onChange={(v) => setSettings((p) => ({ ...p, nodePath: v }))} />
-      <PathRow label={t('builder.pythonPath')} value={settings.pythonPath} onChange={(v) => setSettings((p) => ({ ...p, pythonPath: v }))} />
-      <div>
-        <label style={{ display: 'block', fontWeight: 600, fontSize: 14, marginBottom: 8 }}>{t('builder.registryMirror')}</label>
-        <input type="text" className="hp-input" style={{ width: '100%', fontSize: 13 }}
-          value={settings.registryMirror} onChange={(e) => setSettings((p) => ({ ...p, registryMirror: e.target.value }))}
-          placeholder="https://registry.npmjs.org" />
-      </div>
-      <div>
-        <button type="button" className="hp-btn hp-btn-primary" onClick={() => void save()} disabled={busy} style={{ fontSize: 13, padding: '8px 16px' }}>
+    <SettingsStack>
+      <SettingsCard title={t('shell.navBuilder')}>
+        <PathRow label={t('builder.cargoPath')} value={settings.cargoPath} onChange={(v) => setSettings((p) => ({ ...p, cargoPath: v }))} />
+        <PathRow label={t('builder.nodePath')} value={settings.nodePath} onChange={(v) => setSettings((p) => ({ ...p, nodePath: v }))} />
+        <PathRow label={t('builder.pythonPath')} value={settings.pythonPath} onChange={(v) => setSettings((p) => ({ ...p, pythonPath: v }))} />
+        <SettingsRow label={t('builder.registryMirror')} last>
+          <input
+            type="text"
+            className="hp-input"
+            style={{ fontSize: 13, minWidth: 240, flex: 1 }}
+            value={settings.registryMirror}
+            onChange={(e) => setSettings((p) => ({ ...p, registryMirror: e.target.value }))}
+            placeholder="https://registry.npmjs.org"
+          />
+        </SettingsRow>
+      </SettingsCard>
+      <SettingsActions>
+        <button type="button" className="hp-btn hp-btn-primary" onClick={() => void save()} disabled={busy}>
           {busy ? t('builder.saving') : t('builder.save')}
         </button>
-        {msg ? <p style={{ margin: '8px 0 0', fontSize: 12, color: msg === t('builder.saved') ? 'var(--green)' : 'var(--red)' }}>{msg}</p> : null}
-      </div>
-    </div>
+      </SettingsActions>
+      {msg ? (
+        <SettingsFeedback tone={msg === t('builder.saved') ? 'success' : 'error'}>{msg}</SettingsFeedback>
+      ) : null}
+    </SettingsStack>
   )
 }
