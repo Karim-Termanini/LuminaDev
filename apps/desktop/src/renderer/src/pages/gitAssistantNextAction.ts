@@ -2,7 +2,7 @@ import type { GitVcsOperation } from './gitVcsTypes'
 
 /** Primary CTA for Git Assistant (beginner page). */
 export type GitAssistantNextAction =
-  | 'connect_github'
+  | 'connect_cloud'
   | 'open_project'
   | 'open_editor'
   | 'continue_merge'
@@ -13,7 +13,7 @@ export type GitAssistantNextAction =
   | null
 
 export function computeGitAssistantNextAction(input: {
-  githubConnected: boolean
+  cloudConnected: boolean
   repoPathTrimmed: string
   gitOperation: GitVcsOperation
   conflictFileCount: number
@@ -24,7 +24,7 @@ export function computeGitAssistantNextAction(input: {
   commitMessageTrimmed: string
 }): GitAssistantNextAction {
   const {
-    githubConnected,
+    cloudConnected,
     repoPathTrimmed,
     gitOperation,
     conflictFileCount,
@@ -54,7 +54,7 @@ export function computeGitAssistantNextAction(input: {
 
   // Push / connect only when local work is saved and there are unpushed commits.
   if (ahead != null && ahead > 0 && (behind == null || behind === 0)) {
-    if (!githubConnected) return 'connect_github'
+    if (!cloudConnected) return 'connect_cloud'
     return 'push'
   }
 

@@ -119,7 +119,7 @@ declare global {
       gitClone: (payload: {
         url: string
         targetDir: string
-      }) => Promise<{ ok: boolean; error?: string }>
+      }) => Promise<{ ok: boolean; error?: string; path?: string }>
       gitStatus: (payload: { repoPath: string }) => Promise<{
         ok: boolean
         info: {

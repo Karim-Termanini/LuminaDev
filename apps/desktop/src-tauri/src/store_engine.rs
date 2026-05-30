@@ -273,6 +273,39 @@ pub(crate) async fn handle_git_config_list() -> Value {
     }
 }
 
+/// Last path segment of a clone URL, without `.git` (e.g. `https://host/org/repo.git` → `repo`).
+pub(crate) fn clone_repo_dir_name_from_url(url: &str) -> String {
+    let trimmed = url.trim().trim_end_matches('/');
+    let last = trimmed.rsplit('/').next().unwrap_or("repository");
+    let name = last.trim_end_matches(".git").trim();
+    if name.is_empty() {
+        "repository".to_string()
+    } else {
+        name.to_string()
+    }
+}
+
+/// Pick `parent/repo_name`, or `repo_name-2`, … when a non-repo path already occupies the name.
+pub(crate) fn pick_clone_destination(parent_dir: &str, repo_name: &str) -> std::path::PathBuf {
+    use std::path::Path;
+    let parent = Path::new(parent_dir);
+    let base = parent.join(repo_name);
+    if !base.exists() || path_is_git_repo(&base) {
+        return base;
+    }
+    for n in 2..=99 {
+        let alt = parent.join(format!("{repo_name}-{n}"));
+        if !alt.exists() {
+            return alt;
+        }
+    }
+    parent.join(format!("{repo_name}-copy"))
+}
+
+fn path_is_git_repo(path: &std::path::Path) -> bool {
+    path.join(".git").is_dir()
+}
+
 pub(crate) async fn handle_git_clone(body: &Value) -> Value {
     let url = body.get("url").and_then(|v| v.as_str()).unwrap_or_default();
     let target_dir = body
@@ -280,18 +313,41 @@ pub(crate) async fn handle_git_clone(body: &Value) -> Value {
         .and_then(|v| v.as_str())
         .unwrap_or_default();
     if url.is_empty() || target_dir.is_empty() {
-        json!({ "ok": false, "error": "[GIT_CLONE_FAILED] Missing url or targetDir." })
-    } else {
-        match exec_output_limit("git", &["clone", url, target_dir], cmd_timeout_long()).await {
-            Ok(_) => json!({ "ok": true }),
-            Err(e) => {
-                let msg = if e.starts_with("[HOST_COMMAND_TIMEOUT]") {
-                    format!("[GIT_TIMEOUT] {}", e.trim())
-                } else {
-                    format!("[GIT_CLONE_FAILED] {}", e.trim())
-                };
-                json!({ "ok": false, "error": msg })
-            }
+        return json!({ "ok": false, "error": "[GIT_CLONE_FAILED] Missing url or targetDir." });
+    }
+
+    let repo_name = clone_repo_dir_name_from_url(url);
+    let dest = pick_clone_destination(target_dir, &repo_name);
+    let dest_str = dest.to_string_lossy().to_string();
+
+    if dest.exists() && path_is_git_repo(&dest) {
+        return json!({
+            "ok": false,
+            "error": "[GIT_CLONE_EXISTS] That folder is already a Git repository. Open it instead of cloning again.",
+            "path": dest_str,
+        });
+    }
+
+    match exec_output_limit(
+        "git",
+        &["clone", "--", url, dest_str.as_str()],
+        cmd_timeout_long(),
+    )
+    .await
+    {
+        Ok(_) => json!({ "ok": true, "path": dest_str }),
+        Err(e) => {
+            let msg = if e.starts_with("[HOST_COMMAND_TIMEOUT]") {
+                format!("[GIT_TIMEOUT] {}", e.trim())
+            } else if e.to_lowercase().contains("already exists") {
+                format!(
+                    "[GIT_CLONE_EXISTS] A folder named \"{}\" already exists under the parent you chose.",
+                    repo_name
+                )
+            } else {
+                format!("[GIT_CLONE_FAILED] {}", e.trim())
+            };
+            json!({ "ok": false, "error": msg, "path": dest_str })
         }
     }
 }
@@ -328,5 +384,26 @@ pub(crate) async fn handle_git_status(body: &Value) -> Value {
                 json!({ "ok": false, "error": format!("[GIT_STATUS_FAILED] {}", e.trim()) })
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod clone_tests {
+    use super::*;
+
+    #[test]
+    fn repo_name_from_https_url() {
+        assert_eq!(
+            clone_repo_dir_name_from_url("https://github.com/acme/widget.git"),
+            "widget"
+        );
+    }
+
+    #[test]
+    fn repo_name_from_ssh_url() {
+        assert_eq!(
+            clone_repo_dir_name_from_url("git@github.com:acme/widget.git"),
+            "widget"
+        );
     }
 }

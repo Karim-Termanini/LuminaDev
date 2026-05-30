@@ -282,15 +282,31 @@ Need more than save, send, and sync? Use VS Code, Cursor, your terminal, or GitH
 
 #### G2 — Validate
 
-- [ ] 5 users: open → first push in < 2 minutes average
+**Gates before external testers (not optional for G2):**
+
+- [ ] `ar-SA` / `de-DE` `assistant.*` strings translated (English leftovers confuse quality perception)
+- [ ] Clone fix committed (`parent/repoName` + open existing repo on `[GIT_CLONE_EXISTS]`)
+
+**G2 exit (5 real users):**
+
+- [ ] Open → first push in < 2 minutes average
 - [ ] Zero crashes on clone / pull / push in test pass
 - [ ] No support load on staging/rebase terminology
 
 #### G3 — Iterate
 
+**Hardening (race-safety — treat as required for G3, not optional):**
+
+- [ ] Cancel in-flight IPC on unmount / `repoPath` change (status, remotes, doctor scan) so late responses cannot overwrite state
+
+**Product polish:**
+
+- [ ] Remote-aware or generic Share copy (GitLab linked in Settings but UI says “GitHub” today — use `origin` host or neutral “Send online” / “Connect cloud”)
 - [ ] Diff preview toggle per file
 - [ ] Recents list polish
-- [ ] Post-push "Open in GitHub" one-liner
+- [ ] Post-push “Open on host” one-liner (GitHub/GitLab from remote URL)
+
+**Intentional ceiling (no backlog):** dirty-checkout **stash** stays terminal + modal; no in-app stash IDE (correct for beginner scope).
 
 ### Explicit non-goals (Git — permanent)
 
@@ -309,7 +325,7 @@ Need more than save, send, and sync? Use VS Code, Cursor, your terminal, or GitH
 - [x] Update [`ROUTE_STATUS.md`](./ROUTE_STATUS.md) when `/git` default UX changes
 - [x] Contract tests for beginner page state machine / next-action matrix / **progress rail**
 - [x] Pro-only IPC not called from renderer (documented in shared package)
-- [ ] Cancel network calls on unmount / remote change (optional hardening)
+- [ ] Cancel network calls on unmount / remote change — **G3 required** (race risk on large repos)
 
 ---
 

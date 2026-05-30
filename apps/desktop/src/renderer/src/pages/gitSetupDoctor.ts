@@ -2,7 +2,7 @@ import type { DoctorFinding } from '@linux-dev-home/shared'
 
 import type { GitSetupChecklistItemId } from './gitAssistantSetup'
 
-const FINDING_IDS_BY_SETUP: Record<Exclude<GitSetupChecklistItemId, 'github'>, string[]> = {
+const FINDING_IDS_BY_SETUP: Record<Exclude<GitSetupChecklistItemId, 'cloud'>, string[]> = {
   identity: ['no-name', 'no-email', 'bad-email'],
   credential: ['no-cred', 'plaintext-cred'],
   defaultBranch: ['no-branch'],
@@ -12,7 +12,7 @@ export function findingForSetupItem(
   itemId: GitSetupChecklistItemId,
   findings: DoctorFinding[],
 ): DoctorFinding | null {
-  if (itemId === 'github') return null
+  if (itemId === 'cloud') return null
   const ids = FINDING_IDS_BY_SETUP[itemId]
   return findings.find((f) => ids.includes(f.id) && f.severity !== 'ok') ?? null
 }

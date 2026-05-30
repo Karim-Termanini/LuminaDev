@@ -3,19 +3,19 @@ import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 
 import type { GitSetupChecklistItem, GitSetupChecklistItemId } from '../gitAssistantSetup'
-import { settingsAccountsHref } from '../settingsAccountsHref'
 import { GitAssistantSection } from './GitAssistantSection'
 import { GitSetupDoctorPanel } from './GitSetupDoctorPanel'
 
 const ITEM_KEYS: Record<GitSetupChecklistItemId, string> = {
   identity: 'assistant.setup.identity',
   credential: 'assistant.setup.credential',
-  github: 'assistant.setup.github',
+  cloud: 'assistant.setup.cloud',
   defaultBranch: 'assistant.setup.defaultBranch',
 }
 
 export type GitSetupChecklistProps = {
   items: GitSetupChecklistItem[]
+  connectAccountsHref: string
   busy: boolean
   onSetIdentity: () => void
   onSetCredentialHelper: () => void
@@ -26,6 +26,7 @@ export type GitSetupChecklistProps = {
 
 export function GitSetupChecklist({
   items,
+  connectAccountsHref,
   busy,
   onSetIdentity,
   onSetCredentialHelper,
@@ -58,6 +59,7 @@ export function GitSetupChecklist({
             {!item.ok ? (
               <FixButton
                 id={item.id}
+                connectAccountsHref={connectAccountsHref}
                 busy={busy}
                 onSetIdentity={onSetIdentity}
                 onSetCredentialHelper={onSetCredentialHelper}
@@ -74,6 +76,7 @@ export function GitSetupChecklist({
 
 function FixButton(props: {
   id: GitSetupChecklistItemId
+  connectAccountsHref: string
   busy: boolean
   onSetIdentity: () => void
   onSetCredentialHelper: () => void
@@ -81,10 +84,10 @@ function FixButton(props: {
 }): ReactElement {
   const { t } = useTranslation('git')
 
-  if (props.id === 'github') {
+  if (props.id === 'cloud') {
     return (
       <Link
-        to={settingsAccountsHref('github')}
+        to={props.connectAccountsHref}
         className="hp-btn hp-btn-primary"
         style={{ fontSize: 12, textDecoration: 'none' }}
       >

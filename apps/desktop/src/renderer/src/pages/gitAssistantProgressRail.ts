@@ -10,7 +10,7 @@ export function computeGitProgressRail(input: {
   setupComplete: boolean
   projectComplete: boolean
   saveComplete: boolean
-  githubConnected: boolean
+  cloudConnected: boolean
   ahead: number | null
 }): GitProgressRailState {
   const setup: GitProgressStepStatus = input.setupComplete ? 'complete' : 'incomplete'
@@ -18,7 +18,7 @@ export function computeGitProgressRail(input: {
   const save: GitProgressStepStatus = input.saveComplete ? 'complete' : 'incomplete'
 
   const unpushed = input.ahead != null && input.ahead > 0
-  const shareComplete = input.githubConnected && !unpushed
+  const shareComplete = input.cloudConnected && !unpushed
   const share: GitProgressStepStatus = shareComplete ? 'complete' : 'incomplete'
 
   const order: GitProgressStep[] = ['setup', 'project', 'save', 'share']
