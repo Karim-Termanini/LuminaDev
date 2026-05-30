@@ -84,6 +84,8 @@ export function GitAssistantPage(): ReactElement {
   const [postPush, setPostPush] = useState<{ host: string; branchUrl: string } | null>(null)
   const [remoteHost, setRemoteHost] = useState<GitProviderFamily | null>(null)
   const statusTargetRef = useRef('')
+  const knownFilePathsRef = useRef<Set<string>>(new Set())
+  const [unborn, setUnborn] = useState(false)
 
   const cloudConnected = useMemo(() => hasCloudGitConnected(cloudAccounts), [cloudAccounts])
 
@@ -193,6 +195,8 @@ export function GitAssistantPage(): ReactElement {
       setIncluded(new Set())
       setBranches([])
       setRemoteHost(null)
+      setUnborn(false)
+      knownFilePathsRef.current = new Set()
       return
     }
     if (options?.fetchRemote) {
@@ -208,6 +212,7 @@ export function GitAssistantPage(): ReactElement {
     assertGitVcsOk(br)
     setBranches(Array.isArray(br.branches) ? (br.branches as BranchEntry[]) : [])
     setBranch(st.branch ?? '')
+    setUnborn(Boolean((st as { unborn?: unknown }).unborn))
     setAhead(st.ahead ?? null)
     setBehind(st.behind ?? null)
     const opRaw = (st as { gitOperation?: unknown }).gitOperation
@@ -221,10 +226,25 @@ export function GitAssistantPage(): ReactElement {
     setStaged(stagedArr)
     setUnstaged(unstagedArr)
     const paths = [
-      ...unstagedArr.filter((f) => f.status !== 'C').map((f) => f.path),
-      ...stagedArr.filter((f) => f.status !== 'C').map((f) => f.path),
+      ...new Set([
+        ...unstagedArr.filter((f) => f.status !== 'C').map((f) => f.path),
+        ...stagedArr.filter((f) => f.status !== 'C').map((f) => f.path),
+      ]),
     ]
-    setIncluded(new Set(paths))
+    setIncluded((prev) => {
+      const next = new Set<string>()
+      for (const p of paths) {
+        if (prev.has(p)) next.add(p)
+        else if (!knownFilePathsRef.current.has(p)) {
+          next.add(p)
+          knownFilePathsRef.current.add(p)
+        }
+      }
+      for (const p of [...knownFilePathsRef.current]) {
+        if (!paths.includes(p)) knownFilePathsRef.current.delete(p)
+      }
+      return next
+    })
     try {
       const rem = await window.dh.gitVcsRemotes({ repoPath: path })
       if (statusTargetRef.current !== path) return
@@ -250,8 +270,11 @@ export function GitAssistantPage(): ReactElement {
       setIncluded(new Set())
       setBranches([])
       setRemoteHost(null)
+      setUnborn(false)
+      knownFilePathsRef.current = new Set()
       return
     }
+    knownFilePathsRef.current = new Set()
     let alive = true
     setBusy(true)
     setOpErrorRaw(null)
@@ -293,7 +316,7 @@ export function GitAssistantPage(): ReactElement {
   }, [repoPath, refreshStatus, conflictFileCount, gitOperation])
 
   const setupComplete = isGitSetupComplete(setupItems)
-  const projectComplete = !!repoPath.trim() && !!branch
+  const projectComplete = !!repoPath.trim() && (!!branch || unborn)
   const hasLocalChanges = staged.length > 0 || unstaged.length > 0
   const saveComplete = !!repoPath.trim() && !hasLocalChanges
   const rail = computeGitProgressRail({
@@ -708,9 +731,14 @@ export function GitAssistantPage(): ReactElement {
 
           {repoPath.trim() ? (
             <>
+              {unborn ? (
+                <p className="hp-muted git-assistant-unborn-hint" role="status">
+                  {t('assistant.project.unborn')}
+                </p>
+              ) : null}
               <GitBranchBar
                 branches={branches}
-                currentBranch={branch}
+                currentBranch={branch || t('assistant.branch.unborn')}
                 busy={busy}
                 onCheckout={(name) => void runCheckout(name, false)}
                 onCreateBranch={(name) => void runCheckout(name, true)}

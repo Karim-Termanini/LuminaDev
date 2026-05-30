@@ -293,6 +293,8 @@ Need more than save, send, and sync? Use VS Code, Cursor, your terminal, or GitH
 - [ ] Zero crashes on clone / pull / push in test pass
 - [ ] No support load on staging/rebase terminology
 
+**G2 engineering fixes (2026-05-31):** unborn `git init` repos no longer false “not a repository”; `[GIT_VCS_NO_REMOTE]` on push without origin; changes split **Ready** vs **Still changing**; file checkboxes survive refresh; push/pull busy spinner; **Save snapshot** label aligned.
+
 #### G3 — Iterate
 
 **Hardening (race-safety — treat as required for G3, not optional):**

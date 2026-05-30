@@ -43,6 +43,10 @@ pub fn git_network_classify_error(op: &GitNetworkOp<'_>, stderr: &str, https: bo
     if https && (e.contains("Authentication") || e.contains("auth") || e.contains("403")) {
         return format!("[GIT_VCS_AUTH_FAILED] {}", e);
     }
+    let lower = e.to_lowercase();
+    if lower.contains("no such remote") {
+        return format!("[GIT_VCS_NO_REMOTE] {}", e);
+    }
     format!("[GIT_VCS_NETWORK] {}", e)
 }
 
@@ -64,6 +68,12 @@ pub async fn git_network_with_auth(
     )
     .await
     .unwrap_or_default();
+    if remote_url.trim().is_empty() {
+        return Err(format!(
+            "[GIT_VCS_NO_REMOTE] No remote named '{}' is configured. Add one first, for example: git remote add {} <url>",
+            remote_for_url, remote_for_url
+        ));
+    }
 
     let cmd_args: Vec<String> = match op {
         GitNetworkOp::Push { remote, branch, force_with_lease } => {
@@ -185,5 +195,7 @@ mod tests {
         let fetch_op = GitNetworkOp::Fetch { remote: "origin" };
         let net = git_network_classify_error(&fetch_op, "protected branch nonsense", true);
         assert!(net.starts_with("[GIT_VCS_NETWORK]"));
+        let no_remote = git_network_classify_error(&op, "fatal: No such remote 'origin'", false);
+        assert!(no_remote.starts_with("[GIT_VCS_NO_REMOTE]"));
     }
 }
