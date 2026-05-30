@@ -31,7 +31,10 @@ import { branchWebUrl, hostRepoWebLink } from '../gitAssistantRemoteUrl'
 import { computeGitAssistantNextAction } from '../gitAssistantNextAction'
 import {
   buildIncludedFromPaths,
+  loadBranchExclusionMap,
+  saveBranchExclusionMap,
   setPathIncluded,
+  setPathsIncluded,
   type BranchExclusionMap,
 } from '../gitAssistantFileInclusion'
 import { isDevAppSourceRepo } from '../gitAssistantDevRepo'
@@ -91,6 +94,7 @@ export function GitAssistantPage(): ReactElement {
   const [postPush, setPostPush] = useState<{ host: string; branchUrl: string } | null>(null)
   const [remoteHost, setRemoteHost] = useState<GitProviderFamily | null>(null)
   const statusTargetRef = useRef('')
+  const branchKeyRef = useRef('')
   const excludedByBranchRef = useRef<BranchExclusionMap>(new Map())
   const [unborn, setUnborn] = useState(false)
 
@@ -158,7 +162,7 @@ export function GitAssistantPage(): ReactElement {
 
   const persistRepoChoice = useCallback(
     async (next: string): Promise<void> => {
-      excludedByBranchRef.current = new Map()
+      excludedByBranchRef.current = loadBranchExclusionMap(next)
       setRepoPath(next)
       setOpErrorRaw(null)
       if (!next.trim()) return
@@ -194,6 +198,7 @@ export function GitAssistantPage(): ReactElement {
     statusTargetRef.current = path
     if (!path) {
       setBranch('')
+      branchKeyRef.current = ''
       setAhead(null)
       setBehind(null)
       setStaged([])
@@ -219,6 +224,8 @@ export function GitAssistantPage(): ReactElement {
     assertGitVcsOk(st)
     assertGitVcsOk(br)
     setBranches(Array.isArray(br.branches) ? (br.branches as BranchEntry[]) : [])
+    const branchKey = (st.branch ?? '').trim()
+    branchKeyRef.current = branchKey
     setBranch(st.branch ?? '')
     setUnborn(Boolean((st as { unborn?: unknown }).unborn))
     setAhead(st.ahead ?? null)
@@ -239,7 +246,7 @@ export function GitAssistantPage(): ReactElement {
         ...stagedArr.filter((f) => f.status !== 'C').map((f) => f.path),
       ]),
     ]
-    const branchKey = (st.branch ?? '').trim()
+    excludedByBranchRef.current = loadBranchExclusionMap(path)
     setIncluded(buildIncludedFromPaths(paths, branchKey, excludedByBranchRef.current))
     try {
       const rem = await window.dh.gitVcsRemotes({ repoPath: path })
@@ -257,6 +264,7 @@ export function GitAssistantPage(): ReactElement {
     statusTargetRef.current = path
     if (!path) {
       setBranch('')
+      branchKeyRef.current = ''
       setAhead(null)
       setBehind(null)
       setStaged([])
@@ -270,6 +278,7 @@ export function GitAssistantPage(): ReactElement {
       excludedByBranchRef.current = new Map()
       return
     }
+    excludedByBranchRef.current = loadBranchExclusionMap(path)
     let alive = true
     setBusy(true)
     setOpErrorRaw(null)
@@ -313,6 +322,7 @@ export function GitAssistantPage(): ReactElement {
   const setupComplete = isGitSetupComplete(setupItems)
   const projectComplete = !!repoPath.trim() && (!!branch || unborn)
   const hasLocalChanges = staged.length > 0 || unstaged.length > 0
+  const saveDisabled = !repoPath.trim() || (hasLocalChanges && included.size === 0)
   const saveComplete = !!repoPath.trim() && !hasLocalChanges
   const rail = computeGitProgressRail({
     setupComplete,
@@ -465,18 +475,17 @@ export function GitAssistantPage(): ReactElement {
       setOpErrorRaw('[GIT_VCS_EMPTY_MESSAGE] Commit message cannot be empty.')
       return
     }
+    const paths = [...included]
+    if (paths.length === 0) {
+      setOpErrorRaw('[GIT_VCS_NO_STAGED]')
+      return
+    }
     setBusy(true)
     setOpErrorRaw(null)
     try {
       const path = repoPath.trim()
-      const paths = [...included]
-      if (paths.length > 0) {
-        const rStage = await window.dh.gitVcsStage({ repoPath: path, filePaths: paths })
-        assertGitVcsOk(rStage)
-      } else {
-        const rStage = await window.dh.gitVcsStage({ repoPath: path, filePaths: [], stageAll: true })
-        assertGitVcsOk(rStage)
-      }
+      const rStage = await window.dh.gitVcsStage({ repoPath: path, filePaths: paths })
+      assertGitVcsOk(rStage)
       const r = await window.dh.gitVcsCommit({ repoPath: path, message })
       assertGitVcsOk(r)
       setCommitMessage('')
@@ -797,7 +806,7 @@ export function GitAssistantPage(): ReactElement {
                     message={commitMessage}
                     onMessageChange={setCommitMessage}
                     busy={busy}
-                    disabled={!repoPath.trim()}
+                    disabled={saveDisabled}
                     next={next}
                     showPull={showPull}
                     showPush={showPush}
@@ -856,27 +865,34 @@ export function GitAssistantPage(): ReactElement {
                     included={included}
                     busy={busy}
                     onToggle={(path, on) => {
-                      setPathIncluded(excludedByBranchRef.current, branch, path, on)
+                      const branchKey = branchKeyRef.current
+                      setPathIncluded(excludedByBranchRef.current, branchKey, path, on)
+                      saveBranchExclusionMap(repoPath, excludedByBranchRef.current)
                       setIncluded(
                         buildIncludedFromPaths(
                           [
                             ...unstaged.filter((f) => f.status !== 'C').map((f) => f.path),
                             ...staged.filter((f) => f.status !== 'C').map((f) => f.path),
                           ],
-                          branch,
+                          branchKey,
                           excludedByBranchRef.current,
                         ),
                       )
                     }}
                     onToggleAll={(paths, on) => {
-                      setIncluded((prev) => {
-                        const nextSet = new Set(prev)
-                        for (const p of paths) {
-                          if (on) nextSet.add(p)
-                          else nextSet.delete(p)
-                        }
-                        return nextSet
-                      })
+                      const branchKey = branchKeyRef.current
+                      setPathsIncluded(excludedByBranchRef.current, branchKey, paths, on)
+                      saveBranchExclusionMap(repoPath, excludedByBranchRef.current)
+                      setIncluded(
+                        buildIncludedFromPaths(
+                          [
+                            ...unstaged.filter((f) => f.status !== 'C').map((f) => f.path),
+                            ...staged.filter((f) => f.status !== 'C').map((f) => f.path),
+                          ],
+                          branchKey,
+                          excludedByBranchRef.current,
+                        ),
+                      )
                     }}
                   />
                 </div>

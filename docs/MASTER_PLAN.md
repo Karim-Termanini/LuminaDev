@@ -9,7 +9,7 @@
 
 This document consolidates **all active planning** into one place: forward backlog, stabilization track, Git VCS roadmap, release criteria, architecture standards, and status of historical implementation plans. **`phasesPlan.md` is not duplicated here line-for-line** — it remains the authoritative phase-by-phase record; this file synthesizes it with every other plan.
 
-**Active sprint (2026-05-30):** Git Assistant — G1 + G3 polish shipped on `/git` per [`gitRefactor.md`](../gitRefactor.md). Next: **G2 validate** (5-user dogfood). **One Git UX only** — no advanced page, no pro toggle. Merge/rebase/PR/CI/stash → editor, terminal, or cloud host in the browser.
+**Active sprint (2026-05-31):** Git Assistant **G1–G3 complete** on `/git` (#118–#124). **Next:** Tier 3 release hardening — AppImage on clean VM, cross-distro smoke, Tauri Stage 5 sign-off. **One Git UX only** — no advanced page, no pro toggle.
 
 ---
 
@@ -45,7 +45,7 @@ This document consolidates **all active planning** into one place: forward backl
 - Settings: hosts editor + `~/.profile` env editor live on **System** tab; GitHub/GitLab auth on **Connected accounts** (`settings_*` host exec + cloud auth IPC)
 - Runtimes: install matrix hardened (distro ID_LIKE, verify gate, empty-package errors)
 - Profiles ↔ dashboard: `active_profile` resolver + cross-page sync (2026-05-30)
-- Git VCS: **Git Assistant** on `/git` (G1 shipped); legacy tabbed hub removed (see §6)
+- Git VCS: **Git Assistant** on `/git` (G1–G3 shipped); legacy tabbed hub removed (see §6)
 - Cloud Git: no API-side merge from Lumina; no notification inbox; Cloud tab folds into Setup in G1
 
 ---
@@ -73,7 +73,7 @@ Full checklists, bug tables, and module standards: **[`phasesPlan.md`](../phases
 ✅  Phase 16 — System Readiness / Pre-requisites wizard
 ✅  Phase 17 — lib.rs monolith refactor (37 Rust modules, ~678-line dispatcher)
 ✅  SPRINT   — Tests + audit + cross-distro + v0.2.0-alpha tag
-📋  G1–G3    — Git Assistant (`gitRefactor.md`) — active; see §6, §11
+✅  G1–G3    — Git Assistant (`gitRefactor.md`) — shipped 2026-05-31; see §6
 ```
 
 ### Explicitly out of scope
@@ -289,9 +289,9 @@ Need more than save, send, and sync? Use VS Code, Cursor, your terminal, or GitH
 
 **G2 exit (5 real users):**
 
-- [ ] Open → first push in < 2 minutes average
-- [ ] Zero crashes on clone / pull / push in test pass
-- [ ] No support load on staging/rebase terminology
+- [x] Open → first push in < 2 minutes average
+- [x] Zero crashes on clone / pull / push in test pass
+- [x] No support load on staging/rebase terminology
 
 **G2 engineering fixes (2026-05-31):** unborn `git init` repos no longer false “not a repository”; `[GIT_VCS_NO_REMOTE]` on push without origin; changes split **Ready** vs **Still changing**; file checkboxes survive refresh; push/pull busy spinner; **Save snapshot** label aligned.
 
@@ -375,7 +375,7 @@ From [`AUDIT.md`](./AUDIT.md) §1 (condensed):
 | P0 | AppImage release pipeline E2E | ❓ Unverified |
 | P2 | Settings hosts/env editing + Connected accounts auth | ✅ Done |
 | P2 | Runtimes install matrix hardening | ✅ Done (2026-05-30) |
-| P2 | Git VCS — Git Assistant (G1–G3) | ✅ G1 shipped; G2 validate / G3 iterate — see §6 |
+| P2 | Git VCS — Git Assistant (G1–G3) | ✅ Shipped + G2 validated — see §6 |
 | — | Resources settings tab | Removed (no Rust enforcement) |
 
 ---
@@ -415,7 +415,7 @@ Finish **one** before opening the next.
 | Settings hosts + profile env editing | ✅ | System tab: `/etc/hosts` + `~/.profile` via `hostExec` |
 | Runtimes install matrix | ✅ | Distro ID_LIKE, verify gate (2026-05-30) |
 | Profiles ↔ dashboard alignment | ✅ | `active_profile` + cross-page sync (2026-05-30) |
-| **Git VCS — Git Assistant G1** | ✅ **Shipped** | G2/G3: [`gitRefactor.md`](../gitRefactor.md) §12 |
+| **Git VCS — Git Assistant G1–G3** | ✅ **Shipped** | G2 validated; G3 polish on `main` (#118–#124) |
 
 ### Tier 2 — Opportunistic cleanup
 
