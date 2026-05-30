@@ -39,7 +39,7 @@ This document consolidates **all active planning** into one place: forward backl
 
 **Partial surfaces** (see [`ROUTE_STATUS.md`](./ROUTE_STATUS.md)):
 
-- Settings: hosts editor / profile env files not implemented
+- Settings: hosts editor + `~/.profile` env editor live on **System** tab (`settings_*` host exec)
 - Runtimes: install matrix hardening ongoing
 - Profiles ↔ dashboard unification evolving
 - Git VCS: Smart-Flow phases 3–5 partially shipped (see §6)
@@ -273,7 +273,7 @@ From [`AUDIT.md`](./AUDIT.md) §1 (condensed):
 | Priority | Item | Status |
 | --- | --- | --- |
 | P0 | AppImage release pipeline E2E | ❓ Unverified |
-| P2 | Settings hosts/env editing | 📋 Planned |
+| P2 | Settings hosts/env editing | ✅ Done |
 | P2 | Runtimes install matrix hardening | 📋 Planned |
 | P2 | Git VCS polish / simple mode | 📋 Planned |
 | — | Resources settings tab | Removed (no Rust enforcement) |
@@ -341,6 +341,7 @@ From [`phasesPlan.md`](../phasesPlan.md) Immediate Sprint — **cosmetic work bl
 4. Implement contract-first: `packages/shared` → Rust handlers → renderer.
 5. Run **`pnpm smoke`** before claiming done.
 6. Update **`ROUTE_STATUS.md`** / **`STATUS.md`** if user-visible maturity changes.
+7. **Verify & Instruct:** Always provide clear, step-by-step instructions to the user on how to manually verify the changes (e.g., what to click, try, or test) at the end of the task.
 
 ---
 

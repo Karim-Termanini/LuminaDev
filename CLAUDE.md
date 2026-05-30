@@ -77,7 +77,7 @@ All IPC responses use `{ ok: boolean; error?: string }` shape. Error strings are
 
 **Removed from product (do not reintroduce without explicit decision):** Settings Extension tab, dashboard widgets, `layoutGet`/`layoutSet` IPC, `widgetRegistry`.
 
-**Settings** (`/settings`): 14 tabs via `SettingsShell.tsx`; `hostExec` for hosts/env diagnostics; no Extension tab.
+**Settings** (`/settings`): 14 tabs via `SettingsShell.tsx`; **System** tab edits `/etc/hosts` (pkexec) and `~/.profile` exports via `hostExec`; no Extension tab.
 
 ### Shared package (`packages/shared/src/`)
 
@@ -92,3 +92,7 @@ All IPC responses use `{ ok: boolean; error?: string }` shape. Error strings are
 - No direct commits to `main`; all changes via PR
 - If a change affects contracts or behavior, tests go in the same PR
 - No AI/tool names in branch names or commit messages
+
+## Agent Communication Rules
+
+- **Post-Task Instructions:** When the agent finishes their work or makes a change, they MUST provide the user with clear, step-by-step instructions on how to manually verify the change. Tell the user what to click, try, or test to ensure the implementation is correct.
