@@ -77,7 +77,7 @@ All IPC responses use `{ ok: boolean; error?: string }` shape. Error strings are
 
 **Removed from product (do not reintroduce without explicit decision):** Settings Extension tab, dashboard widgets, `layoutGet`/`layoutSet` IPC, `widgetRegistry`.
 
-**Settings** (`/settings`): 14 tabs via `SettingsShell.tsx`; **System** tab edits `/etc/hosts` (pkexec) and `~/.profile` exports via `hostExec`; no Extension tab.
+**Settings** (`/settings`): 14 tabs via `SettingsShell.tsx`; **System** tab edits `/etc/hosts` (pkexec) and `~/.profile` exports via `hostExec`; **Connected accounts** holds GitHub/GitLab auth; no Extension tab.
 
 ### Shared package (`packages/shared/src/`)
 

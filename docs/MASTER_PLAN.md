@@ -39,7 +39,7 @@ This document consolidates **all active planning** into one place: forward backl
 
 **Partial surfaces** (see [`ROUTE_STATUS.md`](./ROUTE_STATUS.md)):
 
-- Settings: hosts editor + `~/.profile` env editor live on **System** tab (`settings_*` host exec)
+- Settings: hosts editor + `~/.profile` env editor live on **System** tab; GitHub/GitLab auth on **Connected accounts** (`settings_*` host exec + cloud auth IPC)
 - Runtimes: install matrix hardening ongoing
 - Profiles ↔ dashboard unification evolving
 - Git VCS: Smart-Flow phases 3–5 partially shipped (see §6)
@@ -273,7 +273,7 @@ From [`AUDIT.md`](./AUDIT.md) §1 (condensed):
 | Priority | Item | Status |
 | --- | --- | --- |
 | P0 | AppImage release pipeline E2E | ❓ Unverified |
-| P2 | Settings hosts/env editing | ✅ Done |
+| P2 | Settings hosts/env editing + Connected accounts auth | ✅ Done |
 | P2 | Runtimes install matrix hardening | 📋 Planned |
 | P2 | Git VCS polish / simple mode | 📋 Planned |
 | — | Resources settings tab | Removed (no Rust enforcement) |

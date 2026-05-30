@@ -20,7 +20,7 @@ Linux developer workstation dashboard — click-first flows for Docker, Git, pro
 | [`/ssh`](docs/ROUTE_STATUS.md) | partial | Keygen, GitHub test, remote setup, bookmarks |
 | [`/system`](docs/ROUTE_STATUS.md) | partial | CPU/RAM/disk metrics, processes, security snapshot |
 | [`/maintenance`](docs/ROUTE_STATUS.md) | partial | Guardian health score, diagnostics bundle, scheduled tasks |
-| [`/settings`](docs/ROUTE_STATUS.md) | partial | 14 tabs (personalization, accounts, shortcuts, …) |
+| [`/settings`](docs/ROUTE_STATUS.md) | partial | 14 tabs — Dev Home layout, Connected accounts auth, System hosts/~/.profile editing |
 | [`/terminal`](docs/ROUTE_STATUS.md) | partial | Embedded shell (line-buffered, not full PTY) |
 
 Route-level detail: [`docs/ROUTE_STATUS.md`](docs/ROUTE_STATUS.md).

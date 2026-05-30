@@ -19,7 +19,7 @@ Status legend:
 | `/system` | partial | Metrics and monitor data are live; per-container stats on Docker page; some sections still bounded snapshots. |
 | `/docker` | live | Main Docker slice (list/actions/logs/images/volumes/networks/cleanup/remap) is functional with guardrails. |
 | `/ssh` | partial | Core SSH key/test/setup flows work; advanced transfer/remote UX still evolving. |
-| `/git` | live | Primary Git hub — tabbed layout (**Config** = identity/behavior/security/inspector + Git Doctor; **VCS** = status/stage/diff/commit/branches/fetch/pull/push/merge/rebase/stash/CI/conflict studio + Smart-Flow; **Cloud** = GitHub/GitLab auth + activity). Replaces `/git-config`, `/git-vcs`, and `/cloud-git`. **Cloud tab partial:** no API-side merge from Lumina, no notification inbox; activity panels otherwise live. |
+| `/git` | live | Primary Git hub — tabbed layout (**Config** = identity/behavior/security/inspector + Git Doctor; **VCS** = status/stage/diff/commit/branches/fetch/pull/push/merge/rebase/stash/CI/conflict studio + Smart-Flow; **Cloud** = PR/CI activity scoped by provider). Auth lives in **Settings → Connected accounts**. Replaces `/git-config`, `/git-vcs`, and `/cloud-git`. **Cloud tab partial:** no API-side merge from Lumina, no notification inbox; activity panels otherwise live. |
 | `/git-config` | redirect | → `/git?tab=config` |
 | `/git-vcs` | redirect | → `/git?tab=vcs` |
 | `/cloud-git` | redirect | → `/git?tab=cloud` |
@@ -28,7 +28,7 @@ Status legend:
 | `/terminal` | partial | Embedded terminal works; host/sandbox differences still affect behavior. |
 | `/runtimes` | partial | Status/version/deps/uninstall preview are live; install/update/remove backend is in active hardening. |
 | `/maintenance` | partial | Guardian + diagnostics + host probes. **Tasks**: user checklist on Overview + full editor on Schedule. **Git backups** on **Git Config → Backups**. No arbitrary host shell or full remediation. |
-| `/settings` | partial | Personalization, SSH overview, **System tab**: `/etc/hosts` read/edit (pkexec + diff-before-apply), process env diagnostics, `~/.profile` export editor (diff-before-apply), accounts, general, update, notifications, shortcuts, help, datetime, languages, app engine, builder, beta flags. **Extension tab removed** — not in scope. |
+| `/settings` | partial | Dev Home layout: personalization, SSH overview, **Connected accounts** (GitHub/GitLab auth), **System** tab (`/etc/hosts` read/edit via pkexec + diff-before-apply, process env diagnostics, `~/.profile` export editor), general, update, notifications, shortcuts, help, datetime, languages, app engine, builder, beta flags. **Extension tab removed** — not in scope. |
 
 ## Update Rule
 
