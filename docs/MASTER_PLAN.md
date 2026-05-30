@@ -40,8 +40,8 @@ This document consolidates **all active planning** into one place: forward backl
 **Partial surfaces** (see [`ROUTE_STATUS.md`](./ROUTE_STATUS.md)):
 
 - Settings: hosts editor + `~/.profile` env editor live on **System** tab; GitHub/GitLab auth on **Connected accounts** (`settings_*` host exec + cloud auth IPC)
-- Runtimes: install matrix hardening ongoing
-- Profiles ↔ dashboard unification evolving
+- Runtimes: install matrix hardened (distro ID_LIKE, verify gate, empty-package errors)
+- Profiles ↔ dashboard: `active_profile` resolver + cross-page sync (2026-05-30)
 - Git VCS: Smart-Flow phases 3–5 partially shipped (see §6)
 - Cloud Git: no API-side merge from Lumina; no notification inbox
 
@@ -274,7 +274,7 @@ From [`AUDIT.md`](./AUDIT.md) §1 (condensed):
 | --- | --- | --- |
 | P0 | AppImage release pipeline E2E | ❓ Unverified |
 | P2 | Settings hosts/env editing + Connected accounts auth | ✅ Done |
-| P2 | Runtimes install matrix hardening | 📋 Planned |
+| P2 | Runtimes install matrix hardening | ✅ Done (2026-05-30) |
 | P2 | Git VCS polish / simple mode | 📋 Planned |
 | — | Resources settings tab | Removed (no Rust enforcement) |
 

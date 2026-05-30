@@ -9,6 +9,7 @@ import { assertGitOk } from '../pages/gitContract'
 import { humanizeGitError } from '../pages/gitError'
 import { assertSshOk } from '../pages/sshContract'
 import { humanizeSshError } from '../pages/sshError'
+import { broadcastActiveProfileChange } from '../lib/activeProfileSync'
 
 export function WizardFlow({ onComplete }: { onComplete: () => void }): ReactElement {
   const [step, setStep] = useState(0)
@@ -106,12 +107,47 @@ export function WizardFlow({ onComplete }: { onComplete: () => void }): ReactEle
 
   const handleComplete = async () => {
     exitingRef.current = true
-    await window.dh.storeSet({
-      key: 'wizard_state',
-      data: { completed: true, showOnStartup: showAgainNextLaunch },
-    })
-    onComplete()
+    setBusy(true)
+    try {
+      if (pickedProfile) {
+        const r = await window.dh.profileSwitch({ to: pickedProfile })
+        if (r.ok) {
+          await window.dh.storeSet({ key: 'active_profile', data: pickedProfile })
+          broadcastActiveProfileChange(pickedProfile)
+        }
+      }
+      await window.dh.storeSet({
+        key: 'wizard_state',
+        data: { completed: true, showOnStartup: showAgainNextLaunch },
+      })
+      onComplete()
+    } finally {
+      setBusy(false)
+    }
   }
+
+  const goBack = (): void => {
+    if (step > 0) setStep(step - 1)
+  }
+
+  const renderNav = (
+    primary: React.ReactNode,
+    opts?: { showBack?: boolean; leading?: React.ReactNode }
+  ): ReactElement => (
+    <div style={{ ...actions, justifyContent: 'space-between' }}>
+      <div>
+        {opts?.showBack !== false && step > 0 ? (
+          <button type="button" style={btn} onClick={goBack}>
+            ← Back
+          </button>
+        ) : null}
+      </div>
+      <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+        {opts?.leading}
+        {primary}
+      </div>
+    </div>
+  )
 
   const renderStep = () => {
     switch (step) {
@@ -123,11 +159,12 @@ export function WizardFlow({ onComplete }: { onComplete: () => void }): ReactEle
               Let's set up your ultimate developer dashboard. This wizard will verify your
               environment and set up basic credentials.
             </p>
-            <div style={actions}>
+            {renderNav(
               <button style={btnPrimary} onClick={() => setStep(1)}>
                 Get Started →
-              </button>
-            </div>
+              </button>,
+              { showBack: false }
+            )}
           </>
         )
       case 1:
@@ -137,11 +174,11 @@ export function WizardFlow({ onComplete }: { onComplete: () => void }): ReactEle
             <p>
               You are running in <strong>Native (Host)</strong> mode.
             </p>
-            <div style={actions}>
+            {renderNav(
               <button style={btnPrimary} onClick={() => setStep(2)}>
                 Next
               </button>
-            </div>
+            )}
           </>
         )
       case 2:
@@ -175,11 +212,11 @@ export function WizardFlow({ onComplete }: { onComplete: () => void }): ReactEle
                 </div>
               </div>
             )}
-            <div style={actions}>
+            {renderNav(
               <button style={btnPrimary} onClick={() => setStep(3)}>
                 Next
               </button>
-            </div>
+            )}
           </>
         )
       case 3:
@@ -200,10 +237,7 @@ export function WizardFlow({ onComplete }: { onComplete: () => void }): ReactEle
                 onChange={(e) => setGitEmail(e.target.value)}
               />
             </div>
-            <div style={actions}>
-              <button style={btn} onClick={() => setStep(4)}>
-                Skip
-              </button>
+            {renderNav(
               <button
                 style={btnPrimary}
                 disabled={!gitName || !gitEmail || busy}
@@ -224,8 +258,15 @@ export function WizardFlow({ onComplete }: { onComplete: () => void }): ReactEle
                 }}
               >
                 Apply &amp; Next
-              </button>
-            </div>
+              </button>,
+              {
+                leading: (
+                  <button type="button" style={btn} onClick={() => setStep(4)}>
+                    Skip
+                  </button>
+                ),
+              }
+            )}
           </>
         )
       case 4:
@@ -248,13 +289,8 @@ export function WizardFlow({ onComplete }: { onComplete: () => void }): ReactEle
                 Click below to generate a new keypair in <code>~/.ssh/id_ed25519</code>
               </p>
             )}
-            <div style={actions}>
-              {!pubKey && (
-                <button style={btn} onClick={() => setStep(5)}>
-                  Skip
-                </button>
-              )}
-              {!pubKey ? (
+            {renderNav(
+              !pubKey ? (
                 <button
                   style={btnPrimary}
                   disabled={busy}
@@ -277,8 +313,15 @@ export function WizardFlow({ onComplete }: { onComplete: () => void }): ReactEle
                 <button style={btnPrimary} onClick={() => setStep(5)}>
                   Next
                 </button>
-              )}
-            </div>
+              ),
+              {
+                leading: !pubKey ? (
+                  <button type="button" style={btn} onClick={() => setStep(5)}>
+                    Skip
+                  </button>
+                ) : undefined,
+              }
+            )}
           </>
         )
       case 5: {
@@ -297,7 +340,7 @@ export function WizardFlow({ onComplete }: { onComplete: () => void }): ReactEle
           <>
             <h2>Pick a Starter Profile</h2>
             <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12 }}>
-              Sets your active environment. You can change this any time in Profiles.
+              Choose a starter stack. Docker compose starts when you click Finish on the last step.
             </p>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
               {presets.map((p) => (
@@ -325,29 +368,22 @@ export function WizardFlow({ onComplete }: { onComplete: () => void }): ReactEle
                 </button>
               ))}
             </div>
-            <div style={actions}>
-              <button style={btn} onClick={() => setStep(6)}>
-                Skip
-              </button>
+            {renderNav(
               <button
                 style={btnPrimary}
-                disabled={busy}
-                onClick={async () => {
-                  if (pickedProfile) {
-                    setBusy(true)
-                    try {
-                      await window.dh.storeSet({ key: 'active_profile', data: pickedProfile })
-                    } catch {
-                      /* best effort */
-                    }
-                    setBusy(false)
-                  }
-                  setStep(6)
-                }}
+                disabled={!pickedProfile}
+                onClick={() => setStep(6)}
               >
-                {pickedProfile ? 'Set Profile & Next' : 'Next'}
-              </button>
-            </div>
+                Next
+              </button>,
+              {
+                leading: (
+                  <button type="button" style={btn} onClick={() => setStep(6)}>
+                    Skip
+                  </button>
+                ),
+              }
+            )}
           </>
         )
       }
@@ -358,7 +394,7 @@ export function WizardFlow({ onComplete }: { onComplete: () => void }): ReactEle
             <p>Your environment is ready. Click finish to head to your new Dashboard.</p>
             {pickedProfile && (
               <p style={{ fontSize: 13, color: 'var(--green)', marginTop: 8 }}>
-                Active profile set to <strong>{pickedProfile}</strong>.
+                Selected <strong>{pickedProfile}</strong> — compose starts when you finish.
               </p>
             )}
             <label
@@ -378,11 +414,11 @@ export function WizardFlow({ onComplete }: { onComplete: () => void }): ReactEle
               />
               Show this wizard again next launch
             </label>
-            <div style={actions}>
-              <button style={btnPrimary} onClick={handleComplete}>
-                Finish &amp; Launch
+            {renderNav(
+              <button style={btnPrimary} disabled={busy} onClick={() => void handleComplete()}>
+                {busy && pickedProfile ? 'Starting stack…' : 'Finish & Launch'}
               </button>
-            </div>
+            )}
           </>
         )
       default:

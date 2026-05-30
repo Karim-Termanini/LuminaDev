@@ -23,6 +23,7 @@ import { syncAppearanceFromStore } from './theme/applyAccent'
 import { useNotification } from './layout/NotificationProvider'
 import { initProfileSwitchProgress } from './pages/profileSwitchProgress'
 import { resumeBackgroundProjectSetupIfNeeded } from './pages/projectBackgroundSetup'
+import { SETUP_WIZARD_OPEN_EVENT } from './lib/setupWizard'
 
 export default function App(): ReactElement | null {
   const [ready, setReady] = useState(false)
@@ -46,7 +47,6 @@ export default function App(): ReactElement | null {
         setReady(true)
         return
       }
-      // Readiness done — check if first-run wizard was completed
       window.dh.storeGet({ key: 'first_run_wizard_complete' }).then((res2: unknown) => {
         const bag2 = res2 as { ok?: boolean; data?: unknown }
         if (!bag2.ok || bag2.data !== true) {
@@ -58,12 +58,19 @@ export default function App(): ReactElement | null {
   }, [])
 
   useEffect(() => {
+    const onOpenSetupWizard = (): void => {
+      setShowFirstRunWizard(true)
+    }
+    window.addEventListener(SETUP_WIZARD_OPEN_EVENT, onOpenSetupWizard)
+    return () => window.removeEventListener(SETUP_WIZARD_OPEN_EVENT, onOpenSetupWizard)
+  }, [])
+
+  useEffect(() => {
     if (!ready || showReadinessWizard || showFirstRunWizard) return
     void syncAppearanceFromStore()
   }, [ready, showReadinessWizard, showFirstRunWizard])
 
   useEffect(() => {
-    // Startup check for updates if enabled in settings
     void window.dh.storeGet({ key: 'update_settings' }).then((res: unknown) => {
       const bag = res as { ok?: boolean; data?: unknown }
       if (bag.ok && bag.data && typeof bag.data === 'object') {
@@ -88,7 +95,6 @@ export default function App(): ReactElement | null {
       <ReadinessWizardPage
         onComplete={() => {
           setShowReadinessWizard(false)
-          // After readiness, show first-run wizard
           setShowFirstRunWizard(true)
         }}
       />
@@ -118,7 +124,6 @@ export default function App(): ReactElement | null {
         <Route path="/docker" element={<DockerPage />} />
         <Route path="/ssh" element={<SshPage />} />
         <Route path="/git" element={<DeveloperGitPage />} />
-        {/* Legacy redirects */}
         <Route path="/git-config" element={<Navigate to="/git?tab=config" replace />} />
         <Route path="/git-vcs" element={<Navigate to="/git?tab=vcs" replace />} />
         <Route path="/cloud-git" element={<Navigate to="/git?tab=cloud" replace />} />

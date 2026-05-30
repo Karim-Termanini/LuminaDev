@@ -1,4 +1,10 @@
-import { parseOnLoginAutomation, parseStoredActiveProfile, type ComposeProfile } from '@linux-dev-home/shared'
+import {
+  CustomProfilesStoreSchema,
+  parseOnLoginAutomation,
+  parseStoredActiveProfile,
+  resolveActiveProfileName,
+  type ComposeProfile,
+} from '@linux-dev-home/shared'
 import { useEffect } from 'react'
 
 /** Survives React StrictMode double-mount so hooks run at most once per process. */
@@ -22,7 +28,14 @@ export function OnLoginAutomationRunner(): null {
 
         const ap = await window.dh.storeGet({ key: 'active_profile' })
         const apBag = ap as { ok?: boolean; data?: unknown }
-        const profile = apBag.ok ? parseStoredActiveProfile(apBag.data) : null
+        const stored = apBag.ok ? parseStoredActiveProfile(apBag.data) : null
+        if (!stored) return
+
+        const cpRaw = await window.dh.storeGet({ key: 'custom_profiles' })
+        const cpBag = cpRaw as { ok?: boolean; data?: unknown }
+        const customParsed = CustomProfilesStoreSchema.safeParse(cpBag.ok ? cpBag.data : [])
+        const customProfiles = customParsed.success ? customParsed.data : []
+        const profile = resolveActiveProfileName(stored, customProfiles)
         if (profile) {
           await window.dh.composeUp({ profile: profile as ComposeProfile })
         }

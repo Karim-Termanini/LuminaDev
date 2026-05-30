@@ -1,9 +1,68 @@
 use serde_json::{json, Value};
 use std::collections::HashMap;
+use std::path::PathBuf;
 use tauri::{AppHandle, Emitter};
 
 use crate::host_exec::{cmd_timeout_long, cmd_timeout_short, exec_output_limit};
-use crate::utils::{app_file, find_free_port, read_json};
+use crate::utils::{app_file, find_free_port, read_json, sanitize_compose_project_name};
+
+fn template_needs_project_dir(template: &str) -> bool {
+    matches!(template, "web-dev" | "data-science" | "docs")
+}
+
+fn default_project_dir_from_store(store: &Value, profile: &str) -> String {
+    let home = std::env::var("HOME").unwrap_or_else(|_| "/root".to_string());
+    let mut base = PathBuf::from(home).join("LuminaProjects");
+    if let Some(dir) = store.get("projects_home_dir").and_then(|v| v.as_str()) {
+        let trimmed = dir.trim();
+        if !trimmed.is_empty() {
+            base = PathBuf::from(crate::project_scaffold::expand_tilde_path(trimmed));
+        }
+    }
+    crate::project_scaffold::expand_tilde_path(
+        base.join(profile).join("default").to_string_lossy().as_ref(),
+    )
+}
+
+fn persist_profile_project_dir(store_path: &PathBuf, profile: &str, dir: &str) {
+    let mut store = read_json(store_path);
+    if let Some(map) = store.as_object_mut() {
+        map.insert(format!("project_dir_{}", profile), json!(dir));
+        let _ = std::fs::write(
+            store_path,
+            serde_json::to_string_pretty(&store).unwrap_or_default(),
+        );
+    }
+}
+
+fn resolve_profile_project_dir(
+    store_path: &PathBuf,
+    store: &Value,
+    profile: &str,
+    template: &str,
+) -> Option<String> {
+    if !template_needs_project_dir(template) {
+        return None;
+    }
+
+    let from_store = store
+        .get(format!("project_dir_{}", profile))
+        .or_else(|| store.get(format!("project_dir_{}", template)))
+        .and_then(|v| v.as_str())
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .map(crate::project_scaffold::expand_tilde_path);
+
+    if let Some(dir) = from_store {
+        let _ = std::fs::create_dir_all(&dir);
+        return Some(dir);
+    }
+
+    let default = default_project_dir_from_store(store, profile);
+    let _ = std::fs::create_dir_all(&default);
+    persist_profile_project_dir(store_path, profile, &default);
+    Some(default)
+}
 
 pub(crate) fn format_profile_switch_error(raw: &str) -> String {
     let mut s = raw.trim();
@@ -83,19 +142,28 @@ pub(crate) fn get_profile_extra_env(app: &AppHandle, profile: &str) -> HashMap<S
             }
         }
 
-        let proj_dir = store
-            .get(format!("project_dir_{}", profile))
-            .or_else(|| store.get(format!("project_dir_{}", ref_profile)))
-            .and_then(|v| v.as_str());
-        if let Some(dir_str) = proj_dir {
-            if !dir_str.is_empty() {
-                env.insert(
-                    "PROJECT_DIR".to_string(),
-                    crate::project_scaffold::expand_tilde_path(dir_str),
-                );
+        if let Some(custom_profiles) = store.get("custom_profiles").and_then(|v| v.as_array()) {
+            for p in custom_profiles {
+                if let Some(name) = p.get("name").and_then(|v| v.as_str()) {
+                    if name == profile {
+                        if let Some(env_vars) = p.get("envVars").and_then(|v| v.as_array()) {
+                            for ev in env_vars {
+                                if let (Some(k), Some(v)) = (
+                                    ev.get("key").and_then(|x| x.as_str()),
+                                    ev.get("value").and_then(|x| x.as_str()),
+                                ) {
+                                    if !k.trim().is_empty() && !v.trim().is_empty() {
+                                        env.insert(k.trim().to_string(), v.to_string());
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
 
+        // Runtime-assigned ports in store win over wizard envVars (avoids 8888 + 8924 double bind).
         for (env_key, store_prefix) in &[
             ("JUPYTER_PORT", "jupyter_port"),
             ("POSTGRES_PORT", "postgres_port"),
@@ -111,48 +179,74 @@ pub(crate) fn get_profile_extra_env(app: &AppHandle, profile: &str) -> HashMap<S
             }
         }
 
-        if let Some(custom_profiles) = store.get("custom_profiles").and_then(|v| v.as_array()) {
-            for p in custom_profiles {
-                if let Some(name) = p.get("name").and_then(|v| v.as_str()) {
-                    if name == profile {
-                        if let Some(env_vars) = p.get("envVars").and_then(|v| v.as_array()) {
-                            for ev in env_vars {
-                                if let (Some(k), Some(v)) = (
-                                    ev.get("key").and_then(|x| x.as_str()),
-                                    ev.get("value").and_then(|x| x.as_str()),
-                                ) {
-                                    if !k.trim().is_empty() {
-                                        env.insert(k.trim().to_string(), v.to_string());
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+        let project_dir = env.get("PROJECT_DIR").map(|s| s.trim()).unwrap_or("");
+        if project_dir.is_empty() {
+            if let Some(dir) =
+                resolve_profile_project_dir(&store_path, &store, profile, ref_profile)
+            {
+                env.insert("PROJECT_DIR".to_string(), dir);
             }
+        } else {
+            let expanded = crate::project_scaffold::expand_tilde_path(project_dir);
+            let _ = std::fs::create_dir_all(&expanded);
+            env.insert("PROJECT_DIR".to_string(), expanded);
         }
     }
     env
 }
 
-pub(crate) async fn profile_switch(app: &AppHandle, body: &Value) -> Value {
-    let mut from_profile_str = body
-        .get("from")
-        .and_then(|v| v.as_str())
-        .map(|s| s.to_string());
-    let to_profile = body.get("to").and_then(|v| v.as_str()).unwrap_or_default();
-
-    if from_profile_str.is_none() && !to_profile.is_empty() {
-        if let Ok(store_path) = app_file(app, "store.json") {
-            let store = read_json(&store_path);
-            if let Some(active) = store.get("active_profile").and_then(|v| v.as_str()) {
-                if active != to_profile {
-                    from_profile_str = Some(active.to_string());
+fn resolve_profile_name_from_compose_project(app: &AppHandle, project: &str) -> Option<String> {
+    if project.trim().is_empty() {
+        return None;
+    }
+    if let Ok(store_path) = app_file(app, "store.json") {
+        let store = read_json(&store_path);
+        if let Some(custom_profiles) = store.get("custom_profiles").and_then(|v| v.as_array()) {
+            for p in custom_profiles {
+                if let Some(name) = p.get("name").and_then(|v| v.as_str()) {
+                    if sanitize_compose_project_name(name) == project {
+                        return Some(name.to_string());
+                    }
                 }
             }
         }
     }
-    let from_profile = from_profile_str.as_deref();
+    Some(project.to_string())
+}
+
+async fn stop_compose_profile(app: &AppHandle, profile_name: &str, logs: &mut String) {
+    let template = resolve_profile_template(app, profile_name);
+    let dir = crate::compose_profiles::compose_profile_workdir(app, &template);
+    if !dir.is_dir() {
+        return;
+    }
+    let use_full = crate::compose_profiles::profile_wants_full_stack(app, profile_name, &dir);
+    match crate::compose_engine::expose_exec_docker_compose_in_dir(
+        &dir,
+        &["stop"],
+        cmd_timeout_long(),
+        Some(profile_name),
+        Some(get_profile_extra_env(app, profile_name)),
+        use_full,
+    )
+    .await
+    {
+        Ok((stdout, stderr)) => {
+            logs.push_str(&format!(
+                "Stopped {}:\n{}{}\n",
+                profile_name, stdout, stderr
+            ));
+        }
+        Err(e) => logs.push_str(&format!(
+            "Warning: failed to stop {}: {}\n",
+            profile_name,
+            e.trim()
+        )),
+    }
+}
+
+pub(crate) async fn profile_switch(app: &AppHandle, body: &Value) -> Value {
+    let to_profile = body.get("to").and_then(|v| v.as_str()).unwrap_or_default();
 
     let _env_vars = body
         .get("envVars")
@@ -190,30 +284,17 @@ pub(crate) async fn profile_switch(app: &AppHandle, body: &Value) -> Value {
 
     let mut logs = String::new();
 
-    if let Some(from) = from_profile {
-        emit_step(&format!("Stopping {}...", from), 12);
-        let from_template = resolve_profile_template(app, from);
-        let from_dir = crate::compose_profiles::compose_profile_workdir(app, &from_template);
-        if from_dir.is_dir() {
-            let use_full_from =
-                crate::compose_profiles::profile_wants_full_stack(app, from, &from_dir);
-            match crate::compose_engine::expose_exec_docker_compose_in_dir(
-                &from_dir,
-                &["stop"],
-                cmd_timeout_long(),
-                Some(from),
-                Some(get_profile_extra_env(app, from)),
-                use_full_from,
-            )
-            .await
-            {
-                Ok((stdout, stderr)) => {
-                    logs.push_str(&format!("Stopped old profile:\n{}{}\n", stdout, stderr))
-                }
-                Err(e) => logs.push_str(&format!(
-                    "Warning: failed to stop old profile: {}\n",
-                    e.trim()
-                )),
+    let to_key = sanitize_compose_project_name(to_profile);
+    let running = crate::system_info::running_compose_project_names().await;
+    let other_running: Vec<String> = running
+        .into_iter()
+        .filter(|project| project != &to_key)
+        .collect();
+    if !other_running.is_empty() {
+        emit_step("Stopping other profiles...", 12);
+        for project in other_running {
+            if let Some(profile_name) = resolve_profile_name_from_compose_project(app, &project) {
+                stop_compose_profile(app, &profile_name, &mut logs).await;
             }
         }
     }
@@ -459,5 +540,51 @@ pub(crate) async fn profile_credentials_get(app: &AppHandle, body: &Value) -> Va
     match store.load(id) {
         Ok(val) => json!({ "ok": true, "value": val }),
         Err(e) => json!({ "ok": false, "error": e }),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    #[test]
+    fn template_needs_project_dir_for_workspace_templates() {
+        assert!(template_needs_project_dir("data-science"));
+        assert!(template_needs_project_dir("web-dev"));
+        assert!(!template_needs_project_dir("empty"));
+    }
+
+    #[test]
+    fn default_project_dir_uses_projects_home_when_set() {
+        let store = json!({ "projects_home_dir": "/tmp/lumina-work" });
+        let dir = default_project_dir_from_store(&store, "testing11");
+        assert_eq!(dir, "/tmp/lumina-work/testing11/default");
+    }
+
+    #[test]
+    fn resolve_profile_project_dir_creates_and_persists_default() {
+        let base = std::env::temp_dir().join(format!("lumina-profile-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&base);
+        fs::create_dir_all(&base).expect("temp dir");
+        let store_path = base.join("store.json");
+        fs::write(&store_path, r#"{"projects_home_dir":"/tmp/lumina-work"}"#).expect("write store");
+
+        let store = read_json(&store_path);
+        let resolved = resolve_profile_project_dir(&store_path, &store, "testing11", "data-science")
+            .expect("resolved");
+
+        assert_eq!(resolved, "/tmp/lumina-work/testing11/default");
+        assert!(PathBuf::from(&resolved).is_dir());
+
+        let updated = read_json(&store_path);
+        assert_eq!(
+            updated
+                .get("project_dir_testing11")
+                .and_then(|v| v.as_str()),
+            Some("/tmp/lumina-work/testing11/default")
+        );
+
+        let _ = fs::remove_dir_all(&base);
     }
 }

@@ -27,7 +27,7 @@
 | --- | --- | --- |
 | P0 | AppImage release pipeline E2E on clean VM | ❓ Unverified |
 | P2 | Settings hosts/env file editing | ✅ Done (System tab: pkexec hosts write, ~/.profile editor) |
-| P2 | Runtimes install matrix hardening | 📋 Planned |
+| P2 | Runtimes install matrix hardening | ✅ Done (2026-05-30) |
 | P2 | Git VCS polish / simple mode | 📋 Planned |
 
 ### Removed from scope (2026-05-29)

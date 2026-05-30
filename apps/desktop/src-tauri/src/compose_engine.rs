@@ -252,7 +252,7 @@ pub(crate) async fn exec_docker_compose_up_streaming(
   extra_env: Option<HashMap<String, String>>,
   use_full_overlay: bool,
 ) -> Result<String, String> {
-  let compose_args = build_compose_args(compose_dir, &["up", "-d"], Some(project_name), use_full_overlay);
+  let compose_args = build_compose_args(compose_dir, &["up", "-d", "--force-recreate"], Some(project_name), use_full_overlay);
   let mut cmd = Command::new("docker");
   cmd
     .current_dir(compose_dir)

@@ -2,6 +2,7 @@ import type { ReactElement } from 'react'
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { RuntimeStatus, JobSummary } from '@linux-dev-home/shared'
+import { runtimeIsSystemOnly, runtimeSupportsLocalInstall } from '@linux-dev-home/shared'
 import { assertRuntimeOk } from './runtimeContract'
 import { humanizeRuntimeError } from './runtimeError'
 import './RuntimesPage.css'
@@ -426,6 +427,26 @@ export function RuntimesPage(): ReactElement {
       ),
     [installMethod, displayedVersions]
   )
+  const supportsLocalInstall = useMemo(
+    () => runtimeSupportsLocalInstall(selectedId),
+    [selectedId]
+  )
+  const isSystemOnlyRuntime = useMemo(() => runtimeIsSystemOnly(selectedId), [selectedId])
+  const wizardSteps = useMemo(() => {
+    const all = [
+      { step: 1, label: t('wizard.step1') },
+      { step: 2, label: t('wizard.step2') },
+      { step: 3, label: t('wizard.step3') },
+      { step: 4, label: t('wizard.step4') },
+    ]
+    return isSystemOnlyRuntime ? all.filter((s) => s.step !== 2) : all
+  }, [isSystemOnlyRuntime, t])
+
+  useEffect(() => {
+    if (!supportsLocalInstall) {
+      setInstallMethod('system')
+    }
+  }, [supportsLocalInstall, selectedId])
 
   const rtLocaleKey = RUNTIME_LOCALE_KEY[selectedId] ?? selectedId
   const jobRuntimeId =
@@ -500,9 +521,13 @@ export function RuntimesPage(): ReactElement {
 
   const startInstall = async (id: string) => {
     setSelectedId(id)
+    const systemOnly = runtimeIsSystemOnly(id)
+    if (systemOnly) {
+      setInstallMethod('system')
+    }
     setShowWizard(true)
     setWizardStep(1)
-    void loadVersionsForRuntime(id, installMethod, false)
+    void loadVersionsForRuntime(id, systemOnly ? 'system' : installMethod, false)
     void loadInstalledVersions(id, true)
   }
 
@@ -1081,12 +1106,11 @@ export function RuntimesPage(): ReactElement {
                   background: 'rgba(255,255,255,0.02)',
                 }}
               >
-                {[
-                  { step: 1, label: t('wizard.step1') },
-                  { step: 2, label: t('wizard.step2') },
-                  { step: 3, label: t('wizard.step3') },
-                  { step: 4, label: t('wizard.step4') },
-                ].map((s) => (
+                {wizardSteps.map((s, idx) => {
+                  const isLast = idx === wizardSteps.length - 1
+                  const isStepComplete = wizardStep > s.step || (wizardStep === s.step && isLast)
+                  const displayStep = idx + 1
+                  return (
                   <div
                     key={s.step}
                     style={{
@@ -1102,7 +1126,7 @@ export function RuntimesPage(): ReactElement {
                         height: 24,
                         borderRadius: '50%',
                         background:
-                          wizardStep > s.step
+                          isStepComplete
                             ? 'var(--green)'
                             : wizardStep === s.step
                               ? 'var(--accent)'
@@ -1115,11 +1139,12 @@ export function RuntimesPage(): ReactElement {
                         fontWeight: 700,
                       }}
                     >
-                      {wizardStep > s.step ? '✔' : s.step}
+                      {isStepComplete ? '✔' : displayStep}
                     </div>
                     <span style={{ fontSize: 13, fontWeight: 600 }}>{s.label}</span>
                   </div>
-                ))}
+                  )
+                })}
               </div>
 
               {/* Step Content */}
@@ -1130,6 +1155,37 @@ export function RuntimesPage(): ReactElement {
                     <p style={{ color: 'var(--text-muted)', marginBottom: 32 }}>
                       {t('wizConfig.desc', { name: selectedRuntime?.name })}
                     </p>
+
+                    {!supportsLocalInstall && (
+                      <div
+                        className="hp-card"
+                        style={{
+                          marginBottom: 20,
+                          padding: '14px 16px',
+                          borderColor: 'var(--accent)',
+                          background: 'rgba(124, 77, 255, 0.08)',
+                        }}
+                      >
+                        <div style={{ fontWeight: 600, marginBottom: 6 }}>
+                          {t('wizConfig.systemOnlyTipTitle')}
+                        </div>
+                        <div style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                          {t('wizConfig.systemOnlyTip', { name: selectedRuntime?.name })}
+                        </div>
+                        {isSystemOnlyRuntime && (
+                          <div
+                            style={{
+                              fontSize: 12,
+                              color: 'var(--text-muted)',
+                              marginTop: 8,
+                              lineHeight: 1.45,
+                            }}
+                          >
+                            {t('wizConfig.systemOnlySkipDeps')}
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                     <div className="hp-card" style={{ marginBottom: 20 }}>
                       <div style={{ fontWeight: 600, marginBottom: 12 }}>
@@ -1159,6 +1215,7 @@ export function RuntimesPage(): ReactElement {
                             {t('wizConfig.systemDesc')}
                           </div>
                         </button>
+                        {supportsLocalInstall && (
                         <button
                           onClick={() => setInstallMethod('local')}
                           style={{
@@ -1180,6 +1237,7 @@ export function RuntimesPage(): ReactElement {
                             {t('wizConfig.localDesc')}
                           </div>
                         </button>
+                        )}
                       </div>
                     </div>
 
@@ -1259,7 +1317,7 @@ export function RuntimesPage(): ReactElement {
                           {t('wizConfig.systemModeNote')}
                         </div>
                       )}
-                      {installMethod === 'system' && (
+                      {installMethod === 'system' && supportsLocalInstall && (
                         <div
                           role="note"
                           style={{
@@ -1303,7 +1361,7 @@ export function RuntimesPage(): ReactElement {
                   </div>
                 )}
 
-                {wizardStep === 2 && (
+                {wizardStep === 2 && !isSystemOnlyRuntime && (
                   <div>
                     <h3 style={{ marginTop: 0 }}>{t('wizDeps.title')}</h3>
                     <p style={{ color: 'var(--text-muted)', marginBottom: 32 }}>
@@ -1603,7 +1661,9 @@ export function RuntimesPage(): ReactElement {
                         margin: '16px auto 40px',
                       }}
                     >
-                      {t('wizFinish.reviewLog')}
+                      {t(
+                        isSystemOnlyRuntime ? 'wizFinish.reviewLogSystemOnly' : 'wizFinish.reviewLog'
+                      )}
                       {logHasVerifyOk && (
                         <span
                           style={{
@@ -1705,11 +1765,14 @@ export function RuntimesPage(): ReactElement {
                   </button>
                 )}
                 {wizardStep === 1 && (
-                  <button className="hp-btn hp-btn-primary" onClick={() => setWizardStep(2)}>
-                    {t('wizard.next')}
+                  <button
+                    className="hp-btn hp-btn-primary"
+                    onClick={() => (isSystemOnlyRuntime ? void runInstall() : setWizardStep(2))}
+                  >
+                    {isSystemOnlyRuntime ? t('wizard.installNow') : t('wizard.next')}
                   </button>
                 )}
-                {wizardStep === 2 && (
+                {wizardStep === 2 && !isSystemOnlyRuntime && (
                   <button className="hp-btn hp-btn-primary" onClick={runInstall}>
                     {t('wizard.installNow')}
                   </button>

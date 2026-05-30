@@ -5,6 +5,8 @@ import {
   type CustomProfileEntry,
   type OnLoginAutomationStore,
   parseOnLoginAutomation,
+  parseStoredActiveProfile,
+  resolveActiveProfileName,
 } from '@linux-dev-home/shared'
 import './ProfilesPage.css'
 import type { ReactElement } from 'react'
@@ -21,10 +23,10 @@ import {
   signalProfileSwitchStarting,
 } from './profileSwitchProgress'
 import { cancelProjectSetup, invalidateSetupRuns, readSetupSession } from './projectSetupSession'
+import { broadcastActiveProfileChange } from '../lib/activeProfileSync'
 import {
   beginnerBundleLabelKey,
   beginnerOptionalEnvPresets,
-  envPresetsFromPortSuggest,
   findEnvConflicts,
   generateUniqueEnvVars,
   getTemplateEnvPresets,
@@ -36,6 +38,10 @@ import {
   syncDatabaseUrlWithPostgres,
   type RuntimeAssignedPort,
 } from './profileEnvConflicts'
+import {
+  findSshKeyConflict,
+  suggestUniqueSshKeyName,
+} from './profileSshKey'
 
 type PortsSuggestResponse = { ok?: boolean; ports?: Record<string, number> }
 
@@ -139,9 +145,6 @@ export function ProfilesPage(): ReactElement {
   const [envBulkInput, setEnvBulkInput] = useState('')
   const [tagInput, setTagInput] = useState('')
   const [otherRuntimePorts, setOtherRuntimePorts] = useState<RuntimeAssignedPort[]>([])
-  const [wizardSuggestedPorts, setWizardSuggestedPorts] = useState<Record<string, number> | null>(
-    null
-  )
 
   const detectLocalSshKey = useCallback(async () => {
     setDetectingSsh(true)
@@ -157,6 +160,37 @@ export function ProfilesPage(): ReactElement {
     }
     setDetectingSsh(false)
   }, [])
+
+  const handleGenerateFreshSshKey = useCallback(async () => {
+    if (!wizardData?.name.trim()) {
+      setSshGenerateError('Enter a profile name on step 1 before generating a key.')
+      return
+    }
+    setIsGeneratingSsh(true)
+    setSshGenerateError(null)
+    try {
+      const keyName = suggestUniqueSshKeyName(
+        profiles,
+        wizardData.name,
+        editingProfileIdx
+      )
+      const res = await window.dh.sshGenerate({
+        target: 'host',
+        keyName,
+        email: sshEmail.trim() || 'lumina@local',
+      })
+      const resolvedKeyName = res.keyName ?? keyName
+      if (res.ok && resolvedKeyName) {
+        setWizardData((prev) => (prev ? { ...prev, sshKeyId: resolvedKeyName } : prev))
+      } else {
+        setSshGenerateError(res.error || 'Failed to generate SSH key.')
+      }
+    } catch (e) {
+      const err = e as { message?: string } | null
+      setSshGenerateError((err && err.message) || String(e))
+    }
+    setIsGeneratingSsh(false)
+  }, [wizardData?.name, profiles, editingProfileIdx, sshEmail])
 
   const loadExistingCredentials = useCallback(async () => {
     try {
@@ -180,24 +214,21 @@ export function ProfilesPage(): ReactElement {
   useEffect(() => {
     if (!wizardData?.name.trim()) {
       setOtherRuntimePorts([])
-      setWizardSuggestedPorts(null)
       return
     }
     let cancelled = false
     void (async () => {
       try {
-        const { others, suggested } = await fetchRuntimePortsForProfiles(
+        const { others } = await fetchRuntimePortsForProfiles(
           profiles,
           editingProfileIdx,
           { template: wizardData.baseTemplate, profileName: wizardData.name.trim() }
         )
         if (cancelled) return
         setOtherRuntimePorts(others)
-        setWizardSuggestedPorts(suggested)
       } catch {
         if (!cancelled) {
           setOtherRuntimePorts([])
-          setWizardSuggestedPorts(null)
         }
       }
     })()
@@ -213,7 +244,10 @@ export function ProfilesPage(): ReactElement {
         ok: boolean
         data?: unknown
       }
-      if (ap.ok && typeof ap.data === 'string') setActiveProfileTemplate(ap.data)
+      if (ap.ok) {
+        const raw = parseStoredActiveProfile(ap.data)
+        setActiveProfileTemplate(resolveActiveProfileName(raw, loadedProfiles))
+      }
     } catch {
       /* ignore */
     }
@@ -299,7 +333,6 @@ export function ProfilesPage(): ReactElement {
       /* ignore */
     }
     void checkRunning(profiles)
-    // Poll running status every 10s in case compose finishes while user is on the page
     const interval = setInterval(() => {
       void checkRunning(profiles)
     }, 10_000)
@@ -363,6 +396,7 @@ export function ProfilesPage(): ReactElement {
       }
       if (res.ok) {
         setActiveProfileTemplate(name)
+        broadcastActiveProfileChange(name)
         setStatus({ message: t('msg.setActive', { template: name }), type: 'success' })
       } else {
         setStatus({ message: res.error || t('msg.setActiveFailed'), type: 'warning' })
@@ -447,11 +481,13 @@ export function ProfilesPage(): ReactElement {
     )
   }, [profiles, wizardData, editingProfileIdx, otherRuntimePorts])
 
+  const sshKeyConflict = useMemo(
+    () => findSshKeyConflict(profiles, wizardData?.sshKeyId, editingProfileIdx),
+    [profiles, wizardData?.sshKeyId, editingProfileIdx]
+  )
+
   const templateEnvPresets = useMemo(() => {
     if (!wizardData) return []
-    if (wizardSuggestedPorts && Object.keys(wizardSuggestedPorts).length > 0) {
-      return envPresetsFromPortSuggest(wizardData.baseTemplate, wizardSuggestedPorts)
-    }
     return getTemplateEnvPresets(
       wizardData.baseTemplate,
       wizardData.name,
@@ -459,7 +495,7 @@ export function ProfilesPage(): ReactElement {
       editingProfileIdx,
       otherRuntimePorts
     )
-  }, [wizardData, profiles, editingProfileIdx, otherRuntimePorts, wizardSuggestedPorts])
+  }, [wizardData, profiles, editingProfileIdx, otherRuntimePorts])
 
   const beginnerRecommendedPresets = useMemo(() => {
     return partitionBeginnerEnvPresets(templateEnvPresets).recommended
@@ -478,9 +514,10 @@ export function ProfilesPage(): ReactElement {
   const wizardNextBlocked = useMemo(() => {
     if (!wizardData?.name.trim()) return true
     if (wizardStep === 1 && duplicateProfileName) return true
+    if (wizardStep === 2 && sshKeyConflict) return true
     if (wizardStep === 3 && envConflicts.length > 0) return true
     return false
-  }, [wizardData, wizardStep, duplicateProfileName, envConflicts.length])
+  }, [wizardData, wizardStep, duplicateProfileName, sshKeyConflict, envConflicts.length])
 
   function openCreateModal(): void {
     setIsCreatingProfile(true)
@@ -564,7 +601,6 @@ export function ProfilesPage(): ReactElement {
     setIsCreatingProfile(false)
     setEditingProfileIdx(null)
     setOtherRuntimePorts([])
-    setWizardSuggestedPorts(null)
   }
 
   async function exportJson(): Promise<void> {
@@ -996,7 +1032,7 @@ export function ProfilesPage(): ReactElement {
                               try {
                                 const r = (await invoke('ipc_invoke', {
                                   channel: 'dh:profile:switch',
-                                  payload: { to: p.name },
+                                  payload: { from: p.name, to: p.name },
                                 })) as { ok?: boolean; error?: string }
                                 if (!r.ok) {
                                   const errMsg = r.error || 'Failed'
@@ -1005,6 +1041,8 @@ export function ProfilesPage(): ReactElement {
                                   return
                                 }
                                 signalProfileSwitchDone()
+                                await setAsActive(p.name)
+                                broadcastActiveProfileChange(p.name)
                                 void refreshRunning()
                                 setStatus({ message: `${p.name} restarted.`, type: 'success' })
                               } catch (e) {
@@ -1056,13 +1094,20 @@ export function ProfilesPage(): ReactElement {
                               return rest
                             })
                             setActionLoading((prev) => ({ ...prev, [p.name]: 'starting' }))
-                            // Signal Dashboard immediately so it shows progress bar
                             signalProfileSwitchStarting(p.name, { skipPoll: true })
-                            await setAsActive(p.name)
+                            const previousActive =
+                              activeProfileTemplate &&
+                              activeProfileTemplate !== 'empty' &&
+                              activeProfileTemplate !== p.name
+                                ? activeProfileTemplate
+                                : undefined
                             try {
                               const r = (await invoke('ipc_invoke', {
                                 channel: 'dh:profile:switch',
-                                payload: { to: p.name },
+                                payload: {
+                                  to: p.name,
+                                  ...(previousActive ? { from: previousActive } : {}),
+                                },
                               })) as { ok?: boolean; error?: string; log?: string }
                               if (!r.ok) {
                                 const errMsg = r.error || r.log || 'Failed to start'
@@ -1071,7 +1116,10 @@ export function ProfilesPage(): ReactElement {
                                 return
                               }
                               signalProfileSwitchDone()
+                              await setAsActive(p.name)
+                              broadcastActiveProfileChange(p.name)
                               void refreshRunning()
+                              void loadExtras(profiles)
                               setStatus({ message: `${p.name} started.`, type: 'success' })
                             } catch (e) {
                               setRowError((prev) => ({
@@ -1794,11 +1842,7 @@ export function ProfilesPage(): ReactElement {
                           className="fluent-input"
                           style={{ fontFamily: 'monospace', width: '100%' }}
                         />
-                        {wizardData.sshKeyId &&
-                          profiles.find(
-                            (p, idx) =>
-                              p.sshKeyId === wizardData.sshKeyId && idx !== editingProfileIdx
-                          ) && (
+                        {wizardData.sshKeyId && sshKeyConflict && (
                             <div
                               style={{
                                 marginTop: 8,
@@ -1820,35 +1864,25 @@ export function ProfilesPage(): ReactElement {
                               >
                                 <span className="codicon codicon-warning" />
                                 {t('wizard.ssh.keyDuplicateWarning', {
-                                  name: profiles.find(
-                                    (p, idx) =>
-                                      p.sshKeyId === wizardData.sshKeyId &&
-                                      idx !== editingProfileIdx
-                                  )?.name,
+                                  name: sshKeyConflict.name,
                                 })}
                               </p>
                               <button
                                 type="button"
                                 className="dev-home-btn"
                                 style={{ fontSize: 12, padding: '6px 12px', margin: 0 }}
-                                onClick={async () => {
-                                  const safeName = `id_ed25519_${
-                                    wizardData.name
-                                      .trim()
-                                      .replace(/[^a-z0-9]/gi, '_')
-                                      .toLowerCase() || 'profile'
-                                  }`
-                                  const res = await window.dh.sshGenerate({
-                                    target: 'host',
-                                    keyName: safeName,
-                                  })
-                                  if (res.ok && res.keyName) {
-                                    setWizardData({ ...wizardData, sshKeyId: res.keyName })
-                                  }
-                                }}
+                                disabled={isGeneratingSsh}
+                                onClick={() => void handleGenerateFreshSshKey()}
                               >
-                                {t('wizard.ssh.generateFresh')}
+                                {isGeneratingSsh
+                                  ? t('wizard.ssh.generating')
+                                  : t('wizard.ssh.generateFresh')}
                               </button>
+                              {sshGenerateError && (
+                                <p style={{ color: 'var(--red)', fontSize: 12, margin: '8px 0 0' }}>
+                                  {sshGenerateError}
+                                </p>
+                              )}
                             </div>
                           )}
                       </div>
@@ -2159,11 +2193,29 @@ export function ProfilesPage(): ReactElement {
                                   wizardData.envVars ?? [],
                                   beginnerRecommendedPresets
                                 )
-                                const merged = mergeEnvPresetBundle(
+                                let merged = mergeEnvPresetBundle(
                                   wizardData.envVars ?? [],
                                   beginnerRecommendedPresets,
                                   !applied
                                 )
+                                if (!applied) {
+                                  const conflictsAfter = findEnvConflicts(
+                                    profiles,
+                                    merged,
+                                    editingProfileIdx,
+                                    otherRuntimePorts
+                                  )
+                                  if (conflictsAfter.length > 0) {
+                                    merged = generateUniqueEnvVars(
+                                      wizardData.baseTemplate,
+                                      wizardData.name,
+                                      profiles,
+                                      editingProfileIdx,
+                                      merged,
+                                      otherRuntimePorts
+                                    )
+                                  }
+                                }
                                 setWizardData({
                                   ...wizardData,
                                   envVars: syncDatabaseUrlWithPostgres(
@@ -3073,7 +3125,6 @@ export function ProfilesPage(): ReactElement {
                     setIsCreatingProfile(false)
                     setEditingProfileIdx(null)
                     setOtherRuntimePorts([])
-                    setWizardSuggestedPorts(null)
                   }}
                 >
                   {t('btn.cancel')}

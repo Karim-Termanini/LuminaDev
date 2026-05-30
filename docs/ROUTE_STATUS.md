@@ -12,7 +12,7 @@ Status legend:
 
 | Route | Status | Notes |
 | --- | --- | --- |
-| `/dashboard` | partial | Preset grid reads `active_profile` for highlight; slim container count + metrics strip with links to Docker and Monitor; several preset cards are `PLANNED`/disabled. |
+| `/dashboard` | partial | Custom profiles only; empty state until user creates one in Profiles. Slim container count + metrics strip. |
 | `/dashboard/kernels` | partial | GPU probe, service states, security audit; auto-refreshes every ~30s (lightweight snapshot, not a full device manager). |
 | `/dashboard/logs` | partial | Jobs poll ~2s; compose logs load for selected profile; not a full observability platform. |
 | `/dashboard/widgets` | removed | **Deleted** 2026-05-29 — widget system out of scope; no route or redirect. |
@@ -24,9 +24,9 @@ Status legend:
 | `/git-vcs` | redirect | → `/git?tab=vcs` |
 | `/cloud-git` | redirect | → `/git?tab=cloud` |
 | `/registry` | redirect | → `/git?tab=vcs` |
-| `/profiles` | partial | CRUD + duplicate + export/import; **Set Active** writes `active_profile` as `baseTemplate` (`ComposeProfile`). **On launch**: optional `composeUp` for active profile (store `on_login_automation`). Deeper preset/dashboard unification still evolving. |
+| `/profiles` | partial | Custom-named environments only (user picks base template + name). CRUD + duplicate + export/import; Set Active / switch syncs dashboard. On launch: optional composeUp for active profile. |
 | `/terminal` | partial | Embedded terminal works; host/sandbox differences still affect behavior. |
-| `/runtimes` | partial | Status/version/deps/uninstall preview are live; install/update/remove backend is in active hardening. |
+| `/runtimes` | partial | Status/version/deps/uninstall preview live; install/update/remove backend hardened for Ubuntu/Fedora/Arch (distro ID_LIKE, post-install verify gate). |
 | `/maintenance` | partial | Guardian + diagnostics + host probes. **Tasks**: user checklist on Overview + full editor on Schedule. **Git backups** on **Git Config → Backups**. No arbitrary host shell or full remediation. |
 | `/settings` | partial | Dev Home layout: personalization, SSH overview, **Connected accounts** (GitHub/GitLab auth), **System** tab (`/etc/hosts` read/edit via pkexec + diff-before-apply, process env diagnostics, `~/.profile` export editor), general, update, notifications, shortcuts, help, datetime, languages, app engine, builder, beta flags. **Extension tab removed** — not in scope. |
 

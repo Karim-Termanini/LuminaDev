@@ -5,6 +5,7 @@
   "main.btn.initialize": "تهيئة",
   "main.btn.switchToThis": "التبديل إلى هذا",
   "main.btn.currentlyActive": "🟢 نشط حالياً",
+  "main.btn.startStack": "تشغيل المكدس",
   "main.btn.initializing": "جارٍ تشغيل المكدس…",
   "main.metrics.pending": "تظهر مقاييس المضيف بعد اكتمال تشغيل المكدس.",
   "main.workspace.pending": "اربط مشروعاً أو أنشئه بعد أن يعمل المكدس.",

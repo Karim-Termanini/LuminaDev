@@ -3,14 +3,17 @@ use crate::runtime_packages::pkg_remove_with_deps_cmd;
 
 // Explicit imports for extracted handler functions (also available via use super::*)
 use crate::host_exec::{
-    cmd_timeout_short, exec_output, exec_output_limit, exec_result_limit,
+    cmd_timeout_short, exec_output_limit, exec_result_limit,
     get_global_daemon_auto_restart, get_global_thread_pool_size,
 };
 use crate::runtime_packages::{
-    runtime_dnf_java_alternatives_cmd, runtime_java_system_packages_for_version, runtime_pkg_mgr,
-    runtime_preview_removable_deps, runtime_system_package_available, runtime_system_packages,
+    runtime_dnf_java_alternatives_cmd, runtime_java_system_packages_for_version,
+    runtime_preview_removable_deps, runtime_read_host_distro, runtime_system_package_available,
+    runtime_system_packages,
 };
-use crate::runtime_versioning::{lumina_probe_meaningful_line, runtime_dnf_repoquery_versions};
+use crate::runtime_versioning::{
+    lumina_probe_meaningful_line, runtime_dnf_repoquery_versions, runtime_repoquery_versions,
+};
 use crate::runtime_paths::{
     java_home_from_binary, lumina_version_dir_from_path, nvm_version_dir_from_path,
     path_home_before_marker, path_segment_after_marker, validate_java_binary_path,
@@ -21,13 +24,11 @@ use crate::{
 };
 use std::path::{Path, PathBuf};
 
-const LOCAL_INSTALL_RUNTIMES: &[&str] = &[
-    "node", "python", "go", "zig", "rust", "bun", "dart", "flutter", "julia", "php", "ruby", "lua",
-    "r",
-];
+// Must match `RUNTIME_SYSTEM_ONLY_IDS` in packages/shared/src/runtimes.ts
+const SYSTEM_ONLY_RUNTIMES: &[&str] = &["lisp", "c_cpp", "matlab", "php"];
 
 fn runtime_supports_local_install(runtime_id: &str) -> bool {
-    LOCAL_INSTALL_RUNTIMES.contains(&runtime_id)
+    !SYSTEM_ONLY_RUNTIMES.contains(&runtime_id)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -46,19 +47,10 @@ pub(crate) async fn runtime_job_execute(
     )];
     let password_opt: Option<&str> = None;
     let mut final_state = "completed";
-    let effective_verify_method = method.clone();
+    let mut effective_verify_method = method.clone();
 
-    let distro = exec_output(
-        "bash",
-        &[
-            "-lc",
-            "source /etc/os-release 2>/dev/null && printf '%s' \"${ID:-unknown}\"",
-        ],
-    )
-    .await
-    .unwrap_or_else(|_| "unknown".to_string());
-    let distro = distro.trim().to_string();
-    let pkg_mgr = runtime_pkg_mgr(&distro);
+    let (distro, pkg_mgr_owned) = runtime_read_host_distro();
+    let pkg_mgr = pkg_mgr_owned.as_str();
     logs.push(format!("distro={} pkg_mgr={}", distro, pkg_mgr));
 
     {
@@ -258,7 +250,7 @@ pub(crate) async fn runtime_job_execute(
                  SAFE_VER=$(printf '%s' "$DETECTED_VER" | tr '/ ' '__')
                  TARGET_DIR="$LUMINA_JAVA_DIR/jdk-$SAFE_VER"
                  if [ ! -d "$TARGET_DIR" ]; then mv "$TMP_EXTRACT" "$TARGET_DIR"; else rm -rf "$TMP_EXTRACT"; fi
-                 ln -s "$TARGET_DIR" "$LUMINA_JAVA_DIR/current"
+                 ln -sfn "$TARGET_DIR" "$LUMINA_JAVA_DIR/current"
                  for f in "$HOME/.bashrc" "$HOME/.bash_profile" "$HOME/.profile"; do
                    if [ -f "$f" ] && ! grep -q 'lumina-java' "$f"; then
                      printf '\n# lumina-java\nexport JAVA_HOME="$HOME/.local/share/lumina/java/current"\nexport PATH="$JAVA_HOME/bin:$PATH"\n' >> "$f"
@@ -284,11 +276,10 @@ pub(crate) async fn runtime_job_execute(
                     } else {
                         let pkgs = runtime_java_system_packages_for_version(pkg_mgr, &version);
                         if pkgs.is_empty() {
-                            logs.push(format!(
-                                "No Java packages known for '{}' on {}.",
-                                version, distro
-                            ));
-                            Ok(())
+                            Err(format!(
+                                "[RUNTIME_INSTALL_FAILED] No Java packages mapped for '{}' on {} ({}). Use Isolated (Local) install.",
+                                version, distro, pkg_mgr
+                            ))
                         } else {
                             let pkg = pkgs[0].clone();
                             if pkg_mgr == "dnf" && !runtime_dnf_package_available(&pkg).await {
@@ -523,6 +514,7 @@ pub(crate) async fn runtime_job_execute(
                 if runtime_id == "php" {
                     // PHP source compilation is too slow and fragile on non-Debian systems.
                     // Always install via system package manager regardless of "local" track selection.
+                    effective_verify_method = "system".to_string();
                     logs.push(
                         "Installing PHP via system package manager (source compile not supported)…"
                             .into(),
@@ -700,11 +692,10 @@ fi"#;
               );
                     }
                     if pkgs.is_empty() {
-                        logs.push(format!(
-                            "No system packages known for '{}' on {}. Try local/rustup method.",
-                            runtime_id, distro
-                        ));
-                        Ok(())
+                        Err(format!(
+                            "[RUNTIME_INSTALL_FAILED] No system packages mapped for '{}' on {} ({}). Choose Isolated (Local), pick a runtime with a supported installer, or install manually.",
+                            runtime_id, distro, pkg_mgr
+                        ))
                     } else {
                         let total = pkgs.len();
                         let mut loop_res = Ok(());
@@ -1070,7 +1061,19 @@ fi"#;
             kind.as_str(),
             "runtime_install" | "install_deps" | "runtime_update"
         ) {
-            runtime_append_verify(&runtime_id, &effective_verify_method, &version, &mut logs).await;
+            let verified = runtime_append_verify(
+                &runtime_id,
+                &effective_verify_method,
+                &version,
+                &mut logs,
+            )
+            .await;
+            if !verified {
+                logs.push(
+                    "ERROR: [RUNTIME_VERIFY_FAILED] Toolchain not available after install.".into(),
+                );
+                final_state = "failed";
+            }
         }
     }
 
@@ -1746,19 +1749,11 @@ pub(crate) async fn handle_runtime_get_versions(body: &Value) -> Value {
         .unwrap_or("local");
     let mut versions: Vec<String> = Vec::new();
     if method == "system" {
-        let distro = exec_output(
-            "bash",
-            &[
-                "-lc",
-                "source /etc/os-release 2>/dev/null && printf '%s' \"${ID:-unknown}\"",
-            ],
-        )
-        .await
-        .unwrap_or_else(|_| "unknown".to_string());
-        let pkg_mgr = runtime_pkg_mgr(distro.trim());
+        let (_distro, pkg_mgr_owned) = runtime_read_host_distro();
+        let pkg_mgr = pkg_mgr_owned.as_str();
         match runtime_id {
             "c_cpp" => {
-                let discovered = runtime_dnf_repoquery_versions("gcc", 25).await;
+                let discovered = runtime_repoquery_versions(pkg_mgr, "gcc", 25).await;
                 if discovered.is_empty() {
                     versions.push("system (repo default)".into());
                 } else {
@@ -1768,7 +1763,7 @@ pub(crate) async fn handle_runtime_get_versions(body: &Value) -> Value {
                 }
             }
             "matlab" => {
-                let discovered = runtime_dnf_repoquery_versions("octave", 20).await;
+                let discovered = runtime_repoquery_versions(pkg_mgr, "octave", 20).await;
                 if discovered.is_empty() {
                     versions.push("system (repo default)".into());
                 } else {
@@ -2082,7 +2077,7 @@ pub(crate) async fn handle_runtime_check_deps(body: &Value) -> Value {
         "go"      => vec![("go", "go version"), ("gcc", "gcc --version")],
         "rust"    => vec![("rustc", "rustc --version"), ("cargo", "cargo --version"), ("rustup", "rustup --version")],
         "java"    => vec![("java", "java -version 2>&1"), ("javac", "javac -version 2>&1")],
-        "php"     => vec![("php", "export PATH=\"$HOME/.local/bin:$PATH\"; ([ -x \"$HOME/.local/bin/mise\" ] && eval \"$($HOME/.local/bin/mise activate bash)\" >/dev/null 2>&1 || true); php --version 2>&1 | head -1"), ("composer", "composer --version 2>/dev/null")],
+        "php"     => vec![("php", "command -v php >/dev/null 2>&1 && php --version 2>&1 | head -1")],
         "ruby"    => vec![("ruby", "export PATH=\"$HOME/.local/bin:$PATH\"; ([ -x \"$HOME/.local/bin/mise\" ] && eval \"$($HOME/.local/bin/mise activate bash)\" >/dev/null 2>&1 || true); ruby --version"), ("gem", "gem --version")],
         "dotnet"  => vec![("dotnet", "dotnet --version 2>/dev/null || ~/.dotnet/dotnet --version 2>/dev/null")],
         "bun"     => vec![("bun", "bun --version 2>/dev/null || ~/.bun/bin/bun --version 2>/dev/null"), ("unzip", "unzip -v"), ("curl", "curl --version")],
@@ -2119,17 +2114,8 @@ pub(crate) async fn handle_runtime_uninstall_preview(body: &Value) -> Value {
         .get("removeMode")
         .and_then(|v| v.as_str())
         .unwrap_or("runtime_only");
-    let distro = exec_output(
-        "sh",
-        &[
-            "-c",
-            ". /etc/os-release 2>/dev/null; printf '%s' \"${ID:-unknown}\"",
-        ],
-    )
-    .await
-    .unwrap_or_else(|_| "unknown".to_string());
-    let distro = distro.trim().to_string();
-    let pkg_mgr = runtime_pkg_mgr(&distro);
+    let (distro, pkg_mgr_owned) = runtime_read_host_distro();
+    let pkg_mgr = pkg_mgr_owned.as_str();
     let pkgs = runtime_system_packages(runtime_id, pkg_mgr);
 
     let mut pkg_vals: Vec<Value> = pkgs.iter().map(|p| json!(p)).collect();
@@ -2561,6 +2547,22 @@ pub(crate) async fn handle_job_cancel(state: &AppState, body: &Value) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn system_only_runtimes_reject_local_install_policy() {
+        for id in ["lisp", "c_cpp", "matlab", "php"] {
+            assert!(
+                !runtime_supports_local_install(id),
+                "{id} must be system-only"
+            );
+        }
+        for id in ["node", "python", "java", "dotnet", "rust"] {
+            assert!(
+                runtime_supports_local_install(id),
+                "{id} must allow local install"
+            );
+        }
+    }
 
     #[test]
     fn job_runner_cancel_marks_running_job() {

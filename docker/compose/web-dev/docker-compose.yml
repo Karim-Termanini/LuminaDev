@@ -23,4 +23,9 @@ services:
       - POSTGRES_PASSWORD=luminadev
       - POSTGRES_USER=postgres
       - POSTGRES_DB=webapp
+    volumes:
+      - pg_data:/var/lib/postgresql/data
     restart: unless-stopped
+
+volumes:
+  pg_data:
