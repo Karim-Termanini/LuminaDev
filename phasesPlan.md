@@ -1,8 +1,8 @@
 > [!IMPORTANT]
 > **Architectural Notice:** LuminaDev is a **Full Hosted** environment manager. It is explicitly **NOT isolated** and does not use strict sandboxing (like cgroups or Docker-based build isolation) by design.
-> 
+>
 > **Design & Quality Standard:** Every modification, feature implementation, and user dialog/interaction must align with the technical efficiency, visual elegance, and premium user experience of **Microsoft Dev Home**.
-> 
+>
 > **Target Audience & UX Philosophy:** LuminaDev is designed for both **absolute beginners** and **advanced/professional developers**. All interfaces, layout sequences, warning dialogs, and setup flows must cater to both: providing clear, automated, one-click solutions and helpful context for beginners, while offering deep configuration, logs, and raw control options for power users.
 
 # LuminaDev — Product Phases Plan
@@ -14,7 +14,7 @@
 ## 🎯 Immediate Sprint (from `docs/SMART_FLOW_VCS.md`) — DO THIS NOW
 
 **Critical paths only: Tests → Audit → Cross-distro → Release. Distribution is exclusively via GitHub Releases.**
-Cosmetic work (theming, drag-drop polish) blocked until after Day 10.
+Cosmetic work (theming, drag-drop polish) blocked until after Day 10
 
 ### Days 1–2 — Release Setup
 
@@ -425,7 +425,7 @@ Plugin marketplace, signed extensions, and Settings Extension tab are **not part
 
 - [x] **Flow Control:** `App.tsx` chains two wizards sequentially: `readiness_wizard_complete` → `first_run_wizard_complete`. Readiness wizard runs first (full 8-step system check + onboarding). First-run wizard only fires if readiness was completed but first-run wasn't.
 - [x] **Content Scope:** 3-step lightweight wizard — theme picker (dark/light preview cards) → Git identity (name + email, both optional) → completion. Both steps skippable via "Skip for now" link.
-- [x] **Zero Duplication:** ReadinessWizardPage (Phase 16) remains comprehensive path — 8 steps including system probes with auto-fix, theme, git, SSH, and profile picker. FirstRunWizardPage is *sequential fallback* for when readiness done but app onboarding wasn't finalized.
+- [x] **Zero Duplication:** ReadinessWizardPage (Phase 16) remains comprehensive path — 8 steps including system probes with auto-fix, theme, git, SSH, and profile picker. FirstRunWizardPage is _sequential fallback_ for when readiness done but app onboarding wasn't finalized.
 
 **Goal:** Must execute strictly after Phase 16 (System Readiness/Installer) is 100% satisfied. Must be fully functional and avoid duplicated setup steps.
 
@@ -602,6 +602,7 @@ When user clicks "Install" / "Fix":
 **Scope:** Decomposed 3,963-line `lib.rs` into 37 Rust source files (33 domain modules, 678-line dispatcher).
 
 **Results:**
+
 - `lib.rs`: 3,963 → 678 (82.9% reduction), 308 non-test dispatcher lines
 - ipc_invoke: 106 match-arm lines covering ~65 distinct channels (some arms use `|` multi-pattern), zero business logic inline
 - 37 Rust source files (`cloud_auth/` crate with 7 files; 2,303-line `runtime_jobs.rs` the largest module)

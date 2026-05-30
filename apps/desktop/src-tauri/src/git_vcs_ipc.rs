@@ -534,19 +534,14 @@ pub(crate) async fn handle_vcs_status(app: &AppHandle, body: &Value) -> Value {
     if repo_path.is_empty() {
         return json!({ "ok": false, "error": "[GIT_VCS_NOT_A_REPO] Missing repoPath." });
     }
-    // Verify it's a git repo
-    let branch_result = exec_output_limit(
-        "git",
-        &["-C", repo_path, "rev-parse", "--abbrev-ref", "HEAD"],
-        cmd_timeout_short(),
-    )
-    .await;
-    let branch = match branch_result {
-        Err(_) => {
-            return json!({ "ok": false, "error": "[GIT_VCS_NOT_A_REPO] Not a git repository." })
-        }
-        Ok(b) => b,
-    };
+    if !git_vcs_repo_state::git_is_inside_work_tree(repo_path).await {
+        return json!({
+            "ok": false,
+            "error": "[GIT_VCS_NOT_A_REPO] This folder is not a Git repository."
+        });
+    }
+    let unborn = !git_vcs_repo_state::git_has_commits(repo_path).await;
+    let branch = git_vcs_repo_state::git_current_branch_name(repo_path).await;
     let porcelain = exec_output_limit(
         "git",
         &["-C", repo_path, "status", "--porcelain=v1", "-u"],
@@ -561,6 +556,7 @@ pub(crate) async fn handle_vcs_status(app: &AppHandle, body: &Value) -> Value {
     json!({
         "ok": true,
         "branch": branch,
+        "unborn": unborn,
         "ahead": ahead,
         "behind": behind,
         "staged": staged,
