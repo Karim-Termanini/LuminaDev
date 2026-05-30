@@ -563,7 +563,7 @@
   "assistant.pr.titleLabel": "العنوان",
   "assistant.pr.titlePlaceholder": "ملخص قصير للتغييرات",
   "assistant.pr.bodyLabel": "الوصف (اختياري)",
-  "assistant.pr.bodyPlaceholder": "ما يجب أن يعرفه المراجعون…",
+  "assistant.pr.bodyPlaceholder": "قالب PR (Summary، Scope Check، Test Evidence، Docs Check، Notes)",
   "assistant.pr.titleRequired": "أضف عنواناً لطلب السحب.",
   "assistant.pr.createFailed": "تعذّر إنشاء طلب السحب.",
   "assistant.pr.create": "إنشاء على {{host}}",
