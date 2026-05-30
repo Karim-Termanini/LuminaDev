@@ -472,6 +472,7 @@
   "assistant.clone.openedExisting": "المستودع موجود بالفعل — تم فتح المجلد الحالي.",
   "assistant.project.branch": "الفرع: {{branch}}",
   "assistant.project.empty": "افتح أو استنسخ مشروعًا لرؤية التغييرات.",
+  "assistant.project.recents": "مشاريع حديثة",
   "assistant.changes.title": "ملفات متغيرة ({{count}})",
   "assistant.changes.clean": "لا تغييرات محلية — شجرة العمل نظيفة.",
   "assistant.changes.selectAll": "تضمين الكل",
@@ -506,6 +507,10 @@
   "assistant.changes.stagePrimary": "تجهيز",
   "assistant.changes.stageSub": "للحفظ",
   "assistant.changes.stageAria": "تجهيز {{file}}",
+  "assistant.changes.previewAria": "معاينة الفرق لـ {{file}}",
+  "assistant.changes.previewLoading": "جارٍ تحميل الفرق…",
+  "assistant.changes.previewEmpty": "لا يوجد فرق لهذا الملف.",
+  "assistant.changes.previewBinary": "ملف ثنائي — افتحه في المحرر.",
   "assistant.branch.primary": "فرع",
   "assistant.branch.sub": "تبديل أو إنشاء",
   "assistant.branch.none": "(لا فرع)",
@@ -544,5 +549,7 @@
   "assistant.behind.title": "اجلب الأحدث قبل الإرسال",
   "assistant.behind.body": "البعيد لديه {{count}} التزام/التزامات ليست لديك بعد. اسحب أولاً ثم أرسل.",
   "assistant.behind.pull": "جلب الأحدث",
-  "assistant.behind.dismiss": "ليس الآن"
+  "assistant.behind.dismiss": "ليس الآن",
+  "assistant.push.success": "تم الإرسال إلى البعيد. افتح على {{host}} للمراجعة أو طلب السحب.",
+  "assistant.push.dismiss": "إغلاق"
 }

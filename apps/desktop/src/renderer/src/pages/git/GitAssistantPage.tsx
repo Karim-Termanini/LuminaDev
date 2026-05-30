@@ -17,6 +17,7 @@ import { GitProjectBar } from './GitProjectBar'
 import { GitBehindRemoteModal } from './GitBehindRemoteModal'
 import { GitSaveShareBar } from './GitSaveShareBar'
 import { GitSetupChecklist } from './GitSetupChecklist'
+import { GitPostPushBanner } from './GitPostPushBanner'
 import { GitShareOnlinePanel } from './GitShareOnlinePanel'
 import { assertGitOk } from '../gitContract'
 import { humanizeGitError, parseGitErrorCode } from '../gitError'
@@ -24,7 +25,8 @@ import { assertGitVcsOk } from '../gitVcsContract'
 import { humanizeGitVcsError, parseGitVcsErrorCode } from '../gitVcsError'
 import { parseCheckoutDirtyFileList } from '../gitVcsCheckoutDirty'
 import { GitVcsDirtyCheckoutModal } from '../GitVcsDirtyCheckoutModal'
-import { hasCloudGitConnected, preferredCloudProvider } from '../gitAssistantCloud'
+import { cloudProviderLabel, hasCloudGitConnected, preferredCloudProvider } from '../gitAssistantCloud'
+import { branchWebUrl, hostRepoWebLink } from '../gitAssistantRemoteUrl'
 import { computeGitAssistantNextAction } from '../gitAssistantNextAction'
 import { computeGitProgressRail } from '../gitAssistantProgressRail'
 import type { GitProgressStep } from '../gitAssistantProgressRail'
@@ -77,6 +79,7 @@ export function GitAssistantPage(): ReactElement {
   const [stashIncludeUntracked, setStashIncludeUntracked] = useState(true)
   const [editorRefreshHint, setEditorRefreshHint] = useState(false)
   const [behindModalCount, setBehindModalCount] = useState<number | null>(null)
+  const [postPush, setPostPush] = useState<{ host: string; branchUrl: string } | null>(null)
   const [remoteHost, setRemoteHost] = useState<GitProviderFamily | null>(null)
   const statusTargetRef = useRef('')
 
@@ -124,6 +127,10 @@ export function GitAssistantPage(): ReactElement {
   useEffect(() => {
     void loadSetup()
   }, [loadSetup, cloudAccounts])
+
+  useEffect(() => {
+    setPostPush(null)
+  }, [repoPath])
 
   const loadRecents = useCallback(async () => {
     try {
@@ -449,11 +456,32 @@ export function GitAssistantPage(): ReactElement {
     }
   }
 
+  const resolveBranchWebUrl = useCallback(async (): Promise<{ host: string; branchUrl: string } | null> => {
+    const path = repoPath.trim()
+    const branchName = branch.trim()
+    if (!path || !branchName) return null
+    try {
+      const rem = await window.dh.gitVcsRemotes({ repoPath: path })
+      assertGitVcsOk(rem)
+      const origin = (rem.remotes ?? []).find((r) => r.name === 'origin') ?? rem.remotes?.[0]
+      if (!origin?.fetchUrl) return null
+      const link = hostRepoWebLink(origin.fetchUrl)
+      if (!link) return null
+      return {
+        host: cloudProviderLabel(link.provider),
+        branchUrl: branchWebUrl(link, branchName),
+      }
+    } catch {
+      return null
+    }
+  }, [repoPath, branch])
+
   const runPush = async (): Promise<void> => {
     if (!repoPath.trim()) return
     const path = repoPath.trim()
     setBusy(true)
     setOpErrorRaw(null)
+    setPostPush(null)
     try {
       const fetchRes = await window.dh.gitVcsFetch({ repoPath: path, remote: 'origin' })
       assertGitVcsOk(fetchRes)
@@ -470,6 +498,8 @@ export function GitAssistantPage(): ReactElement {
       const r = await window.dh.gitVcsPush({ repoPath: path, remote: 'origin', branch: branch || undefined })
       assertGitVcsOk(r)
       await refreshStatus()
+      const link = await resolveBranchWebUrl()
+      if (link) setPostPush(link)
     } catch (e) {
       setOpErrorRaw(e instanceof Error ? e.message : String(e))
     } finally {
@@ -710,6 +740,14 @@ export function GitAssistantPage(): ReactElement {
                     onGetLatest={() => void runPull()}
                     onSend={() => void runPush()}
                   />
+                  {postPush ? (
+                    <GitPostPushBanner
+                      host={postPush.host}
+                      branchUrl={postPush.branchUrl}
+                      busy={busy}
+                      onDismiss={() => setPostPush(null)}
+                    />
+                  ) : null}
                   <div ref={shareRef as React.RefObject<HTMLDivElement>}>
                     {!cloudConnected ? (
                       <GitAssistantSection
@@ -743,6 +781,7 @@ export function GitAssistantPage(): ReactElement {
                 </div>
                 <div className="git-assistant-save-changes">
                   <GitChangesPanel
+                    repoPath={repoPath}
                     staged={staged}
                     unstaged={unstaged}
                     included={included}

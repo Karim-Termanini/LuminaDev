@@ -9,7 +9,7 @@
 
 This document consolidates **all active planning** into one place: forward backlog, stabilization track, Git VCS roadmap, release criteria, architecture standards, and status of historical implementation plans. **`phasesPlan.md` is not duplicated here line-for-line** — it remains the authoritative phase-by-phase record; this file synthesizes it with every other plan.
 
-**Active sprint (2026-05-30):** Git Assistant — G1 shipped on `/git` per [`gitRefactor.md`](../gitRefactor.md). Next: **G2 validate**, **G3 iterate**. **One Git UX only** — no advanced page, no pro toggle. Merge/rebase/PR/CI/stash → editor, terminal, or GitHub in the browser.
+**Active sprint (2026-05-30):** Git Assistant — G1 + G3 polish shipped on `/git` per [`gitRefactor.md`](../gitRefactor.md). Next: **G2 validate** (5-user dogfood). **One Git UX only** — no advanced page, no pro toggle. Merge/rebase/PR/CI/stash → editor, terminal, or cloud host in the browser.
 
 ---
 
@@ -284,8 +284,8 @@ Need more than save, send, and sync? Use VS Code, Cursor, your terminal, or GitH
 
 **Gates before external testers (not optional for G2):**
 
-- [ ] `ar-SA` / `de-DE` `assistant.*` strings translated (English leftovers confuse quality perception)
-- [ ] Clone fix committed (`parent/repoName` + open existing repo on `[GIT_CLONE_EXISTS]`)
+- [x] `ar-SA` / `de-DE` `assistant.*` strings translated (English leftovers confuse quality perception)
+- [x] Clone fix committed (`parent/repoName` + open existing repo on `[GIT_CLONE_EXISTS]`)
 
 **G2 exit (5 real users):**
 
@@ -297,14 +297,14 @@ Need more than save, send, and sync? Use VS Code, Cursor, your terminal, or GitH
 
 **Hardening (race-safety — treat as required for G3, not optional):**
 
-- [ ] Cancel in-flight IPC on unmount / `repoPath` change (status, remotes, doctor scan) so late responses cannot overwrite state
+- [x] Cancel in-flight IPC on unmount / `repoPath` change (status, remotes, doctor scan, diff preview) so late responses cannot overwrite state
 
 **Product polish:**
 
-- [ ] Remote-aware or generic Share copy (GitLab linked in Settings but UI says “GitHub” today — use `origin` host or neutral “Send online” / “Connect cloud”)
-- [ ] Diff preview toggle per file
-- [ ] Recents list polish
-- [ ] Post-push “Open on host” one-liner (GitHub/GitLab from remote URL)
+- [x] Remote-aware or generic Share copy (GitHub/GitLab from `origin` host)
+- [x] Diff preview toggle per file
+- [x] Recents list polish
+- [x] Post-push “Open on host” one-liner (GitHub/GitLab from remote URL)
 
 **Intentional ceiling (no backlog):** dirty-checkout **stash** stays terminal + modal; no in-app stash IDE (correct for beginner scope).
 
@@ -325,7 +325,7 @@ Need more than save, send, and sync? Use VS Code, Cursor, your terminal, or GitH
 - [x] Update [`ROUTE_STATUS.md`](./ROUTE_STATUS.md) when `/git` default UX changes
 - [x] Contract tests for beginner page state machine / next-action matrix / **progress rail**
 - [x] Pro-only IPC not called from renderer (documented in shared package)
-- [ ] Cancel network calls on unmount / remote change — **G3 required** (race risk on large repos)
+- [x] Cancel network calls on unmount / remote change (status, cloud auth, remotes, doctor, diff)
 
 ---
 

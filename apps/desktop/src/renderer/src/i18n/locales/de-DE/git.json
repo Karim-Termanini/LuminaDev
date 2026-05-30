@@ -472,6 +472,7 @@
   "assistant.clone.openedExisting": "Dieses Repository liegt bereits auf der Festplatte — vorhandener Ordner wurde geöffnet.",
   "assistant.project.branch": "Branch: {{branch}}",
   "assistant.project.empty": "Öffnen oder klonen Sie ein Projekt, um Änderungen zu sehen.",
+  "assistant.project.recents": "Zuletzt geöffnet",
   "assistant.changes.title": "Geänderte Dateien ({{count}})",
   "assistant.changes.clean": "Keine lokalen Änderungen — Arbeitsbaum sauber.",
   "assistant.changes.selectAll": "Alle einschließen",
@@ -506,6 +507,10 @@
   "assistant.changes.stagePrimary": "stagen",
   "assistant.changes.stageSub": "zum Speichern",
   "assistant.changes.stageAria": "{{file}} stagen",
+  "assistant.changes.previewAria": "Diff für {{file}} anzeigen",
+  "assistant.changes.previewLoading": "Diff wird geladen…",
+  "assistant.changes.previewEmpty": "Kein Diff für diese Datei.",
+  "assistant.changes.previewBinary": "Binärdatei — im Editor öffnen.",
   "assistant.branch.primary": "Branch",
   "assistant.branch.sub": "wechseln oder anlegen",
   "assistant.branch.none": "(kein Branch)",
@@ -544,5 +549,7 @@
   "assistant.behind.title": "Zuerst Neueste holen",
   "assistant.behind.body": "Remote hat {{count}} Commit(s), die Sie noch nicht haben. Zuerst Pull, dann senden.",
   "assistant.behind.pull": "Neueste holen",
-  "assistant.behind.dismiss": "Später"
+  "assistant.behind.dismiss": "Später",
+  "assistant.push.success": "An Remote gesendet. Auf {{host}} öffnen für PR oder Review.",
+  "assistant.push.dismiss": "Schließen"
 }

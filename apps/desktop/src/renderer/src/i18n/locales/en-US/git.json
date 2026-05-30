@@ -495,6 +495,7 @@
   "assistant.clone.openedExisting": "That repository is already on disk — opened the existing folder.",
   "assistant.project.branch": "Branch: {{branch}}",
   "assistant.project.empty": "Open or clone a project to see changes here.",
+  "assistant.project.recents": "Recent projects",
   "assistant.changes.title": "Changed files ({{count}})",
   "assistant.changes.clean": "No local changes — working tree clean.",
   "assistant.changes.selectAll": "Stage all",
@@ -502,6 +503,10 @@
   "assistant.changes.stagePrimary": "stage",
   "assistant.changes.stageSub": "include in save",
   "assistant.changes.stageAria": "Stage {{file}}",
+  "assistant.changes.previewAria": "Preview diff for {{file}}",
+  "assistant.changes.previewLoading": "Loading diff…",
+  "assistant.changes.previewEmpty": "No diff to show for this file.",
+  "assistant.changes.previewBinary": "Binary file — open in your editor to inspect.",
   "assistant.branch.sectionTitle": "Branch",
   "assistant.branch.sectionSubtitle": "Switch or create a branch without leaving this page.",
   "assistant.branch.primary": "branch",
@@ -541,5 +546,7 @@
   "assistant.behind.title": "Get latest before you send",
   "assistant.behind.body": "The remote has {{count}} commit(s) you do not have yet. Pull first, then send your work.",
   "assistant.behind.pull": "Get latest",
-  "assistant.behind.dismiss": "Not now"
+  "assistant.behind.dismiss": "Not now",
+  "assistant.push.success": "Sent to the remote. Open on {{host}} to review or open a pull request.",
+  "assistant.push.dismiss": "Dismiss"
 }

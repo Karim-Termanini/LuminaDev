@@ -1,6 +1,6 @@
 import type { DoctorFinding } from '@linux-dev-home/shared'
 import type { ReactElement } from 'react'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { applyDoctorFixAction } from '../gitSetupDoctor'
@@ -21,15 +21,24 @@ export function GitSetupDoctorPanel({
   const [score, setScore] = useState<number | null>(null)
   const [gitVersion, setGitVersion] = useState<string | null>(null)
   const [findings, setFindings] = useState<DoctorFinding[]>([])
+  const scanEpochRef = useRef(0)
+
+  useEffect(() => {
+    return () => {
+      scanEpochRef.current++
+    }
+  }, [])
 
   const issues = findings.filter((f) => f.severity !== 'ok')
   const critCount = issues.filter((f) => f.severity === 'critical').length
   const warnCount = issues.filter((f) => f.severity === 'warning').length
 
   const runScan = async (): Promise<void> => {
+    const epoch = ++scanEpochRef.current
     setPhase('scanning')
     try {
       const res = await window.dh.gitDoctorScan()
+      if (epoch !== scanEpochRef.current) return
       if (!res.ok || !Array.isArray(res.findings)) {
         setPhase('error')
         return
@@ -39,7 +48,7 @@ export function GitSetupDoctorPanel({
       setGitVersion(typeof res.gitVersion === 'string' ? res.gitVersion : null)
       setPhase('done')
     } catch {
-      setPhase('error')
+      if (epoch === scanEpochRef.current) setPhase('error')
     }
   }
 

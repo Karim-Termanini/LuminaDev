@@ -3,6 +3,11 @@ import type { ReactElement } from 'react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import {
+  formatRecentOpened,
+  recentRepoBasename,
+  recentRepoParentHint,
+} from '../gitAssistantRecents'
 import { GitAssistantSection } from './GitAssistantSection'
 
 export type GitProjectBarProps = {
@@ -48,19 +53,31 @@ export function GitProjectBar({
       </div>
 
       {sorted.length > 0 ? (
-        <div className="hp-row-wrap" style={{ marginTop: 12 }}>
-          {sorted.slice(0, 8).map((r) => (
-            <button
-              key={r.path}
-              type="button"
-              className={`hp-btn git-assistant-recent-chip ${repoPath === r.path ? 'is-active' : ''}`.trim()}
-              disabled={busy}
-              onClick={() => onSelectRepo(r.path)}
-              title={r.path}
-            >
-              {r.path.split('/').pop() || r.path}
-            </button>
-          ))}
+        <div className="git-assistant-recents">
+          <div className="git-assistant-recents-label">{t('assistant.project.recents')}</div>
+          <ul className="git-assistant-recents-list">
+            {sorted.slice(0, 6).map((r) => (
+              <li key={r.path}>
+                <button
+                  type="button"
+                  className={`git-assistant-recent-row ${repoPath === r.path ? 'is-active' : ''}`.trim()}
+                  disabled={busy}
+                  onClick={() => onSelectRepo(r.path)}
+                  title={r.path}
+                >
+                  <span className="git-assistant-recent-row-main">
+                    <span className="git-assistant-recent-name">{recentRepoBasename(r.path)}</span>
+                    <span className="git-assistant-recent-meta mono">
+                      {recentRepoParentHint(r.path)} · {formatRecentOpened(r.lastOpened)}
+                    </span>
+                  </span>
+                  {repoPath === r.path ? (
+                    <span className="codicon codicon-check git-assistant-recent-check" aria-hidden />
+                  ) : null}
+                </button>
+              </li>
+            ))}
+          </ul>
         </div>
       ) : null}
 
