@@ -21,7 +21,7 @@ Where type is one of:
 Examples:
 - `fix: normalize docker cleanup error contracts`
 - `test: add runtime uninstall preview schema coverage`
-- `docs: add privilege boundary verification matrix`
+- `docs: update route status for /git hub`
 
 ## Reviewer checklist (commit-level)
 

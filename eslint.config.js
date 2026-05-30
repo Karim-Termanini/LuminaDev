@@ -37,11 +37,6 @@ export default tseslint.config(
     },
   },
   {
-    files: ['apps/desktop/src/renderer/src/layout/WidgetLayoutContext.tsx'],
-    plugins: { 'react-refresh': reactRefresh },
-    rules: { 'react-refresh/only-export-components': 'off' },
-  },
-  {
     files: ['apps/desktop/scripts/**/*.mjs'],
     languageOptions: {
       globals: { ...globals.node },

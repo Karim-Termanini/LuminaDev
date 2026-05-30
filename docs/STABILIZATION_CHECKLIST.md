@@ -1,6 +1,10 @@
 # Stabilization Checklist
 
-This checklist is the closure track for the "hype vs substance" concerns.
+> **Planning context:** [`MASTER_PLAN.md`](./MASTER_PLAN.md). **Audit / QA:** [`AUDIT.md`](./AUDIT.md).
+>
+> **Note:** Items referencing Flatpak, `DOCKER_FLATPAK.md`, or `PRIVILEGE_BOUNDARY_MATRIX.md` are **historical evidence** from the alpha era. Flatpak was abandoned 2026-05-28; those standalone docs were removed. Distribution is native Tauri / AppImage only.
+
+This checklist is the closure track for reliability, safety, process discipline, and truthful documentation.
 It is intentionally limited to reliability, safety, process discipline, and truthful documentation.
 
 Status legend:
@@ -54,19 +58,11 @@ Status legend:
   - Document at least 3 critical operations with explicit behavior in each context (Flatpak/native).
   - Include user-visible error wording for blocked host operations.
   - Add verification steps in docs for reproducing expected behavior.
-  - Cross-reference from `README.md` and `docs/DOCKER_FLATPAK.md`.
+  - Cross-reference from `README.md` (privilege notes in Known Limitations).
 - **Evidence:**
-  - Added explicit matrix with 3 critical operations across native vs Flatpak:
-    - `docs/PRIVILEGE_BOUNDARY_MATRIX.md`
-    - Operations covered: Docker socket access, SSH `~/.ssh` access, PTY terminal fallback.
-  - Added user-visible error wording references in matrix:
-    - Docker unavailable/permission denied messaging.
-    - SSH Flatpak note with override guidance.
-    - PTY fallback guidance.
-  - Added reproducible verification steps for both contexts and linked references:
-    - `README.md` Flatpak section
-    - `docs/DOCKER_FLATPAK.md`
-    - `docs/INSTALL_TEST.md`
+  - Documented native vs sandboxed behavior for Docker socket, SSH `~/.ssh`, and PTY terminal in stabilization pass (2026-04).
+  - Docker/SSH error contracts surface actionable guidance in renderer (`humanizeDockerError`, SSH page help text).
+  - Reproducible verification: [`INSTALL_TEST.md`](./INSTALL_TEST.md), manual B5 below.
 
 ## 4) Scope Freeze Enforcement
 
@@ -95,7 +91,7 @@ Status legend:
   - At least one pass over all files in `docs/` completed and recorded.
 - **Evidence:**
   - Completed docs audit record with reviewed file list and corrective actions:
-    - `docs/DOCS_AUDIT_2026-04.md`
+    - [`AUDIT.md`](./AUDIT.md) Appendix A
   - Added/updated truthfulness and process references:
     - `README.md`
     - `docs/BRANCHING.md`
@@ -121,7 +117,7 @@ Stabilization is considered complete only when:
 - **Stage 1 (Tauri skeleton + API bridge):** `done`
 - **Stage 2 (Rust-native backend port):** `done` — all IPC channels native; Node bridge removed
 - **Stage 3 (renderer parity + UX preservation):** `done`
-- **Stage 4 (packaging + CI + Flatpak):** `in_progress` — native-linux-build green; flatpak deferred to release
+- **Stage 4 (packaging + CI):** `in_progress` — native-linux-build green; **Flatpak abandoned**; distribution via GitHub Releases (AppImage) only
 - **Stage 5 (release gate):** `open` — product-complete criteria + final `pnpm smoke` when you choose to cut a release (not on a fixed calendar)
 
 - **Stage 1 evidence:**
@@ -150,7 +146,7 @@ Stabilization is considered complete only when:
 
 - **Stage 3 evidence (2026-04-29):**
   - All 63 `window.dh.*` call sites across 8 pages verified against bridge
-  - Two bugs fixed: `isTauriRuntime()` guard, `DashboardLayoutFile` import
+  - Two bugs fixed: `isTauriRuntime()` guard, renderer type imports aligned with shared package
   - UX regression audit: polish batches 1–5 intact
   - `pnpm typecheck` + `pnpm smoke` passed
 
@@ -158,8 +154,8 @@ Stabilization is considered complete only when:
   - CI: broadened push triggers (`feat/*`, `fix/*`, `chore/*`, etc.)
   - `quality-gate` job: no native addon build tools needed (node-pty removed)
   - `native-linux-build`: Rust toolchain + cache, Tauri build green in CI
-  - Flatpak: `flatpak/io.github.karimodora.LinuxDevHome.tauri.yml` added for local/Flathub prep — not in CI until Flathub submission
-  - Electron removed from repo (2026-04-30) — repo is now Tauri-only; `pnpm dev` → `tauri dev`
+  - Electron removed from repo (2026-04-30) — repo is Tauri-only; `pnpm dev` → `tauri dev`
+  - **Flatpak:** abandoned 2026-05-28; manifest and Flathub prep removed from repo
 
 - **Post-parity hardening (before product-complete declaration, not part of Stage 5 definition):**
   - ✅ `runtime_install` job: real distro package execution (apt/dnf/pacman + nvm/rustup)
@@ -168,7 +164,7 @@ Stabilization is considered complete only when:
   - ✅ Electron removed from repo (2026-04-30)
 
 - **Stage 4 remaining:**
-  - Flatpak CI job (heavy; add before Flathub submission only)
+  - AppImage build verification on clean VM (see [`MASTER_PLAN.md`](./MASTER_PLAN.md) §4 P5, [`INSTALL_TEST.md`](./INSTALL_TEST.md))
 
 - **Stage 5 (release gate — when you declare product-ready):**
   - `pnpm smoke` green on final `main`
@@ -189,21 +185,21 @@ Use this to audit which pages show live data and which show stubs/static content
 | **Monitor → System info** | `hostname`, `uname`, uptime | `ip`, `distro`, `shell`, `de`, `wm`, `gpu`, `packages`, `resolution` all optional / may be empty |
 | **Docker → Containers** | Live via `docker` CLI | — |
 | **Docker → Images / Volumes / Networks** | Live via `docker` CLI | — |
-| **Docker → Ports** | Live from container list | `[DOCKER_REMAP_NOT_SUPPORTED]` in Flatpak |
-| **Docker → Install/Setup** | Real sudo steps on native; blocked on Flatpak | — |
+| **Docker → Ports** | Live from container list on native builds | Remap requires Docker CLI access |
+| **Docker → Install/Setup** | Real Polkit/sudo steps on native | — |
 | **Runtimes → Status** | `node --version`, `python3 --version`, etc. | — |
 | **Runtimes → get-versions** | Node/Go/Python via public API | All others return `["latest"]` |
-| **Runtimes → check-deps** | `which` on each tool | — |
-| **Runtimes → uninstall-preview** | Distro package list | No real dep graph; `removableDeps` always empty |
-| **Runtimes → install job** | Real apt/dnf/pacman or nvm/rustup | Requires passwordless sudo for system method |
+| **Runtimes → check-deps** | `which` / distro tool checks on PATH | — |
+| **Runtimes → uninstall-preview** | Distro-aware package list + `removableDeps` dry-run | — |
+| **Runtimes → install job** | Real apt/dnf/pacman or nvm/rustup | Requires passwordless sudo or pkexec for system method |
 | **Job runner progress** | Starts `running`, ends `done`/`failed` | No streaming progress (final state only) |
 | **SSH → generate / getPub / testGithub** | Real `ssh-keygen`, `ssh -T` | — |
 | **Git → config list / set** | Real `git config --global` | — |
 | **Git → clone / status** | Real git operations | — |
 | **Terminal** | Real shell via tokio spawn | No PTY (line-buffered only; no interactive apps like vim) |
 | **Compose** | Real `docker compose up/logs` | Needs compose files in `docker/compose/` |
-| **Diagnostics bundle** | Saves JSON to app data dir | `perf.snapshot` returns zeros |
-| **Dashboard widgets** | Layout persistence (store.json) | Widget data depends on Monitor IPC |
+| **Diagnostics bundle** | Saves JSON to app data dir | — |
+| **Dashboard layout IPC** | _(removed 2026-05-29)_ | Widget deck and `layoutGet`/`layoutSet` channels removed with dashboard widgets |
 
 ## Manual Test Checklist (B5)
 
@@ -226,8 +222,8 @@ Route-by-route live/partial/stub truth table: [`ROUTE_STATUS.md`](./ROUTE_STATUS
 - [x] Volumes tab: list loads, create/remove volume works (Verified: `createCustomVolume` / `removeVolume`)
 - [x] Networks tab: list loads, create/remove network works (Verified: `createCustomNetwork` / `removeNetwork`)
 - [x] Cleanup tab: prune preview shows counts; “Run Cleanup” executes (Verified: `runPrune` / `previewCleanup`)
-- [x] Ports tab — **native session**: remap form runs; **Flatpak**: notice shown (Verified: `sessionKind` guard)
-- [x] Install / Setup — **Flatpak**: warning shown; **native**: wizard flow (Verified: `sessionKind` guard in Step 0)
+- [x] Ports tab — remap form runs on native session (Verified: `DockerPage`)
+- [x] Install / Setup — native wizard flow with Polkit (Verified: readiness + Docker install guards)
 
 ### Terminal
 
@@ -261,12 +257,13 @@ Route-by-route live/partial/stub truth table: [`ROUTE_STATUS.md`](./ROUTE_STATUS
 
 - [x] Runtime status list loads (node, python, go, rust, java) (Verified: `RuntimesPage`)
 
-### Known limits (not test failures)
+### Known limits (native builds)
 
-| Feature | Native + sudo | Flatpak / no sudo | Expected UI Response |
-| --- | --- | --- | --- |
-| `docker:install` | Wizard runs distro package steps; requires sudo in step 3 | Step 0 blocks with warning + links (official install + `docs/DOCKER_FLATPAK.md`) | Flatpak: modal warning; IPC errors: toast via `humanizeDockerError` (may say **likely Flatpak**) |
-| `docker:remap-port` | Remap form available; clones container with new `-p` then stops/removes original | Ports tab shows sandbox notice + docs link; form hidden | Flatpak: in-page notice; `[DOCKER_REMAP_NOT_SUPPORTED]` → **likely Flatpak** in toast |
-| SSH `~/.ssh` access | Direct read/write via `ssh-keygen` | May need `--filesystem=home` override; see `docs/PRIVILEGE_BOUNDARY_MATRIX.md` | Help text in SSH page mentions Flatpak overrides |
-| Docker socket | Direct via `/var/run/docker.sock` | Needs `--socket=session` Flatpak override; see `docs/DOCKER_FLATPAK.md` | "Docker daemon/socket unavailable" in banner |
+| Feature | Expected behavior |
+| --- | --- |
+| `docker:install` | Wizard runs distro package steps; Polkit/sudo for system packages |
+| `docker:remap-port` | Clones container with new `-p`, stops/removes source on success |
+| SSH `~/.ssh` | Direct read/write via `ssh-keygen` on native host |
+| Docker socket | Requires daemon running + user in `docker` group (or rootless docker) |
+| Terminal | Line-buffered — not full PTY; external terminal fallback available |
 

@@ -2,7 +2,6 @@
 
 import type {
   ComposeProfile,
-  DashboardLayoutFile,
   HostPortRow,
   HostSysInfo,
 } from '@linux-dev-home/shared'
@@ -206,12 +205,6 @@ declare global {
       onTerminalExit: (handler: (msg: { id: string }) => void) => () => void
       openExternal: (url: string) => Promise<unknown>
       sessionInfo: () => Promise<unknown>
-      layoutGet: (payload?: {
-        profile?: string | null
-      }) => Promise<{ ok: boolean; layout: DashboardLayoutFile; error?: string }>
-      layoutSet: (
-        payload: { layout: unknown; profile?: string | null } | unknown
-      ) => Promise<{ ok: boolean; error?: string }>
       storeGet: (
         payload: import('@linux-dev-home/shared').StoreGetRequest
       ) => Promise<{ ok: boolean; data: unknown; error?: string }>

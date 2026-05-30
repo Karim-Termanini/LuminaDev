@@ -106,8 +106,6 @@ async fn ipc_invoke(
         "dh:store:get" => store_engine::store_get(&app, &body).await,
         "dh:store:set" => store_engine::store_set(&app, &body).await,
         "dh:store:delete" => store_engine::store_delete(&app, &body).await,
-        "dh:layout:get" => store_engine::layout_get(&app, &body).await,
-        "dh:layout:set" => store_engine::layout_set(&app, &body).await,
         "dh:system:readiness:check" | "dh:system:readiness:fix" => {
             readiness_ipc::invoke(&app, channel.as_str(), &body).await
         }

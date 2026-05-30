@@ -10,7 +10,6 @@ import { SettingsGeneral } from './SettingsGeneral'
 import { SettingsUpdate } from './SettingsUpdate'
 import { SettingsAppEngine } from './SettingsAppEngine'
 import { SettingsBuilder } from './SettingsBuilder'
-import { SettingsExtension } from './SettingsExtension'
 import { SettingsBetaFeatures } from './SettingsBetaFeatures'
 import { SettingsNotification } from './SettingsNotification'
 import { SettingsShortcuts } from './SettingsShortcuts'
@@ -20,7 +19,7 @@ import { SettingsLanguages } from './SettingsLanguages'
 
 type SettingsNavId =
   | 'personalization' | 'remote' | 'system' | 'accounts' | 'general' | 'update'
-  | 'app-engine' | 'builder' | 'extension' | 'beta'
+  | 'app-engine' | 'builder' | 'beta'
   | 'notification' | 'shortcuts' | 'help-about' | 'datetime' | 'languages'
 
 const NAV: ReadonlyArray<{ id: SettingsNavId; labelKey: string; hintKey: string; icon: string; beta?: boolean }> = [
@@ -37,7 +36,6 @@ const NAV: ReadonlyArray<{ id: SettingsNavId; labelKey: string; hintKey: string;
   { id: 'languages', labelKey: 'shell.navLanguages', hintKey: 'shell.navLanguagesHint', icon: 'globe' },
   { id: 'app-engine', labelKey: 'shell.navAppEngine', hintKey: 'shell.navAppEngineHint', icon: 'server', beta: true },
   { id: 'builder', labelKey: 'shell.navBuilder', hintKey: 'shell.navBuilderHint', icon: 'tools', beta: true },
-  // { id: 'extension', labelKey: 'shell.navExtension', hintKey: 'shell.navExtensionHint', icon: 'extensions', beta: true },
   { id: 'beta', labelKey: 'shell.navBetaFeatures', hintKey: 'shell.navBetaFeaturesHint', icon: 'beaker', beta: true },
 ]
 
@@ -55,7 +53,6 @@ const TAB_SUBTITLE_KEYS: Partial<Record<SettingsNavId, string>> = {
   languages: 'shell.languagesSubtitle',
   'app-engine': 'shell.appEngineSubtitle',
   builder: 'shell.builderSubtitle',
-  extension: 'shell.extensionSubtitle',
   beta: 'shell.betaSubtitle',
 }
 
@@ -69,7 +66,6 @@ function TabContent({ id }: { id: SettingsNavId }): ReactElement {
     case 'update': return <SettingsUpdate />
     case 'app-engine': return <SettingsAppEngine />
     case 'builder': return <SettingsBuilder />
-    case 'extension': return <SettingsExtension />
     case 'beta': return <SettingsBetaFeatures />
     case 'notification': return <SettingsNotification />
     case 'shortcuts': return <SettingsShortcuts />

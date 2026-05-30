@@ -8,27 +8,27 @@ Status legend:
 - `partial` = core behavior works, but one or more flows are simplified/limited
 - `stub` = placeholder/demo/static behavior, not production-complete
 - `redirect` = legacy route, automatically redirected to a primary route
+- `removed` = route intentionally removed; redirect may still exist for bookmarks
 
 | Route | Status | Notes |
 | --- | --- | --- |
-| `/dashboard` | partial | Preset grid reads `active_profile` for highlight; slim container count + metrics strip with links to Docker and Monitor; several preset cards are `PLANNED`/disabled. Widget deck includes **`live.git-recents`** (recent repos + branch / dirty / ahead|behind snapshot via `dh:git:recent:list` + `dh:git:vcs:status`). |
-| `/dashboard/widgets` | stub | Static placeholder; not a full widget management surface yet. |
+| `/dashboard` | partial | Preset grid reads `active_profile` for highlight; slim container count + metrics strip with links to Docker and Monitor; several preset cards are `PLANNED`/disabled. |
 | `/dashboard/kernels` | partial | GPU probe, service states, security audit; auto-refreshes every ~30s (lightweight snapshot, not a full device manager). |
 | `/dashboard/logs` | partial | Jobs poll ~2s; compose logs load for selected profile; not a full observability platform. |
-| `/system` | partial | Metrics and monitor data are live; some sections still bounded snapshots. |
+| `/dashboard/widgets` | removed | **Deleted** 2026-05-29 — widget system out of scope; no route or redirect. |
+| `/system` | partial | Metrics and monitor data are live; per-container stats on Docker page; some sections still bounded snapshots. |
 | `/docker` | live | Main Docker slice (list/actions/logs/images/volumes/networks/cleanup/remap) is functional with guardrails. |
 | `/ssh` | partial | Core SSH key/test/setup flows work; advanced transfer/remote UX still evolving. |
-| `/git` | live | Primary Git hub — tabbed layout (**Config** = identity/behavior/security/inspector + Git Doctor; **VCS** = status/stage/diff/commit/branches/fetch/pull/push/merge/rebase/stash/CI per-repo + Smart-Flow v0 conflict banners; **Cloud Git** = GitHub/GitLab auth + activity dashboards). Replaces `/git-config`, `/git-vcs`, and `/cloud-git`. |
+| `/git` | live | Primary Git hub — tabbed layout (**Config** = identity/behavior/security/inspector + Git Doctor; **VCS** = status/stage/diff/commit/branches/fetch/pull/push/merge/rebase/stash/CI/conflict studio + Smart-Flow; **Cloud** = GitHub/GitLab auth + activity). Replaces `/git-config`, `/git-vcs`, and `/cloud-git`. **Cloud tab partial:** no API-side merge from Lumina, no notification inbox; activity panels otherwise live. |
 | `/git-config` | redirect | → `/git?tab=config` |
-| `/git-vcs` | redirect | → `/git?tab=vcs` (see `/git` for full VCS feature list) |
-| `/cloud-git` | redirect | → `/git?tab=cloud` (see `/git` for full Cloud Git feature list) |
+| `/git-vcs` | redirect | → `/git?tab=vcs` |
+| `/cloud-git` | redirect | → `/git?tab=cloud` |
 | `/registry` | redirect | → `/git?tab=vcs` |
-| `/profiles` | partial | CRUD + duplicate + export/import; **Set Active** writes `active_profile` as `baseTemplate` (`ComposeProfile`). **On launch**: optional `composeUp` for active profile + dashboard `layoutGet`/`layoutSet` refresh (store `on_login_automation`, runner after wizard). Deeper preset/dashboard unification still evolving. |
+| `/profiles` | partial | CRUD + duplicate + export/import; **Set Active** writes `active_profile` as `baseTemplate` (`ComposeProfile`). **On launch**: optional `composeUp` for active profile (store `on_login_automation`). Deeper preset/dashboard unification still evolving. |
 | `/terminal` | partial | Embedded terminal works; host/sandbox differences still affect behavior. |
 | `/runtimes` | partial | Status/version/deps/uninstall preview are live; install/update/remove backend is in active hardening. |
-| `/maintenance` | partial | Guardian + diagnostics + host probes as above. **Tasks**: user checklist on Overview + full editor on Schedule (inline rename). **Git backups** live on **Git Config → Backups**. No arbitrary host shell or full remediation. |
-| `/settings` | partial | **Nav:** Personalization / SSH & remote / System / **Connected accounts** (rail + detail card). **Accent:** presets + custom color; `appearance` store; `applyAppearanceAccent` / `syncAppearanceFromStore` (incl. wizard complete). **SSH:** read-only bookmark table + “Manage on SSH page” (`ssh_bookmarks`). **Hosts / env:** as before. **Accounts:** summary of linked GitHub/GitLab (`dh:cloud:auth:status`) + link to `/cloud-git`. **Not yet:** hosts file editing, profile-scoped env files + diff-before-apply. |
-| `/cloud-git` | partial | **Auth:** device flow + PAT for GitHub and GitLab via `dh:cloud:auth:*`; encrypted credential file. Optional OAuth **client IDs** for device flow: **Cloud Git → Advanced** (`store.json` `cloud_oauth_clients`) or `LUMINA_*_OAUTH_CLIENT_ID` at launch / compile. **UI:** provider **tabs** + scoped accent (GitHub blue / GitLab orange), **two-column layout** (Account & security + Activity), and **identity hero** per tab. **Activity (account-scoped):** open PR/MRs via `dh:cloud:git:prs` with **Open in Lumina VCS** when repo basename matches `dh:git:recent:list`; **reviews requested of you** via `dh:cloud:git:review-requests` (GitHub search `review-requested:<login>`, GitLab `reviewer_username` on merge requests API, same VCS links); **assigned issues** via `dh:cloud:git:issues` (GitHub search `assignee:@me`, GitLab `assignee_username`; **Open in Lumina VCS** when the issue row’s repo basename matches `dh:git:recent:list`); **CI** via `dh:cloud:git:pipelines` (global list here with the same **Open in Lumina VCS** link on each row when `repo` matches recents; **same channel** supports `repoPath` + `remote` for **per-repo** runs on `/git-vcs`, including self-hosted GitLab / GitHub Enterprise hosts from the remote URL); **latest releases** via `dh:cloud:git:releases` (same **Open in Lumina VCS** heuristic on each row). **Not yet:** API-side merge from Lumina, mentions / notification inbox, dedicated “cloud activity” dashboard beyond `/cloud-git`. (Activity lists include **Merge on provider** deep links to the standard PR/MR merge pages.) |
+| `/maintenance` | partial | Guardian + diagnostics + host probes. **Tasks**: user checklist on Overview + full editor on Schedule. **Git backups** on **Git Config → Backups**. No arbitrary host shell or full remediation. |
+| `/settings` | partial | Personalization, SSH overview, system diagnostics, accounts, general, update, notifications, shortcuts, help, datetime, languages, app engine, builder, beta flags. **Not yet:** hosts file editing, profile-scoped env files + diff-before-apply. **Extension tab removed** — not in scope. |
 
 ## Update Rule
 

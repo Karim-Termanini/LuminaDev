@@ -23,7 +23,7 @@ cd apps/desktop && pnpm exec vitest run src/renderer/src/pages/dockerContract.te
 ## Architecture
 
 **Monorepo** with two packages:
-- `packages/shared` — IPC channel names (`IPC` const), Zod request/response schemas, TypeScript types, widget registry. Built before desktop.
+- `packages/shared` — IPC channel names (`IPC` const), Zod request/response schemas, TypeScript types. Built before desktop.
 - `apps/desktop` — Tauri desktop app: Rust handlers in `src-tauri`, React renderer.
 
 ### IPC data flow
@@ -60,18 +60,30 @@ All IPC responses use `{ ok: boolean; error?: string }` shape. Error strings are
 
 - `apps/desktop/src/renderer/src/App.tsx` — route definitions
 - `pages/` — one file per route + contract/error helpers + tests
-- **`docs/SMART_FLOW_VCS.md`** — “Zero Terminal” / Smart-Flow VCS roadmap (Smart Push, conflict studio, PR wizard, banners); handoff doc for future `/git-vcs` work
-- **`SettingsPage.tsx`** — `/settings`: category rail + `hp-*` cards; `storeGet`/`storeSet` for `ssh_bookmarks` / `appearance`; `hostExec` commands `settings_read_hosts`, `settings_process_env` (see `HostExecRequestSchema` in shared + `dh:host:exec` match arms in `lib.rs`); accent applied via `applyAppearanceAccent` / `syncAppearanceFromStore`
 - `components/` — shared UI components
 - `layout/AppShell.tsx` — nav shell
-- `wizard/` — onboarding wizard on first launch
+- `wizard/` — readiness + first-run wizards
+
+### Documentation map
+
+| Doc | Use when |
+| --- | --- |
+| [`docs/MASTER_PLAN.md`](docs/MASTER_PLAN.md) | Active backlog, release gate, what is removed |
+| [`phasesPlan.md`](phasesPlan.md) | Phase history, architecture rules, known bugs table |
+| [`docs/AUDIT.md`](docs/AUDIT.md) | Audit findings, manual page QA checklist |
+| [`docs/ROUTE_STATUS.md`](docs/ROUTE_STATUS.md) | Route live/partial/stub truth before changing UI behavior |
+| [`docs/SMART_FLOW_VCS.md`](docs/SMART_FLOW_VCS.md) | Git VCS Smart-Flow (`/git?tab=vcs`) roadmap |
+| [`docs/STABILIZATION_CHECKLIST.md`](docs/STABILIZATION_CHECKLIST.md) | Stabilization evidence + B5 manual tests |
+
+**Removed from product (do not reintroduce without explicit decision):** Settings Extension tab, dashboard widgets, `layoutGet`/`layoutSet` IPC, `widgetRegistry`.
+
+**Settings** (`/settings`): 14 tabs via `SettingsShell.tsx`; `hostExec` for hosts/env diagnostics; no Extension tab.
 
 ### Shared package (`packages/shared/src/`)
 
 - `ipc.ts` — `IPC` const with all channel strings + TypeScript types
 - `schemas.ts` — Zod schemas for all request/response payloads
-- `foundation.ts` — `DashboardLayoutFile`, `JobStartRequest`
-- `widgetRegistry.ts` — registered widget types for dashboard
+- `foundation.ts` — `JobStartRequest` and shared foundation types
 
 ## Commit Rules
 

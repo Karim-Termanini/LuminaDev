@@ -84,7 +84,6 @@ export function MaintenancePage(): ReactElement {
     clearCache: true,
     pruneDocker: true,
     cleanLogs: true,
-    refreshWidgets: true,
   })
   const [newTaskTitle, setNewTaskTitle] = useState('')
   const [newCron, setNewCron] = useState('')
@@ -328,18 +327,6 @@ export function MaintenancePage(): ReactElement {
   async function runRecommendedMaintenance(): Promise<void> {
     if (recommendedSelection.pruneDocker) {
       await runCleanup()
-    }
-    if (recommendedSelection.refreshWidgets) {
-      const layoutRes = await window.dh.layoutGet()
-      if (layoutRes.ok) {
-        const saveRes = await window.dh.layoutSet(layoutRes.layout)
-        if (!saveRes.ok) {
-          throw new Error(saveRes.error || 'Failed to refresh widget layout cache.')
-        }
-        await appendHistory('widgets.refresh', 'success', t('cleanup.widgetRefreshed'))
-      } else {
-        throw new Error(layoutRes.error || 'Failed to load widget layout cache.')
-      }
     }
     if (recommendedSelection.clearCache) {
       await appendHistory('cache.cleanup.manual', 'warning', t('cleanup.hostCache'))
@@ -589,7 +576,6 @@ export function MaintenancePage(): ReactElement {
               <label><input type="checkbox" checked={recommendedSelection.clearCache} onChange={(e) => setRecommendedSelection((p) => ({ ...p, clearCache: e.target.checked }))} /> {t('section.clearCache')}</label>
               <label><input type="checkbox" checked={recommendedSelection.pruneDocker} onChange={(e) => setRecommendedSelection((p) => ({ ...p, pruneDocker: e.target.checked }))} /> {t('section.pruneDocker')}</label>
               <label><input type="checkbox" checked={recommendedSelection.cleanLogs} onChange={(e) => setRecommendedSelection((p) => ({ ...p, cleanLogs: e.target.checked }))} /> {t('section.cleanLogs')}</label>
-              <label><input type="checkbox" checked={recommendedSelection.refreshWidgets} onChange={(e) => setRecommendedSelection((p) => ({ ...p, refreshWidgets: e.target.checked }))} /> {t('section.refreshWidgets')}</label>
               <button className="hp-btn hp-btn-primary" onClick={() => void runRecommendedMaintenance()} disabled={busyCleanup || savingState}>
                 {t('section.runQuick')}
               </button>

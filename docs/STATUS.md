@@ -1,76 +1,61 @@
-# تقرير الوضع — LuminaDev (Tauri migration & release track)
+# LuminaDev Status Snapshot
 
-مستند **لقطة** يُحدَّث عند تغيّر المسار بشكل جوهري. التفاصيل القانونية للمراحل: [`STABILIZATION_CHECKLIST.md`](./STABILIZATION_CHECKLIST.md).
+Living snapshot updated when the release track changes materially.
 
----
+**Last updated:** 2026-05-30
 
-## Migration stages (من `STABILIZATION_CHECKLIST`)
-
-| Stage | المعنى | الحالة |
-|-------|--------|--------|
-| 0 | baseline + freeze | ✅ `done` |
-| 1 | Tauri skeleton + bridge | ✅ `done` |
-| 2 | Rust-native backend port | ✅ `done` |
-| 3 | renderer parity + UX | ✅ `done` |
-| 4 | packaging + CI | 🔄 `in_progress` |
-| 5 | release gate (عند إعلان product-ready) | ⬜ `open` |
-
-**ملاحظة تصنيف:** عناصر مثل **تنفيذ حقيقي لـ `runtime_install`** أو **سد stubs الـ runtimes** هي **قرب parity / جاهزية منتج** أكثر من تعريف «Stage 5» الضيق في الـ checklist؛ يمكن سردها تحت «قبل الوسم» دون خلطها مع «تعبئة فقط».
+| Doc | Role |
+| --- | --- |
+| [`phasesPlan.md`](../phasesPlan.md) | Phase history + architecture standards |
+| [`MASTER_PLAN.md`](./MASTER_PLAN.md) | Unified active plan + backlog |
+| [`AUDIT.md`](./AUDIT.md) | Consolidated audit + page QA |
+| [`STABILIZATION_CHECKLIST.md`](./STABILIZATION_CHECKLIST.md) | Stabilization gate evidence |
+| [`ROUTE_STATUS.md`](./ROUTE_STATUS.md) | Route maturity matrix |
 
 ---
 
-## ما خلص (PRs تقريبية #21 → #32)
+## Migration / release track
 
-### Stack (Rust / Tauri)
+| Stage | Meaning | Status |
+| --- | --- | --- |
+| 0 | Baseline + freeze | ✅ done |
+| 1 | Tauri skeleton + bridge | ✅ done |
+| 2 | Rust-native backend port | ✅ done |
+| 3 | Renderer parity + UX | ✅ done |
+| 4 | Packaging + CI (GitHub Releases / AppImage) | 🔄 in progress |
+| 5 | Release gate (explicit product-ready declaration) | ⬜ open |
 
-| PR | الموضوع |
-|----|---------|
-| #21 | Tauri scaffold + مسارات native أولية (Git / SSH / Monitor / Runtime …) |
-| #24 / #25 | باقي القنوات native + إزالة Node bridge |
-| #29 | A4 — timeouts وتضييق shell (`exec_*_limit`، إلخ) |
-| #30 | Tauri-first dev + إغلاق A4 (compose بـ `current_dir`، prune، `ps`/`sshpass`، إلخ) |
-
-### Renderer / UI
-
-| PR | الموضوع |
-|----|---------|
-| #22 / #23 | bridge parity + أيقونة + CI |
-| #26 | Docker screen audit (dead code، notices) |
-| #27 | Docker UI / Rust (`Ok()` wrapper) |
-| #28 | B5 checklist + B1–B3 docs |
-
-### Docs
-
-| PR | الموضوع |
-|----|---------|
-| #32 | دقة Stage 2 (محاكاة jobs، probes عبر bash، stubs) — مذكور أيضًا داخل `STABILIZATION_CHECKLIST` |
+Flatpak / Flathub pathway **abandoned** (2026-05-28). No Flatpak manifest in repo.
 
 ---
 
-## ما تبقى
+## Product phases
 
-### Stage 4 (ناقص / مستمر)
+Phases **0–17** shipped per `phasesPlan.md`.
 
-- **Electron:** حذف من الريبو (`electron-vite`، `main/`، `preload/`، سكربتات التعبئة المرتبطة) — **خطوة منفصلة** بعد **Tauri-only** (لا مسار إلزامي لـ Electron).
+**Removed from scope (2026-05-29):**
+- Phase 10 Extensions — Settings Extension tab, plugin marketplace
+- Dashboard widgets — deck, layout IPC, `/dashboard/widgets` route
 
-### قبل الوسم / جاهزية منتج (ليست بالضرورة «Stage 5» وحدها)
-
-- **`runtime_install` في `job:start`:** من محاكاة (sleep) إلى تنفيذ حقيقي عندما يُعرَف المنتج جاهزًا لذلك.
-- **`dh:runtime:check-deps`** و **`uninstall:preview`:** من stubs إلى تنفيذ عند الحاجة.
-- **`pnpm smoke` على `main`** قبل أي إصدار؛ **`git tag` / GitHub Release** فقط بعد **إعلان صريح** بأن المنتج مكتمل (سياسة المشروع).
-
-### غير مطلوب الآن (حسب الخطة)
-
-- توسيع **product phases** في `phasesPlan.md` قبل **product-complete**.
-- **Flatpak CI** الكامل كأولوية زمنية (تم التخلي عن Flathub).
+**Still partial** ([`ROUTE_STATUS.md`](./ROUTE_STATUS.md)):
+- Settings hosts/env file editing
+- Runtimes install matrix hardening
+- Profiles ↔ dashboard unification
+- AppImage E2E on clean VM
 
 ---
 
-## مراجع سريعة
+## Quality gate
 
-| ملف | الغرض |
-|-----|--------|
-| [`STABILIZATION_CHECKLIST.md`](./STABILIZATION_CHECKLIST.md) | معايير المراحل والأدلة |
-| [`phasesPlan.md`](../phasesPlan.md) | خريطة المنتج طويلة المدى |
+`pnpm smoke` must pass before merge. Release tagging waits on Stage 5 + maintainer sign-off.
 
-آخر مراجعة لهذا المستند: 2026-04-30.
+---
+
+## References
+
+| File | Purpose |
+| --- | --- |
+| [`MASTER_PLAN.md`](./MASTER_PLAN.md) | Unified plan + backlog |
+| [`AUDIT.md`](./AUDIT.md) | Audit + manual QA checklist |
+| [`SMART_FLOW_VCS.md`](./SMART_FLOW_VCS.md) | Git Smart-Flow blueprint |
+| [`STABILIZATION_CHECKLIST.md`](./STABILIZATION_CHECKLIST.md) | Stabilization + B5 tests |

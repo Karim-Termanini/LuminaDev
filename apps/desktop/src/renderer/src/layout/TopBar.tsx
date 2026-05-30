@@ -197,12 +197,6 @@ export function TopBar(): ReactElement {
         icon: 'output',
         keywords: ['logs', 'log viewer', 'stream', 'container logs', 'job logs'],
       },
-      {
-        label: 'Dashboard → Widgets',
-        route: '/dashboard/widgets',
-        icon: 'layout',
-        keywords: ['widgets', 'widget gallery', 'dashboard layout', 'customize'],
-      },
       // Git sub-tabs
       {
         label: 'Git → Version Control',
@@ -329,14 +323,6 @@ export function TopBar(): ReactElement {
         icon: 'tools',
         keywords: ['toolchain', 'cargo', 'registry', 'mirror', 'builder'],
       },
-      /*
-      {
-        label: 'Settings → Extensions',
-        route: '/settings?tab=extension',
-        icon: 'extensions',
-        keywords: ['plugins', 'extensions', 'addon'],
-      },
-      */
       {
         label: 'Settings → Beta Features',
         route: '/settings?tab=beta',
@@ -581,12 +567,6 @@ export function TopBar(): ReactElement {
               label={t('topbar.logs')}
               tooltip={t('topbar.logsTooltip')}
               type="logs"
-            />
-            <DashTab
-              to="/dashboard/widgets"
-              label={t('topbar.widgets')}
-              tooltip={t('topbar.widgetsTooltip')}
-              type="widgets"
             />
           </>
         ) : (

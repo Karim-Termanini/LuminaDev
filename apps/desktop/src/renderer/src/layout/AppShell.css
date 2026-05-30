@@ -272,11 +272,6 @@
   margin-left: -120px;
 }
 
-[data-tooltip-position='bottom-tab-widgets']::after {
-  width: 300px;
-  margin-left: -150px;
-}
-
 /* ── Main content area ── */
 
 .app-shell-main {

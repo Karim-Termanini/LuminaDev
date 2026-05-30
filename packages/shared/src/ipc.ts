@@ -274,8 +274,6 @@ export const IPC = {
   sshSetupRemoteKey: 'dh:ssh:setup:remote:key',
   sshEnableLocal: 'dh:ssh:enable:local',
   sessionInfo: 'dh:session:info',
-  layoutGet: 'dh:layout:get',
-  layoutSet: 'dh:layout:set',
   storeGet: 'dh:store:get',
   storeSet: 'dh:store:set',
   storeDelete: 'dh:store:delete',

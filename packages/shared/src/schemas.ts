@@ -175,8 +175,6 @@ export const WizardStateStoreSchema = z.object({
 export const OnLoginAutomationStoreSchema = z.object({
   /** Run `composeUp` for persisted `active_profile` once per launch. */
   composeUpForActiveProfile: z.boolean().optional().default(false),
-  /** Re-read `layout.json` and `layoutSet` it (same pattern as Maintenance “refresh widgets”). */
-  reloadDashboardLayout: z.boolean().optional().default(false),
 })
 
 export const MaintenanceTaskSchema = z.object({
@@ -645,7 +643,6 @@ export type AppearanceStore = z.infer<typeof AppearanceStoreSchema>
 
 const defaultOnLoginAutomation: OnLoginAutomationStore = {
   composeUpForActiveProfile: false,
-  reloadDashboardLayout: false,
 }
 
 /** Coerce persisted `on_login_automation` (or missing/invalid) to a safe object. */

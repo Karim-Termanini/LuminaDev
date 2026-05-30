@@ -39,9 +39,7 @@
   "topbar.maintenance": "الصيانة",
   "topbar.settings": "الإعدادات",
   "topbar.linuxDevHome": "Linux Dev Home",
-  "topbar.widgets": "Widgets",
   "topbar.mainTooltip": "لوحة التحكم الرئيسية وبطاقات الحالة السريعة",
   "topbar.kernelsTooltip": "مراقبة المعالج الرسومي (GPU)، سلاسل الأدوات، خدمات النظام، والمنافذ المفتوحة",
-  "topbar.logsTooltip": "مستعرض السجلات ومخرجات العمليات النشطة",
-  "topbar.widgetsTooltip": "إدارة، تهيئة، وتخطيط عناصر واجهة لوحة التحكم"
+  "topbar.logsTooltip": "مستعرض السجلات ومخرجات العمليات النشطة"
 }
