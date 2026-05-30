@@ -11,6 +11,7 @@ import {
   hostNewPullRequestUrl,
   isDefaultIntegrationBranch,
 } from '../gitAssistantPullRequestUrl'
+import { PR_BODY_DEFAULT_TEMPLATE } from '../gitAssistantPrBodyTemplate'
 import type { HostRepoLink } from '../gitAssistantRemoteUrl'
 
 export type GitPullRequestPanelProps = {
@@ -41,7 +42,7 @@ export function GitPullRequestPanel({
 }: GitPullRequestPanelProps): ReactElement {
   const { t } = useTranslation('git')
   const [title, setTitle] = useState('')
-  const [body, setBody] = useState('')
+  const [body, setBody] = useState(PR_BODY_DEFAULT_TEMPLATE)
   const [prBusy, setPrBusy] = useState(false)
   const [prError, setPrError] = useState<string | null>(null)
   const [prSuccess, setPrSuccess] = useState<string | null>(null)
@@ -55,7 +56,7 @@ export function GitPullRequestPanel({
 
   useEffect(() => {
     setTitle(suggestedTitle.trim() || head)
-    setBody('')
+    setBody(PR_BODY_DEFAULT_TEMPLATE)
     setPrError(null)
     setPrSuccess(null)
     setLastPrUrl(null)
@@ -236,11 +237,11 @@ export function GitPullRequestPanel({
         <span>{t('assistant.pr.bodyLabel')}</span>
         <textarea
           className="hp-input"
-          rows={3}
+          rows={14}
           value={body}
           disabled={busy || prBusy}
           onChange={(e) => setBody(e.target.value)}
-          placeholder={t('assistant.pr.bodyPlaceholder')}
+          placeholder={PR_BODY_DEFAULT_TEMPLATE}
         />
       </label>
 

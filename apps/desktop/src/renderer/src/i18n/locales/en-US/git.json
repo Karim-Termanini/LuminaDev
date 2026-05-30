@@ -560,7 +560,7 @@
   "assistant.pr.titleLabel": "Title",
   "assistant.pr.titlePlaceholder": "Short summary of your changes",
   "assistant.pr.bodyLabel": "Description (optional)",
-  "assistant.pr.bodyPlaceholder": "What reviewers should know…",
+  "assistant.pr.bodyPlaceholder": "PR template (Summary, Scope Check, Test Evidence, Docs Check, Notes)",
   "assistant.pr.titleRequired": "Add a title for the pull request.",
   "assistant.pr.createFailed": "Could not create the pull request.",
   "assistant.pr.create": "Create on {{host}}",
