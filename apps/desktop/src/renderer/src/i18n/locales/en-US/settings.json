@@ -39,7 +39,7 @@
   "beta.labelAutoSwitchProfile": "Auto-switch profile on project directory change",
   "beta.descAutoSwitchProfile": "",
   "beta.labelGitVcsProMode": "Git VCS Pro mode",
-  "beta.descGitVcsProMode": "Show all Git VCS controls (integration bar, CI, PR wizards, protected branch). When off, VCS uses a simpler default flow.",
+  "beta.descGitVcsProMode": "Unlock full Git VCS controls (fetch, integrate, CI, PR/MR). The VCS tab stays in simple mode until you turn Pro on with the beaker toggle.",
   "beta.loadFailed": "Failed to load flags",
   "beta.saveFailed": "Failed to save flag",
   "builder.cargoPath": "Cargo path",

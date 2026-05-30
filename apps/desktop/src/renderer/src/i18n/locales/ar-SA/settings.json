@@ -39,7 +39,7 @@
   "beta.labelAutoSwitchProfile": "التبديل التلقائي للملف الشخصي عند تغيير دليل المشروع",
   "beta.descAutoSwitchProfile": "",
   "beta.labelGitVcsProMode": "وضع Git VCS المتقدم",
-  "beta.descGitVcsProMode": "إظهار جميع عناصر تحكم Git VCS (شريط التكامل، CI، معالجات PR، الفرع المحمي). عند التعطيل، يستخدم VCS تدفقاً افتراضياً أبسط.",
+  "beta.descGitVcsProMode": "يفتح عناصر Git VCS الكاملة (جلب، دمج، CI، PR/MR). يبقى تبويب VCS في الوضع البسيط حتى تفعّل Pro من زر المختبر.",
   "beta.loadFailed": "فشل تحميل الأعلام",
   "beta.saveFailed": "فشل حفظ العلامة",
   "builder.cargoPath": "مسار Cargo",

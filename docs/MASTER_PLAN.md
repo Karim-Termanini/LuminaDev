@@ -275,7 +275,7 @@ From [`AUDIT.md`](./AUDIT.md) §1 (condensed):
 | P0 | AppImage release pipeline E2E | ❓ Unverified |
 | P2 | Settings hosts/env editing + Connected accounts auth | ✅ Done |
 | P2 | Runtimes install matrix hardening | ✅ Done (2026-05-30) |
-| P2 | Git VCS polish / simple mode | 📋 Planned |
+| P2 | Git VCS polish / simple mode | 🟡 Partial (simple default: compact hints, contextual sync toolbar, header Pro toggle) |
 | — | Resources settings tab | Removed (no Rust enforcement) |
 
 ---

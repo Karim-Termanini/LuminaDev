@@ -42,33 +42,36 @@ import {
 } from './gitVcsPrTracking'
 import { reconcileGitVcsSelection } from './gitVcsSelection'
 import { GLASS } from '../layout/GLASS'
+import { GitVcsProModeToggle } from './gitVcsProModeToggle'
 import { useBetaFlags } from '../hooks/useBetaFlags'
 
 type DirtyCheckoutPrompt = { branch: string; create: boolean; files: string[] }
+
+const GIT_VCS_PRO_LAYOUT_KEY = 'git_vcs_pro_layout'
 
 export function GitVcsPage(): ReactElement {
   const { t } = useTranslation('git')
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const betaFlags = useBetaFlags()
-  const [proMode, setProMode] = useState(false)
+  const [proLayout, setProLayout] = useState(false)
   const [proModeToggling, setProModeToggling] = useState(false)
+  const proMode = proLayout
 
-  // Sync local proMode state from beta flags on mount
   useEffect(() => {
-    setProMode(!!betaFlags['enable_git_vcs_pro_mode'])
+    setProLayout(!!betaFlags[GIT_VCS_PRO_LAYOUT_KEY])
   }, [betaFlags])
 
   const toggleProMode = async () => {
-    const next = !proMode
+    const next = !proLayout
     setProModeToggling(true)
     try {
       const res = await window.dh.storeSet({
         key: 'beta_features_state',
-        data: { enable_git_vcs_pro_mode: next },
+        data: { [GIT_VCS_PRO_LAYOUT_KEY]: next },
       })
       if (res.ok) {
-        setProMode(next)
+        setProLayout(next)
       }
     } finally {
       setProModeToggling(false)
@@ -1022,6 +1025,39 @@ export function GitVcsPage(): ReactElement {
     ]
   )
 
+  const workTreeClean =
+    staged.length === 0 &&
+    unstaged.length === 0 &&
+    conflictFileCount === 0 &&
+    gitOperation === 'none'
+
+  const flowHintAction = useMemo(() => {
+    if (proMode || !nextGitAction) return nextGitAction
+    const hasWork = staged.length > 0 || unstaged.length > 0
+    if (hasWork && nextGitAction === 'pull') {
+      return commitMessage.trim() ? 'commit' : 'commit_message'
+    }
+    return nextGitAction
+  }, [proMode, nextGitAction, staged.length, unstaged.length, commitMessage])
+
+  const showFlowHints =
+    !!repoPath.trim() &&
+    (proMode ||
+      flowHintAction != null ||
+      conflictFileCount > 0 ||
+      gitOperation !== 'none')
+
+  const simpleShowPull =
+    !proMode && workTreeClean && behind != null && behind > 0
+  const simpleShowPush =
+    !proMode && workTreeClean && ahead != null && ahead > 0 && (behind == null || behind === 0)
+  const simpleShowCheckRemote =
+    !proMode &&
+    workTreeClean &&
+    !simpleShowPull &&
+    !simpleShowPush &&
+    ((ahead == null && behind == null) || (ahead === 0 && behind === 0))
+
   const vcsTheme =
     activeFetchProvider === 'other' ? null : CLOUD_GIT_PROVIDER_THEME[activeFetchProvider]
   const vcsScopedStyle = vcsTheme
@@ -1043,36 +1079,34 @@ export function GitVcsPage(): ReactElement {
       >
         <header style={{ marginBottom: 28 }}>
           <div
-            className="mono"
-            style={{ color: 'var(--cg-accent, var(--accent))', fontSize: 12, marginBottom: 8 }}
+            style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              justifyContent: 'space-between',
+              gap: 12,
+              flexWrap: 'wrap',
+            }}
           >
-            GIT.WORKTREE
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div
+                className="mono"
+                style={{ color: 'var(--cg-accent, var(--accent))', fontSize: 12, marginBottom: 8 }}
+              >
+                GIT.WORKTREE
+              </div>
+              <h1 style={{ margin: 0, fontSize: 26, fontWeight: 700 }}>Git VCS</h1>
+              <p style={{ color: 'var(--text-muted)', marginTop: 8, maxWidth: 640, lineHeight: 1.5 }}>
+                {t('page.subtitleSimple')}
+              </p>
+            </div>
+            <GitVcsProModeToggle
+              proMode={proMode}
+              toggling={proModeToggling}
+              onToggle={() => void toggleProMode()}
+              t={t}
+            />
           </div>
-          <h1 style={{ margin: 0, fontSize: 26, fontWeight: 700 }}>Git VCS</h1>
-          <p style={{ color: 'var(--text-muted)', marginTop: 8, maxWidth: 640, lineHeight: 1.5 }}>
-            Stage, review diffs, commit, and sync branches — all against your local Git checkout.
-          </p>
         </header>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 12,
-            marginBottom: 8,
-            flexWrap: 'wrap',
-          }}
-        >
-          <button
-            type="button"
-            className="hp-btn"
-            disabled={proModeToggling}
-            onClick={() => void toggleProMode()}
-            title={proMode ? 'Switch to simple mode' : t('toolbar.simpleModeHint')}
-          >
-            <span className="codicon codicon-beaker" style={{ marginRight: 5 }} />
-            {proMode ? `${t('toolbar.proMode')} on` : `${t('toolbar.proMode')} off`}
-          </button>
-        </div>
         {proMode ? (
           <GitVcsProviderRail
             accounts={cloudAccounts}
@@ -1126,27 +1160,49 @@ export function GitVcsPage(): ReactElement {
     >
       <header>
         <div
-          className="mono"
-          style={{ color: 'var(--cg-accent, var(--accent))', fontSize: 12, marginBottom: 6 }}
+          style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            justifyContent: 'space-between',
+            gap: 12,
+            flexWrap: 'wrap',
+          }}
         >
-          {t('page.worktreeLabel')}
-        </div>
-        <h1 style={{ margin: 0, fontSize: 24, fontWeight: 700 }}>{t('page.title')}</h1>
-        <p style={{ color: 'var(--text-muted)', marginTop: 6, maxWidth: 720, lineHeight: 1.5 }}>
-          <Trans
-            i18nKey="page.subtitle"
-            ns="git"
-            t={t}
-            components={{
-              link: (
-                <Link
-                  to="/settings?tab=accounts&provider=github"
-                  style={{ color: 'var(--cg-accent, var(--accent))' }}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div
+              className="mono"
+              style={{ color: 'var(--cg-accent, var(--accent))', fontSize: 12, marginBottom: 6 }}
+            >
+              {t('page.worktreeLabel')}
+            </div>
+            <h1 style={{ margin: 0, fontSize: 24, fontWeight: 700 }}>{t('page.title')}</h1>
+            <p style={{ color: 'var(--text-muted)', marginTop: 6, maxWidth: 720, lineHeight: 1.5 }}>
+              {proMode ? (
+                <Trans
+                  i18nKey="page.subtitle"
+                  ns="git"
+                  t={t}
+                  components={{
+                    link: (
+                      <Link
+                        to="/settings?tab=accounts&provider=github"
+                        style={{ color: 'var(--cg-accent, var(--accent))' }}
+                      />
+                    ),
+                  }}
                 />
-              ),
-            }}
+              ) : (
+                t('page.subtitleSimple')
+              )}
+            </p>
+          </div>
+          <GitVcsProModeToggle
+            proMode={proMode}
+            toggling={proModeToggling}
+            onToggle={() => void toggleProMode()}
+            t={t}
           />
-        </p>
+        </div>
       </header>
 
       {proMode ? (
@@ -1167,7 +1223,7 @@ export function GitVcsPage(): ReactElement {
         highlightPath={null}
       />
 
-      {repoPath.trim() ? (
+      {showFlowHints ? (
         <GitVcsFlowHints
           gitOperation={gitOperation}
           conflictFileCount={conflictFileCount}
@@ -1175,7 +1231,8 @@ export function GitVcsPage(): ReactElement {
           unstagedCount={unstaged.length}
           ahead={ahead}
           behind={behind}
-          nextAction={nextGitAction}
+          nextAction={flowHintAction ?? null}
+          compact={!proMode}
         />
       ) : null}
 
@@ -1442,7 +1499,7 @@ export function GitVcsPage(): ReactElement {
               </span>
             )}
             {/* remote selector — only show if multiple remotes */}
-            {fetchRemoteNames.length > 1 ? (
+            {fetchRemoteNames.length > 1 && proMode ? (
               <select
                 className="mono"
                 aria-label="Remote"
@@ -1465,32 +1522,71 @@ export function GitVcsPage(): ReactElement {
                 ))}
               </select>
             ) : null}
-            <button
-              type="button"
-              className="hp-btn"
-              disabled={busy}
-              onClick={() => void runFetch()}
-            >
-              {t('toolbar.fetch')}
-            </button>
-            <button
-              type="button"
-              className="hp-btn"
-              disabled={busy}
-              onClick={() => void runPull()}
-              style={nextActionButtonStyle(nextGitAction, 'pull', {})}
-            >
-              {t('toolbar.pull')}
-            </button>
-            <button
-              type="button"
-              className="hp-btn hp-btn-primary"
-              disabled={busy}
-              onClick={() => void runPush()}
-              style={nextActionButtonStyle(nextGitAction, 'push', {})}
-            >
-              {t('toolbar.push')}
-            </button>
+            {proMode ? (
+              <>
+                <button
+                  type="button"
+                  className="hp-btn"
+                  disabled={busy}
+                  onClick={() => void runFetch()}
+                >
+                  {t('toolbar.fetch')}
+                </button>
+                <button
+                  type="button"
+                  className="hp-btn"
+                  disabled={busy}
+                  onClick={() => void runPull()}
+                  style={nextActionButtonStyle(nextGitAction, 'pull', {})}
+                >
+                  {t('toolbar.pull')}
+                </button>
+                <button
+                  type="button"
+                  className="hp-btn hp-btn-primary"
+                  disabled={busy}
+                  onClick={() => void runPush()}
+                  style={nextActionButtonStyle(nextGitAction, 'push', {})}
+                >
+                  {t('toolbar.push')}
+                </button>
+              </>
+            ) : (
+              <>
+                {simpleShowCheckRemote ? (
+                  <button
+                    type="button"
+                    className="hp-btn"
+                    disabled={busy}
+                    onClick={() => void runFetch()}
+                  >
+                    {t('toolbar.checkRemote')}
+                  </button>
+                ) : null}
+                {simpleShowPull ? (
+                  <button
+                    type="button"
+                    className="hp-btn hp-btn-primary"
+                    disabled={busy}
+                    onClick={() => void runPull()}
+                    style={nextActionButtonStyle(flowHintAction, 'pull', {})}
+                  >
+                    {t('toolbar.pull')}
+                  </button>
+                ) : null}
+                {simpleShowPush ? (
+                  <button
+                    type="button"
+                    className="hp-btn hp-btn-primary"
+                    disabled={busy}
+                    onClick={() => void runPush()}
+                    style={nextActionButtonStyle(flowHintAction, 'push', {})}
+                  >
+                    {t('toolbar.push')}
+                  </button>
+                ) : null}
+              </>
+            )}
             {proMode &&
             activeFetchProvider !== 'other' &&
             cloudAccounts.some((a) => a.provider === activeFetchProvider) ? (
@@ -1514,16 +1610,6 @@ export function GitVcsPage(): ReactElement {
                 {activeFetchProvider === 'gitlab' ? t('toolbar.newMr') : t('toolbar.newPr')}
               </button>
             ) : null}
-            <button
-              type="button"
-              className="hp-btn"
-              disabled={proModeToggling}
-              onClick={() => void toggleProMode()}
-              title={proMode ? 'Switch to simple mode' : t('toolbar.simpleModeHint')}
-            >
-              <span className="codicon codicon-beaker" style={{ marginRight: 5 }} />
-              {proMode ? `${t('toolbar.proMode')} on` : `${t('toolbar.proMode')} off`}
-            </button>
           </div>
 
           <div

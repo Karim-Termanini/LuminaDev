@@ -11,6 +11,8 @@ export type GitVcsFlowHintsProps = {
   ahead: number | null
   behind: number | null
   nextAction: GitVcsNextAction
+  /** Beginner layout: one-line next step only (no numbered playbook). */
+  compact?: boolean
 }
 
 const CHIP: CSSProperties = {
@@ -45,7 +47,7 @@ function Ol({ children }: { children: ReactNode }): ReactElement {
   )
 }
 
-function nextLead(nextAction: GitVcsNextAction): ReactElement | null {
+function nextLead(nextAction: GitVcsNextAction, compact: boolean): ReactElement | null {
   if (!nextAction) return null
   if (nextAction === 'resolution_studio') {
     return (
@@ -67,7 +69,11 @@ function nextLead(nextAction: GitVcsNextAction): ReactElement | null {
     return (
       <p style={{ margin: '10px 0 0', fontSize: 14, lineHeight: 1.55, color: 'var(--text)' }}>
         <span className="codicon codicon-debug-step-into" style={{ marginRight: 8, color: '#69f0ae' }} aria-hidden />
-        <Trans i18nKey="flow.lead.pull" ns="git" components={{ chip: <NextChip /> }} />
+        <Trans
+          i18nKey={compact ? 'flow.lead.pullSimple' : 'flow.lead.pull'}
+          ns="git"
+          components={{ chip: <NextChip /> }}
+        />
       </p>
     )
   }
@@ -75,7 +81,11 @@ function nextLead(nextAction: GitVcsNextAction): ReactElement | null {
     return (
       <p style={{ margin: '10px 0 0', fontSize: 14, lineHeight: 1.55, color: 'var(--text)' }}>
         <span className="codicon codicon-debug-step-into" style={{ marginRight: 8, color: '#69f0ae' }} aria-hidden />
-        <Trans i18nKey="flow.lead.commitMessage" ns="git" components={{ chip: <NextChip />, chip5: <NextChip /> }} />
+        <Trans
+          i18nKey={compact ? 'flow.lead.commitMessageSimple' : 'flow.lead.commitMessage'}
+          ns="git"
+          components={{ chip: <NextChip />, chip5: <NextChip /> }}
+        />
       </p>
     )
   }
@@ -83,7 +93,11 @@ function nextLead(nextAction: GitVcsNextAction): ReactElement | null {
     return (
       <p style={{ margin: '10px 0 0', fontSize: 14, lineHeight: 1.55, color: 'var(--text)' }}>
         <span className="codicon codicon-debug-step-into" style={{ marginRight: 8, color: '#69f0ae' }} aria-hidden />
-        <Trans i18nKey="flow.lead.commit" ns="git" components={{ chip: <NextChip /> }} />
+        <Trans
+          i18nKey={compact ? 'flow.lead.commitSimple' : 'flow.lead.commit'}
+          ns="git"
+          components={{ chip: <NextChip /> }}
+        />
       </p>
     )
   }
@@ -91,7 +105,11 @@ function nextLead(nextAction: GitVcsNextAction): ReactElement | null {
     return (
       <p style={{ margin: '10px 0 0', fontSize: 14, lineHeight: 1.55, color: 'var(--text)' }}>
         <span className="codicon codicon-debug-step-into" style={{ marginRight: 8, color: '#69f0ae' }} aria-hidden />
-        <Trans i18nKey="flow.lead.push" ns="git" components={{ chip: <NextChip /> }} />
+        <Trans
+          i18nKey={compact ? 'flow.lead.pushSimple' : 'flow.lead.push'}
+          ns="git"
+          components={{ chip: <NextChip /> }}
+        />
       </p>
     )
   }
@@ -106,6 +124,7 @@ export function GitVcsFlowHints({
   ahead,
   behind,
   nextAction,
+  compact = false,
 }: GitVcsFlowHintsProps): ReactElement {
   const { t } = useTranslation('git')
   const behindRemote = behind != null && behind > 0
@@ -118,7 +137,9 @@ export function GitVcsFlowHints({
 
   if (conflictFileCount > 0) {
     title = t('flow.title.conflicts')
-    body = (
+    body = compact ? (
+      <></>
+    ) : (
       <Ol>
         <li><Trans i18nKey="flow.body.conflict1" ns="git" components={{ chip: <NextChip /> }} /></li>
         <li><Trans i18nKey="flow.body.conflict2" ns="git" components={{ chip: <NextChip /> }} /></li>
@@ -129,15 +150,19 @@ export function GitVcsFlowHints({
     )
   } else if (gitOperation === 'merging' || gitOperation === 'rebasing') {
     title = t('flow.title.operation', { op: gitOperation === 'merging' ? t('integrate.merge').toLowerCase() : t('integrate.rebase').toLowerCase() })
-    body = (
+    body = compact ? (
+      <></>
+    ) : (
       <Ol>
         <li><Trans i18nKey="flow.body.operation1" ns="git" components={{}} /></li>
         <li><Trans i18nKey="flow.body.operation2" ns="git" values={{ op: gitOperation === 'merging' ? t('integrate.merge').toLowerCase() : t('integrate.rebase').toLowerCase() }} components={{ bold: <strong /> }} /></li>
       </Ol>
     )
   } else {
-    title = t('flow.title.e2e')
-    body = (
+    title = compact ? t('flow.title.simple') : t('flow.title.e2e')
+    body = compact ? (
+      <></>
+    ) : (
       <Ol>
         <li><Trans i18nKey="flow.body.line1" ns="git" components={chipMap} /></li>
         <li><Trans i18nKey="flow.body.line2" ns="git" components={chipMap} /></li>
@@ -157,9 +182,10 @@ export function GitVcsFlowHints({
     )
   }
 
-  const lead = nextLead(nextAction)
+  const lead = nextLead(nextAction, compact)
 
   const extra =
+    !compact &&
     nextAction !== 'commit_message' &&
     nextAction !== 'commit' &&
     stagedCount === 0 &&
@@ -177,7 +203,7 @@ export function GitVcsFlowHints({
       className="hp-card"
       aria-label="Workflow hints"
       style={{
-        padding: '14px 16px',
+        padding: compact ? '12px 14px' : '14px 16px',
         borderColor: 'color-mix(in srgb, var(--accent) 22%, var(--border))',
         background: 'color-mix(in srgb, var(--accent) 6%, var(--bg-widget))',
       }}
