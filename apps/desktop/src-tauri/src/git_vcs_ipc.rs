@@ -1,4 +1,5 @@
 //! Local Git merge / rebase / stash-pop IPC (no network). Keeps `lib.rs` slimmer.
+//! Pro-only channels remain for contract tests; renderer Git Assistant does not call merge/rebase/conflict-resolve arms.
 
 use serde_json::{json, Value};
 use tauri::AppHandle;

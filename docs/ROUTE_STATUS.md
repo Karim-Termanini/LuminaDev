@@ -19,7 +19,7 @@ Status legend:
 | `/system` | partial | Metrics and monitor data are live; per-container stats on Docker page; some sections still bounded snapshots. |
 | `/docker` | live | Main Docker slice (list/actions/logs/images/volumes/networks/cleanup/remap) is functional with guardrails. |
 | `/ssh` | partial | Core SSH key/test/setup flows work; advanced transfer/remote UX still evolving. |
-| `/git` | live | Primary Git hub — tabbed layout (**Config** = identity/behavior/security/inspector + Git Doctor; **VCS** = status/stage/diff/commit/branches/fetch/pull/push/merge/rebase/stash/CI/conflict studio + Smart-Flow; **Cloud** = PR/CI activity scoped by provider). Auth lives in **Settings → Connected accounts**. Replaces `/git-config`, `/git-vcs`, and `/cloud-git`. **Cloud tab partial:** no API-side merge from Lumina, no notification inbox; activity panels otherwise live. |
+| `/git` | live | **Git Assistant** — single-page Setup → Project → Save → Share; one primary next-action; open/clone/save snapshot/get latest/send to GitHub; conflicts → external editor. Legacy tabbed VCS/Config/Cloud UI removed. GitHub auth: **Settings → Connected accounts**. |
 | `/git-config` | redirect | → `/git?tab=config` |
 | `/git-vcs` | redirect | → `/git?tab=vcs` |
 | `/cloud-git` | redirect | → `/git?tab=cloud` |
