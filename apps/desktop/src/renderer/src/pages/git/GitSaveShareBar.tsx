@@ -58,6 +58,12 @@ export function GitSaveShareBar({
           style={next === 'commit_message' ? GIT_VCS_NEXT_ACTION_RING : undefined}
         />
       </div>
+      {busy ? (
+        <p className="hp-muted git-assistant-sync-busy" role="status" style={{ margin: '0 0 10px', fontSize: 12 }}>
+          <span className="codicon codicon-loading codicon-modifier-spin" aria-hidden />
+          {t('assistant.save.syncBusy')}
+        </p>
+      ) : null}
       <div className="git-assistant-actions">
         <button
           type="button"

@@ -19,6 +19,120 @@ export type GitChangesPanelProps = {
 
 type Row = { path: string; status: FileEntry['status']; staged: boolean }
 
+function buildChangeRows(staged: FileEntry[], unstaged: FileEntry[]): {
+  ready: Row[]
+  working: Row[]
+} {
+  const ready: Row[] = []
+  const working: Row[] = []
+  for (const f of staged.filter((x) => x.status !== 'C')) {
+    ready.push({ path: f.path, status: f.status, staged: true })
+  }
+  for (const f of unstaged.filter((x) => x.status !== 'C')) {
+    working.push({
+      path: f.path,
+      status: f.status,
+      staged: false,
+    })
+  }
+  return { ready, working }
+}
+
+function FileRows({
+  rows,
+  included,
+  busy,
+  previewPath,
+  diffLoading,
+  diffText,
+  diffBinary,
+  onToggle,
+  onTogglePreview,
+  t,
+}: {
+  rows: Row[]
+  included: Set<string>
+  busy: boolean
+  previewPath: string | null
+  diffLoading: boolean
+  diffText: string | null
+  diffBinary: boolean
+  onToggle: (path: string, included: boolean) => void
+  onTogglePreview: (previewKey: string) => void
+  t: (key: string, opts?: Record<string, unknown>) => string
+}): ReactElement {
+  return (
+    <ul className="git-assistant-file-list">
+      {rows.map((row) => {
+        const expanded = previewPath === `${row.staged ? 's' : 'u'}:${row.path}`
+        const previewKey = `${row.staged ? 's' : 'u'}:${row.path}`
+        return (
+          <li
+            key={previewKey}
+            className={`git-assistant-file-row ${expanded ? 'is-expanded' : ''} ${
+              row.staged ? 'is-staged' : 'is-unstaged'
+            }`.trim()}
+          >
+            <div className="git-assistant-file-row-main">
+              <button
+                type="button"
+                className="git-assistant-file-preview-toggle"
+                disabled={busy}
+                aria-expanded={expanded}
+                aria-label={t('assistant.changes.previewAria', { file: row.path })}
+                onClick={() => onTogglePreview(previewKey)}
+              >
+                <span
+                  className={`codicon codicon-chevron-${expanded ? 'down' : 'right'}`}
+                  aria-hidden
+                />
+              </button>
+              <span
+                className={`git-assistant-file-badge ${row.staged ? 'is-ready' : 'is-working'}`}
+              >
+                {row.staged
+                  ? t('assistant.changes.badgeReady')
+                  : t('assistant.changes.badgeWorking')}
+              </span>
+              <span className="git-assistant-file-path mono" title={row.path}>
+                {row.path}
+              </span>
+              <label className="git-assistant-file-stage">
+                <input
+                  type="checkbox"
+                  checked={included.has(row.path)}
+                  disabled={busy}
+                  onChange={(e) => onToggle(row.path, e.target.checked)}
+                  aria-label={t('assistant.changes.includeAria', { file: row.path })}
+                />
+              </label>
+            </div>
+            {expanded ? (
+              <div className="git-assistant-diff-preview" aria-live="polite">
+                {diffLoading ? (
+                  <p className="hp-muted" style={{ margin: 0, fontSize: 12 }}>
+                    {t('assistant.changes.previewLoading')}
+                  </p>
+                ) : diffBinary ? (
+                  <p className="hp-muted" style={{ margin: 0, fontSize: 12 }}>
+                    {t('assistant.changes.previewBinary')}
+                  </p>
+                ) : diffText?.trim() ? (
+                  <pre>{diffText}</pre>
+                ) : (
+                  <p className="hp-muted" style={{ margin: 0, fontSize: 12 }}>
+                    {t('assistant.changes.previewEmpty')}
+                  </p>
+                )}
+              </div>
+            ) : null}
+          </li>
+        )
+      })}
+    </ul>
+  )
+}
+
 export function GitChangesPanel({
   repoPath,
   staged,
@@ -29,42 +143,42 @@ export function GitChangesPanel({
   busy,
 }: GitChangesPanelProps): ReactElement {
   const { t } = useTranslation('git')
-  const [previewPath, setPreviewPath] = useState<string | null>(null)
+  const [previewKey, setPreviewKey] = useState<string | null>(null)
   const [diffText, setDiffText] = useState<string | null>(null)
   const [diffBinary, setDiffBinary] = useState(false)
   const [diffLoading, setDiffLoading] = useState(false)
   const diffEpochRef = useRef(0)
 
-  const rows: Row[] = useMemo(() => {
-    const out: Row[] = []
-    for (const f of unstaged.filter((x) => x.status !== 'C')) {
-      out.push({ path: f.path, status: f.status, staged: false })
-    }
-    for (const f of staged.filter((x) => x.status !== 'C')) {
-      if (!out.some((r) => r.path === f.path)) out.push({ path: f.path, status: f.status, staged: true })
-    }
-    return out
-  }, [staged, unstaged])
+  const { ready, working } = useMemo(
+    () => buildChangeRows(staged, unstaged),
+    [staged, unstaged],
+  )
+  const allRows = useMemo(() => [...ready, ...working], [ready, working])
+  const allPaths = allRows.map((r) => r.path)
+  const allIncluded = allRows.length > 0 && allRows.every((r) => included.has(r.path))
 
-  const allPaths = rows.map((r) => r.path)
-  const allIncluded = rows.length > 0 && rows.every((r) => included.has(r.path))
+  const previewRow = previewKey
+    ? allRows.find((r) => `${r.staged ? 's' : 'u'}:${r.path}` === previewKey)
+    : null
+
+  const togglePreview = (key: string): void => {
+    setPreviewKey((prev) => (prev === key ? null : key))
+  }
 
   useEffect(() => {
-    setPreviewPath(null)
+    setPreviewKey(null)
     setDiffText(null)
     diffEpochRef.current++
   }, [repoPath])
 
   useEffect(() => {
     const path = repoPath.trim()
-    if (!path || !previewPath) {
+    if (!path || !previewRow) {
       setDiffText(null)
       setDiffBinary(false)
       setDiffLoading(false)
       return
     }
-    const row = rows.find((r) => r.path === previewPath)
-    if (!row) return
     const epoch = ++diffEpochRef.current
     setDiffLoading(true)
     setDiffText(null)
@@ -72,8 +186,8 @@ export function GitChangesPanel({
       try {
         const res = await window.dh.gitVcsDiff({
           repoPath: path,
-          filePath: previewPath,
-          staged: row.staged,
+          filePath: previewRow.path,
+          staged: previewRow.staged,
         })
         if (epoch !== diffEpochRef.current) return
         assertGitVcsOk(res)
@@ -91,23 +205,22 @@ export function GitChangesPanel({
     return () => {
       diffEpochRef.current++
     }
-  }, [previewPath, repoPath, rows])
-
-  const togglePreview = (filePath: string): void => {
-    setPreviewPath((prev) => (prev === filePath ? null : filePath))
-  }
+  }, [previewKey, previewRow, repoPath])
 
   return (
     <GitAssistantSection
       id="git-changes-heading"
-      title={t('assistant.changes.title', { count: rows.length })}
+      title={t('assistant.changes.title', { count: allRows.length })}
       subtitle={
-        <GitDualLabel primary={t('assistant.changes.stagePrimary')} sub={t('assistant.changes.stageSub')} />
+        <GitDualLabel
+          primary={t('assistant.changes.stagePrimary')}
+          sub={t('assistant.changes.stageSub')}
+        />
       }
       icon="diff"
       className="git-assistant-changes-panel"
     >
-      {rows.length > 0 ? (
+      {allRows.length > 0 ? (
         <div className="git-assistant-changes-toolbar">
           <button
             type="button"
@@ -121,66 +234,51 @@ export function GitChangesPanel({
         </div>
       ) : null}
 
-      {rows.length === 0 ? (
+      {allRows.length === 0 ? (
         <p className="hp-muted" style={{ margin: 0 }}>
           {t('assistant.changes.clean')}
         </p>
       ) : (
-        <ul className="git-assistant-file-list">
-          {rows.map((row) => {
-            const expanded = previewPath === row.path
-            return (
-              <li key={row.path} className={`git-assistant-file-row ${expanded ? 'is-expanded' : ''}`.trim()}>
-                <div className="git-assistant-file-row-main">
-                  <button
-                    type="button"
-                    className="git-assistant-file-preview-toggle"
-                    disabled={busy}
-                    aria-expanded={expanded}
-                    aria-label={t('assistant.changes.previewAria', { file: row.path })}
-                    onClick={() => togglePreview(row.path)}
-                  >
-                    <span
-                      className={`codicon codicon-chevron-${expanded ? 'down' : 'right'}`}
-                      aria-hidden
-                    />
-                  </button>
-                  <span className="git-assistant-file-path mono" title={row.path}>
-                    {row.path}
-                  </span>
-                  <label className="git-assistant-file-stage">
-                    <input
-                      type="checkbox"
-                      checked={included.has(row.path)}
-                      disabled={busy}
-                      onChange={(e) => onToggle(row.path, e.target.checked)}
-                      aria-label={t('assistant.changes.stageAria', { file: row.path })}
-                    />
-                  </label>
-                </div>
-                {expanded ? (
-                  <div className="git-assistant-diff-preview" aria-live="polite">
-                    {diffLoading ? (
-                      <p className="hp-muted" style={{ margin: 0, fontSize: 12 }}>
-                        {t('assistant.changes.previewLoading')}
-                      </p>
-                    ) : diffBinary ? (
-                      <p className="hp-muted" style={{ margin: 0, fontSize: 12 }}>
-                        {t('assistant.changes.previewBinary')}
-                      </p>
-                    ) : diffText?.trim() ? (
-                      <pre>{diffText}</pre>
-                    ) : (
-                      <p className="hp-muted" style={{ margin: 0, fontSize: 12 }}>
-                        {t('assistant.changes.previewEmpty')}
-                      </p>
-                    )}
-                  </div>
-                ) : null}
-              </li>
-            )
-          })}
-        </ul>
+        <>
+          {ready.length > 0 ? (
+            <div className="git-assistant-changes-group">
+              <h4 className="git-assistant-changes-group-title">
+                {t('assistant.changes.readyHeading', { count: ready.length })}
+              </h4>
+              <FileRows
+                rows={ready}
+                included={included}
+                busy={busy}
+                previewPath={previewKey}
+                diffLoading={diffLoading}
+                diffText={diffText}
+                diffBinary={diffBinary}
+                onToggle={onToggle}
+                onTogglePreview={togglePreview}
+                t={t}
+              />
+            </div>
+          ) : null}
+          {working.length > 0 ? (
+            <div className="git-assistant-changes-group">
+              <h4 className="git-assistant-changes-group-title">
+                {t('assistant.changes.workingHeading', { count: working.length })}
+              </h4>
+              <FileRows
+                rows={working}
+                included={included}
+                busy={busy}
+                previewPath={previewKey}
+                diffLoading={diffLoading}
+                diffText={diffText}
+                diffBinary={diffBinary}
+                onToggle={onToggle}
+                onTogglePreview={togglePreview}
+                t={t}
+              />
+            </div>
+          ) : null}
+        </>
       )}
     </GitAssistantSection>
   )

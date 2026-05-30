@@ -11,6 +11,7 @@ export type GitVcsErrorCode =
   | 'GIT_VCS_AUTH_FAILED'
   | 'GIT_VCS_DIFF_TOO_LARGE'
   | 'GIT_VCS_NETWORK'
+  | 'GIT_VCS_NO_REMOTE'
   | 'GIT_VCS_CHECKOUT'
   | 'GIT_VCS_CHECKOUT_DIRTY'
   | 'GIT_VCS_STASH'
@@ -41,7 +42,15 @@ export function humanizeGitVcsError(err: unknown): string {
   const match = raw.match(/^\[([A-Z_]+)\]\s*([\s\S]*)$/)
   const code = match?.[1] ?? ''
   const detail = (match?.[2] ?? raw).trim()
-  if (code === 'GIT_VCS_NOT_A_REPO') return `This folder is not a Git repository. ${detail}`.trim()
+  if (code === 'GIT_VCS_NOT_A_REPO') {
+    return `This folder is not a Git repository. ${detail}`.trim()
+  }
+  if (code === 'GIT_VCS_NO_REMOTE') {
+    return (
+      detail ||
+      "No Git remote is configured for this project. Add a remote first (for example: git remote add origin <url>), then push again."
+    ).trim()
+  }
   if (code === 'GIT_VCS_NO_STAGED') return 'Stage at least one file before committing.'
   if (code === 'GIT_VCS_COMMIT_FAILED')
     return `Commit did not complete. ${detail || 'Check your Git identity, hooks, and signing setup.'}`.trim()

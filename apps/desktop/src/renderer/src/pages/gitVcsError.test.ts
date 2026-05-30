@@ -69,6 +69,12 @@ describe('humanizeGitVcsError', () => {
     )
   })
 
+  it('humanizes GIT_VCS_NO_REMOTE without network wording', () => {
+    const msg = humanizeGitVcsError(new Error('[GIT_VCS_NO_REMOTE] No such remote'))
+    expect(msg).toContain('remote')
+    expect(msg).not.toContain('Network error')
+  })
+
   it('humanizes GIT_VCS_CHECKOUT_DIRTY without implying not-a-repo', () => {
     const msg = humanizeGitVcsError(
       new Error(

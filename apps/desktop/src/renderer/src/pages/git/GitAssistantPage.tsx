@@ -15,6 +15,7 @@ import { GitNextStepCard } from './GitNextStepCard'
 import { GitProgressRail } from './GitProgressRail'
 import { GitProjectBar } from './GitProjectBar'
 import { GitBehindRemoteModal } from './GitBehindRemoteModal'
+import { GitRemoteUpdatesBanner } from './GitRemoteUpdatesBanner'
 import { GitSaveShareBar } from './GitSaveShareBar'
 import { GitSetupChecklist } from './GitSetupChecklist'
 import { GitPostPushBanner } from './GitPostPushBanner'
@@ -28,6 +29,13 @@ import { GitVcsDirtyCheckoutModal } from '../GitVcsDirtyCheckoutModal'
 import { cloudProviderLabel, hasCloudGitConnected, preferredCloudProvider } from '../gitAssistantCloud'
 import { branchWebUrl, hostRepoWebLink } from '../gitAssistantRemoteUrl'
 import { computeGitAssistantNextAction } from '../gitAssistantNextAction'
+import {
+  buildIncludedFromPaths,
+  setPathIncluded,
+  type BranchExclusionMap,
+} from '../gitAssistantFileInclusion'
+import { isDevAppSourceRepo } from '../gitAssistantDevRepo'
+import { fetchOriginQuiet } from '../gitAssistantRemoteSync'
 import { computeGitProgressRail } from '../gitAssistantProgressRail'
 import type { GitProgressStep } from '../gitAssistantProgressRail'
 import { evaluateGitSetupChecklist, isGitSetupComplete } from '../gitAssistantSetup'
@@ -82,6 +90,8 @@ export function GitAssistantPage(): ReactElement {
   const [postPush, setPostPush] = useState<{ host: string; branchUrl: string } | null>(null)
   const [remoteHost, setRemoteHost] = useState<GitProviderFamily | null>(null)
   const statusTargetRef = useRef('')
+  const excludedByBranchRef = useRef<BranchExclusionMap>(new Map())
+  const [unborn, setUnborn] = useState(false)
 
   const cloudConnected = useMemo(() => hasCloudGitConnected(cloudAccounts), [cloudAccounts])
 
@@ -147,6 +157,7 @@ export function GitAssistantPage(): ReactElement {
 
   const persistRepoChoice = useCallback(
     async (next: string): Promise<void> => {
+      excludedByBranchRef.current = new Map()
       setRepoPath(next)
       setOpErrorRaw(null)
       if (!next.trim()) return
@@ -177,7 +188,7 @@ export function GitAssistantPage(): ReactElement {
     setSearchParams(next, { replace: true })
   }, [searchParams, setSearchParams, repoPath, persistRepoChoice])
 
-  const refreshStatus = useCallback(async () => {
+  const refreshStatus = useCallback(async (options?: { fetchRemote?: boolean }) => {
     const path = repoPath.trim()
     statusTargetRef.current = path
     if (!path) {
@@ -191,7 +202,13 @@ export function GitAssistantPage(): ReactElement {
       setIncluded(new Set())
       setBranches([])
       setRemoteHost(null)
+      setUnborn(false)
+      excludedByBranchRef.current = new Map()
       return
+    }
+    if (options?.fetchRemote) {
+      await fetchOriginQuiet(path)
+      if (statusTargetRef.current !== path) return
     }
     const [st, br] = await Promise.all([
       window.dh.gitVcsStatus({ repoPath: path }),
@@ -202,6 +219,7 @@ export function GitAssistantPage(): ReactElement {
     assertGitVcsOk(br)
     setBranches(Array.isArray(br.branches) ? (br.branches as BranchEntry[]) : [])
     setBranch(st.branch ?? '')
+    setUnborn(Boolean((st as { unborn?: unknown }).unborn))
     setAhead(st.ahead ?? null)
     setBehind(st.behind ?? null)
     const opRaw = (st as { gitOperation?: unknown }).gitOperation
@@ -215,10 +233,13 @@ export function GitAssistantPage(): ReactElement {
     setStaged(stagedArr)
     setUnstaged(unstagedArr)
     const paths = [
-      ...unstagedArr.filter((f) => f.status !== 'C').map((f) => f.path),
-      ...stagedArr.filter((f) => f.status !== 'C').map((f) => f.path),
+      ...new Set([
+        ...unstagedArr.filter((f) => f.status !== 'C').map((f) => f.path),
+        ...stagedArr.filter((f) => f.status !== 'C').map((f) => f.path),
+      ]),
     ]
-    setIncluded(new Set(paths))
+    const branchKey = (st.branch ?? '').trim()
+    setIncluded(buildIncludedFromPaths(paths, branchKey, excludedByBranchRef.current))
     try {
       const rem = await window.dh.gitVcsRemotes({ repoPath: path })
       if (statusTargetRef.current !== path) return
@@ -244,12 +265,14 @@ export function GitAssistantPage(): ReactElement {
       setIncluded(new Set())
       setBranches([])
       setRemoteHost(null)
+      setUnborn(false)
+      excludedByBranchRef.current = new Map()
       return
     }
     let alive = true
     setBusy(true)
     setOpErrorRaw(null)
-    void refreshStatus()
+    void refreshStatus({ fetchRemote: true })
       .catch((e) => {
         if (alive && statusTargetRef.current === path) {
           setOpErrorRaw(e instanceof Error ? e.message : String(e))
@@ -267,7 +290,7 @@ export function GitAssistantPage(): ReactElement {
   useEffect(() => {
     const onVisible = (): void => {
       if (document.visibilityState !== 'visible' || !repoPath.trim()) return
-      void refreshStatus()
+      void refreshStatus({ fetchRemote: true })
         .then(() => {
           if (conflictFileCount > 0 || gitOperation !== 'none') {
             setEditorRefreshHint(true)
@@ -287,7 +310,7 @@ export function GitAssistantPage(): ReactElement {
   }, [repoPath, refreshStatus, conflictFileCount, gitOperation])
 
   const setupComplete = isGitSetupComplete(setupItems)
-  const projectComplete = !!repoPath.trim() && !!branch
+  const projectComplete = !!repoPath.trim() && (!!branch || unborn)
   const hasLocalChanges = staged.length > 0 || unstaged.length > 0
   const saveComplete = !!repoPath.trim() && !hasLocalChanges
   const rail = computeGitProgressRail({
@@ -362,7 +385,7 @@ export function GitAssistantPage(): ReactElement {
       const r = await window.dh.gitVcsCheckout({ repoPath: repoPath.trim(), branch: name, create })
       assertGitVcsOk(r)
       setDirtyCheckout(null)
-      await refreshStatus()
+      await refreshStatus({ fetchRemote: true })
     } catch (e) {
       const raw = e instanceof Error ? e.message : String(e)
       if (parseGitVcsErrorCode(new Error(raw)) === 'GIT_VCS_CHECKOUT_DIRTY') {
@@ -370,6 +393,34 @@ export function GitAssistantPage(): ReactElement {
       } else {
         setOpErrorRaw(raw)
       }
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const runStashAndSwitch = async (): Promise<void> => {
+    const prompt = dirtyCheckout
+    if (!prompt || !repoPath.trim()) return
+    setBusy(true)
+    setOpErrorRaw(null)
+    try {
+      const path = repoPath.trim()
+      const stashRes = await window.dh.gitVcsStash({
+        repoPath: path,
+        message: `LuminaDev: before ${prompt.create ? 'create' : 'switch'} ${prompt.branch}`,
+        includeUntracked: stashIncludeUntracked,
+      })
+      assertGitVcsOk(stashRes)
+      const checkoutRes = await window.dh.gitVcsCheckout({
+        repoPath: path,
+        branch: prompt.branch,
+        create: prompt.create,
+      })
+      assertGitVcsOk(checkoutRes)
+      setDirtyCheckout(null)
+      await refreshStatus({ fetchRemote: true })
+    } catch (e) {
+      setOpErrorRaw(e instanceof Error ? e.message : String(e))
     } finally {
       setBusy(false)
     }
@@ -483,8 +534,7 @@ export function GitAssistantPage(): ReactElement {
     setOpErrorRaw(null)
     setPostPush(null)
     try {
-      const fetchRes = await window.dh.gitVcsFetch({ repoPath: path, remote: 'origin' })
-      assertGitVcsOk(fetchRes)
+      await fetchOriginQuiet(path)
       const st = await window.dh.gitVcsStatus({ repoPath: path })
       assertGitVcsOk(st)
       if (st.behind != null && st.behind > 0) {
@@ -703,9 +753,19 @@ export function GitAssistantPage(): ReactElement {
 
           {repoPath.trim() ? (
             <>
+              {isDevAppSourceRepo(repoPath) ? (
+                <div className="hp-status-alert warning" role="status" style={{ marginBottom: 12 }}>
+                  {t('assistant.devRepoWarning')}
+                </div>
+              ) : null}
+              {unborn ? (
+                <p className="hp-muted git-assistant-unborn-hint" role="status">
+                  {t('assistant.project.unborn')}
+                </p>
+              ) : null}
               <GitBranchBar
                 branches={branches}
-                currentBranch={branch}
+                currentBranch={branch || t('assistant.branch.unborn')}
                 busy={busy}
                 onCheckout={(name) => void runCheckout(name, false)}
                 onCreateBranch={(name) => void runCheckout(name, true)}
@@ -719,15 +779,17 @@ export function GitAssistantPage(): ReactElement {
                 onIncludeUntrackedChange={setStashIncludeUntracked}
                 busy={busy}
                 onCancel={() => setDirtyCheckout(null)}
-                onStashAndSwitch={() => {
-                  setOpErrorRaw(
-                    '[GIT_VCS_CHECKOUT_DIRTY] Save or stash via terminal for branch switches with uncommitted changes.',
-                  )
-                  setDirtyCheckout(null)
-                }}
+                onStashAndSwitch={() => void runStashAndSwitch()}
               />
               <div ref={saveRef as React.RefObject<HTMLDivElement>} className="git-assistant-save-grid">
                 <div className="git-assistant-save-main">
+                  {showPull ? (
+                    <GitRemoteUpdatesBanner
+                      behind={behind ?? 0}
+                      busy={busy}
+                      onGetLatest={() => void runPull()}
+                    />
+                  ) : null}
                   <GitSaveShareBar
                     message={commitMessage}
                     onMessageChange={setCommitMessage}
@@ -791,12 +853,17 @@ export function GitAssistantPage(): ReactElement {
                     included={included}
                     busy={busy}
                     onToggle={(path, on) => {
-                      setIncluded((prev) => {
-                        const nextSet = new Set(prev)
-                        if (on) nextSet.add(path)
-                        else nextSet.delete(path)
-                        return nextSet
-                      })
+                      setPathIncluded(excludedByBranchRef.current, branch, path, on)
+                      setIncluded(
+                        buildIncludedFromPaths(
+                          [
+                            ...unstaged.filter((f) => f.status !== 'C').map((f) => f.path),
+                            ...staged.filter((f) => f.status !== 'C').map((f) => f.path),
+                          ],
+                          branch,
+                          excludedByBranchRef.current,
+                        ),
+                      )
                     }}
                     onToggleAll={(paths, on) => {
                       setIncluded((prev) => {

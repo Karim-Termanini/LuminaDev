@@ -18,6 +18,8 @@ pnpm install
 
 ### 🚀 Push & Multi-Remote Policy
 
+i
+
 - **Bundle Your Pushes:** Do not push every micro-commit. Bundle your work into logical blocks (Vertical Slices) before pushing to save CI resources.
 - **Sync Both Remotes:** When pushing new code, ensure it is pushed to both **GitLab** and **GitHub**.
 - **Dual Review:** After pushing, you must create a **Merge Request (MR)** on GitLab and a **Pull Request (PR)** on GitHub to maintain synchronization and allow for multi-platform review.

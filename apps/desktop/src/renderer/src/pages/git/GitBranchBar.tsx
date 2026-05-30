@@ -36,6 +36,7 @@ export function GitBranchBar({
     >
       <div className="hp-row-wrap">
         <select
+          key={currentBranch}
           className="hp-input mono"
           value={currentBranch}
           disabled={busy || locals.length === 0}
