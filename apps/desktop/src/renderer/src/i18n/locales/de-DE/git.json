@@ -387,6 +387,7 @@
   "dirtyCheckout.helpText.after": " in einem Terminal wieder her.",
   "dirtyCheckout.cancel": "Abbrechen",
   "dirtyCheckout.stashAndSwitch": "Alles stashen und wechseln",
+  "assistant.devRepoWarning": "Dieser Ordner ist der LuminaDev-Quellcode während pnpm dev. Branch-Wechsel überschreibt Projektdateien und kann die Dev-App neu starten. Nutzen Sie für Git-Tests einen separaten Klon.",
   "integrateWizard.title": "Änderungen integrieren",
   "integrateWizard.subtitle.before": "Updates von einem anderen Branch in ",
   "integrateWizard.targetLabel": "Branch oder Remote-Ref für Merge/Rebase",

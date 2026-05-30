@@ -395,6 +395,7 @@
   "dirtyCheckout.helpText.after": " in a terminal.",
   "dirtyCheckout.cancel": "Cancel",
   "dirtyCheckout.stashAndSwitch": "Stash all and switch",
+  "assistant.devRepoWarning": "This folder is the LuminaDev app source while you run pnpm dev. Switching branches here rewrites project files and can restart the dev app. Use a separate clone for Git tests.",
 
   "integrateWizard.title": "Integrate Changes",
   "integrateWizard.subtitle.before": "Bringing updates from another branch into ",

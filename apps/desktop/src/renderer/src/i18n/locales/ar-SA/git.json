@@ -387,6 +387,7 @@
   "dirtyCheckout.helpText.after": " في الطرفية.",
   "dirtyCheckout.cancel": "إلغاء",
   "dirtyCheckout.stashAndSwitch": "تخزين الكل والتبديل",
+  "assistant.devRepoWarning": "هذا المجلد هو مصدر LuminaDev أثناء تشغيل pnpm dev. تبديل الفروع يعيد كتابة ملفات المشروع وقد يعيد تشغيل تطبيق التطوير. استخدم استنساخاً منفصلاً لاختبارات Git.",
   "integrateWizard.title": "دمج التغييرات",
   "integrateWizard.subtitle.before": "جلب التحديثات من فرع آخر إلى ",
   "integrateWizard.targetLabel": "الفرع أو المرجع البعيد للدمج/إعادة الترتيب منه",
