@@ -1,49 +1,39 @@
 ## LuminaDev v0.2.0-alpha (Draft)
 
-Alpha release focused on Flatpak stability, Docker/runtime reliability, and CI hardening.
+> **Historical note (2026-05-30):** This draft reflects the alpha tag era. Flatpak was the primary distribution path at tag time; **Flatpak is now abandoned**. Current target is **GitHub Releases / AppImage**. Extension tab and dashboard widgets are **removed from scope**. See [`STATUS.md`](./STATUS.md) and [`MASTER_PLAN.md`](./MASTER_PLAN.md).
 
-### Install Instructions
+Alpha release focused on Tauri migration, Docker/runtime reliability, and CI hardening.
 
-- **Flatpak (recommended)**
-  - Install runtime deps:
-    - `flatpak install flathub org.gnome.Platform//49 org.gnome.Sdk//49`
-  - Install app build/bundle artifact from release assets (when attached).
-  - Run:
-    - `flatpak run io.github.karimodora.LinuxDevHome`
+### Install Instructions (historical)
 
-- **From source (desktop app)**
-  - Requirements: Node.js + pnpm, Rust toolchain, Tauri Linux deps.
-  - Install dependencies:
-    - `pnpm install`
-  - Run app:
-    - `pnpm dev`
+- **From source (current recommended path)**
+  - Requirements: Node.js 20+, pnpm, Rust toolchain, Tauri Linux deps ([prerequisites](https://v2.tauri.app/start/prerequisites/)).
+  - `pnpm install && pnpm dev`
 
-### What Is Included
+- **Flatpak** — abandoned; manifest removed from repo. Do not use for new installs.
 
-- Flatpak manifest/build flow stabilized, including cargo source generation support.
+### What Was Included at Alpha Tag
+
+- Full Tauri backend port (Electron removed).
 - Rust Docker smoke tests and Job Runner integration tests.
-- GitHub/GitLab CI hardening for native build, smoke tests, and Flatpak build.
-- Runtime install reliability improvements (including Fedora Java package mapping behavior).
-- Flatpak-specific guidance improvements for Docker socket and terminal fallback UX.
-- Initial backend modularization: `lib.rs` split into focused modules (including `host_exec`, `runtime_packages`, `runtime_versioning`, `runtime_paths`, `runtime_verify`, and `runtime_jobs`).
+- CI: native Linux build, workspace smoke (`pnpm smoke`).
+- Runtime install reliability (including Fedora Java package mapping).
+- Backend modularization into focused Rust domain modules.
 
-### Known Issues (Alpha)
+### Known Issues at Alpha Tag (many since fixed)
 
-- Some routes remain intentionally partial/post-alpha scope (`Extensions`, `Cloud Git`). **`/settings`** now ships a real **hub** (accent persistence, SSH bookmark overview, read-only hosts + env diagnostics); **hosts editing** and **profile env file** workflows are still out of scope for this alpha tag.
-- Dashboard/Profile store still has split sources of truth for preset linkage.
-- Runtime uninstall dependency graph remains best-effort (`removableDeps` limited).
-- Ruby install flow can be slower/less predictable on some Fedora setups.
-- Flatpak host integration still depends on user environment and override correctness (Docker socket access, host tools availability).
-- Packaged app metadata may still report `0.1.0` in some manifests while the git tag is `v0.2.0-alpha` (cosmetic; tracked for the next housekeeping pass).
-- Linux AppImage/deb artifacts are not currently uploaded by CI workflows; Flatpak bundle is the primary downloadable artifact for this alpha.
+- Several routes partial (Settings hosts editing, runtime matrix hardening).
+- Dashboard/profile store split sources of truth (evolving).
+- AppImage CI artifact upload not verified end-to-end.
 
 ### Verification Snapshot
 
-- Workspace smoke: `pnpm smoke`
-- Rust library tests: `cd apps/desktop/src-tauri && cargo test --lib -- --nocapture`
-- Docker smoke tests: `cd apps/desktop/src-tauri && cargo test --test docker_smoke -- --nocapture`
+```bash
+pnpm smoke
+cd apps/desktop/src-tauri && cargo test --lib -- --nocapture
+cd apps/desktop/src-tauri && cargo test --test docker_smoke -- --nocapture
+```
 
-### Release artifacts
+### Current release blockers
 
-- **Flatpak bundle:** `luminadev.flatpak` (built by GitHub Actions `flatpak.yml` on `main`)
-- **AppImage:** not attached for this alpha (no CI artifact upload yet)
+See [`MASTER_PLAN.md`](./MASTER_PLAN.md) §4 P5 — AppImage E2E on clean VM.

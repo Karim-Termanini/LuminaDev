@@ -1,24 +1,35 @@
-# Install test (Flatpak)
+# Install test (native Tauri / AppImage)
 
-After building the Flatpak locally (network build; see `flatpak/README.md` for the offline manifest):
+Manual verification on a clean Linux VM before tagging a release. See also [`STABILIZATION_CHECKLIST.md`](./STABILIZATION_CHECKLIST.md) (B5) and [`AUDIT.md`](./AUDIT.md) Appendix B.
 
-```bash
-cd /path/to/LuminaDev
-flatpak-builder --user --install --force-clean flatpak-build-dir flatpak/io.github.karimodora.LinuxDevHome.yml
-```
-
-Offline / Flathub-style (uses `flatpak/generated-sources.json`; regenerate after lockfile changes):
+## Build from source
 
 ```bash
-flatpak-builder --user --install --force-clean flatpak-build-dir flatpak/io.github.karimodora.LinuxDevHome.offline.yml
+git clone https://github.com/Karim-Termanini/LuminaDev.git
+cd LuminaDev
+pnpm install
+pnpm smoke
+pnpm --filter desktop build:tauri
 ```
 
-Smoke checklist:
+Artifact path depends on Tauri output (typically under `apps/desktop/src-tauri/target/release/bundle/`).
 
-1. App launches under Wayland or X11 fallback.
-2. Dashboard renders and host metrics update without crashing when `/proc` is restricted.
-3. Docker panel surfaces a clear error when the socket is missing (expected in a strict sandbox until overrides are applied).
-4. Embedded terminal falls back to “Open external terminal” when `node-pty` cannot start.
-5. Git clone refuses paths outside the user home / temp allowlist.
+## AppImage smoke checklist
 
-Record failures against `docs/DOCKER_FLATPAK.md` permission guidance.
+1. App launches without crash; readiness wizard completes on first run.
+2. Dashboard renders; host metrics update when `/proc` is readable.
+3. Docker panel lists containers or shows a clear error when the daemon/socket is unavailable.
+4. `/git` hub loads Config, VCS, and Cloud tabs.
+5. Settings hub opens all 14 tabs (no Extension tab).
+6. Embedded terminal shows a shell prompt; input works (line-buffered — vim/htop may not work).
+7. `pnpm smoke` equivalent passed on the build machine before packaging.
+
+## Cross-distro spot checks
+
+Test on at least one of each when feasible:
+
+- **Ubuntu / Pop!_OS** — docker group, apt-based runtime installs
+- **Fedora** — dnf Java package mapping, SELinux context
+- **Arch** — pacman hooks, `/proc` reads
+
+Record failures in the PR or against [`ROUTE_STATUS.md`](./ROUTE_STATUS.md) if route maturity changes.

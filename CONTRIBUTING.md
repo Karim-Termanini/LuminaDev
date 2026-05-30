@@ -24,21 +24,20 @@ pnpm install
 
 ### 🧪 Quality Gate Policy
 
-2. Run local quality gates before opening a PR:
+Run before opening a PR:
 
 ```bash
-pnpm typecheck
-pnpm test
-pnpm lint
-pnpm build
+pnpm smoke   # preferred full gate (typecheck + test + lint + Rust)
 ```
 
-3. For Rust backend checks:
+Or individually: `pnpm typecheck`, `pnpm test`, `pnpm lint`, `cargo test` in `apps/desktop/src-tauri`.
 
-```bash
-cd apps/desktop/src-tauri
-cargo test -- --nocapture
-```
+## Documentation
+
+- Active plan: [`docs/MASTER_PLAN.md`](docs/MASTER_PLAN.md)
+- Phase history: [`phasesPlan.md`](phasesPlan.md)
+- Route truth: [`docs/ROUTE_STATUS.md`](docs/ROUTE_STATUS.md)
+- Commit rules: this file + [`docs/COMMIT_QUALITY_RULES.md`](docs/COMMIT_QUALITY_RULES.md)
 
 ## Branch and commit rules
 

@@ -1,5 +1,7 @@
 # Smart-Flow VCS Strategy (“Zero Terminal”)
 
+> **Planning context:** Priority backlog and shipped vs open slices are summarized in **[`MASTER_PLAN.md` §6](./MASTER_PLAN.md#6-git-vcs--smart-flow-roadmap-zero-terminal)**. Phase history: [`phasesPlan.md`](../phasesPlan.md).
+
 This document is the **operational blueprint** for evolving Git VCS from “raw Git errors in a panel” into an **intelligent assistant**: the app understands repo state, blocks unsafe actions, explains *why*, and routes the user through merge/rebase/conflict resolution and (later) cloud PR creation—**without requiring a terminal**.
 
 **Design north star (VS Code–class clarity, Lumina simplicity):** prefer **banners + focused modals** over toast spam; prefer **one obvious next step** over a matrix of Git commands; never leak opaque `git(1)` stderr without a humanized layer (`humanizeGitVcsError` + `[GIT_VCS_*]` codes).
@@ -127,7 +129,7 @@ Work in **vertical slices** (each shippable behind a small flag if needed). Sugg
 ### 1) Git state machine + intelligent banners (foundation) — **v0 shipped**
 
 - **Rust:** `apps/desktop/src-tauri/src/git_vcs_repo_state.rs` — `dh:git:vcs:status` now includes `gitOperation` (`none` \| `merging` \| `rebasing`) via `MERGE_HEAD` / `REBASE_HEAD`, plus `conflictFileCount` from `git diff --diff-filter=U`.  
-- **Renderer:** `GitVcsStateBanner.tsx` on `/git-vcs` (`GitVcsPage.tsx`) shows an amber **status banner** with next-step copy when merging/rebasing or when unmerged paths remain.  
+- **Renderer:** `GitVcsStateBanner.tsx` on `/git?tab=vcs` (`GitVcsPage.tsx`) shows an amber **status banner** with next-step copy when merging/rebasing or when unmerged paths remain.  
 - **Next:** cherry-pick / bisect states, tighter integration with file list highlighting (Phase 3), and automated tests around the status payload.
 
 ### 2) Smart Push + protected branch dialog (behavioral win) — **prefetch gate + protected notice shipped**
@@ -181,7 +183,7 @@ Work in **vertical slices** (each shippable behind a small flag if needed). Sugg
 
 - [ ] `pnpm typecheck` / `pnpm smoke` (or the narrowest relevant gate from `CLAUDE.md`).  
 - [ ] Renderer humanized errors for any new `[GIT_VCS_*]` / `[CLOUD_*]` codes.  
-- [ ] `docs/ROUTE_STATUS.md` updated if `/git-vcs` or `/cloud-git` behavior materially changes.  
+- [ ] `docs/ROUTE_STATUS.md` updated if `/git` behavior materially changes.  
 - [ ] No new long-running network calls without cancelation on unmount / remote change.
 
 ---

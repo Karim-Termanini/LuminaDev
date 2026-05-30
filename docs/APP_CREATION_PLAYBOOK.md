@@ -1,5 +1,9 @@
 # Application Creation Playbook
 
+> **Current product docs:** [`MASTER_PLAN.md`](./MASTER_PLAN.md), [`AUDIT.md`](./AUDIT.md), [`phasesPlan.md`](../phasesPlan.md).
+>
+> **Historical sections:** Flatpak packaging, dashboard widget/layout IPC, and Electron migration incidents below are retained as engineering lessons. Flatpak is **abandoned**; widgets and Extension tab are **removed** (2026-05-29).
+
 This document is the reusable engineering guide learned from building LuminaDev.
 Use it as the default process for the next application.
 Update it whenever a new problem appears (see "Continuous Incident Log" section).

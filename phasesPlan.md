@@ -7,7 +7,7 @@
 
 # LuminaDev — Product Phases Plan
 
-> Living document. Route truth table: [`docs/ROUTE_STATUS.md`](docs/ROUTE_STATUS.md) | Release gate: [`docs/STABILIZATION_CHECKLIST.md`](docs/STABILIZATION_CHECKLIST.md)
+> Living document. Route truth table: [`docs/ROUTE_STATUS.md`](docs/ROUTE_STATUS.md) | Unified plan: [`docs/MASTER_PLAN.md`](docs/MASTER_PLAN.md) | Audit: [`docs/AUDIT.md`](docs/AUDIT.md) | Release gate: [`docs/STABILIZATION_CHECKLIST.md`](docs/STABILIZATION_CHECKLIST.md)
 
 ---
 
@@ -262,8 +262,8 @@ pub async fn ipc_invoke(channel: &str, payload: Value, state: AppState) -> Resul
 
 ## Phase 0 — Foundations ✅ SHIPPED
 
-- [x] Widget registry + `dashboard-layout.json` persisted in app data dir
-- [x] Responsive dashboard grid + "Add widget" + "Custom profile" entry points
+- [x] Widget registry + layout IPC — **removed 2026-05-29** (was Phase 0; infrastructure deleted)
+- [x] Responsive dashboard grid + custom profile entry points (widget deck **removed** 2026-05-29)
 - [x] Job runner (`jobStart` / `jobsList` / `jobCancel`) with footer progress strip
 - [x] Session banner: native app banner + link to docs
 - [x] Full Tauri migration (Stages 0–4): all IPC native Rust, Electron removed, CI green
@@ -275,7 +275,7 @@ pub async fn ipc_invoke(channel: &str, payload: Value, state: AppState) -> Resul
 ### Verified shipped
 
 - [x] 9 preset profile cards on grid: Web Dev, Mobile, Game Dev, Infra/K8s, + 5 more (PROFILE_01–09)
-- [x] `CustomProfileWizardModal` — name → template → stacks → widgets → save to `custom_profiles` store
+- [x] `CustomProfileWizardModal` — name → template → stacks → save to `custom_profiles` store
 - [x] Widget drag-and-drop reorder (HTML5, wired in dashboard — **widget deck removed 2026-05-29**)
 - [x] Widget layout load/save via `layoutGet` / `layoutSet` IPC — **removed 2026-05-29** (channels, types, and store handlers deleted)
 - [x] `DashboardKernelsPage`, `DashboardLogsPage` present and routed
@@ -320,7 +320,7 @@ Known issue addressed: install wizard now refreshes `installedFeatures` on open 
 
 ---
 
-## Phase 4 — Git Environment Manager ✅ SHIPPED (`/git-config` → `live`)
+## Phase 4 — Git Environment Manager ✅ SHIPPED (`/git?tab=config`)
 
 - [x] Overview: 4 health score cards + total score + smart suggestions with one-click fix
 - [x] Identity Center: name, email, branch quick-picks, editor quick-picks, profile label
@@ -435,7 +435,7 @@ Plugin marketplace, signed extensions, and Settings Extension tab are **not part
 
 Turns app into true daily driver for software engineers managing repositories and cloud source control platforms.
 
-- **Authentication** ✅: Encrypted store for tokens; device flow + PAT; optional OAuth client IDs via **Cloud Git → Advanced** / env / compile-time; dashboard **Cloud Git** link widget (`link.cloud-git`). Device-flow failure maps to `[CLOUD_AUTH_DEVICE_POLL_REJECTED]` with actionable guidance.
+- **Authentication** ✅: Encrypted store for tokens; device flow + PAT; optional OAuth client IDs via **Cloud Git → Advanced** / env / compile-time. Device-flow failure maps to `[CLOUD_AUTH_DEVICE_POLL_REJECTED]` with actionable guidance.
 - **Interactive Version Control (Smart Workflow)** ✅:
   - **Smart Push/Sync**: Fetch-before-push; `behind > 0` blocks push with notice; protected-branch failures → `[GIT_VCS_PROTECTED_BRANCH]` + Cloud Git link; **Copy raw error** on panel.
   - **Branch rename after protected-branch push**: Suggests new branch name, creates + pushes it, then opens PR/MR wizard automatically.
@@ -579,7 +579,7 @@ When user clicks "Install" / "Fix":
 | 24 | AppShell | Docs link pointed to `github.com` instead of docs | ✅ FIXED (2026-05-28) |
 | 25 | TopBar | Palette hidden on non-dashboard pages (overflow clipping) | ✅ FIXED (2026-05-28) |
 | 26 | TopBar | Palette wouldn't reopen after Enter-navigate (stale focus) | ✅ FIXED (2026-05-28) |
-| 27 | TopBar | Dashboard sub-nav tabs tooltip blurriness (Logs, Widgets) due to subpixel transform offsets | ✅ FIXED (2026-05-28) |
+| 27 | TopBar | Dashboard sub-nav tabs tooltip blurriness (Logs) due to subpixel transform offsets | ✅ FIXED (2026-05-28) |
 | 28 | AppShell / TopBar | Sidebar & Topbar icon tooltip blurriness due to dynamic-width fractional offsets | ✅ FIXED (2026-05-28) |
 
 ---
@@ -587,7 +587,7 @@ When user clicks "Install" / "Fix":
 ## 🚨 UI/UX & Performance Debt ✅ DONE (2026-05-28)
 
 - [x] **Runtimes Page Optimization:** Profile Tauri invoke calls causing >1 min load time. Implement lazy loading, caching of local package lists, or async background fetching. ✅ DONE (2026-05-28) — 30s status cache, adaptive polling (800ms active, 3s idle), background refresh.
-- [x] **Dashboard - Main:** Wire dynamic widget injection based on user's active Profile layout configuration. ✅ DONE (2026-05-28) — `DashboardWidgetDeck` resolves widget types from shared registry, profile-driven layout.
+- [x] **Dashboard - Main:** Profile-driven dashboard preset grid (widget deck **removed** 2026-05-29).
 - [x] **Dashboard - Widgets:** Removed from product scope (2026-05-29).
 - [x] **Dashboard - Kernels:** Build configuration grid for starting, stopping, linking local development kernels (e.g., Jupyter, PHP-FPM). ✅ DONE (2026-05-28) — `KERNEL_DEFS` with Start/Stop/Open/Link via `hostExec`.
 - [x] **Dashboard - Logs:** Implement unified log viewer using `xterm.js` multiplexing stdout/stderr streams from all active background jobs and containers into single searchable buffer. ✅ DONE (2026-05-28) — real xterm.js with multiplexed streams, functional line-buffer search filter.

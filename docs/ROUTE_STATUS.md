@@ -15,6 +15,7 @@ Status legend:
 | `/dashboard` | partial | Preset grid reads `active_profile` for highlight; slim container count + metrics strip with links to Docker and Monitor; several preset cards are `PLANNED`/disabled. |
 | `/dashboard/kernels` | partial | GPU probe, service states, security audit; auto-refreshes every ~30s (lightweight snapshot, not a full device manager). |
 | `/dashboard/logs` | partial | Jobs poll ~2s; compose logs load for selected profile; not a full observability platform. |
+| `/dashboard/widgets` | removed | **Deleted** 2026-05-29 — widget system out of scope; no route or redirect. |
 | `/system` | partial | Metrics and monitor data are live; per-container stats on Docker page; some sections still bounded snapshots. |
 | `/docker` | live | Main Docker slice (list/actions/logs/images/volumes/networks/cleanup/remap) is functional with guardrails. |
 | `/ssh` | partial | Core SSH key/test/setup flows work; advanced transfer/remote UX still evolving. |

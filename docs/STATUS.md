@@ -1,8 +1,16 @@
 # LuminaDev Status Snapshot
 
-Living snapshot updated when the release track changes materially. Phase map: [`phasesPlan.md`](../phasesPlan.md). Stabilization gate: [`STABILIZATION_CHECKLIST.md`](./STABILIZATION_CHECKLIST.md).
+Living snapshot updated when the release track changes materially.
 
-**Last updated:** 2026-05-29
+**Last updated:** 2026-05-30
+
+| Doc | Role |
+| --- | --- |
+| [`phasesPlan.md`](../phasesPlan.md) | Phase history + architecture standards |
+| [`MASTER_PLAN.md`](./MASTER_PLAN.md) | Unified active plan + backlog |
+| [`AUDIT.md`](./AUDIT.md) | Consolidated audit + page QA |
+| [`STABILIZATION_CHECKLIST.md`](./STABILIZATION_CHECKLIST.md) | Stabilization gate evidence |
+| [`ROUTE_STATUS.md`](./ROUTE_STATUS.md) | Route maturity matrix |
 
 ---
 
@@ -14,30 +22,32 @@ Living snapshot updated when the release track changes materially. Phase map: [`
 | 1 | Tauri skeleton + bridge | ✅ done |
 | 2 | Rust-native backend port | ✅ done |
 | 3 | Renderer parity + UX | ✅ done |
-| 4 | Packaging + CI (GitHub Releases / AppImage) | 🔄 in progress — Flatpak abandoned |
-| 5 | Release gate (explicit product-ready declaration) | ⬜ open — **not started** |
+| 4 | Packaging + CI (GitHub Releases / AppImage) | 🔄 in progress |
+| 5 | Release gate (explicit product-ready declaration) | ⬜ open |
+
+Flatpak / Flathub pathway **abandoned** (2026-05-28). No Flatpak manifest in repo.
 
 ---
 
 ## Product phases
 
-Phases **0–17** shipped per `phasesPlan.md` execution order.
+Phases **0–17** shipped per `phasesPlan.md`.
 
 **Removed from scope (2026-05-29):**
-- **Phase 10 Extensions** — no Settings Extension tab, no plugin marketplace.
-- **Dashboard widgets** — widget deck, layout IPC (`layoutGet`/`layoutSet`), and `/dashboard/widgets` route fully removed from codebase.
+- Phase 10 Extensions — Settings Extension tab, plugin marketplace
+- Dashboard widgets — deck, layout IPC, `/dashboard/widgets` route
 
-**Still partial** (see [`ROUTE_STATUS.md`](./ROUTE_STATUS.md)):
-- Settings hosts/env editing
+**Still partial** ([`ROUTE_STATUS.md`](./ROUTE_STATUS.md)):
+- Settings hosts/env file editing
 - Runtimes install matrix hardening
 - Profiles ↔ dashboard unification
-- AppImage end-to-end verification on clean VM
+- AppImage E2E on clean VM
 
 ---
 
 ## Quality gate
 
-`pnpm smoke` must pass before merge. Release tagging waits on Stage 5 + maintainer sign-off — not on a fixed calendar.
+`pnpm smoke` must pass before merge. Release tagging waits on Stage 5 + maintainer sign-off.
 
 ---
 
@@ -45,6 +55,7 @@ Phases **0–17** shipped per `phasesPlan.md` execution order.
 
 | File | Purpose |
 | --- | --- |
-| [`STABILIZATION_CHECKLIST.md`](./STABILIZATION_CHECKLIST.md) | Stabilization criteria + manual test checklist |
-| [`FORWARD_PLAN_2026-05-28.md`](./FORWARD_PLAN_2026-05-28.md) | Post-audit tactical backlog |
-| [`SMART_FLOW_VCS.md`](./SMART_FLOW_VCS.md) | Git VCS Smart-Flow blueprint |
+| [`MASTER_PLAN.md`](./MASTER_PLAN.md) | Unified plan + backlog |
+| [`AUDIT.md`](./AUDIT.md) | Audit + manual QA checklist |
+| [`SMART_FLOW_VCS.md`](./SMART_FLOW_VCS.md) | Git Smart-Flow blueprint |
+| [`STABILIZATION_CHECKLIST.md`](./STABILIZATION_CHECKLIST.md) | Stabilization + B5 tests |
