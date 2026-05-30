@@ -6,13 +6,16 @@ import { branchWebUrl, hostRepoWebLink, type HostRepoLink } from '../gitAssistan
 import { cloudProviderLabel } from '../gitAssistantCloud'
 import { assertGitVcsOk } from '../gitVcsContract'
 import { GitAssistantSection } from './GitAssistantSection'
+import { GitPullRequestPanel } from './GitPullRequestPanel'
 
 export type GitShareOnlinePanelProps = {
   repoPath: string
   branch: string
   cloudConnected: boolean
   ahead: number | null
+  behind: number | null
   busy: boolean
+  suggestedPrTitle?: string
 }
 
 export function GitShareOnlinePanel({
@@ -20,7 +23,9 @@ export function GitShareOnlinePanel({
   branch,
   cloudConnected,
   ahead,
+  behind,
   busy,
+  suggestedPrTitle = '',
 }: GitShareOnlinePanelProps): ReactElement | null {
   const { t } = useTranslation('git')
   const [hostLink, setHostLink] = useState<HostRepoLink | null>(null)
@@ -87,6 +92,17 @@ export function GitShareOnlinePanel({
           {t('assistant.share.noRemote')}
         </p>
       )}
+      {hostLink ? (
+        <GitPullRequestPanel
+          repoPath={repoPath}
+          branch={branch}
+          hostLink={hostLink}
+          ahead={ahead}
+          behind={behind}
+          busy={busy}
+          suggestedTitle={suggestedPrTitle}
+        />
+      ) : null}
     </GitAssistantSection>
   )
 }

@@ -541,5 +541,17 @@
   "assistant.behind.title": "Get latest before you send",
   "assistant.behind.body": "The remote has {{count}} commit(s) you do not have yet. Pull first, then send your work.",
   "assistant.behind.pull": "Get latest",
-  "assistant.behind.dismiss": "Not now"
+  "assistant.behind.dismiss": "Not now",
+  "assistant.pr.title": "Pull request",
+  "assistant.pr.subtitle": "Merge {{head}} into {{base}} on {{host}}.",
+  "assistant.pr.pushFirst": "Push your commits first, then create the pull request.",
+  "assistant.pr.behindBase": "{{base}} has {{count}} commit(s) you do not have yet. Pull first so the PR stays mergeable.",
+  "assistant.pr.titleLabel": "Title",
+  "assistant.pr.titlePlaceholder": "Short summary of your changes",
+  "assistant.pr.bodyLabel": "Description (optional)",
+  "assistant.pr.bodyPlaceholder": "What reviewers should know…",
+  "assistant.pr.titleRequired": "Add a title for the pull request.",
+  "assistant.pr.createFailed": "Could not create the pull request.",
+  "assistant.pr.create": "Create on {{host}}",
+  "assistant.pr.openCompare": "Open compare page on {{host}}"
 }

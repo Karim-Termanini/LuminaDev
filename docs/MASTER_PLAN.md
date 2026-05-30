@@ -209,7 +209,7 @@ Known limits on **native** builds: terminal is line-buffered (no full PTY for vi
 | --- | --- | --- | --- |
 | **G1 — Ship** | Replace `/git` entirely | ~2 weeks | All G1 checkboxes below; legacy tabbed Git UI **deleted** from routes |
 | **G2 — Validate** | Real user flows | After G1 merge | 5 users complete open → push without help; no "how do I stage/rebase" tickets |
-| **G3 — Iterate** | Polish | After G2 metrics | Diff preview toggle, recents polish, post-push "Open in GitHub" |
+| **G3 — Iterate** | Polish | After G2 metrics | Diff preview, recents, post-push link, **create PR / open compare** on Share step |
 
 #### G1 — Ship (work breakdown)
 
@@ -305,6 +305,7 @@ Need more than save, send, and sync? Use VS Code, Cursor, your terminal, or GitH
 - [ ] Diff preview toggle per file
 - [ ] Recents list polish
 - [ ] Post-push “Open on host” one-liner (GitHub/GitLab from remote URL)
+- [x] **Create pull request in Share step** — `cloudGitCreatePr` when connected; compare-page fallback; title/body fields; blocks when `ahead > 0`; warns when behind `main`
 
 **Intentional ceiling (no backlog):** dirty-checkout **stash** stays terminal + modal; no in-app stash IDE (correct for beginner scope).
 
@@ -312,7 +313,7 @@ Need more than save, send, and sync? Use VS Code, Cursor, your terminal, or GitH
 
 - Second Git UI, advanced page, or `enable_advanced_git` / pro toggle
 - In-app conflict merge studio or visual 3-way resolver
-- Smart-Flow vertical slices (rebase UI, cherry-pick, bisect, PR wizard in-app)
+- Smart-Flow vertical slices (rebase UI, cherry-pick, bisect, **full** PR review/merge studio in-app — simple create-PR in Git Assistant is in scope for G3)
 - libgit2 replacement of all CLI
 - Server-side merge resolution
 - Notifications inbox / mentions on `/git`

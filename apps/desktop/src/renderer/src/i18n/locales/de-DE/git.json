@@ -544,5 +544,17 @@
   "assistant.behind.title": "Zuerst Neueste holen",
   "assistant.behind.body": "Remote hat {{count}} Commit(s), die Sie noch nicht haben. Zuerst Pull, dann senden.",
   "assistant.behind.pull": "Neueste holen",
-  "assistant.behind.dismiss": "Später"
+  "assistant.behind.dismiss": "Später",
+  "assistant.pr.title": "Pull Request",
+  "assistant.pr.subtitle": "{{head}} in {{base}} auf {{host}} zusammenführen.",
+  "assistant.pr.pushFirst": "Zuerst Commits pushen, dann den Pull Request erstellen.",
+  "assistant.pr.behindBase": "{{base}} hat {{count}} Commit(s), die Sie noch nicht haben. Zuerst Pull.",
+  "assistant.pr.titleLabel": "Titel",
+  "assistant.pr.titlePlaceholder": "Kurze Zusammenfassung",
+  "assistant.pr.bodyLabel": "Beschreibung (optional)",
+  "assistant.pr.bodyPlaceholder": "Hinweise für Reviewer…",
+  "assistant.pr.titleRequired": "Titel für den Pull Request eingeben.",
+  "assistant.pr.createFailed": "Pull Request konnte nicht erstellt werden.",
+  "assistant.pr.create": "Auf {{host}} erstellen",
+  "assistant.pr.openCompare": "Vergleichsseite auf {{host}} öffnen"
 }
