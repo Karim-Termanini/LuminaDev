@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { computeGitAssistantNextAction } from './gitAssistantNextAction'
 
 const base = () => ({
-  githubConnected: true,
+  cloudConnected: true,
   repoPathTrimmed: '/home/me/proj',
   gitOperation: 'none' as const,
   conflictFileCount: 0,
@@ -18,26 +18,26 @@ describe('computeGitAssistantNextAction', () => {
     expect(computeGitAssistantNextAction({ ...base(), repoPathTrimmed: '' })).toBe('open_project')
   })
 
-  it('connect github when ahead but not connected', () => {
+  it('connect cloud when ahead but not connected', () => {
     expect(
       computeGitAssistantNextAction({
         ...base(),
-        githubConnected: false,
+        cloudConnected: false,
         ahead: 1,
         behind: 0,
       }),
-    ).toBe('connect_github')
+    ).toBe('connect_cloud')
   })
 
-  it('does not block local idle workflow when github disconnected', () => {
-    expect(computeGitAssistantNextAction({ ...base(), githubConnected: false })).toBe(null)
+  it('does not block local idle workflow when cloud disconnected', () => {
+    expect(computeGitAssistantNextAction({ ...base(), cloudConnected: false })).toBe(null)
   })
 
-  it('commit when dirty even if github disconnected', () => {
+  it('commit when dirty even if cloud disconnected', () => {
     expect(
       computeGitAssistantNextAction({
         ...base(),
-        githubConnected: false,
+        cloudConnected: false,
         stagedCount: 1,
         commitMessageTrimmed: 'fix: local only',
       }),
@@ -48,7 +48,7 @@ describe('computeGitAssistantNextAction', () => {
     expect(computeGitAssistantNextAction({ ...base(), conflictFileCount: 1 })).toBe('open_editor')
   })
 
-  it('push when ahead and github connected', () => {
+  it('push when ahead and cloud connected', () => {
     expect(
       computeGitAssistantNextAction({
         ...base(),

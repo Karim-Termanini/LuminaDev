@@ -11,7 +11,7 @@ export type GitNextStepCardProps = {
 }
 
 const ACTION_ICONS: Record<Exclude<GitAssistantNextAction, null>, string> = {
-  connect_github: 'link',
+  connect_cloud: 'link',
   open_project: 'folder-opened',
   open_editor: 'edit',
   continue_merge: 'debug-continue',

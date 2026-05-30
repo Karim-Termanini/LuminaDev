@@ -66,6 +66,9 @@ export function GitProjectBar({
 
       {cloneOpen ? (
         <div className="git-assistant-clone-panel">
+          <p className="hp-muted" style={{ margin: '0 0 10px', fontSize: 12, lineHeight: 1.5 }}>
+            {t('assistant.clone.parentHint')}
+          </p>
           <input
             type="text"
             className="hp-input"

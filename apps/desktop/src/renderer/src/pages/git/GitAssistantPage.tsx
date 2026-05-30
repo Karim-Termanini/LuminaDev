@@ -19,19 +19,30 @@ import { GitSaveShareBar } from './GitSaveShareBar'
 import { GitSetupChecklist } from './GitSetupChecklist'
 import { GitShareOnlinePanel } from './GitShareOnlinePanel'
 import { assertGitOk } from '../gitContract'
+import { humanizeGitError, parseGitErrorCode } from '../gitError'
 import { assertGitVcsOk } from '../gitVcsContract'
 import { humanizeGitVcsError, parseGitVcsErrorCode } from '../gitVcsError'
 import { parseCheckoutDirtyFileList } from '../gitVcsCheckoutDirty'
 import { GitVcsDirtyCheckoutModal } from '../GitVcsDirtyCheckoutModal'
+import { hasCloudGitConnected, preferredCloudProvider } from '../gitAssistantCloud'
 import { computeGitAssistantNextAction } from '../gitAssistantNextAction'
 import { computeGitProgressRail } from '../gitAssistantProgressRail'
 import type { GitProgressStep } from '../gitAssistantProgressRail'
 import { evaluateGitSetupChecklist, isGitSetupComplete } from '../gitAssistantSetup'
+import type { GitProviderFamily } from '../gitVcsProviderHost'
+import { classifyGitRemoteUrl } from '../gitVcsProviderHost'
 import { assertGitRecentList } from '../registryContract'
 import { settingsAccountsHref } from '../settingsAccountsHref'
 import type { GitVcsOperation } from '../gitVcsTypes'
 
 type DirtyCheckoutPrompt = { branch: string; create: boolean; files: string[] }
+
+type GitCloneResponse = { ok: boolean; error?: string; path?: string }
+
+function humanizeGitOpMessage(raw: string): string {
+  if (/\[GIT_VCS_/.test(raw)) return humanizeGitVcsError(raw)
+  return humanizeGitError(raw)
+}
 
 export function GitAssistantPage(): ReactElement {
   const { t } = useTranslation('git')
@@ -66,13 +77,21 @@ export function GitAssistantPage(): ReactElement {
   const [stashIncludeUntracked, setStashIncludeUntracked] = useState(true)
   const [editorRefreshHint, setEditorRefreshHint] = useState(false)
   const [behindModalCount, setBehindModalCount] = useState<number | null>(null)
+  const [remoteHost, setRemoteHost] = useState<GitProviderFamily | null>(null)
+  const statusTargetRef = useRef('')
 
-  const githubConnected = useMemo(
-    () => cloudAccounts.some((a) => a.provider === 'github'),
-    [cloudAccounts],
+  const cloudConnected = useMemo(() => hasCloudGitConnected(cloudAccounts), [cloudAccounts])
+
+  const connectProvider = useMemo(
+    () => preferredCloudProvider(cloudAccounts, remoteHost),
+    [cloudAccounts, remoteHost],
   )
 
-  const opError = opErrorRaw ? humanizeGitVcsError(opErrorRaw) : null
+  const connectAccountsHref = settingsAccountsHref(connectProvider ?? 'github')
+
+  const opIsCloneInfo = opErrorRaw?.startsWith('[GIT_CLONE_ALREADY_HERE]') ?? false
+  const opError = opErrorRaw && !opIsCloneInfo ? humanizeGitOpMessage(opErrorRaw) : null
+  const opInfo = opIsCloneInfo ? humanizeGitError(opErrorRaw) : null
 
   const loadSetup = useCallback(async () => {
     try {
@@ -80,19 +99,26 @@ export function GitAssistantPage(): ReactElement {
       assertGitOk(res, 'Failed to load Git config.')
       const rows = res.rows ?? []
       const cfg = new Map(rows.map((r) => [r.key.toLowerCase(), r.value]))
-      setSetupItems(evaluateGitSetupChecklist(cfg, githubConnected))
+      setSetupItems(evaluateGitSetupChecklist(cfg, cloudConnected))
       setIdentityName(cfg.get('user.name') ?? '')
       setIdentityEmail(cfg.get('user.email') ?? '')
     } catch {
-      setSetupItems(evaluateGitSetupChecklist(new Map(), githubConnected))
+      setSetupItems(evaluateGitSetupChecklist(new Map(), cloudConnected))
     }
-  }, [githubConnected])
+  }, [cloudConnected])
+
+  const cloudLoadEpochRef = useRef(0)
 
   useEffect(() => {
+    const epoch = ++cloudLoadEpochRef.current
     void window.dh.cloudAuthStatus().then((res) => {
+      if (epoch !== cloudLoadEpochRef.current) return
       if (res.ok && Array.isArray(res.accounts)) setCloudAccounts(res.accounts as ConnectedAccount[])
       else setCloudAccounts([])
     })
+    return () => {
+      cloudLoadEpochRef.current++
+    }
   }, [])
 
   useEffect(() => {
@@ -145,7 +171,9 @@ export function GitAssistantPage(): ReactElement {
   }, [searchParams, setSearchParams, repoPath, persistRepoChoice])
 
   const refreshStatus = useCallback(async () => {
-    if (!repoPath.trim()) {
+    const path = repoPath.trim()
+    statusTargetRef.current = path
+    if (!path) {
       setBranch('')
       setAhead(null)
       setBehind(null)
@@ -155,13 +183,14 @@ export function GitAssistantPage(): ReactElement {
       setConflictFileCount(0)
       setIncluded(new Set())
       setBranches([])
+      setRemoteHost(null)
       return
     }
-    const path = repoPath.trim()
     const [st, br] = await Promise.all([
       window.dh.gitVcsStatus({ repoPath: path }),
       window.dh.gitVcsBranches({ repoPath: path }),
     ])
+    if (statusTargetRef.current !== path) return
     assertGitVcsOk(st)
     assertGitVcsOk(br)
     setBranches(Array.isArray(br.branches) ? (br.branches as BranchEntry[]) : [])
@@ -183,21 +212,49 @@ export function GitAssistantPage(): ReactElement {
       ...stagedArr.filter((f) => f.status !== 'C').map((f) => f.path),
     ]
     setIncluded(new Set(paths))
+    try {
+      const rem = await window.dh.gitVcsRemotes({ repoPath: path })
+      if (statusTargetRef.current !== path) return
+      assertGitVcsOk(rem)
+      const origin = (rem.remotes ?? []).find((r) => r.name === 'origin') ?? rem.remotes?.[0]
+      setRemoteHost(origin?.fetchUrl ? classifyGitRemoteUrl(origin.fetchUrl) : null)
+    } catch {
+      if (statusTargetRef.current === path) setRemoteHost(null)
+    }
   }, [repoPath])
 
   useEffect(() => {
-    void (async () => {
-      if (!repoPath.trim()) return
-      setBusy(true)
-      setOpErrorRaw(null)
-      try {
-        await refreshStatus()
-      } catch (e) {
-        setOpErrorRaw(e instanceof Error ? e.message : String(e))
-      } finally {
-        setBusy(false)
-      }
-    })()
+    const path = repoPath.trim()
+    statusTargetRef.current = path
+    if (!path) {
+      setBranch('')
+      setAhead(null)
+      setBehind(null)
+      setStaged([])
+      setUnstaged([])
+      setGitOperation('none')
+      setConflictFileCount(0)
+      setIncluded(new Set())
+      setBranches([])
+      setRemoteHost(null)
+      return
+    }
+    let alive = true
+    setBusy(true)
+    setOpErrorRaw(null)
+    void refreshStatus()
+      .catch((e) => {
+        if (alive && statusTargetRef.current === path) {
+          setOpErrorRaw(e instanceof Error ? e.message : String(e))
+        }
+      })
+      .finally(() => {
+        if (alive && statusTargetRef.current === path) setBusy(false)
+      })
+    return () => {
+      alive = false
+      statusTargetRef.current = ''
+    }
   }, [repoPath, refreshStatus])
 
   useEffect(() => {
@@ -230,12 +287,12 @@ export function GitAssistantPage(): ReactElement {
     setupComplete,
     projectComplete,
     saveComplete,
-    githubConnected,
+    cloudConnected,
     ahead,
   })
 
   const next = computeGitAssistantNextAction({
-    githubConnected,
+    cloudConnected,
     repoPathTrimmed: repoPath.trim(),
     gitOperation,
     conflictFileCount,
@@ -266,9 +323,17 @@ export function GitAssistantPage(): ReactElement {
     setBusy(true)
     setOpErrorRaw(null)
     try {
-      const res = await window.dh.gitClone({ url, targetDir })
-      assertGitOk(res, 'Clone failed.')
-      const clonedPath = (res as Record<string, unknown>).path as string | undefined
+      const res = (await window.dh.gitClone({ url, targetDir })) as GitCloneResponse
+      if (!res.ok) {
+        const code = res.error ? parseGitErrorCode(new Error(res.error)) : null
+        if (code === 'GIT_CLONE_EXISTS' && res.path?.trim()) {
+          await persistRepoChoice(res.path.trim())
+          setOpErrorRaw(`[GIT_CLONE_ALREADY_HERE] ${t('assistant.clone.openedExisting')}`)
+          return
+        }
+        assertGitOk(res, 'Clone failed.')
+      }
+      const clonedPath = res.path?.trim()
       if (clonedPath) await persistRepoChoice(clonedPath)
     } catch (e) {
       setOpErrorRaw(e instanceof Error ? e.message : String(e))
@@ -305,8 +370,8 @@ export function GitAssistantPage(): ReactElement {
 
   const runPrimary = async (): Promise<void> => {
     if (!next) return
-    if (next === 'connect_github') {
-      void navigate(settingsAccountsHref('github'))
+    if (next === 'connect_cloud') {
+      void navigate(connectAccountsHref)
       return
     }
     if (next === 'open_project') {
@@ -519,6 +584,13 @@ export function GitAssistantPage(): ReactElement {
             </div>
           ) : null}
 
+          {opInfo ? (
+            <div className="hp-status-alert success" role="status">
+              <span className="codicon codicon-check" aria-hidden />
+              {opInfo}
+            </div>
+          ) : null}
+
           {opError ? (
             <div className="hp-status-alert error" role="alert">
               <span className="codicon codicon-error" aria-hidden />
@@ -553,6 +625,7 @@ export function GitAssistantPage(): ReactElement {
             <div ref={setupRef as React.RefObject<HTMLDivElement>} className="git-assistant-duo-cell">
               <GitSetupChecklist
                 items={setupItems}
+                connectAccountsHref={connectAccountsHref}
                 busy={busy}
                 onSetIdentity={() => setIdentityOpen(true)}
                 onSetCredentialHelper={() => void setCredentialHelper()}
@@ -638,7 +711,7 @@ export function GitAssistantPage(): ReactElement {
                     onSend={() => void runPush()}
                   />
                   <div ref={shareRef as React.RefObject<HTMLDivElement>}>
-                    {!githubConnected ? (
+                    {!cloudConnected ? (
                       <GitAssistantSection
                         id="git-share-heading"
                         title={t('assistant.share.title')}
@@ -649,7 +722,7 @@ export function GitAssistantPage(): ReactElement {
                           {t('assistant.cloud.prompt')}
                         </p>
                         <Link
-                          to={settingsAccountsHref('github')}
+                          to={connectAccountsHref}
                           className="hp-btn hp-btn-primary"
                           style={{ marginTop: 12, textDecoration: 'none', width: 'fit-content' }}
                         >
@@ -661,7 +734,7 @@ export function GitAssistantPage(): ReactElement {
                       <GitShareOnlinePanel
                         repoPath={repoPath}
                         branch={branch}
-                        githubConnected={githubConnected}
+                        cloudConnected={cloudConnected}
                         ahead={ahead}
                         busy={busy}
                       />
