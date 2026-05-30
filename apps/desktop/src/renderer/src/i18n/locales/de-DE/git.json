@@ -578,7 +578,7 @@
   "assistant.pr.bodyPlaceholder": "PR-Vorlage (Summary, Scope Check, Test Evidence, Docs Check, Notes)",
   "assistant.pr.titleRequired": "Titel für den Pull Request eingeben.",
   "assistant.pr.createFailed": "Pull Request konnte nicht erstellt werden.",
-  "assistant.pr.create": "Auf {{host}} erstellen",
+  "assistant.pr.create": "PR erstellen",
   "assistant.pr.openCompare": "Vergleichsseite auf {{host}} öffnen",
   "assistant.pr.openedInBrowser": "Im Browser auf {{host}} geöffnet.",
   "assistant.pr.openLinkManually": "Falls nichts erscheint: unten „Link erneut öffnen“.",

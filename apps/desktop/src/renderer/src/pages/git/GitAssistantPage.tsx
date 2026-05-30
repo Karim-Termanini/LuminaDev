@@ -36,6 +36,7 @@ import {
 } from '../gitAssistantFileInclusion'
 import { isDevAppSourceRepo } from '../gitAssistantDevRepo'
 import { fetchOriginQuiet } from '../gitAssistantRemoteSync'
+import { shouldShowGitPush } from '../gitAssistantPrPublish'
 import { computeGitProgressRail } from '../gitAssistantProgressRail'
 import type { GitProgressStep } from '../gitAssistantProgressRail'
 import { evaluateGitSetupChecklist, isGitSetupComplete } from '../gitAssistantSetup'
@@ -547,7 +548,7 @@ export function GitAssistantPage(): ReactElement {
       }
       const r = await window.dh.gitVcsPush({ repoPath: path, remote: 'origin', branch: branch || undefined })
       assertGitVcsOk(r)
-      await refreshStatus()
+      await refreshStatus({ fetchRemote: true })
       const link = await resolveBranchWebUrl()
       if (link) setPostPush(link)
     } catch (e) {
@@ -633,13 +634,15 @@ export function GitAssistantPage(): ReactElement {
   }
 
   const showPull = !!repoPath.trim() && behind != null && behind > 0
-  const showPush =
-    !!repoPath.trim() &&
-    !hasLocalChanges &&
-    ahead != null &&
-    ahead > 0 &&
-    conflictFileCount === 0 &&
-    gitOperation === 'none'
+  const showPush = shouldShowGitPush({
+    repoPathTrimmed: repoPath.trim(),
+    hasLocalChanges,
+    unborn,
+    ahead,
+    behind,
+    conflictFileCount,
+    gitOperation,
+  })
 
   return (
     <div className="git-assistant-page elevated-page">

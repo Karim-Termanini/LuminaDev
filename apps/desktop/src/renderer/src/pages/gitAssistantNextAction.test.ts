@@ -29,8 +29,19 @@ describe('computeGitAssistantNextAction', () => {
     ).toBe('connect_cloud')
   })
 
-  it('does not block local idle workflow when cloud disconnected', () => {
-    expect(computeGitAssistantNextAction({ ...base(), cloudConnected: false })).toBe(null)
+  it('does not block local idle workflow when cloud disconnected and in sync', () => {
+    expect(
+      computeGitAssistantNextAction({
+        ...base(),
+        cloudConnected: false,
+        ahead: 0,
+        behind: 0,
+      }),
+    ).toBe(null)
+  })
+
+  it('connect cloud when branch has no upstream and cloud disconnected', () => {
+    expect(computeGitAssistantNextAction({ ...base(), cloudConnected: false })).toBe('connect_cloud')
   })
 
   it('commit when dirty even if cloud disconnected', () => {
@@ -56,5 +67,9 @@ describe('computeGitAssistantNextAction', () => {
         behind: 0,
       }),
     ).toBe('push')
+  })
+
+  it('push when branch has no upstream and cloud connected', () => {
+    expect(computeGitAssistantNextAction({ ...base() })).toBe('push')
   })
 })

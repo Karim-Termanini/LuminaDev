@@ -1,3 +1,4 @@
+import { branchNeedsPublishBeforePr } from './gitAssistantPrPublish'
 import type { GitVcsOperation } from './gitVcsTypes'
 
 /** Primary CTA for Git Assistant (beginner page). */
@@ -52,8 +53,8 @@ export function computeGitAssistantNextAction(input: {
     return 'commit'
   }
 
-  // Push / connect only when local work is saved and there are unpushed commits.
-  if (ahead != null && ahead > 0 && (behind == null || behind === 0)) {
+  // Push / connect only when local work is saved and there are unpushed commits (or no upstream yet).
+  if (branchNeedsPublishBeforePr(ahead, behind) && (behind == null || behind === 0)) {
     if (!cloudConnected) return 'connect_cloud'
     return 'push'
   }
