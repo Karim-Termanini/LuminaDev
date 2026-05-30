@@ -63,10 +63,16 @@ export function humanizeCloudAuthError(err: unknown): string {
   if (code === 'CLOUD_GIT_NETWORK') {
     return `The provider API request failed. ${detail || 'Try again in a moment.'}`.trim()
   }
-  if (code === 'CLOUD_GIT_MR_BRANCH_NOT_ON_REMOTE') {
+  if (code === 'CLOUD_GIT_MR_BRANCH_NOT_ON_REMOTE' || code === 'CLOUD_GIT_HEAD_NOT_ON_REMOTE') {
     return (
       detail ||
       'This branch is not on the remote yet. Push it to that remote first, then open the merge or pull request again.'
+    ).trim()
+  }
+  if (code === 'CLOUD_GIT_NO_COMMITS') {
+    return (
+      detail ||
+      'There are no new commits on this branch compared to the base. Add commits or choose a different base branch.'
     ).trim()
   }
   if (code === 'CLOUD_GIT_PR_EXISTS') {

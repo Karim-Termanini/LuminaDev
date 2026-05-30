@@ -558,6 +558,7 @@
   "assistant.pr.title": "طلب سحب",
   "assistant.pr.subtitle": "دمج {{head}} في {{base}} على {{host}}.",
   "assistant.pr.pushFirst": "ادفع التزاماتك أولاً، ثم أنشئ طلب السحب.",
+  "assistant.pr.noUpstream": "هذا الفرع غير موجود على origin بعد. ادفعه مع upstream (مثل git push -u origin <branch>) ثم أنشئ طلب السحب أو قارن.",
   "assistant.pr.behindBase": "{{base}} لديه {{count}} التزام/التزامات ليست لديك بعد. اسحب أولاً.",
   "assistant.pr.titleLabel": "العنوان",
   "assistant.pr.titlePlaceholder": "ملخص قصير للتغييرات",
@@ -566,5 +567,9 @@
   "assistant.pr.titleRequired": "أضف عنواناً لطلب السحب.",
   "assistant.pr.createFailed": "تعذّر إنشاء طلب السحب.",
   "assistant.pr.create": "إنشاء على {{host}}",
-  "assistant.pr.openCompare": "فتح صفحة المقارنة على {{host}}"
+  "assistant.pr.openCompare": "فتح صفحة المقارنة على {{host}}",
+  "assistant.pr.openedInBrowser": "تم الفتح في المتصفح على {{host}}.",
+  "assistant.pr.openLinkManually": "إن لم يظهر شيء، استخدم «فتح الرابط مرة أخرى» أدناه.",
+  "assistant.pr.retryOpenLink": "فتح الرابط مرة أخرى",
+  "assistant.pr.wrongProvider": "الريموت هو {{host}} والحساب المتصل هو {{connected}}. اربط {{host}} من الإعدادات → الحسابات المرتبطة."
 }

@@ -773,6 +773,7 @@ export function GitAssistantPage(): ReactElement {
                         repoPath={repoPath}
                         branch={branch}
                         branchNames={branches.map((b) => b.name).filter(Boolean)}
+                        cloudProvider={connectProvider}
                         cloudConnected={cloudConnected}
                         ahead={ahead}
                         behind={behind}

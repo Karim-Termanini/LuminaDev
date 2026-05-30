@@ -2,6 +2,7 @@ import type { ReactElement } from 'react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import type { CloudGitProviderId } from '../cloudGitTheme'
 import { branchWebUrl, hostRepoWebLink, type HostRepoLink } from '../gitAssistantRemoteUrl'
 import { cloudProviderLabel } from '../gitAssistantCloud'
 import { assertGitVcsOk } from '../gitVcsContract'
@@ -12,6 +13,7 @@ export type GitShareOnlinePanelProps = {
   repoPath: string
   branch: string
   branchNames: string[]
+  cloudProvider: CloudGitProviderId | null
   cloudConnected: boolean
   ahead: number | null
   behind: number | null
@@ -23,6 +25,7 @@ export function GitShareOnlinePanel({
   repoPath,
   branch,
   branchNames,
+  cloudProvider,
   cloudConnected,
   ahead,
   behind,
@@ -84,6 +87,7 @@ export function GitShareOnlinePanel({
         branch={branch}
         branchNames={branchNamesStable}
         hostLink={hostLink}
+        cloudProvider={cloudProvider}
         cloudConnected={cloudConnected}
         ahead={ahead}
         behind={behind}

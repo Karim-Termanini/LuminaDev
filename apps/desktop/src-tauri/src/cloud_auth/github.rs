@@ -684,6 +684,46 @@ impl GitHubProvider {
         Ok(out)
     }
 
+    /// Open PR whose head is `owner:head` on the default remote branch ref.
+    pub async fn find_open_pull_request_url(
+        token: &str,
+        hostname: &str,
+        owner: &str,
+        repo: &str,
+        head: &str,
+    ) -> Result<Option<String>, String> {
+        let client = reqwest::Client::new();
+        let api_base = github_api_base(hostname);
+        let url = format!("{}/repos/{}/{}/pulls", api_base, owner, repo);
+        let head_ref = format!("{}:{}", owner, head);
+        let resp = client
+            .get(&url)
+            .header("Authorization", format!("Bearer {}", token))
+            .header("User-Agent", "LuminaDev/0.2.0")
+            .header("Accept", "application/vnd.github+json")
+            .query(&[("state", "open"), ("head", head_ref.as_str()), ("per_page", "5")])
+            .send()
+            .await
+            .map_err(|e| format!("[CLOUD_GIT_NETWORK] GitHub find PR: {}", e))?;
+        if resp.status() == 401 {
+            return Err(
+                "[CLOUD_AUTH_INVALID_TOKEN] GitHub token is invalid or expired.".to_string(),
+            );
+        }
+        if !resp.status().is_success() {
+            return Ok(None);
+        }
+        let data: serde_json::Value = resp
+            .json()
+            .await
+            .map_err(|e| format!("[CLOUD_GIT_NETWORK] GitHub find PR parse: {}", e))?;
+        let items = data.as_array().cloned().unwrap_or_default();
+        Ok(items
+            .first()
+            .and_then(|pr| pr["html_url"].as_str())
+            .map(|s| s.to_string()))
+    }
+
      #[allow(clippy::too_many_arguments)]
      pub async fn create_pull_request(
          token: &str,
@@ -715,7 +755,19 @@ impl GitHubProvider {
             return Err("[CLOUD_GIT_INSUFFICIENT_SCOPE] Your GitHub token lacks the 'repo' scope needed to create pull requests. Reconnect in Settings → Connected accounts with a token that has the 'repo' scope enabled.".to_string());
         }
         if resp.status() == 422 {
-            return Err("[CLOUD_GIT_PR_EXISTS] A pull request for this branch already exists.".to_string());
+            let text = resp.text().await.unwrap_or_default();
+            let lower = text.to_lowercase();
+            if lower.contains("already exists") {
+                return Err("[CLOUD_GIT_PR_EXISTS] A pull request for this branch already exists.".to_string());
+            }
+            if lower.contains("no commits between") {
+                return Err("[CLOUD_GIT_NO_COMMITS] There are no commits between the base and head branches.".to_string());
+            }
+            if lower.contains("invalid") && lower.contains("head") {
+                return Err("[CLOUD_GIT_HEAD_NOT_ON_REMOTE] GitHub does not have this branch on the remote yet. Push your branch to origin, then create the pull request again.".to_string());
+            }
+            let snippet: String = text.chars().take(200).collect();
+            return Err(format!("[CLOUD_GIT_CREATE_PR] GitHub rejected the pull request: {}", snippet));
         }
         if !resp.status().is_success() {
             let status = resp.status();

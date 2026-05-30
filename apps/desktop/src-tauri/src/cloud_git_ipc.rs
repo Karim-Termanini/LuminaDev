@@ -454,7 +454,36 @@ async fn create_pr(app: &AppHandle, body: &Value) -> Value {
 
     match result {
         Ok(url) => json!({ "ok": true, "url": url }),
-        Err(e) => json!({ "ok": false, "error": e }),
+        Err(e) => {
+            let mut out = json!({ "ok": false, "error": e });
+            if e.contains("[CLOUD_GIT_PR_EXISTS]") {
+                if let (
+                    "github",
+                    cloud_auth::ParsedRemoteRepo::Github {
+                        hostname,
+                        full_name,
+                    },
+                ) = (provider, &parsed)
+                {
+                    let parts: Vec<&str> = full_name.splitn(2, '/').collect();
+                    if parts.len() == 2 {
+                        if let Ok(Some(existing)) =
+                            cloud_auth::GitHubProvider::find_open_pull_request_url(
+                                &cred.token,
+                                hostname,
+                                parts[0],
+                                parts[1],
+                                &head,
+                            )
+                            .await
+                        {
+                            out["existingUrl"] = json!(existing);
+                        }
+                    }
+                }
+            }
+            out
+        }
     }
 }
 
