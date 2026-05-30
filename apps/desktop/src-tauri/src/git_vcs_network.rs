@@ -3,6 +3,7 @@
 use tauri::{AppHandle, Manager};
 
 use crate::cloud_auth::{self, CredentialStore};
+use crate::git_vcs_repo_state::git_ensure_push_upstream;
 use crate::host_exec::{
     exec_output_limit, exec_output_with_env, cmd_timeout_long, cmd_timeout_short,
 };
@@ -48,6 +49,39 @@ pub fn git_network_classify_error(op: &GitNetworkOp<'_>, stderr: &str, https: bo
         return format!("[GIT_VCS_NO_REMOTE] {}", e);
     }
     format!("[GIT_VCS_NETWORK] {}", e)
+}
+
+async fn finish_push_success(
+    repo_path: &str,
+    op: &GitNetworkOp<'_>,
+    output: String,
+) -> Result<String, String> {
+    if let GitNetworkOp::Push { remote, .. } = op {
+        let remote = remote.unwrap_or("origin");
+        let branch = match op {
+            GitNetworkOp::Push {
+                branch: Some(b), ..
+            } => b.trim().to_string(),
+            _ => String::new(),
+        };
+        let branch = if branch.is_empty() || branch == "HEAD" {
+            exec_output_limit(
+                "git",
+                &["-C", repo_path, "rev-parse", "--abbrev-ref", "HEAD"],
+                cmd_timeout_short(),
+            )
+            .await
+            .unwrap_or_default()
+            .trim()
+            .to_string()
+        } else {
+            branch
+        };
+        if !branch.is_empty() && branch != "HEAD" {
+            git_ensure_push_upstream(repo_path, remote, &branch).await;
+        }
+    }
+    Ok(output)
 }
 
 pub async fn git_network_with_auth(
@@ -133,15 +167,17 @@ pub async fn git_network_with_auth(
         let result = exec_output_with_env("git", &args_refs, &env, cmd_timeout_long()).await;
         let _ = std::fs::remove_file(&script_path);
         match result {
-            Ok(output) => Ok(output),
+            Ok(output) => finish_push_success(repo_path, &op, output).await,
             Err(e) if e.contains("no upstream branch") && matches!(op, GitNetworkOp::Push { .. }) => {
                 // Smart Retry: If push fails for no upstream, try to set it automatically
                 let current_branch = exec_output_limit("git", &["-C", repo_path, "rev-parse", "--abbrev-ref", "HEAD"], cmd_timeout_short()).await.unwrap_or_default().trim().to_string();
                 if !current_branch.is_empty() && current_branch != "HEAD" {
                     let remote = match &op { GitNetworkOp::Push { remote, .. } => remote.unwrap_or("origin"), _ => "origin" };
                     let retry_args = ["-C", repo_path, "push", "--set-upstream", remote, &current_branch];
-                    exec_output_with_env("git", &retry_args, &env, cmd_timeout_long()).await
-                        .map_err(|e2| git_network_classify_error(&op, &e2, true))
+                    match exec_output_with_env("git", &retry_args, &env, cmd_timeout_long()).await {
+                        Ok(output) => finish_push_success(repo_path, &op, output).await,
+                        Err(e2) => Err(git_network_classify_error(&op, &e2, true)),
+                    }
                 } else {
                     Err(git_network_classify_error(&op, &e, true))
                 }
@@ -150,14 +186,16 @@ pub async fn git_network_with_auth(
         }
     } else {
         match exec_output_limit("git", &args_refs, cmd_timeout_long()).await {
-            Ok(output) => Ok(output),
+            Ok(output) => finish_push_success(repo_path, &op, output).await,
             Err(e) if e.contains("no upstream branch") && matches!(op, GitNetworkOp::Push { .. }) => {
                 let current_branch = exec_output_limit("git", &["-C", repo_path, "rev-parse", "--abbrev-ref", "HEAD"], cmd_timeout_short()).await.unwrap_or_default().trim().to_string();
                 if !current_branch.is_empty() && current_branch != "HEAD" {
                     let remote = match &op { GitNetworkOp::Push { remote, .. } => remote.unwrap_or("origin"), _ => "origin" };
                     let retry_args = ["-C", repo_path, "push", "--set-upstream", remote, &current_branch];
-                    exec_output_limit("git", &retry_args, cmd_timeout_long()).await
-                        .map_err(|e2| git_network_classify_error(&op, &e2, false))
+                    match exec_output_limit("git", &retry_args, cmd_timeout_long()).await {
+                        Ok(output) => finish_push_success(repo_path, &op, output).await,
+                        Err(e2) => Err(git_network_classify_error(&op, &e2, false)),
+                    }
                 } else {
                     Err(git_network_classify_error(&op, &e, false))
                 }

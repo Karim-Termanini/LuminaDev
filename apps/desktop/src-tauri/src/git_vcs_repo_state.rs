@@ -88,22 +88,84 @@ pub(crate) async fn git_current_branch_name(repo_path: &str) -> String {
     }
 }
 
+async fn git_rev_list_count(repo_path: &str, range: &str) -> Option<i64> {
+    exec_output_limit(
+        "git",
+        &["-C", repo_path, "rev-list", "--count", range],
+        cmd_timeout_short(),
+    )
+    .await
+    .ok()
+    .and_then(|s| s.trim().parse::<i64>().ok())
+}
+
+async fn git_has_upstream(repo_path: &str) -> bool {
+    exec_output_limit(
+        "git",
+        &["-C", repo_path, "rev-parse", "--verify", "@{u}"],
+        cmd_timeout_short(),
+    )
+    .await
+    .is_ok()
+}
+
+/// After a successful push, set `branch.*.merge` when the remote ref exists but tracking was never configured.
+pub(crate) async fn git_ensure_push_upstream(repo_path: &str, remote: &str, branch: &str) {
+    let branch = branch.trim();
+    if branch.is_empty() || branch == "HEAD" {
+        return;
+    }
+    if git_has_upstream(repo_path).await {
+        return;
+    }
+    let upstream_ref = format!("{remote}/{branch}");
+    if exec_output_limit(
+        "git",
+        &["-C", repo_path, "rev-parse", "--verify", &upstream_ref],
+        cmd_timeout_short(),
+    )
+    .await
+    .is_err()
+    {
+        return;
+    }
+    let _ = exec_output_limit(
+        "git",
+        &[
+            "-C",
+            repo_path,
+            "branch",
+            "--set-upstream-to",
+            &upstream_ref,
+            branch,
+        ],
+        cmd_timeout_short(),
+    )
+    .await;
+}
+
 pub(crate) async fn git_ahead_behind(repo_path: &str) -> (Option<i64>, Option<i64>) {
-    let ahead = exec_output_limit(
+    if git_has_upstream(repo_path).await {
+        let ahead = git_rev_list_count(repo_path, "@{u}..HEAD").await;
+        let behind = git_rev_list_count(repo_path, "HEAD..@{u}").await;
+        return (ahead, behind);
+    }
+    let branch = git_current_branch_name(repo_path).await;
+    if branch.is_empty() {
+        return (None, None);
+    }
+    let tracking = format!("origin/{branch}");
+    if exec_output_limit(
         "git",
-        &["-C", repo_path, "rev-list", "--count", "@{u}..HEAD"],
+        &["-C", repo_path, "rev-parse", "--verify", &tracking],
         cmd_timeout_short(),
     )
     .await
-    .ok()
-    .and_then(|s| s.trim().parse::<i64>().ok());
-    let behind = exec_output_limit(
-        "git",
-        &["-C", repo_path, "rev-list", "--count", "HEAD..@{u}"],
-        cmd_timeout_short(),
-    )
-    .await
-    .ok()
-    .and_then(|s| s.trim().parse::<i64>().ok());
+    .is_err()
+    {
+        return (None, None);
+    }
+    let ahead = git_rev_list_count(repo_path, &format!("{tracking}..HEAD")).await;
+    let behind = git_rev_list_count(repo_path, &format!("HEAD..{tracking}")).await;
     (ahead, behind)
 }

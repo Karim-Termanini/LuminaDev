@@ -278,7 +278,7 @@ export function GitPullRequestPanel({
           onClick={() => void createPullRequest()}
         >
           <span className="codicon codicon-git-pull-request" aria-hidden />
-          {t('assistant.pr.create', { host })}
+          {t('assistant.pr.create')}
         </button>
         <button
           type="button"
