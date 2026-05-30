@@ -8,19 +8,6 @@ export const SessionInfoSchema = z.object({
 })
 export type SessionInfo = z.infer<typeof SessionInfoSchema>
 
-/** One placed widget on the dashboard (Phase 0: registry + persistence). */
-export const DashboardPlacementSchema = z.object({
-  instanceId: z.string().min(1).max(64),
-  widgetTypeId: z.string().min(1).max(128),
-})
-
-export const DashboardLayoutFileSchema = z.object({
-  version: z.literal(1),
-  placements: z.array(DashboardPlacementSchema).max(24),
-})
-export type DashboardLayoutFile = z.infer<typeof DashboardLayoutFileSchema>
-export type DashboardPlacement = z.infer<typeof DashboardPlacementSchema>
-
 export const JobStartRequestSchema = z.object({
   kind: z.enum([
     'demo_countdown',
@@ -60,14 +47,3 @@ export const JobCancelRequestSchema = z.object({
   id: z.string().uuid(),
 })
 export type JobCancelRequest = z.infer<typeof JobCancelRequestSchema>
-
-/** Default placements when no layout file exists yet. */
-export function defaultDashboardLayout(): DashboardLayoutFile {
-  return {
-    version: 1,
-    placements: [
-      { instanceId: 'default-docker-hint', widgetTypeId: 'static.docker-permission-hint' },
-      { instanceId: 'default-trust-hint', widgetTypeId: 'static.host-trust-hint' },
-    ],
-  }
-}

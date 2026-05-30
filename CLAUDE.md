@@ -23,7 +23,7 @@ cd apps/desktop && pnpm exec vitest run src/renderer/src/pages/dockerContract.te
 ## Architecture
 
 **Monorepo** with two packages:
-- `packages/shared` — IPC channel names (`IPC` const), Zod request/response schemas, TypeScript types, widget registry. Built before desktop.
+- `packages/shared` — IPC channel names (`IPC` const), Zod request/response schemas, TypeScript types. Built before desktop.
 - `apps/desktop` — Tauri desktop app: Rust handlers in `src-tauri`, React renderer.
 
 ### IPC data flow
@@ -70,8 +70,7 @@ All IPC responses use `{ ok: boolean; error?: string }` shape. Error strings are
 
 - `ipc.ts` — `IPC` const with all channel strings + TypeScript types
 - `schemas.ts` — Zod schemas for all request/response payloads
-- `foundation.ts` — `DashboardLayoutFile`, `JobStartRequest`
-- `widgetRegistry.ts` — registered widget types for dashboard
+- `foundation.ts` — `JobStartRequest` and shared foundation types
 
 ## Commit Rules
 

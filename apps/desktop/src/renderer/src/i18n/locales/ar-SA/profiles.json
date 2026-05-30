@@ -20,11 +20,9 @@
   "builder.empty": "لا توجد بيئات مخصصة بعد. انقر على الزر أعلاه للبدء.",
 
   "automation.title": "التشغيل التلقائي العام",
-  "automation.subtitle": "بعد إغلاق معالج الإعداد، يمكنك اختيارياً بدء حزمة Compose النشطة أو تحديث تخطيط واجهة لوحة التحكم من القرص. يتطلب Docker لـ Compose؛ يحتاج Flatpak إلى صلاحية الوصول للمقبس.",
+  "automation.subtitle": "بعد إغلاق معالج الإعداد، يمكنك اختيارياً بدء حزمة Compose النشطة مرة واحدة لكل تشغيل للتطبيق. يتطلب Docker لـ Compose؛ يحتاج Flatpak إلى صلاحية الوصول للمقبس.",
   "automation.composeUp.title": "تشغيل Compuse عند الإقلاع",
   "automation.composeUp.desc": "ابدأ الملف الشخصي النشط تلقائياً مرة واحدة لكل تشغيل للتطبيق.",
-  "automation.refreshDashboard.title": "تحديث تخطيط لوحة التحكم",
-  "automation.refreshDashboard.desc": "أعد تحميل الأدوات من layout.json عند الإقلاع.",
 
   "backup.title": "النسخ الاحتياطي والمزامنة",
   "backup.subtitle": "صدّر جميع الملفات الشخصية بصيغة JSON للنسخ الاحتياطي والمشاركة مع الفريق، أو استورد ملفات شخصية من تصدير سابق.",

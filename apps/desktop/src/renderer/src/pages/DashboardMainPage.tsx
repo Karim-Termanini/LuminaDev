@@ -5,7 +5,6 @@ import {
   type HostMetricsResponse,
   parseStoredActiveProfile,
   type CustomProfileEntry,
-  type DashboardLayoutFile,
   type JobSummary,
 } from '@linux-dev-home/shared'
 import type { ReactElement } from 'react'
@@ -14,7 +13,6 @@ import { listen } from '@tauri-apps/api/event'
 import { useCallback, useEffect, useMemo, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { humanizeProfileError } from './profileError'
-import { DashboardWidgetDeck } from '../dashboard/DashboardWidgetDeck'
 import { useBetaFlags } from '../hooks/useBetaFlags'
 import { useTranslation } from 'react-i18next'
 
@@ -181,7 +179,6 @@ export function DashboardMainPage(): ReactElement {
   const [jobs, setJobs] = useState<JobSummary[]>([])
   const [toast, setToast] = useState<Toast | null>(null)
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const [profileLayout, setProfileLayout] = useState<DashboardLayoutFile | null>(null)
   const [swState, setSwState] = useState(getProfileSwitchSnapshot)
   const [setupCancelling, setSetupCancelling] = useState(false)
   const [activeProfile, setActiveProfile] = useState<string | null>(null)
@@ -485,39 +482,6 @@ export function DashboardMainPage(): ReactElement {
       localStorage.setItem('dashboard-selected-profile', selectedProfileName)
     }
   }, [selectedProfileName])
-
-  // Fetch layout for selected profile
-  useEffect(() => {
-    if (selectedProfileName) {
-      window.dh
-        .layoutGet({ profile: selectedProfileName })
-        .then((res) => {
-          if (res.ok && res.layout) {
-            setProfileLayout(res.layout)
-          } else {
-            setProfileLayout({ version: 1, placements: [] })
-          }
-        })
-        .catch(() => {
-          setProfileLayout({ version: 1, placements: [] })
-        })
-    }
-  }, [selectedProfileName])
-
-  // Reload layout when activeProfile changes
-  useEffect(() => {
-    if (!activeProfile) return
-    window.dh
-      .layoutGet({ profile: activeProfile })
-      .then((res) => {
-        if (res && (res as any).ok !== false) {
-          setProfileLayout((res as any).layout as DashboardLayoutFile)
-        }
-      })
-      .catch(() => {
-        /* non-fatal */
-      })
-  }, [activeProfile])
 
   const showToast = (
     message: string,
@@ -1085,46 +1049,6 @@ export function DashboardMainPage(): ReactElement {
               <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: 15, maxWidth: 600 }}>
                 {selectedProfile.description}
               </p>
-            </div>
-
-            {/* ── Widget Hero ── */}
-            <div className="dashboard-widget-hero">
-              {profileLayout && profileLayout.placements && profileLayout.placements.length > 0 ? (
-                <DashboardWidgetDeck
-                  layout={profileLayout}
-                  onRemove={(instanceId) => {
-                    const next = {
-                      ...profileLayout,
-                      placements: profileLayout.placements.filter(
-                        (p) => p.instanceId !== instanceId
-                      ),
-                    }
-                    setProfileLayout(next)
-                    void window.dh.layoutSet({ profile: activeProfile ?? 'web-dev', layout: next })
-                  }}
-                  onReorder={(fromId, toId) => {
-                    const fromIdx = profileLayout.placements.findIndex(
-                      (p) => p.instanceId === fromId
-                    )
-                    const toIdx = profileLayout.placements.findIndex((p) => p.instanceId === toId)
-                    if (fromIdx === -1 || toIdx === -1) return
-                    const nextPlacements = [...profileLayout.placements]
-                    const [moved] = nextPlacements.splice(fromIdx, 1)
-                    nextPlacements.splice(toIdx, 0, moved)
-                    const next = { ...profileLayout, placements: nextPlacements }
-                    setProfileLayout(next)
-                    void window.dh.layoutSet({ profile: activeProfile ?? 'web-dev', layout: next })
-                  }}
-                />
-              ) : (
-                <div className="widget-empty-hero">
-                  <span className="codicon codicon-layout" aria-hidden />
-                  <p>No widgets configured for this profile.</p>
-                  <button type="button" onClick={() => navigate('/dashboard/widgets')}>
-                    Add Widgets →
-                  </button>
-                </div>
-              )}
             </div>
 
             {/* Initialize Button */}

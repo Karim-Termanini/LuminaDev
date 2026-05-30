@@ -121,7 +121,7 @@ Stabilization is considered complete only when:
 - **Stage 1 (Tauri skeleton + API bridge):** `done`
 - **Stage 2 (Rust-native backend port):** `done` — all IPC channels native; Node bridge removed
 - **Stage 3 (renderer parity + UX preservation):** `done`
-- **Stage 4 (packaging + CI + Flatpak):** `in_progress` — native-linux-build green; flatpak deferred to release
+- **Stage 4 (packaging + CI):** `in_progress` — native-linux-build green; **Flatpak abandoned**; distribution via GitHub Releases (AppImage) only
 - **Stage 5 (release gate):** `open` — product-complete criteria + final `pnpm smoke` when you choose to cut a release (not on a fixed calendar)
 
 - **Stage 1 evidence:**
@@ -168,7 +168,7 @@ Stabilization is considered complete only when:
   - ✅ Electron removed from repo (2026-04-30)
 
 - **Stage 4 remaining:**
-  - Flatpak CI job (heavy; add before Flathub submission only)
+  - AppImage build verification on clean VM (see `docs/FORWARD_PLAN_2026-05-28.md` P5)
 
 - **Stage 5 (release gate — when you declare product-ready):**
   - `pnpm smoke` green on final `main`
@@ -193,17 +193,17 @@ Use this to audit which pages show live data and which show stubs/static content
 | **Docker → Install/Setup** | Real sudo steps on native; blocked on Flatpak | — |
 | **Runtimes → Status** | `node --version`, `python3 --version`, etc. | — |
 | **Runtimes → get-versions** | Node/Go/Python via public API | All others return `["latest"]` |
-| **Runtimes → check-deps** | `which` on each tool | — |
-| **Runtimes → uninstall-preview** | Distro package list | No real dep graph; `removableDeps` always empty |
-| **Runtimes → install job** | Real apt/dnf/pacman or nvm/rustup | Requires passwordless sudo for system method |
+| **Runtimes → check-deps** | `which` / distro tool checks on PATH | — |
+| **Runtimes → uninstall-preview** | Distro-aware package list + `removableDeps` dry-run | — |
+| **Runtimes → install job** | Real apt/dnf/pacman or nvm/rustup | Requires passwordless sudo or pkexec for system method |
 | **Job runner progress** | Starts `running`, ends `done`/`failed` | No streaming progress (final state only) |
 | **SSH → generate / getPub / testGithub** | Real `ssh-keygen`, `ssh -T` | — |
 | **Git → config list / set** | Real `git config --global` | — |
 | **Git → clone / status** | Real git operations | — |
 | **Terminal** | Real shell via tokio spawn | No PTY (line-buffered only; no interactive apps like vim) |
 | **Compose** | Real `docker compose up/logs` | Needs compose files in `docker/compose/` |
-| **Diagnostics bundle** | Saves JSON to app data dir | `perf.snapshot` returns zeros |
-| **Dashboard widgets** | Layout persistence (store.json) | Widget data depends on Monitor IPC |
+| **Diagnostics bundle** | Saves JSON to app data dir | — |
+| **Dashboard layout IPC** | _(removed 2026-05-29)_ | Widget deck and `layoutGet`/`layoutSet` channels removed with dashboard widgets |
 
 ## Manual Test Checklist (B5)
 

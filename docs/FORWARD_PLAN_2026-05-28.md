@@ -13,14 +13,13 @@
 |---|---|---|
 | Phases 0–9, 12, 13, 15, 16, 17 | ✅ DONE | All verified against source |
 | Phase 11 — First-run Wizard | ✅ DONE | Merged into Phase 16 (8-step unified installer) |
-| Phase 10 — Extensions | 📋 FUTURE | Deferred/post-release; disabled in UI |
+| Phase 10 — Extensions | 🚫 REMOVED | Out of scope 2026-05-29; UI and infrastructure deleted |
 | UI/UX Debt — all 6 items | ✅ DONE | Completed 2026-05-28 |
 | Audit defects — all 7 issues | ✅ FIXED | Fixed 2026-05-28 |
 | Smart Universal Search (fuzzy) | ✅ SHIPPED | Fuzzy-scored palette: pages, containers, runtimes, git repos |
 | Git Doctor | ✅ WIRED | `git_doctor.rs` (478 lines), dispatcher arm at `lib.rs:175` |
-| SettingsExtension tab | 🚫 DISABLED | Code preserved, navigation hidden |
-| Per-container stats stream | ✅ DONE | Phase 5 gap closed (completed 2026-05-29) |
-| DashboardWidgets profile binding | ✅ FIXED | 2026-05-28 — now reads `active_profile` from store |
+| SettingsExtension tab | 🚫 REMOVED | Out of scope 2026-05-29 |
+| Dashboard widgets | 🚫 REMOVED | Deck, layout IPC, and `/dashboard/widgets` route deleted 2026-05-29 |
 | Status bar "Engine Connected" + version | ✅ FIXED | 2026-05-28 — live `appInfo()` IPC, dynamic health check |
 | Sidebar nav `status: 'live'` badges | ✅ FIXED | 2026-05-28 — derived from engine health ping |
 | Docs link | ✅ FIXED | 2026-05-28 — points to `docs.luminadev.app` |
@@ -38,10 +37,7 @@ Branch merged to `main`. Audit fixes + fuzzy search applied on top.
 
 ## P1 — Small Gaps
 
-### 1.1 Widget Profile Binding ✅ DONE (2026-05-28)
-`DashboardWidgetsPage.tsx` now fetches `active_profile` from `storeGet` on mount. `layoutGet`/`layoutSet` use real profile key. Fallback to `'web-dev'` if store empty.
-
-### 1.2 Log Stream Cleanup on App Shutdown ✅ DONE (2026-05-28)
+### 1.1 Log Stream Cleanup on App Shutdown ✅ DONE (2026-05-28)
 `AppState.streams` (`HashMap<String, AbortHandle>`) has no cleanup on window close. Streams running at shutdown are orphaned.
 **Fix:** In `lib.rs` Tauri app builder, added `WindowEvent::CloseRequested` listener to abort all active streams on window close, and added a `streams.len() > 20` cap check.
 
@@ -69,22 +65,9 @@ Stabilized container volume status matching and updated translations.
 
 ---
 
-## P3 — Phase 10 Extensions [FUTURE - POST-RELEASE]
+## P3 — Phase 10 Extensions 🚫 REMOVED (2026-05-29)
 
-> [!NOTE]
-> **Deferred:** Deferred to future post-release phase. Not part of current active scope.
-
-### 10a — Plugin Discovery & Management (Week 4)
-- Scan plugin manifests from local app directory.
-- Add trust verification model via sha256 checksum tracking.
-
-### 10b — Widget Loading (Weeks 5–6)
-- Dynamic widget registration in a frontend `DYNAMIC_WIDGET_REGISTRY`.
-- Load widget `.js` bundles dynamically from a local Tauri asset server.
-
-### 10c — Developer API (Weeks 7–8)
-- Distribute TypeScript definitions for plugin developers.
-- Write documentation and publish sample templates.
+Plugin marketplace, signed extensions, Settings Extension tab, and dashboard widget infrastructure are **not part of this project**. Do not reintroduce without an explicit product decision.
 
 ---
 

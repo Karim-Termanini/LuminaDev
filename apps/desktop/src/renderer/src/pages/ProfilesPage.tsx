@@ -684,33 +684,6 @@ export function ProfilesPage(): ReactElement {
                 </div>
               </div>
             </label>
-
-            <label className="profiles-list-row" style={{ cursor: 'pointer' }}>
-              <div className="row-left">
-                <div className="row-icon-box" style={{ background: 'transparent' }}>
-                  <span
-                    className="codicon codicon-refresh"
-                    style={{ fontSize: 24, color: 'var(--text)' }}
-                  />
-                </div>
-                <div className="row-title-area">
-                  <span className="row-title">{t('automation.refreshDashboard.title')}</span>
-                  <span className="row-subtitle">{t('automation.refreshDashboard.desc')}</span>
-                </div>
-              </div>
-              <div className="row-actions">
-                <div className="fluent-toggle">
-                  <input
-                    type="checkbox"
-                    checked={onLogin.reloadDashboardLayout}
-                    onChange={(e) =>
-                      void saveOnLogin({ ...onLogin, reloadDashboardLayout: e.target.checked })
-                    }
-                  />
-                  <span className="fluent-slider"></span>
-                </div>
-              </div>
-            </label>
           </div>
         </section>
       )}

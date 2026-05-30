@@ -9,26 +9,28 @@ Linux developer workstation dashboard, focused on safe click-first flows for Doc
 This project is in active development. Features below are split by maturity:
 
 - **Implemented (verified)**:
-  - Docker surface: container list/actions/logs plus image/volume/network cleanup flows.
+  - Docker surface: container list/actions/logs plus image/volume/network cleanup flows; per-container stats polling.
   - Maintenance and Monitor pages with metrics + job runner integration.
-  - SSH and Git configuration UI flows.
+  - SSH and Git configuration UI flows; unified `/git` hub (Config, VCS, Cloud tabs).
+  - Elevated theme across primary routes (Phase 15 complete).
   - Typed IPC boundaries via `@linux-dev-home/shared` schemas.
 - **Partial / evolving**:
   - `dh:docker:install` / `dh:docker:remap-port`: install wizard (distro + sudo) and port-remap clone flow; remap stops and removes the source container on success (`sourceRemoved` in response).
   - **Settings** (`/settings`): personalization (accent), read-only SSH bookmark overview, structured **hosts** and **process env** diagnostics. Host file editing and profile-scoped env files are not implemented yet ([`docs/ROUTE_STATUS.md`](docs/ROUTE_STATUS.md)).
   - Runtime install/update matrix hardening.
   - Diagnostics and support bundle depth.
-- **Planned**:
-  - Extensions, theme rollout, and broader automation.
+- **Out of scope (removed 2026-05-29):**
+  - Settings **Extension** tab / plugin marketplace (Phase 10) — UI and infrastructure removed.
+  - Dashboard **widget catalog/deck** and layout IPC — fully removed from shared, Rust, and renderer.
 
 ## Quality Gate Policy
 
 All changes must pass the full CI gate before merge. Gate runs are enforced on every PR:
 
 1. `pnpm smoke` (typecheck + test + lint) must pass.
-2. All Docker destructive actions must keep confirmation + tested error handling.
+2. Destructive actions (Docker prune/remove, runtime uninstall, profile teardown) must keep confirmation + tested error handling.
 3. No feature regression on existing live/partial routes without corresponding test updates.
-4. Documentation must use `Implemented / Partial / Planned` wording only.
+4. Documentation must use `Implemented / Partial / Planned` (or `Out of scope`) wording only.
 5. Commit hygiene: no micro-churn commits; each commit must represent one reviewable change with a descriptive message.
 
 ## Known Limitations

@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { DashboardLayoutFileSchema } from '../src/foundation'
 import {
   ComposeUpRequestSchema,
   CustomProfilesStoreSchema,
@@ -21,7 +20,6 @@ import {
   SshGenerateSchema,
   StoreSetRequestSchema,
 } from '../src/schemas'
-import { isRegisteredWidgetType } from '../src/widgetRegistry'
 
 describe('schemas', () => {
   it('rejects arbitrary host exec', () => {
@@ -130,15 +128,24 @@ describe('schemas', () => {
     ).toThrow()
   })
 
-  it('parses dashboard layout file', () => {
-    const v = DashboardLayoutFileSchema.parse({
-      version: 1,
-      placements: [{ instanceId: 'a', widgetTypeId: 'static.docker-permission-hint' }],
+  it('parseOnLoginAutomation falls back on invalid data', () => {
+    expect(parseOnLoginAutomation(null)).toEqual({
+      composeUpForActiveProfile: false,
     })
-    expect(v.placements).toHaveLength(1)
-    expect(isRegisteredWidgetType('static.docker-permission-hint')).toBe(true)
-    expect(isRegisteredWidgetType('link.cloud-git')).toBe(true)
-    expect(isRegisteredWidgetType('unknown.widget')).toBe(false)
+    expect(parseOnLoginAutomation({ composeUpForActiveProfile: true })).toEqual({
+      composeUpForActiveProfile: true,
+    })
+  })
+
+  it('parses on_login_automation store set', () => {
+    const v = StoreSetRequestSchema.parse({
+      key: 'on_login_automation',
+      data: { composeUpForActiveProfile: true },
+    })
+    expect(v).toEqual({
+      key: 'on_login_automation',
+      data: { composeUpForActiveProfile: true },
+    })
   })
 
   it('parses typed store set for custom_profiles', () => {
@@ -202,28 +209,6 @@ describe('schemas', () => {
     expect(parseStoredActiveProfile('desktop-qt')).toBe('desktop-gui')
     expect(parseStoredActiveProfile('typo')).toBe('typo')
     expect(parseStoredActiveProfile(null)).toBe(null)
-  })
-
-  it('parseOnLoginAutomation falls back on invalid data', () => {
-    expect(parseOnLoginAutomation(null)).toEqual({
-      composeUpForActiveProfile: false,
-      reloadDashboardLayout: false,
-    })
-    expect(parseOnLoginAutomation({ composeUpForActiveProfile: true })).toEqual({
-      composeUpForActiveProfile: true,
-      reloadDashboardLayout: false,
-    })
-  })
-
-  it('parses on_login_automation store set', () => {
-    const v = StoreSetRequestSchema.parse({
-      key: 'on_login_automation',
-      data: { composeUpForActiveProfile: true, reloadDashboardLayout: true },
-    })
-    expect(v).toEqual({
-      key: 'on_login_automation',
-      data: { composeUpForActiveProfile: true, reloadDashboardLayout: true },
-    })
   })
 
   it('parseSshBookmarks returns [] on invalid data', () => {

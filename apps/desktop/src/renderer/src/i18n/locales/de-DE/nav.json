@@ -39,9 +39,7 @@
   "topbar.maintenance": "Wartung",
   "topbar.settings": "Einstellungen",
   "topbar.linuxDevHome": "Linux Dev Home",
-  "topbar.widgets": "Widgets",
   "topbar.mainTooltip": "Übersichts-Dashboard und schnelle Statuskarten",
   "topbar.kernelsTooltip": "GPU-Überwachung, Toolchains, Systemdienste und offene Ports",
-  "topbar.logsTooltip": "Protokollbetrachter und aktive Prozessausgaben",
-  "topbar.widgetsTooltip": "Verwalten, Konfigurieren und Layouten von Dashboard-Widgets"
+  "topbar.logsTooltip": "Protokollbetrachter und aktive Prozessausgaben"
 }

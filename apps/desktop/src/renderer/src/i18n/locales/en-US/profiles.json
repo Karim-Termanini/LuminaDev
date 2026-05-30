@@ -20,11 +20,9 @@
   "builder.empty": "No custom environments yet. Click the button above to get started.",
 
   "automation.title": "Global Boot Automation",
-  "automation.subtitle": "After the Setup Wizard is dismissed, optionally start your active compose stack or refresh the dashboard widget layout from disk. Requires Docker for compose; Flatpak needs socket access.",
+  "automation.subtitle": "After the Setup Wizard is dismissed, optionally start your active compose stack once per launch. Requires Docker for compose; Flatpak needs socket access.",
   "automation.composeUp.title": "Compose up on launch",
   "automation.composeUp.desc": "Automatically start the active profile once per app launch.",
-  "automation.refreshDashboard.title": "Refresh dashboard layout",
-  "automation.refreshDashboard.desc": "Reload widgets from layout.json on launch.",
 
   "backup.title": "Backup & Sync",
   "backup.subtitle": "Export all profiles as JSON for backup and team sharing, or import profiles from a previous export.",

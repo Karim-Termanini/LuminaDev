@@ -7,7 +7,6 @@ import { ActiveJobsStrip } from './ActiveJobsStrip'
 import { EnvironmentBanner } from './EnvironmentBanner'
 import { OnLoginAutomationRunner } from './OnLoginAutomationRunner'
 import { TopBar } from './TopBar'
-import { WidgetLayoutProvider } from './WidgetLayoutContext'
 import './AppShell.css'
 
 const DEFAULT_SHORTCUTS: Record<string, string> = {
@@ -202,13 +201,11 @@ export function AppShell({ children }: { children: ReactNode }): ReactElement {
         </div>
       </aside>
       <div className="app-shell-main">
-        <WidgetLayoutProvider>
-          <OnLoginAutomationRunner />
-          <EnvironmentBanner />
-          <TopBar />
-          <main style={{ flex: 1, overflow: 'auto', padding: 24 }}>{children}</main>
-          <ActiveJobsStrip />
-        </WidgetLayoutProvider>
+        <OnLoginAutomationRunner />
+        <EnvironmentBanner />
+        <TopBar />
+        <main style={{ flex: 1, overflow: 'auto', padding: 24 }}>{children}</main>
+        <ActiveJobsStrip />
         <ShortcutVisualizer />
       </div>
     </div>

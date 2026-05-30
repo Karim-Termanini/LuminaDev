@@ -20,11 +20,9 @@
   "builder.empty": "Noch keine benutzerdefinierten Umgebungen. Klicke oben auf die Schaltfläche, um zu beginnen.",
 
   "automation.title": "Globale Startautomatisierung",
-  "automation.subtitle": "Nachdem der Setup-Assistent geschlossen wurde, kannst du optional den aktiven Compose-Stack starten oder das Dashboard-Widget-Layout von der Festplatte aktualisieren. Erfordert Docker für Compose; Flatpak benötigt Socket-Zugriff.",
+  "automation.subtitle": "Nachdem der Setup-Assistent geschlossen wurde, kannst du optional den aktiven Compose-Stack einmal pro Start ausführen. Erfordert Docker für Compose; Flatpak benötigt Socket-Zugriff.",
   "automation.composeUp.title": "Compose beim Start ausführen",
   "automation.composeUp.desc": "Startet das aktive Profil automatisch einmal pro App-Start.",
-  "automation.refreshDashboard.title": "Dashboard-Layout aktualisieren",
-  "automation.refreshDashboard.desc": "Lädt Widgets aus layout.json beim Start neu.",
 
   "backup.title": "Backup & Sync",
   "backup.subtitle": "Exportiere alle Profile als JSON für Backup und Team-Sharing oder importiere Profile aus einem vorherigen Export.",

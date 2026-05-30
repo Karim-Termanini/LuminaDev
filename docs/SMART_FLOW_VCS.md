@@ -39,8 +39,7 @@ This document is the **operational blueprint** for evolving Git VCS from “raw 
    - Proceed with **Push** as today.
 
 4. **If push fails for policy reasons (protected branch)**  
-   - **v0 shipped:** Tauri classifies common host messages into **`[GIT_VCS_PROTECTED_BRANCH]`**; the error panel uses the same amber “soft notice” treatment as integration-required, with **Open Cloud Git** (tab follows the active fetch remote when GitHub/GitLab) and **Dismiss**.  
-   - **Still to do:** branch rename / suggest + **create PR/MR wizard** (push to new branch + host API). **Shipped:** **Copy raw error** on `/git-vcs` (full bracketed IPC string).
+   - **Shipped:** Tauri classifies common host messages into **`[GIT_VCS_PROTECTED_BRANCH]`**; bypass branch suggest + push + PR/MR wizard in renderer. **Copy raw error** on Git op panel.
 
 **Implementation notes:**
 
@@ -162,18 +161,15 @@ Work in **vertical slices** (each shippable behind a small flag if needed). Sugg
 
 ## Open backlog (not shipped yet)
 
-These are the **largest remaining Smart-Flow / Git VCS** items called out in product planning; everything else in this doc is either shipped as v0 or tracked in smaller bullets above.
-
 | Backlog item | What “done” looks like |
 | --- | --- |
-| **Branch rename + create PR/MR wizard** | When direct push is impossible (e.g. protected default branch): suggest a safe branch name, `git checkout -b` / push there, then a wizard calling Cloud Git APIs to open a PR/MR with prefilled title/body and target branch (`Phase Four`). |
-| **True 3-way conflict UI** | Dedicated resolver (ours / theirs / result + per-hunk actions), optional new IPC for stage blobs; today: conflict rows + merge-aware diff + editor (`Phase Three`). |
+| **Integration bar a11y** | Keyboard focus + screen-reader review on ref picker and action row. |
+| **Cherry-pick / bisect states** | Extend `gitOperation` state machine beyond merge/rebase. |
+| **Dedicated `:1/:2/:3` conflict IPC** | Optional backend blobs for full 3-way resolver without relying on combined diff only. |
 
-**Also shipped from the same planning thread:** **Copy raw error** on `/git-vcs` copies the full `opErrorRaw` string (including `[GIT_VCS_*]` prefix) for logs, issues, and support.
+**Shipped since original blueprint:** Smart Push prefetch gate, protected-branch notice + bypass branch + PR/MR wizard, conflict rows + `GitVcsConflictResolver`, copy raw error.
 
----
-
-## Explicit non-goals (until re-scoped)
+**Explicit non-goals (until re-scoped)**
 
 - Replacing **all** Git CLI usage with libgit2 (not required for blueprint).  
 - Server-side merge resolution (always local-first).  

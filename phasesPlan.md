@@ -144,8 +144,10 @@ Progress notes (2026-05-01, docs pass):
 
 - ❌ Drag-and-drop polish (basic HTML5 reorder already works — good enough)
 - ❌ Theme surface rollout across all routes (Maintenance theme is pilot; others wait)
-- ❌ Full-scope **Phase 10 Extensions** and **Phase 12 Cloud Git** (as originally scoped)
-- Phase **8 Settings**: first **hub** shipped on `/settings` (accent, SSH overview, read-only hosts/env); **hosts editor** and **profile env files** remain future work
+- ❌ Full-scope **Phase 12 Cloud Git** (as originally scoped) — core shipped; notification inbox still out
+- Phase **8 Settings**: first **hub** shipped on `/settings`; **hosts editor** and **profile env files** remain future work
+- ❌ **Extensions / plugin marketplace** — **removed from scope** (2026-05-29)
+- ❌ **Dashboard widget catalog/deck** — **removed from scope** (2026-05-29)
 - ❌ Policy Lock, Visual Change Preview
 - ✅ **Git Doctor** — shipped: scan card in Git Config Overview + Diagnostics tab with health ring, severity-classified findings, and one-click fixes
 
@@ -274,10 +276,10 @@ pub async fn ipc_invoke(channel: &str, payload: Value, state: AppState) -> Resul
 
 - [x] 9 preset profile cards on grid: Web Dev, Mobile, Game Dev, Infra/K8s, + 5 more (PROFILE_01–09)
 - [x] `CustomProfileWizardModal` — name → template → stacks → widgets → save to `custom_profiles` store
-- [x] Widget drag-and-drop reorder (HTML5, wired in `DashboardWidgetDeck` rendered inside `DashboardMainPage`)
-- [x] Widget layout load/save via `layoutGet` / `layoutSet` IPC
+- [x] Widget drag-and-drop reorder (HTML5, wired in dashboard — **widget deck removed 2026-05-29**)
+- [x] Widget layout load/save via `layoutGet` / `layoutSet` IPC — **removed 2026-05-29** (channels, types, and store handlers deleted)
 - [x] `DashboardKernelsPage`, `DashboardLogsPage` present and routed
-- [x] `DashboardWidgetsPage` (`/dashboard/widgets`) — full widget catalog + placement management; built 2026-05-28
+- [x] ~~`DashboardWidgetsPage`~~ — **removed from scope** (2026-05-29); route deleted
 
 ### Verified missing (not Alpha scope)
 
@@ -339,7 +341,7 @@ Known issue addressed: install wizard now refreshes `installedFeatures` on open 
 - [x] System info: 14 fields
 - [x] GitHub commits feed widget
 
-Missing: per-container stats stream, LAN discovery (intentional).
+Missing: LAN discovery (intentional). **Per-container stats stream:** ✅ shipped on Docker page (2026-05-29).
 
 ---
 
@@ -376,9 +378,9 @@ Remaining: Ruby install slow on Fedora (intentional/known).
 
 ---
 
-## Phase 8 — Settings ✅ DONE (15 tabs shipped; 1 stub, Resources tab absent)
+## Phase 8 — Settings ✅ DONE (14 tabs shipped; Resources tab absent; Extension removed)
 
-**`/settings` shell** — `SettingsShell.tsx` with category rail, `?tab=` URL param, and per-tab routed components. 15 tabs implemented:
+**`/settings` shell** — `SettingsShell.tsx` with category rail, `?tab=` URL param, and per-tab routed components. **14 tabs** implemented:
 
 - [x] **Personalization** — accent colour, theme tokens; `applyAppearanceAccent` / `syncAppearanceFromStore`
 - [x] **Remote** — SSH overview, terminal defaults
@@ -394,8 +396,8 @@ Remaining: Ruby install slow on Fedora (intentional/known).
 - [x] **App Engine** _(beta)_ — IPC timeout, thread pool, daemon auto-restart
 - [x] **Builder** _(beta)_ — toolchain paths (Cargo, Node, Python), registry mirrors
 - [x] **Beta Features** _(beta)_ — experimental flags via `beta_features_state` store
-- [⚠️] **Extension** _(beta)_ — tab exists, component renders "Coming Soon" stub; real plugin loading not yet built
 - [ ] **Resources** — CPU/RAM limit sliders tab **not present** (not in nav, no component); deferred post-Alpha
+- [x] ~~**Extension**~~ — **removed from scope** (2026-05-29); no plugin tab in settings
 
 ---
 
@@ -413,11 +415,9 @@ Remaining: Ruby install slow on Fedora (intentional/known).
 
 ---
 
-## Phase 10 — Extensions 📋 PLANNED (post-Alpha)
+## Phase 10 — Extensions ❌ REMOVED FROM SCOPE (2026-05-29)
 
-- **Extension model v0**: "plugins" = **extra widgets + optional IPC namespaces** loaded from **signed/allowlisted** folder; no arbitrary binary download at first.
-- **Developer API**: versioned API and lifecycle hooks for third-party widget development.
-- **Marketplace**: browsable directory for community-contributed extensions (post-v0 stability).
+Plugin marketplace, signed extensions, and Settings Extension tab are **not part of this project**. Do not reintroduce without explicit product decision.
 
 ---
 
@@ -447,9 +447,7 @@ Turns app into true daily driver for software engineers managing repositories an
   - **CI/CD Pipelines**: `GitVcsCiChecks` + `gitVcsRepoPipelines` — real-time status (GitHub Actions + GitLab CI) with 30s polling. GitHub-only server-side merge button.
   - **Issues Tracking**: Open issues across repos via `CloudGitActivityPanel`.
   - **Releases & Tags**: Latest releases per provider via `CloudGitActivityPanel`.
-- **Dashboard Widgets** ✅:
-  - `live.git-recents`: Recent local repos — branch, dirty files, ahead/behind counts.
-  - `live.cloud-notifications` _(new)_: Failed pipelines + open issues from all connected GitHub/GitLab accounts. Registered in widget registry + `DashboardWidgetDeck`.
+- **Dashboard Widgets** — **removed** (2026-05-29). Use `/git` recents and Cloud Git activity instead.
 
 ---
 
@@ -458,7 +456,7 @@ Turns app into true daily driver for software engineers managing repositories an
 **Goal:** Convert all pages to elevated product aesthetic (ambient gradients, elevated cards, hero sections).
 
 - [x] **Elevated Theme Utilities:** `theme-elevated.css` with reusable classes (hero, card, tabs, tiles, grids, etc.)
-- [x] **Full Page Coverage:** All 11 pages + 1 modal converted to use elevated theme system (DockerPage, GitConfigPage, SettingsPage, RuntimesPage, DashboardWidgetsPage, TerminalPage, RegistryPage, ProfilesPage, DashboardKernelsPage, DashboardLogsPage, GitVcsDirtyCheckoutModal)
+- [x] **Full Page Coverage:** All primary pages + modals converted to elevated theme (DockerPage, GitConfigPage, SettingsPage, RuntimesPage, TerminalPage, RegistryPage, ProfilesPage, DashboardKernelsPage, DashboardLogsPage, GitVcsDirtyCheckoutModal)
 - [x] **CSS Architecture:** Per-page CSS files importing shared theme, no inline styles for layout/theming
 
 **Future Enhancement (Post-Phase 15):**
@@ -590,7 +588,7 @@ When user clicks "Install" / "Fix":
 
 - [x] **Runtimes Page Optimization:** Profile Tauri invoke calls causing >1 min load time. Implement lazy loading, caching of local package lists, or async background fetching. ✅ DONE (2026-05-28) — 30s status cache, adaptive polling (800ms active, 3s idle), background refresh.
 - [x] **Dashboard - Main:** Wire dynamic widget injection based on user's active Profile layout configuration. ✅ DONE (2026-05-28) — `DashboardWidgetDeck` resolves widget types from shared registry, profile-driven layout.
-- [x] **Dashboard - Widgets:** Remove all mocked JSON files. Tie widgets directly to live system event emitters. ✅ DONE (2026-05-28) — zero mock files, all `layoutGet`/`layoutSet` are real IPC, profile reads from `active_profile` store.
+- [x] **Dashboard - Widgets:** Removed from product scope (2026-05-29).
 - [x] **Dashboard - Kernels:** Build configuration grid for starting, stopping, linking local development kernels (e.g., Jupyter, PHP-FPM). ✅ DONE (2026-05-28) — `KERNEL_DEFS` with Start/Stop/Open/Link via `hostExec`.
 - [x] **Dashboard - Logs:** Implement unified log viewer using `xterm.js` multiplexing stdout/stderr streams from all active background jobs and containers into single searchable buffer. ✅ DONE (2026-05-28) — real xterm.js with multiplexed streams, functional line-buffer search filter.
 - [x] **Global Navigation (Chrome) Fixes:** Define specific Tauri commands (e.g., `open_terminal`, `show_notifications_panel`) bound to Top Bar buttons (Search, Notification, Terminal, Settings) and Left Sidebar buttons (Docs, Setup Wizard, Local User). ✅ DONE (2026-05-28) — Search uses fuzzy-scored palette (pages/containers/runtimes/git repos via live IPC), Notifications poll `jobsList()`, Terminal/Settings navigate, Docs link fixed, Setup Wizard wired, Profile name from store, nav badges from engine health ping.
@@ -619,11 +617,15 @@ Based on current app state (Phase 16 + Phase 7 complete), here's what remaining 
 
 ### Phase 8 — Settings ✅ DONE
 
-15 tabs shipped. See Phase 8 section above for per-tab detail. Remaining gaps: Resources tab absent, Extension tab is stub.
+15 tabs shipped → **14 tabs** (Extension removed). See Phase 8 section. Remaining gaps: Resources tab absent.
+
+### Phase 10 — Extensions ❌ REMOVED
+
+Out of scope. See Phase 10 section above.
 
 ### Phase 15 — Theme Rollout ✅ DONE
 
-`theme-elevated.css` created; all 11 pages + 1 modal converted to elevated theme system. Dynamic theme swapping without reload is post-Alpha enhancement.
+`theme-elevated.css` created; primary routes converted. Dynamic theme swapping without reload is post-Alpha enhancement.
 
 ### Phase 9 — Profiles ✅ DONE
 
@@ -635,22 +637,9 @@ Based on current app state (Phase 16 + Phase 7 complete), here's what remaining 
 
 **Status:** ✅ Merged into 8-step unified installer (Phase 16). No separate implementation needed.
 
-### Phase 10 — Extensions (Post-Alpha)
+### UI/UX & Performance — ✅ DONE (2026-05-28)
 
-**Scope:** Plugin model v0 (signed/allowlisted widgets + optional IPC namespaces).
-
-- Developer API: versioned, lifecycle hooks
-- Marketplace: browsable community directory (post-v0)
-
-**Dependency:** Stable Phase 0–7 + Phase 15 (theme must be locked) before plugin stability.
-
-### UI/UX & Performance (Ongoing)
-
-**Runtimes page:** >1 minute load time — profile Tauri invokes, implement lazy loading + caching.
-**Dashboard widgets:** Remove mocked JSON, tie to live event emitters.
-**Kernel management:** Config grid for start/stop/link local kernels.
-**Log viewer:** xterm.js multiplexing stdout/stderr from jobs + containers.
-**Navigation polish:** Wire `dh:terminal:openExternal`, notifications, search.
+Runtimes lazy-load/caching, kernel grid, log multiplexing, and navigation polish shipped. Dashboard widgets **removed** 2026-05-29.
 
 ---
 
@@ -670,11 +659,11 @@ Based on current app state (Phase 16 + Phase 7 complete), here's what remaining 
 ✅  Phase 7  — Maintenance / Guardian
 ✅  Phase 16 — System Readiness & Pre-Requisites Wizard (Installer)
 ✅  Phase 15 — Theme Rollout (Elevated aesthetic)
-✅  Phase 8  — Settings (15 tabs; Extension stub, Resources absent)
+✅  Phase 8  — Settings (14 tabs; Resources absent; Extension removed)
 ✅  Phase 9  — Profiles
 ✅  Phase 11 — First-run Wizard (Merged into Phase 16)
 ✅  UI/UX & Performance Debt (all 7 items, 2026-05-28)
 ✅  Audit Fixes (9 defects squashed, fuzzy search shipped, 2026-05-28)
-📋  Phase 10 — Extensions (Plugin model v0, Dev API) (Deferred / Future Phase)
+❌  Phase 10 — Extensions (removed from scope 2026-05-29)
 ✅  Phase 17  — lib.rs Monolith Refactoring (37 source files, 678-line dispatcher)
 ```
