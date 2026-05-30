@@ -94,7 +94,7 @@ export function SettingsAccounts(): ReactElement {
 
       <SettingsCard title={t('accounts.workflowsTitle')} description={t('accounts.workflowsDesc')}>
         <Link
-          to={`/git?tab=cloud&provider=${activeProvider}`}
+          to="/git"
           className="hp-btn hp-btn-primary settings-accounts-cloud-link"
           style={{ textDecoration: 'none' }}
         >

@@ -175,9 +175,9 @@ describe('headless-e2e: page-specific rendering', () => {
     expect(page.SettingsPage).toBeDefined()
   })
 
-  it('should load CloudGitPage without errors', async () => {
-    const page = await import('./CloudGitPage')
-    expect(page.CloudGitPage).toBeDefined()
+  it('should load GitAssistantPage without errors', async () => {
+    const page = await import('./git/GitAssistantPage')
+    expect(page.GitAssistantPage).toBeDefined()
   })
 
   it('should verify critical page paths conceptually', () => {
@@ -186,8 +186,7 @@ describe('headless-e2e: page-specific rendering', () => {
       'DashboardLogsPage',
       'DockerPage',
       'MonitorPage',
-      'GitConfigPage',
-      'CloudGitPage',
+      'DeveloperGitPage',
       'RuntimesPage',
       'SshPage',
       'MaintenancePage',

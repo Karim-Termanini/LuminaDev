@@ -49,9 +49,10 @@ export function GitChangesPanel({
         <GitDualLabel primary={t('assistant.changes.stagePrimary')} sub={t('assistant.changes.stageSub')} />
       }
       icon="diff"
+      className="git-assistant-changes-panel"
     >
-      <div className="hp-row" style={{ justifyContent: 'flex-end', marginBottom: rows.length > 0 ? 10 : 0 }}>
-        {rows.length > 0 ? (
+      {rows.length > 0 ? (
+        <div className="git-assistant-changes-toolbar">
           <button
             type="button"
             className="hp-btn"
@@ -61,8 +62,8 @@ export function GitChangesPanel({
           >
             {allIncluded ? t('assistant.changes.deselectAll') : t('assistant.changes.selectAll')}
           </button>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
 
       {rows.length === 0 ? (
         <p className="hp-muted" style={{ margin: 0 }}>
@@ -72,14 +73,18 @@ export function GitChangesPanel({
         <ul className="git-assistant-file-list">
           {rows.map((row) => (
             <li key={row.path} className="git-assistant-file-row">
-              <input
-                type="checkbox"
-                checked={included.has(row.path)}
-                disabled={busy}
-                onChange={(e) => onToggle(row.path, e.target.checked)}
-                aria-label={t('assistant.changes.stageAria', { file: row.path })}
-              />
-              <span className="git-assistant-file-path mono">{row.path}</span>
+              <span className="git-assistant-file-path mono" title={row.path}>
+                {row.path}
+              </span>
+              <label className="git-assistant-file-stage">
+                <input
+                  type="checkbox"
+                  checked={included.has(row.path)}
+                  disabled={busy}
+                  onChange={(e) => onToggle(row.path, e.target.checked)}
+                  aria-label={t('assistant.changes.stageAria', { file: row.path })}
+                />
+              </label>
             </li>
           ))}
         </ul>

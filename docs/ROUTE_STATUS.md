@@ -20,10 +20,10 @@ Status legend:
 | `/docker` | live | Main Docker slice (list/actions/logs/images/volumes/networks/cleanup/remap) is functional with guardrails. |
 | `/ssh` | partial | Core SSH key/test/setup flows work; advanced transfer/remote UX still evolving. |
 | `/git` | live | **Git Assistant** — single-page Setup → Project → Save → Share; one primary next-action; open/clone/save snapshot/get latest/send to GitHub; conflicts → external editor. Legacy tabbed VCS/Config/Cloud UI removed. GitHub auth: **Settings → Connected accounts**. |
-| `/git-config` | redirect | → `/git?tab=config` |
-| `/git-vcs` | redirect | → `/git?tab=vcs` |
-| `/cloud-git` | redirect | → `/git?tab=cloud` |
-| `/registry` | redirect | → `/git?tab=vcs` |
+| `/git-config` | redirect | → `/git` |
+| `/git-vcs` | redirect | → `/git` |
+| `/cloud-git` | redirect | → `/git` |
+| `/registry` | redirect | → `/git` |
 | `/profiles` | partial | Custom-named environments only (user picks base template + name). CRUD + duplicate + export/import; Set Active / switch syncs dashboard. On launch: optional composeUp for active profile. |
 | `/terminal` | partial | Embedded terminal works; host/sandbox differences still affect behavior. |
 | `/runtimes` | partial | Status/version/deps/uninstall preview live; install/update/remove backend hardened for Ubuntu/Fedora/Arch (distro ID_LIKE, post-install verify gate). |

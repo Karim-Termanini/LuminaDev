@@ -9,7 +9,7 @@
 
 This document consolidates **all active planning** into one place: forward backlog, stabilization track, Git VCS roadmap, release criteria, architecture standards, and status of historical implementation plans. **`phasesPlan.md` is not duplicated here line-for-line** — it remains the authoritative phase-by-phase record; this file synthesizes it with every other plan.
 
-**Active sprint (2026-05-30):** Git Assistant — renderer-only refactor of `/git` per [`gitRefactor.md`](../gitRefactor.md). Phases G1–G3 below. **One Git UX only** — no advanced page, no pro toggle, no in-app Smart-Flow. Merge/rebase/PR/CI/stash → editor, terminal, or GitHub in the browser.
+**Active sprint (2026-05-30):** Git Assistant — G1 shipped on `/git` per [`gitRefactor.md`](../gitRefactor.md). Next: **G2 validate**, **G3 iterate**. **One Git UX only** — no advanced page, no pro toggle. Merge/rebase/PR/CI/stash → editor, terminal, or GitHub in the browser.
 
 ---
 
@@ -45,7 +45,7 @@ This document consolidates **all active planning** into one place: forward backl
 - Settings: hosts editor + `~/.profile` env editor live on **System** tab; GitHub/GitLab auth on **Connected accounts** (`settings_*` host exec + cloud auth IPC)
 - Runtimes: install matrix hardened (distro ID_LIKE, verify gate, empty-package errors)
 - Profiles ↔ dashboard: `active_profile` resolver + cross-page sync (2026-05-30)
-- Git VCS: legacy three-tab hub (`/git?tab=config|vcs|cloud`) — **to be replaced and deleted** by Git Assistant G1 (see §6, §11)
+- Git VCS: **Git Assistant** on `/git` (G1 shipped); legacy tabbed hub removed (see §6)
 - Cloud Git: no API-side merge from Lumina; no notification inbox; Cloud tab folds into Setup in G1
 
 ---
@@ -123,7 +123,7 @@ Extract when next touching these files:
 | File | Lines | Target split |
 | --- | --- | --- |
 | `DockerPage.tsx` | ~3,664 | `DockerContainersTab`, `DockerImagesTab`, `DockerVolumesTab`, `DockerNetworksTab` |
-| `GitConfigPage.tsx` | ~2,835 | `GitDoctorPanel`, `GitConfigInspector` |
+| ~~`GitConfigPage.tsx`~~ | removed G1.10 | Git Doctor → inline on Setup checklist |
 | `ProfilesPage.tsx` | ~2,704 | `ProfileWizardModal`, `ProfileScaffoldModal` |
 
 ### P5 — Release gate (post-stabilization)
@@ -197,7 +197,7 @@ Known limits on **native** builds: terminal is line-buffered (no full PTY for vi
 
 **Product rule:** There is **no** Lumina “advanced Git” mode — no second page, no beta flag, no header Pro toggle. Anything beyond setup / open / save / share / connect GitHub → **editor, terminal, or GitHub in the browser** (footer link states this once).
 
-**Implementation constraint:** Renderer-only. **Do not delete Rust IPC** the new UI no longer calls. Reuse `gitVcsNextAction`, `GitVcsFileList`, `humanizeGitVcsError`, Git Doctor IPC, cloud auth, `gitVcsStage` / `gitVcsCommit` / `gitVcsPull` / `gitVcsPush`. **Remove renderer surfaces** that exposed pro Git.
+**Implementation constraint:** Renderer-only. **Do not delete Rust IPC** the new UI no longer calls. Reuse `computeGitAssistantNextAction`, `humanizeGitVcsError`, Git Doctor IPC, cloud auth, `gitVcsStage` / `gitVcsCommit` / `gitVcsPull` / `gitVcsPush`. **Legacy pro renderer surfaces deleted (G1.10).**
 
 **Rust IPC policy (team decision):** Keep unused `dh:git:vcs:*` handlers and matching `IPC` channels for contract tests. Document with **JSDoc `@deprecated` on `IPC` consts** + `git_vcs_ipc.rs` module comment — **not** `#[deprecated]` on Rust fns (CI `deny(warnings)` risk). Renderer must not call pro-only channels. Delete only after zero-reference audit.
 
@@ -229,17 +229,18 @@ Known limits on **native** builds: terminal is line-buffered (no full PTY for vi
 
 **G1 ship checklist**
 
-- [ ] `/git` loads only Git Assistant (no tab switcher, no pro toggle)
-- [ ] Setup checklist shows 4 items with fix actions
-- [ ] User can open/clone a repository (folder picker)
-- [ ] User can save snapshot (commit), get latest (pull), send to GitHub (push)
-- [ ] Next-action card shows correct primary button for all states in decision matrix
-- [ ] Humanized errors on failures
-- [ ] Conflicts route to external editor only
-- [ ] Legacy `GitVcsPage` / three-tab git routes unreachable (code deleted or redirects removed)
-- [ ] Progress rail: Share incomplete when GitHub not connected; all four steps track real status
-- [ ] Footer uses canonical copy above
-- [ ] Pro-only IPC documented in shared JSDoc (channels kept; no Rust `#[deprecated]`)
+- [x] `/git` loads only Git Assistant (no tab switcher, no pro toggle)
+- [x] Setup checklist shows 4 items with fix actions (+ Git Doctor on failed rows)
+- [x] User can open/clone a repository (folder picker)
+- [x] User can save snapshot (commit), get latest (pull), send to GitHub (push)
+- [x] Next-action card shows correct primary button for all states in decision matrix
+- [x] Humanized errors on failures (+ behind-remote modal on push block)
+- [x] Conflicts route to external editor only
+- [x] Legacy `GitVcsPage` / three-tab git routes unreachable (code deleted; redirects → `/git`)
+- [x] Progress rail: Share incomplete when GitHub not connected; all four steps track real status
+- [x] Footer uses canonical copy above
+- [x] Pro-only IPC documented in shared JSDoc (channels kept; no Rust `#[deprecated]`)
+- [x] G1.9: Open on GitHub when connected (+ post-push hint when `ahead === 0`)
 
 **Removed from product (not relocated — gone from Lumina Git)**
 
@@ -303,12 +304,12 @@ Need more than save, send, and sync? Use VS Code, Cursor, your terminal, or GitH
 
 ### Agent checklist (Git sprint work)
 
-- [ ] `pnpm smoke` or narrowest gate from `CLAUDE.md`
-- [ ] Humanized errors for any new `[GIT_VCS_*]` / `[CLOUD_*]` codes
-- [ ] Update [`ROUTE_STATUS.md`](./ROUTE_STATUS.md) when `/git` default UX changes
-- [ ] Contract tests for beginner page state machine / next-action matrix / **progress rail**
-- [ ] Pro-only IPC not called from renderer (documented in shared package)
-- [ ] Cancel network calls on unmount / remote change
+- [x] `pnpm smoke` or narrowest gate from `CLAUDE.md`
+- [x] Humanized errors for any new `[GIT_VCS_*]` / `[CLOUD_*]` codes
+- [x] Update [`ROUTE_STATUS.md`](./ROUTE_STATUS.md) when `/git` default UX changes
+- [x] Contract tests for beginner page state machine / next-action matrix / **progress rail**
+- [x] Pro-only IPC not called from renderer (documented in shared package)
+- [ ] Cancel network calls on unmount / remote change (optional hardening)
 
 ---
 
@@ -354,7 +355,7 @@ From [`AUDIT.md`](./AUDIT.md) §1 (condensed):
 | P0 | AppImage release pipeline E2E | ❓ Unverified |
 | P2 | Settings hosts/env editing + Connected accounts auth | ✅ Done |
 | P2 | Runtimes install matrix hardening | ✅ Done (2026-05-30) |
-| P2 | Git VCS — Git Assistant (G1–G3) | 📋 **Active sprint** — see §6; replaces prior "simple mode" partial work |
+| P2 | Git VCS — Git Assistant (G1–G3) | ✅ G1 shipped; G2 validate / G3 iterate — see §6 |
 | — | Resources settings tab | Removed (no Rust enforcement) |
 
 ---
@@ -394,7 +395,7 @@ Finish **one** before opening the next.
 | Settings hosts + profile env editing | ✅ | System tab: `/etc/hosts` + `~/.profile` via `hostExec` |
 | Runtimes install matrix | ✅ | Distro ID_LIKE, verify gate (2026-05-30) |
 | Profiles ↔ dashboard alignment | ✅ | `active_profile` + cross-page sync (2026-05-30) |
-| **Git VCS — Git Assistant G1** | 📋 **Active** | [`gitRefactor.md`](../gitRefactor.md); replace `/git`, delete legacy tabbed UI (§6 G1.10) |
+| **Git VCS — Git Assistant G1** | ✅ **Shipped** | G2/G3: [`gitRefactor.md`](../gitRefactor.md) §12 |
 
 ### Tier 2 — Opportunistic cleanup
 

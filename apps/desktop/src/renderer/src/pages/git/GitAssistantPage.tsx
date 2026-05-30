@@ -14,8 +14,10 @@ import { GitChangesPanel } from './GitChangesPanel'
 import { GitNextStepCard } from './GitNextStepCard'
 import { GitProgressRail } from './GitProgressRail'
 import { GitProjectBar } from './GitProjectBar'
+import { GitBehindRemoteModal } from './GitBehindRemoteModal'
 import { GitSaveShareBar } from './GitSaveShareBar'
 import { GitSetupChecklist } from './GitSetupChecklist'
+import { GitShareOnlinePanel } from './GitShareOnlinePanel'
 import { assertGitOk } from '../gitContract'
 import { assertGitVcsOk } from '../gitVcsContract'
 import { humanizeGitVcsError, parseGitVcsErrorCode } from '../gitVcsError'
@@ -27,7 +29,7 @@ import type { GitProgressStep } from '../gitAssistantProgressRail'
 import { evaluateGitSetupChecklist, isGitSetupComplete } from '../gitAssistantSetup'
 import { assertGitRecentList } from '../registryContract'
 import { settingsAccountsHref } from '../settingsAccountsHref'
-import type { GitVcsOperation } from '../GitVcsStateBanner'
+import type { GitVcsOperation } from '../gitVcsTypes'
 
 type DirtyCheckoutPrompt = { branch: string; create: boolean; files: string[] }
 
@@ -63,6 +65,7 @@ export function GitAssistantPage(): ReactElement {
   const [dirtyCheckout, setDirtyCheckout] = useState<DirtyCheckoutPrompt | null>(null)
   const [stashIncludeUntracked, setStashIncludeUntracked] = useState(true)
   const [editorRefreshHint, setEditorRefreshHint] = useState(false)
+  const [behindModalCount, setBehindModalCount] = useState<number | null>(null)
 
   const githubConnected = useMemo(
     () => cloudAccounts.some((a) => a.provider === 'github'),
@@ -392,6 +395,7 @@ export function GitAssistantPage(): ReactElement {
       const st = await window.dh.gitVcsStatus({ repoPath: path })
       assertGitVcsOk(st)
       if (st.behind != null && st.behind > 0) {
+        setBehindModalCount(st.behind)
         setOpErrorRaw(
           `[GIT_VCS_INTEGRATION_REQUIRED] Remote has ${st.behind} commit(s) not in your branch yet.`,
         )
@@ -553,6 +557,10 @@ export function GitAssistantPage(): ReactElement {
                 onSetIdentity={() => setIdentityOpen(true)}
                 onSetCredentialHelper={() => void setCredentialHelper()}
                 onSetDefaultBranch={() => void setDefaultBranchMain()}
+                onSetConfigKey={async (key, value) => {
+                  await window.dh.gitConfigSetKey({ key, value })
+                }}
+                onReloadSetup={loadSetup}
               />
               {identityOpen ? (
                 <div className="git-assistant-inline-panel">
@@ -615,66 +623,88 @@ export function GitAssistantPage(): ReactElement {
                   setDirtyCheckout(null)
                 }}
               />
-              <div ref={saveRef as React.RefObject<HTMLDivElement>}>
-                <GitChangesPanel
-                  staged={staged}
-                  unstaged={unstaged}
-                  included={included}
-                  busy={busy}
-                  onToggle={(path, on) => {
-                    setIncluded((prev) => {
-                      const nextSet = new Set(prev)
-                      if (on) nextSet.add(path)
-                      else nextSet.delete(path)
-                      return nextSet
-                    })
-                  }}
-                  onToggleAll={(paths, on) => {
-                    setIncluded((prev) => {
-                      const nextSet = new Set(prev)
-                      for (const p of paths) {
-                        if (on) nextSet.add(p)
-                        else nextSet.delete(p)
-                      }
-                      return nextSet
-                    })
-                  }}
-                />
-                <GitSaveShareBar
-                  message={commitMessage}
-                  onMessageChange={setCommitMessage}
-                  busy={busy}
-                  disabled={!repoPath.trim()}
-                  next={next}
-                  showPull={showPull}
-                  showPush={showPush}
-                  onSaveSnapshot={(m) => void runSaveSnapshot(m)}
-                  onGetLatest={() => void runPull()}
-                  onSend={() => void runPush()}
-                />
+              <div ref={saveRef as React.RefObject<HTMLDivElement>} className="git-assistant-save-grid">
+                <div className="git-assistant-save-main">
+                  <GitSaveShareBar
+                    message={commitMessage}
+                    onMessageChange={setCommitMessage}
+                    busy={busy}
+                    disabled={!repoPath.trim()}
+                    next={next}
+                    showPull={showPull}
+                    showPush={showPush}
+                    onSaveSnapshot={(m) => void runSaveSnapshot(m)}
+                    onGetLatest={() => void runPull()}
+                    onSend={() => void runPush()}
+                  />
+                  <div ref={shareRef as React.RefObject<HTMLDivElement>}>
+                    {!githubConnected ? (
+                      <GitAssistantSection
+                        id="git-share-heading"
+                        title={t('assistant.share.title')}
+                        subtitle={t('assistant.share.subtitle')}
+                        icon="github"
+                      >
+                        <p className="hp-muted" style={{ margin: 0 }}>
+                          {t('assistant.cloud.prompt')}
+                        </p>
+                        <Link
+                          to={settingsAccountsHref('github')}
+                          className="hp-btn hp-btn-primary"
+                          style={{ marginTop: 12, textDecoration: 'none', width: 'fit-content' }}
+                        >
+                          <span className="codicon codicon-link" aria-hidden />
+                          {t('assistant.setup.fixConnect')}
+                        </Link>
+                      </GitAssistantSection>
+                    ) : (
+                      <GitShareOnlinePanel
+                        repoPath={repoPath}
+                        branch={branch}
+                        githubConnected={githubConnected}
+                        ahead={ahead}
+                        busy={busy}
+                      />
+                    )}
+                  </div>
+                </div>
+                <div className="git-assistant-save-changes">
+                  <GitChangesPanel
+                    staged={staged}
+                    unstaged={unstaged}
+                    included={included}
+                    busy={busy}
+                    onToggle={(path, on) => {
+                      setIncluded((prev) => {
+                        const nextSet = new Set(prev)
+                        if (on) nextSet.add(path)
+                        else nextSet.delete(path)
+                        return nextSet
+                      })
+                    }}
+                    onToggleAll={(paths, on) => {
+                      setIncluded((prev) => {
+                        const nextSet = new Set(prev)
+                        for (const p of paths) {
+                          if (on) nextSet.add(p)
+                          else nextSet.delete(p)
+                        }
+                        return nextSet
+                      })
+                    }}
+                  />
+                </div>
               </div>
-              <div ref={shareRef as React.RefObject<HTMLDivElement>}>
-                {!githubConnected ? (
-                  <GitAssistantSection
-                    id="git-share-heading"
-                    title={t('assistant.share.title')}
-                    subtitle={t('assistant.share.subtitle')}
-                    icon="github"
-                  >
-                    <p className="hp-muted" style={{ margin: 0 }}>
-                      {t('assistant.cloud.prompt')}
-                    </p>
-                    <Link
-                      to={settingsAccountsHref('github')}
-                      className="hp-btn hp-btn-primary"
-                      style={{ marginTop: 12, textDecoration: 'none', width: 'fit-content' }}
-                    >
-                      <span className="codicon codicon-link" aria-hidden />
-                      {t('assistant.setup.fixConnect')}
-                    </Link>
-                  </GitAssistantSection>
-                ) : null}
-              </div>
+              <GitBehindRemoteModal
+                open={behindModalCount != null && behindModalCount > 0}
+                behind={behindModalCount ?? 0}
+                busy={busy}
+                onPull={() => {
+                  setBehindModalCount(null)
+                  void runPull()
+                }}
+                onDismiss={() => setBehindModalCount(null)}
+              />
             </>
           ) : null}
 

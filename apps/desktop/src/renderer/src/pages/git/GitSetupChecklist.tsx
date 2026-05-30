@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom'
 import type { GitSetupChecklistItem, GitSetupChecklistItemId } from '../gitAssistantSetup'
 import { settingsAccountsHref } from '../settingsAccountsHref'
 import { GitAssistantSection } from './GitAssistantSection'
+import { GitSetupDoctorPanel } from './GitSetupDoctorPanel'
 
 const ITEM_KEYS: Record<GitSetupChecklistItemId, string> = {
   identity: 'assistant.setup.identity',
@@ -19,6 +20,8 @@ export type GitSetupChecklistProps = {
   onSetIdentity: () => void
   onSetCredentialHelper: () => void
   onSetDefaultBranch: () => void
+  onSetConfigKey: (key: string, value: string) => Promise<void>
+  onReloadSetup: () => Promise<void>
 }
 
 export function GitSetupChecklist({
@@ -27,6 +30,8 @@ export function GitSetupChecklist({
   onSetIdentity,
   onSetCredentialHelper,
   onSetDefaultBranch,
+  onSetConfigKey,
+  onReloadSetup,
 }: GitSetupChecklistProps): ReactElement {
   const { t } = useTranslation('git')
 
@@ -62,6 +67,7 @@ export function GitSetupChecklist({
           </li>
         ))}
       </ul>
+      <GitSetupDoctorPanel busy={busy} onSetConfigKey={onSetConfigKey} onReloadSetup={onReloadSetup} />
     </GitAssistantSection>
   )
 }

@@ -529,5 +529,18 @@
   "assistant.share.subtitle": "Optional — connect GitHub when you want to push.",
   "assistant.merge.title": "Merge in progress",
   "assistant.merge.subtitle": "Finish in your editor, then continue or abort here.",
-  "assistant.page.eyebrow": "التحكم بالإصدارات"
+  "assistant.page.eyebrow": "التحكم بالإصدارات",
+  "assistant.setup.doctorCheck": "تشغيل Git Doctor",
+  "assistant.setup.doctorScanning": "جارٍ الفحص…",
+  "assistant.setup.doctorError": "تعذّر تشغيل Git Doctor. جرّب إصلاح الآن أو الإعدادات.",
+  "assistant.setup.doctorNoIssue": "لا مشاكل إضافية لهذا البند.",
+  "assistant.share.connectedTitle": "مشاركة عبر الإنترنت",
+  "assistant.share.connectedSubtitle": "عملك على GitHub — افتح المستودع أو ابدأ طلب سحب في المتصفح.",
+  "assistant.share.openGithub": "فتح على GitHub",
+  "assistant.share.pushedHint": "أحدث الالتزامات على البعيد. افتح GitHub لإنشاء طلب سحب.",
+  "assistant.share.noGithubRemote": "اربط بعيد GitHub (origin) لفتح المستودع في المتصفح.",
+  "assistant.behind.title": "اجلب الأحدث قبل الإرسال",
+  "assistant.behind.body": "البعيد لديه {{count}} التزام/التزامات ليست لديك بعد. اسحب أولاً ثم أرسل.",
+  "assistant.behind.pull": "جلب الأحدث",
+  "assistant.behind.dismiss": "ليس الآن"
 }

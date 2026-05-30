@@ -526,5 +526,18 @@
   "assistant.editorRefresh": "Refreshed after you returned from your editor.",
   "assistant.mergeInProgress": "A merge or rebase is in progress. Finish in your editor, then continue or abort.",
   "assistant.mergeContinue": "Continue",
-  "assistant.mergeAbort": "Abort"
+  "assistant.mergeAbort": "Abort",
+  "assistant.setup.doctorCheck": "Run Git Doctor",
+  "assistant.setup.doctorScanning": "Scanning…",
+  "assistant.setup.doctorError": "Could not run Git Doctor. Try Fix now or Settings.",
+  "assistant.setup.doctorNoIssue": "No extra issues for this item.",
+  "assistant.share.connectedTitle": "Share online",
+  "assistant.share.connectedSubtitle": "Your work is on GitHub — open the repo or start a pull request in the browser.",
+  "assistant.share.openGithub": "Open on GitHub",
+  "assistant.share.pushedHint": "Latest commits are on the remote. Open GitHub to create a pull request or review changes.",
+  "assistant.share.noGithubRemote": "Connect a GitHub remote (origin) to open the repo in the browser.",
+  "assistant.behind.title": "Get latest before you send",
+  "assistant.behind.body": "The remote has {{count}} commit(s) you do not have yet. Pull first, then send your work.",
+  "assistant.behind.pull": "Get latest",
+  "assistant.behind.dismiss": "Not now"
 }

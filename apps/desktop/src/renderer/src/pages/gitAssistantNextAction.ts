@@ -1,4 +1,4 @@
-import type { GitVcsOperation } from './GitVcsStateBanner'
+import type { GitVcsOperation } from './gitVcsTypes'
 
 /** Primary CTA for Git Assistant (beginner page). */
 export type GitAssistantNextAction =

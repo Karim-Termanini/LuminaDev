@@ -529,5 +529,18 @@
   "assistant.share.subtitle": "Optional — connect GitHub when you want to push.",
   "assistant.merge.title": "Merge in progress",
   "assistant.merge.subtitle": "Finish in your editor, then continue or abort here.",
-  "assistant.page.eyebrow": "Versionskontrolle"
+  "assistant.page.eyebrow": "Versionskontrolle",
+  "assistant.setup.doctorCheck": "Git Doctor starten",
+  "assistant.setup.doctorScanning": "Scan läuft…",
+  "assistant.setup.doctorError": "Git Doctor fehlgeschlagen. „Jetzt beheben“ oder Einstellungen nutzen.",
+  "assistant.setup.doctorNoIssue": "Keine weiteren Probleme für diesen Punkt.",
+  "assistant.share.connectedTitle": "Online teilen",
+  "assistant.share.connectedSubtitle": "Auf GitHub — Repository im Browser öffnen oder PR starten.",
+  "assistant.share.openGithub": "Auf GitHub öffnen",
+  "assistant.share.pushedHint": "Neueste Commits sind remote. Auf GitHub eine Pull Request erstellen.",
+  "assistant.share.noGithubRemote": "GitHub-Remote (origin) verbinden, um das Repo im Browser zu öffnen.",
+  "assistant.behind.title": "Zuerst Neueste holen",
+  "assistant.behind.body": "Remote hat {{count}} Commit(s), die Sie noch nicht haben. Zuerst Pull, dann senden.",
+  "assistant.behind.pull": "Neueste holen",
+  "assistant.behind.dismiss": "Später"
 }
