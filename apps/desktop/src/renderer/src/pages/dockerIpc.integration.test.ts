@@ -18,7 +18,7 @@ describe('docker IPC contract integration', () => {
       { ok: false, error: '[DOCKER_UNAVAILABLE] cannot connect to docker daemon' },
       'Container action failed.'
     )
-    expect(msg).toContain('Docker daemon/socket unavailable')
+    expect(msg).toContain('Docker is not running')
   })
 
   it('surfaces invalid payload contract failures clearly', () => {

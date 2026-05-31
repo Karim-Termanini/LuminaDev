@@ -136,6 +136,7 @@ export function DockerPage(): ReactElement {
   const [busy, setBusy] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [createdInfo, setCreatedInfo] = useState<string>('')
+  const [actionInfo, setActionInfo] = useState<string>('')
   const [customNames, setCustomNames] = useState<Record<string, string>>({})
   const [exampleNetworks, setExampleNetworks] = useState<Record<string, string>>({})
   const [pullImage, setPullImage] = useState('')
@@ -207,6 +208,17 @@ export function DockerPage(): ReactElement {
     removeVolumes: false,
     removeImage: false,
   })
+  const [actionConfirm, setActionConfirm] = useState<{
+    open: boolean
+    id: string
+    name: string
+    action: 'stop' | 'restart'
+  }>({
+    open: false,
+    id: '',
+    name: '',
+    action: 'stop',
+  })
   const detectedInstallFamily: InstallDistroId | null = [
     'ubuntu',
     'debian',
@@ -236,18 +248,22 @@ export function DockerPage(): ReactElement {
   const refreshAll = useCallback(async () => {
     setRefreshing(true)
     try {
-      setErr('')
       // 1. Get primary list (containers)
       const d = (await window.dh.dockerList()) as
         | { ok: true; rows: ContainerRow[] }
         | { ok: false; error: string }
-      setDocker(d)
       if (!d.ok) {
+        const message = humanizeDockerError(d.error ?? 'Docker unavailable.')
+        setDocker({ ok: false, error: message })
+        setErr(message)
         setImages([])
         setVolumes([])
         setNetworks([])
         return
       }
+
+      setErr('')
+      setDocker(d)
 
       // 2. Poll others in parallel, failing gracefully for sub-sections
       const [imgRes, volRes, netRes] = (await Promise.all([
@@ -266,7 +282,7 @@ export function DockerPage(): ReactElement {
         setVolumes(volRes.rows as VolumeRow[])
       }
     } catch (e) {
-      const message = e instanceof Error ? e.message : String(e)
+      const message = humanizeDockerError(e)
       setDocker({ ok: false, error: message })
       // Only setErr for the very first failure or persistent major failures
       // to avoid spamming the UI during polling if daemon goes away
@@ -317,6 +333,12 @@ export function DockerPage(): ReactElement {
     const t = window.setTimeout(() => setCreatedInfo(''), 6000)
     return () => window.clearTimeout(t)
   }, [createdInfo])
+
+  useEffect(() => {
+    if (!actionInfo) return
+    const t = window.setTimeout(() => setActionInfo(''), 6000)
+    return () => window.clearTimeout(t)
+  }, [actionInfo])
 
   useEffect(() => {
     if (tab !== 'ports' || !docker?.ok) return
@@ -442,6 +464,31 @@ export function DockerPage(): ReactElement {
     }
   }
 
+  async function executeContainerAction(
+    id: string,
+    action: 'start' | 'stop' | 'restart',
+    containerName: string
+  ): Promise<void> {
+    setBusy(true)
+    setErr('')
+    try {
+      const res = await window.dh.dockerAction({ id, action })
+      assertDockerOk(res, 'Container action failed.')
+      const message =
+        action === 'start'
+          ? t('action.started', { name: containerName })
+          : action === 'stop'
+            ? t('action.stopped', { name: containerName })
+            : t('action.restarted', { name: containerName })
+      setActionInfo(message)
+      await refreshAll()
+    } catch (e) {
+      setErr(humanizeDockerError(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function runAction(
     id: string,
     action: 'start' | 'stop' | 'restart' | 'remove'
@@ -457,16 +504,20 @@ export function DockerPage(): ReactElement {
       })
       return
     }
-    setBusy(true)
-    try {
-      const res = await window.dh.dockerAction({ id, action })
-      assertDockerOk(res, 'Container action failed.')
-      await refreshAll()
-    } catch (e) {
-      setErr(humanizeDockerError(e))
-    } finally {
-      setBusy(false)
+    const row = rows.find((r) => r.id === id)
+    const name = row?.name ?? id.slice(0, 12)
+    if (action === 'stop' || action === 'restart') {
+      setActionConfirm({ open: true, id, name, action })
+      return
     }
+    await executeContainerAction(id, action, name)
+  }
+
+  async function confirmContainerAction(): Promise<void> {
+    if (!actionConfirm.open) return
+    const { id, name, action } = actionConfirm
+    setActionConfirm((s) => ({ ...s, open: false }))
+    await executeContainerAction(id, action, name)
   }
 
   async function confirmRemoveContainer(): Promise<void> {
@@ -523,13 +574,13 @@ export function DockerPage(): ReactElement {
             await refreshAll()
             setErr('')
           } catch (forceErr) {
-            setErr(forceErr instanceof Error ? forceErr.message : String(forceErr))
+            setErr(humanizeDockerError(forceErr))
           }
         } else {
           setErr('Image removal cancelled.')
         }
       } else {
-        setErr(message)
+        setErr(humanizeDockerError(e))
       }
     } finally {
       setBusy(false)
@@ -711,6 +762,7 @@ export function DockerPage(): ReactElement {
       await refreshAll()
       setTab('containers')
     } catch (e) {
+      setCreatedInfo('')
       setErr(humanizeDockerError(e))
     } finally {
       setBusy(false)
@@ -804,6 +856,20 @@ export function DockerPage(): ReactElement {
             className="hp-btn"
             style={{ marginInlineStart: 'auto' }}
             onClick={() => setCreatedInfo('')}
+          >
+            Close
+          </button>
+        </div>
+      ) : null}
+      {actionInfo ? (
+        <div className="hp-status-alert success">
+          <span style={{ fontSize: 18 }}>✔</span>
+          <span>{actionInfo}</span>
+          <button
+            type="button"
+            className="hp-btn"
+            style={{ marginInlineStart: 'auto' }}
+            onClick={() => setActionInfo('')}
           >
             Close
           </button>
@@ -2512,6 +2578,40 @@ export function DockerPage(): ReactElement {
                 disabled={busy}
               >
                 Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {actionConfirm.open ? (
+        <div style={modalOverlay}>
+          <div style={{ ...modalContent, maxWidth: 480 }}>
+            <h3 style={{ marginTop: 0, marginBottom: 10 }}>
+              {actionConfirm.action === 'stop'
+                ? t('action.confirmStop.title')
+                : t('action.confirmRestart.title')}
+            </h3>
+            <p style={{ marginTop: 0, color: 'var(--text-muted)', fontSize: 13 }}>
+              {actionConfirm.action === 'stop'
+                ? t('action.confirmStop.body', { name: actionConfirm.name })
+                : t('action.confirmRestart.body', { name: actionConfirm.name })}
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button
+                type="button"
+                className="hp-btn"
+                onClick={() => setActionConfirm((s) => ({ ...s, open: false }))}
+              >
+                {t('action.cancel')}
+              </button>
+              <button
+                type="button"
+                className="hp-btn hp-btn-primary"
+                onClick={() => void confirmContainerAction()}
+                disabled={busy}
+              >
+                {actionConfirm.action === 'stop' ? t('action.stop') : t('action.restart')}
               </button>
             </div>
           </div>
