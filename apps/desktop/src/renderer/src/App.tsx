@@ -119,8 +119,9 @@ export default function App(): ReactElement | null {
           <Route index element={<DashboardMainPage />} />
           <Route path="kernels" element={<DashboardKernelsPage />} />
           <Route path="logs" element={<DashboardLogsPage />} />
+          <Route path="monitor" element={<MonitorPage />} />
         </Route>
-        <Route path="/system" element={<MonitorPage />} />
+        <Route path="/system" element={<Navigate to="/dashboard/monitor" replace />} />
         <Route path="/docker" element={<DockerPage />} />
         <Route path="/ssh" element={<SshPage />} />
         <Route path="/git" element={<DeveloperGitPage />} />

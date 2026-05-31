@@ -24,6 +24,7 @@
   "topbar.main": "Haupt",
   "topbar.kernels": "Kernel",
   "topbar.logs": "Protokolle",
+  "topbar.monitor": "Monitor",
   "topbar.overview": "Übersicht",
   "topbar.searchPlaceholder": "Workstation durchsuchen...",
   "topbar.notifications": "Letzte Aktivität & Aufgaben",
@@ -41,5 +42,6 @@
   "topbar.linuxDevHome": "Linux Dev Home",
   "topbar.mainTooltip": "Übersichts-Dashboard und schnelle Statuskarten",
   "topbar.kernelsTooltip": "GPU-Überwachung, Toolchains, Systemdienste und offene Ports",
-  "topbar.logsTooltip": "Protokollbetrachter und aktive Prozessausgaben"
+  "topbar.logsTooltip": "Protokollbetrachter und aktive Prozessausgaben",
+  "topbar.monitorTooltip": "Live-CPU, Speicher, Festplatte, Sicherheit, Ports und Prozesse"
 }

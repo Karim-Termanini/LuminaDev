@@ -1,15 +1,26 @@
 # LuminaDev — Master Plan
 
-**Last updated:** 2026-05-31
-**Canonical phase history:** [`phasesPlan.md`](../phasesPlan.md) *(unchanged — detailed per-phase checklists live there)*  
-**Git Assistant sprint spec:** [`gitRefactor.md`](../gitRefactor.md) *(product + implementation plan for this sprint)*  
+**Last updated:** 2026-05-31 (evening — post-ship hardening on `feat/runtimes-r1-r2`)  
+**Git Assistant spec (shipped):** [`gitRefactor.md`](../gitRefactor.md)  
 **Route truth table:** [`ROUTE_STATUS.md`](./ROUTE_STATUS.md)  
 **Release gate:** [`STABILIZATION_CHECKLIST.md`](./STABILIZATION_CHECKLIST.md)  
 **Quality gate:** `pnpm smoke` must pass before merge
 
 This document consolidates **all active planning** into one place: forward backlog, stabilization track, Git VCS roadmap, release criteria, architecture standards, and status of historical implementation plans. **`phasesPlan.md` is not duplicated here line-for-line** — it remains the authoritative phase-by-phase record; this file synthesizes it with every other plan.
 
-**Active sprint (2026-05-31):** Git Assistant **G1–G3 complete + G2 validated**. **Runtimes Simplification R1–R3 complete** — 7 runtimes, `pnpm smoke` green, all removed runtime references purged from renderer + Rust + shared. **Next:** Tier 3 release hardening — AppImage on clean VM, cross-distro smoke, Tauri Stage 5 sign-off.
+**Canonical phase history:** [`phasesPlan.md`](../phasesPlan.md) *(detailed per-phase checklists)*  
+
+**Sprints closed (2026-05-31):**
+
+| Sprint | Status | Branch / notes |
+| --- | --- | --- |
+| **Git Assistant G1–G3** | ✅ Shipped + validated | Beginner `/git` flow; in-app Create PR; see §6 |
+| **Git Assistant G4 — hardening** | ✅ Done + manually verified | Partial commit, push-with-dirty-tree, existing-PR probe, post-push copy; see §6 **G4** |
+| **Runtimes R1–R3** | ✅ Done | 18 → 7 runtimes; Fedora manual smoke (7 cards + .NET verify); see §14 |
+| **Maintenance M1** | ✅ Done | Humanized Guardian scores, elevated UI, tab ownership, systemd actions; see §15 |
+| **Monitor — dashboard tab** | ✅ Done | `/dashboard/monitor`; `/system` redirect; Dev Home surface + health hints; see §16 |
+
+**Next:** Tier 3 release hardening (AppImage on clean VM, full cross-distro matrix, Tauri Stage 5 sign-off).
 
 ---
 
@@ -27,6 +38,8 @@ This document consolidates **all active planning** into one place: forward backl
 
 | Area | Status | Notes |
 | --- | --- | --- |
+| Maintenance | ✅ M1 done | Guardian + humanized pressure labels; 5-tab layout; SSH/Nginx/UFW systemd row |
+| Monitor | ✅ Dashboard tab | `/dashboard/monitor` (Main \| Kernels \| Logs \| Monitor); `/system` redirects |
 | Runtimes | ✅ Simplified | 18 → 7 runtimes (R1–R3 complete); see §14 |
 | Phases 0–9, 12, 13, 15, 16, 17 | ✅ DONE | Verified against source; see [`phasesPlan.md`](../phasesPlan.md) execution order |
 | Phase 11 — First-run Wizard | ✅ DONE | Merged into Phase 16 (8-step readiness installer) |
@@ -46,7 +59,7 @@ This document consolidates **all active planning** into one place: forward backl
 - Settings: hosts editor + `~/.profile` env editor live on **System** tab; GitHub/GitLab auth on **Connected accounts** (`settings_*` host exec + cloud auth IPC)
 - Runtimes: install matrix hardened (distro ID_LIKE, verify gate, empty-package errors)
 - Profiles ↔ dashboard: `active_profile` resolver + cross-page sync (2026-05-30)
-- Git VCS: **Git Assistant** on `/git` (G1–G3 shipped); legacy tabbed hub removed (see §6)
+- Git VCS: **Git Assistant** G1–G4 on `/git` (partial snapshot commit + in-app PR validated 2026-05-31)
 - Cloud Git: no API-side merge from Lumina; no notification inbox; Cloud tab folds into Setup in G1
 
 ---
@@ -61,8 +74,8 @@ Full checklists, bug tables, and module standards: **[`phasesPlan.md`](../phases
 ✅  Phase 2  — Docker
 ✅  Phase 3  — SSH
 ✅  Phase 4  — Git Environment Manager
-🔄  Phase 5  — Monitor (partial; per-container stats moved to Docker)
-📋  Phase 6  — Runtimes (18 → 7; R1–R3 complete; see §14)
+🔄  Phase 5  — Monitor (`/dashboard/monitor`; per-container stats on Docker)
+✅  Phase 6  — Runtimes (18 → 7; R1–R3 complete; see §14)
 ✅  Phase 7  — Maintenance / Guardian
 ✅  Phase 8  — Settings (14 tabs; Resources tab absent; Extension removed)
 ✅  Phase 9  — Profiles + scaffolding
@@ -75,7 +88,10 @@ Full checklists, bug tables, and module standards: **[`phasesPlan.md`](../phases
 ✅  Phase 17 — lib.rs monolith refactor (37 Rust modules, ~678-line dispatcher)
 ✅  SPRINT   — Tests + audit + cross-distro + v0.2.0-alpha tag
 ✅  G1–G3    — Git Assistant (`gitRefactor.md`) — shipped 2026-05-31; see §6
+✅  G4       — Git Assistant post-ship hardening — partial commit + push/PR UX; see §6
 ✅  R1–R3    — Runtimes Simplification — 18 → 7 runtimes; see §14
+✅  M1        — Maintenance polish — humanized health + tab refactor; see §15
+✅  Monitor   — Dashboard tab + elevated Dev Home surface; see §16
 ```
 
 ### Explicitly out of scope
@@ -256,7 +272,7 @@ Known limits on **native** builds: terminal is line-buffered (no full PTY for vi
 | Merge/rebase/continue/stash/cherry-pick/bisect UI | Deleted → editor/terminal |
 | `GitVcsConflictResolver` / 3-way merge | Deleted → editor |
 | CI pipelines panel on Git | Deleted → GitHub/GitLab web |
-| PR/MR wizard on Git | Deleted → browser after push |
+| PR/MR wizard on Git | Retired full wizard; **G3 Create PR** in Share step (API + compare fallback) |
 | Protected-branch bypass wizard | Deleted → terminal |
 | Config inspector / health dashboard / preset matrix | Deleted → Settings identity only if needed |
 | Multi-remote provider rail | Deleted |
@@ -331,6 +347,27 @@ Need more than save, send, and sync? Use VS Code, Cursor, your terminal, or GitH
 
 **Intentional ceiling (no backlog):** dirty-checkout **stash** stays terminal + modal; no in-app stash IDE (correct for beginner scope).
 
+#### G4 — Post-ship hardening (2026-05-31)
+
+Follow-up on `feat/runtimes-r1-r2` after manual dogfooding on LuminaDev repo. All items verified in UI + git log.
+
+| Fix | Status | Notes |
+| --- | --- | --- |
+| Existing open PR/MR probe | ✅ | `dh:cloud:git:find-pr`; disables Create PR + **Open existing PR** when branch already has one |
+| Partial snapshot commit | ✅ | Unstage deselected indexed files; `resolveSnapshotCommitPaths` uses **fresh** `git status` + exclusion ref (not stale React `included`) |
+| Push with dirty tree | ✅ | `shouldShowGitPush` no longer requires clean working tree when `ahead > 0` |
+| Push vs Save disabled state | ✅ | `saveDisabled` applies to commit only; Push/Pull disable on `busy` only |
+| Ahead/behind tracking branch | ✅ | `git_ahead_behind` tries `branch.*.remote`, then origin/upstream/other remotes |
+| Post-push PR copy | ✅ | Banner + Share hint point to **Create PR** in-panel; **View branch on host** is browse-only |
+
+**G4 manual evidence (2026-05-31):** 3-of-4 files committed with `test.ts` excluded; push succeeded with 1 local file remaining; Create PR distinct from Open on GitHub.
+
+**G4 agent checklist**
+
+- [x] Unit tests: `stagedPathsToUnstageBeforeCommit`, `resolveSnapshotCommitPaths`, `shouldShowGitPush`
+- [x] `pnpm smoke` green on branch
+- [ ] Merge `feat/runtimes-r1-r2` to main via PR ([#127](https://github.com/Karim-Termanini/LuminaDev/pull/127))
+
 ### Explicit non-goals (Git — permanent)
 
 - Second Git UI, advanced page, or `enable_advanced_git` / pro toggle
@@ -394,7 +431,7 @@ From [`AUDIT.md`](./AUDIT.md) §1 (condensed):
 | P0 | AppImage release pipeline E2E | ❓ Unverified |
 | P2 | Settings hosts/env editing + Connected accounts auth | ✅ Done |
 | P2 | Runtimes install matrix hardening | ✅ Done (2026-05-30) |
-| P2 | Git VCS — Git Assistant (G1–G3) | ✅ Shipped + G2 validated (63 files audited; 12 fixes verified; 40+ tests) — see §6 |
+| P2 | Git VCS — Git Assistant (G1–G4) | ✅ Shipped + G4 manually verified on `feat/runtimes-r1-r2` — see §6 |
 | — | Resources settings tab | Removed (no Rust enforcement) |
 
 ---
@@ -434,7 +471,7 @@ Finish **one** before opening the next.
 | Settings hosts + profile env editing | ✅ | System tab: `/etc/hosts` + `~/.profile` via `hostExec` |
 | Runtimes install matrix | ✅ | Distro ID_LIKE, verify gate (2026-05-30) |
 | Profiles ↔ dashboard alignment | ✅ | `active_profile` + cross-page sync (2026-05-30) |
-| **Git VCS — Git Assistant G1–G3** | ✅ **Shipped** | G2 validated; G3 polish on `main` (#118–#124) |
+| **Git VCS — Git Assistant G1–G4** | ✅ **Shipped** | PR [#127](https://github.com/Karim-Termanini/LuminaDev/pull/127) |
 
 ### Tier 2 — Opportunistic cleanup
 
@@ -500,7 +537,7 @@ Post-G1  G2 validate → G3 iterate
 | --- | --- | --- | --- |
 | **R1 — Strip** | Remove 11 runtimes from renderer + discovery | ✅ Done | Runtimes page shows only 7; no references to removed runtimes in UI |
 | **R2 — Clean** | Remove Rust handlers + shared types for removed runtimes | ✅ Done | `runtime_discover.rs`, `runtime_jobs.rs`, `runtime_packages.rs`, `runtime_verify.rs` all pruned; `RUNTIME_SYSTEM_ONLY_IDS` → `['php']`; `RUNTIME_DETAILS` trimmed to 7; cache keys bumped to v2; `pnpm smoke` green |
-| **R3 — Harden** | Audit + test remaining 7 runtimes end-to-end | ✅ Done | All 7 install + probe + set-active verified; cross-distro smoke; `ROUTE_STATUS.md` updated |
+| **R3 — Harden** | Audit + test remaining 7 runtimes end-to-end | ✅ Done | 7 cards on Fedora; .NET system install + VERIFY OK; `ROUTE_STATUS.md` updated; full Ubuntu/Arch matrix deferred to Tier 3 §5 P5 |
 
 #### R1 — Strip (work breakdown)
 
@@ -529,7 +566,7 @@ Post-G1  G2 validate → G3 iterate
 | --- | --- | --- |
 | R3.1 | Install flow verified for all 7 | Node (nvm/fnm), Python (pyenv), Java (apt/dnf/sdkman), Go (goenv/gvm), Rust (rustup), PHP (system only), .NET (dotnet-install.sh) — all methods confirmed working |
 | R3.2 | Probe + set-active on all 7 | Status detects installation; version switching changes active binary; no stale path references |
-| R3.3 | Cross-distro smoke | Ubuntu 24.04, Fedora 40, Arch: all 7 install + probe + set-active |
+| R3.3 | Cross-distro smoke | Ubuntu 24.04, Fedora 40, Arch: all 7 install + probe + set-active — **Fedora validated manually (2026-05-31); Ubuntu/Arch → Tier 3 P5** |
 | R3.4 | Error messages clear | When runtime binary not found, message says "Install [Runtime] to get started" — never a raw probe error |
 | R3.5 | Cache invalidation | No stale version cache for removed runtimes; opening Runtimes page after upgrade shows only 7 |
 
@@ -553,13 +590,70 @@ Post-G1  G2 validate → G3 iterate
 
 ---
 
+## 15. Maintenance Polish — Sprint (M1) ✅ DONE (2026-05-31)
+
+**Product thesis:** Guardian scoring is real (`/proc` + Docker + systemd). M1 adds beginner-readable pressure labels and actionable UX without changing the scoring algorithm.
+
+### Shipped
+
+| Item | Notes |
+| --- | --- |
+| M1.1 — Status labels | Color-coded Excellent / Healthy / Moderate / Critical via `maintenanceHealth.ts` |
+| M1.2 — Plain-language detail | Layer tooltips + humanized diagnostic rows (`maintenanceDiagnosticsHumanize.ts`) |
+| M1.3 — Action suggestions | Diagnostic rows link to Docker, Settings, SSH, etc. |
+| Elevated Dev Home layout | Full-bleed hero, tab strip, overview nav cards |
+| Tab ownership | Overview = Guardian + nav only; Cleanup / Data / Logs / Schedule own their content |
+| Systemd row | SSH, Nginx, UFW — Start when inactive; **NOT INSTALLED** when unit missing (Docker removed from row) |
+| Docker cleanup | Quick maintenance on Cleanup tab; detailed prune on `/docker` |
+
+### Agent checklist (M1)
+
+- [x] `maintenanceHealth.test.ts`, `maintenanceDiagnosticsHumanize.test.ts`, `maintenanceSystemdServices.test.ts`
+- [x] `pnpm smoke` green
+- [x] [`ROUTE_STATUS.md`](./ROUTE_STATUS.md) unchanged for `/maintenance` (still `partial`)
+
+### What NOT to change (unchanged)
+
+- Guardian scoring algorithm (`evaluateGuardian`)
+- Real data sources — no mocks
+- Diagnostics bundle export
+
+---
+
+## 16. Monitor — Dashboard integration ✅ DONE (2026-05-31)
+
+**Product thesis:** Host metrics belong with Dashboard (Main \| Kernels \| Logs \| Monitor), not as a standalone sidebar destination.
+
+### Shipped
+
+| Item | Notes |
+| --- | --- |
+| Route | `/dashboard/monitor`; `/system` → redirect |
+| Nav | Fourth dashboard tab; sidebar Monitor entry removed; Alt+2 → monitor tab |
+| UI | Dev Home hero, spotlight strip, segmented tabs, collapsible Details |
+| Health hints | `monitorHealth.ts` — color-coded CPU/RAM/Disk with plain descriptions |
+| i18n | `topbar.monitor` + tooltip (en/de/ar) |
+
+### Agent checklist
+
+- [x] `monitorHealth.test.ts`
+- [x] [`ROUTE_STATUS.md`](./ROUTE_STATUS.md) — `/dashboard/monitor` live; `/system` redirect
+- [x] `pnpm smoke` green
+
+### Explicit non-goals
+
+- LAN discovery
+- Per-container stats (stay on Docker page)
+
+---
+
 ## 12. Document map
 
 | Document | Role |
 | --- | --- |
 | **`phasesPlan.md`** | Canonical phase history + bug table + architecture rules |
 | **`docs/MASTER_PLAN.md`** (this file) | Unified active plan + backlog + release gate |
-| **`gitRefactor.md`** | Git Assistant product + G1/G2/G3 spec (active sprint) |
+| **`gitRefactor.md`** | Git Assistant product + G1/G2/G3 spec (**shipped**; G4 hardening in §6) |
 | `docs/SMART_FLOW_VCS.md` | Historical Smart-Flow blueprint (superseded by §6; do not extend) |
 | `docs/STABILIZATION_CHECKLIST.md` | Stabilization evidence + B5 manual checklist |
 | `docs/ROUTE_STATUS.md` | Route live/partial/stub matrix |

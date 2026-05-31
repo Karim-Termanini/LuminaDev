@@ -24,6 +24,7 @@
   "topbar.main": "Main",
   "topbar.kernels": "Kernels",
   "topbar.logs": "Logs",
+  "topbar.monitor": "Monitor",
   "topbar.overview": "Overview",
   "topbar.searchPlaceholder": "Search workstation...",
   "topbar.notifications": "Recent Activity & Jobs",
@@ -41,5 +42,6 @@
   "topbar.linuxDevHome": "Linux Dev Home",
   "topbar.mainTooltip": "Overview dashboard and quick status cards",
   "topbar.kernelsTooltip": "GPU monitoring, toolchains, system services, and open ports",
-  "topbar.logsTooltip": "Log viewer and active process outputs"
+  "topbar.logsTooltip": "Log viewer and active process outputs",
+  "topbar.monitorTooltip": "Live CPU, memory, disk, security, ports, and processes"
 }

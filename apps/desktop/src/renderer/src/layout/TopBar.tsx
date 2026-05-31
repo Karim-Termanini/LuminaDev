@@ -24,7 +24,6 @@ export function TopBar(): ReactElement {
   const paletteOpenRef = useRef(false)
 
   const titles: Record<string, string> = {
-    '/system': t('topbar.system'),
     '/workstation': t('topbar.workstation'),
     '/docker': t('topbar.docker'),
     '/ssh': t('topbar.ssh'),
@@ -84,21 +83,6 @@ export function TopBar(): ReactElement {
         route: '/dashboard',
         icon: 'dashboard',
         keywords: ['home', 'overview', 'main'],
-      },
-      {
-        label: 'Monitor',
-        route: '/system',
-        icon: 'pulse',
-        keywords: [
-          'cpu',
-          'memory',
-          'disk',
-          'metrics',
-          'performance',
-          'processes',
-          'ports',
-          'system',
-        ],
       },
       {
         label: 'Docker',
@@ -196,6 +180,22 @@ export function TopBar(): ReactElement {
         route: '/dashboard/logs',
         icon: 'output',
         keywords: ['logs', 'log viewer', 'stream', 'container logs', 'job logs'],
+      },
+      {
+        label: 'Dashboard → Monitor',
+        route: '/dashboard/monitor',
+        icon: 'pulse',
+        keywords: [
+          'cpu',
+          'memory',
+          'disk',
+          'metrics',
+          'performance',
+          'processes',
+          'ports',
+          'system',
+          'monitor',
+        ],
       },
       {
         label: 'Git Assistant',
@@ -540,6 +540,12 @@ export function TopBar(): ReactElement {
               label={t('topbar.logs')}
               tooltip={t('topbar.logsTooltip')}
               type="logs"
+            />
+            <DashTab
+              to="/dashboard/monitor"
+              label={t('topbar.monitor')}
+              tooltip={t('topbar.monitorTooltip')}
+              type="monitor"
             />
           </>
         ) : (

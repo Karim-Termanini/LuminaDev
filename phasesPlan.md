@@ -333,13 +333,15 @@ Known issue addressed: install wizard now refreshes `installedFeatures` on open 
 
 ---
 
-## Phase 5 — Monitor 🔄 PARTIAL (`/system` → `partial`)
+## Phase 5 — Monitor 🔄 PARTIAL (`/dashboard/monitor`; `/system` redirects)
 
 - [x] CPU %, memory, swap, disk, load avg (2s refresh)
 - [x] Real net/disk Mbps via two-pass `/proc` delta
 - [x] Top N processes, listening ports, security snapshot + drilldown
 - [x] System info: 14 fields
 - [x] GitHub commits feed widget
+- [x] **Dashboard tab (2026-05-31):** fourth sub-route under `/dashboard`; sidebar Monitor entry removed; Alt+2 shortcut
+- [x] **Dev Home UI (2026-05-31):** elevated surface, health hints (`monitorHealth.ts`), collapsible Details
 
 Missing: LAN discovery (intentional). **Per-container stats stream:** ✅ shipped on Docker page (2026-05-29).
 
@@ -366,7 +368,7 @@ Remaining: Ruby install slow on Fedora (removed — Ruby no longer in scope).
 
 ---
 
-## Phase 7 — Maintenance 🔄 ✅ DONE
+## Phase 7 — Maintenance 🔄 ✅ DONE (+ M1 polish 2026-05-31)
 
 **Goal:** Process actual, real-time data for entire program (no mocks).
 
@@ -380,6 +382,7 @@ Remaining: Ruby install slow on Fedora (removed — Ruby no longer in scope).
   - Container fleet (running/total)
   - **Process health** (runaway CPU/memory detection)
   - Host security (firewall + SSH config)
+- [x] **M1 UX (2026-05-31):** Humanized pressure labels (`maintenanceHealth.ts`); plain-language diagnostics; 5-tab layout with overview-only Guardian; SSH/Nginx/UFW systemd Start + NOT INSTALLED; Docker Maintenance tab removed (prune on `/docker`)
 
 ---
 
@@ -557,7 +560,7 @@ When user clicks "Install" / "Fix":
 
 ## Known Bugs
 
-> **Git Assistant G2 audit (2026-05-31):** 12 engineering fixes verified in full audit pass (63 files, 40+ tests). Zero known blockers remain on `/git`. Remaining code-quality items (6 missing IPC constants, dead code, schema gaps) documented in [`docs/MASTER_PLAN.md`](docs/MASTER_PLAN.md) §6.
+> **Git Assistant (2026-05-31):** G1–G3 shipped; **G4 hardening** on `feat/runtimes-r1-r2` — partial commit, push-with-local-changes, existing-PR probe, post-push copy. Manually verified on LuminaDev repo. See [`docs/MASTER_PLAN.md`](docs/MASTER_PLAN.md) §6 **G4**.
 
 | # | Page | Bug | Status |
 |---|------|-----|--------|
@@ -660,7 +663,7 @@ Runtimes lazy-load/caching, kernel grid, log multiplexing, and navigation polish
 ✅  Phase 3  — SSH
 ✅  Phase 4  — Git Environment Manager
 ✅  Phase 5  — Monitor
-📋  Phase 6  — Runtimes (7 languages; R1–R3 simplification — see §14)
+✅  Phase 6  — Runtimes (7 languages; R1–R3 simplification — see MASTER_PLAN §14)
 ✅  Phase 1  — Dashboard
 ✅  SPRINT   — Tests + Audit + Cross-distro + v0.2.0-alpha (shipped)
 ✅  Phase 13 — Advanced CI & Environment Hardening
@@ -675,4 +678,6 @@ Runtimes lazy-load/caching, kernel grid, log multiplexing, and navigation polish
 ✅  Audit Fixes (9 defects squashed, fuzzy search shipped, 2026-05-28)
 ❌  Phase 10 — Extensions (removed from scope 2026-05-29)
 ✅  Phase 17  — lib.rs Monolith Refactoring (37 source files, 678-line dispatcher)
+✅  G1–G4    — Git Assistant (see MASTER_PLAN §6)
+✅  R1–R3    — Runtimes Simplification (see MASTER_PLAN §14)
 ```
