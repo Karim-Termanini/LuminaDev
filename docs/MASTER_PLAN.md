@@ -366,7 +366,7 @@ Follow-up on `feat/runtimes-r1-r2` after manual dogfooding on LuminaDev repo. Al
 
 - [x] Unit tests: `stagedPathsToUnstageBeforeCommit`, `resolveSnapshotCommitPaths`, `shouldShowGitPush`
 - [x] `pnpm smoke` green on branch
-- [ ] Merge `feat/runtimes-r1-r2` to main via PR
+- [ ] Merge `feat/runtimes-r1-r2` to main via PR ([#127](https://github.com/Karim-Termanini/LuminaDev/pull/127))
 
 ### Explicit non-goals (Git — permanent)
 
@@ -471,7 +471,7 @@ Finish **one** before opening the next.
 | Settings hosts + profile env editing | ✅ | System tab: `/etc/hosts` + `~/.profile` via `hostExec` |
 | Runtimes install matrix | ✅ | Distro ID_LIKE, verify gate (2026-05-30) |
 | Profiles ↔ dashboard alignment | ✅ | `active_profile` + cross-page sync (2026-05-30) |
-| **Git VCS — Git Assistant G1–G4** | ✅ **Shipped** | G2 validated; G3 + G4 on `feat/runtimes-r1-r2` — merge pending |
+| **Git VCS — Git Assistant G1–G4** | ✅ **Shipped** | PR [#127](https://github.com/Karim-Termanini/LuminaDev/pull/127) |
 
 ### Tier 2 — Opportunistic cleanup
 
