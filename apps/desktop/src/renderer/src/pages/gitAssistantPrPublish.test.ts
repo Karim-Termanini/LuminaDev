@@ -24,7 +24,6 @@ describe('branchNeedsPublishBeforePr', () => {
 describe('shouldShowGitPush', () => {
   const base = () => ({
     repoPathTrimmed: '/tmp/proj',
-    hasLocalChanges: false,
     unborn: false,
     ahead: null as number | null,
     behind: null as number | null,
@@ -40,8 +39,8 @@ describe('shouldShowGitPush', () => {
     expect(shouldShowGitPush({ ...base(), ahead: 0, behind: 0 })).toBe(false)
   })
 
-  it('hides push when there are local changes', () => {
-    expect(shouldShowGitPush({ ...base(), hasLocalChanges: true })).toBe(false)
+  it('shows push when ahead even with uncommitted files still in the tree', () => {
+    expect(shouldShowGitPush({ ...base(), ahead: 1, behind: 0 })).toBe(true)
   })
 
   it('hides push for unborn repo', () => {

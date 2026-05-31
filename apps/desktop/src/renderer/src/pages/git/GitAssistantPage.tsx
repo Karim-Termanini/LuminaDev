@@ -813,7 +813,7 @@ export function GitAssistantPage(): ReactElement {
                     message={commitMessage}
                     onMessageChange={setCommitMessage}
                     busy={busy}
-                    disabled={saveDisabled}
+                    saveDisabled={saveDisabled}
                     next={next}
                     showPull={showPull}
                     showPush={showPush}
