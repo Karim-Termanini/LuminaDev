@@ -537,7 +537,7 @@ Post-G1  G2 validate → G3 iterate
 | --- | --- | --- | --- |
 | **R1 — Strip** | Remove 11 runtimes from renderer + discovery | ✅ Done | Runtimes page shows only 7; no references to removed runtimes in UI |
 | **R2 — Clean** | Remove Rust handlers + shared types for removed runtimes | ✅ Done | `runtime_discover.rs`, `runtime_jobs.rs`, `runtime_packages.rs`, `runtime_verify.rs` all pruned; `RUNTIME_SYSTEM_ONLY_IDS` → `['php']`; `RUNTIME_DETAILS` trimmed to 7; cache keys bumped to v2; `pnpm smoke` green |
-| **R3 — Harden** | Audit + test remaining 7 runtimes end-to-end | ✅ Done | 7 cards on Fedora; .NET system install + VERIFY OK; full Ubuntu/Arch matrix deferred to Tier 3 §5 P5 |
+| **R3 — Harden** | Audit + test remaining 7 runtimes end-to-end | ✅ Done | 7 cards on Fedora; .NET system install + VERIFY OK; `ROUTE_STATUS.md` updated; full Ubuntu/Arch matrix deferred to Tier 3 §5 P5 |
 
 #### R1 — Strip (work breakdown)
 
