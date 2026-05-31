@@ -24,6 +24,7 @@
   "topbar.main": "الرئيسية",
   "topbar.kernels": "النوى",
   "topbar.logs": "السجلات",
+  "topbar.monitor": "المراقبة",
   "topbar.overview": "نظرة عامة",
   "topbar.searchPlaceholder": "بحث في محطة العمل...",
   "topbar.notifications": "النشاط الأخير والمهام",
@@ -41,5 +42,6 @@
   "topbar.linuxDevHome": "Linux Dev Home",
   "topbar.mainTooltip": "لوحة التحكم الرئيسية وبطاقات الحالة السريعة",
   "topbar.kernelsTooltip": "مراقبة المعالج الرسومي (GPU)، سلاسل الأدوات، خدمات النظام، والمنافذ المفتوحة",
-  "topbar.logsTooltip": "مستعرض السجلات ومخرجات العمليات النشطة"
+  "topbar.logsTooltip": "مستعرض السجلات ومخرجات العمليات النشطة",
+  "topbar.monitorTooltip": "المعالج والذاكرة والقرص والأمان والمنافذ والعمليات مباشرة"
 }

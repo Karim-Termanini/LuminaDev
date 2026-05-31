@@ -15,11 +15,12 @@ Status legend:
 | `/dashboard` | partial | Custom profiles only; empty state until user creates one in Profiles. Slim container count + metrics strip. |
 | `/dashboard/kernels` | partial | GPU probe, service states, security audit; auto-refreshes every ~30s (lightweight snapshot, not a full device manager). |
 | `/dashboard/logs` | partial | Jobs poll ~2s; compose logs load for selected profile; not a full observability platform. |
+| `/dashboard/monitor` | live | Host metrics dashboard — live CPU/RAM/storage/network, security posture, ports, Docker, processes, Git config score. |
 | `/dashboard/widgets` | removed | **Deleted** 2026-05-29 — widget system out of scope; no route or redirect. |
-| `/system` | partial | Metrics and monitor data are live; per-container stats on Docker page; some sections still bounded snapshots. |
+| `/system` | redirect | → `/dashboard/monitor` (bookmark compat). |
 | `/docker` | live | Main Docker slice (list/actions/logs/images/volumes/networks/cleanup/remap) is functional with guardrails. |
 | `/ssh` | partial | Core SSH key/test/setup flows work; advanced transfer/remote UX still evolving. |
-| `/git` | live | **Git Assistant** — single-page Setup → Project → Save → Share; one primary next-action; open/clone/save snapshot/get latest/send to GitHub; conflicts → external editor. Legacy tabbed VCS/Config/Cloud UI removed. GitHub auth: **Settings → Connected accounts**. |
+| `/git` | live | **Git Assistant** — Setup → Project → Save → Share; partial snapshot commit (checkbox exclude); push while dirty tree OK; in-app **Create PR** + existing-PR probe; post-push points to Create PR (not browser-only). Legacy tabbed UI removed. Auth: **Settings → Connected accounts**. |
 | `/git-config` | redirect | → `/git` |
 | `/git-vcs` | redirect | → `/git` |
 | `/cloud-git` | redirect | → `/git` |

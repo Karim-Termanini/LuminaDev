@@ -2,29 +2,54 @@ import { ComposeProfileSchema, type ComposeProfile, type ContainerRow, type Host
 import type { ReactElement } from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
+import { Link } from 'react-router-dom'
 import { humanizeDashboardError } from './dashboardError'
 import { humanizeDockerError } from './dockerError'
 import { humanizeRuntimeError } from './runtimeError'
 import { collectAccessibilitySnapshot, evaluateAccessibilitySnapshot } from './accessibilityAudit'
 import { evaluateGuardian } from './maintenanceGuardian'
-import { OPS_RUNBOOK } from './maintenancePageHelpers'
+import {
+  getGuardianLayerPressureScore,
+  getGuardianLayerTooltip,
+  getMaintenanceOverallLabel,
+  getMaintenanceOverallLevel,
+  getMaintenancePressureColor,
+  getMaintenancePressureDescription,
+  getMaintenancePressureLabel,
+  getMaintenancePressureLevel,
+} from './maintenanceHealth'
+import { humanizeMaintenanceDiagnostic } from './maintenanceDiagnosticsHumanize'
+import {
+  MAINTENANCE_CRON_PRESETS,
+  OPS_RUNBOOK,
+} from './maintenancePageHelpers'
+import {
+  isUnitNotFoundError,
+  MAINTENANCE_SYSTEMD_SERVICES,
+  normalizeSystemdState,
+  type SystemdServiceId,
+  type SystemdServiceState,
+} from './maintenanceSystemdServices'
 import './MaintenancePage.css'
 
-const CRON_HINTS = ['0 */6 * * *', '0 3 * * *', '30 2 * * 0']
-const SYSTEMD_UNITS = ['docker', 'ssh', 'nginx', 'ufw'] as const
 const STATUS_AUTO_DISMISS_MS = 12_000
 const profileIds = ComposeProfileSchema.options
 const TABS = [
   'Overview / Health Dashboard',
   'System Cleanup',
-  'Docker Maintenance',
   'Data & Profiles',
   'Logs & History',
   'Scheduled / Automation',
 ] as const
 
-type ServiceState = Record<string, 'active' | 'inactive' | 'unknown'>
-type CleanupPreview = { containers: number; images: number; volumes: number; networks: number } | null
+const DEFAULT_DOCKER_CLEANUP_SELECTION = {
+  containers: true,
+  images: true,
+  volumes: false,
+  networks: false,
+} as const
+
+type ServiceState = Record<SystemdServiceId, import('./maintenanceSystemdServices').SystemdServiceState>
 type TabId = (typeof TABS)[number]
 type DiagnosticCheck = { id: string; label: string; ok: boolean; details: string }
 
@@ -33,10 +58,109 @@ type RunbookOp = (typeof OPS_RUNBOOK)[number]
 const MAINT_TAB_META: Record<TabId, { icon: string; short: string }> = {
   'Overview / Health Dashboard': { icon: 'dashboard', short: 'Overview' },
   'System Cleanup': { icon: 'trash', short: 'Cleanup' },
-  'Docker Maintenance': { icon: 'package', short: 'Docker' },
   'Data & Profiles': { icon: 'folder', short: 'Data' },
   'Logs & History': { icon: 'history', short: 'Logs' },
   'Scheduled / Automation': { icon: 'watch', short: 'Schedule' },
+}
+
+const OVERVIEW_NAV: Array<{ tab: TabId; icon: string; titleKey: string; descKey: string }> = [
+  { tab: 'System Cleanup', icon: 'trash', titleKey: 'overview.nav.cleanup', descKey: 'overview.nav.cleanupDesc' },
+  { tab: 'Data & Profiles', icon: 'folder', titleKey: 'overview.nav.data', descKey: 'overview.nav.dataDesc' },
+  { tab: 'Logs & History', icon: 'history', titleKey: 'overview.nav.logs', descKey: 'overview.nav.logsDesc' },
+  { tab: 'Scheduled / Automation', icon: 'watch', titleKey: 'overview.nav.schedule', descKey: 'overview.nav.scheduleDesc' },
+]
+
+const GUARDIAN_LAYER_LABELS: Record<string, string> = {
+  host_compute: 'guardian.hostCompute',
+  memory_pressure: 'guardian.memoryPressure',
+  storage_pressure: 'guardian.storagePressure',
+  container_fleet: 'guardian.containerFleet',
+  process_health: 'guardian.processHealth',
+  host_security: 'guardian.hostSecurity',
+}
+
+const GUARDIAN_LAYER_META: Record<string, { icon: string; tone: string }> = {
+  host_compute: { icon: 'pulse', tone: 'compute' },
+  memory_pressure: { icon: 'chip', tone: 'memory' },
+  storage_pressure: { icon: 'save', tone: 'storage' },
+  container_fleet: { icon: 'package', tone: 'docker' },
+  process_health: { icon: 'server-process', tone: 'process' },
+  host_security: { icon: 'shield', tone: 'security' },
+}
+
+function GuardianLayerTile({
+  layerId,
+  title,
+  signals,
+  detail,
+  deduction,
+  ok,
+  pressureScore,
+}: {
+  layerId: string
+  title: string
+  signals: string
+  detail: string
+  deduction: number
+  ok: boolean
+  pressureScore: number | null
+}): ReactElement {
+  const { t } = useTranslation('maintenance')
+  const level = getMaintenancePressureLevel(pressureScore)
+  const tooltip = getGuardianLayerTooltip(layerId as Parameters<typeof getGuardianLayerTooltip>[0], t)
+  const meta = GUARDIAN_LAYER_META[layerId] ?? { icon: 'info', tone: 'default' }
+
+  return (
+    <div
+      className={`maint-layer-tile maint-tone-${meta.tone} ${ok ? 'maint-layer-tile--ok' : 'maint-layer-tile--warn'}`}
+      title={tooltip}
+    >
+      <div className="maint-layer-tile-bar" aria-hidden />
+      <div className="maint-layer-head">
+        <div className="maint-layer-title-row">
+          <span className={`maint-layer-icon-wrap maint-tone-${meta.tone}`} aria-hidden>
+            <span className={`codicon codicon-${meta.icon}`} />
+          </span>
+          <div className="maint-layer-title" title={tooltip}>
+            {title}
+          </div>
+        </div>
+        {pressureScore != null ? (
+          <div className="maint-layer-score-row">
+            <span className="maint-layer-score-num">{Math.round(pressureScore)}/100</span>
+            {level ? (
+              <span className={`maint-layer-status is-${level}`}>
+                <span className="maint-layer-status-dot" style={{ background: getMaintenancePressureColor(level) }} aria-hidden />
+                {getMaintenancePressureLabel(level, t)}
+              </span>
+            ) : null}
+          </div>
+        ) : (
+          <span className="hp-muted maint-layer-waiting">{t('layerPressure.waiting')}</span>
+        )}
+      </div>
+
+      {pressureScore != null && level ? (
+        <>
+          <div className="maint-layer-bar" aria-hidden>
+            <div
+              className={`maint-layer-bar-fill is-${level}`}
+              style={{ width: `${Math.round(pressureScore)}%` }}
+            />
+          </div>
+          <p className={`maint-layer-hint is-${level}`} role="status">
+            {getMaintenancePressureDescription(level, t)}
+          </p>
+        </>
+      ) : null}
+
+      <div className="hp-muted maint-layer-signals">{signals}</div>
+      <div className="maint-layer-detail">{detail}</div>
+      <div className={`maint-layer-deduction ${deduction > 0 ? 'is-warn' : 'is-ok'}`}>
+        {deduction > 0 ? `−${deduction} pts` : '−0 pts'}
+      </div>
+    </div>
+  )
 }
 
 function MaintenanceRunbookStrip({
@@ -50,6 +174,7 @@ function MaintenanceRunbookStrip({
   return (
     <>
       <div className="maint-runbook-label">{t('runbook.label')}</div>
+      <p className="maint-section-lead maint-runbook-lead">{t('runbook.lead')}</p>
       <div className="maint-runbook-grid">
         {OPS_RUNBOOK.map((op) => (
           <button
@@ -60,11 +185,129 @@ function MaintenanceRunbookStrip({
             onClick={() => void onRun(op)}
           >
             <span className={`codicon codicon-${op.icon}`} aria-hidden />
-            <span>{runbookBusyId === op.id ? t('runbook.running') : t(op.labelKey)}</span>
+            <span className="maint-runbook-tile-copy">
+              <strong>{runbookBusyId === op.id ? t('runbook.running') : t(op.labelKey)}</strong>
+              <span className="hp-muted">{t(op.descKey)}</span>
+            </span>
           </button>
         ))}
       </div>
     </>
+  )
+}
+
+function SystemdServiceTile({
+  serviceId,
+  state,
+  busy,
+  error,
+  optional,
+  onStart,
+}: {
+  serviceId: SystemdServiceId
+  state: SystemdServiceState
+  busy: boolean
+  error?: string
+  optional: boolean
+  onStart: () => void
+}): ReactElement {
+  const { t } = useTranslation('maintenance')
+  const def = MAINTENANCE_SYSTEMD_SERVICES.find((s) => s.id === serviceId)
+  if (!def) return <></>
+
+  const showStart = state === 'inactive' || state === 'unknown'
+  const notInstalled = state === 'not_installed'
+
+  return (
+    <div className={`maint-systemd-tile is-${state}`}>
+      <div className="maint-systemd-head">
+        <span className={`maint-systemd-icon codicon codicon-${def.icon}`} aria-hidden />
+        <div className="maint-systemd-copy">
+          <strong>{t(def.titleKey)}</strong>
+          <span className="hp-muted">{t(def.descKey)}</span>
+        </div>
+        <StatusPill state={notInstalled ? 'not_installed' : state} />
+      </div>
+      {error && !notInstalled ? <div className="maint-systemd-error">{error}</div> : null}
+      {notInstalled ? (
+        <div className="maint-systemd-ok hp-muted">
+          {optional ? t('systemd.notInstalledOptional') : t('systemd.notInstalled')}
+        </div>
+      ) : showStart ? (
+        <button type="button" className="hp-btn hp-btn-primary maint-systemd-start" disabled={busy} onClick={onStart}>
+          <span className="codicon codicon-play" aria-hidden />
+          {busy ? t('systemd.starting') : t('systemd.start')}
+        </button>
+      ) : (
+        <div className="maint-systemd-ok hp-muted">{t('systemd.running')}</div>
+      )}
+    </div>
+  )
+}
+
+function OverviewNav({
+  onOpenTab,
+}: {
+  onOpenTab: (tab: TabId) => void
+}): ReactElement {
+  const { t } = useTranslation('maintenance')
+  return (
+    <div className="maint-overview-nav">
+      <div className="maint-section-head">{t('overview.navTitle')}</div>
+      <p className="maint-section-lead">{t('overview.navLead')}</p>
+      <div className="maint-overview-nav-grid">
+        {OVERVIEW_NAV.map((item) => (
+          <button key={item.tab} type="button" className="maint-overview-nav-card" onClick={() => onOpenTab(item.tab)}>
+            <span className={`codicon codicon-${item.icon}`} aria-hidden />
+            <span className="maint-overview-nav-copy">
+              <strong>{t(item.titleKey)}</strong>
+              <span className="hp-muted">{t(item.descKey)}</span>
+            </span>
+            <span className="codicon codicon-chevron-right maint-overview-nav-chevron" aria-hidden />
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function DiagnosticResultRow({
+  check,
+  onRerun,
+  rerunning,
+}: {
+  check: DiagnosticCheck
+  onRerun: () => void
+  rerunning: boolean
+}): ReactElement {
+  const { t } = useTranslation('maintenance')
+  const human = humanizeMaintenanceDiagnostic(check, t)
+
+  return (
+    <div className={`maint-diag-row ${check.ok ? 'maint-diag-row--pass' : 'maint-diag-row--fail'}`}>
+      <div className="maint-diag-main">
+        <strong className="maint-diag-title">{check.label}</strong>
+        <p className="maint-diag-summary">{human.summary}</p>
+        <p className="maint-diag-hint">{human.hint}</p>
+        <details className="maint-diag-tech">
+          <summary>{t('diag.showTechnical')}</summary>
+          <code>{human.technical}</code>
+        </details>
+      </div>
+      <div className="maint-diag-actions">
+        <StatusPill state={check.ok ? 'success' : 'failed'} />
+        {!check.ok && human.action ? (
+          <Link to={human.action.href} className="hp-btn maint-diag-action-btn">
+            {t(human.action.labelKey)}
+          </Link>
+        ) : null}
+        {check.id === 'docker' && !check.ok ? (
+          <button type="button" className="hp-btn" disabled={rerunning} onClick={onRerun}>
+            {rerunning ? t('health.running') : t('diag.rerun')}
+          </button>
+        ) : null}
+      </div>
+    </div>
   )
 }
 
@@ -77,9 +320,11 @@ export function MaintenancePage(): ReactElement {
   const [topProcesses, setTopProcesses] = useState<TopProcessRow[]>([])
   const [jobs, setJobs] = useState<JobSummary[]>([])
   const [state, setState] = useState<MaintenanceStateStore>({ tasks: [], profileHealth: [], history: [] })
-  const [serviceState, setServiceState] = useState<ServiceState>({})
-  const [cleanupPreview, setCleanupPreview] = useState<CleanupPreview>(null)
-  const [cleanupSelection, setCleanupSelection] = useState({ containers: true, images: true, volumes: false, networks: false })
+  const [serviceState, setServiceState] = useState<ServiceState>({
+    ssh: 'unknown',
+    nginx: 'unknown',
+    ufw: 'unknown',
+  })
   const [recommendedSelection, setRecommendedSelection] = useState({
     clearCache: true,
     pruneDocker: true,
@@ -97,6 +342,8 @@ export function MaintenancePage(): ReactElement {
   const [statusTone, setStatusTone] = useState<'success' | 'warning'>('warning')
   const [runbook, setRunbook] = useState<{ title: string; text: string } | null>(null)
   const [runbookBusyId, setRunbookBusyId] = useState<string | null>(null)
+  const [systemdBusy, setSystemdBusy] = useState<Partial<Record<SystemdServiceId, boolean>>>({})
+  const [systemdError, setSystemdError] = useState<Partial<Record<SystemdServiceId, string>>>({})
   const [commandPeek, setCommandPeek] = useState<string | null>(null)
   const [editTaskId, setEditTaskId] = useState<string | null>(null)
   const [editDraft, setEditDraft] = useState('')
@@ -113,25 +360,6 @@ export function MaintenancePage(): ReactElement {
       setSavingState(false)
     }
   }, [t])
-
-  const refreshCleanupPreview = useCallback(async () => {
-    try {
-      const res = (await window.dh.dockerPrunePreview()) as {
-        ok: boolean
-        preview?: { containers: number; images: number; volumes: number; networks: number }
-        error?: string
-      }
-      if (res.ok) {
-        setCleanupPreview(res.preview ?? null)
-      } else {
-        setCleanupPreview(null)
-        showStatus(humanizeDockerError(res.error))
-      }
-    } catch (e) {
-      showStatus(humanizeDockerError(e))
-      setCleanupPreview(null)
-    }
-  }, [])
 
   const refreshLive = useCallback(async () => {
     try {
@@ -150,27 +378,71 @@ export function MaintenancePage(): ReactElement {
       }
       const j = (await window.dh.jobsList()) as JobSummary[]
       setJobs(Array.isArray(j) ? j : [])
-      await refreshCleanupPreview()
     } catch (e) {
       showStatus(humanizeDashboardError(e))
     }
-  }, [refreshCleanupPreview])
+  }, [])
 
   const refreshSystemdSnapshot = useCallback(async () => {
-    const next: ServiceState = {}
+    const next: ServiceState = { ssh: 'unknown', nginx: 'unknown', ufw: 'unknown' }
     await Promise.all(
-      SYSTEMD_UNITS.map(async (unit) => {
+      MAINTENANCE_SYSTEMD_SERVICES.map(async (svc) => {
         try {
-          const res = await window.dh.hostExec({ command: 'systemctl_is_active', unit })
+          const res = (await window.dh.hostExec({
+            command: 'systemctl_is_active_fallback',
+            units: svc.probeUnits,
+          })) as { ok: boolean; result?: string; resolvedUnit?: string | null; error?: string }
           const out = (res.ok ? String(res.result ?? '') : '').trim().toLowerCase()
-          next[unit] = out.includes('active') ? 'active' : out ? 'inactive' : 'unknown'
+          const normalized = normalizeSystemdState(out)
+          if (normalized === 'unknown' && !res.resolvedUnit) {
+            next[svc.id] = svc.optional ? 'not_installed' : 'unknown'
+          } else {
+            next[svc.id] = normalized
+          }
         } catch {
-          next[unit] = 'unknown'
+          next[svc.id] = svc.optional ? 'not_installed' : 'unknown'
         }
-      })
+      }),
     )
     setServiceState(next)
   }, [])
+
+  const startSystemdService = useCallback(async (serviceId: SystemdServiceId) => {
+    const def = MAINTENANCE_SYSTEMD_SERVICES.find((s) => s.id === serviceId)
+    if (!def || (def.optional && serviceState[serviceId] === 'not_installed')) return
+    setSystemdBusy((prev) => ({ ...prev, [serviceId]: true }))
+    setSystemdError((prev) => ({ ...prev, [serviceId]: '' }))
+    let lastError = ''
+    for (const unit of def.startUnits) {
+      try {
+        const res = (await window.dh.hostExec({
+          command: 'systemctl_start',
+          unit,
+          user: false,
+        })) as { ok: boolean; error?: string }
+        if (res.ok) {
+          await refreshSystemdSnapshot()
+          showStatus(t('systemd.started', { service: t(def.titleKey) }), 'success')
+          setSystemdBusy((prev) => ({ ...prev, [serviceId]: false }))
+          return
+        }
+        lastError = res.error ?? t('systemd.startFailed')
+        if (isUnitNotFoundError(lastError)) break
+      } catch (e) {
+        lastError = e instanceof Error ? e.message : String(e)
+        if (isUnitNotFoundError(lastError)) break
+      }
+    }
+    if (isUnitNotFoundError(lastError)) {
+      setServiceState((prev) => ({ ...prev, [serviceId]: def.optional ? 'not_installed' : 'unknown' }))
+      setSystemdError((prev) => ({ ...prev, [serviceId]: '' }))
+      showStatus(def.optional ? t('systemd.notInstalledOptional') : t('systemd.notInstalled'))
+    } else {
+      setSystemdError((prev) => ({ ...prev, [serviceId]: lastError }))
+      showStatus(lastError)
+    }
+    setSystemdBusy((prev) => ({ ...prev, [serviceId]: false }))
+  }, [refreshSystemdSnapshot, serviceState, t])
 
   const refreshStatic = useCallback(async () => {
     try {
@@ -212,6 +484,9 @@ export function MaintenancePage(): ReactElement {
   const m = metrics?.metrics
   const runningContainers = containers.filter((c) => c.state === 'running').length
   const guardian = useMemo(() => evaluateGuardian(m, security, containers, topProcesses), [m, security, containers, topProcesses])
+  const guardianOverallLevel = useMemo(() => getMaintenanceOverallLevel(guardian.score), [guardian.score])
+  const memPct = m && m.totalMemMb > 0 ? Math.round(((m.totalMemMb - m.freeMemMb) / m.totalMemMb) * 100) : null
+  const diskPct = m && m.diskTotalGb > 0 ? Math.round(((m.diskTotalGb - m.diskFreeGb) / m.diskTotalGb) * 100) : null
   const activeJobCount = useMemo(() => jobs.filter((j) => j.state === 'running').length, [jobs])
   const pendingTasks = useMemo(() => state.tasks.filter((t) => !t.done), [state.tasks])
   const degradedProfiles = state.profileHealth.filter((p) => p.health === 'degraded').length
@@ -227,7 +502,6 @@ export function MaintenancePage(): ReactElement {
   const tabShortLabel = useMemo<Record<TabId, string>>(() => ({
     'Overview / Health Dashboard': t('tabs.overviewShort'),
     'System Cleanup': t('tabs.cleanupShort'),
-    'Docker Maintenance': t('tabs.dockerShort'),
     'Data & Profiles': t('tabs.dataShort'),
     'Logs & History': t('tabs.logsShort'),
     'Scheduled / Automation': t('tabs.scheduleShort'),
@@ -236,7 +510,6 @@ export function MaintenancePage(): ReactElement {
   const tabFullLabel = useMemo<Record<TabId, string>>(() => ({
     'Overview / Health Dashboard': t('tabs.overview'),
     'System Cleanup': t('tabs.cleanup'),
-    'Docker Maintenance': t('tabs.docker'),
     'Data & Profiles': t('tabs.data'),
     'Logs & History': t('tabs.logs'),
     'Scheduled / Automation': t('tabs.schedule'),
@@ -304,7 +577,7 @@ export function MaintenancePage(): ReactElement {
   async function runCleanup(): Promise<void> {
     setBusyCleanup(true)
     try {
-      const res = (await window.dh.dockerCleanupRun(cleanupSelection)) as {
+      const res = (await window.dh.dockerCleanupRun(DEFAULT_DOCKER_CLEANUP_SELECTION)) as {
         ok: boolean
         reclaimedBytes?: number
         error?: string
@@ -510,148 +783,216 @@ export function MaintenancePage(): ReactElement {
 
   return (
     <div className="maint-page elevated-page">
+      <div className="maint-scroll">
       <header className="maint-hero">
-        <div className="maint-hero-eyebrow">Workspace care</div>
-        <h1 className="maint-hero-title">{t('page.contentTitle')}</h1>
-        <p className="maint-hero-sub">
-          {degradedProfiles > 0 ? t('page.statusIssues', { count: degradedProfiles }) : t('page.statusHealthy')}{' '}
-          {lastMaintenanceDaysAgo === null ? t('page.lastMaintenanceNever') : t('page.lastMaintenance', { days: lastMaintenanceDaysAgo })}
-        </p>
+        <div className="maint-hero-eyebrow">
+          <span className="codicon codicon-tools" aria-hidden />
+          {t('page.eyebrow')}
+        </div>
+        <div className="maint-hero-row">
+          <div>
+            <h1 className="maint-hero-title">{t('page.contentTitle')}</h1>
+            <p className="maint-hero-sub">
+              {degradedProfiles > 0 ? t('page.statusIssues', { count: degradedProfiles }) : t('page.statusHealthy')}{' '}
+              {lastMaintenanceDaysAgo === null ? t('page.lastMaintenanceNever') : t('page.lastMaintenance', { days: lastMaintenanceDaysAgo })}
+            </p>
+          </div>
+          <div className="maint-live-pill" role="status">
+            <span className="maint-live-dot" aria-hidden />
+            {t('page.live')}
+          </div>
+        </div>
       </header>
 
-      <section className="hp-card maint-tabs-panel">
-        <nav className="maint-tabs-scroll" aria-label="Maintenance sections">
-          {TABS.map((tab) => (
-            <button
-              key={tab}
-              type="button"
-              className={`maint-tab ${activeTab === tab ? 'maint-tab-active' : ''}`}
-              title={tabFullLabel[tab]}
-              onClick={() => setActiveTab(tab)}
-            >
-              <span className={`codicon codicon-${MAINT_TAB_META[tab].icon}`} aria-hidden />
-              <span>{tabShortLabel[tab]}</span>
-              <span className="maint-tab-full">{tabFullLabel[tab]}</span>
-            </button>
-          ))}
-        </nav>
+      <section className="maint-spotlight" aria-label={t('summary.aria')}>
+        <div className="maint-spotlight-item">
+          <span className="maint-spotlight-label">{t('summary.guardian')}</span>
+          <span className={`maint-spotlight-value${guardian.score != null && guardian.score >= 70 ? ' is-ok' : guardian.score != null ? ' is-warn' : ''}`}>
+            {guardian.score === null ? '—' : `${guardian.score}%`}
+          </span>
+          <span className="maint-spotlight-sub">
+            {guardian.score != null ? getMaintenanceOverallLabel(guardianOverallLevel, t) : t('summary.guardian_sub')}
+          </span>
+        </div>
+        <div className="maint-spotlight-item">
+          <span className="maint-spotlight-label">{t('summary.cpu')}</span>
+          <span className={`maint-spotlight-value${m && m.cpuUsagePercent >= 85 ? ' is-warn' : ''}`}>
+            {m ? `${m.cpuUsagePercent.toFixed(1)}%` : '—'}
+          </span>
+          <span className="maint-spotlight-sub">{t('summary.cpu_sub')}</span>
+        </div>
+        <div className="maint-spotlight-item">
+          <span className="maint-spotlight-label">{t('summary.memory')}</span>
+          <span className={`maint-spotlight-value${memPct != null && memPct >= 90 ? ' is-warn' : ''}`}>
+            {memPct != null ? `${memPct}%` : '—'}
+          </span>
+          <span className="maint-spotlight-sub">{t('summary.memory_sub')}</span>
+        </div>
+        <div className="maint-spotlight-item">
+          <span className="maint-spotlight-label">{t('summary.docker')}</span>
+          <span className="maint-spotlight-value">{runningContainers}/{containers.length}</span>
+          <span className="maint-spotlight-sub">{t('summary.docker_sub')}</span>
+        </div>
+        <div className="maint-spotlight-item">
+          <span className="maint-spotlight-label">{t('summary.tasks')}</span>
+          <span className={`maint-spotlight-value${pendingTasks.length > 0 ? ' is-warn' : ''}`}>{pendingTasks.length}</span>
+          <span className="maint-spotlight-sub">{t('summary.tasks_sub')}</span>
+        </div>
+        <div className="maint-spotlight-item">
+          <span className="maint-spotlight-label">{t('summary.disk')}</span>
+          <span className={`maint-spotlight-value${diskPct != null && diskPct >= 92 ? ' is-warn' : ''}`}>
+            {diskPct != null ? `${diskPct}%` : '—'}
+          </span>
+          <span className="maint-spotlight-sub">{t('summary.disk_sub')}</span>
+        </div>
       </section>
 
-      {(activeTab === 'Overview / Health Dashboard' || activeTab === 'System Cleanup') ? (
-      <section className="hp-card">
-        {activeTab === 'Overview / Health Dashboard' && activeJobCount > 0 ? (
+      <nav className="maint-tabs" aria-label="Maintenance sections">
+        {TABS.map((tab) => (
+          <button
+            key={tab}
+            type="button"
+            className={`maint-tab ${activeTab === tab ? 'maint-tab-active' : ''}`}
+            title={tabFullLabel[tab]}
+            onClick={() => setActiveTab(tab)}
+          >
+            <span className={`codicon codicon-${MAINT_TAB_META[tab].icon}`} aria-hidden />
+            <span>{tabShortLabel[tab]}</span>
+            <span className="maint-tab-full">{tabFullLabel[tab]}</span>
+          </button>
+        ))}
+      </nav>
+
+      {activeTab === 'Overview / Health Dashboard' ? (
+      <section className="maint-panel">
+        {activeJobCount > 0 ? (
           <div className="maint-job-banner">
-            <span style={{ fontSize: 14 }}>
+            <span className="maint-job-banner-text">
               <strong>{activeJobCount}</strong> job{activeJobCount === 1 ? '' : 's'} running (install, diagnostics, etc.).
             </span>
             <button
               type="button"
-              className="hp-btn hp-btn-primary"
-              style={{ fontSize: 12 }}
-              onClick={() => document.getElementById('maintenance-job-runner')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+              className="hp-btn hp-btn-primary maint-job-banner-btn"
+              onClick={() => setActiveTab('Logs & History')}
             >
               {t('page.viewJobRunner')}
             </button>
           </div>
         ) : null}
-        <div className="hp-grid-2" style={{ gap: 18, alignItems: 'stretch' }}>
-          <div style={{ minHeight: 130, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-            <div className="hp-section-title">{t('section.systemOverview')}</div>
-            <div className="maint-score-wrap">
-              <div>
-                <div className="maint-score-num">{guardian.score === null ? '—' : `${guardian.score}%`}</div>
-                <div className="maint-score-sub">{t('health.guardianHealth')}</div>
+        <div className="maint-guardian-card maint-guardian-card--solo">
+          <div className="maint-guardian-card-bar" aria-hidden />
+          <div className="maint-section-head">{t('section.systemOverview')}</div>
+          <div className="maint-score-hero">
+            <div className="maint-score-ring" aria-hidden>
+              <svg viewBox="0 0 120 120" className="maint-score-ring-svg">
+                <circle className="maint-score-ring-track" cx="60" cy="60" r="52" />
+                <circle
+                  className={`maint-score-ring-fill is-${guardianOverallLevel}`}
+                  cx="60"
+                  cy="60"
+                  r="52"
+                  strokeDasharray={`${((guardian.score ?? 0) / 100) * 326.7} 326.7`}
+                />
+              </svg>
+              <div className="maint-score-ring-label">
+                {guardian.score === null ? '—' : `${guardian.score}%`}
               </div>
             </div>
-            <div className="maint-kpi-row">
-              <span className="maint-kpi">CPU {m?.cpuUsagePercent.toFixed(1) ?? '—'}%</span>
-              <span className="maint-kpi">Mem {m ? Math.round(((m.totalMemMb - m.freeMemMb) / m.totalMemMb) * 100) : '—'}%</span>
-              <span className="maint-kpi">Disk {m ? Math.round(((m.diskTotalGb - m.diskFreeGb) / m.diskTotalGb) * 100) : '—'}%</span>
-              <span className="maint-kpi">Docker {runningContainers}/{containers.length}</span>
-            </div>
-          </div>
-          <div style={{ minHeight: 130 }}>
-            <div className="hp-section-title">{t('section.runRecommended')}</div>
-            <div className="hp-grid-gap-8" style={{ fontSize: 13, marginTop: 4 }}>
-              <label><input type="checkbox" checked={recommendedSelection.clearCache} onChange={(e) => setRecommendedSelection((p) => ({ ...p, clearCache: e.target.checked }))} /> {t('section.clearCache')}</label>
-              <label><input type="checkbox" checked={recommendedSelection.pruneDocker} onChange={(e) => setRecommendedSelection((p) => ({ ...p, pruneDocker: e.target.checked }))} /> {t('section.pruneDocker')}</label>
-              <label><input type="checkbox" checked={recommendedSelection.cleanLogs} onChange={(e) => setRecommendedSelection((p) => ({ ...p, cleanLogs: e.target.checked }))} /> {t('section.cleanLogs')}</label>
-              <button className="hp-btn hp-btn-primary" onClick={() => void runRecommendedMaintenance()} disabled={busyCleanup || savingState}>
-                {t('section.runQuick')}
-              </button>
+            <div className="maint-score-copy">
+              <div className="maint-score-sub">{t('health.guardianHealth')}</div>
+              {guardian.score != null ? (
+                <span className={`maint-overall-badge is-${guardianOverallLevel}`}>
+                  <span className="maint-overall-dot" aria-hidden />
+                  {getMaintenanceOverallLabel(guardianOverallLevel, t)}
+                </span>
+              ) : null}
+              <p className="maint-real-data-note">{t('overview.realDataNote')}</p>
+              <div className="maint-kpi-row">
+                <span className="maint-kpi">CPU {m?.cpuUsagePercent.toFixed(1) ?? '—'}%</span>
+                <span className="maint-kpi">Mem {memPct ?? '—'}%</span>
+                <span className="maint-kpi">Disk {diskPct ?? '—'}%</span>
+                <span className="maint-kpi">Docker {runningContainers}/{containers.length}</span>
+              </div>
             </div>
           </div>
         </div>
-        {activeTab === 'Overview / Health Dashboard' ? (
-          <div className="maint-divider">
-            <div className="hp-section-title">{t('section.guardianLayers')}</div>
-            <p className="hp-muted" style={{ fontSize: 12, lineHeight: 1.55, marginTop: 6, marginBottom: 14 }}>
-              <Trans i18nKey="guardian.description" ns="maintenance" t={t} components={{ 0: <strong /> }} />
-            </p>
-            <div className="maint-layer-grid">
-              {guardian.layers.map((layer) => (
-                <div
-                  key={layer.id}
-                  className={`maint-layer-tile ${layer.ok ? 'maint-layer-tile--ok' : 'maint-layer-tile--warn'}`}
-                >
-                  <div style={{ fontWeight: 750, fontSize: 14, letterSpacing: '-0.01em' }}>{({
-                    host_compute: t('guardian.hostCompute'),
-                    memory_pressure: t('guardian.memoryPressure'),
-                    storage_pressure: t('guardian.storagePressure'),
-                    container_fleet: t('guardian.containerFleet'),
-                    process_health: t('guardian.processHealth'),
-                    host_security: t('guardian.hostSecurity'),
-                  } as Record<string, string>)[layer.id] ?? layer.title}</div>
-                  <div className="hp-muted" style={{ fontSize: 10, marginTop: 6, lineHeight: 1.4 }}>{layer.signals}</div>
-                  <div style={{ marginTop: 10, fontSize: 13, lineHeight: 1.45 }}>{layer.detail}</div>
-                  {layer.deduction > 0 ? (
-                    <div style={{ marginTop: 10, fontSize: 11, fontWeight: 800, color: 'var(--orange)' }}>−{layer.deduction} pts</div>
-                  ) : (
-                    <div style={{ marginTop: 10, fontSize: 11, fontWeight: 800, color: 'var(--green)' }}>−0 pts</div>
-                  )}
-                </div>
-              ))}
-            </div>
-            <div style={{ marginTop: 22 }}>
-              <div className="hp-section-title">{t('section.yourChecklist')}</div>
-              <p className="hp-muted" style={{ fontSize: 12, lineHeight: 1.55, marginTop: 6, marginBottom: 10 }}>
-                {t('schedule.openItems')}
-              </p>
-              {pendingTasks.length === 0 ? (
-                <div className="hp-muted" style={{ fontSize: 13 }}>{t('checklist.noTasks')}</div>
-              ) : (
-                <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: 8 }}>
-                  {pendingTasks.slice(0, 8).map((task) => (
-                    <li key={task.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <input
-                        type="checkbox"
-                        checked={task.done}
-                        onChange={() => void updateTask(task.id, { done: !task.done })}
-                        aria-label={`Done: ${task.title}`}
-                      />
-                      <span style={{ fontSize: 14 }}>{task.title}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <button
-                type="button"
-                className="hp-btn"
-                style={{ marginTop: 12 }}
-                onClick={() => setActiveTab('Scheduled / Automation')}
-              >
-                {t('checklist.openSchedule')}
-              </button>
-            </div>
+        <div className="maint-divider">
+          <div className="maint-section-head">{t('section.guardianLayers')}</div>
+          <p className="maint-section-lead">
+            <Trans i18nKey="guardian.description" ns="maintenance" t={t} components={{ 0: <strong /> }} />
+          </p>
+          <div className="maint-layer-grid">
+            {guardian.layers.map((layer) => (
+              <GuardianLayerTile
+                key={layer.id}
+                layerId={layer.id}
+                title={t(GUARDIAN_LAYER_LABELS[layer.id] ?? layer.title)}
+                signals={layer.signals}
+                detail={layer.detail}
+                deduction={layer.deduction}
+                ok={layer.ok}
+                pressureScore={getGuardianLayerPressureScore(layer.id, m, containers, topProcesses, security)}
+              />
+            ))}
           </div>
-        ) : null}
+          <div className="maint-checklist-block">
+            <div className="maint-section-head">{t('section.yourChecklist')}</div>
+            <p className="maint-section-lead">{t('overview.checklistLead')}</p>
+            {pendingTasks.length === 0 ? (
+              <div className="hp-muted maint-checklist-empty">{t('checklist.noTasks')}</div>
+            ) : (
+              <ul className="maint-checklist">
+                {pendingTasks.slice(0, 5).map((task) => (
+                  <li key={task.id} className="maint-checklist-item">
+                    <input
+                      type="checkbox"
+                      checked={task.done}
+                      onChange={() => void updateTask(task.id, { done: !task.done })}
+                      aria-label={`Done: ${task.title}`}
+                    />
+                    <span>{task.title}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <button
+              type="button"
+              className="hp-btn maint-checklist-btn"
+              onClick={() => setActiveTab('Scheduled / Automation')}
+            >
+              {t('checklist.openSchedule')}
+            </button>
+          </div>
+          <OverviewNav onOpenTab={setActiveTab} />
+        </div>
       </section>
       ) : null}
 
-      {(activeTab === 'Overview / Health Dashboard' || activeTab === 'Data & Profiles') ? (
-      <section className="hp-card">
-        <div className="hp-section-title">{t('section.infrastructureStatus')}</div>
-        <div className="hp-row-wrap" style={{ marginBottom: 12, rowGap: 8 }}>
+      {activeTab === 'System Cleanup' ? (
+      <section className="maint-panel">
+        <div className="maint-section-head">{t('section.runRecommended')}</div>
+        <p className="maint-section-lead">{t('cleanup.lead')}</p>
+        <div className="maint-actions-body">
+          <label className="maint-check-row"><input type="checkbox" checked={recommendedSelection.clearCache} onChange={(e) => setRecommendedSelection((p) => ({ ...p, clearCache: e.target.checked }))} /> {t('section.clearCache')}</label>
+          <label className="maint-check-row"><input type="checkbox" checked={recommendedSelection.pruneDocker} onChange={(e) => setRecommendedSelection((p) => ({ ...p, pruneDocker: e.target.checked }))} /> {t('section.pruneDocker')}</label>
+          <label className="maint-check-row"><input type="checkbox" checked={recommendedSelection.cleanLogs} onChange={(e) => setRecommendedSelection((p) => ({ ...p, cleanLogs: e.target.checked }))} /> {t('section.cleanLogs')}</label>
+          <button className="hp-btn hp-btn-primary maint-actions-run" onClick={() => void runRecommendedMaintenance()} disabled={busyCleanup || savingState}>
+            <span className="codicon codicon-play" aria-hidden />
+            {t('section.runQuick')}
+          </button>
+        </div>
+        <p className="maint-section-lead maint-docker-page-hint">
+          {t('cleanup.dockerPageHint')}{' '}
+          <Link to="/docker">{t('cleanup.openDocker')}</Link>
+        </p>
+      </section>
+      ) : null}
+
+      {activeTab === 'Data & Profiles' ? (
+      <section className="maint-panel">
+        <div className="maint-section-head">{t('section.infrastructureStatus')}</div>
+        <p className="maint-section-lead">{t('infra.lead')}</p>
+        <div className="hp-row-wrap maint-infra-toolbar">
           <button className="hp-btn" onClick={() => void checkAllProfiles()} disabled={savingState}>{t('infra.checkAllProfiles')}</button>
           <button className="hp-btn" onClick={() => void refreshSystemdSnapshot()} disabled={savingState}>{t('infra.refreshSystemd')}</button>
         </div>
@@ -687,53 +1028,51 @@ export function MaintenancePage(): ReactElement {
             </tbody>
           </table>
         </div>
-        <div style={{ marginTop: 12, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
-          {SYSTEMD_UNITS.map((unit) => (
-            <div key={unit} style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10 }}>
-              <div className="hp-muted" style={{ fontSize: 11 }}>{unit}</div>
-              <div style={{ marginTop: 6 }}><StatusPill state={serviceState[unit] ?? 'unknown'} /></div>
-            </div>
+        <div className="maint-section-head maint-section-head-spaced">{t('infra.systemServices')}</div>
+        <p className="maint-section-lead">{t('infra.systemServicesLead')}</p>
+        <div className="maint-systemd-grid">
+          {MAINTENANCE_SYSTEMD_SERVICES.map((svc) => (
+            <SystemdServiceTile
+              key={svc.id}
+              serviceId={svc.id}
+              state={serviceState[svc.id] ?? 'unknown'}
+              busy={Boolean(systemdBusy[svc.id])}
+              error={systemdError[svc.id]}
+              optional={svc.optional}
+              onStart={() => void startSystemdService(svc.id)}
+            />
           ))}
         </div>
       </section>
       ) : null}
 
-      {(activeTab === 'Docker Maintenance' || activeTab === 'System Cleanup') ? (
-      <section className="hp-card">
-        <div className="hp-section-title">{t('section.dockerCleanupPlanner')}</div>
-        <div className="hp-row-wrap" style={{ rowGap: 8 }}>
-          <label><input type="checkbox" checked={cleanupSelection.containers} onChange={(e) => setCleanupSelection((p) => ({ ...p, containers: e.target.checked }))} /> {t('docker.containers')}</label>
-          <label><input type="checkbox" checked={cleanupSelection.images} onChange={(e) => setCleanupSelection((p) => ({ ...p, images: e.target.checked }))} /> {t('docker.images')}</label>
-          <label><input type="checkbox" checked={cleanupSelection.volumes} onChange={(e) => setCleanupSelection((p) => ({ ...p, volumes: e.target.checked }))} /> {t('docker.volumes')}</label>
-          <label><input type="checkbox" checked={cleanupSelection.networks} onChange={(e) => setCleanupSelection((p) => ({ ...p, networks: e.target.checked }))} /> {t('docker.networks')}</label>
-          <button className="hp-btn hp-btn-primary" onClick={() => void runCleanup()} disabled={busyCleanup}>{busyCleanup ? t('docker.running') : t('docker.runCleanup')}</button>
-        </div>
-        {cleanupPreview ? (
-          <div className="hp-row-wrap hp-muted" style={{ marginTop: 8, fontSize: 12 }}>
-            <span>{t('docker.stoppedContainers', { count: cleanupPreview.containers })}</span>
-            <span>{t('docker.unusedImages', { count: cleanupPreview.images })}</span>
-            <span>{t('docker.orphanVolumes', { count: cleanupPreview.volumes })}</span>
-            <span>{t('docker.orphanNetworks', { count: cleanupPreview.networks })}</span>
-          </div>
-        ) : null}
-      </section>
-      ) : null}
-
-      {(activeTab === 'Data & Profiles' || activeTab === 'Scheduled / Automation') ? (
-      <section className="hp-card">
-        <div className="hp-section-title">{t('section.maintenanceTasksRunbook')}</div>
-        <div className="hp-grid-gap-8" style={{ marginTop: 6 }}>
+      {activeTab === 'Scheduled / Automation' ? (
+      <section className="maint-panel">
+        <div className="maint-section-head">{t('section.maintenanceTasksRunbook')}</div>
+        <p className="maint-section-lead">{t('tasks.lead')}</p>
+        <div className="maint-task-form">
           <input value={newTaskTitle} onChange={(e) => setNewTaskTitle(e.target.value)} className="hp-input" placeholder={t('tasks.titlePlaceholder')} />
           <div className="hp-grid-2">
             <input value={newCron} onChange={(e) => setNewCron(e.target.value)} className="hp-input" placeholder={t('tasks.cronPlaceholder')} />
             <input value={newCmd} onChange={(e) => setNewCmd(e.target.value)} className="hp-input" placeholder={t('tasks.commandPlaceholder')} />
           </div>
-          <div className="hp-row-wrap">
-            <button className="hp-btn hp-btn-primary" onClick={() => void addTask()} disabled={savingState || !newTaskTitle.trim()}>{t('tasks.add')}</button>
-            {CRON_HINTS.map((hint) => (
-              <button key={hint} className="hp-btn" onClick={() => setNewCron(hint)} disabled={savingState}>Use {hint}</button>
+          <div className="maint-cron-presets">
+            <span className="maint-cron-presets-label">{t('tasks.cronPresets')}</span>
+            {MAINTENANCE_CRON_PRESETS.map((preset) => (
+              <button
+                key={preset.cron}
+                type="button"
+                className="maint-cron-preset"
+                title={t(preset.descKey)}
+                onClick={() => setNewCron(preset.cron)}
+                disabled={savingState}
+              >
+                <strong>{t(preset.labelKey)}</strong>
+                <span className="hp-muted">{preset.cron}</span>
+              </button>
             ))}
           </div>
+          <button className="hp-btn hp-btn-primary" onClick={() => void addTask()} disabled={savingState || !newTaskTitle.trim()}>{t('tasks.add')}</button>
         </div>
         <div style={{ marginTop: 12, display: 'grid', gap: 8 }}>
           {state.tasks.length === 0 ? (
@@ -813,11 +1152,21 @@ export function MaintenancePage(): ReactElement {
           )}
         </div>
         <MaintenanceRunbookStrip runbookBusyId={runbookBusyId} onRun={runHostProbe} />
+        <div className="maint-divider">
+          <div className="maint-section-head">{t('schedule.remindersTitle')}</div>
+          <p className="maint-section-lead">{t('schedule.remindersLead')}</p>
+          <div className="hp-row-wrap">
+            <button className="hp-btn" onClick={() => void saveReminder(3)}>{t('schedule.reminder3d')}</button>
+            <button className="hp-btn" onClick={() => void saveReminder(7)}>{t('schedule.reminder7d')}</button>
+            <button className="hp-btn" onClick={() => void saveReminder(14)}>{t('schedule.reminder14d')}</button>
+            <span className="hp-muted">{t('schedule.currentReminder', { days: state.reminderDays ?? 'none' })}</span>
+          </div>
+        </div>
       </section>
       ) : null}
 
-      {(activeTab === 'Logs & History' || activeTab === 'Overview / Health Dashboard') ? (
-      <section className="hp-card" id="maintenance-job-runner">
+      {activeTab === 'Logs & History' ? (
+      <section className="maint-panel" id="maintenance-job-runner">
         <div className="hp-section-title">{t('section.jobRunner')}</div>
         <p className="hp-muted" style={{ fontSize: 12, marginTop: 4, marginBottom: 10 }}>
           {t('jobs.description')}
@@ -859,21 +1208,9 @@ export function MaintenancePage(): ReactElement {
       </section>
       ) : null}
 
-      {activeTab === 'Scheduled / Automation' ? (
-        <section className="hp-card">
-          <div className="hp-section-title">{tabFullLabel['Scheduled / Automation']}</div>
-          <div className="hp-row-wrap">
-            <button className="hp-btn" onClick={() => void saveReminder(3)}>{t('schedule.reminder3d')}</button>
-            <button className="hp-btn" onClick={() => void saveReminder(7)}>{t('schedule.reminder7d')}</button>
-            <button className="hp-btn" onClick={() => void saveReminder(14)}>{t('schedule.reminder14d')}</button>
-            <span className="hp-muted">{t('schedule.currentReminder', { days: state.reminderDays ?? 'none' })}</span>
-          </div>
-        </section>
-      ) : null}
-
       {activeTab === 'Logs & History' ? (
-        <section className="hp-card">
-          <div className="hp-section-title">{t('section.maintenanceHistory')}</div>
+        <section className="maint-panel">
+          <div className="maint-section-head">{t('section.maintenanceHistory')}</div>
           <div className="hp-table-wrap">
             <table className="hp-table">
               <thead>
@@ -905,48 +1242,58 @@ export function MaintenancePage(): ReactElement {
         </section>
       ) : null}
 
-      {(activeTab === 'Logs & History' || activeTab === 'Overview / Health Dashboard') ? (
-        <section className="hp-card">
-          <div className="hp-section-title">{t('section.integrityDiagnostics')}</div>
-          <div className="maint-toolbar">
-            <button className="hp-btn hp-btn-primary" onClick={() => void runDiagnosticsWizard()} disabled={runningDiagnostics}>
-              <span className="codicon codicon-run-all" aria-hidden style={{ fontSize: 15 }} />
-              {runningDiagnostics ? t('health.running') : t('health.run')}
-            </button>
-            <button type="button" className="hp-btn" onClick={() => void exportDiagnosticReport()}>
-              <span className="codicon codicon-export" aria-hidden style={{ fontSize: 15 }} />
-              {t('health.export')}
-            </button>
-            <label className="hp-muted" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+      {activeTab === 'Logs & History' ? (
+        <section className="maint-panel">
+          <div className="maint-section-head">{t('section.integrityDiagnostics')}</div>
+          <p className="maint-section-lead">{t('health.diagnosticsLead')}</p>
+          <div className="maint-toolbar maint-diag-toolbar">
+            <div className="maint-diag-toolbar-primary">
+              <button className="hp-btn hp-btn-primary" onClick={() => void runDiagnosticsWizard()} disabled={runningDiagnostics}>
+                <span className="codicon codicon-run-all" aria-hidden />
+                {runningDiagnostics ? t('health.running') : t('health.run')}
+              </button>
+              <p className="maint-toolbar-hint">{t('health.runDesc')}</p>
+            </div>
+            <div className="maint-diag-toolbar-secondary">
+              <button type="button" className="hp-btn" onClick={() => void exportDiagnosticReport()}>
+                <span className="codicon codicon-export" aria-hidden />
+                {t('health.export')}
+              </button>
+              <p className="maint-toolbar-hint">{t('health.exportDesc')}</p>
+            </div>
+            <label className="maint-sensitive-toggle">
               <input
                 type="checkbox"
                 checked={includeSensitiveBundle}
                 onChange={(e) => setIncludeSensitiveBundle(e.target.checked)}
               />
-              {t('health.includeSensitive')}
+              <span>
+                <strong>{t('health.includeSensitive')}</strong>
+                <span className="hp-muted"> — {t('health.includeSensitiveDesc')}</span>
+              </span>
             </label>
           </div>
           <div className="maint-diag-list">
             {diagnostics.length === 0 ? (
-              <div className="hp-muted" style={{ padding: '8px 0' }}>
+              <div className="hp-muted maint-diag-empty">
                 {t('health.noDiagnostics')}
               </div>
             ) : (
               diagnostics.map((d) => (
-                <div key={d.id} className={`maint-diag-row ${d.ok ? 'maint-diag-row--pass' : 'maint-diag-row--fail'}`}>
-                  <strong style={{ fontSize: 14 }}>{d.label}</strong>
-                  <StatusPill state={d.ok ? 'success' : 'failed'} />
-                  <div className="maint-diag-detail mono hp-muted">{d.details}</div>
-                </div>
+                <DiagnosticResultRow
+                  key={d.id}
+                  check={d}
+                  rerunning={runningDiagnostics}
+                  onRerun={() => void runDiagnosticsWizard()}
+                />
               ))
             )}
           </div>
-          <MaintenanceRunbookStrip runbookBusyId={runbookBusyId} onRun={runHostProbe} />
         </section>
       ) : null}
 
       {runbook ? (
-        <section className="hp-card maint-output-panel" aria-live="polite">
+        <section className="maint-output-panel" aria-live="polite">
           <div className="maint-output-head">
             <h2 className="maint-output-title">{runbook.title}</h2>
             <button type="button" className="hp-btn" onClick={() => setRunbook(null)}>
@@ -958,7 +1305,7 @@ export function MaintenancePage(): ReactElement {
       ) : null}
 
       {commandPeek ? (
-        <section className="hp-card maint-output-panel">
+        <section className="maint-output-panel">
           <div className="maint-output-head">
             <h2 className="maint-output-title">{t('section.commandHint')}</h2>
             <button type="button" className="hp-btn" onClick={() => setCommandPeek(null)}>
@@ -981,6 +1328,7 @@ export function MaintenancePage(): ReactElement {
           </button>
         </div>
       ) : null}
+      </div>
     </div>
   )
 }
@@ -1011,6 +1359,7 @@ function StatusPill({ state }: { state: string }): ReactElement {
         active: t('statusPill.active'),
         inactive: t('statusPill.inactive'),
         unknown: t('statusPill.unknown'),
+        not_installed: t('statusPill.notInstalled'),
       }[state] ?? state).toUpperCase()}
     </span>
   )

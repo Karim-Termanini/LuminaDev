@@ -30,7 +30,6 @@ export function AppShell({ children }: { children: ReactNode }): ReactElement {
 
   const navDefaults: Array<{ to: string; label: string; icon: string }> = [
     { to: '/dashboard', label: t('nav.dashboard'), icon: 'dashboard' },
-    { to: '/system', label: t('nav.monitor'), icon: 'pulse' },
     { to: '/docker', label: t('nav.docker'), icon: 'package' },
     { to: '/ssh', label: t('nav.ssh'), icon: 'key' },
     { to: '/git', label: t('nav.git'), icon: 'git-branch' },
@@ -60,7 +59,7 @@ export function AppShell({ children }: { children: ReactNode }): ReactElement {
       go_dashboard: '/dashboard',
       go_docker: '/docker',
       go_git: '/git',
-      go_system: '/system',
+      go_system: '/dashboard/monitor',
       go_profiles: '/profiles',
       go_runtimes: '/runtimes',
       go_maintenance: '/maintenance',
