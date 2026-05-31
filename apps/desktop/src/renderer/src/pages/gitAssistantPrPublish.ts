@@ -8,10 +8,9 @@ export function branchNeedsPublishBeforePr(
   return (ahead ?? 0) > 0
 }
 
-/** Show git push when the working tree is clean and commits may need publishing. */
+/** Show git push when commits may need publishing (unpushed work is independent of dirty files). */
 export function shouldShowGitPush(input: {
   repoPathTrimmed: string
-  hasLocalChanges: boolean
   unborn: boolean
   ahead: number | null
   behind: number | null
@@ -20,7 +19,6 @@ export function shouldShowGitPush(input: {
 }): boolean {
   return (
     !!input.repoPathTrimmed &&
-    !input.hasLocalChanges &&
     !input.unborn &&
     input.conflictFileCount === 0 &&
     input.gitOperation === 'none' &&

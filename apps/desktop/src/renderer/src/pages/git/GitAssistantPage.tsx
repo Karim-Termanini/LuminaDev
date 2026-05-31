@@ -653,7 +653,6 @@ export function GitAssistantPage(): ReactElement {
   const showPull = !!repoPath.trim() && behind != null && behind > 0
   const showPush = shouldShowGitPush({
     repoPathTrimmed: repoPath.trim(),
-    hasLocalChanges,
     unborn,
     ahead,
     behind,
