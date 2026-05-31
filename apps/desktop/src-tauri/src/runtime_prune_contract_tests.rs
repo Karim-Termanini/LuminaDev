@@ -11,22 +11,6 @@ fn runtime_token_edge_cases_are_parsed_stably() {
 }
 
 #[test]
-fn dart_channel_release_parsing_handles_slash_and_plain_inputs() {
-  assert_eq!(
-    lumina_dart_channel_release("beta/3.5.0"),
-    ("beta", "3.5.0".to_string())
-  );
-  assert_eq!(
-    lumina_dart_channel_release("dev"),
-    ("dev", "latest".to_string())
-  );
-  assert_eq!(
-    lumina_dart_channel_release("3.4.2"),
-    ("stable", "3.4.2".to_string())
-  );
-}
-
-#[test]
 fn rust_channel_token_detects_named_channels_only() {
   assert_eq!(lumina_rust_channel_token("nightly"), Some("nightly".to_string()));
   assert_eq!(lumina_rust_channel_token("beta"), Some("beta".to_string()));

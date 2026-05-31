@@ -25,22 +25,7 @@ pub(crate) async fn runtime_append_verify(
         "java" if method == "local" => "([ -x \"$HOME/.local/share/lumina/java/current/bin/java\" ] && \"$HOME/.local/share/lumina/java/current/bin/java\" -version 2>&1 | head -1) || echo MISSING",
         "java" => "command -v java >/dev/null 2>&1 && java -version 2>&1 | head -1 || echo MISSING",
         "php" => "command -v php >/dev/null 2>&1 && php --version 2>&1 | head -1 || echo MISSING",
-        "ruby" if method == "local" => "export PATH=\"$HOME/.local/bin:$PATH\"; ([ -x \"$HOME/.local/bin/mise\" ] && eval \"$($HOME/.local/bin/mise activate bash)\" >/dev/null 2>&1 || true); (command -v ruby >/dev/null 2>&1 && ruby --version 2>&1) || echo MISSING",
-        "ruby" => "command -v ruby >/dev/null 2>&1 && ruby --version 2>&1 || echo MISSING",
         "dotnet" => "([ -x \"$HOME/.dotnet/dotnet\" ] && \"$HOME/.dotnet/dotnet\" --version 2>&1) || (command -v dotnet >/dev/null 2>&1 && dotnet --version 2>&1) || echo MISSING",
-        "bun" => "([ -x \"$HOME/.bun/bin/bun\" ] && \"$HOME/.bun/bin/bun\" --version 2>&1) || (command -v bun >/dev/null 2>&1 && bun --version 2>&1) || echo MISSING",
-        "zig" if method == "local" => "([ -x \"$HOME/.local/share/lumina/zig/current/zig\" ] && \"$HOME/.local/share/lumina/zig/current/zig\" version 2>&1) || (command -v zig >/dev/null 2>&1 && zig version 2>&1) || echo MISSING",
-        "zig" => "command -v zig >/dev/null 2>&1 && zig version 2>&1 || echo MISSING",
-        "c_cpp" => "command -v gcc >/dev/null 2>&1 && gcc --version 2>&1 | head -1 || echo MISSING",
-        "matlab" => "command -v octave >/dev/null 2>&1 && octave --version 2>&1 | head -1 || echo MISSING",
-        "dart" => "([ -x \"$HOME/.dart/dart-sdk/bin/dart\" ] && \"$HOME/.dart/dart-sdk/bin/dart\" --version 2>&1 | head -1) || (command -v dart >/dev/null 2>&1 && dart --version 2>&1 | head -1) || echo MISSING",
-        "flutter" => "([ -x \"$HOME/.flutter-sdk/bin/flutter\" ] && \"$HOME/.flutter-sdk/bin/flutter\" --version 2>&1 | head -1) || (command -v flutter >/dev/null 2>&1 && flutter --version 2>&1 | head -1) || echo MISSING",
-        "julia" => "export PATH=\"$HOME/.juliaup/bin:$PATH\"; ([ -x \"$HOME/.juliaup/bin/julia\" ] && \"$HOME/.juliaup/bin/julia\" --startup-file=no --version 2>&1) || (command -v julia >/dev/null 2>&1 && julia --startup-file=no --version 2>&1) || echo MISSING",
-        "lua" if method == "local" => "export PATH=\"$HOME/.local/bin:$PATH\"; ([ -x \"$HOME/.local/bin/mise\" ] && eval \"$($HOME/.local/bin/mise activate bash)\" >/dev/null 2>&1 || true); ((command -v lua5.4 >/dev/null 2>&1 && lua5.4 -v 2>&1) || (command -v lua >/dev/null 2>&1 && lua -v 2>&1)) || echo MISSING",
-        "lua" => "(command -v lua5.4 >/dev/null 2>&1 && lua5.4 -v 2>&1) || (command -v lua >/dev/null 2>&1 && lua -v 2>&1) || echo MISSING",
-        "lisp" => "command -v sbcl >/dev/null 2>&1 && sbcl --version 2>&1 || echo MISSING",
-        "r" if method == "local" => "export PATH=\"$HOME/.local/bin:$PATH\"; ([ -x \"$HOME/.local/bin/mise\" ] && eval \"$($HOME/.local/bin/mise activate bash)\" >/dev/null 2>&1 || true); (command -v R >/dev/null 2>&1 && R --version 2>&1 | head -1) || echo MISSING",
-        "r" => "command -v R >/dev/null 2>&1 && R --version 2>&1 | head -1 || echo MISSING",
         _ => {
             logs.push(format!("VERIFY: skipped (unknown runtime '{}')", runtime_id));
             return true;
@@ -56,19 +41,7 @@ pub(crate) async fn runtime_append_verify(
                 ));
                 return false;
             }
-            let mut ver_token = lumina_first_version_token(requested_version).unwrap_or_default();
-            if runtime_id == "dart" {
-                if let Some((_, rhs)) = requested_version.trim().split_once('/') {
-                    let r = rhs.trim();
-                    if !r.is_empty() {
-                        if let Some(t) = lumina_first_version_token(r) {
-                            ver_token = t;
-                        } else if r.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false) {
-                            ver_token = r.trim_start_matches('v').to_string();
-                        }
-                    }
-                }
-            }
+            let ver_token = lumina_first_version_token(requested_version).unwrap_or_default();
             let mut is_match = true;
             if !ver_token.is_empty() && method != "system" {
                 if runtime_id == "rust" {
