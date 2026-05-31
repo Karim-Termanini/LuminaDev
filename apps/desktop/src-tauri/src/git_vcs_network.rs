@@ -165,8 +165,7 @@ pub async fn git_network_with_auth(
         let script_str = script_path.to_string_lossy().to_string();
         let env = [("GIT_ASKPASS", script_str.as_str()), ("GIT_TERMINAL_PROMPT", "0")];
         let result = exec_output_with_env("git", &args_refs, &env, cmd_timeout_long()).await;
-        let _ = std::fs::remove_file(&script_path);
-        match result {
+        let outcome = match result {
             Ok(output) => finish_push_success(repo_path, &op, output).await,
             Err(e) if e.contains("no upstream branch") && matches!(op, GitNetworkOp::Push { .. }) => {
                 // Smart Retry: If push fails for no upstream, try to set it automatically
@@ -182,8 +181,10 @@ pub async fn git_network_with_auth(
                     Err(git_network_classify_error(&op, &e, true))
                 }
             }
-            Err(e) => Err(git_network_classify_error(&op, &e, true))
-        }
+            Err(e) => Err(git_network_classify_error(&op, &e, true)),
+        };
+        let _ = std::fs::remove_file(&script_path);
+        outcome
     } else {
         match exec_output_limit("git", &args_refs, cmd_timeout_long()).await {
             Ok(output) => finish_push_success(repo_path, &op, output).await,

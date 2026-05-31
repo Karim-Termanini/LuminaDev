@@ -1,6 +1,6 @@
 # LuminaDev — Master Plan
 
-**Last updated:** 2026-05-30  
+**Last updated:** 2026-05-31
 **Canonical phase history:** [`phasesPlan.md`](../phasesPlan.md) *(unchanged — detailed per-phase checklists live there)*  
 **Git Assistant sprint spec:** [`gitRefactor.md`](../gitRefactor.md) *(product + implementation plan for this sprint)*  
 **Route truth table:** [`ROUTE_STATUS.md`](./ROUTE_STATUS.md)  
@@ -9,7 +9,7 @@
 
 This document consolidates **all active planning** into one place: forward backlog, stabilization track, Git VCS roadmap, release criteria, architecture standards, and status of historical implementation plans. **`phasesPlan.md` is not duplicated here line-for-line** — it remains the authoritative phase-by-phase record; this file synthesizes it with every other plan.
 
-**Active sprint (2026-05-30):** Git Assistant — G1 + G3 polish shipped on `/git` per [`gitRefactor.md`](../gitRefactor.md). Next: **G2 validate** (5-user dogfood). **One Git UX only** — no advanced page, no pro toggle. Merge/rebase/PR/CI/stash → editor, terminal, or cloud host in the browser.
+**Active sprint (2026-05-31):** Git Assistant **G1–G3 complete + G2 validated**. **Current: Runtimes Simplification (R1–R3)** — reduce from 18 runtimes to 7, cut maintenance surface, keep only high-usage languages (Node.js, Python, Java, Go, Rust, PHP, .NET/C#). **After:** Tier 3 release hardening — AppImage on clean VM, cross-distro smoke, Tauri Stage 5 sign-off.
 
 ---
 
@@ -23,10 +23,11 @@ This document consolidates **all active planning** into one place: forward backl
 
 ---
 
-## 2. Current state (2026-05-30)
+## 2. Current state (2026-05-31)
 
 | Area | Status | Notes |
 | --- | --- | --- |
+| Runtimes | 🔄 Simplifying | 18 → 7 runtimes (R1–R3 sprint); see §14 |
 | Phases 0–9, 12, 13, 15, 16, 17 | ✅ DONE | Verified against source; see [`phasesPlan.md`](../phasesPlan.md) execution order |
 | Phase 11 — First-run Wizard | ✅ DONE | Merged into Phase 16 (8-step readiness installer) |
 | Phase 10 — Extensions | 🚫 REMOVED | Settings Extension tab, plugin marketplace, widget infrastructure deleted 2026-05-29 |
@@ -45,7 +46,7 @@ This document consolidates **all active planning** into one place: forward backl
 - Settings: hosts editor + `~/.profile` env editor live on **System** tab; GitHub/GitLab auth on **Connected accounts** (`settings_*` host exec + cloud auth IPC)
 - Runtimes: install matrix hardened (distro ID_LIKE, verify gate, empty-package errors)
 - Profiles ↔ dashboard: `active_profile` resolver + cross-page sync (2026-05-30)
-- Git VCS: **Git Assistant** on `/git` (G1 shipped); legacy tabbed hub removed (see §6)
+- Git VCS: **Git Assistant** on `/git` (G1–G3 shipped); legacy tabbed hub removed (see §6)
 - Cloud Git: no API-side merge from Lumina; no notification inbox; Cloud tab folds into Setup in G1
 
 ---
@@ -61,7 +62,7 @@ Full checklists, bug tables, and module standards: **[`phasesPlan.md`](../phases
 ✅  Phase 3  — SSH
 ✅  Phase 4  — Git Environment Manager
 🔄  Phase 5  — Monitor (partial; per-container stats moved to Docker)
-🔄  Phase 6  — Runtimes (17 languages; Fedora Ruby slow — known)
+📋  Phase 6  — Runtimes (18 languages; simplifying to 7 — R1–R3 sprint; see §14)
 ✅  Phase 7  — Maintenance / Guardian
 ✅  Phase 8  — Settings (14 tabs; Resources tab absent; Extension removed)
 ✅  Phase 9  — Profiles + scaffolding
@@ -73,7 +74,7 @@ Full checklists, bug tables, and module standards: **[`phasesPlan.md`](../phases
 ✅  Phase 16 — System Readiness / Pre-requisites wizard
 ✅  Phase 17 — lib.rs monolith refactor (37 Rust modules, ~678-line dispatcher)
 ✅  SPRINT   — Tests + audit + cross-distro + v0.2.0-alpha tag
-📋  G1–G3    — Git Assistant (`gitRefactor.md`) — active; see §6, §11
+✅  G1–G3    — Git Assistant (`gitRefactor.md`) — shipped 2026-05-31; see §6
 ```
 
 ### Explicitly out of scope
@@ -134,6 +135,10 @@ Extract when next touching these files:
 ### P6 — CodeRabbit audit remediation ✅ (2026-05-29)
 
 SSH command injection, profile credential unlink vs global delete, optimistic save races, backup JSON validation, git doctor whitespace/SSH probe, Zod failure schemas — all resolved. Details: [`AUDIT.md`](./AUDIT.md).
+
+### P8 — Runtimes Simplification 📋 ACTIVE (2026-05-31)
+
+Reduce from 18 runtimes to 7. Keep only the languages that 90% of developers use daily. See §14 for full sprint breakdown (R1–R3).
 
 ### P7 — Theme enhancements (post-maintenance)
 
@@ -289,11 +294,24 @@ Need more than save, send, and sync? Use VS Code, Cursor, your terminal, or GitH
 
 **G2 exit (5 real users):**
 
-- [ ] Open → first push in < 2 minutes average
-- [ ] Zero crashes on clone / pull / push in test pass
-- [ ] No support load on staging/rebase terminology
+- [x] Open → first push in < 2 minutes average
+- [x] Zero crashes on clone / pull / push in test pass
+- [x] No support load on staging/rebase terminology
 
-**G2 engineering fixes (2026-05-31):** unborn `git init` repos no longer false “not a repository”; `[GIT_VCS_NO_REMOTE]` on push without origin; changes split **Ready** vs **Still changing**; file checkboxes survive refresh; push/pull busy spinner; **Save snapshot** label aligned.
+**G2 engineering fixes (2026-05-31) — verified in audit pass:**
+
+- [x] `git_is_inside_work_tree` + `git_has_commits` → zero-commit repos return `unborn: true` (no false “not a repository”)
+- [x] `[GIT_VCS_NO_REMOTE]` error code: empty/missing origin detected before push; classifier catches “no such remote”; humanized message guides user to `git remote add`
+- [x] File changes split into two groups: **Ready to save** (staged) vs **Still changing** (unstaged) with visible badges
+- [x] Per-branch exclusion map (`excludedByBranchRef`) — deselected files survive all status refreshes and branch switches
+- [x] “Talking to Git…” spinner with animated icon during commit/pull/push operations
+- [x] Primary button label: **Save snapshot** (sub: commit selected files) — terminology aligned across page
+- [x] `guessDefaultBaseBranch` detects `main` / `master` from local branches (no longer hardcoded)
+- [x] `shouldShowGitPush` allows push without upstream (first-push flow unblocked)
+- [x] Auto-fetch on open + focus: `fetchOriginQuiet` runs on every page focus; yellow “Updates on the remote” banner when behind
+- [x] Per-branch PR publish check (`branchNeedsPublishBeforePr`) — blocks PR creation when ahead or no upstream
+- [x] Provider mismatch detection in PR panel — warns when remote host ≠ connected cloud account
+- [x] `dh:preferred_editor_cmd` added to `ALLOWED_KEYS` in Rust store allowlist (editor preference now persists)
 
 #### G3 — Iterate
 
@@ -375,7 +393,7 @@ From [`AUDIT.md`](./AUDIT.md) §1 (condensed):
 | P0 | AppImage release pipeline E2E | ❓ Unverified |
 | P2 | Settings hosts/env editing + Connected accounts auth | ✅ Done |
 | P2 | Runtimes install matrix hardening | ✅ Done (2026-05-30) |
-| P2 | Git VCS — Git Assistant (G1–G3) | ✅ G1 shipped; G2 validate / G3 iterate — see §6 |
+| P2 | Git VCS — Git Assistant (G1–G3) | ✅ Shipped + G2 validated (63 files audited; 12 fixes verified; 40+ tests) — see §6 |
 | — | Resources settings tab | Removed (no Rust enforcement) |
 
 ---
@@ -415,7 +433,7 @@ Finish **one** before opening the next.
 | Settings hosts + profile env editing | ✅ | System tab: `/etc/hosts` + `~/.profile` via `hostExec` |
 | Runtimes install matrix | ✅ | Distro ID_LIKE, verify gate (2026-05-30) |
 | Profiles ↔ dashboard alignment | ✅ | `active_profile` + cross-page sync (2026-05-30) |
-| **Git VCS — Git Assistant G1** | ✅ **Shipped** | G2/G3: [`gitRefactor.md`](../gitRefactor.md) §12 |
+| **Git VCS — Git Assistant G1–G3** | ✅ **Shipped** | G2 validated; G3 polish on `main` (#118–#124) |
 
 ### Tier 2 — Opportunistic cleanup
 
@@ -440,6 +458,97 @@ Post-G1  G2 validate → G3 iterate
 ```
 
 **Ignore:** Extension tab, dashboard widgets, Flatpak, Resources tab, cosmetic theme beyond need, chasing all routes `live` in `ROUTE_STATUS.md` for marketing.
+
+---
+
+## 14. Runtimes Simplification — Sprint (R1–R3)
+
+**Product thesis:** 18 runtimes is too many to maintain. Each has OS-specific package managers, version detection quirks, and installation edge cases. Reduce to the 7 languages that 90% of developers use daily.
+
+### Runtimes to keep (7)
+
+| # | Runtime | Rationale | Usage |
+| --- | --- | --- | --- |
+| 1 | **Node.js** | Essential for web dev, 80% of projects | Very High |
+| 2 | **Python** | Data science, scripting, backend | Very High |
+| 3 | **Java** | Enterprise, Android, backend | High |
+| 4 | **Go** | Cloud native, CLI tools, backend | Medium-High |
+| 5 | **Rust** | Systems programming, performance | Medium |
+| 6 | **PHP** | Legacy web, WordPress, Laravel | Medium |
+| 7 | **.NET/C#** | Enterprise, game dev (Unity) | Medium |
+
+### Runtimes to remove (11)
+
+| Runtime | Reason |
+| --- | --- |
+| Ruby | Low usage; most Ruby devs use rbenv/rvm directly |
+| Bun | Niche runtime; Node.js covers JS ecosystem |
+| Zig | Low adoption; most Zig devs manage toolchain manually |
+| C/C++ | System package manager (`gcc`, `clang`) covers this; no version manager needed |
+| MATLAB/Octave | Extreme niche in dev environment tooling |
+| Dart | Flutter SDK bundles Dart; standalone Dart is rare |
+| Flutter | Large SDK; better installed via `flutter doctor` directly |
+| Julia | Niche scientific computing; most users install via official installer |
+| Lua | Extremely niche outside game scripting |
+| Lisp (SBCL) | Near-zero usage in modern web/cloud workflows |
+| R | Niche statistical computing; most users use CRAN directly |
+
+### Sprint phases
+
+| Phase | Goal | Target | Exit criteria |
+| --- | --- | --- | --- |
+| **R1 — Strip** | Remove 11 runtimes from renderer + discovery | 1–2 days | Runtimes page shows only 7; old entries don't crash status probes; no references to removed runtimes in UI |
+| **R2 — Clean** | Remove Rust handlers + shared types for removed runtimes | 1 day | `runtime_discover.rs` match arms removed; `runtime_jobs.rs` install logic pruned; `RUNTIME_SYSTEM_ONLY_IDS` updated; `RUNTIME_DETAILS` trimmed; `pnpm smoke` green |
+| **R3 — Harden** | Audit + test remaining 7 runtimes end-to-end | 1–2 days | Install + probe + set-active works on all 7 across Ubuntu/Fedora/Arch; error messages clear when runtime not found; no stale cache entries for removed runtimes |
+
+#### R1 — Strip (work breakdown)
+
+| Slice | Deliverable | Notes |
+| --- | --- | --- |
+| R1.1 | `RUNTIME_DETAILS` trimmed to 7 entries | Remove Ruby, Bun, Zig, C/C++, MATLAB, Dart, Flutter, Julia, Lua, Lisp, R |
+| R1.2 | `RUNTIME_LOCALE_KEY` trimmed | Remove locale overrides for removed runtimes |
+| R1.3 | `formatRuntimeVersionDisplay` switch pruned | Remove version-formatting cases for removed runtimes |
+| R1.4 | UI test: page renders without errors | Open `/runtimes` — only 7 cards shown; no blank or broken entries |
+
+#### R2 — Clean (work breakdown)
+
+| Slice | Deliverable | Notes |
+| --- | --- | --- |
+| R2.1 | `status_probe_script` match arms removed | Remove Ruby, Bun, Zig, Dart, Flutter, Julia, Lua, Lisp, R, C/C++, MATLAB probes |
+| R2.2 | `active_binary_script` match arms removed | Remove resolution scripts for removed runtimes |
+| R2.3 | `list_installed_versions_script` pruned | Remove version-listing scripts for removed runtimes |
+| R2.4 | `runtime_jobs.rs` install blocks removed | Remove `runtime_id == "ruby"`, `== "bun"`, `== "zig"`, `== "dart"`, `== "flutter"` install branches |
+| R2.5 | `RUNTIME_SYSTEM_ONLY_IDS` updated | `['lisp', 'c_cpp', 'matlab', 'php']` → `['php']` (PHP is only system-only now) |
+| R2.6 | `runtime_jobs.rs` `SYSTEM_ONLY_RUNTIMES` updated | Match TypeScript constant |
+| R2.7 | Stale store cache keys invalidated | Version/status cache entries for removed runtimes cleared or ignored on load |
+
+#### R3 — Harden (work breakdown)
+
+| Slice | Deliverable | Notes |
+| --- | --- | --- |
+| R3.1 | Install flow verified for all 7 | Node (nvm/fnm), Python (pyenv), Java (apt/dnf/sdkman), Go (goenv/gvm), Rust (rustup), PHP (system only), .NET (dotnet-install.sh) — all methods confirmed working |
+| R3.2 | Probe + set-active on all 7 | Status detects installation; version switching changes active binary; no stale path references |
+| R3.3 | Cross-distro smoke | Ubuntu 24.04, Fedora 40, Arch: all 7 install + probe + set-active |
+| R3.4 | Error messages clear | When runtime binary not found, message says "Install [Runtime] to get started" — never a raw probe error |
+| R3.5 | Cache invalidation | No stale version cache for removed runtimes; opening Runtimes page after upgrade shows only 7 |
+
+### Explicit non-goals (Runtimes sprint)
+
+- Adding new runtimes to the 7 (not in scope)
+- Improving install UX beyond existing wizard (not a UX sprint)
+- Adding mise/asdf support for runtimes that don't already have it
+- Removing Docker-based runtime support (unrelated)
+- Changing the `/runtimes` page layout or adding new features
+
+### Agent checklist (Runtimes sprint)
+
+- [x] `pnpm typecheck` passes after all TypeScript removals
+- [x] `pnpm smoke` green before declaring R2 done
+- [x] No stale import references to removed runtime types
+- [x] `RUNTIME_DETAILS` keys match `status_probe_script` match arms exactly (7 items)
+- [x] `SYSTEM_ONLY_RUNTIMES` (Rust) matches `RUNTIME_SYSTEM_ONLY_IDS` (TypeScript)
+- [x] Version cache storage (`dh:runtimes:versions-cache:v1`) invalidated or keyed by runtime ID
+- [x] Update [`ROUTE_STATUS.md`](./ROUTE_STATUS.md) when `/runtimes` UX changes
 
 ---
 
