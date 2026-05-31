@@ -32,10 +32,10 @@ import { computeGitAssistantNextAction } from '../gitAssistantNextAction'
 import {
   buildIncludedFromPaths,
   loadBranchExclusionMap,
+  resolveSnapshotCommitPaths,
   saveBranchExclusionMap,
   setPathIncluded,
   setPathsIncluded,
-  stagedPathsToUnstageBeforeCommit,
   type BranchExclusionMap,
 } from '../gitAssistantFileInclusion'
 import { isDevAppSourceRepo } from '../gitAssistantDevRepo'
@@ -476,8 +476,7 @@ export function GitAssistantPage(): ReactElement {
       setOpErrorRaw('[GIT_VCS_EMPTY_MESSAGE] Commit message cannot be empty.')
       return
     }
-    const paths = [...included]
-    if (paths.length === 0) {
+    if (included.size === 0) {
       setOpErrorRaw('[GIT_VCS_NO_STAGED]')
       return
     }
@@ -486,13 +485,26 @@ export function GitAssistantPage(): ReactElement {
     try {
       const path = repoPath.trim()
       const branchKey = branchKeyRef.current || branch.trim()
-      const excluded = excludedByBranchRef.current.get(branchKey) ?? new Set<string>()
-      const toUnstage = stagedPathsToUnstageBeforeCommit(staged, excluded)
+      const stFresh = await window.dh.gitVcsStatus({ repoPath: path })
+      assertGitVcsOk(stFresh)
+      const stagedFresh = Array.isArray(stFresh.staged) ? (stFresh.staged as FileEntry[]) : []
+      const unstagedFresh = Array.isArray(stFresh.unstaged) ? (stFresh.unstaged as FileEntry[]) : []
+      const { included: includedNow, toUnstage } = resolveSnapshotCommitPaths({
+        staged: stagedFresh,
+        unstaged: unstagedFresh,
+        branch: branchKey,
+        excludedByBranch: excludedByBranchRef.current,
+      })
+      const pathsToCommit = [...includedNow]
+      if (pathsToCommit.length === 0) {
+        setOpErrorRaw('[GIT_VCS_NO_STAGED]')
+        return
+      }
       if (toUnstage.length > 0) {
         const rUnstage = await window.dh.gitVcsUnstage({ repoPath: path, filePaths: toUnstage })
         assertGitVcsOk(rUnstage)
       }
-      const rStage = await window.dh.gitVcsStage({ repoPath: path, filePaths: paths })
+      const rStage = await window.dh.gitVcsStage({ repoPath: path, filePaths: pathsToCommit })
       assertGitVcsOk(rStage)
       const r = await window.dh.gitVcsCommit({ repoPath: path, message })
       assertGitVcsOk(r)

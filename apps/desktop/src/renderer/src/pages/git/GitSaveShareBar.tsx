@@ -10,7 +10,7 @@ export type GitSaveShareBarProps = {
   message: string
   onMessageChange: (v: string) => void
   busy: boolean
-  disabled: boolean
+  saveDisabled: boolean
   next: GitAssistantNextAction
   showPull: boolean
   showPush: boolean
@@ -23,7 +23,7 @@ export function GitSaveShareBar({
   message,
   onMessageChange,
   busy,
-  disabled,
+  saveDisabled,
   next,
   showPull,
   showPush,
@@ -51,7 +51,7 @@ export function GitSaveShareBar({
         <textarea
           className="hp-input"
           value={message}
-          disabled={busy || disabled}
+          disabled={busy || saveDisabled}
           onChange={(e) => onMessageChange(e.target.value)}
           placeholder={t('assistant.save.messagePlaceholder')}
           rows={3}
@@ -68,7 +68,7 @@ export function GitSaveShareBar({
         <button
           type="button"
           className="hp-btn hp-btn-primary"
-          disabled={busy || disabled}
+          disabled={busy || saveDisabled}
           style={saveStyle}
           onClick={() => onSaveSnapshot(message)}
         >
@@ -76,13 +76,13 @@ export function GitSaveShareBar({
           <GitDualLabel primary={t('assistant.save.commitPrimary')} sub={t('assistant.save.commitSub')} inline />
         </button>
         {showPull ? (
-          <button type="button" className="hp-btn" disabled={busy || disabled} style={pullStyle} onClick={() => void onGetLatest()}>
+          <button type="button" className="hp-btn" disabled={busy} style={pullStyle} onClick={() => void onGetLatest()}>
             <span className="codicon codicon-repo-pull" aria-hidden />
             <GitDualLabel primary={t('assistant.save.pullPrimary')} sub={t('assistant.save.pullSub')} inline />
           </button>
         ) : null}
         {showPush ? (
-          <button type="button" className="hp-btn" disabled={busy || disabled} style={pushStyle} onClick={() => void onSend()}>
+          <button type="button" className="hp-btn" disabled={busy} style={pushStyle} onClick={() => void onSend()}>
             <span className="codicon codicon-repo-push" aria-hidden />
             <GitDualLabel primary={t('assistant.save.pushPrimary')} sub={t('assistant.save.pushSub')} inline />
           </button>
