@@ -673,9 +673,17 @@ pub(crate) async fn docker_create(body: &Value) -> Value {
                 .and_then(|v| v.as_bool())
                 .unwrap_or(true);
             if auto_start {
-                let _ = exec_output("docker", &["start", &id]).await;
+                match exec_output("docker", &["start", &id]).await {
+                    Ok(_) => json!({ "ok": true, "id": id }),
+                    Err(e) => json!({
+                        "ok": false,
+                        "error": format!("[DOCKER_CREATE_FAILED] {}", e.trim()),
+                        "id": id
+                    }),
+                }
+            } else {
+                json!({ "ok": true, "id": id })
             }
-            json!({ "ok": true, "id": id })
         }
         Err(e) => {
             json!({ "ok": false, "error": format!("[DOCKER_CREATE_FAILED] {}", e.trim()), "id": "" })
