@@ -583,5 +583,8 @@
   "assistant.pr.openedInBrowser": "Im Browser auf {{host}} geöffnet.",
   "assistant.pr.openLinkManually": "Falls nichts erscheint: unten „Link erneut öffnen“.",
   "assistant.pr.retryOpenLink": "Link erneut öffnen",
+  "assistant.pr.alreadyExists": "Für diesen Branch existiert bereits ein offener Pull Request auf {{host}}.",
+  "assistant.pr.openExisting": "Bestehenden PR öffnen",
+  "assistant.pr.checkingExisting": "Prüfe auf bestehenden Pull Request…",
   "assistant.pr.wrongProvider": "Remote ist {{host}}, verbunden ist {{connected}}. {{host}} unter Einstellungen → Verknüpfte Konten verbinden."
 }

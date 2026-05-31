@@ -13,6 +13,7 @@ pub async fn invoke(app: &AppHandle, channel: &str, body: &Value) -> Value {
         "dh:cloud:git:issues" => issues(app, body).await,
         "dh:cloud:git:releases" => releases(app, body).await,
         "dh:cloud:git:create-pr" => create_pr(app, body).await,
+        "dh:cloud:git:find-pr" => find_pr(app, body).await,
         "dh:cloud:git:get-pr-checks" => get_pr_checks(app, body).await,
         "dh:cloud:git:merge-pr" => merge_pr(app, body).await,
         _ => json!({
@@ -326,6 +327,116 @@ async fn issues(app: &AppHandle, body: &Value) -> Value {
     }
 }
 
+async fn find_pr(app: &AppHandle, body: &Value) -> Value {
+    let provider = body.get("provider").and_then(|v| v.as_str()).unwrap_or("");
+    let head = body
+        .get("head")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    let repo_path = body
+        .get("repoPath")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty());
+    let remote_name = body
+        .get("remote")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .unwrap_or("origin");
+
+    if head.is_empty() {
+        return json!({ "ok": false, "error": "[CLOUD_GIT_FIND_PR] head branch is required." });
+    }
+
+    let store = cloud_auth::app_encrypted_credential_store(app);
+    let cred = match store.load(provider) {
+        Ok(Some(c)) => c,
+        Ok(None) => {
+            return json!({ "ok": false, "error": "[CLOUD_AUTH_NOT_CONNECTED] Connect this provider in Settings → Connected accounts first." })
+        }
+        Err(e) => return json!({ "ok": false, "error": e }),
+    };
+
+    let rp = match repo_path {
+        Some(p) => p,
+        None => {
+            return json!({ "ok": false, "error": "[CLOUD_GIT_FIND_PR] repoPath is required." })
+        }
+    };
+    let remote_url = match exec_output_limit(
+        "git",
+        &["-C", rp, "remote", "get-url", remote_name],
+        cmd_timeout_short(),
+    )
+    .await
+    {
+        Ok(u) => u,
+        Err(e) => {
+            return json!({ "ok": false, "error": format!("[CLOUD_GIT_SCOPE] Could not read remote: {}", e.trim()) })
+        }
+    };
+    let parsed =
+        match cloud_auth::parse_remote_for_repo_scoped_pipelines(remote_url.trim(), provider) {
+            Ok(p) => p,
+            Err(e) => return json!({ "ok": false, "error": e }),
+        };
+
+    let url = match (provider, &parsed) {
+        (
+            "github",
+            cloud_auth::ParsedRemoteRepo::Github {
+                hostname,
+                full_name,
+            },
+        ) => {
+            let parts: Vec<&str> = full_name.splitn(2, '/').collect();
+            if parts.len() != 2 {
+                return json!({ "ok": false, "error": "[CLOUD_GIT_FIND_PR] Could not parse owner/repo from remote URL." });
+            }
+            match cloud_auth::GitHubProvider::find_open_pull_request_url(
+                &cred.token,
+                hostname,
+                parts[0],
+                parts[1],
+                &head,
+            )
+            .await
+            {
+                Ok(found) => found,
+                Err(e) => return json!({ "ok": false, "error": e }),
+            }
+        }
+        (
+            "gitlab",
+            cloud_auth::ParsedRemoteRepo::Gitlab {
+                web_origin,
+                path_with_namespace,
+            },
+        ) => match cloud_auth::GitLabProvider::find_open_merge_request_url(
+            &cred.token,
+            web_origin,
+            path_with_namespace,
+            &head,
+        )
+        .await
+        {
+            Ok(found) => found,
+            Err(e) => return json!({ "ok": false, "error": e }),
+        },
+        _ => {
+            return json!({ "ok": false, "error": "[CLOUD_GIT_SCOPE] Provider/remote mismatch. Make sure the correct tab is active." });
+        }
+    };
+
+    match url {
+        Some(u) => json!({ "ok": true, "url": u }),
+        None => json!({ "ok": true }),
+    }
+}
+
 async fn create_pr(app: &AppHandle, body: &Value) -> Value {
     let provider = body.get("provider").and_then(|v| v.as_str()).unwrap_or("");
     let title = body
@@ -479,6 +590,25 @@ async fn create_pr(app: &AppHandle, body: &Value) -> Value {
                         {
                             out["existingUrl"] = json!(existing);
                         }
+                    }
+                } else if let (
+                    "gitlab",
+                    cloud_auth::ParsedRemoteRepo::Gitlab {
+                        web_origin,
+                        path_with_namespace,
+                    },
+                ) = (provider, &parsed)
+                {
+                    if let Ok(Some(existing)) =
+                        cloud_auth::GitLabProvider::find_open_merge_request_url(
+                            &cred.token,
+                            web_origin,
+                            path_with_namespace,
+                            &head,
+                        )
+                        .await
+                    {
+                        out["existingUrl"] = json!(existing);
                     }
                 }
             }

@@ -580,5 +580,8 @@
   "assistant.pr.openedInBrowser": "Opened in your browser on {{host}}.",
   "assistant.pr.openLinkManually": "Use “Open link again” below if nothing appeared.",
   "assistant.pr.retryOpenLink": "Open link again",
+  "assistant.pr.alreadyExists": "An open pull request already exists for this branch on {{host}}.",
+  "assistant.pr.openExisting": "Open existing PR",
+  "assistant.pr.checkingExisting": "Checking for an existing pull request…",
   "assistant.pr.wrongProvider": "Remote is {{host}} but the connected account is {{connected}}. Connect {{host}} under Settings → Connected accounts."
 }

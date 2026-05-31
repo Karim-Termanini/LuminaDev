@@ -47,6 +47,8 @@ export function GitPullRequestPanel({
   const [prError, setPrError] = useState<string | null>(null)
   const [prSuccess, setPrSuccess] = useState<string | null>(null)
   const [lastPrUrl, setLastPrUrl] = useState<string | null>(null)
+  const [existingPrUrl, setExistingPrUrl] = useState<string | null>(null)
+  const [existingPrLoading, setExistingPrLoading] = useState(false)
 
   const head = branch.trim()
   const base = useMemo(() => guessDefaultBaseBranch(branchNames), [branchNames])
@@ -60,7 +62,52 @@ export function GitPullRequestPanel({
     setPrError(null)
     setPrSuccess(null)
     setLastPrUrl(null)
+    setExistingPrUrl(null)
   }, [suggestedTitle, head, repoPath])
+
+  const providerReady =
+    cloudProvider != null && hostLink != null && hostLink.provider === cloudProvider
+  const needsPublish = branchNeedsPublishBeforePr(ahead, behind)
+
+  useEffect(() => {
+    if (
+      !cloudConnected ||
+      !providerReady ||
+      !cloudProvider ||
+      !repoPath.trim() ||
+      !head ||
+      needsPublish
+    ) {
+      setExistingPrUrl(null)
+      setExistingPrLoading(false)
+      return
+    }
+    let cancelled = false
+    setExistingPrLoading(true)
+    void (async () => {
+      try {
+        const res = await window.dh.cloudGitFindPr({
+          provider: cloudProvider,
+          repoPath: repoPath.trim(),
+          remote: 'origin',
+          head,
+        })
+        if (cancelled) return
+        if (res.ok && res.url?.trim()) {
+          setExistingPrUrl(res.url.trim())
+        } else {
+          setExistingPrUrl(null)
+        }
+      } catch {
+        if (!cancelled) setExistingPrUrl(null)
+      } finally {
+        if (!cancelled) setExistingPrLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [cloudConnected, providerReady, cloudProvider, repoPath, head, needsPublish])
 
   if (!head) {
     return (
@@ -98,12 +145,17 @@ export function GitPullRequestPanel({
     )
   }
 
-  const needsPublish = branchNeedsPublishBeforePr(ahead, behind)
+  const needsPublishResolved = needsPublish
   const behindBase = behind != null && behind > 0
-  const providerReady =
-    cloudProvider != null && hostLink.provider === cloudProvider
+  const prFormLocked = !!existingPrUrl
   const canCreate =
-    cloudConnected && providerReady && !needsPublish && !busy && !prBusy
+    cloudConnected &&
+    providerReady &&
+    !needsPublishResolved &&
+    !busy &&
+    !prBusy &&
+    !existingPrLoading &&
+    !existingPrUrl
 
   const openExternalUrl = async (url: string): Promise<void> => {
     setLastPrUrl(url)
@@ -138,7 +190,7 @@ export function GitPullRequestPanel({
       )
       return
     }
-    if (needsPublish) {
+    if (needsPublishResolved) {
       setPrError(
         ahead == null && behind == null
           ? t('assistant.pr.noUpstream')
@@ -146,6 +198,7 @@ export function GitPullRequestPanel({
       )
       return
     }
+    if (existingPrUrl) return
     if (busy || prBusy) return
 
     const prTitle = title.trim()
@@ -166,13 +219,18 @@ export function GitPullRequestPanel({
         base,
       })
       if (res.ok && res.url?.trim()) {
-        await openExternalUrl(res.url.trim())
+        const url = res.url.trim()
+        setExistingPrUrl(url)
+        await openExternalUrl(url)
         return
       }
       const raw = res.error ?? t('assistant.pr.createFailed')
       const existingUrl = res.existingUrl?.trim()
       if (raw.includes('[CLOUD_GIT_PR_EXISTS]') && existingUrl) {
+        setExistingPrUrl(existingUrl)
         await openExternalUrl(existingUrl)
+        setPrError(null)
+        return
       }
       setPrError(humanizeCloudAuthError(new Error(raw)))
     } catch (e) {
@@ -223,12 +281,24 @@ export function GitPullRequestPanel({
         </p>
       ) : null}
 
+      {existingPrLoading ? (
+        <p className="hp-muted git-assistant-pr-hint" role="status">
+          {t('assistant.pr.checkingExisting')}
+        </p>
+      ) : null}
+
+      {existingPrUrl ? (
+        <p className="hp-status-alert success" role="status" style={{ margin: '8px 0 0', fontSize: 12 }}>
+          {t('assistant.pr.alreadyExists', { host })}
+        </p>
+      ) : null}
+
       <label className="git-assistant-pr-field">
         <span>{t('assistant.pr.titleLabel')}</span>
         <input
           className="hp-input"
           value={title}
-          disabled={busy || prBusy}
+          disabled={busy || prBusy || prFormLocked}
           onChange={(e) => setTitle(e.target.value)}
           placeholder={t('assistant.pr.titlePlaceholder')}
         />
@@ -239,7 +309,7 @@ export function GitPullRequestPanel({
           className="hp-input"
           rows={14}
           value={body}
-          disabled={busy || prBusy}
+          disabled={busy || prBusy || prFormLocked}
           onChange={(e) => setBody(e.target.value)}
           placeholder={PR_BODY_DEFAULT_TEMPLATE}
         />
@@ -257,16 +327,16 @@ export function GitPullRequestPanel({
         </p>
       ) : null}
 
-      {lastPrUrl ? (
+      {(lastPrUrl || existingPrUrl) ? (
         <button
           type="button"
           className="hp-btn"
           style={{ marginTop: 8, fontSize: 12 }}
           disabled={busy || prBusy}
-          onClick={() => void openExternalUrl(lastPrUrl)}
+          onClick={() => void openExternalUrl(existingPrUrl ?? lastPrUrl!)}
         >
           <span className="codicon codicon-link-external" aria-hidden />
-          {t('assistant.pr.retryOpenLink')}
+          {existingPrUrl ? t('assistant.pr.openExisting') : t('assistant.pr.retryOpenLink')}
         </button>
       ) : null}
 

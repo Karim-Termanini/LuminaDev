@@ -693,6 +693,49 @@ impl GitLabProvider {
         Ok(out)
     }
 
+    pub async fn find_open_merge_request_url(
+        token: &str,
+        web_origin: &str,
+        path_with_namespace: &str,
+        source_branch: &str,
+    ) -> Result<Option<String>, String> {
+        let client = reqwest::Client::new();
+        let project_id: String = path_with_namespace
+            .chars()
+            .flat_map(|c| if c == '/' { vec!['%', '2', 'F'] } else { vec![c] })
+            .collect();
+        let url = format!("{}/api/v4/projects/{}/merge_requests", web_origin, project_id);
+        let resp = client
+            .get(&url)
+            .header("Authorization", format!("Bearer {}", token))
+            .header("User-Agent", "LuminaDev/0.2.0")
+            .query(&[
+                ("state", "opened"),
+                ("source_branch", source_branch),
+                ("per_page", "5"),
+            ])
+            .send()
+            .await
+            .map_err(|e| format!("[CLOUD_GIT_NETWORK] GitLab find MR: {}", e))?;
+        if resp.status() == 401 {
+            return Err(
+                "[CLOUD_AUTH_INVALID_TOKEN] GitLab token is invalid or expired.".to_string(),
+            );
+        }
+        if !resp.status().is_success() {
+            return Ok(None);
+        }
+        let data: serde_json::Value = resp
+            .json()
+            .await
+            .map_err(|e| format!("[CLOUD_GIT_NETWORK] GitLab find MR parse: {}", e))?;
+        let items = data.as_array().cloned().unwrap_or_default();
+        Ok(items
+            .first()
+            .and_then(|mr| mr["web_url"].as_str())
+            .map(|s| s.to_string()))
+    }
+
     pub async fn create_merge_request(
         token: &str,
         web_origin: &str,

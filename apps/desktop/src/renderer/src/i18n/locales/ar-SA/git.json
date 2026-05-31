@@ -583,5 +583,8 @@
   "assistant.pr.openedInBrowser": "تم الفتح في المتصفح على {{host}}.",
   "assistant.pr.openLinkManually": "إن لم يظهر شيء، استخدم «فتح الرابط مرة أخرى» أدناه.",
   "assistant.pr.retryOpenLink": "فتح الرابط مرة أخرى",
+  "assistant.pr.alreadyExists": "يوجد بالفعل طلب سحب مفتوح لهذا الفرع على {{host}}.",
+  "assistant.pr.openExisting": "فتح طلب السحب الحالي",
+  "assistant.pr.checkingExisting": "جارٍ التحقق من وجود طلب سحب…",
   "assistant.pr.wrongProvider": "الريموت هو {{host}} والحساب المتصل هو {{connected}}. اربط {{host}} من الإعدادات → الحسابات المرتبطة."
 }
