@@ -144,6 +144,74 @@ pub(crate) async fn git_ensure_push_upstream(repo_path: &str, remote: &str, bran
     .await;
 }
 
+async fn git_branch_config_remote(repo_path: &str, branch: &str) -> Option<String> {
+    let key = format!("branch.{}.remote", branch);
+    let remote = exec_output_limit(
+        "git",
+        &["-C", repo_path, "config", "--get", &key],
+        cmd_timeout_short(),
+    )
+    .await
+    .ok()?;
+    let trimmed = remote.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_string())
+    }
+}
+
+async fn git_list_remotes(repo_path: &str) -> Vec<String> {
+    exec_output_limit(
+        "git",
+        &["-C", repo_path, "remote"],
+        cmd_timeout_short(),
+    )
+    .await
+    .unwrap_or_default()
+    .lines()
+    .map(str::trim)
+    .filter(|l| !l.is_empty())
+    .map(str::to_string)
+    .collect()
+}
+
+async fn git_remote_tracking_ref_exists(repo_path: &str, remote: &str, branch: &str) -> bool {
+    let tracking = format!("{remote}/{branch}");
+    exec_output_limit(
+        "git",
+        &["-C", repo_path, "rev-parse", "--verify", &tracking],
+        cmd_timeout_short(),
+    )
+    .await
+    .is_ok()
+}
+
+/// When `@{u}` is unset, pick the first remote ref that exists for this branch.
+/// Prefers `branch.*.remote`, then `origin`, `upstream`, then other remotes.
+async fn git_resolve_fallback_tracking_ref(repo_path: &str, branch: &str) -> Option<String> {
+    let mut candidates: Vec<String> = Vec::new();
+    if let Some(r) = git_branch_config_remote(repo_path, branch).await {
+        candidates.push(r);
+    }
+    for name in ["origin", "upstream"] {
+        if !candidates.iter().any(|c| c == name) {
+            candidates.push(name.to_string());
+        }
+    }
+    for remote in git_list_remotes(repo_path).await {
+        if !candidates.iter().any(|c| c == &remote) {
+            candidates.push(remote);
+        }
+    }
+    for remote in candidates {
+        if git_remote_tracking_ref_exists(repo_path, &remote, branch).await {
+            return Some(format!("{remote}/{branch}"));
+        }
+    }
+    None
+}
+
 pub(crate) async fn git_ahead_behind(repo_path: &str) -> (Option<i64>, Option<i64>) {
     if git_has_upstream(repo_path).await {
         let ahead = git_rev_list_count(repo_path, "@{u}..HEAD").await;
@@ -154,17 +222,9 @@ pub(crate) async fn git_ahead_behind(repo_path: &str) -> (Option<i64>, Option<i6
     if branch.is_empty() {
         return (None, None);
     }
-    let tracking = format!("origin/{branch}");
-    if exec_output_limit(
-        "git",
-        &["-C", repo_path, "rev-parse", "--verify", &tracking],
-        cmd_timeout_short(),
-    )
-    .await
-    .is_err()
-    {
+    let Some(tracking) = git_resolve_fallback_tracking_ref(repo_path, &branch).await else {
         return (None, None);
-    }
+    };
     let ahead = git_rev_list_count(repo_path, &format!("{tracking}..HEAD")).await;
     let behind = git_rev_list_count(repo_path, &format!("HEAD..{tracking}")).await;
     (ahead, behind)

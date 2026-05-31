@@ -345,15 +345,15 @@ Missing: LAN discovery (intentional). **Per-container stats stream:** ✅ shippe
 
 ---
 
-## Phase 6 — Runtimes 📋 SIMPLIFYING (`/runtimes` → `partial`)
+## Phase 6 — Runtimes ✅ SIMPLIFIED (2026-05-31)
 
 ~~17 runtimes: Node, Python, Go, Rust, Java, Bun, Zig, Dart, Flutter, Julia, PHP, Ruby, Lua, .NET, C/C++, Octave, SBCL~~
 
-**R1–R3 sprint (2026-05-31):** Simplifying from 18 runtimes to 7. See [`docs/MASTER_PLAN.md`](docs/MASTER_PLAN.md) §14.
+**R1–R3 sprint complete:** Simplified from 18 runtimes to 7. See [`docs/MASTER_PLAN.md`](docs/MASTER_PLAN.md) §14.
 
 **Keeping (7):** Node.js, Python, Java, Go, Rust, PHP, .NET/C#
 
-**Removing (11):** Ruby, Bun, Zig, C/C++, MATLAB/Octave, Dart, Flutter, Julia, Lua, Lisp (SBCL), R
+**Removed (11):** Ruby, Bun, Zig, C/C++, MATLAB/Octave, Dart, Flutter, Julia, Lua, Lisp (SBCL), R — purged from shared types, renderer, and all 4 Rust modules (`runtime_discover.rs`, `runtime_jobs.rs`, `runtime_packages.rs`, `runtime_verify.rs`).
 
 - [x] Local + system install methods per runtime
 - [x] Real streaming progress (BufReader live)
@@ -660,7 +660,7 @@ Runtimes lazy-load/caching, kernel grid, log multiplexing, and navigation polish
 ✅  Phase 3  — SSH
 ✅  Phase 4  — Git Environment Manager
 ✅  Phase 5  — Monitor
-✅  Phase 6  — Runtimes (17 languages)
+📋  Phase 6  — Runtimes (7 languages; R1–R3 simplification — see §14)
 ✅  Phase 1  — Dashboard
 ✅  SPRINT   — Tests + Audit + Cross-distro + v0.2.0-alpha (shipped)
 ✅  Phase 13 — Advanced CI & Environment Hardening

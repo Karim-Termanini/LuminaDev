@@ -1,5 +1,3 @@
-use crate::host_exec::{cmd_timeout_short, exec_output_limit};
-
 /// First whitespace-delimited token (e.g. "v22.0.0 (LTS: Foo)" → "v22.0.0").
 pub(crate) fn lumina_first_version_token(raw: &str) -> Option<String> {
   let t = raw.trim();
@@ -37,67 +35,6 @@ pub(crate) fn lumina_dotnet_install_channel(version: &str) -> String {
   } else {
     s.to_string()
   }
-}
-
-/// Best-effort list of distro package versions (Fedora/RHEL `dnf` only).
-pub(crate) async fn runtime_dnf_repoquery_versions(package: &str, limit: usize) -> Vec<String> {
-  let safe_pkg = package.replace('\'', "'\\''");
-  let cmd = format!(
-    "command -v dnf >/dev/null 2>&1 && dnf -q repoquery '{}' --qf '%{{version}}\\n' 2>/dev/null | sort -Vu | tail -n {}",
-    safe_pkg, limit
-  );
-  exec_output_limit("bash", &["-lc", &cmd], cmd_timeout_short())
-    .await
-    .unwrap_or_default()
-    .lines()
-    .map(|l| l.trim().to_string())
-    .filter(|l| !l.is_empty())
-    .collect()
-}
-
-/// Distro-aware package version discovery for system-install version pickers.
-pub(crate) async fn runtime_repoquery_versions(
-    pkg_mgr: &str,
-    package: &str,
-    limit: usize,
-) -> Vec<String> {
-    match pkg_mgr {
-        "dnf" => runtime_dnf_repoquery_versions(package, limit).await,
-        "apt" => {
-            let safe_pkg = package.replace('\'', "'\\''");
-            let cmd = format!(
-                "command -v apt-cache >/dev/null 2>&1 && apt-cache madison '{}' 2>/dev/null | awk '{{print $3}}' | sort -Vu | tail -n {}",
-                safe_pkg, limit
-            );
-            exec_output_limit("bash", &["-lc", &cmd], cmd_timeout_short())
-                .await
-                .unwrap_or_default()
-                .lines()
-                .map(|l| l.trim().to_string())
-                .filter(|l| !l.is_empty())
-                .collect()
-        }
-        "pacman" => {
-            let safe_pkg = package.replace('\'', "'\\''");
-            let cmd = format!(
-                "command -v pacman >/dev/null 2>&1 && pacman -Si '{}' 2>/dev/null | awk -F': ' '/^Version/ {{print $2; exit}}'",
-                safe_pkg
-            );
-            exec_output_limit("bash", &["-lc", &cmd], cmd_timeout_short())
-                .await
-                .ok()
-                .map(|v| {
-                    let v = v.trim().to_string();
-                    if v.is_empty() {
-                        vec![]
-                    } else {
-                        vec![v]
-                    }
-                })
-                .unwrap_or_default()
-        }
-        _ => vec![],
-    }
 }
 
 /// Compare a UI-selected version token against a one-line tool probe.
@@ -138,42 +75,6 @@ pub(crate) fn lumina_rust_channel_token(raw: &str) -> Option<String> {
     "nightly" | "beta" | "stable" => Some(t),
     _ => None,
   }
-}
-
-/// Dart SDK zip/deb: `stable`, `beta/3.5.0`, `dev` → (channel, release segment for archive URL).
-pub(crate) fn lumina_dart_channel_release(version: &str) -> (&'static str, String) {
-  let v = version.trim();
-  if let Some((left, right)) = v.split_once('/') {
-    let ch = match left.trim().to_lowercase().as_str() {
-      "dev" => "dev",
-      "beta" => "beta",
-      "stable" => "stable",
-      _ => "stable",
-    };
-    let rel = lumina_dart_release_segment(right);
-    return (ch, rel);
-  }
-  let tl = v.to_lowercase();
-  let ch = match tl.as_str() {
-    "dev" => "dev",
-    "beta" => "beta",
-    _ => "stable",
-  };
-  (ch, lumina_dart_release_segment(v))
-}
-
-fn lumina_dart_release_segment(raw: &str) -> String {
-  if let Some(tok) = lumina_first_version_token(raw) {
-    let t = tok.trim().trim_start_matches('v');
-    if !t.is_empty() && t.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false) {
-      return t.to_string();
-    }
-  }
-  let s = raw.trim().trim_start_matches('v');
-  if !s.is_empty() && s.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false) {
-    return s.to_string();
-  }
-  "latest".into()
 }
 
 /// Lines from `bash -lc` while sourcing profiles (before the probe) — do not show as runtime version.

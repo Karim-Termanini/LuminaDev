@@ -11,21 +11,19 @@ use crate::runtime_packages::{
     runtime_preview_removable_deps, runtime_read_host_distro, runtime_system_package_available,
     runtime_system_packages,
 };
-use crate::runtime_versioning::{
-    lumina_probe_meaningful_line, runtime_dnf_repoquery_versions, runtime_repoquery_versions,
-};
+use crate::runtime_versioning::lumina_probe_meaningful_line;
 use crate::runtime_paths::{
     java_home_from_binary, lumina_version_dir_from_path, nvm_version_dir_from_path,
-    path_home_before_marker, path_segment_after_marker, validate_java_binary_path,
+    path_segment_after_marker, validate_java_binary_path,
 };
 use crate::{
     active_binary_script, list_installed_versions_script, list_mise_runtime_script,
     parse_version_path_lines, status_probe_script,
 };
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 // Must match `RUNTIME_SYSTEM_ONLY_IDS` in packages/shared/src/runtimes.ts
-const SYSTEM_ONLY_RUNTIMES: &[&str] = &["lisp", "c_cpp", "matlab", "php"];
+const SYSTEM_ONLY_RUNTIMES: &[&str] = &["php"];
 
 fn runtime_supports_local_install(runtime_id: &str) -> bool {
     !SYSTEM_ONLY_RUNTIMES.contains(&runtime_id)
@@ -137,42 +135,6 @@ pub(crate) async fn runtime_job_execute(
              && ln -sfn \"$GO_VER_DIR\" \"$GO_BASE/current\" \
              && grep -q lumina-go \"$HOME/.bashrc\" \
              || echo 'export PATH=\"$HOME/.local/share/lumina/go/current/bin:$PATH\"  # lumina-go' >> \"$HOME/.bashrc\"",
-            v = v
-          );
-                runtime_bash_user_step(
-                    &cmd,
-                    &mut logs,
-                    Some(app.clone()),
-                    Some(job_id.clone()),
-                    5,
-                    90,
-                )
-                .await
-                .map_err(|e| e.to_string())
-            } else if runtime_id == "zig" && method == "local" {
-                let mut v = lumina_first_version_token(&version).unwrap_or_else(|| "0.13.0".into());
-                v = v.trim().trim_start_matches('v').trim().to_string();
-                if v.is_empty() {
-                    v = "0.13.0".into();
-                }
-                let cmd = format!(
-            "set -e \
-             && ZIG_BASE=\"$HOME/.local/share/lumina/zig\" \
-             && ZIG_VER_DIR=\"$ZIG_BASE/{v}\" \
-             && mkdir -p \"$ZIG_BASE\" \
-             && ARCH_RAW=\"$(uname -m 2>/dev/null || echo x86_64)\" \
-             && case \"$ARCH_RAW\" in aarch64|arm64) ZIG_ARCH=\"aarch64\" ;; *) ZIG_ARCH=\"x86_64\" ;; esac \
-             && if [ ! -x \"$ZIG_VER_DIR/zig\" ]; then \
-                  TMP=\"/tmp/lumina-zig-{v}-$ZIG_ARCH.tar.xz\"; \
-                  curl -fsSL \"https://ziglang.org/download/{v}/zig-linux-$ZIG_ARCH-{v}.tar.xz\" -o \"$TMP\"; \
-                  rm -rf \"$ZIG_VER_DIR\"; \
-                  mkdir -p \"$ZIG_VER_DIR\"; \
-                  tar -xf \"$TMP\" -C \"$ZIG_VER_DIR\" --strip-components=1; \
-                  rm -f \"$TMP\"; \
-                fi \
-             && ln -sfn \"$ZIG_VER_DIR\" \"$ZIG_BASE/current\" \
-             && grep -q lumina-zig \"$HOME/.bashrc\" \
-             || echo 'export PATH=\"$HOME/.local/share/lumina/zig/current:$PATH\"  # lumina-zig' >> \"$HOME/.bashrc\"",
             v = v
           );
                 runtime_bash_user_step(
@@ -368,159 +330,15 @@ pub(crate) async fn runtime_job_execute(
                 )
                 .await
                 .map_err(|e| e.to_string())
-            } else if runtime_id == "bun" {
-                let ver = lumina_first_version_token(&version).unwrap_or_default();
-                let ver = ver.trim().trim_start_matches('v').to_string();
-                if ver.is_empty() {
-                    logs.push("Installing Bun via official installer (latest)…".into());
-                    runtime_bash_user_step(
-                        "curl -fsSL https://bun.sh/install | bash",
-                        &mut logs,
-                        Some(app.clone()),
-                        Some(job_id.clone()),
-                        5,
-                        90,
-                    )
-                    .await
-                    .map_err(|e| e.to_string())
-                } else {
-                    logs.push(format!("Installing Bun {} via official installer…", ver));
-                    let cmd = format!(
-                        "curl -fsSL https://bun.sh/install | bash -s \"bun-v{}\"",
-                        ver.replace(['"', '\''], "")
-                    );
-                    runtime_bash_user_step(
-                        &cmd,
-                        &mut logs,
-                        Some(app.clone()),
-                        Some(job_id.clone()),
-                        5,
-                        90,
-                    )
-                    .await
-                    .map_err(|e| e.to_string())
-                }
-            } else if runtime_id == "dart" {
-                let (channel, release) = lumina_dart_channel_release(&version);
-                logs.push(format!(
-                    "Installing Dart SDK (channel={}, release={})…",
-                    channel, release
-                ));
-                if pkg_mgr == "apt" {
-                    let cmd = format!(
-                        "curl -fsSL https://dl-ssl.google.com/linux/linux_signing_key.pub \
-                 | gpg --dearmor -o /usr/share/keyrings/dart.gpg 2>/dev/null && \
-               echo 'deb [signed-by=/usr/share/keyrings/dart.gpg] \
-                 https://storage.googleapis.com/download.dartlang.org/linux/debian {channel} main' \
-                 > /etc/apt/sources.list.d/dart_{channel}.list && \
-               apt-get update -qq && apt-get install -y dart",
-                        channel = channel
-                    );
-                    sudo_bash_install_step(
-                        &cmd,
-                        password_opt,
-                        &mut logs,
-                        Some(app.clone()),
-                        Some(job_id.clone()),
-                        20,
-                        70,
-                    )
-                    .await
-                    .map_err(|e| format!("[RUNTIME_INSTALL_FAILED] {}", e))
-                } else {
-                    let rel_safe = release.replace('\'', "'\\''");
-                    let cmd = format!(
-                        r#"set -e
-                 ARCH_RAW="$(uname -m 2>/dev/null || echo x86_64)"
-                 case "$ARCH_RAW" in aarch64|arm64) DARCH="arm64" ;; *) DARCH="x64" ;; esac
-                 curl -fsSL "https://storage.googleapis.com/dart-archive/channels/{channel}/release/{rel}/sdk/dartsdk-linux-$DARCH-release.zip" -o /tmp/dart-sdk.zip
-                 mkdir -p "$HOME/.dart"
-                 unzip -q -o /tmp/dart-sdk.zip -d "$HOME/.dart"
-                 rm /tmp/dart-sdk.zip
-                 grep -q 'dart-sdk' "$HOME/.bashrc" || echo 'export PATH="$HOME/.dart/dart-sdk/bin:$PATH"' >> "$HOME/.bashrc""#,
-                        channel = channel,
-                        rel = rel_safe
-                    );
-                    runtime_bash_user_step(
-                        &cmd,
-                        &mut logs,
-                        Some(app.clone()),
-                        Some(job_id.clone()),
-                        5,
-                        90,
-                    )
-                    .await
-                    .map_err(|e| e.to_string())
-                }
-            } else if runtime_id == "flutter" {
-                let has_snap = exec_output_limit("which", &["snap"], cmd_timeout_short())
-                    .await
-                    .is_ok();
-                if has_snap {
-                    logs.push("Installing Flutter via snap…".into());
-                    sudo_bash_install_step(
-                        "snap install flutter --classic",
-                        password_opt,
-                        &mut logs,
-                        Some(app.clone()),
-                        Some(job_id.clone()),
-                        10,
-                        85,
-                    )
-                    .await
-                    .map_err(|e| format!("[RUNTIME_INSTALL_FAILED] {}", e))
-                } else {
-                    let flutter_ch = match version.trim().to_lowercase().as_str() {
-                        "beta" => "beta",
-                        "master" => "master",
-                        _ => "stable",
-                    };
-                    logs.push(format!(
-              "snap not found — downloading Flutter SDK ({}) tarball into ~/.flutter-sdk…",
-              flutter_ch
-            ));
-                    let cmd = format!(
-                        r#"
-              FLUTTER_JSON=$(curl -fsSL https://storage.googleapis.com/flutter_infra_release/releases/releases_linux.json 2>/dev/null)
-              FLUTTER_ARCHIVE=$(echo "$FLUTTER_JSON" | python3 -c "import sys,json; d=json.load(sys.stdin); print(next(r['archive'] for r in d['releases'] if r['channel']=='{ch}'))" 2>/dev/null)
-              if [ -z "$FLUTTER_ARCHIVE" ]; then
-                echo "Could not resolve latest Flutter release URL" >&2; exit 1
-              fi
-              curl -fsSL "https://storage.googleapis.com/flutter_infra_release/releases/$FLUTTER_ARCHIVE" -o /tmp/flutter.tar.xz
-              mkdir -p "$HOME/.flutter-sdk"
-              tar xf /tmp/flutter.tar.xz -C "$HOME/.flutter-sdk" --strip-components=1
-              rm /tmp/flutter.tar.xz
-              grep -q 'flutter-sdk' "$HOME/.bashrc" || echo 'export PATH="$HOME/.flutter-sdk/bin:$PATH"' >> "$HOME/.bashrc"
-            "#,
-                        ch = flutter_ch
-                    );
-                    runtime_bash_user_step(
-                        &cmd,
-                        &mut logs,
-                        Some(app.clone()),
-                        Some(job_id.clone()),
-                        5,
-                        90,
-                    )
-                    .await
-                    .map_err(|e| e.to_string())
-                }
-            } else if (runtime_id == "php"
-                || runtime_id == "ruby"
-                || runtime_id == "lua"
-                || runtime_id == "r")
-                && method == "local"
-            {
-                if runtime_id == "php" {
-                    // PHP source compilation is too slow and fragile on non-Debian systems.
-                    // Always install via system package manager regardless of "local" track selection.
-                    effective_verify_method = "system".to_string();
-                    logs.push(
-                        "Installing PHP via system package manager (source compile not supported)…"
-                            .into(),
-                    );
-                    // Elevated via sudo_bash_install_step below — no sudo needed inline.
-                    let cmd = r#"
+            } else if runtime_id == "php" && method == "local" {
+                // PHP source compilation is too slow and fragile on non-Debian systems.
+                // Always install via system package manager regardless of "local" track selection.
+                effective_verify_method = "system".to_string();
+                logs.push(
+                    "Installing PHP via system package manager (source compile not supported)…"
+                        .into(),
+                );
+                let cmd = r#"
 if command -v dnf >/dev/null 2>&1; then
   dnf install -y php-cli php-common php-mbstring php-xml php-json php-curl php-zip 2>&1
 elif command -v apt-get >/dev/null 2>&1; then
@@ -530,148 +348,17 @@ elif command -v pacman >/dev/null 2>&1; then
 else
   echo "[RUNTIME_INSTALL_FAILED] No supported package manager found" >&2; exit 1
 fi"#;
-                    sudo_bash_install_step(
-                        cmd,
-                        password_opt,
-                        &mut logs,
-                        Some(app.clone()),
-                        Some(job_id.clone()),
-                        10,
-                        85,
-                    )
-                    .await
-                    .map_err(|e| format!("[RUNTIME_INSTALL_FAILED] {}", e))
-                } else {
-                    let ver_guess = lumina_first_version_token(&version)
-                        .unwrap_or_else(|| version.trim().to_string())
-                        .trim()
-                        .trim_start_matches('v')
-                        .to_string();
-                    if ver_guess.is_empty() {
-                        Err(
-              "[RUNTIME_INSTALL_FAILED] Pick a concrete version for isolated install (examples: Ruby 3.3.5, Lua 5.4)."
-                .to_string(),
-            )
-                    } else {
-                        let spec = if ver_guess.contains('@') {
-                            ver_guess.clone()
-                        } else {
-                            format!("{}@{}", runtime_id, ver_guess)
-                        };
-                        let safe_spec = spec.replace('\'', "'\\''").replace('"', "");
-                        logs.push(format!(
-              "Installing {} via mise (https://mise.jdx.dev) — downloads prebuilt binaries when available…",
-              spec
-            ));
-                        let build_deps_cmd = if runtime_id == "lua" {
-                            r#"
-              if command -v dnf >/dev/null 2>&1; then
-                sudo dnf install -y readline-devel 2>/dev/null || true
-              elif command -v apt-get >/dev/null 2>&1; then
-                sudo apt-get install -y libreadline-dev 2>/dev/null || true
-              elif command -v pacman >/dev/null 2>&1; then
-                sudo pacman -S --needed --noconfirm readline 2>/dev/null || true
-              fi"#
-                        } else {
-                            ""
-                        };
-                        if !build_deps_cmd.is_empty() {
-                            logs.push(format!(
-                                "Pre-installing build dependencies for {}…",
-                                runtime_id
-                            ));
-                            let _ = sudo_bash_install_step(
-                                build_deps_cmd,
-                                password_opt,
-                                &mut logs,
-                                Some(app.clone()),
-                                Some(job_id.clone()),
-                                5,
-                                20,
-                            )
-                            .await;
-                        }
-                        let cmd = format!(
-                            r#"set -e
-                 export PATH="$HOME/.local/bin:$PATH"
-                 if [ ! -x "$HOME/.local/bin/mise" ]; then
-                   curl -fsSL https://mise.run | sh
-                 fi
-                 export PATH="$HOME/.local/bin:$PATH"
-                 "$HOME/.local/bin/mise" install '{spec}'
-                 "$HOME/.local/bin/mise" use -g '{spec}'
-                 if ! grep -q 'mise activate' "$HOME/.bashrc" 2>/dev/null; then
-                   echo 'eval "$($HOME/.local/bin/mise activate bash)"' >> "$HOME/.bashrc"
-                 fi"#,
-                            spec = safe_spec
-                        );
-                        runtime_bash_user_step(
-                            &cmd,
-                            &mut logs,
-                            Some(app.clone()),
-                            Some(job_id.clone()),
-                            5,
-                            90,
-                        )
-                        .await
-                        .map_err(|e| e.to_string())
-                    }
-                }
-            } else if runtime_id == "julia" {
-                let want = lumina_first_version_token(&version).unwrap_or_default();
-                let want = want.trim().to_string();
-                logs.push("Installing Julia via juliaup…".into());
-                let cmd = if want.is_empty() {
-                    r#"set -e
-               export PATH="$HOME/.juliaup/bin:$PATH"
-               if ! command -v juliaup >/dev/null 2>&1 && [ ! -x "$HOME/.juliaup/bin/juliaup" ]; then
-                 curl -fsSL https://install.julialang.org | sh -s -- -y
-               fi"#
-              .to_string()
-                } else {
-                    let safe = want.replace('\'', "'\\''").replace('"', "");
-                    format!(
-                        r#"set -e
-                 export PATH="$HOME/.juliaup/bin:$PATH"
-                 if ! command -v juliaup >/dev/null 2>&1 && [ ! -x "$HOME/.juliaup/bin/juliaup" ]; then
-                   curl -fsSL https://install.julialang.org | sh -s -- -y
-                   export PATH="$HOME/.juliaup/bin:$PATH"
-                 fi
-                 export PATH="$HOME/.juliaup/bin:$PATH"
-                 JUP="$HOME/.juliaup/bin/juliaup"
-                 if [ ! -x "$JUP" ]; then
-                   echo "[RUNTIME_INSTALL_FAILED] juliaup not found after install" >&2
-                   exit 1
-                 fi
-                 "$JUP" status >/dev/null 2>&1 || true
-                 juliaup_add() {{
-                   if "$JUP" add "$1" 2>/dev/null; then return 0; fi
-                   return 1
-                 }}
-                 if ! juliaup_add '{want}' && ! juliaup_add "release~{want}"; then
-                   echo "[RUNTIME_INSTALL_FAILED] juliaup add failed for {want} (tried bare name and release~…)" >&2
-                   "$JUP" add '{want}'
-                 fi
-                 juliaup_def() {{
-                   if "$JUP" default "$1" 2>/dev/null; then return 0; fi
-                   return 1
-                 }}
-                 if ! juliaup_def '{want}' && ! juliaup_def "release~{want}"; then
-                   "$JUP" default '{want}'
-                 fi"#,
-                        want = safe
-                    )
-                };
-                runtime_bash_user_step(
-                    &cmd,
+                sudo_bash_install_step(
+                    cmd,
+                    password_opt,
                     &mut logs,
                     Some(app.clone()),
                     Some(job_id.clone()),
-                    5,
-                    90,
+                    10,
+                    85,
                 )
                 .await
-                .map_err(|e| e.to_string())
+                .map_err(|e| format!("[RUNTIME_INSTALL_FAILED] {}", e))
             } else {
                 let pkgs = runtime_system_packages(&runtime_id, pkg_mgr);
                 if method.trim() == "local"
@@ -901,44 +588,6 @@ fi"#;
                     }
                 })
                 .map_err(|e| format!("[RUNTIME_UNINSTALL_FAILED] {}", e.trim()))
-            } else if runtime_id == "bun" {
-                logs.push("Removing Bun (~/.bun)…".into());
-                exec_output_limit("bash", &["-lc", "rm -rf \"$HOME/.bun\" && sed -i '/BUN_INSTALL/d;/.bun\\/bin/d' \"$HOME/.bashrc\" \"$HOME/.zshrc\" 2>/dev/null || true"], cmd_timeout_install_step()).await
-            .map(|out| { if !out.is_empty() { logs.push(out); } })
-            .map_err(|e| format!("[RUNTIME_UNINSTALL_FAILED] {}", e.trim()))
-            } else if runtime_id == "flutter" {
-                logs.push("Removing Flutter snap…".into());
-                sudo_bash_install_step(
-                    "snap remove flutter",
-                    password_opt,
-                    &mut logs,
-                    Some(app.clone()),
-                    Some(job_id.clone()),
-                    10,
-                    85,
-                )
-                .await
-                .map_err(|e| format!("[RUNTIME_UNINSTALL_FAILED] {}", e))
-            } else if runtime_id == "julia" {
-                // juliaup self uninstall doesn't accept -y; pipe stdin to confirm,
-                // then fall back to manual directory removal if juliaup isn't found.
-                let cmd = r#"
-            if command -v juliaup > /dev/null 2>&1 || [ -x "$HOME/.juliaup/bin/juliaup" ]; then
-              JULIAUP="$( command -v juliaup 2>/dev/null || echo "$HOME/.juliaup/bin/juliaup" )"
-              echo y | "$JULIAUP" self uninstall 2>/dev/null || true
-            fi
-            rm -rf "$HOME/.juliaup" "$HOME/.julia" 2>/dev/null || true
-            sed -i '/juliaup/d;/\.julia/d' "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.profile" "$HOME/.bash_profile" 2>/dev/null || true
-          "#;
-                logs.push("Removing Julia via juliaup and cleaning home directories…".into());
-                exec_output_limit("bash", &["-lc", cmd], cmd_timeout_install_step())
-                    .await
-                    .map(|out| {
-                        if !out.is_empty() {
-                            logs.push(out);
-                        }
-                    })
-                    .map_err(|e| format!("[RUNTIME_UNINSTALL_FAILED] {}", e.trim()))
             } else {
                 let pkgs = runtime_system_packages(&runtime_id, pkg_mgr);
                 if pkgs.is_empty() {
@@ -1217,34 +866,6 @@ async fn runtime_set_java_active(home: &Path, path_raw: &str) -> Value {
     }
 }
 
-async fn runtime_set_julia_active(body: &Value, path: &Path) -> Value {
-    if !path.to_string_lossy().contains("/.juliaup/bin/julia") {
-        return json!({ "ok": false, "error": "[RUNTIME_SET_ACTIVE_FAILED] Unsupported Julia path (expected ~/.juliaup/bin/julia)." });
-    }
-    let channel = body
-        .get("version")
-        .and_then(|v| v.as_str())
-        .unwrap_or_default()
-        .trim()
-        .to_string();
-    if channel.is_empty() {
-        return json!({ "ok": false, "error": "[RUNTIME_SET_ACTIVE_FAILED] Julia channel name required (pass version)." });
-    }
-    let safe_channel = channel.replace('\'', "'\\''");
-    let cmd = format!(
-        "export PATH=\"$HOME/.juliaup/bin:$PATH\" \
-         && juliaup default '{}'",
-        safe_channel
-    );
-    match exec_output_limit("bash", &["-lc", &cmd], cmd_timeout_short()).await {
-        Ok(_) => json!({ "ok": true }),
-        Err(e) => json!({
-            "ok": false,
-            "error": format!("[RUNTIME_SET_ACTIVE_FAILED] {}", e.trim())
-        }),
-    }
-}
-
 pub(crate) async fn runtime_set_active_invoke(body: &Value) -> Value {
     // ...
 
@@ -1275,10 +896,6 @@ pub(crate) async fn runtime_set_active_invoke(body: &Value) -> Value {
         Ok(p) => p,
         Err(e) => return json!({ "ok": false, "error": e }),
     };
-
-    if runtime_id == "julia" {
-        return runtime_set_julia_active(body, &path).await;
-    }
 
     let safe_path = path.to_string_lossy().replace('\'', "'\\''");
 
@@ -1334,18 +951,6 @@ pub(crate) async fn runtime_set_active_invoke(body: &Value) -> Value {
             let link = home.join(".local/share/lumina/go/current");
             lumina_replace_symlink(&link, ver_dir)
         }
-        "zig" => {
-            if path.file_name() != Some(OsStr::new("zig"))
-                || !path.to_string_lossy().contains("/.local/share/lumina/zig/")
-            {
-                return json!({ "ok": false, "error": "[RUNTIME_SET_ACTIVE_FAILED] Unsupported Zig path (expected ~/.local/share/lumina/zig/<ver>/zig)." });
-            }
-            let Some(zig_dir) = path.parent() else {
-                return json!({ "ok": false, "error": "[RUNTIME_SET_ACTIVE_FAILED] Could not resolve Zig install directory." });
-            };
-            let link = home.join(".local/share/lumina/zig/current");
-            lumina_replace_symlink(&link, zig_dir)
-        }
         "rust" => {
             if !path.ends_with(Path::new("bin/rustc"))
                 || !path.to_string_lossy().contains("/.rustup/toolchains/")
@@ -1375,7 +980,7 @@ pub(crate) async fn runtime_set_active_invoke(body: &Value) -> Value {
                 .map(|_| ())
                 .map_err(|e| format!("[RUNTIME_SET_ACTIVE_FAILED] {}", e.trim()))
         }
-        "php" | "ruby" | "lua" | "r" => {
+        "php" => {
             let version = path
                 .parent()
                 .and_then(|p| p.parent())
@@ -1386,7 +991,7 @@ pub(crate) async fn runtime_set_active_invoke(body: &Value) -> Value {
             if version.is_empty() {
                 return json!({ "ok": false, "error": "[RUNTIME_SET_ACTIVE_FAILED] Could not resolve mise version from path." });
             }
-            let safe_spec = format!("{}@{}", runtime_id, version).replace('\'', "'\\''");
+            let safe_spec = format!("php@{}", version).replace('\'', "'\\''");
             let cmd = format!(
                 "export PATH=\"$HOME/.local/bin:$PATH\" \
          && [ -x \"$HOME/.local/bin/mise\" ] \
@@ -1519,18 +1124,7 @@ pub(crate) async fn handle_runtime_status() -> Value {
         ("go", "Go"),
         ("rust", "Rust"),
         ("php", "PHP"),
-        ("ruby", "Ruby"),
         ("dotnet", ".NET"),
-        ("bun", "Bun"),
-        ("zig", "Zig"),
-        ("c_cpp", "C/C++"),
-        ("matlab", "Octave"),
-        ("dart", "Dart"),
-        ("flutter", "Flutter"),
-        ("julia", "Julia"),
-        ("lua", "Lua"),
-        ("lisp", "SBCL"),
-        ("r", "R"),
     ];
 
     let mut tasks: Vec<(String, String, _)> = Vec::new();
@@ -1650,31 +1244,6 @@ async fn collect_rust_installed_versions(versions: &mut Vec<Value>) {
     }
 }
 
-async fn collect_julia_installed_versions(versions: &mut Vec<Value>) {
-    if let Ok(raw) = exec_output_limit(
-        "bash",
-        &["-lc", "export PATH=\"$HOME/.juliaup/bin:$PATH\"; juliaup status 2>/dev/null | tail -n +3 || true"],
-        cmd_timeout_short(),
-    )
-    .await
-    {
-        let julia_bin = format!(
-            "{}/.juliaup/bin/julia",
-            std::env::var("HOME").unwrap_or_default()
-        );
-        for line in raw.lines() {
-            if let Some((channel, label, is_default)) = parse_juliaup_status_line(line) {
-                versions.push(json!({
-                    "version": channel,
-                    "path": julia_bin,
-                    "label": label,
-                    "isDefault": is_default,
-                }));
-            }
-        }
-    }
-}
-
 pub(crate) async fn handle_runtime_installed_versions(body: &Value) -> Value {
     let runtime_id = body
         .get("runtimeId")
@@ -1689,27 +1258,8 @@ pub(crate) async fn handle_runtime_installed_versions(body: &Value) -> Value {
 
     match runtime_id {
         "rust" => collect_rust_installed_versions(&mut versions).await,
-        "julia" => collect_julia_installed_versions(&mut versions).await,
-        "bun" => {
-            let bun_bin = format!("{}/.bun/bin/bun", std::env::var("HOME").unwrap_or_default());
-            if std::path::Path::new(&bun_bin).exists() {
-                versions.push(json!({ "version": "installed", "path": bun_bin, "isDefault": true }));
-            }
-        }
         "php" => {
             collect_discovered_tab_versions(list_mise_runtime_script("php", "php", "php"), &mut versions)
-                .await;
-        }
-        "ruby" => {
-            collect_discovered_tab_versions(list_mise_runtime_script("ruby", "ruby", "ruby"), &mut versions)
-                .await;
-        }
-        "lua" => {
-            collect_discovered_tab_versions(list_mise_runtime_script("lua", "lua", "lua"), &mut versions)
-                .await;
-        }
-        "r" => {
-            collect_discovered_tab_versions(list_mise_runtime_script("r", "r", "R"), &mut versions)
                 .await;
         }
         id => {
@@ -1723,7 +1273,7 @@ pub(crate) async fn handle_runtime_installed_versions(body: &Value) -> Value {
         sort_java_developer_versions(&mut versions);
     }
 
-    if runtime_id != "julia" && runtime_id != "rust" {
+    if runtime_id != "rust" {
         if let Some(active) = runtime_active_binary_path(runtime_id).await {
             mark_default_installed_versions(&mut versions, &active);
         }
@@ -1752,30 +1302,10 @@ pub(crate) async fn handle_runtime_get_versions(body: &Value) -> Value {
         let (_distro, pkg_mgr_owned) = runtime_read_host_distro();
         let pkg_mgr = pkg_mgr_owned.as_str();
         match runtime_id {
-            "c_cpp" => {
-                let discovered = runtime_repoquery_versions(pkg_mgr, "gcc", 25).await;
-                if discovered.is_empty() {
-                    versions.push("system (repo default)".into());
-                } else {
-                    for v in discovered {
-                        versions.push(format!("gcc {}", v));
-                    }
-                }
-            }
-            "matlab" => {
-                let discovered = runtime_repoquery_versions(pkg_mgr, "octave", 20).await;
-                if discovered.is_empty() {
-                    versions.push("system (repo default)".into());
-                } else {
-                    for v in discovered {
-                        versions.push(format!("octave {}", v));
-                    }
-                }
-            }
-            "node" | "python" | "go" | "php" | "ruby" | "zig" | "lua" | "lisp" | "r" => {
+            "node" | "python" | "go" | "php" => {
                 versions.push("system (repo default)".into());
             }
-            "bun" | "dart" | "flutter" | "julia" | "rust" => {
+            "rust" => {
                 versions.push("local installer (recommended)".into());
             }
             "java" => {
@@ -1922,142 +1452,12 @@ pub(crate) async fn handle_runtime_get_versions(body: &Value) -> Value {
                 versions.extend(["8.3".into(), "8.2".into(), "8.1".into(), "8.0".into()]);
             }
         }
-        "ruby" => {
-            if let Ok(raw) = exec_output_limit(
-                "curl",
-                &["-fsSL", "https://endoflife.date/api/ruby.json"],
-                cmd_timeout_short(),
-            )
-            .await
-            {
-                if let Ok(arr) = serde_json::from_str::<Value>(&raw) {
-                    if let Some(list) = arr.as_array() {
-                        for item in list.iter().take(10) {
-                            if let Some(v) = item.get("latest").and_then(|x| x.as_str()) {
-                                versions.push(v.to_string());
-                            }
-                        }
-                    }
-                }
-            }
-            if versions.is_empty() {
-                versions.extend([
-                    "3.3.0".into(),
-                    "3.2.3".into(),
-                    "3.1.4".into(),
-                    "3.0.6".into(),
-                ]);
-            }
-        }
         "dotnet" => versions.extend([
             "9.0".into(),
             "8.0 (LTS)".into(),
             "7.0".into(),
             "6.0 (LTS)".into(),
         ]),
-        "bun" => {
-            if let Ok(raw) = exec_output_limit(
-                "curl",
-                &[
-                    "-fsSL",
-                    "https://api.github.com/repos/oven-sh/bun/releases?per_page=20",
-                ],
-                cmd_timeout_short(),
-            )
-            .await
-            {
-                if let Ok(arr) = serde_json::from_str::<Value>(&raw) {
-                    if let Some(list) = arr.as_array() {
-                        for item in list.iter().take(15) {
-                            if let Some(v) = item.get("tag_name").and_then(|x| x.as_str()) {
-                                versions.push(v.trim_start_matches("bun-v").to_string());
-                            }
-                        }
-                    }
-                }
-            }
-            if versions.is_empty() {
-                versions.extend([
-                    "1.2.0".into(),
-                    "1.1.45".into(),
-                    "1.1.44".into(),
-                    "1.1.43".into(),
-                ]);
-            }
-        }
-        "zig" => {
-            if let Ok(raw) = exec_output_limit(
-                "curl",
-                &["-fsSL", "https://ziglang.org/download/index.json"],
-                cmd_timeout_short(),
-            )
-            .await
-            {
-                if let Ok(obj) = serde_json::from_str::<Value>(&raw) {
-                    if let Some(map) = obj.as_object() {
-                        for key in map.keys().take(10) {
-                            if key != "master" {
-                                versions.push(key.clone());
-                            }
-                        }
-                    }
-                }
-            }
-            if versions.is_empty() {
-                versions.extend(["0.14.0".into(), "0.13.0".into(), "0.12.0".into()]);
-            }
-        }
-        "julia" => {
-            if let Ok(raw) = exec_output_limit(
-                "curl",
-                &["-fsSL", "https://endoflife.date/api/julia.json"],
-                cmd_timeout_short(),
-            )
-            .await
-            {
-                if let Ok(arr) = serde_json::from_str::<Value>(&raw) {
-                    if let Some(list) = arr.as_array() {
-                        for item in list.iter().take(10) {
-                            if let Some(v) = item.get("latest").and_then(|x| x.as_str()) {
-                                versions.push(v.to_string());
-                            }
-                        }
-                    }
-                }
-            }
-            if versions.is_empty() {
-                versions.extend(["1.11.5".into(), "1.10.9".into(), "1.9.4".into()]);
-            }
-        }
-        "c_cpp" => {
-            let discovered = runtime_dnf_repoquery_versions("gcc", 30).await;
-            if discovered.is_empty() {
-                versions.extend(["system (repo default)".into()]);
-            } else {
-                for v in discovered {
-                    versions.push(format!("gcc {}", v));
-                }
-            }
-        }
-        "matlab" => {
-            let discovered = runtime_dnf_repoquery_versions("octave", 20).await;
-            if discovered.is_empty() {
-                versions.extend(["system (repo default)".into()]);
-            } else {
-                for v in discovered {
-                    versions.push(format!("octave {}", v));
-                }
-            }
-        }
-        "dart" => {
-            versions.extend(["stable".into(), "beta".into(), "dev".into()]);
-            versions.push("beta/<semver> (zip)".into());
-            versions.push("stable/<semver> (zip)".into());
-        }
-        "flutter" => versions.extend(["stable".into(), "beta".into(), "master".into()]),
-        "lua" => versions.extend(["5.4".into(), "5.3".into()]),
-        "lisp" => versions.extend(["system (sbcl)".into()]),
-        "r" => versions.extend(["4.4".into(), "4.3".into(), "4.2".into()]),
         _ => {}
     }
     if versions.is_empty() {
@@ -2078,18 +1478,7 @@ pub(crate) async fn handle_runtime_check_deps(body: &Value) -> Value {
         "rust"    => vec![("rustc", "rustc --version"), ("cargo", "cargo --version"), ("rustup", "rustup --version")],
         "java"    => vec![("java", "java -version 2>&1"), ("javac", "javac -version 2>&1")],
         "php"     => vec![("php", "command -v php >/dev/null 2>&1 && php --version 2>&1 | head -1")],
-        "ruby"    => vec![("ruby", "export PATH=\"$HOME/.local/bin:$PATH\"; ([ -x \"$HOME/.local/bin/mise\" ] && eval \"$($HOME/.local/bin/mise activate bash)\" >/dev/null 2>&1 || true); ruby --version"), ("gem", "gem --version")],
         "dotnet"  => vec![("dotnet", "dotnet --version 2>/dev/null || ~/.dotnet/dotnet --version 2>/dev/null")],
-        "bun"     => vec![("bun", "bun --version 2>/dev/null || ~/.bun/bin/bun --version 2>/dev/null"), ("unzip", "unzip -v"), ("curl", "curl --version")],
-        "zig"     => vec![("zig", "zig version"), ("tar", "tar --version")],
-        "c_cpp"   => vec![("gcc", "gcc --version"), ("g++", "g++ --version"), ("make", "make --version"), ("cmake", "cmake --version"), ("gdb", "gdb --version")],
-        "matlab"  => vec![("octave", "octave --version")],
-        "dart"    => vec![("dart", "dart --version 2>&1 || $HOME/.dart/dart-sdk/bin/dart --version 2>&1"), ("curl", "curl --version")],
-        "flutter" => vec![("flutter", "flutter --version 2>&1 | head -1 || $HOME/.flutter-sdk/bin/flutter --version 2>&1 | head -1"), ("dart", "dart --version 2>&1 || $HOME/.dart/dart-sdk/bin/dart --version 2>&1"), ("git", "git --version")],
-        "julia"   => vec![("julia", "export PATH=\"$HOME/.juliaup/bin:$PATH\"; julia --version 2>/dev/null || ~/.juliaup/bin/julia --version 2>/dev/null"), ("curl", "curl --version")],
-        "lua"     => vec![("lua", "export PATH=\"$HOME/.local/bin:$PATH\"; ([ -x \"$HOME/.local/bin/mise\" ] && eval \"$($HOME/.local/bin/mise activate bash)\" >/dev/null 2>&1 || true); lua -v 2>&1 || lua5.4 -v 2>&1"), ("readline-devel (build dep)", "rpm -q readline-devel 2>/dev/null || dpkg -l libreadline-dev 2>/dev/null | grep -q '^ii' && echo ok || echo missing")],
-        "lisp"    => vec![("sbcl", "sbcl --version")],
-        "r"       => vec![("R", "export PATH=\"$HOME/.local/bin:$PATH\"; ([ -x \"$HOME/.local/bin/mise\" ] && eval \"$($HOME/.local/bin/mise activate bash)\" >/dev/null 2>&1 || true); R --version 2>&1 | head -1")],
         _         => vec![],
     };
     let mut deps: Vec<Value> = Vec::new();
@@ -2126,24 +1515,6 @@ pub(crate) async fn handle_runtime_uninstall_preview(body: &Value) -> Value {
             note = "Rust is managed by rustup. This will run 'rustup self uninstall'.".to_string();
             pkg_vals = vec![json!("rustup")];
         }
-        "bun" => {
-            note = "Bun was installed via the official installer. This will remove ~/.bun."
-                .to_string();
-            pkg_vals = vec![json!("~/.bun (directory)")];
-        }
-        "dart" => {
-            note = format!("Dart was installed via apt. Removal will use {}.", pkg_mgr);
-            pkg_vals = vec![json!("dart")];
-        }
-        "flutter" => {
-            note =
-                "Flutter was installed via snap. This will run 'snap remove flutter'.".to_string();
-            pkg_vals = vec![json!("flutter (snap)")];
-        }
-        "julia" => {
-            note = "Removes juliaup + cleans ~/.juliaup and ~/.julia. No sudo needed.".to_string();
-            pkg_vals = vec![json!("~/.juliaup"), json!("~/.julia")];
-        }
         "dotnet" if pkg_mgr == "pacman" => {
             note = "On Arch, .NET was installed via Microsoft's install script to ~/.dotnet. Remove that directory manually or run: rm -rf ~/.dotnet".to_string();
             pkg_vals = vec![json!("~/.dotnet (directory)")];
@@ -2163,7 +1534,7 @@ pub(crate) async fn handle_runtime_uninstall_preview(body: &Value) -> Value {
     if remove_mode == "runtime_and_deps" {
         if pkg_vals.is_empty() {
             note = format!("{} No additional package-managed cleanup candidates were detected for this runtime.", note);
-        } else if !matches!(runtime_id, "rust" | "bun" | "dart" | "flutter" | "julia") {
+        } else if runtime_id != "rust" {
             note = format!(
                 "{} Package manager autoremove may also clean unused dependencies on this distro.",
                 note
@@ -2176,7 +1547,7 @@ pub(crate) async fn handle_runtime_uninstall_preview(body: &Value) -> Value {
         }
     }
 
-    let uses_pkg_mgr = !matches!(runtime_id, "rust" | "bun" | "julia" | "dart" | "flutter");
+    let uses_pkg_mgr = runtime_id != "rust";
     let removable_deps: Vec<Value> =
         if remove_mode == "runtime_and_deps" && uses_pkg_mgr && !pkgs.is_empty() {
             let pkg_strs: Vec<&str> = pkgs.to_vec();
@@ -2308,55 +1679,8 @@ pub(crate) async fn handle_runtime_remove_version(body: &Value) -> Value {
         return json!({ "ok": false, "error": "[REMOVE_VERSION_FAILED] could not resolve version directory." });
     }
 
-    let home = std::env::var("HOME").unwrap_or_default();
-    if path_str.contains("/.dart/dart-sdk") {
-        let dart_sdk = path_home_before_marker(path_str, "/.dart/dart-sdk")
-            .map(|h| h.join(".dart").join("dart-sdk"))
-            .unwrap_or_else(|| PathBuf::from(format!("{}/.dart/dart-sdk", home)));
-        return match std::fs::remove_dir_all(&dart_sdk) {
-            Ok(_) => json!({ "ok": true }),
-            Err(e) => json!({
-                "ok": false,
-                "error": format!("[REMOVE_VERSION_FAILED] could not remove Dart SDK: {}", e)
-            }),
-        };
-    }
-
-    if path_str.contains("/.flutter-sdk") || path_str.contains("/.flutter/") {
-        let flutter_dir = if path_str.contains("/.flutter-sdk") {
-            path_home_before_marker(path_str, "/.flutter-sdk")
-                .map(|h| h.join(".flutter-sdk"))
-                .unwrap_or_else(|| PathBuf::from(format!("{}/.flutter-sdk", home)))
-        } else {
-            path_home_before_marker(path_str, "/.flutter/")
-                .map(|h| h.join(".flutter"))
-                .unwrap_or_else(|| PathBuf::from(format!("{}/.flutter", home)))
-        };
-        return match std::fs::remove_dir_all(&flutter_dir) {
-            Ok(_) => json!({ "ok": true }),
-            Err(e) => json!({
-                "ok": false,
-                "error": format!("[REMOVE_VERSION_FAILED] could not remove Flutter SDK: {}", e)
-            }),
-        };
-    }
-
-    if runtime_id == "julia" || path_str.contains("/.juliaup/") {
-        if version.is_empty() {
-            return json!({ "ok": false, "error": "[REMOVE_VERSION_FAILED] Julia channel name required." });
-        }
-        let cmd = format!(
-            r#"export PATH="$HOME/.juliaup/bin:$PATH"; juliaup remove '{}' 2>&1"#,
-            version.replace('\'', "'\\''")
-        );
-        return match exec_output_limit("bash", &["-lc", &cmd], cmd_timeout_short()).await {
-            Ok(_) => json!({ "ok": true }),
-            Err(e) => json!({ "ok": false, "error": format!("[REMOVE_VERSION_FAILED] juliaup remove: {}", e.trim()) }),
-        };
-    }
-
     let mise_marker = format!("/.local/share/mise/installs/{}/", runtime_id);
-    if path_str.contains(&mise_marker) || matches!(runtime_id, "php" | "ruby" | "lua" | "r") {
+    if path_str.contains(&mise_marker) || runtime_id == "php" {
         let mise_version =
             path_segment_after_marker(path_str, &mise_marker).unwrap_or_else(|| version.clone());
         if mise_version.is_empty() {
@@ -2373,7 +1697,7 @@ pub(crate) async fn handle_runtime_remove_version(body: &Value) -> Value {
         };
     }
 
-    json!({ "ok": false, "error": "[REMOVE_VERSION_FAILED] path is not in a recognised version manager directory (lumina / nvm / pyenv / rustup / juliaup / mise)." })
+    json!({ "ok": false, "error": "[REMOVE_VERSION_FAILED] path is not in a recognised version manager directory (lumina / nvm / pyenv / rustup / mise)." })
 }
 
 async fn runtime_active_binary_path(runtime_id: &str) -> Option<String> {
@@ -2506,33 +1830,6 @@ async fn probe_single_installed_version(runtime_id: &str) -> Option<Value> {
     }))
 }
 
-/// Parse one line of `juliaup status` (installed channels only).
-fn parse_juliaup_status_line(line: &str) -> Option<(String, String, bool)> {
-    let trimmed = line.trim();
-    if trimmed.is_empty() || trimmed.chars().all(|c| c == '-') {
-        return None;
-    }
-    if trimmed.contains("Default") && trimmed.contains("Channel") {
-        return None;
-    }
-    let parts: Vec<&str> = trimmed.split_whitespace().collect();
-    if parts.is_empty() {
-        return None;
-    }
-    let (start, is_default) = if parts[0] == "*" {
-        (1, true)
-    } else {
-        (0, false)
-    };
-    if parts.len() <= start + 1 {
-        return None;
-    }
-    let channel = parts[start].to_string();
-    let version_raw = parts[start + 1];
-    let label = version_raw.split('+').next().unwrap_or(version_raw).to_string();
-    Some((channel, label, is_default))
-}
-
 pub(crate) async fn handle_job_cancel(state: &AppState, body: &Value) -> Value {
     let id = body
         .get("id")
@@ -2550,13 +1847,11 @@ mod tests {
 
     #[test]
     fn system_only_runtimes_reject_local_install_policy() {
-        for id in ["lisp", "c_cpp", "matlab", "php"] {
-            assert!(
-                !runtime_supports_local_install(id),
-                "{id} must be system-only"
-            );
-        }
-        for id in ["node", "python", "java", "dotnet", "rust"] {
+        assert!(
+            !runtime_supports_local_install("php"),
+            "php must be system-only"
+        );
+        for id in ["node", "python", "java", "dotnet", "rust", "go"] {
             assert!(
                 runtime_supports_local_install(id),
                 "{id} must allow local install"
@@ -2591,24 +1886,6 @@ mod tests {
     }
 
     #[test]
-    fn parse_juliaup_status_default_channel() {
-        let (channel, label, is_default) =
-            parse_juliaup_status_line("       *  1.6.7    1.6.7+0.x64.linux.gnu").unwrap();
-        assert_eq!(channel, "1.6.7");
-        assert_eq!(label, "1.6.7");
-        assert!(is_default);
-    }
-
-    #[test]
-    fn parse_juliaup_status_release_channel() {
-        let (channel, label, is_default) =
-            parse_juliaup_status_line("          release  1.12.6+0.x64.linux.gnu").unwrap();
-        assert_eq!(channel, "release");
-        assert_eq!(label, "1.12.6");
-        assert!(!is_default);
-    }
-
-    #[test]
     fn parse_rustup_toolchain_active_default() {
         let (tc, is_default) =
             parse_rustup_toolchain_line("stable-x86_64-unknown-linux-gnu (active, default)").unwrap();
@@ -2631,11 +1908,6 @@ mod tests {
             "rustc 1.96.0 (ac68faa20 2026-05-25)",
         );
         assert_eq!(label, "1.96.0 (stable)");
-    }
-
-    #[test]
-    fn parse_juliaup_status_skips_separator() {
-        assert!(parse_juliaup_status_line("--------------------------------------------------").is_none());
     }
 
     #[test]

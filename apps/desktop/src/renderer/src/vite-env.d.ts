@@ -558,6 +558,12 @@ declare global {
         head: string
         base: string
       }) => Promise<{ ok: boolean; url?: string; existingUrl?: string; error?: string }>
+      cloudGitFindPr: (payload: {
+        provider: 'github' | 'gitlab'
+        repoPath: string
+        remote?: string
+        head: string
+      }) => Promise<{ ok: boolean; url?: string; error?: string }>
       cloudGitGetPrChecks: (payload: {
         provider: 'github' | 'gitlab'
         repoPath: string

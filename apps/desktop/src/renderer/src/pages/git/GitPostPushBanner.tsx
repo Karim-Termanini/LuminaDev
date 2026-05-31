@@ -20,16 +20,19 @@ export function GitPostPushBanner({
     <div className="hp-status-alert success git-assistant-post-push" role="status">
       <span className="codicon codicon-cloud-upload" aria-hidden />
       <div className="git-assistant-post-push-body">
-        <p style={{ margin: 0 }}>{t('assistant.push.success', { host })}</p>
+        <p style={{ margin: 0 }}>{t('assistant.push.success')}</p>
+        <p className="hp-muted" style={{ margin: '6px 0 0', fontSize: 12 }}>
+          {t('assistant.push.createPrHint', { host })}
+        </p>
         <button
           type="button"
-          className="hp-btn hp-btn-primary"
+          className="hp-btn"
           disabled={busy}
           style={{ marginTop: 8 }}
           onClick={() => void window.dh.openExternal(branchUrl)}
         >
           <span className="codicon codicon-link-external" aria-hidden />
-          {t('assistant.share.openHost', { host })}
+          {t('assistant.push.viewBranch', { host })}
         </button>
       </div>
       <button

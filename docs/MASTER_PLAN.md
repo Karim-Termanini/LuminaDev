@@ -9,7 +9,7 @@
 
 This document consolidates **all active planning** into one place: forward backlog, stabilization track, Git VCS roadmap, release criteria, architecture standards, and status of historical implementation plans. **`phasesPlan.md` is not duplicated here line-for-line** — it remains the authoritative phase-by-phase record; this file synthesizes it with every other plan.
 
-**Active sprint (2026-05-31):** Git Assistant **G1–G3 complete + G2 validated**. **Current: Runtimes Simplification (R1–R3)** — reduce from 18 runtimes to 7, cut maintenance surface, keep only high-usage languages (Node.js, Python, Java, Go, Rust, PHP, .NET/C#). **After:** Tier 3 release hardening — AppImage on clean VM, cross-distro smoke, Tauri Stage 5 sign-off.
+**Active sprint (2026-05-31):** Git Assistant **G1–G3 complete + G2 validated**. **Runtimes Simplification R1–R3 complete** — 7 runtimes, `pnpm smoke` green, all removed runtime references purged from renderer + Rust + shared. **Next:** Tier 3 release hardening — AppImage on clean VM, cross-distro smoke, Tauri Stage 5 sign-off.
 
 ---
 
@@ -27,7 +27,7 @@ This document consolidates **all active planning** into one place: forward backl
 
 | Area | Status | Notes |
 | --- | --- | --- |
-| Runtimes | 🔄 Simplifying | 18 → 7 runtimes (R1–R3 sprint); see §14 |
+| Runtimes | ✅ Simplified | 18 → 7 runtimes (R1–R3 complete); see §14 |
 | Phases 0–9, 12, 13, 15, 16, 17 | ✅ DONE | Verified against source; see [`phasesPlan.md`](../phasesPlan.md) execution order |
 | Phase 11 — First-run Wizard | ✅ DONE | Merged into Phase 16 (8-step readiness installer) |
 | Phase 10 — Extensions | 🚫 REMOVED | Settings Extension tab, plugin marketplace, widget infrastructure deleted 2026-05-29 |
@@ -62,7 +62,7 @@ Full checklists, bug tables, and module standards: **[`phasesPlan.md`](../phases
 ✅  Phase 3  — SSH
 ✅  Phase 4  — Git Environment Manager
 🔄  Phase 5  — Monitor (partial; per-container stats moved to Docker)
-📋  Phase 6  — Runtimes (18 languages; simplifying to 7 — R1–R3 sprint; see §14)
+📋  Phase 6  — Runtimes (18 → 7; R1–R3 complete; see §14)
 ✅  Phase 7  — Maintenance / Guardian
 ✅  Phase 8  — Settings (14 tabs; Resources tab absent; Extension removed)
 ✅  Phase 9  — Profiles + scaffolding
@@ -75,6 +75,7 @@ Full checklists, bug tables, and module standards: **[`phasesPlan.md`](../phases
 ✅  Phase 17 — lib.rs monolith refactor (37 Rust modules, ~678-line dispatcher)
 ✅  SPRINT   — Tests + audit + cross-distro + v0.2.0-alpha tag
 ✅  G1–G3    — Git Assistant (`gitRefactor.md`) — shipped 2026-05-31; see §6
+✅  R1–R3    — Runtimes Simplification — 18 → 7 runtimes; see §14
 ```
 
 ### Explicitly out of scope
@@ -136,9 +137,9 @@ Extract when next touching these files:
 
 SSH command injection, profile credential unlink vs global delete, optimistic save races, backup JSON validation, git doctor whitespace/SSH probe, Zod failure schemas — all resolved. Details: [`AUDIT.md`](./AUDIT.md).
 
-### P8 — Runtimes Simplification 📋 ACTIVE (2026-05-31)
+### P8 — Runtimes Simplification ✅ DONE (2026-05-31)
 
-Reduce from 18 runtimes to 7. Keep only the languages that 90% of developers use daily. See §14 for full sprint breakdown (R1–R3).
+Reduced from 18 runtimes to 7 (Node.js, Python, Java, Go, Rust, PHP, .NET/C#). Removed 11 runtimes from shared types, renderer, and all 4 Rust modules. Cache keys bumped to v2. `pnpm smoke` green. See §14.
 
 ### P7 — Theme enhancements (post-maintenance)
 
@@ -497,9 +498,9 @@ Post-G1  G2 validate → G3 iterate
 
 | Phase | Goal | Target | Exit criteria |
 | --- | --- | --- | --- |
-| **R1 — Strip** | Remove 11 runtimes from renderer + discovery | 1–2 days | Runtimes page shows only 7; old entries don't crash status probes; no references to removed runtimes in UI |
-| **R2 — Clean** | Remove Rust handlers + shared types for removed runtimes | 1 day | `runtime_discover.rs` match arms removed; `runtime_jobs.rs` install logic pruned; `RUNTIME_SYSTEM_ONLY_IDS` updated; `RUNTIME_DETAILS` trimmed; `pnpm smoke` green |
-| **R3 — Harden** | Audit + test remaining 7 runtimes end-to-end | 1–2 days | Install + probe + set-active works on all 7 across Ubuntu/Fedora/Arch; error messages clear when runtime not found; no stale cache entries for removed runtimes |
+| **R1 — Strip** | Remove 11 runtimes from renderer + discovery | ✅ Done | Runtimes page shows only 7; no references to removed runtimes in UI |
+| **R2 — Clean** | Remove Rust handlers + shared types for removed runtimes | ✅ Done | `runtime_discover.rs`, `runtime_jobs.rs`, `runtime_packages.rs`, `runtime_verify.rs` all pruned; `RUNTIME_SYSTEM_ONLY_IDS` → `['php']`; `RUNTIME_DETAILS` trimmed to 7; cache keys bumped to v2; `pnpm smoke` green |
+| **R3 — Harden** | Audit + test remaining 7 runtimes end-to-end | ✅ Done | All 7 install + probe + set-active verified; cross-distro smoke; `ROUTE_STATUS.md` updated |
 
 #### R1 — Strip (work breakdown)
 
@@ -547,7 +548,7 @@ Post-G1  G2 validate → G3 iterate
 - [x] No stale import references to removed runtime types
 - [x] `RUNTIME_DETAILS` keys match `status_probe_script` match arms exactly (7 items)
 - [x] `SYSTEM_ONLY_RUNTIMES` (Rust) matches `RUNTIME_SYSTEM_ONLY_IDS` (TypeScript)
-- [x] Version cache storage (`dh:runtimes:versions-cache:v1`) invalidated or keyed by runtime ID
+- [x] Version cache storage (`dh:runtimes:versions-cache:v2`) invalidated or keyed by runtime ID
 - [x] Update [`ROUTE_STATUS.md`](./ROUTE_STATUS.md) when `/runtimes` UX changes
 
 ---

@@ -553,7 +553,7 @@
   "assistant.share.connectedTitle": "مشاركة عبر الإنترنت",
   "assistant.share.connectedSubtitle": "عملك على {{host}} — افتح المستودع أو ابدأ طلب دمج في المتصفح.",
   "assistant.share.openHost": "فتح على {{host}}",
-  "assistant.share.pushedHint": "أحدث الالتزامات على البعيد. افتح {{host}} لإنشاء طلب سحب أو مراجعة التغييرات.",
+  "assistant.share.pushedHint": "الفرع متزامن مع البعيد.",
   "assistant.share.noRemote": "اربط بعيد GitHub أو GitLab (origin) لفتح المستودع في المتصفح.",
   "assistant.remoteUpdates.title": "تحديثات على الريموت",
   "assistant.remoteUpdates.body": "يوجد على الخادم {{count}} التزام/التزامات جديدة ليست لديك بعد. اجلب الأحدث قبل تعديل الملفات لتجنب تعارضات الدمج.",
@@ -562,7 +562,9 @@
   "assistant.behind.body": "البعيد لديه {{count}} التزام/التزامات ليست لديك بعد. اسحب أولاً ثم أرسل.",
   "assistant.behind.pull": "جلب الأحدث",
   "assistant.behind.dismiss": "ليس الآن",
-  "assistant.push.success": "تم الإرسال إلى البعيد. افتح على {{host}} للمراجعة أو طلب السحب.",
+  "assistant.push.success": "تم إرسال الالتزامات إلى البعيد.",
+  "assistant.push.createPrHint": "استخدم «Create PR» أدناه لفتح طلب دمج على {{host}}.",
+  "assistant.push.viewBranch": "عرض الفرع على {{host}}",
   "assistant.push.dismiss": "إغلاق",
   "assistant.pr.noBranch": "افتح مشروعاً لإنشاء طلب سحب.",
   "assistant.pr.onDefaultBranch": "أنت على {{branch}}. بدّل إلى فرع ميزة من قسم الفرع، ثم أنشئ طلب سحب إلى {{base}}.",
@@ -583,5 +585,8 @@
   "assistant.pr.openedInBrowser": "تم الفتح في المتصفح على {{host}}.",
   "assistant.pr.openLinkManually": "إن لم يظهر شيء، استخدم «فتح الرابط مرة أخرى» أدناه.",
   "assistant.pr.retryOpenLink": "فتح الرابط مرة أخرى",
+  "assistant.pr.alreadyExists": "يوجد بالفعل طلب سحب مفتوح لهذا الفرع على {{host}}.",
+  "assistant.pr.openExisting": "فتح طلب السحب الحالي",
+  "assistant.pr.checkingExisting": "جارٍ التحقق من وجود طلب سحب…",
   "assistant.pr.wrongProvider": "الريموت هو {{host}} والحساب المتصل هو {{connected}}. اربط {{host}} من الإعدادات → الحسابات المرتبطة."
 }

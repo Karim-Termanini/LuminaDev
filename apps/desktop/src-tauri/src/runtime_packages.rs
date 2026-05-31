@@ -3,8 +3,7 @@ use crate::host_exec::{cmd_timeout_short, exec_output_limit, exec_result_limit};
 /// Runtimes surfaced on `/runtimes` — used by install-matrix coverage tests.
 #[cfg(test)]
 pub(crate) const RUNTIME_IDS: &[&str] = &[
-    "node", "python", "java", "go", "rust", "php", "ruby", "dotnet", "bun", "zig", "c_cpp",
-    "matlab", "dart", "flutter", "julia", "lua", "lisp", "r",
+    "node", "python", "java", "go", "rust", "php", "dotnet",
 ];
 
 pub(crate) fn runtime_pkg_mgr(distro: &str) -> &'static str {
@@ -72,8 +71,7 @@ pub(crate) fn runtime_install_supported(runtime_id: &str, pkg_mgr: &str) -> bool
     }
     matches!(
         runtime_id,
-        "node" | "python" | "go" | "zig" | "rust" | "bun" | "dart" | "flutter" | "julia"
-            | "java" | "dotnet" | "php" | "ruby" | "lua" | "r"
+        "node" | "python" | "go" | "rust" | "java" | "dotnet" | "php"
     )
 }
 
@@ -99,42 +97,10 @@ pub(crate) fn runtime_system_packages(runtime_id: &str, pkg_mgr: &str) -> Vec<&'
         ("php", "dnf") => vec!["php", "php-cli"],
         ("php", "pacman") => vec!["php"],
         ("php", "zypper") => vec!["php8", "php8-cli"],
-        ("ruby", "apt") => vec!["ruby", "ruby-dev"],
-        ("ruby", "dnf") => vec!["ruby", "ruby-devel"],
-        ("ruby", "pacman") => vec!["ruby"],
-        ("ruby", "zypper") => vec!["ruby"],
         ("dotnet", "apt") => vec!["dotnet-sdk-8.0"],
         ("dotnet", "dnf") => vec!["dotnet-sdk-8.0"],
         ("dotnet", "pacman") => vec![],
         ("dotnet", "zypper") => vec!["dotnet-sdk-8.0"],
-        ("zig", "apt") => vec!["zig"],
-        ("zig", "dnf") => vec!["zig"],
-        ("zig", "pacman") => vec!["zig"],
-        ("zig", "zypper") => vec!["zig"],
-        ("c_cpp", "apt") => vec!["gcc", "g++", "make", "cmake", "gdb"],
-        ("c_cpp", "dnf") => vec!["gcc", "gcc-c++", "make", "cmake", "gdb"],
-        ("c_cpp", "pacman") => vec!["gcc", "make", "cmake", "gdb"],
-        ("c_cpp", "zypper") => vec!["gcc", "gcc-c++", "make", "cmake", "gdb"],
-        ("matlab", "apt") => vec!["octave"],
-        ("matlab", "dnf") => vec!["octave"],
-        ("matlab", "pacman") => vec!["octave"],
-        ("matlab", "zypper") => vec!["octave"],
-        ("julia", "apt") => vec!["julia"],
-        ("julia", "dnf") => vec!["julia"],
-        ("julia", "pacman") => vec!["julia"],
-        ("julia", "zypper") => vec!["julia"],
-        ("lua", "apt") => vec!["lua5.4"],
-        ("lua", "dnf") => vec!["lua"],
-        ("lua", "pacman") => vec!["lua"],
-        ("lua", "zypper") => vec!["lua54"],
-        ("lisp", "apt") => vec!["sbcl"],
-        ("lisp", "dnf") => vec!["sbcl"],
-        ("lisp", "pacman") => vec!["sbcl"],
-        ("lisp", "zypper") => vec!["sbcl"],
-        ("r", "apt") => vec!["r-base", "r-base-dev"],
-        ("r", "dnf") => vec!["R", "R-devel"],
-        ("r", "pacman") => vec!["r"],
-        ("r", "zypper") => vec!["R-base", "R-base-devel"],
         _ => vec![],
     }
 }

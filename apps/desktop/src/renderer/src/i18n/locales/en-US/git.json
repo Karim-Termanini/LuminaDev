@@ -550,7 +550,7 @@
   "assistant.share.connectedTitle": "Share online",
   "assistant.share.connectedSubtitle": "Your work is on {{host}} — open the repo or start a merge request in the browser.",
   "assistant.share.openHost": "Open on {{host}}",
-  "assistant.share.pushedHint": "Latest commits are on the remote. Open {{host}} to create a pull request or review changes.",
+  "assistant.share.pushedHint": "Branch is in sync with the remote.",
   "assistant.share.noRemote": "Connect a GitHub or GitLab remote (origin) to open the repo in the browser.",
   "assistant.remoteUpdates.title": "Updates on the remote",
   "assistant.remoteUpdates.body": "The server has {{count}} new commit(s) you do not have yet. Get latest before you edit files to avoid merge conflicts.",
@@ -559,7 +559,9 @@
   "assistant.behind.body": "The remote has {{count}} commit(s) you do not have yet. Pull first, then send your work.",
   "assistant.behind.pull": "Get latest",
   "assistant.behind.dismiss": "Not now",
-  "assistant.push.success": "Sent to the remote. Open on {{host}} to review or open a pull request.",
+  "assistant.push.success": "Commits sent to the remote.",
+  "assistant.push.createPrHint": "Use Create PR in Share online below to open a merge request on {{host}}.",
+  "assistant.push.viewBranch": "View branch on {{host}}",
   "assistant.push.dismiss": "Dismiss",
   "assistant.pr.noBranch": "Open a project to create a pull request.",
   "assistant.pr.onDefaultBranch": "You are on {{branch}}. Use the Branch section to switch to a feature branch, then create a pull request into {{base}}.",
@@ -580,5 +582,8 @@
   "assistant.pr.openedInBrowser": "Opened in your browser on {{host}}.",
   "assistant.pr.openLinkManually": "Use “Open link again” below if nothing appeared.",
   "assistant.pr.retryOpenLink": "Open link again",
+  "assistant.pr.alreadyExists": "An open pull request already exists for this branch on {{host}}.",
+  "assistant.pr.openExisting": "Open existing PR",
+  "assistant.pr.checkingExisting": "Checking for an existing pull request…",
   "assistant.pr.wrongProvider": "Remote is {{host}} but the connected account is {{connected}}. Connect {{host}} under Settings → Connected accounts."
 }

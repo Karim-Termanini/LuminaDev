@@ -93,3 +93,33 @@ export function setPathsIncluded(
     setPathIncluded(excludedByBranch, branch, p, include)
   }
 }
+
+/** Staged paths not selected for this snapshot — must leave the index before commit. */
+export function stagedPathsToUnstageBeforeCommit(
+  staged: ReadonlyArray<{ path: string; status: string }>,
+  included: ReadonlySet<string>,
+): string[] {
+  return staged
+    .filter((f) => f.status !== 'C' && !included.has(f.path))
+    .map((f) => f.path)
+}
+
+/** Derive included paths and index cleanup from fresh status + exclusion ref (not React state). */
+export function resolveSnapshotCommitPaths(input: {
+  staged: ReadonlyArray<{ path: string; status: string }>
+  unstaged: ReadonlyArray<{ path: string; status: string }>
+  branch: string
+  excludedByBranch: BranchExclusionMap
+}): { included: Set<string>; toUnstage: string[] } {
+  const allPaths = [
+    ...new Set([
+      ...input.unstaged.filter((f) => f.status !== 'C').map((f) => f.path),
+      ...input.staged.filter((f) => f.status !== 'C').map((f) => f.path),
+    ]),
+  ]
+  const included = buildIncludedFromPaths(allPaths, input.branch, input.excludedByBranch)
+  return {
+    included,
+    toUnstage: stagedPathsToUnstageBeforeCommit(input.staged, included),
+  }
+}

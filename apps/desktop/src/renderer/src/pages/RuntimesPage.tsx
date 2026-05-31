@@ -2,7 +2,11 @@ import type { ReactElement } from 'react'
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { RuntimeStatus, JobSummary } from '@linux-dev-home/shared'
-import { runtimeIsSystemOnly, runtimeSupportsLocalInstall } from '@linux-dev-home/shared'
+import {
+  isSupportedRuntimeId,
+  runtimeIsSystemOnly,
+  runtimeSupportsLocalInstall,
+} from '@linux-dev-home/shared'
 import { assertRuntimeOk } from './runtimeContract'
 import { humanizeRuntimeError } from './runtimeError'
 import './RuntimesPage.css'
@@ -14,30 +18,13 @@ const RUNTIME_DETAILS: Record<string, { website: string; icon: string }> = {
   go: { website: 'https://go.dev', icon: 'zap' },
   java: { website: 'https://java.com', icon: 'beaker' },
   php: { website: 'https://php.net', icon: 'globe' },
-  ruby: { website: 'https://ruby-lang.org', icon: 'ruby' },
   dotnet: { website: 'https://dotnet.microsoft.com', icon: 'library' },
-  bun: { website: 'https://bun.sh', icon: 'flame' },
-  zig: { website: 'https://ziglang.org', icon: 'circuit-board' },
-  c_cpp: { website: 'https://gcc.gnu.org', icon: 'terminal-bash' },
-  matlab: { website: 'https://octave.org', icon: 'graph-line' },
-  dart: { website: 'https://dart.dev', icon: 'symbol-namespace' },
-  flutter: { website: 'https://flutter.dev', icon: 'device-mobile' },
-  julia: { website: 'https://julialang.org', icon: 'symbol-color' },
-  lua: { website: 'https://www.lua.org', icon: 'symbol-variable' },
-  lisp: { website: 'https://www.sbcl.org', icon: 'symbol-class' },
-  r: { website: 'https://www.r-project.org', icon: 'graph' },
 }
 
-const RUNTIME_LOCALE_KEY: Record<string, string> = {
-  c_cpp: 'cpp',
-  matlab: 'octave',
-  lisp: 'clisp',
-}
-
-const UPDATE_OUTCOME_STORAGE_KEY = 'dh:runtimes:update-outcomes:v1'
-const STATUS_CACHE_KEY = 'dh:runtimes:status-cache:v1'
+const UPDATE_OUTCOME_STORAGE_KEY = 'dh:runtimes:update-outcomes:v2'
+const STATUS_CACHE_KEY = 'dh:runtimes:status-cache:v2'
 const STATUS_CACHE_TTL = 30 * 1000
-const VERSIONS_CACHE_KEY = 'dh:runtimes:versions-cache:v1'
+const VERSIONS_CACHE_KEY = 'dh:runtimes:versions-cache:v2'
 const VERSIONS_CACHE_TTL = 5 * 60 * 1000 // 5 minutes
 
 type InstalledVersionRow = {
@@ -48,6 +35,10 @@ type InstalledVersionRow = {
   isDefault?: boolean
 }
 
+function filterSupportedRuntimes(rows: RuntimeStatus[]): RuntimeStatus[] {
+  return rows.filter((r) => isSupportedRuntimeId(r.id))
+}
+
 /** Strip redundant runtime name prefixes from probe output for display. */
 function formatRuntimeVersionDisplay(runtimeId: string, raw: string | undefined): string {
   if (!raw) return ''
@@ -55,8 +46,6 @@ function formatRuntimeVersionDisplay(runtimeId: string, raw: string | undefined)
   switch (runtimeId) {
     case 'python':
       return v.replace(/^Python\s+/i, '')
-    case 'julia':
-      return v.replace(/^julia version\s+/i, '')
     case 'java': {
       const quoted = v.match(/"([^"]+)"/)
       if (quoted) return quoted[1]
@@ -68,21 +57,6 @@ function formatRuntimeVersionDisplay(runtimeId: string, raw: string | undefined)
       return v.replace(/^PHP\s+/i, '').replace(/\s+\(.*$/, '').trim()
     case 'rust':
       return v.replace(/^rustc\s+/, '').replace(/\s+\([^)]*\)\s*$/, '').trim() || v
-    case 'lua':
-      return v.replace(/^Lua\s+/i, '').replace(/\s+Copyright.*$/i, '').trim()
-    case 'r': {
-      const m = v.match(/R version ([\d.]+)/i)
-      if (m) return m[1]
-      return v.replace(/^R version\s+/i, '').replace(/\s+--.*$/, '').trim()
-    }
-    case 'c_cpp':
-      return v.replace(/^gcc\s+\(GCC\)\s+/i, '').replace(/\s+\(.*$/, '').trim()
-    case 'lisp':
-      return v.replace(/^SBCL\s+/i, '').trim()
-    case 'dart':
-      return v.replace(/^Dart SDK version:\s*/i, '').split(/\s+/)[0] || v
-    case 'flutter':
-      return v.replace(/^Flutter\s+/i, '').split(/\s+/)[0] || v
     default:
       return v
   }
@@ -111,10 +85,6 @@ function pickDefaultRuntimeVersion(runtimeId: string, versions: string[]): strin
   if (runtimeId === 'dotnet') {
     const lts = versions.find((v) => /\bLTS\b/i.test(v))
     if (lts) return lts
-  }
-  if (runtimeId === 'bun') {
-    const stable = versions.find((v) => /^\d+\.\d+\.\d+$/.test(v))
-    if (stable) return stable
   }
   if (runtimeId === 'rust') {
     return versions.includes('stable') ? 'stable' : versions[0]
@@ -266,11 +236,12 @@ export function RuntimesPage(): ReactElement {
         error?: string
       }
       if (res.ok) {
-        setRuntimes(res.runtimes)
+        const supported = filterSupportedRuntimes(res.runtimes)
+        setRuntimes(supported)
         try {
           localStorage.setItem(
             STATUS_CACHE_KEY,
-            JSON.stringify({ ts: Date.now(), runtimes: res.runtimes })
+            JSON.stringify({ ts: Date.now(), runtimes: supported })
           )
         } catch {
           /* ignore */
@@ -340,7 +311,7 @@ export function RuntimesPage(): ReactElement {
       if (raw) {
         const cached = JSON.parse(raw) as { ts: number; runtimes: RuntimeStatus[] }
         if (Date.now() - cached.ts < STATUS_CACHE_TTL && Array.isArray(cached.runtimes)) {
-          setRuntimes(cached.runtimes)
+          setRuntimes(filterSupportedRuntimes(cached.runtimes))
           void refreshStatus(true)
           return
         }
@@ -448,11 +419,9 @@ export function RuntimesPage(): ReactElement {
     }
   }, [supportsLocalInstall, selectedId])
 
-  const rtLocaleKey = RUNTIME_LOCALE_KEY[selectedId] ?? selectedId
   const jobRuntimeId =
     (activeJob as JobSummary & { runtimeId?: string })?.runtimeId ?? selectedId
-  const verifyLocaleKey = RUNTIME_LOCALE_KEY[jobRuntimeId] ?? jobRuntimeId
-  const suggestVerifyCmd = t(verifyLocaleKey + '.verify')
+  const suggestVerifyCmd = t(jobRuntimeId + '.verify')
   const progressAction = isUninstallJob ? 'Removing' : isUpdateJob ? 'Updating' : 'Installing'
   const lastJobTail = activeJob?.logTail ?? []
   const logHasVerifyOk = lastJobTail.some((l) => /VERIFY OK/i.test(l))
@@ -877,7 +846,7 @@ export function RuntimesPage(): ReactElement {
                 {t('view.description')}
               </h3>
               <p style={{ fontSize: 16, color: 'var(--text-main)', lineHeight: 1.6, opacity: 0.8 }}>
-                {t(rtLocaleKey + '.desc')}
+                {t(selectedId + '.desc')}
               </p>
               <a
                 href="#"

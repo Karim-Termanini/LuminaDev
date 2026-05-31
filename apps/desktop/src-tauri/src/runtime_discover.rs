@@ -1,7 +1,7 @@
 //! Global runtime discovery — version managers, common home paths, and PATH.
 //! Lumina install dirs are included but never exclusive.
 
-const PREAMBLE: &str = r#"export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.juliaup/bin:$HOME/.bun/bin:$PATH"
+const PREAMBLE: &str = r#"export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
 [ -s "$HOME/.nvm/nvm.sh" ] && . "$HOME/.nvm/nvm.sh" 2>/dev/null
 command -v mise >/dev/null 2>&1 && eval "$("$HOME/.local/bin/mise" activate bash 2>/dev/null || mise activate bash 2>/dev/null)" 2>/dev/null
 command -v pyenv >/dev/null 2>&1 && eval "$(pyenv init - --path 2>/dev/null)" 2>/dev/null
@@ -174,72 +174,6 @@ _mise_rows go go
 _asdf_rows golang go
 "
         )),
-        "zig" => with_discover(
-            r#"
-if [ -d "$HOME/.local/share/lumina/zig" ]; then
-  for d in "$HOME/.local/share/lumina/zig"/*; do
-    [ -d "$d" ] || continue
-    b=$(basename "$d"); [ "$b" = "current" ] && continue
-    [ -x "$d/zig" ] || continue
-    _emit_unique "$("$d/zig" version 2>/dev/null)" "$d/zig"
-  done
-fi
-if [ -d "$HOME/.zig" ]; then
-  for d in "$HOME/.zig"/*; do
-    [ -x "$d/zig" ] || continue
-    _emit_unique "$("$d/zig" version 2>/dev/null)" "$d/zig"
-  done
-fi
-p=$(command -v zig 2>/dev/null)
-if [ -n "$p" ]; then
-  rp=$(readlink -f "$p" 2>/dev/null || echo "$p")
-  _emit_unique "$("$rp" version 2>/dev/null)" "$rp"
-fi
-"#,
-        ),
-        "dart" => with_discover(
-            r#"
-if [ -d "$HOME/.local/share/lumina/dart" ]; then
-  for d in "$HOME/.local/share/lumina/dart"/*; do
-    [ -d "$d" ] || continue
-    b=$(basename "$d"); [ "$b" = "current" ] && continue
-    [ -x "$d/bin/dart" ] || continue
-    ver=$("$d/bin/dart" --version 2>&1 | awk '{print $4}')
-    _emit_unique "${ver:-$b}" "$d/bin/dart"
-  done
-fi
-for d in "$HOME/.dart/dart-sdk" "$HOME/dart-sdk" "$HOME/sdks/dart"; do
-  [ -x "$d/bin/dart" ] || continue
-  ver=$("$d/bin/dart" --version 2>&1 | awk '{print $4}')
-  _emit_unique "${ver:-dart}" "$d/bin/dart"
-done
-p=$(command -v dart 2>/dev/null)
-if [ -n "$p" ]; then
-  rp=$(readlink -f "$p" 2>/dev/null || echo "$p")
-  ver=$("$rp" --version 2>&1 | awk '{print $4}')
-  _emit_unique "${ver:-dart}" "$rp"
-fi
-"#,
-        ),
-        "flutter" => with_discover(
-            r#"
-for d in "$HOME/.local/share/lumina/flutter"/* "$HOME/flutter" "$HOME/.flutter-sdk" "$HOME/snap/flutter/common/flutter"; do
-  [ -d "$d" ] || continue
-  b=$(basename "$d"); [ "$b" = "current" ] && continue
-  [ -x "$d/bin/flutter" ] || continue
-  ver=$(cat "$d/version" 2>/dev/null | head -1)
-  _emit_unique "${ver:-$b}" "$d/bin/flutter"
-done
-p=$(command -v flutter 2>/dev/null)
-if [ -n "$p" ]; then
-  rp=$(readlink -f "$p" 2>/dev/null || echo "$p")
-  d=$(dirname "$(dirname "$rp")")
-  ver=$(cat "$d/version" 2>/dev/null | head -1)
-  [ -z "$ver" ] && ver=$("$rp" --version 2>/dev/null | head -1)
-  _emit_unique "${ver:-installed}" "$rp"
-fi
-"#,
-        ),
         "dotnet" => with_discover(
             r#"
 for d in "$HOME/.dotnet" /usr/share/dotnet /opt/dotnet; do
@@ -252,46 +186,6 @@ if [ -n "$p" ]; then
   rp=$(readlink -f "$p" 2>/dev/null || echo "$p")
   ver=$("$rp" --version 2>/dev/null)
   _emit_unique "${ver:-dotnet}" "$rp"
-fi
-"#,
-        ),
-        "c_cpp" => with_discover(
-            r#"
-_ccpp_version() {
-  local rp="$1"
-  local ver
-  ver=$(LC_ALL=C "$rp" -dumpfullversion 2>/dev/null | head -1)
-  [ -n "$ver" ] || ver=$(LC_ALL=C "$rp" -dumpversion 2>/dev/null | head -1)
-  [ -n "$ver" ] || ver=$("$rp" --version 2>/dev/null | head -1)
-  printf '%s' "$ver"
-}
-for bin in gcc g++ clang clang++; do
-  p=$(command -v "$bin" 2>/dev/null) || continue
-  rp=$(readlink -f "$p" 2>/dev/null || echo "$p")
-  case "$(basename "$rp")" in ccache|distcc) continue ;; esac
-  ver=$(_ccpp_version "$rp")
-  case "$ver" in *ccache*|*distcc*) continue ;; esac
-  _emit_unique "${ver:-$bin}" "$rp"
-done
-"#,
-        ),
-        "lisp" => with_discover(
-            r#"
-for bin in sbcl clisp; do
-  p=$(command -v "$bin" 2>/dev/null) || continue
-  rp=$(readlink -f "$p" 2>/dev/null || echo "$p")
-  ver=$("$rp" --version 2>/dev/null | head -1)
-  _emit_unique "${ver:-$bin}" "$rp"
-done
-"#,
-        ),
-        "matlab" => with_discover(
-            r#"
-p=$(command -v octave 2>/dev/null)
-if [ -n "$p" ]; then
-  rp=$(readlink -f "$p" 2>/dev/null || echo "$p")
-  ver=$("$rp" --version 2>/dev/null | head -1)
-  _emit_unique "${ver:-octave}" "$rp"
 fi
 "#,
         ),
@@ -337,37 +231,6 @@ readlink -f "$(command -v go 2>/dev/null)" 2>/dev/null"#,
             r#"readlink -f "$(rustup which rustc 2>/dev/null || command -v rustc 2>/dev/null)" 2>/dev/null"#,
         ),
         "php" => with_preamble(r#"readlink -f "$(command -v php 2>/dev/null)" 2>/dev/null"#),
-        "ruby" => with_preamble(r#"readlink -f "$(command -v ruby 2>/dev/null)" 2>/dev/null"#),
-        "zig" => with_preamble(r#"readlink -f "$(command -v zig 2>/dev/null)" 2>/dev/null"#),
-        "dart" => with_preamble(r#"readlink -f "$(command -v dart 2>/dev/null)" 2>/dev/null"#),
-        "flutter" => with_preamble(
-            r#"for d in "$HOME/.local/share/lumina/flutter/current" "$HOME/flutter" "$HOME/.flutter-sdk"; do
-  [ -x "$d/bin/flutter" ] && readlink -f "$d/bin/flutter" && exit 0
-done
-readlink -f "$(command -v flutter 2>/dev/null)" 2>/dev/null"#,
-        ),
-        "bun" => with_preamble(
-            r#"[ -x "$HOME/.bun/bin/bun" ] && readlink -f "$HOME/.bun/bin/bun" 2>/dev/null || readlink -f "$(command -v bun 2>/dev/null)" 2>/dev/null"#,
-        ),
-        "julia" => with_preamble(
-            r#"readlink -f "$(command -v julia 2>/dev/null || echo "$HOME/.juliaup/bin/julia")" 2>/dev/null"#,
-        ),
-        "lua" => with_preamble(
-            r#"readlink -f "$(command -v lua 2>/dev/null || command -v lua5.4 2>/dev/null)" 2>/dev/null"#,
-        ),
-        "lisp" => with_preamble(r#"readlink -f "$(command -v sbcl 2>/dev/null)" 2>/dev/null"#),
-        "r" => with_preamble(r#"readlink -f "$(command -v R 2>/dev/null)" 2>/dev/null"#),
-        "c_cpp" => with_preamble(
-            r#"
-for bin in gcc /usr/bin/gcc /usr/libexec/ccache/gcc; do
-  p=$(command -v "$bin" 2>/dev/null) || { [ -x "$bin" ] && p="$bin" || continue; }
-  rp=$(readlink -f "$p" 2>/dev/null || echo "$p")
-  case "$(basename "$rp")" in ccache|distcc) continue ;; esac
-  [ -x "$rp" ] && readlink -f "$rp" && exit 0
-done
-"#,
-        ),
-        "matlab" => with_preamble(r#"readlink -f "$(command -v octave 2>/dev/null)" 2>/dev/null"#),
         "dotnet" => with_preamble(
             r#"readlink -f "$(command -v dotnet 2>/dev/null || echo "$HOME/.dotnet/dotnet")" 2>/dev/null"#,
         ),
@@ -383,21 +246,7 @@ pub(crate) fn status_probe_script(runtime_id: &str) -> Option<String> {
         "go" => with_preamble("go version 2>&1"),
         "rust" => with_preamble("rustc --version 2>&1"),
         "php" => with_preamble("php --version 2>&1 | head -1"),
-        "ruby" => with_preamble("ruby --version 2>&1"),
         "dotnet" => with_preamble("dotnet --version 2>&1 || $HOME/.dotnet/dotnet --version 2>&1"),
-        "bun" => with_preamble("bun --version 2>&1"),
-        "zig" => with_preamble("zig version 2>&1"),
-        "dart" => with_preamble("dart --version 2>&1 | head -1"),
-        "flutter" => with_preamble(
-            r#"p=$(command -v flutter 2>/dev/null)
-if [ -n "$p" ]; then d=$(dirname "$(dirname "$(readlink -f "$p")")"); cat "$d/version" 2>/dev/null | head -1 || flutter --version 2>&1 | head -1; fi"#,
-        ),
-        "julia" => with_preamble("julia --version 2>&1"),
-        "lua" => with_preamble("lua -v 2>&1 || lua5.4 -v 2>&1"),
-        "lisp" => with_preamble("sbcl --version 2>&1"),
-        "r" => with_preamble("R --version 2>&1 | head -1"),
-        "c_cpp" => with_preamble("gcc --version 2>&1 | head -1"),
-        "matlab" => with_preamble("octave --version 2>&1 | head -1"),
         _ => return None,
     })
 }
@@ -450,13 +299,6 @@ mod tests {
             rows[0].3.as_deref(),
             Some("/usr/lib/jvm/java-25-openjdk")
         );
-    }
-
-    #[test]
-    fn flutter_script_includes_home_flutter() {
-        let script = list_installed_versions_script("flutter").unwrap();
-        assert!(script.contains("$HOME/flutter"));
-        assert!(script.contains("command -v flutter"));
     }
 
     #[test]

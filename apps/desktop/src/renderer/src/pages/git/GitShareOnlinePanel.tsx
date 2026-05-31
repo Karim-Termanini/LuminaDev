@@ -97,7 +97,7 @@ export function GitShareOnlinePanel({
 
       {showPushed ? (
         <p className="hp-muted" style={{ margin: '12px 0 0', fontSize: 12 }}>
-          {t('assistant.share.pushedHint', { host: hostName || 'GitHub' })}
+          {t('assistant.share.pushedHint')}
         </p>
       ) : null}
       {branchUrl ? (

@@ -28,8 +28,7 @@ pub(crate) use runtime_packages::{
 mod runtime_versioning;
 #[allow(unused_imports)]
 pub(crate) use runtime_versioning::{
-    lumina_dart_channel_release, lumina_dotnet_install_channel, lumina_first_version_token,
-    lumina_rust_channel_token,
+    lumina_dotnet_install_channel, lumina_first_version_token, lumina_rust_channel_token,
 };
 mod runtime_paths;
 pub(crate) use runtime_paths::{
@@ -196,6 +195,7 @@ async fn ipc_invoke(
         | "dh:cloud:git:issues"
         | "dh:cloud:git:releases"
         | "dh:cloud:git:create-pr"
+        | "dh:cloud:git:find-pr"
         | "dh:cloud:git:get-pr-checks"
         | "dh:cloud:git:merge-pr" => cloud_git_ipc::invoke(&app, channel.as_str(), &body).await,
         "dh:git:vcs:status" => git_vcs_ipc::handle_vcs_status(&app, &body).await,

@@ -352,6 +352,7 @@ export const IPC = {
   editorList: 'dh:editor:list',
   editorOpen: 'dh:editor:open',
   cloudGitCreatePr: 'dh:cloud:git:create-pr',
+  cloudGitFindPr: 'dh:cloud:git:find-pr',
   cloudGitGetPrChecks: 'dh:cloud:git:get-pr-checks',
   cloudGitMergePr: 'dh:cloud:git:merge-pr',
   appInfo: 'dh:app:info',

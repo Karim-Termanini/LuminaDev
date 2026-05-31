@@ -32,6 +32,7 @@ import { computeGitAssistantNextAction } from '../gitAssistantNextAction'
 import {
   buildIncludedFromPaths,
   loadBranchExclusionMap,
+  resolveSnapshotCommitPaths,
   saveBranchExclusionMap,
   setPathIncluded,
   setPathsIncluded,
@@ -475,8 +476,7 @@ export function GitAssistantPage(): ReactElement {
       setOpErrorRaw('[GIT_VCS_EMPTY_MESSAGE] Commit message cannot be empty.')
       return
     }
-    const paths = [...included]
-    if (paths.length === 0) {
+    if (included.size === 0) {
       setOpErrorRaw('[GIT_VCS_NO_STAGED]')
       return
     }
@@ -484,7 +484,27 @@ export function GitAssistantPage(): ReactElement {
     setOpErrorRaw(null)
     try {
       const path = repoPath.trim()
-      const rStage = await window.dh.gitVcsStage({ repoPath: path, filePaths: paths })
+      const branchKey = branchKeyRef.current || branch.trim()
+      const stFresh = await window.dh.gitVcsStatus({ repoPath: path })
+      assertGitVcsOk(stFresh)
+      const stagedFresh = Array.isArray(stFresh.staged) ? (stFresh.staged as FileEntry[]) : []
+      const unstagedFresh = Array.isArray(stFresh.unstaged) ? (stFresh.unstaged as FileEntry[]) : []
+      const { included: includedNow, toUnstage } = resolveSnapshotCommitPaths({
+        staged: stagedFresh,
+        unstaged: unstagedFresh,
+        branch: branchKey,
+        excludedByBranch: excludedByBranchRef.current,
+      })
+      const pathsToCommit = [...includedNow]
+      if (pathsToCommit.length === 0) {
+        setOpErrorRaw('[GIT_VCS_NO_STAGED]')
+        return
+      }
+      if (toUnstage.length > 0) {
+        const rUnstage = await window.dh.gitVcsUnstage({ repoPath: path, filePaths: toUnstage })
+        assertGitVcsOk(rUnstage)
+      }
+      const rStage = await window.dh.gitVcsStage({ repoPath: path, filePaths: pathsToCommit })
       assertGitVcsOk(rStage)
       const r = await window.dh.gitVcsCommit({ repoPath: path, message })
       assertGitVcsOk(r)
@@ -645,7 +665,6 @@ export function GitAssistantPage(): ReactElement {
   const showPull = !!repoPath.trim() && behind != null && behind > 0
   const showPush = shouldShowGitPush({
     repoPathTrimmed: repoPath.trim(),
-    hasLocalChanges,
     unborn,
     ahead,
     behind,
@@ -765,7 +784,7 @@ export function GitAssistantPage(): ReactElement {
 
           {repoPath.trim() ? (
             <>
-              {isDevAppSourceRepo(repoPath) ? (
+              {isDevAppSourceRepo(repoPath.trim()) ? (
                 <div className="hp-status-alert warning" role="status" style={{ marginBottom: 12 }}>
                   {t('assistant.devRepoWarning')}
                 </div>
@@ -806,7 +825,7 @@ export function GitAssistantPage(): ReactElement {
                     message={commitMessage}
                     onMessageChange={setCommitMessage}
                     busy={busy}
-                    disabled={saveDisabled}
+                    saveDisabled={saveDisabled}
                     next={next}
                     showPull={showPull}
                     showPush={showPush}
