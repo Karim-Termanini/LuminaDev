@@ -6,6 +6,7 @@ import {
   serializeExclusionMap,
   setPathIncluded,
   setPathsIncluded,
+  stagedPathsToUnstageBeforeCommit,
   type BranchExclusionMap,
 } from './gitAssistantFileInclusion'
 
@@ -38,5 +39,15 @@ describe('gitAssistantFileInclusion', () => {
     expect(buildIncludedFromPaths(['a.ts', 'b.ts', 'c.ts'], 'feature', restored).has('c.ts')).toBe(
       false,
     )
+  })
+
+  it('lists staged paths to unstage when user excluded them', () => {
+    const staged = [
+      { path: 'keep.ts', status: 'M' },
+      { path: 'drop.ts', status: 'A' },
+      { path: 'conflict.ts', status: 'C' },
+    ]
+    const excluded = new Set(['drop.ts', 'conflict.ts'])
+    expect(stagedPathsToUnstageBeforeCommit(staged, excluded)).toEqual(['drop.ts'])
   })
 })
