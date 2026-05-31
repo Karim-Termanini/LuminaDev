@@ -93,3 +93,13 @@ export function setPathsIncluded(
     setPathIncluded(excludedByBranch, branch, p, include)
   }
 }
+
+/** Staged paths the user excluded — must be unstaged before a selective snapshot commit. */
+export function stagedPathsToUnstageBeforeCommit(
+  staged: ReadonlyArray<{ path: string; status: string }>,
+  excluded: ReadonlySet<string>,
+): string[] {
+  return staged
+    .filter((f) => f.status !== 'C' && excluded.has(f.path))
+    .map((f) => f.path)
+}

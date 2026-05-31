@@ -35,6 +35,7 @@ import {
   saveBranchExclusionMap,
   setPathIncluded,
   setPathsIncluded,
+  stagedPathsToUnstageBeforeCommit,
   type BranchExclusionMap,
 } from '../gitAssistantFileInclusion'
 import { isDevAppSourceRepo } from '../gitAssistantDevRepo'
@@ -484,6 +485,13 @@ export function GitAssistantPage(): ReactElement {
     setOpErrorRaw(null)
     try {
       const path = repoPath.trim()
+      const branchKey = branchKeyRef.current || branch.trim()
+      const excluded = excludedByBranchRef.current.get(branchKey) ?? new Set<string>()
+      const toUnstage = stagedPathsToUnstageBeforeCommit(staged, excluded)
+      if (toUnstage.length > 0) {
+        const rUnstage = await window.dh.gitVcsUnstage({ repoPath: path, filePaths: toUnstage })
+        assertGitVcsOk(rUnstage)
+      }
       const rStage = await window.dh.gitVcsStage({ repoPath: path, filePaths: paths })
       assertGitVcsOk(rStage)
       const r = await window.dh.gitVcsCommit({ repoPath: path, message })
@@ -765,7 +773,7 @@ export function GitAssistantPage(): ReactElement {
 
           {repoPath.trim() ? (
             <>
-              {isDevAppSourceRepo(repoPath) ? (
+              {isDevAppSourceRepo(repoPath.trim()) ? (
                 <div className="hp-status-alert warning" role="status" style={{ marginBottom: 12 }}>
                   {t('assistant.devRepoWarning')}
                 </div>
