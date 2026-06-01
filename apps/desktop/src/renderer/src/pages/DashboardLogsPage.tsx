@@ -151,7 +151,9 @@ export function DashboardLogsPage(): ReactElement {
   const unlistenRef = useRef<(() => void) | null>(null)
   const linesRef = useRef<string[]>([])
   const searchTextRef = useRef(searchText)
-  searchTextRef.current = searchText
+  useEffect(() => {
+    searchTextRef.current = searchText
+  }, [searchText])
 
   const refreshJobs = useCallback(async () => {
     try {
