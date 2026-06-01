@@ -1,12 +1,13 @@
-# LUMINA_DEV_COMPOSE_FULL=1 overlay — realistic infra/k8s dev stack
+# Infra / k8s dev stack
+# All ports use env vars with non-overlapping defaults to prevent collisions across profiles.
 
 services:
   traefik:
     image: traefik:v3.0
     ports:
-      - "18080:80"
-      - "18443:443"
-      - "18900:8080"
+      - '${TRAEFIK_HTTP_PORT:-30300}:80'
+      - '${TRAEFIK_HTTPS_PORT:-30301}:443'
+      - '${TRAEFIK_API_PORT:-30302}:8080'
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     command:
@@ -17,7 +18,7 @@ services:
   portainer:
     image: portainer/portainer-ce:latest
     ports:
-      - "19000:9000"
+      - '${PORTAINER_PORT:-30303}:9000'
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - portainer_data:/data
@@ -26,7 +27,7 @@ services:
   prometheus:
     image: prom/prometheus:latest
     ports:
-      - "19090:9090"
+      - '${PROMETHEUS_PORT:-30304}:9090'
     restart: unless-stopped
 
 volumes:

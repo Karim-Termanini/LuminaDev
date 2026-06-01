@@ -156,6 +156,15 @@ pub(crate) async fn runtime_bash_user_step(
     }
 }
 
+/// Execute a shell command with elevated privileges (sudo/pkexec).
+///
+/// # Security
+/// This function runs `bash -c` with root privileges. Callers MUST only pass
+/// hardcoded command strings from trusted sources within the codebase.
+/// Never pass unsanitized user input, file contents, or network data as `cmd`.
+///
+/// The command is always wrapped with `nice -n 19` for CPU priority reduction
+/// and resource limits from the app engine settings (if `app` is provided).
 pub(crate) async fn sudo_bash_install_step(
     cmd: &str,
     password: Option<&str>,

@@ -20,7 +20,10 @@ fn default_project_dir_from_store(store: &Value, profile: &str) -> String {
         }
     }
     crate::project_scaffold::expand_tilde_path(
-        base.join(profile).join("default").to_string_lossy().as_ref(),
+        base.join(profile)
+            .join("default")
+            .to_string_lossy()
+            .as_ref(),
     )
 }
 
@@ -152,21 +155,8 @@ pub(crate) fn get_profile_extra_env(app: &AppHandle, profile: &str) -> HashMap<S
             }
         }
 
-        // Runtime-assigned ports in store win over wizard envVars (avoids 8888 + 8924 double bind).
-        for (env_key, store_prefix) in &[
-            ("JUPYTER_PORT", "jupyter_port"),
-            ("POSTGRES_PORT", "postgres_port"),
-            ("NODE_PORT", "node_port"),
-            ("NODE_HMR_PORT", "node_hmr_port"),
-            ("APPIUM_PORT", "appium_port"),
-            ("JSON_SERVER_PORT", "json_server_port"),
-            ("OLLAMA_PORT", "ollama_port"),
-        ] {
-            let store_key = format!("{}_{}", store_prefix, profile);
-            if let Some(val) = store.get(&store_key).and_then(|v| v.as_u64()) {
-                env.insert(env_key.to_string(), val.to_string());
-            }
-        }
+        // Runtime-assigned ports in store win; canonical defaults fill gaps (see compose_ports.rs).
+        crate::compose_ports::apply_profile_ports(&mut env, &template, profile, &store);
 
         let project_dir = env.get("PROJECT_DIR").map(|s| s.trim()).unwrap_or("");
         if project_dir.is_empty() {
@@ -274,7 +264,7 @@ pub(crate) async fn profile_switch(app: &AppHandle, body: &Value) -> Value {
     let mut logs = String::new();
 
     let to_key = sanitize_compose_project_name(to_profile);
-    let running = crate::system_info::running_compose_project_names().await;
+    let running = crate::monitor_handlers::running_compose_project_names().await;
     let other_running: Vec<String> = running
         .into_iter()
         .filter(|project| project != &to_key)
@@ -328,7 +318,8 @@ pub(crate) async fn profile_switch(app: &AppHandle, body: &Value) -> Value {
         }
     }
 
-    let use_full_stack = crate::compose_profiles::profile_wants_full_stack(app, to_profile, &to_dir);
+    let use_full_stack =
+        crate::compose_profiles::profile_wants_full_stack(app, to_profile, &to_dir);
     emit_step(
         &format!(
             "Starting {} (pulling images, building containers)...",
@@ -353,16 +344,13 @@ pub(crate) async fn profile_switch(app: &AppHandle, body: &Value) -> Value {
             emit_step("Verifying containers are running...", 71);
             let mut running = false;
             for attempt in 0..45 {
-                if crate::system_info::is_compose_profile_running(to_profile).await {
+                if crate::monitor_handlers::is_compose_profile_running(to_profile).await {
                     running = true;
                     break;
                 }
                 let pct = 71u8.saturating_add(((attempt + 1) * 8 / 45).min(8));
                 emit_step(
-                    &format!(
-                        "Waiting for containers to start ({}/45)...",
-                        attempt + 1
-                    ),
+                    &format!("Waiting for containers to start ({}/45)...", attempt + 1),
                     pct,
                 );
                 tokio::time::sleep(std::time::Duration::from_secs(2)).await;
@@ -445,7 +433,9 @@ pub(crate) async fn profile_switch(app: &AppHandle, body: &Value) -> Value {
                         .await
                         {
                             Ok(_) => {
-                                if crate::system_info::is_compose_profile_running(to_profile).await {
+                                if crate::monitor_handlers::is_compose_profile_running(to_profile)
+                                    .await
+                                {
                                     if let Ok(store_path) = app_file(app, "store.json") {
                                         let mut store = read_json(&store_path);
                                         if let Some(map) = store.as_object_mut() {
@@ -560,8 +550,9 @@ mod tests {
         fs::write(&store_path, r#"{"projects_home_dir":"/tmp/lumina-work"}"#).expect("write store");
 
         let store = read_json(&store_path);
-        let resolved = resolve_profile_project_dir(&store_path, &store, "testing11", "data-science")
-            .expect("resolved");
+        let resolved =
+            resolve_profile_project_dir(&store_path, &store, "testing11", "data-science")
+                .expect("resolved");
 
         assert_eq!(resolved, "/tmp/lumina-work/testing11/default");
         assert!(PathBuf::from(&resolved).is_dir());
@@ -589,8 +580,9 @@ mod tests {
         .expect("write store");
 
         let store = read_json(&store_path);
-        let resolved = resolve_profile_project_dir(&store_path, &store, "testing11", "data-science")
-            .expect("resolved");
+        let resolved =
+            resolve_profile_project_dir(&store_path, &store, "testing11", "data-science")
+                .expect("resolved");
 
         assert_eq!(resolved, linked);
 

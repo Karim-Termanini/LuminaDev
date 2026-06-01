@@ -366,7 +366,7 @@ Follow-up on `feat/runtimes-r1-r2` after manual dogfooding on LuminaDev repo. Al
 
 - [x] Unit tests: `stagedPathsToUnstageBeforeCommit`, `resolveSnapshotCommitPaths`, `shouldShowGitPush`
 - [x] `pnpm smoke` green on branch
-- [ ] Merge `feat/runtimes-r1-r2` to main via PR ([#127](https://github.com/Karim-Termanini/LuminaDev/pull/127))
+- [x] Merge `feat/runtimes-r1-r2` to main via PR ([#127](https://github.com/Karim-Termanini/LuminaDev/pull/127))
 
 ### Explicit non-goals (Git — permanent)
 

@@ -1,15 +1,16 @@
-# LUMINA_DEV_COMPOSE_FULL=1 overlay — game dev stack
+# Game dev stack
+# All ports use env vars with non-overlapping defaults to prevent collisions across profiles.
 
 services:
   redis:
     image: redis:7-alpine
     ports:
-      - "16379:6379"
+      - '${REDIS_PORT:-30400}:6379'
     restart: unless-stopped
 
   game-server:
     image: alpine:latest
-    command: ["sleep", "infinity"]
+    command: ['sleep', 'infinity']
     ports:
-      - "17777:7777"
+      - '${GAME_SERVER_PORT:-30401}:7777'
     restart: unless-stopped

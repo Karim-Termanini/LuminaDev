@@ -450,14 +450,28 @@ pub(crate) async fn docker_reconfigure_invoke(body: &Value) -> Value {
     }
 
     let _ = exec_output("docker", &["stop", id]).await;
+
+    // Verify the new container starts before destroying the old one.
+    if let Err(e) = exec_output("docker", &["start", &temp_name]).await {
+        // Rollback: restart the old container, clean up the failed new one.
+        let _ = exec_output("docker", &["start", id]).await;
+        let _ = exec_output("docker", &["rm", "-f", &temp_name]).await;
+        return json!({ "ok": false, "error": format!("[DOCKER_RECONFIG_START_FAILED] new container failed to start — old container restored: {}", e.trim()) });
+    }
+
+    // New container verified — safe to remove the old one.
     let _ = exec_output("docker", &["rm", id]).await;
 
+    // Stop new container so it can be renamed, then rename and restart.
+    let _ = exec_output("docker", &["stop", &temp_name]).await;
     if let Err(e) = exec_output("docker", &["rename", &temp_name, &container_name]).await {
-        return json!({ "ok": false, "error": format!("[DOCKER_RECONFIG_FAILED] rename failed: {}", e.trim()) });
+        // Rename failed but new container (under temp name) still works.
+        let _ = exec_output("docker", &["start", &temp_name]).await;
+        return json!({ "ok": false, "error": format!("[DOCKER_RECONFIG_RENAME_FAILED] old container removed, new container running as '{}': {}", temp_name, e.trim()) });
     }
 
     if let Err(e) = exec_output("docker", &["start", &container_name]).await {
-        return json!({ "ok": false, "error": format!("[DOCKER_RECONFIG_START_FAILED] {}", e.trim()) });
+        return json!({ "ok": false, "error": format!("[DOCKER_RECONFIG_START_FAILED] renamed container failed to start: {}", e.trim()) });
     }
 
     json!({ "ok": true, "name": container_name })
