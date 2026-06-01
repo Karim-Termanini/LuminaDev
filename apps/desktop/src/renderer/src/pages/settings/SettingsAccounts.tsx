@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react'
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import type { CloudAuthProvider } from '@linux-dev-home/shared'
 import { useTranslation } from 'react-i18next'
@@ -17,23 +17,26 @@ function parseProvider(raw: string | null): CloudGitProviderId {
 export function SettingsAccounts(): ReactElement {
   const { t } = useTranslation('settings')
   const [searchParams, setSearchParams] = useSearchParams()
-  const [activeProvider, setActiveProvider] = useState<CloudGitProviderId>(() => parseProvider(searchParams.get('provider')))
+  const providerFromUrl = parseProvider(searchParams.get('provider'))
+  const [activeProvider, setActiveProvider] = useState<CloudGitProviderId>(providerFromUrl)
   const auth = useCloudAuth(activeProvider)
 
-  useEffect(() => {
-    const next = parseProvider(searchParams.get('provider'))
-    setActiveProvider((cur) => (cur === next ? cur : next))
-  }, [searchParams])
+  const [syncedUrl, setSyncedUrl] = useState(providerFromUrl)
+  if (providerFromUrl !== syncedUrl) {
+    setSyncedUrl(providerFromUrl)
+    if (!auth.deviceFlow) setActiveProvider(providerFromUrl)
+  }
+  const flowProvider = auth.deviceFlow?.provider
+  if (flowProvider && flowProvider !== activeProvider) {
+    setActiveProvider(flowProvider)
+  }
 
-  useEffect(() => {
-    if (auth.deviceFlow) setActiveProvider(auth.deviceFlow.provider)
-  }, [auth.deviceFlow])
-
+  const { accounts } = auth
   const byProvider = useMemo(() => {
-    const map = new Map<CloudAuthProvider, (typeof auth.accounts)[number]>()
-    for (const a of auth.accounts) map.set(a.provider, a)
+    const map = new Map<CloudAuthProvider, (typeof accounts)[number]>()
+    for (const a of accounts) map.set(a.provider, a)
     return map
-  }, [auth.accounts])
+  }, [accounts])
 
   function selectProvider(provider: CloudGitProviderId): void {
     setActiveProvider(provider)

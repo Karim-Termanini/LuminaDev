@@ -84,8 +84,18 @@ export function useCloudAuth(activeProvider: CloudGitProviderId): {
   }, [])
 
   useEffect(() => {
-    void refreshStatus().finally(() => setLoading(false))
-    return () => stopPoll()
+    let cancelled = false
+    void (async () => {
+      try {
+        await refreshStatus()
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+      stopPoll()
+    }
   }, [refreshStatus, stopPoll])
 
   useEffect(() => {
@@ -98,13 +108,15 @@ export function useCloudAuth(activeProvider: CloudGitProviderId): {
     })()
   }, [])
 
-  useEffect(() => {
+  const [patActiveProvider, setPatActiveProvider] = useState(activeProvider)
+  if (activeProvider !== patActiveProvider) {
+    setPatActiveProvider(activeProvider)
     if (patProvider && patProvider !== activeProvider) {
       setPatProvider(null)
       setPatToken('')
       setPatError(null)
     }
-  }, [activeProvider, patProvider])
+  }
 
   const applyCloudAuthFailure = useCallback((e: unknown): void => {
     if (isCloudAuthOauthNotConfigured(e)) {
