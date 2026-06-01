@@ -134,7 +134,7 @@ export function SettingsSystem(): ReactElement {
   const { t } = useTranslation('settings')
   const [hostsPreview, setHostsPreview] = useState<string | null>(null)
   const [hostsErr, setHostsErr] = useState<string | null>(null)
-  const [hostsBusy, setHostsBusy] = useState(false)
+  const [hostsBusy, setHostsBusy] = useState(true)
   const [hostsEditing, setHostsEditing] = useState(false)
   const [hostsDraft, setHostsDraft] = useState('')
   const [hostsSaving, setHostsSaving] = useState(false)
@@ -143,7 +143,7 @@ export function SettingsSystem(): ReactElement {
 
   const [profileEnvContent, setProfileEnvContent] = useState<string | null>(null)
   const [profileEnvPath, setProfileEnvPath] = useState('')
-  const [profileEnvBusy, setProfileEnvBusy] = useState(false)
+  const [profileEnvBusy, setProfileEnvBusy] = useState(true)
   const [profileEnvErr, setProfileEnvErr] = useState<string | null>(null)
   const [profileEnvNewKey, setProfileEnvNewKey] = useState('')
   const [profileEnvNewVal, setProfileEnvNewVal] = useState('')
@@ -153,7 +153,7 @@ export function SettingsSystem(): ReactElement {
 
   const [envPreview, setEnvPreview] = useState<string | null>(null)
   const [envErr, setEnvErr] = useState<string | null>(null)
-  const [envBusy, setEnvBusy] = useState(false)
+  const [envBusy, setEnvBusy] = useState(true)
 
   const [envFilter, setEnvFilter] = useState('')
   const [hostsFilter, setHostsFilter] = useState('')
@@ -200,9 +200,6 @@ export function SettingsSystem(): ReactElement {
   }, [hostsSaveReview, hostsPreview, hostsDraft])
 
   useEffect(() => {
-    setHostsBusy(true)
-    setEnvBusy(true)
-    setProfileEnvBusy(true)
     void Promise.all([
       window.dh.hostExec({ command: 'settings_read_hosts' }),
       window.dh.hostExec({ command: 'settings_process_env' }),
