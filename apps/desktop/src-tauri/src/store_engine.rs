@@ -5,7 +5,10 @@ use crate::host_exec::{
     cmd_timeout_long, cmd_timeout_short, exec_output, exec_output_limit,
     set_global_daemon_auto_restart, set_global_ipc_timeout, set_global_thread_pool_size,
 };
-use crate::utils::{app_file, is_allowed_store_key, now_ms, read_json, write_json};
+use crate::utils::{
+    app_file, is_allowed_store_key, now_ms, read_json, read_json_async, write_json,
+    write_json_async,
+};
 
 // ---------------------------------------------------------------------------
 // Store operations (dh:store:*)
@@ -18,7 +21,7 @@ pub(crate) async fn store_get(app: &AppHandle, body: &Value) -> Value {
     }
     match app_file(app, "store.json") {
         Ok(path) => {
-            let store = read_json(&path);
+            let store = read_json_async(path).await;
             json!({ "ok": true, "data": store.get(key).cloned().unwrap_or(Value::Null) })
         }
         Err(e) => json!({ "ok": false, "error": e }),
@@ -32,7 +35,7 @@ pub(crate) async fn store_set(app: &AppHandle, body: &Value) -> Value {
     }
     match app_file(app, "store.json") {
         Ok(path) => {
-            let mut store = read_json(&path);
+            let mut store = read_json_async(path.clone()).await;
             // Accept both 'value' and 'data' to resolve contract mismatch
             let value = body
                 .get("value")
@@ -57,7 +60,7 @@ pub(crate) async fn store_set(app: &AppHandle, body: &Value) -> Value {
                     set_global_daemon_auto_restart(v);
                 }
             }
-            match write_json(&path, &store) {
+            match write_json_async(path, store).await {
                 Ok(_) => json!({ "ok": true }),
                 Err(e) => json!({ "ok": false, "error": e }),
             }
@@ -73,13 +76,13 @@ pub(crate) async fn store_delete(app: &AppHandle, body: &Value) -> Value {
     }
     match app_file(app, "store.json") {
         Ok(path) => {
-            let mut store = read_json(&path);
+            let mut store = read_json_async(path.clone()).await;
             if store.is_object() {
                 if let Some(map) = store.as_object_mut() {
                     map.remove(key);
                 }
             }
-            match write_json(&path, &store) {
+            match write_json_async(path, store).await {
                 Ok(_) => json!({ "ok": true }),
                 Err(e) => json!({ "ok": false, "error": e }),
             }

@@ -1,10 +1,11 @@
-# LUMINA_DEV_COMPOSE_FULL=1 overlay — desktop GUI dev stack
+# Desktop GUI dev stack
+# All ports use env vars with non-overlapping defaults to prevent collisions across profiles.
 
 services:
   xpra:
     image: jare/xpra:latest
     ports:
-      - "18100:14500"
+      - '${XPRA_PORT:-30600}:14500'
     environment:
       - DISPLAY=:0
     restart: unless-stopped

@@ -1,10 +1,7 @@
 use serde_json::{json, Value};
 
-use crate::host_exec::{
-    cmd_timeout_long, cmd_timeout_short, exec_output, exec_output_limit, exec_result,
-    exec_result_limit,
-};
-use crate::utils::{docker_prune_preview_payload, parse_size_mb};
+use crate::host_exec::{cmd_timeout_short, exec_output, exec_output_limit};
+use crate::utils::docker_prune_preview_payload;
 
 pub(crate) async fn docker_check_installed() -> Value {
     let docker = exec_output_limit("docker", &["--version"], cmd_timeout_short())
@@ -20,48 +17,7 @@ pub(crate) async fn docker_check_installed() -> Value {
 }
 
 pub(crate) async fn docker_list() -> Value {
-    match exec_output("docker", &["ps", "-a", "--format", "{\"ID\":\"{{.ID}}\",\"Names\":\"{{.Names}}\",\"Image\":\"{{.Image}}\",\"State\":\"{{.State}}\",\"Status\":\"{{.Status}}\",\"Ports\":\"{{.Ports}}\",\"Networks\":\"{{.Networks}}\",\"Mounts\":\"{{.Mounts}}\"}"]).await {
-    Ok(out) => {
-      let rows: Vec<Value> = out
-        .lines()
-        .filter_map(|line| serde_json::from_str::<Value>(line).ok())
-        .map(|v| {
-          let mut networks: Vec<String> = v
-            .get("Networks")
-            .and_then(|x| x.as_str())
-            .unwrap_or_default()
-            .split(',')
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
-            .collect();
-          if networks.is_empty() {
-            networks.push("bridge".to_string());
-          }
-          let volumes: Vec<String> = v
-            .get("Mounts")
-            .and_then(|x| x.as_str())
-            .unwrap_or_default()
-            .split(',')
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
-            .collect();
-          json!({
-            "id": v.get("ID").and_then(|x| x.as_str()).unwrap_or_default(),
-            "name": v.get("Names").and_then(|x| x.as_str()).map(|s| s.trim_start_matches('/')).unwrap_or_default(),
-            "image": v.get("Image").and_then(|x| x.as_str()).unwrap_or_default(),
-            "imageId": "",
-            "state": v.get("State").and_then(|x| x.as_str()).unwrap_or("unknown"),
-            "status": v.get("Status").and_then(|x| x.as_str()).unwrap_or("unknown"),
-            "ports": v.get("Ports").and_then(|x| x.as_str()).filter(|x| !x.is_empty()).unwrap_or("—"),
-            "networks": networks,
-            "volumes": volumes
-          })
-        })
-        .collect();
-      json!({ "ok": true, "rows": rows })
-    }
-    Err(e) => json!({ "ok": false, "error": format!("[DOCKER_LIST_FAILED] {}", e.trim()) }),
-  }
+    crate::docker_api::list_containers().await
 }
 
 pub(crate) async fn docker_action(body: &Value) -> Value {
@@ -87,215 +43,56 @@ pub(crate) async fn docker_action(body: &Value) -> Value {
             .and_then(|v| v.as_str())
             .unwrap_or_default()
             .to_string();
-        let remove_args: Vec<&str> = if remove_volumes {
-            vec!["rm", "-f", "-v", id]
-        } else {
-            vec!["rm", "-f", id]
-        };
-        return match exec_output("docker", &remove_args).await {
-            Ok(_) => {
-                if remove_image && !image_ref.trim().is_empty() {
-                    let _ = exec_output("docker", &["rmi", image_ref.trim()]).await;
-                }
-                json!({ "ok": true })
-            }
-            Err(e) => {
-                json!({ "ok": false, "error": format!("[DOCKER_ACTION_FAILED] {}", e.trim()) })
-            }
-        };
-    }
-    let args: Vec<&str> = match action {
-        "start" => vec!["start", id],
-        "stop" => vec!["stop", id],
-        "restart" => vec!["restart", id],
-        _ => {
-            return json!({ "ok": false, "error": format!("[DOCKER_ACTION_FAILED] Unsupported action: {}", action) })
+        let result = crate::docker_api::container_action(id, "remove", remove_volumes).await;
+        if result.get("ok").and_then(|v| v.as_bool()) == Some(true)
+            && remove_image
+            && !image_ref.trim().is_empty()
+        {
+            let _ = crate::docker_api::remove_image(image_ref.trim(), true).await;
         }
-    };
-    match exec_output("docker", &args).await {
-        Ok(_) => json!({ "ok": true }),
-        Err(e) => json!({ "ok": false, "error": format!("[DOCKER_ACTION_FAILED] {}", e.trim()) }),
+        return result;
     }
+    crate::docker_api::container_action(id, action, false).await
 }
 
 pub(crate) async fn handle_container_stats(body: &Value) -> Value {
     let id = body.get("id").and_then(|v| v.as_str()).unwrap_or_default();
-    if id.is_empty() {
-        return json!({"ok": false, "error": "[DOCKER_STATS_FAILED] Missing container id."});
-    }
-    match exec_output(
-        "docker",
-        &["stats", "--no-stream", "--format", "{{json .}}", id],
-    )
-    .await
-    {
-        Ok(out) => {
-            let line = out.lines().next().unwrap_or("{}");
-            match serde_json::from_str::<Value>(line) {
-                Ok(v) => {
-                    let cpu_pct = v
-                        .get("CPUPerc")
-                        .and_then(|x| x.as_str())
-                        .unwrap_or("0%")
-                        .trim_end_matches('%')
-                        .parse::<f64>()
-                        .unwrap_or(0.0);
-                    let (mem_mb, mem_limit_mb) = parse_docker_mem(
-                        v.get("MemUsage")
-                            .and_then(|x| x.as_str())
-                            .unwrap_or("0B / 0B"),
-                    );
-                    let (net_rx_mb, net_tx_mb) = parse_docker_net(
-                        v.get("NetIO").and_then(|x| x.as_str()).unwrap_or("0B / 0B"),
-                    );
-                    // CPUPerc is already a percentage string (e.g. "2.50%").
-                    // The multiply/divide by 100.0 rounds to 2 decimal places.
-                    json!({
-                      "ok": true,
-                      "cpuPct": (cpu_pct * 100.0).round() / 100.0,
-                      "memMb": (mem_mb * 100.0).round() / 100.0,
-                      "memLimitMb": (mem_limit_mb * 100.0).round() / 100.0,
-                      "netRxMb": (net_rx_mb * 100.0).round() / 100.0,
-                      "netTxMb": (net_tx_mb * 100.0).round() / 100.0
-                    })
-                }
-                Err(_) => {
-                    json!({"ok": false, "error": "[DOCKER_STATS_FAILED] Could not parse stats JSON."})
-                }
-            }
-        }
-        Err(e) => json!({"ok": false, "error": format!("[DOCKER_STATS_FAILED] {}", e.trim())}),
-    }
-}
-
-fn parse_docker_mem(raw: &str) -> (f64, f64) {
-    // "10MiB / 1.943GiB" or "1.2GiB / 3.8GiB" or "0B / 0B"
-    let parts: Vec<&str> = raw.split(" / ").collect();
-    let usage = parts.first().map(|s| parse_mem_to_mb(s)).unwrap_or(0.0);
-    let limit = parts.get(1).map(|s| parse_mem_to_mb(s)).unwrap_or(0.0);
-    (usage, limit)
-}
-
-fn parse_docker_net(raw: &str) -> (f64, f64) {
-    // "1.2kB / 0B" or "5.3MB / 2.1MB"
-    let parts: Vec<&str> = raw.split(" / ").collect();
-    let rx = parts.first().map(|s| parse_net_to_mb(s)).unwrap_or(0.0);
-    let tx = parts.get(1).map(|s| parse_net_to_mb(s)).unwrap_or(0.0);
-    (rx, tx)
-}
-
-fn parse_mem_to_mb(s: &str) -> f64 {
-    let s_lower = s.trim().to_lowercase();
-    let s_str = s_lower.as_str();
-    if s_str.ends_with("tib") {
-        s_str.trim_end_matches("tib").parse::<f64>().unwrap_or(0.0) * 1024.0 * 1024.0
-    } else if s_str.ends_with("gib") {
-        s_str.trim_end_matches("gib").parse::<f64>().unwrap_or(0.0) * 1024.0
-    } else if s_str.ends_with("mib") {
-        s_str.trim_end_matches("mib").parse::<f64>().unwrap_or(0.0)
-    } else if s_str.ends_with("kib") {
-        s_str.trim_end_matches("kib").parse::<f64>().unwrap_or(0.0) / 1024.0
-    } else if s_str.ends_with('b') {
-        s_str.trim_end_matches('b').parse::<f64>().unwrap_or(0.0) / (1024.0 * 1024.0)
-    } else {
-        0.0
-    }
-}
-
-fn parse_net_to_mb(s: &str) -> f64 {
-    let s_lower = s.trim().to_lowercase();
-    let s_str = s_lower.as_str();
-    if s_str.ends_with("tb") {
-        s_str.trim_end_matches("tb").parse::<f64>().unwrap_or(0.0) * 1000.0 * 1000.0
-    } else if s_str.ends_with("gb") {
-        s_str.trim_end_matches("gb").parse::<f64>().unwrap_or(0.0) * 1000.0
-    } else if s_str.ends_with("mb") {
-        s_str.trim_end_matches("mb").parse::<f64>().unwrap_or(0.0)
-    } else if s_str.ends_with("kb") {
-        s_str.trim_end_matches("kb").parse::<f64>().unwrap_or(0.0) / 1000.0
-    } else if s_str.ends_with('b') {
-        s_str.trim_end_matches('b').parse::<f64>().unwrap_or(0.0) / (1000.0 * 1000.0)
-    } else {
-        0.0
-    }
+    crate::docker_api::container_stats(id).await
 }
 
 pub(crate) async fn docker_logs(body: &Value) -> Value {
     let id = body.get("id").and_then(|v| v.as_str()).unwrap_or_default();
-    let tail = body
-        .get("tail")
-        .and_then(|v| v.as_u64())
-        .unwrap_or(200)
-        .to_string();
-    if id.is_empty() {
-        json!({ "ok": false, "text": "", "error": "[DOCKER_LOGS_FAILED] Missing id." })
-    } else {
-        match exec_result("docker", &["logs", "--tail", &tail, id]).await {
-            Ok((stdout, stderr)) => json!({ "ok": true, "text": format!("{}{}", stdout, stderr) }),
-            Err(e) => {
-                json!({ "ok": false, "text": "", "error": format!("[DOCKER_LOGS_FAILED] {}", e.trim()) })
-            }
-        }
-    }
+    let tail = body.get("tail").and_then(|v| v.as_u64()).unwrap_or(200);
+    crate::docker_api::container_logs(id, tail).await
 }
 
 pub(crate) async fn docker_images_list() -> Value {
-    match exec_output(
-        "docker",
-        &["images", "--format", "{{json .}}", "--no-trunc"],
-    )
-    .await
-    {
-        Ok(out) => {
-            let rows: Vec<Value> = out
-                .lines()
-                .filter_map(|line| serde_json::from_str::<Value>(line).ok())
-                .map(|v| {
-                    let repository = v
-                        .get("Repository")
-                        .and_then(|x| x.as_str())
-                        .unwrap_or("<none>");
-                    let tag = v.get("Tag").and_then(|x| x.as_str()).unwrap_or("<none>");
-                    let id = v.get("ID").and_then(|x| x.as_str()).unwrap_or_default();
-                    let size = v.get("Size").and_then(|x| x.as_str()).unwrap_or("0MB");
-                    json!({
-                      "id": id,
-                      "repoTags": [format!("{}:{}", repository, tag)],
-                      "sizeMb": parse_size_mb(size),
-                      "createdAt": v.get("CreatedAt").and_then(|x| x.as_str()).unwrap_or_default()
-                    })
-                })
-                .collect();
-            json!({ "ok": true, "rows": rows })
-        }
-        Err(e) => json!({ "ok": false, "error": format!("[DOCKER_IMAGES_FAILED] {}", e.trim()) }),
-    }
+    crate::docker_api::list_images().await
 }
 
 pub(crate) async fn docker_image_action(body: &Value) -> Value {
     let id = body.get("id").and_then(|v| v.as_str()).unwrap_or_default();
     let force = body.get("force").and_then(|v| v.as_bool()).unwrap_or(false);
-    if id.is_empty() {
-        json!({ "ok": false, "error": "[DOCKER_IMAGE_ACTION_FAILED] Missing image id." })
-    } else {
-        let args: Vec<&str> = if force {
-            vec!["rmi", "-f", id]
-        } else {
-            vec!["rmi", id]
-        };
-        match exec_output("docker", &args).await {
-            Ok(_) => json!({ "ok": true }),
-            Err(e) => {
-                json!({ "ok": false, "error": format!("[DOCKER_IMAGE_ACTION_FAILED] {}", e.trim()) })
-            }
-        }
-    }
+    crate::docker_api::remove_image(id, force).await
 }
 
 pub(crate) async fn docker_volumes_list() -> Value {
     // Build a map of volume_name -> Vec<container_name>
-    let mut usage_map: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
-    if let Ok(out) = exec_output("docker", &["container", "ls", "-a", "--format", "{{.Names}}\t{{.Mounts}}", "--no-trunc"]).await {
+    let mut usage_map: std::collections::HashMap<String, Vec<String>> =
+        std::collections::HashMap::new();
+    if let Ok(out) = exec_output(
+        "docker",
+        &[
+            "container",
+            "ls",
+            "-a",
+            "--format",
+            "{{.Names}}\t{{.Mounts}}",
+            "--no-trunc",
+        ],
+    )
+    .await
+    {
         for line in out.lines() {
             let parts: Vec<&str> = line.split('\t').collect();
             if parts.len() == 2 {
@@ -305,7 +102,10 @@ pub(crate) async fn docker_volumes_list() -> Value {
                     for m in mounts_str.split(',') {
                         let m = m.trim();
                         if !m.is_empty() {
-                            usage_map.entry(m.to_string()).or_default().push(container.to_string());
+                            usage_map
+                                .entry(m.to_string())
+                                .or_default()
+                                .push(container.to_string());
                         }
                     }
                 }
@@ -313,34 +113,7 @@ pub(crate) async fn docker_volumes_list() -> Value {
         }
     }
 
-    match exec_output("docker", &["volume", "ls", "--format", "{{json .}}"]).await {
-        Ok(out) => {
-            let mut rows = Vec::new();
-            for line in out.lines() {
-                let line = line.trim();
-                if line.is_empty() {
-                    continue;
-                }
-                if let Ok(parsed) = serde_json::from_str::<Value>(line) {
-                    let name = parsed.get("Name").and_then(|v| v.as_str()).unwrap_or("").to_string();
-                    let driver = parsed.get("Driver").and_then(|v| v.as_str()).unwrap_or("local").to_string();
-                    let scope = parsed.get("Scope").and_then(|v| v.as_str()).unwrap_or("local").to_string();
-                    let mountpoint = parsed.get("Mountpoint").and_then(|v| v.as_str()).unwrap_or("").to_string();
-                    let used_by = usage_map.get(&name).cloned().unwrap_or_default();
-                    
-                    rows.push(json!({
-                        "name": name,
-                        "driver": driver,
-                        "mountpoint": mountpoint,
-                        "scope": scope,
-                        "usedBy": used_by
-                    }));
-                }
-            }
-            json!({ "ok": true, "rows": rows })
-        }
-        Err(e) => json!({ "ok": false, "error": format!("[DOCKER_VOLUMES_FAILED] {}", e.trim()) }),
-    }
+    crate::docker_api::list_volumes(usage_map).await
 }
 
 pub(crate) async fn docker_volume_create(body: &Value) -> Value {
@@ -382,25 +155,7 @@ pub(crate) async fn docker_volume_action(body: &Value) -> Value {
 }
 
 pub(crate) async fn docker_networks_list() -> Value {
-    match exec_output("docker", &["network", "ls", "--format", "{{json .}}"]).await {
-        Ok(out) => {
-            let rows: Vec<Value> = out
-                .lines()
-                .filter_map(|line| serde_json::from_str::<Value>(line).ok())
-                .map(|v| {
-                    json!({
-                      "id": v.get("ID").and_then(|x| x.as_str()).unwrap_or_default(),
-                      "name": v.get("Name").and_then(|x| x.as_str()).unwrap_or_default(),
-                      "driver": v.get("Driver").and_then(|x| x.as_str()).unwrap_or("bridge"),
-                      "scope": v.get("Scope").and_then(|x| x.as_str()).unwrap_or("local"),
-                      "usedBy": []
-                    })
-                })
-                .collect();
-            json!({ "ok": true, "rows": rows })
-        }
-        Err(e) => json!({ "ok": false, "error": format!("[DOCKER_NETWORKS_FAILED] {}", e.trim()) }),
-    }
+    crate::docker_api::list_networks().await
 }
 
 pub(crate) async fn docker_network_create(body: &Value) -> Value {
@@ -508,14 +263,7 @@ pub(crate) async fn docker_pull(body: &Value) -> Value {
         .get("image")
         .and_then(|v| v.as_str())
         .unwrap_or_default();
-    if image.is_empty() {
-        json!({ "ok": false, "error": "[DOCKER_PULL_FAILED] Missing image name." })
-    } else {
-        match exec_result_limit("docker", &["pull", image], cmd_timeout_long()).await {
-            Ok((stdout, stderr)) => json!({ "ok": true, "log": format!("{}{}", stdout, stderr) }),
-            Err(e) => json!({ "ok": false, "error": format!("[DOCKER_PULL_FAILED] {}", e.trim()) }),
-        }
-    }
+    crate::docker_api::pull_image_simple(image).await
 }
 
 pub(crate) async fn docker_search(body: &Value) -> Value {
@@ -711,88 +459,5 @@ async fn docker_nonempty_line_count(args: &[&str]) -> u64 {
     match exec_output_limit("docker", args, cmd_timeout_short()).await {
         Ok(out) => out.lines().filter(|l| !l.trim().is_empty()).count() as u64,
         Err(_) => 0,
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn mem_to_mb_standard_units() {
-        assert!((parse_mem_to_mb("10MiB") - 10.0).abs() < 0.01);
-        assert!((parse_mem_to_mb("1.943GiB") - 1989.632).abs() < 0.01);
-        assert!((parse_mem_to_mb("512KiB") - 0.5).abs() < 0.01);
-        assert!((parse_mem_to_mb("0B") - 0.0).abs() < 0.01);
-    }
-
-    #[test]
-    fn mem_to_mb_case_insensitive() {
-        assert!((parse_mem_to_mb("10mib") - 10.0).abs() < 0.01);
-        assert!((parse_mem_to_mb("1.943GIB") - 1989.632).abs() < 0.01);
-        assert!((parse_mem_to_mb("512KIB") - 0.5).abs() < 0.01);
-    }
-
-    #[test]
-    fn net_to_mb_standard_units() {
-        assert!((parse_net_to_mb("1.2kB") - 0.0012).abs() < 0.0001);
-        assert!((parse_net_to_mb("5.3MB") - 5.3).abs() < 0.01);
-        assert!((parse_net_to_mb("1GB") - 1000.0).abs() < 0.01);
-        assert!((parse_net_to_mb("0B") - 0.0).abs() < 0.01);
-    }
-
-    #[test]
-    fn net_to_mb_case_insensitive() {
-        assert!((parse_net_to_mb("1.2kb") - 0.0012).abs() < 0.0001);
-        assert!((parse_net_to_mb("5.3mb") - 5.3).abs() < 0.01);
-        assert!((parse_net_to_mb("1gb") - 1000.0).abs() < 0.01);
-    }
-
-    #[test]
-    fn net_to_mb_uppercase_kb() {
-        // Edge case: uppercase K in KB (non-standard but seen in some runtimes)
-        assert!((parse_net_to_mb("1.2KB") - 0.0012).abs() < 0.0001);
-        assert!((parse_net_to_mb("5.3MB") - 5.3).abs() < 0.01);
-    }
-
-    #[test]
-    fn mem_to_mb_terabyte() {
-        assert!((parse_mem_to_mb("2.5TiB") - 2_621_440.0).abs() < 1.0);
-        assert!((parse_mem_to_mb("1TiB") - 1_048_576.0).abs() < 1.0);
-    }
-
-    #[test]
-    fn net_to_mb_terabyte() {
-        assert!((parse_net_to_mb("1.5TB") - 1_500_000.0).abs() < 1.0);
-        assert!((parse_net_to_mb("0.5tb") - 500_000.0).abs() < 1.0);
-    }
-
-    #[test]
-    fn mem_to_mb_uppercase_b() {
-        // Edge case: uppercase suffixes from non-standard container runtimes
-        assert!((parse_mem_to_mb("10MIB") - 10.0).abs() < 0.01);
-        assert!((parse_mem_to_mb("1.943GIB") - 1989.632).abs() < 0.01);
-    }
-
-    #[test]
-    fn docker_mem_split_and_parse() {
-        let (usage, limit) = parse_docker_mem("10MiB / 1.943GiB");
-        assert!((usage - 10.0).abs() < 0.01);
-        assert!((limit - 1989.632).abs() < 0.01);
-
-        let (usage, limit) = parse_docker_mem("0B / 0B");
-        assert!((usage - 0.0).abs() < 0.01);
-        assert!((limit - 0.0).abs() < 0.01);
-    }
-
-    #[test]
-    fn docker_net_split_and_parse() {
-        let (rx, tx) = parse_docker_net("1.2kB / 5.3MB");
-        assert!((rx - 0.0012).abs() < 0.0001);
-        assert!((tx - 5.3).abs() < 0.01);
-
-        let (rx, tx) = parse_docker_net("0B / 0B");
-        assert!((rx - 0.0).abs() < 0.01);
-        assert!((tx - 0.0).abs() < 0.01);
     }
 }

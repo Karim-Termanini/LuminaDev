@@ -1,10 +1,11 @@
-# LUMINA_DEV_COMPOSE_FULL=1 overlay — docs/writing stack
+# Docs / writing stack
+# All ports use env vars with non-overlapping defaults to prevent collisions across profiles.
 
 services:
   mkdocs:
     image: squidfunk/mkdocs-material:latest
     ports:
-      - "18000:8000"
+      - '${MKDOCS_PORT:-30700}:8000'
     volumes:
       - ${PROJECT_DIR}:/docs
     restart: unless-stopped

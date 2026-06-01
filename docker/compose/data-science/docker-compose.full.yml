@@ -1,5 +1,0 @@
-# FULL stack overlay for data-science.
-# Base docker-compose.yml already defines Jupyter + Postgres with per-profile env ports.
-# Do not redefine those services here — Compose merges port lists and duplicates bindings.
-
-services: {}

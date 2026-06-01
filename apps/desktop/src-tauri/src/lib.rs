@@ -41,16 +41,19 @@ pub(crate) use runtime_discover::{
 };
 mod runtime_verify;
 pub(crate) use runtime_verify::runtime_append_verify;
+mod runtime_install;
 mod runtime_jobs;
+mod runtime_remove;
+pub(crate) use runtime_install::runtime_set_active_invoke;
 #[allow(unused_imports)]
-pub(crate) use runtime_jobs::{
-    cancel_runtime_job, effective_runtime_job_final_state, runtime_set_active_invoke,
-};
+pub(crate) use runtime_jobs::{cancel_runtime_job, effective_runtime_job_final_state};
 
 mod cloud_auth;
 mod cloud_git_ipc;
 mod compose_engine;
+mod compose_ports;
 mod compose_profiles;
+mod docker_api;
 mod docker_engine;
 mod docker_ext;
 mod executor;
@@ -67,7 +70,9 @@ mod readiness_ipc;
 mod store_engine;
 mod system_info;
 pub(crate) use system_info::startup_update_check;
+mod monitor_handlers;
 mod runtime_logs;
+mod ssh_handlers;
 mod terminal_pty;
 
 #[tauri::command]
@@ -157,7 +162,7 @@ async fn ipc_invoke(
         "dh:terminal:get-all-env" => terminal_pty::terminal_get_all_env().await,
         "dh:docker:terminal" => terminal_pty::docker_terminal(&app, &state, &body).await,
         "dh:job:list" => json!(state.jobs.lock().await.clone()),
-        "dh:job:start" => runtime_jobs::handle_job_start(&app, &state, &body).await,
+        "dh:job:start" => runtime_install::handle_job_start(&app, &state, &body).await,
         "dh:job:cancel" => runtime_jobs::handle_job_cancel(&state, &body).await,
         "dh:editor:list" => system_info::editor_list().await,
         "dh:editor:open" => system_info::editor_open(&app, &body).await,
@@ -223,12 +228,12 @@ async fn ipc_invoke(
         | "dh:git:vcs:conflict-hunks"
         | "dh:git:vcs:resolve-conflict"
         | "dh:git:vcs:resolve-hunk" => git_vcs_ipc::invoke_extended(channel.as_str(), &body).await,
-        "dh:ssh:generate" => system_info::handle_ssh_generate(&body).await,
-        "dh:ssh:get:pub" => system_info::handle_ssh_get_pub().await,
-        "dh:ssh:test:github" => system_info::handle_ssh_test_github().await,
-        "dh:ssh:list:dir" => system_info::handle_ssh_list_dir(&body).await,
-        "dh:ssh:setup:remote:key" => system_info::handle_ssh_setup_remote_key(&body).await,
-        "dh:ssh:enable:local" => system_info::handle_ssh_enable_local().await,
+        "dh:ssh:generate" => ssh_handlers::handle_ssh_generate(&body).await,
+        "dh:ssh:get:pub" => ssh_handlers::handle_ssh_get_pub().await,
+        "dh:ssh:test:github" => ssh_handlers::handle_ssh_test_github().await,
+        "dh:ssh:list:dir" => ssh_handlers::handle_ssh_list_dir(&body).await,
+        "dh:ssh:setup:remote:key" => ssh_handlers::handle_ssh_setup_remote_key(&body).await,
+        "dh:ssh:enable:local" => ssh_handlers::handle_ssh_enable_local().await,
         "dh:runtime:status" => runtime_jobs::handle_runtime_status().await,
         "dh:runtime:installed-versions" => {
             runtime_jobs::handle_runtime_installed_versions(&body).await
@@ -236,18 +241,20 @@ async fn ipc_invoke(
         "dh:runtime:get-versions" => runtime_jobs::handle_runtime_get_versions(&body).await,
         "dh:runtime:check-deps" => runtime_jobs::handle_runtime_check_deps(&body).await,
         "dh:runtime:uninstall:preview" => {
-            runtime_jobs::handle_runtime_uninstall_preview(&body).await
+            runtime_remove::handle_runtime_uninstall_preview(&body).await
         }
         "dh:runtime:set-active" => runtime_set_active_invoke(&body).await,
-        "dh:runtime:remove-version" => runtime_jobs::handle_runtime_remove_version(&body).await,
+        "dh:runtime:remove-version" => runtime_remove::handle_runtime_remove_version(&body).await,
         "dh:diagnostics:bundle:create" => system_info::diagnostics_bundle_create(&app, &body).await,
-        "dh:monitor:top-processes" => system_info::handle_monitor_top_processes().await,
-        "dh:monitor:security" => system_info::handle_monitor_security().await,
-        "dh:monitor:security-drilldown" => system_info::handle_monitor_security_drilldown().await,
-        "dh:metrics" => system_info::handle_metrics(&state).await,
+        "dh:monitor:top-processes" => monitor_handlers::handle_monitor_top_processes().await,
+        "dh:monitor:security" => monitor_handlers::handle_monitor_security().await,
+        "dh:monitor:security-drilldown" => {
+            monitor_handlers::handle_monitor_security_drilldown().await
+        }
+        "dh:metrics" => monitor_handlers::handle_metrics(&state).await,
         "dh:app:update:check" => system_info::app_update_check(&app, &body).await,
         "dh:profile:running-status" => {
-            system_info::handle_profile_running_status(&app, &body).await
+            monitor_handlers::handle_profile_running_status(&app, &body).await
         }
         "dh:docker:container:stats" => docker_engine::handle_container_stats(&body).await,
         "dh:log:stream:start" => {
@@ -317,16 +324,15 @@ mod tests {
     use super::*;
     use crate::docker_ext::docker_install_build_steps;
     use crate::runtime_packages::{
-        pkg_remove_cmd, pkg_upgrade_cmd, runtime_java_system_packages_for_version,
-        runtime_pkg_mgr, runtime_pkg_mgr_or_default,
+        pkg_remove_cmd, pkg_upgrade_cmd, runtime_java_system_packages_for_version, runtime_pkg_mgr,
+        runtime_pkg_mgr_or_default,
     };
     use crate::runtime_versioning::{
         lumina_dotnet_install_channel, lumina_first_version_token, lumina_probe_meaningful_line,
     };
     use crate::utils::{
         docker_prune_preview_payload, is_allowed_store_key, is_physical_disk_name,
-        parse_porcelain_v1, parse_size_mb, sanitize_docker_name, ss_process_from_line,
-        truncate_probe_output,
+        parse_porcelain_v1, sanitize_docker_name, ss_process_from_line, truncate_probe_output,
     };
 
     #[cfg(test)]
@@ -406,14 +412,6 @@ mod tests {
             effective_runtime_job_final_state("completed", "running"),
             "completed"
         );
-    }
-
-    #[test]
-    fn parse_size_mb_parses_common_units() {
-        assert_eq!(parse_size_mb("1gb"), 1024);
-        assert_eq!(parse_size_mb("512 mb"), 512);
-        assert_eq!(parse_size_mb("2048kb"), 2);
-        assert_eq!(parse_size_mb("1048576b"), 1);
     }
 
     #[test]

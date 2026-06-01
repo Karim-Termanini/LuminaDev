@@ -1,14 +1,15 @@
-# LUMINA_DEV_COMPOSE_FULL=1 overlay — mobile dev stack
+# Mobile dev stack
+# All ports use env vars with non-overlapping defaults to prevent collisions across profiles.
 
 services:
   appium:
     image: appium/appium:latest
     ports:
-      - "14723:4723"
+      - '${APPIUM_PORT:-30500}:4723'
     restart: unless-stopped
 
   json-server:
     image: vimagick/json-server:latest
     ports:
-      - "13000:3000"
+      - '${JSON_SERVER_PORT:-30501}:3000'
     restart: unless-stopped

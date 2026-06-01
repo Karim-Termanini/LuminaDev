@@ -6,8 +6,8 @@ services:
     image: node:${NODE_IMAGE_TAG:-20-alpine}
     working_dir: /app
     ports:
-      - "${NODE_PORT:-3000}:3000"
-      - "${NODE_HMR_PORT:-5173}:5173"
+      - "${NODE_PORT:-30000}:3000"
+      - "${NODE_HMR_PORT:-30001}:5173"
     environment:
       - NODE_ENV=development
     volumes:
@@ -18,7 +18,7 @@ services:
   postgres:
     image: postgres:${POSTGRES_IMAGE_TAG:-16-alpine}
     ports:
-      - "${POSTGRES_PORT:-54321}:5432"
+      - "${POSTGRES_PORT:-30002}:5432"
     environment:
       - POSTGRES_PASSWORD=luminadev
       - POSTGRES_USER=postgres

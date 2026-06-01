@@ -1,10 +1,12 @@
-# LUMINA_DEV_COMPOSE_FULL=1 overlay — AI/ML dev stack
+# AI/ML dev stack
+# All ports use env vars with non-overlapping defaults to prevent collisions across profiles.
+# Override via LUMINA_DEV_COMPOSE_ROOT env or store.json port assignments.
 
 services:
   jupyter:
     image: jupyter/scipy-notebook:latest
     ports:
-      - "18888:8888"
+      - '${JUPYTER_PORT:-30100}:8888'
     environment:
       - JUPYTER_ENABLE_LAB=yes
       - JUPYTER_TOKEN=luminadev
@@ -15,7 +17,7 @@ services:
   ollama:
     image: ollama/ollama:latest
     ports:
-      - "11434:11434"
+      - '${OLLAMA_PORT:-30101}:11434'
     volumes:
       - ollama_data:/root/.ollama
     restart: unless-stopped

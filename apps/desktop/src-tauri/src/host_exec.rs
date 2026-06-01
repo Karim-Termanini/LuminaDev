@@ -114,6 +114,7 @@ pub(crate) async fn exec_result_limit(
     }
 }
 
+#[allow(dead_code)]
 pub(crate) async fn exec_result(cmd: &str, args: &[&str]) -> Result<(String, String), String> {
     let limit = get_global_ipc_timeout();
     exec_result_limit(cmd, args, limit).await
