@@ -519,7 +519,7 @@ export function SshPage(): ReactElement {
 
     const remote = shQuote(`${ftSession.user}@${ftSession.host}`)
     const port = String(ftSession.port)
-    let cmd = ''
+    let cmd: string
 
     if (ftDirection === 'upload') {
       if (ftLocalPaths.length === 0) {
