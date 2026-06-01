@@ -182,18 +182,18 @@ async fn ipc_invoke(
         "dh:git:status" => store_engine::handle_git_status(&body).await,
         "dh:git:doctor:scan" => git_doctor::handle_doctor_scan().await,
         "dh:cloud:auth:connect-start" => {
-            cloud_git_ipc::handle_cloud_auth_connect_start(&app, &body).await
+            cloud_auth::ipc::handle_cloud_auth_connect_start(&app, &body).await
         }
         "dh:cloud:auth:connect-poll" => {
-            cloud_git_ipc::handle_cloud_auth_connect_poll(&app, &body).await
+            cloud_auth::ipc::handle_cloud_auth_connect_poll(&app, &body).await
         }
         "dh:cloud:auth:connect-pat" => {
-            cloud_git_ipc::handle_cloud_auth_connect_pat(&app, &body).await
+            cloud_auth::ipc::handle_cloud_auth_connect_pat(&app, &body).await
         }
         "dh:cloud:auth:disconnect" => {
-            cloud_git_ipc::handle_cloud_auth_disconnect(&app, &body).await
+            cloud_auth::ipc::handle_cloud_auth_disconnect(&app, &body).await
         }
-        "dh:cloud:auth:status" => cloud_git_ipc::handle_cloud_auth_status(&app).await,
+        "dh:cloud:auth:status" => cloud_auth::ipc::handle_cloud_auth_status(&app).await,
         "dh:cloud:git:prs"
         | "dh:cloud:git:review-requests"
         | "dh:cloud:git:pipelines"
