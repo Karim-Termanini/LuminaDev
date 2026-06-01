@@ -209,7 +209,9 @@ export function RuntimesPage(): ReactElement {
   }, [selectedId, t])
 
   const installedVersionsCacheRef = useRef(installedVersionsCache)
-  installedVersionsCacheRef.current = installedVersionsCache
+  useEffect(() => {
+    installedVersionsCacheRef.current = installedVersionsCache
+  }, [installedVersionsCache])
 
   const loadInstalledVersions = useCallback(async (runtimeId: string, force = false) => {
     if (!force && installedVersionsCacheRef.current[runtimeId]) return
