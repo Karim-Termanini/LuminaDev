@@ -42,6 +42,7 @@ import {
   findSshKeyConflict,
   suggestUniqueSshKeyName,
 } from './profileSshKey'
+import { isAutoComposeMountPath, isUserLinkedWorkspacePath } from '../lib/workspacePath'
 
 type PortsSuggestResponse = { ok?: boolean; ports?: Record<string, number> }
 
@@ -261,7 +262,17 @@ export function ProfilesPage(): ReactElement {
       loadedProfiles.map(async (p) => {
         try {
           const res = await storeGetAny({ key: `project_dir_${p.name}` })
-          paths[p.name] = res.ok && typeof res.data === 'string' ? res.data : null
+          const raw = res.ok && typeof res.data === 'string' ? res.data.trim() : ''
+          if (raw && isAutoComposeMountPath(raw, p.name)) {
+            paths[p.name] = null
+            try {
+              await window.dh.storeDelete({ key: `project_dir_${p.name}` })
+            } catch {
+              /* ignore */
+            }
+            return
+          }
+          paths[p.name] = isUserLinkedWorkspacePath(raw, p.name) ? raw : null
         } catch {
           paths[p.name] = null
         }
@@ -591,6 +602,12 @@ export function ProfilesPage(): ReactElement {
     if (isCreatingProfile) {
       next = [...profiles, finalData]
       await save(next, t('msg.created', { name: finalData.name }))
+      try {
+        await window.dh.storeDelete({ key: `project_dir_${finalData.name}` })
+        setProjectPaths((prev) => ({ ...prev, [finalData.name]: null }))
+      } catch {
+        /* ignore */
+      }
     } else if (editingProfileIdx !== null) {
       next = [...profiles]
       next[editingProfileIdx] = finalData

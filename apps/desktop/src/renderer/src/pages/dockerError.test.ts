@@ -50,7 +50,7 @@ describe('humanizeDockerError', () => {
     )
 
     expect(humanizeDockerError('[DOCKER_PULL_FAILED] Error response from daemon: No such image: redis:missing')).toBe(
-      "This image doesn't exist on your system. Pull it first, then try again."
+      "Docker couldn't find this image. Check the name and try again, or pull it first."
     )
 
     expect(

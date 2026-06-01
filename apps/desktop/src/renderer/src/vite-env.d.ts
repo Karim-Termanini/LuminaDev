@@ -210,7 +210,9 @@ declare global {
       storeSet: (
         payload: import('@linux-dev-home/shared').StoreSetRequest
       ) => Promise<{ ok: boolean; error?: string }>
-      storeDelete: (payload: { key: 'active_profile' }) => Promise<{ ok: boolean; error?: string }>
+      storeDelete: (
+        payload: import('@linux-dev-home/shared').StoreDeleteRequest
+      ) => Promise<{ ok: boolean; error?: string }>
       appInfo: () => Promise<{
         ok: boolean
         version: string

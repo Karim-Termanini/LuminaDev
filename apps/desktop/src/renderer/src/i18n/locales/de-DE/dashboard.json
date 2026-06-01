@@ -42,6 +42,7 @@
   "main.workspace.title": "Arbeitsbereichskonfiguration",
   "main.workspace.projectPath": "Projektpfad / Einhängevolumen",
   "main.workspace.noProject": "Kein Projekt verknüpft.",
+  "main.workspace.noProjectHint": "Erstellen Sie einen Arbeitsbereich mit Beispiel-Notebooks, Quelldateien und Docker-Einhängepunkt.",
   "main.workspace.linkExisting": "Vorhandenes verknüpfen",
   "main.workspace.createNew": "Neu erstellen",
   "main.workspace.unlinkProject": "Projekt trennen",
