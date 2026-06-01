@@ -31,11 +31,12 @@ export function SettingsAccounts(): ReactElement {
     setActiveProvider(flowProvider)
   }
 
+  const { accounts } = auth
   const byProvider = useMemo(() => {
-    const map = new Map<CloudAuthProvider, (typeof auth.accounts)[number]>()
-    for (const a of auth.accounts) map.set(a.provider, a)
+    const map = new Map<CloudAuthProvider, (typeof accounts)[number]>()
+    for (const a of accounts) map.set(a.provider, a)
     return map
-  }, [auth.accounts])
+  }, [accounts])
 
   function selectProvider(provider: CloudGitProviderId): void {
     setActiveProvider(provider)
