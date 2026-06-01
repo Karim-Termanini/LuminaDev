@@ -350,6 +350,10 @@ export const StoreGetRequestSchema = z.object({
   key: StoreKeySchema,
 })
 
+export const StoreDeleteRequestSchema = z.object({
+  key: StoreKeySchema,
+})
+
 export const StoreSetRequestSchema = z.union([
   z.object({
     key: z.literal('custom_profiles'),
@@ -653,6 +657,7 @@ export type MaintenanceProfileHealth = z.infer<typeof MaintenanceProfileHealthSc
 export type MaintenanceStateStore = z.infer<typeof MaintenanceStateStoreSchema>
 export type StoreKey = z.infer<typeof StoreKeySchema>
 export type StoreGetRequest = z.infer<typeof StoreGetRequestSchema>
+export type StoreDeleteRequest = z.infer<typeof StoreDeleteRequestSchema>
 export type StoreSetRequest = z.infer<typeof StoreSetRequestSchema>
 export type WizardStateStore = z.infer<typeof WizardStateStoreSchema>
 export type OnLoginAutomationStore = z.infer<typeof OnLoginAutomationStoreSchema>

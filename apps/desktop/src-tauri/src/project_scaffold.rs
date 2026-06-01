@@ -50,33 +50,12 @@ fn find_free_port(preferred: u16) -> u16 {
     preferred
 }
 
-pub async fn handle_project_scaffold(body: Value) -> Value {
-    let path_str = body
-        .get("path")
-        .and_then(|v| v.as_str())
-        .unwrap_or_default();
-    let template = body
-        .get("template")
-        .and_then(|v| v.as_str())
-        .unwrap_or_default();
-    let options = body.get("options").cloned().unwrap_or_else(|| json!({}));
-
-    if path_str.is_empty() {
-        return json!({ "ok": false, "error": "[SCAFFOLD_FAILED] Missing path." });
-    }
-
-    let expanded = if path_str.starts_with("~/") {
-        let home = std::env::var("HOME").unwrap_or_else(|_| "/root".to_string());
-        path_str.replacen("~/", &format!("{}/", home), 1)
-    } else {
-        path_str.to_string()
-    };
-
-    let project_dir = PathBuf::from(&expanded);
-    if let Err(e) = std::fs::create_dir_all(&project_dir) {
-        return json!({ "ok": false, "error": format!("[SCAFFOLD_FAILED] Could not create directory: {}", e) });
-    }
-
+pub fn apply_project_scaffold(
+    project_dir: &Path,
+    template: &str,
+    options: &Value,
+    sub_template: Option<&str>,
+) -> Result<(), String> {
     if template == "data-science" {
         let toolchain = options
             .get("toolchain")
@@ -339,7 +318,7 @@ if (!interactive()) {
                 let _ = std::fs::write(project_dir.join(name), notebook_r);
             }
         }
-        scaffold_editor_configs(&project_dir, "data-science", "");
+        scaffold_editor_configs(project_dir, "data-science", "");
         if create_r {
             let extensions_json = r#"{
   "recommendations": [
@@ -350,6 +329,7 @@ if (!interactive()) {
 }"#;
             let _ = std::fs::write(project_dir.join(".vscode/extensions.json"), extensions_json);
         }
+        Ok(())
     } else if template == "web-dev" {
         // Create professional directories
         let _ = std::fs::create_dir_all(project_dir.join("src/components"));
@@ -458,33 +438,86 @@ export default defineConfig({
 })
 "#;
         let _ = std::fs::write(project_dir.join("vite.config.ts"), vite_config);
-        scaffold_editor_configs(&project_dir, "web-dev", "");
+        scaffold_editor_configs(project_dir, "web-dev", "");
+        Ok(())
     } else if template == "mobile" {
-        let sub = body
-            .get("subTemplate")
-            .and_then(|v| v.as_str())
-            .unwrap_or("react-native");
+        let sub = sub_template.unwrap_or("react-native");
         let env_pairs: Vec<(&str, &str)> = vec![];
-        let result = if sub == "flutter" {
-            scaffold_mobile_flutter(&project_dir, &env_pairs)
+        if sub == "flutter" {
+            scaffold_mobile_flutter(project_dir, &env_pairs)
         } else {
-            scaffold_mobile_react_native(&project_dir, &env_pairs)
-        };
-        if let Err(e) = result {
-            return json!({ "ok": false, "error": e });
+            scaffold_mobile_react_native(project_dir, &env_pairs)
         }
     } else if template == "ai-ml" {
         let env_pairs: Vec<(&str, &str)> = vec![];
-        if let Err(e) = scaffold_ai_ml(&project_dir, &env_pairs) {
-            return json!({ "ok": false, "error": e });
-        }
+        scaffold_ai_ml(project_dir, &env_pairs)
     } else if template == "docs" {
-        if let Err(e) = scaffold_docs(&project_dir) {
-            return json!({ "ok": false, "error": e });
-        }
+        scaffold_docs(project_dir)
+    } else {
+        Ok(())
+    }
+}
+
+pub async fn handle_project_scaffold(body: Value) -> Value {
+    let path_str = body
+        .get("path")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default();
+    let template = body
+        .get("template")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default();
+    let options = body.get("options").cloned().unwrap_or_else(|| json!({}));
+
+    if path_str.is_empty() {
+        return json!({ "ok": false, "error": "[SCAFFOLD_FAILED] Missing path." });
     }
 
-    json!({ "ok": true, "path": expanded })
+    let expanded = expand_tilde_path(path_str);
+    let project_dir = PathBuf::from(&expanded);
+    if let Err(e) = std::fs::create_dir_all(&project_dir) {
+        return json!({ "ok": false, "error": format!("[SCAFFOLD_FAILED] Could not create directory: {}", e) });
+    }
+
+    let sub = body.get("subTemplate").and_then(|v| v.as_str());
+    match apply_project_scaffold(&project_dir, template, &options, sub) {
+        Ok(()) => json!({ "ok": true, "path": expanded }),
+        Err(e) => json!({ "ok": false, "error": e }),
+    }
+}
+
+#[cfg(test)]
+mod scaffold_apply_tests {
+    use super::*;
+    use std::fs;
+
+    #[test]
+    fn apply_project_scaffold_fills_empty_data_science_workspace() {
+        let base = std::env::temp_dir().join(format!("lumina-scaffold-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&base);
+        fs::create_dir_all(&base).expect("temp dir");
+
+        let options = json!({
+            "toolchain": "python",
+            "dependencies": {
+                "pandas": "latest",
+                "numpy": "latest",
+                "matplotlib": "latest",
+                "scikit-learn": "latest"
+            },
+            "rDependencies": {},
+            "createNotebook": true,
+            "createMainScript": false
+        });
+        apply_project_scaffold(&base, "data-science", &options, None).expect("scaffold");
+
+        assert!(base.join("README.md").is_file());
+        assert!(base.join("notebooks/01_exploration.ipynb").is_file());
+        assert!(base.join("src/db.py").is_file());
+        assert!(base.join("requirements.txt").is_file());
+
+        let _ = fs::remove_dir_all(&base);
+    }
 }
 
 pub(crate) fn expand_tilde_path(path_str: &str) -> String {

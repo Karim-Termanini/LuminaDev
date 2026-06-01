@@ -1,4 +1,3 @@
-import { invoke } from '@tauri-apps/api/core'
 import { dismissProfileSwitchError, signalProfileSwitchDone } from './profileSwitchProgress'
 
 export const SETUP_SESSION_STORAGE_KEY = 'dh:setup:session:v1'
@@ -80,22 +79,9 @@ export function clearSetupSession(): void {
   }
 }
 
-export async function stopProfileStack(profileName: string): Promise<boolean> {
-  try {
-    const r = (await invoke('ipc_invoke', {
-      channel: 'dh:compose:stop',
-      payload: { profile: profileName },
-    })) as { ok?: boolean }
-    return Boolean(r.ok)
-  } catch {
-    return false
-  }
-}
-
-/** Stops Docker (if running), clears persisted setup, hides progress UI. */
+/** Clears persisted setup and hides progress UI without stopping the profile stack. */
 export async function cancelProjectSetup(profileName: string): Promise<void> {
   invalidateSetupRuns()
-  await stopProfileStack(profileName)
   const session = readSetupSession()
   if (!session || session.profileName === profileName) {
     clearSetupSession()

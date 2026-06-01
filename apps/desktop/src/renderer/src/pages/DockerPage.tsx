@@ -219,6 +219,8 @@ export function DockerPage(): ReactElement {
     name: '',
     action: 'stop',
   })
+  const [flashCreateBtn, setFlashCreateBtn] = useState(false)
+  const customFormRef = useRef<HTMLDivElement>(null)
   const detectedInstallFamily: InstallDistroId | null = [
     'ubuntu',
     'debian',
@@ -408,7 +410,7 @@ export function DockerPage(): ReactElement {
         setInstallError(humanizeDockerError(res.error || 'Unknown error during installation'))
       }
     } catch (e) {
-      setInstallError(e instanceof Error ? e.message : String(e))
+      setInstallError(humanizeDockerError(e))
     } finally {
       setInstallBusy(false)
     }
@@ -452,13 +454,13 @@ export function DockerPage(): ReactElement {
         networkMode: remapNetworkMode,
       })) as { ok: boolean; error?: string }
       if (!res.ok) {
-        setRemapFeedback(res.error ?? 'Remap failed.')
+        setRemapFeedback(humanizeDockerError(res.error ?? 'Remap failed.'))
       } else {
         setRemapFeedback('Done. Refreshing...')
         await refreshAll()
       }
     } catch (e) {
-      setRemapFeedback(String(e))
+      setRemapFeedback(humanizeDockerError(e))
     } finally {
       setRemapBusy(false)
     }
@@ -715,6 +717,13 @@ export function DockerPage(): ReactElement {
     setCustomEnvText(example.env ?? '')
     setCustomNetworkMode(selectedNetwork || 'bridge')
     setCreatedInfo(`Filled form from example: ${example.title}`)
+
+    // Scroll the custom form into view so the user sees the populated fields
+    customFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+
+    // Flash the Create button to draw attention to the next step
+    setFlashCreateBtn(true)
+    setTimeout(() => setFlashCreateBtn(false), 1500)
   }
 
   async function pullCustomImage(forceImage?: string): Promise<void> {
@@ -903,21 +912,27 @@ export function DockerPage(): ReactElement {
         <nav className="docker-sidebar">
           {(
             [
-              { id: 'scheme', icon: '🗺', label: t('tab.scheme') },
-              { id: 'create', icon: '➕', label: t('tab.create') },
-              { id: 'containers', icon: '📦', label: t('tab.containers') },
-              { id: 'images', icon: '🖼', label: t('tab.images') },
-              { id: 'volumes', icon: '💾', label: t('tab.volumes') },
-              { id: 'networks', icon: '🌐', label: t('tab.networks') },
-              { id: 'ports', icon: '🔌', label: t('tab.ports') },
-              { id: 'cleanup', icon: '🧹', label: t('tab.cleanup') },
-            ] as { id: TabId; icon: string; label: string }[]
-          ).map(({ id, icon, label }) => (
+              { id: 'scheme', icon: '🗺', label: t('tab.scheme'), tip: t('tab.scheme.tip') },
+              { id: 'create', icon: '➕', label: t('tab.create'), tip: t('tab.create.tip') },
+              {
+                id: 'containers',
+                icon: '📦',
+                label: t('tab.containers'),
+                tip: t('tab.containers.tip'),
+              },
+              { id: 'images', icon: '🖼', label: t('tab.images'), tip: t('tab.images.tip') },
+              { id: 'volumes', icon: '💾', label: t('tab.volumes'), tip: t('tab.volumes.tip') },
+              { id: 'networks', icon: '🌐', label: t('tab.networks'), tip: t('tab.networks.tip') },
+              { id: 'ports', icon: '🔌', label: t('tab.ports'), tip: t('tab.ports.tip') },
+              { id: 'cleanup', icon: '🧹', label: t('tab.cleanup'), tip: t('tab.cleanup.tip') },
+            ] as { id: TabId; icon: string; label: string; tip: string }[]
+          ).map(({ id, icon, label, tip }) => (
             <button
               key={id}
               type="button"
               onClick={() => setTab(id)}
               className={`docker-tab-button ${tab === id ? 'active' : ''}`}
+              title={tip}
             >
               <span>{icon}</span>
               <span>{label}</span>
@@ -1101,7 +1116,7 @@ export function DockerPage(): ReactElement {
                   )}
                 </div>
               </div>
-              <div className="hp-card">
+              <div className="hp-card" ref={customFormRef}>
                 <div className="hp-card-header">
                   <div className="hp-card-title">{t('create.custom')}</div>
                   <div className="hp-card-subtitle">{t('create.customDesc')}</div>
@@ -1175,7 +1190,7 @@ export function DockerPage(): ReactElement {
                   </label>
                   <button
                     type="button"
-                    className="hp-btn hp-btn-primary"
+                    className={`hp-btn hp-btn-primary${flashCreateBtn ? ' docker-create-flash' : ''}`}
                     onClick={() => void createCustomContainer()}
                     disabled={busy}
                   >
@@ -2632,6 +2647,31 @@ export function DockerPage(): ReactElement {
           />
         </>
       )}
+
+      {/* Engine status bar */}
+      <div className="docker-engine-status">
+        <span
+          style={{
+            display: 'inline-block',
+            width: 8,
+            height: 8,
+            borderRadius: '50%',
+            marginRight: 8,
+            background: docker?.ok
+              ? 'var(--green)'
+              : docker
+                ? 'var(--orange)'
+                : 'var(--text-muted)',
+          }}
+        />
+        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+          {docker?.ok
+            ? 'LuminaDev Engine: Connected'
+            : docker
+              ? 'LuminaDev Engine: Disconnected'
+              : 'LuminaDev Engine: Checking…'}
+        </span>
+      </div>
     </div>
   )
 }
@@ -2872,6 +2912,15 @@ function ContainerTable(
 ): ReactElement {
   const { title, rows, busy, onAction, onConsole, onConfigure } = props
   const { t } = useTranslation('docker')
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null)
+
+  // Close the menu when clicking outside
+  useEffect(() => {
+    if (!openMenuId) return
+    const handler = () => setOpenMenuId(null)
+    document.addEventListener('click', handler)
+    return () => document.removeEventListener('click', handler)
+  }, [openMenuId])
   return (
     <div>
       <div className="hp-section-title">{title}</div>
@@ -2988,11 +3037,12 @@ function ContainerTable(
                     gap: 8,
                     paddingTop: 4,
                     flexWrap: 'wrap',
+                    alignItems: 'center',
                   }}
                 >
                   <button
                     type="button"
-                    className="hp-btn"
+                    className="hp-btn hp-btn-primary"
                     onClick={() => void onAction(r.id, isRunning ? 'stop' : 'start')}
                     disabled={busy}
                   >
@@ -3018,24 +3068,86 @@ function ContainerTable(
                       {t('action.console')}
                     </button>
                   )}
-                  {!isRunning ? (
+                  <div style={{ position: 'relative' }}>
                     <button
                       type="button"
-                      className="hp-btn hp-btn-danger"
-                      onClick={() => void onAction(r.id, 'remove')}
+                      className="hp-btn"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setOpenMenuId(openMenuId === r.id ? null : r.id)
+                      }}
                       disabled={busy}
+                      title={t('action.more')}
+                      style={{ minWidth: 36, padding: '6px 10px' }}
                     >
-                      {t('action.remove')}
+                      ⋮
                     </button>
-                  ) : null}
-                  <button
-                    type="button"
-                    className="hp-btn"
-                    onClick={() => onConfigure(r)}
-                    disabled={busy}
-                  >
-                    {t('action.configure')}
-                  </button>
+                    {openMenuId === r.id && (
+                      <div
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                          position: 'absolute',
+                          right: 0,
+                          top: '100%',
+                          marginTop: 4,
+                          background: 'var(--bg-panel)',
+                          border: '1px solid var(--border)',
+                          borderRadius: 8,
+                          boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
+                          zIndex: 100,
+                          minWidth: 160,
+                          overflow: 'hidden',
+                        }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setOpenMenuId(null)
+                            onConfigure(r)
+                          }}
+                          disabled={busy}
+                          style={{
+                            display: 'block',
+                            width: '100%',
+                            padding: '8px 14px',
+                            border: 'none',
+                            background: 'none',
+                            color: 'var(--text)',
+                            fontSize: 13,
+                            cursor: busy ? 'not-allowed' : 'pointer',
+                            textAlign: 'left',
+                            opacity: busy ? 0.5 : 1,
+                          }}
+                        >
+                          {t('action.configure')}
+                        </button>
+                        {!isRunning && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setOpenMenuId(null)
+                              void onAction(r.id, 'remove')
+                            }}
+                            disabled={busy}
+                            style={{
+                              display: 'block',
+                              width: '100%',
+                              padding: '8px 14px',
+                              border: 'none',
+                              background: 'none',
+                              color: 'var(--red)',
+                              fontSize: 13,
+                              cursor: busy ? 'not-allowed' : 'pointer',
+                              textAlign: 'left',
+                              opacity: busy ? 0.5 : 1,
+                            }}
+                          >
+                            {t('action.remove')}
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             )
@@ -3165,7 +3277,9 @@ function ContainerInspectDrawer({
         const res = await window.dh.dockerInspect({ id: row.id })
         if (cancelled) return
         if (!res.ok || !res.data) {
-          setInspectError(res.error ?? 'Could not load container inspect data.')
+          setInspectError(
+            humanizeDockerError(res.error ?? 'Could not load container inspect data.')
+          )
           return
         }
         const h = hydrateDrawerFromInspect(res.data)
@@ -3175,7 +3289,7 @@ function ContainerInspectDrawer({
         setEditRestart(h.editRestart)
         setInspectVolumes(res.data.volumes)
       } catch (e) {
-        if (!cancelled) setInspectError(String(e))
+        if (!cancelled) setInspectError(humanizeDockerError(e))
       } finally {
         if (!cancelled) setInspectBusy(false)
       }
@@ -3196,7 +3310,7 @@ function ContainerInspectDrawer({
         return
       }
       if (!res.ok) {
-        setLogs(res.error || 'Error loading logs')
+        setLogs(humanizeDockerError(res.error || 'Error loading logs'))
         return
       }
       setLogs(res.text || 'No logs')
@@ -3230,10 +3344,10 @@ function ContainerInspectDrawer({
         setApplyFeedback('Applied. Container restarted.')
         await onRefresh()
       } else {
-        setApplyFeedback(res.error ?? 'Apply failed.')
+        setApplyFeedback(humanizeDockerError(res.error ?? 'Apply failed.'))
       }
     } catch (e) {
-      setApplyFeedback(String(e))
+      setApplyFeedback(humanizeDockerError(e))
     } finally {
       setApplying(false)
     }
@@ -3817,7 +3931,7 @@ function DockerTerminalModal({
         })
       } catch (e) {
         if (cancelled) return
-        term.writeln(`\r\nError creating terminal: ${e instanceof Error ? e.message : String(e)}`)
+        term.writeln(`\r\nError creating terminal: ${humanizeDockerError(e)}`)
         return
       }
       if (cancelled) {
@@ -3825,7 +3939,9 @@ function DockerTerminalModal({
         return
       }
       if (!res.ok || !res.id) {
-        term.writeln(`\r\nError creating terminal: ${res.ok ? 'missing id' : res.error}`)
+        term.writeln(
+          `\r\nError creating terminal: ${res.ok ? 'missing id' : humanizeDockerError(res.error ?? 'Terminal session failed.')}`
+        )
         return
       }
       const tid = res.id

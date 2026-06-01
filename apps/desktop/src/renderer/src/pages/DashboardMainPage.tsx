@@ -80,6 +80,8 @@ function persistPreferredEditorCmd(cmd: string): void {
   }
 }
 
+import { isAutoComposeMountPath } from '../lib/workspacePath'
+
 interface ProfileDef {
   name: string
   title: string
@@ -425,33 +427,6 @@ export function DashboardMainPage(): ReactElement {
       /* keep default */
     }
 
-    if (selectedProfileName) {
-      window.dh
-        .storeGet({ key: `project_dir_${selectedProfileName}` } as any)
-        .then(async (p: any) => {
-          if (p.ok && p.data && typeof p.data === 'string') {
-            try {
-              const res = (await invoke('ipc_invoke', {
-                channel: 'dh:fs:exists',
-                payload: { path: p.data },
-              })) as any
-              if (res.ok && res.exists) {
-                setProjectPath(p.data)
-              } else {
-                setProjectPath(null)
-                await window.dh.storeSet({
-                  key: `project_dir_${selectedProfileName}`,
-                  data: null,
-                } as any)
-              }
-            } catch {
-              setProjectPath(p.data)
-            }
-          } else setProjectPath(null)
-        })
-        .catch(() => {})
-    }
-
     invoke('ipc_invoke', { channel: 'dh:editor:list' })
       .then((res: any) => {
         if (res.ok && res.editors) {
@@ -460,6 +435,57 @@ export function DashboardMainPage(): ReactElement {
         }
       })
       .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    if (!selectedProfileName) {
+      setProjectPath(null)
+      return
+    }
+
+    setProjectPath(null)
+    const profileForLoad = selectedProfileName
+    let cancelled = false
+
+    void (async () => {
+      try {
+        const p = (await window.dh.storeGet({
+          key: `project_dir_${profileForLoad}`,
+        } as any)) as { ok: boolean; data?: unknown }
+        if (cancelled) return
+
+        if (!p.ok || !p.data || typeof p.data !== 'string') {
+          setProjectPath(null)
+          return
+        }
+
+        const storedPath = p.data.trim()
+        if (!storedPath || isAutoComposeMountPath(storedPath, profileForLoad)) {
+          setProjectPath(null)
+          await window.dh.storeDelete({ key: `project_dir_${profileForLoad}` })
+          return
+        }
+
+        const res = (await invoke('ipc_invoke', {
+          channel: 'dh:fs:exists',
+          payload: { path: storedPath },
+        })) as { ok?: boolean; exists?: boolean }
+        if (cancelled) return
+
+        if (res.ok && res.exists) {
+          setProjectPath(storedPath)
+        } else {
+          setProjectPath(null)
+          await window.dh.storeDelete({ key: `project_dir_${profileForLoad}` })
+        }
+      } catch {
+        if (!cancelled) setProjectPath(null)
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
   }, [selectedProfileName])
 
   useEffect(() => {
@@ -932,6 +958,44 @@ export function DashboardMainPage(): ReactElement {
   const isProfileActiveInStore = Boolean(selectedProfileName) && activeProfile === selectedProfileName
   const isProfileReady =
     isProfileActiveInStore && profileStackRunning && !isProfileInitializing
+
+  const openCreateWorkspaceWizard = useCallback((): void => {
+    if (!selectedProfile || !selectedProfileName) return
+    if (isDataScience) {
+      setCreateProjectDepsMode('beginner')
+      setCreateProjectDeps(defaultBeginnerDataScienceDeps(createProjectToolchain))
+    } else if (isWebDev) {
+      setCreateProjectDeps({
+        tailwindcss: 'latest',
+        'react-router-dom': 'latest',
+      })
+    } else {
+      setCreateProjectDeps({})
+    }
+    setCreateProjectStep(1)
+    setCreateProjectName('')
+    setCreateProjectModalOpen(true)
+    const tmpl = selectedProfile.baseTemplate || selectedProfile.name
+    void invoke('ipc_invoke', {
+      channel: 'dh:ports:suggest',
+      payload: {
+        template: tmpl,
+        profile: selectedProfileName,
+        subTemplate: mobileSubTemplate,
+      },
+    })
+      .then((r: any) => {
+        if (r.ok && r.ports) setSuggestedPorts(r.ports)
+      })
+      .catch(() => {})
+  }, [
+    selectedProfile,
+    selectedProfileName,
+    isDataScience,
+    isWebDev,
+    createProjectToolchain,
+    mobileSubTemplate,
+  ])
 
   const activityData = useMemo(() => {
     return metricsHistory.map((item, idx) => ({
@@ -1461,23 +1525,34 @@ export function DashboardMainPage(): ReactElement {
                       >
                         {t('main.workspace.projectPath')}
                       </label>
-                      <div style={{ display: 'flex', gap: 12 }}>
-                        <input
-                          type="text"
-                          readOnly
-                          value={projectPath || t('main.workspace.noProject')}
-                          style={{
-                            flex: 1,
-                            padding: '10px 14px',
-                            borderRadius: 6,
-                            border: '1px solid rgba(255,255,255,0.1)',
-                            background: 'rgba(0,0,0,0.2)',
-                            color: 'var(--text)',
-                            fontSize: 13,
-                          }}
-                        />
-                        {!projectPath ? (
-                          <>
+                      {!projectPath ? (
+                        <>
+                          <p
+                            style={{
+                              margin: '0 0 12px',
+                              fontSize: 13,
+                              color: 'var(--text-muted)',
+                              lineHeight: 1.5,
+                            }}
+                          >
+                            {t('main.workspace.noProjectHint')}
+                          </p>
+                          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                            <input
+                              type="text"
+                              readOnly
+                              value={t('main.workspace.noProject')}
+                              style={{
+                                flex: 1,
+                                minWidth: 220,
+                                padding: '10px 14px',
+                                borderRadius: 6,
+                                border: '1px solid rgba(255,255,255,0.1)',
+                                background: 'rgba(0,0,0,0.2)',
+                                color: 'var(--text-muted)',
+                                fontSize: 13,
+                              }}
+                            />
                             <button
                               onClick={handleLinkProject}
                               style={{
@@ -1494,35 +1569,7 @@ export function DashboardMainPage(): ReactElement {
                               {t('main.workspace.linkExisting')}
                             </button>
                             <button
-                              onClick={() => {
-                                if (isDataScience) {
-                                  setCreateProjectDepsMode('beginner')
-                                  setCreateProjectDeps(
-                                    defaultBeginnerDataScienceDeps(createProjectToolchain)
-                                  )
-                                } else if (isWebDev) {
-                                  setCreateProjectDeps({
-                                    tailwindcss: 'latest',
-                                    'react-router-dom': 'latest',
-                                  })
-                                } else {
-                                  setCreateProjectDeps({})
-                                }
-                                setCreateProjectModalOpen(true)
-                                const tmpl = selectedProfile.baseTemplate || selectedProfile.name
-                                invoke('ipc_invoke', {
-                                  channel: 'dh:ports:suggest',
-                                  payload: {
-                                    template: tmpl,
-                                    profile: selectedProfileName,
-                                    subTemplate: mobileSubTemplate,
-                                  },
-                                })
-                                  .then((r: any) => {
-                                    if (r.ok && r.ports) setSuggestedPorts(r.ports)
-                                  })
-                                  .catch(() => {})
-                              }}
+                              onClick={() => openCreateWorkspaceWizard()}
                               style={{
                                 padding: '0 16px',
                                 borderRadius: 6,
@@ -1536,15 +1583,30 @@ export function DashboardMainPage(): ReactElement {
                             >
                               {t('main.workspace.createNew')}
                             </button>
-                          </>
-                        ) : (
+                          </div>
+                        </>
+                      ) : (
+                        <div style={{ display: 'flex', gap: 12 }}>
+                          <input
+                            type="text"
+                            readOnly
+                            value={projectPath}
+                            style={{
+                              flex: 1,
+                              padding: '10px 14px',
+                              borderRadius: 6,
+                              border: '1px solid rgba(255,255,255,0.1)',
+                              background: 'rgba(0,0,0,0.2)',
+                              color: 'var(--text)',
+                              fontSize: 13,
+                            }}
+                          />
                           <button
                             onClick={async () => {
                               setProjectPath(null)
-                              await window.dh.storeSet({
+                              await window.dh.storeDelete({
                                 key: `project_dir_${selectedProfileName}`,
-                                data: null,
-                              } as any)
+                              })
                               setToast({
                                 type: 'success',
                                 message: t('main.toast.projectUnlinked'),
@@ -1570,8 +1632,8 @@ export function DashboardMainPage(): ReactElement {
                           >
                             {t('main.workspace.unlinkProject')}
                           </button>
-                        )}
-                      </div>
+                        </div>
+                      )}
                     </div>
                     {projectPath && (
                       <div>
@@ -2640,7 +2702,7 @@ export function DashboardMainPage(): ReactElement {
                   <button
                     type="button"
                     onClick={() => {
-                      setCreateProjectModalOpen(false)
+                      closeCreateProjectModal()
                       setSuggestedPorts({})
                     }}
                     style={{
@@ -3386,10 +3448,7 @@ export function DashboardMainPage(): ReactElement {
                 >
                   <button
                     type="button"
-                    onClick={() => {
-                      setCreateProjectModalOpen(false)
-                      setCreateProjectStep(1)
-                    }}
+                    onClick={closeCreateProjectModal}
                     style={{
                       padding: '10px 20px',
                       border: 'none',

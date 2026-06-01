@@ -42,6 +42,7 @@
   "main.workspace.title": "إعدادات مساحة العمل",
   "main.workspace.projectPath": "مسار المشروع / وحدة التخزين المثبتة",
   "main.workspace.noProject": "لا يوجد مشروع مرتبط.",
+  "main.workspace.noProjectHint": "أنشئ مساحة عمل لتوليد دفاتر عينة وملفات مصدر وربط المشروع بـ Docker.",
   "main.workspace.linkExisting": "ربط مشروع موجود",
   "main.workspace.createNew": "إنشاء جديد",
   "main.workspace.unlinkProject": "فصل المشروع",

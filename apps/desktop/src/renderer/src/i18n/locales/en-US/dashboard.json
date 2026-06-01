@@ -44,6 +44,7 @@
   "main.workspace.title": "Workspace Configuration",
   "main.workspace.projectPath": "Project Path / Mounted Volume",
   "main.workspace.noProject": "No project linked.",
+  "main.workspace.noProjectHint": "Create a workspace to scaffold sample notebooks, source files, and mount your project into Docker.",
   "main.workspace.linkExisting": "Link Existing",
   "main.workspace.createNew": "Create New",
   "main.workspace.unlinkProject": "Unlink Project",

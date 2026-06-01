@@ -24,19 +24,8 @@ fn default_project_dir_from_store(store: &Value, profile: &str) -> String {
     )
 }
 
-fn persist_profile_project_dir(store_path: &PathBuf, profile: &str, dir: &str) {
-    let mut store = read_json(store_path);
-    if let Some(map) = store.as_object_mut() {
-        map.insert(format!("project_dir_{}", profile), json!(dir));
-        let _ = std::fs::write(
-            store_path,
-            serde_json::to_string_pretty(&store).unwrap_or_default(),
-        );
-    }
-}
-
 fn resolve_profile_project_dir(
-    store_path: &PathBuf,
+    _store_path: &PathBuf,
     store: &Value,
     profile: &str,
     template: &str,
@@ -58,9 +47,9 @@ fn resolve_profile_project_dir(
         return Some(dir);
     }
 
+    // Compose needs a mount path, but do not persist it as the user's linked workspace.
     let default = default_project_dir_from_store(store, profile);
     let _ = std::fs::create_dir_all(&default);
-    persist_profile_project_dir(store_path, profile, &default);
     Some(default)
 }
 
@@ -563,7 +552,7 @@ mod tests {
     }
 
     #[test]
-    fn resolve_profile_project_dir_creates_and_persists_default() {
+    fn resolve_profile_project_dir_uses_compose_mount_without_persisting() {
         let base = std::env::temp_dir().join(format!("lumina-profile-test-{}", std::process::id()));
         let _ = fs::remove_dir_all(&base);
         fs::create_dir_all(&base).expect("temp dir");
@@ -578,12 +567,32 @@ mod tests {
         assert!(PathBuf::from(&resolved).is_dir());
 
         let updated = read_json(&store_path);
-        assert_eq!(
-            updated
-                .get("project_dir_testing11")
-                .and_then(|v| v.as_str()),
-            Some("/tmp/lumina-work/testing11/default")
+        assert!(
+            updated.get("project_dir_testing11").is_none(),
+            "auto compose mount must not be stored as linked workspace"
         );
+
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn resolve_profile_project_dir_honors_explicit_store_link() {
+        let base = std::env::temp_dir().join(format!("lumina-profile-link-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&base);
+        fs::create_dir_all(&base).expect("temp dir");
+        let store_path = base.join("store.json");
+        let linked = "/tmp/lumina-work/testing11/my-project";
+        fs::write(
+            &store_path,
+            format!(r#"{{"project_dir_testing11":"{linked}"}}"#),
+        )
+        .expect("write store");
+
+        let store = read_json(&store_path);
+        let resolved = resolve_profile_project_dir(&store_path, &store, "testing11", "data-science")
+            .expect("resolved");
+
+        assert_eq!(resolved, linked);
 
         let _ = fs::remove_dir_all(&base);
     }

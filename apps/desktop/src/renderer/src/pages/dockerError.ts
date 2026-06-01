@@ -39,7 +39,7 @@ function humanizeDockerDetail(text: string): string | null {
   }
 
   if (/no such image|image not found|repository does not exist|manifest unknown|pull access denied.*does not exist/i.test(text)) {
-    return "This image doesn't exist on your system. Pull it first, then try again."
+    return "Docker couldn't find this image. Check the name and try again, or pull it first."
   }
 
   if (/no such container/i.test(text)) {

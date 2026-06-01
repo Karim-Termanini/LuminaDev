@@ -2,6 +2,7 @@ import type { ContainerRow, HostMetricsResponse, SystemdRow } from '@linux-dev-h
 import type { ReactElement, ReactNode } from 'react'
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { humanizeDockerError } from './dockerError'
 
 export function SystemPage(): ReactElement {
   const { t } = useTranslation('monitor')
@@ -119,7 +120,7 @@ export function SystemPage(): ReactElement {
           {!docker ? (
             <span style={{ color: 'var(--text-muted)' }}>{t('system.loading')}</span>
           ) : !docker.ok ? (
-            <span style={{ color: 'var(--orange)' }}>{docker.error}</span>
+            <span style={{ color: 'var(--orange)' }}>{humanizeDockerError(docker.error)}</span>
           ) : (
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
