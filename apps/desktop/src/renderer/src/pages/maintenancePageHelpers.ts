@@ -6,6 +6,8 @@ export const OPS_RUNBOOK = [
   { id: 'cache-du', label: 'Largest cache folders', labelKey: 'runbook.largestCacheFolders', descKey: 'runbook.largestCacheFoldersDesc', probe: 'maintenance_du_cache_tail', icon: 'folder-opened' },
 ] as const
 
+export type RunbookOp = (typeof OPS_RUNBOOK)[number]
+
 export const MAINTENANCE_CRON_PRESETS = [
   { cron: '0 */6 * * *', labelKey: 'tasks.cronEvery6h', descKey: 'tasks.cronEvery6hDesc' },
   { cron: '0 3 * * *', labelKey: 'tasks.cronDaily3am', descKey: 'tasks.cronDaily3amDesc' },

@@ -4,6 +4,7 @@ pub mod remotes;
 pub mod store;
 pub mod github;
 pub mod gitlab;
+pub mod ipc;
 
 pub use types::{ParsedRemoteRepo, PollResult, StoredCredential};
 pub use helpers::{app_encrypted_credential_store, chrono_now, compose_github_client_id, compose_gitlab_client_id};
