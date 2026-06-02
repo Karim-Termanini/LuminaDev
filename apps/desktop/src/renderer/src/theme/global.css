@@ -40,6 +40,24 @@
   --yellow: #92400e;
 }
 
+/* High contrast — applied via document.documentElement.dataset.theme = 'high-contrast' */
+[data-theme="high-contrast"] {
+  --bg-app: #000000;
+  --bg-panel: #000000;
+  --bg-widget: #0a0a0a;
+  --bg-input: #141414;
+  --border: #ffffff;
+  --text: #ffffff;
+  --text-muted: #f0f0f0;
+  --accent: #ffff00;
+  --accent-dim: rgba(255, 255, 0, 0.45);
+  --orange: #ffb000;
+  --blue: #4fc3ff;
+  --green: #00ff6a;
+  --red: #ff5252;
+  --yellow: #ffff00;
+}
+
 * {
   box-sizing: border-box;
 }

@@ -5,6 +5,7 @@ import {
 } from '@linux-dev-home/shared'
 import type { ReactElement } from 'react'
 import { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { assertGitOk } from '../pages/gitContract'
 import { humanizeGitError } from '../pages/gitError'
 import { assertSshOk } from '../pages/sshContract'
@@ -12,6 +13,7 @@ import { humanizeSshError } from '../pages/sshError'
 import { broadcastActiveProfileChange } from '../lib/activeProfileSync'
 
 export function WizardFlow({ onComplete }: { onComplete: () => void }): ReactElement {
+  const { t } = useTranslation('common')
   const [step, setStep] = useState(0)
   const [hydrated, setHydrated] = useState(false)
   const exitingRef = useRef(false)
@@ -226,13 +228,13 @@ export function WizardFlow({ onComplete }: { onComplete: () => void }): ReactEle
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <input
                 style={input}
-                placeholder="Your Name"
+                placeholder={t('wizard.gitNamePlaceholder', 'Your Name')}
                 value={gitName}
                 onChange={(e) => setGitName(e.target.value)}
               />
               <input
                 style={input}
-                placeholder="your.email@example.com"
+                placeholder={t('wizard.gitEmailPlaceholder', 'your.email@example.com')}
                 value={gitEmail}
                 onChange={(e) => setGitEmail(e.target.value)}
               />

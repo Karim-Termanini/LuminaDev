@@ -102,6 +102,19 @@ pub struct CloudPrDetails {
 }
 
 #[derive(Debug, Clone, Serialize)]
+pub struct CloudInboxEntry {
+    pub id: String,
+    pub provider: String,
+    /// `mention` | `review_request` | `pr_activity`
+    pub category: String,
+    pub title: String,
+    pub url: String,
+    pub repo: String,
+    pub updated_at: String,
+    pub unread: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct CloudReleaseEntry {
     pub id: String,
     pub tag: String,

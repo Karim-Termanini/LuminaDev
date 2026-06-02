@@ -24,3 +24,7 @@ apps/desktop/src-tauri/gen
 data/state_store.db
 data/state_store.db/
 data/stream_store/
+
+.claude/
+.cursor/
+graphify-out/

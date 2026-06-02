@@ -3,8 +3,6 @@ import type { ReactElement } from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { invoke } from '@tauri-apps/api/core'
-
 import { openRepoInEditor } from './gitAssistantEditor'
 import { GIT_ASSISTANT_FOOTER } from './constants'
 import { GitAssistantSection } from './GitAssistantSection'
@@ -20,7 +18,7 @@ import { GitSaveShareBar } from './GitSaveShareBar'
 import { GitSetupChecklist } from './GitSetupChecklist'
 import { GitPostPushBanner } from './GitPostPushBanner'
 import { GitShareOnlinePanel } from './GitShareOnlinePanel'
-import { assertGitOk } from '../gitContract'
+import { assertGitOk, assertGitRecentList } from '../gitContract'
 import { humanizeGitError, parseGitErrorCode } from '../gitError'
 import { assertGitVcsOk } from '../gitVcsContract'
 import { humanizeGitVcsError, parseGitVcsErrorCode } from '../gitVcsError'
@@ -46,7 +44,6 @@ import type { GitProgressStep } from '../gitAssistantProgressRail'
 import { evaluateGitSetupChecklist, isGitSetupComplete } from '../gitAssistantSetup'
 import type { GitProviderFamily } from '../gitVcsProviderHost'
 import { classifyGitRemoteUrl } from '../gitVcsProviderHost'
-import { assertGitRecentList } from '../registryContract'
 import { settingsAccountsHref } from '../settingsAccountsHref'
 import type { GitVcsOperation } from '../gitVcsTypes'
 
@@ -89,7 +86,12 @@ export function GitAssistantPage(): ReactElement {
   const [identityEmail, setIdentityEmail] = useState('')
   const [branches, setBranches] = useState<BranchEntry[]>([])
   const [dirtyCheckout, setDirtyCheckout] = useState<DirtyCheckoutPrompt | null>(null)
-  const [stashIncludeUntracked, setStashIncludeUntracked] = useState(true)
+  const [stashIncludeUntracked, setStashIncludeUntracked] = useState<boolean>(true)
+  const stashLoadedRef = useRef(false)
+  const setStashUntrackedPersist = useCallback((val: boolean) => {
+    setStashIncludeUntracked(val)
+    void window.dh.storeSet({ key: 'stash_include_untracked', data: val })
+  }, [])
   const [editorRefreshHint, setEditorRefreshHint] = useState(false)
   const [behindModalCount, setBehindModalCount] = useState<number | null>(null)
   const [postPush, setPostPush] = useState<{ host: string; branchUrl: string } | null>(null)
@@ -127,6 +129,15 @@ export function GitAssistantPage(): ReactElement {
   }, [cloudConnected])
 
   const cloudLoadEpochRef = useRef(0)
+
+  useEffect(() => {
+    void window.dh.storeGet({ key: 'stash_include_untracked' }).then((res) => {
+      if (res.ok && typeof res.data === 'boolean') {
+        setStashIncludeUntracked(res.data)
+      }
+      stashLoadedRef.current = true
+    })
+  }, [])
 
   useEffect(() => {
     const epoch = ++cloudLoadEpochRef.current
@@ -592,12 +603,10 @@ export function GitAssistantPage(): ReactElement {
     setBusy(true)
     setOpErrorRaw(null)
     try {
-      const channel =
-        gitOperation === 'rebasing' ? 'dh:git:vcs:rebase-continue' : 'dh:git:vcs:merge-continue'
-      const r = (await invoke('ipc_invoke', {
-        channel,
-        payload: { repoPath: repoPath.trim() },
-      })) as { ok?: boolean; error?: string }
+      const r =
+        gitOperation === 'rebasing'
+          ? await window.dh.gitVcsRebaseContinue({ repoPath: repoPath.trim() })
+          : await window.dh.gitVcsMergeContinue({ repoPath: repoPath.trim() })
       if (!r.ok) throw new Error(r.error ?? 'Continue failed.')
       await refreshStatus()
     } catch (e) {
@@ -612,11 +621,10 @@ export function GitAssistantPage(): ReactElement {
     setBusy(true)
     setOpErrorRaw(null)
     try {
-      const channel = gitOperation === 'rebasing' ? 'dh:git:vcs:rebase-abort' : 'dh:git:vcs:merge-abort'
-      const r = (await invoke('ipc_invoke', {
-        channel,
-        payload: { repoPath: repoPath.trim() },
-      })) as { ok?: boolean; error?: string }
+      const r =
+        gitOperation === 'rebasing'
+          ? await window.dh.gitVcsRebaseAbort({ repoPath: repoPath.trim() })
+          : await window.dh.gitVcsMergeAbort({ repoPath: repoPath.trim() })
       if (!r.ok) throw new Error(r.error ?? 'Abort failed.')
       await refreshStatus()
     } catch (e) {
@@ -807,7 +815,7 @@ export function GitAssistantPage(): ReactElement {
                 creatingNewBranch={dirtyCheckout?.create ?? false}
                 files={dirtyCheckout?.files ?? []}
                 includeUntracked={stashIncludeUntracked}
-                onIncludeUntrackedChange={setStashIncludeUntracked}
+                onIncludeUntrackedChange={setStashUntrackedPersist}
                 busy={busy}
                 onCancel={() => setDirtyCheckout(null)}
                 onStashAndSwitch={() => void runStashAndSwitch()}

@@ -12,7 +12,7 @@ function toUserFacingMessage(result: unknown, fallback: string): string {
   }
 }
 
-describe('docker IPC contract integration', () => {
+describe('docker IPC contract + error roundtrip', () => {
   it('humanizes deterministic unavailable action failures', () => {
     const msg = toUserFacingMessage(
       { ok: false, error: '[DOCKER_UNAVAILABLE] cannot connect to docker daemon' },

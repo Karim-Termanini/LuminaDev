@@ -1,4 +1,3 @@
-import { invoke } from '@tauri-apps/api/core'
 import type { ReactElement } from 'react'
 import { useEffect, useState } from 'react'
 import { assertSettingsOk } from '../settingsContract'
@@ -48,7 +47,7 @@ export function SettingsUpdate(): ReactElement {
     setChecking(true)
     setMsg(null)
     try {
-      const res = await invoke<{ ok: boolean; updateAvailable?: boolean; latestVersion?: string; currentVersion?: string; url?: string; error?: string }>('ipc_invoke', { channel: 'dh:app:update:check', payload: {} })
+      const res = await window.dh.appUpdateCheck()
       if (res.ok) {
         const { updateAvailable, latestVersion, currentVersion } = res
         if (updateAvailable) {

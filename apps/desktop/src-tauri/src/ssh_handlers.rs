@@ -5,6 +5,40 @@ use crate::host_exec::{
     exec_result_limit, exec_sshpass_ssh, get_global_ipc_timeout,
 };
 
+/// Embed `s` as a single-quoted bash word inside an outer `bash -c '…'` script.
+/// Prevents `$()`, backticks, and `"` in `s` from being interpreted by the remote shell.
+fn bash_sq_word_in_c(s: &str) -> String {
+    format!("'\"'\"'{}'\"'\"'", s.replace('\'', "'\"'\"'"))
+}
+
+fn validate_ssh_public_key_line(key: &str) -> Result<&str, &'static str> {
+    let key = key.trim();
+    if key.is_empty() || key.bytes().any(|b| b == b'\n' || b == b'\r') {
+        return Err("empty or multiline");
+    }
+    if key.chars().any(|c| matches!(c, '$' | '`' | '"' | '\0')) {
+        return Err("shell metacharacters");
+    }
+    let key_type = key.split_whitespace().next().unwrap_or("");
+    if !matches!(
+        key_type,
+        "ssh-ed25519"
+            | "ssh-rsa"
+            | "ssh-dss"
+            | "ecdsa-sha2-nistp256"
+            | "ecdsa-sha2-nistp384"
+            | "ecdsa-sha2-nistp521"
+            | "sk-ssh-ed25519@openssh.com"
+            | "sk-ecdsa-sha2-nistp256@openssh.com"
+    ) {
+        return Err("unsupported key type");
+    }
+    if key.split_whitespace().count() < 2 {
+        return Err("malformed key");
+    }
+    Ok(key)
+}
+
 
 // ---------------------------------------------------------------------------
 // SSH handlers
@@ -153,26 +187,30 @@ pub(crate) async fn handle_ssh_setup_remote_key(body: &Value) -> Value {
         .unwrap_or_default();
     if public_key.is_empty() {
         json!({ "ok": false, "error": "[SSH_SETUP_KEY_FAILED] Missing public key." })
+    } else if let Err(reason) = validate_ssh_public_key_line(public_key) {
+        json!({
+            "ok": false,
+            "error": format!("[SSH_SETUP_KEY_FAILED] Invalid public key: {reason}.")
+        })
     } else {
+        let public_key = public_key.trim();
         let port_str = port.to_string();
         let remote = format!("{}@{}", user, host_str);
-        let safe_key = public_key.replace('\'', r"'\''");
-        // Wrap in `bash -c '...'` so it works regardless of the remote user's
-        // login shell (fish, zsh, dash, etc. all accept this invocation).
-        // Key is double-quoted inside the single-quoted bash string; SSH public
-        // keys never contain `"` so this is safe.
+        let key_word = bash_sq_word_in_c(public_key);
+        // Remote login shell may be fish/zsh/dash; run a bash script with the key
+        // embedded as single-quoted literals (no double quotes → no $(…) expansion).
         let setup_cmd = format!(
             concat!(
                 "bash -c '",
                 "mkdir -p ~/.ssh && ",
                 "touch ~/.ssh/authorized_keys && ",
                 "chmod 700 ~/.ssh && ",
-                "grep -qF \"{key}\" ~/.ssh/authorized_keys || ",
-                "printf \"%s\\n\" \"{key}\" >> ~/.ssh/authorized_keys && ",
+                "grep -qF -- {key} ~/.ssh/authorized_keys || ",
+                "printf %s\\\\n {key} >> ~/.ssh/authorized_keys && ",
                 "chmod 600 ~/.ssh/authorized_keys",
                 "'"
             ),
-            key = safe_key
+            key = key_word
         );
         let result = if !password.is_empty() {
             exec_sshpass_ssh(password, &port_str, &remote, &setup_cmd, cmd_timeout_ssh()).await
@@ -256,3 +294,29 @@ pub(crate) async fn handle_ssh_enable_local() -> Value {
 // ---------------------------------------------------------------------------
 // Monitor handlers
 // ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::{bash_sq_word_in_c, validate_ssh_public_key_line};
+
+    #[test]
+    fn bash_sq_word_in_c_neutralizes_command_substitution() {
+        let key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExample lumina@local";
+        let word = bash_sq_word_in_c(key);
+        let script = format!("bash -c 'grep -qF -- {word} ~/.ssh/authorized_keys'");
+        assert!(script.contains("'\"'\"'"));
+        assert!(!script.contains("\"{"));
+    }
+
+    #[test]
+    fn validate_ssh_public_key_rejects_shell_metacharacters() {
+        assert!(validate_ssh_public_key_line("ssh-ed25519 AAA$(x) u@h").is_err());
+        assert!(validate_ssh_public_key_line("ssh-ed25519 AAA`id` u@h").is_err());
+    }
+
+    #[test]
+    fn validate_ssh_public_key_accepts_ed25519_line() {
+        let key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExample lumina@local";
+        assert_eq!(validate_ssh_public_key_line(key), Ok(key));
+    }
+}

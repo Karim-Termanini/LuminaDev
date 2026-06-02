@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-export const DockerContainerActionSchema = z.enum(['start', 'stop', 'restart', 'remove'])
+export const DockerActionSchema = z.enum(['start', 'stop', 'restart', 'remove'])
 export const DockerImageActionSchema = z.enum(['remove'])
 export const DockerVolumeActionSchema = z.enum(['remove'])
 export const DockerNetworkActionSchema = z.enum(['remove'])
@@ -242,7 +242,7 @@ export const AppearanceStoreSchema = z.object({
     .string()
     .regex(/^#[0-9A-Fa-f]{6}$/, 'Expected #RRGGBB')
     .optional(),
-  theme: z.enum(['dark', 'light']).optional(),
+  theme: z.enum(['dark', 'light', 'high-contrast']).optional(),
 })
 
 /** Optional OAuth app client IDs for GitHub/GitLab device flow (public IDs; local store only). */
@@ -453,6 +453,75 @@ export const ComposeUpRequestSchema = z.object({
   profile: ComposeProfileSchema,
 })
 
+/** User-defined profile name from `custom_profiles` store (not base template id). */
+export const ProfileNameSchema = z.string().trim().min(1).max(128)
+
+export const ComposeDownRequestSchema = z.object({
+  profile: ProfileNameSchema,
+})
+
+export const ComposeStopRequestSchema = ComposeDownRequestSchema
+
+export const ComposeLogsRequestSchema = ComposeDownRequestSchema
+
+export const ProfileSwitchRequestSchema = z.object({
+  to: ProfileNameSchema,
+  from: ProfileNameSchema.optional(),
+  envVars: z.array(ProfileEnvVarSchema).max(100).optional(),
+})
+
+export const ProfileRunningStatusRequestSchema = z.object({
+  names: z.array(ProfileNameSchema).max(50),
+})
+
+export const DockerActionRequestSchema = z.object({
+  id: z.string().min(1).max(256),
+  action: DockerActionSchema,
+  removeVolumes: z.boolean().optional(),
+  removeImage: z.boolean().optional(),
+  image: z.string().max(256).optional(),
+})
+
+export const PortsSuggestRequestSchema = z.object({
+  template: ComposeProfileSchema,
+  profile: ProfileNameSchema,
+  subTemplate: z.string().max(64).optional(),
+})
+
+export const FsExistsRequestSchema = z.object({
+  path: z.string().min(1).max(4096),
+})
+
+export const ProjectEnsureDirRequestSchema = FsExistsRequestSchema
+
+export const ProjectScaffoldRequestSchema = z.object({
+  path: z.string().min(1).max(4096),
+  template: z.string().min(1).max(64),
+  options: z.record(z.string(), z.unknown()).optional(),
+  subTemplate: z.string().max(64).optional(),
+})
+
+export const ProjectInstallDepsRequestSchema = z.object({
+  projectName: z.string().min(1).max(128),
+  profileName: ProfileNameSchema,
+  projectPath: z.string().min(1).max(4096),
+  template: z.string().min(1).max(64),
+  toolchain: z.string().min(1).max(32),
+})
+
+export const EditorOpenRequestSchema = z.object({
+  path: z.string().min(1).max(4096),
+  cmd: z.string().min(1).max(512),
+})
+
+export const TerminalCreateRequestSchema = z.object({
+  cols: z.number().int().min(1).max(500),
+  rows: z.number().int().min(1).max(500),
+  cmd: z.string().max(512).optional(),
+  args: z.array(z.string().max(512)).max(32).optional(),
+  env: z.record(z.string(), z.string().max(8192)).optional(),
+})
+
 export const GitCloneRequestSchema = z.object({
   url: z.string().url().max(2048),
   targetDir: z.string().min(1).max(4096),
@@ -585,6 +654,24 @@ export const CloudGitReviewRequestsRequestSchema = z.object({
   limit: z.number().int().min(1).max(50).optional(),
 })
 
+export const CloudGitInboxRequestSchema = z.object({
+  limit: z.number().int().min(1).max(50).optional(),
+})
+
+export const CloudGitInboxCategorySchema = z.enum(['mention', 'review_request', 'pr_activity'])
+
+export const CloudGitInboxItemSchema = z.object({
+  id: z.string().min(1),
+  provider: CloudAuthProviderSchema,
+  category: CloudGitInboxCategorySchema,
+  title: z.string(),
+  url: z.string().url(),
+  repo: z.string(),
+  updatedAt: z.string(),
+  unread: z.boolean(),
+})
+export type CloudGitInboxItem = z.infer<typeof CloudGitInboxItemSchema>
+
 export const CloudPullRequestEntrySchema = z.object({
   id: z.string().min(1),
   title: z.string(),
@@ -645,7 +732,7 @@ export const CloudReleaseEntrySchema = z.object({
 })
 export type CloudReleaseEntry = z.infer<typeof CloudReleaseEntrySchema>
 
-export type DockerContainerAction = z.infer<typeof DockerContainerActionSchema>
+export type DockerAction = z.infer<typeof DockerActionSchema>
 export type DockerImageAction = z.infer<typeof DockerImageActionSchema>
 export type DockerVolumeAction = z.infer<typeof DockerVolumeActionSchema>
 export type DockerNetworkAction = z.infer<typeof DockerNetworkActionSchema>
@@ -881,27 +968,58 @@ export type GitVcsConflictDiffRequest = z.infer<typeof GitVcsConflictDiffRequest
 export type GitVcsRenameBranchRequest = z.infer<typeof GitVcsRenameBranchRequestSchema>
 
 /** CI/CD check entry from GitHub/GitLab. */
-export interface CloudCiCheck {
-  id: string
-  name: string
-  status: string // 'queued' | 'in_progress' | 'completed' | 'success' | 'failure' | etc
-  conclusion?: string
-  url?: string
-  details?: string
-}
+export const CloudCiCheckSchema = z.object({
+  id: z.string().min(1),
+  name: z.string(),
+  status: z.string(),
+  conclusion: z.string().optional(),
+  url: z.string().optional(),
+  details: z.string().optional(),
+})
+export type CloudCiCheck = z.infer<typeof CloudCiCheckSchema>
 
-export interface CloudPrDetails {
-  mergeable: boolean | null
-  mergeable_state: string
-  base_branch?: string
+export const CloudPrDetailsSchema = z.object({
+  mergeable: z.boolean().nullable(),
+  mergeable_state: z.string(),
+  base_branch: z.string().optional(),
   /** True when no open PR exists for this head but a merged closed PR does (GitHub/GitLab). */
-  pr_merged?: boolean
-  checks: CloudCiCheck[]
-}
+  pr_merged: z.boolean().optional(),
+  checks: z.array(CloudCiCheckSchema),
+})
+export type CloudPrDetails = z.infer<typeof CloudPrDetailsSchema>
 
-export interface CloudGitGetPrChecksRequest {
-  provider: 'github' | 'gitlab'
-  repoPath: string
-  remote?: string
-  reference: string // branch name or SHA
-}
+export const CloudGitGetPrChecksRequestSchema = z.object({
+  provider: CloudAuthProviderSchema,
+  repoPath: z.string().min(1).max(4096),
+  remote: z.string().min(1).max(256).optional(),
+  reference: z.string().min(1).max(4096),
+})
+export type CloudGitGetPrChecksRequest = z.infer<typeof CloudGitGetPrChecksRequestSchema>
+
+export const CloudGitCreatePrRequestSchema = z.object({
+  provider: CloudAuthProviderSchema,
+  repoPath: z.string().min(1).max(4096),
+  remote: z.string().min(1).max(256).optional(),
+  title: z.string().min(1).max(256),
+  body: z.string().max(65_536).optional(),
+  head: z.string().min(1).max(256),
+  base: z.string().min(1).max(256),
+})
+export type CloudGitCreatePrRequest = z.infer<typeof CloudGitCreatePrRequestSchema>
+
+export const CloudGitFindPrRequestSchema = z.object({
+  provider: CloudAuthProviderSchema,
+  repoPath: z.string().min(1).max(4096),
+  remote: z.string().min(1).max(256).optional(),
+  head: z.string().min(1).max(256),
+})
+export type CloudGitFindPrRequest = z.infer<typeof CloudGitFindPrRequestSchema>
+
+export const CloudGitMergePrRequestSchema = z.object({
+  provider: CloudAuthProviderSchema,
+  repoPath: z.string().min(1).max(4096),
+  remote: z.string().min(1).max(256).optional(),
+  prUrl: z.string().url().max(2048),
+  reference: z.string().min(1).max(256).optional(),
+})
+export type CloudGitMergePrRequest = z.infer<typeof CloudGitMergePrRequestSchema>

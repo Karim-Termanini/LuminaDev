@@ -1,6 +1,4 @@
 import type {
-  ComposeProfile,
-  DockerContainerAction,
   DockerImageAction,
   DockerNetworkAction,
   DockerVolumeAction,
@@ -312,6 +310,7 @@ export const IPC = {
   cloudAuthStatus: 'dh:cloud:auth:status',
   cloudGitPrs: 'dh:cloud:git:prs',
   cloudGitReviewRequests: 'dh:cloud:git:review-requests',
+  cloudGitInbox: 'dh:cloud:git:inbox',
   cloudGitPipelines: 'dh:cloud:git:pipelines',
   cloudGitIssues: 'dh:cloud:git:issues',
   cloudGitReleases: 'dh:cloud:git:releases',
@@ -327,46 +326,48 @@ export const IPC = {
   gitVcsBranches: 'dh:git:vcs:branches',
   gitVcsCheckout: 'dh:git:vcs:checkout',
   gitVcsStash: 'dh:git:vcs:stash',
-  /** @deprecated Pro Git UI removed — use editor/terminal. Handler kept for tests. */
+  /** Legacy — Pro Git UI removed; handler kept for tests. */
   gitVcsMerge: 'dh:git:vcs:merge',
-  /** @deprecated Pro Git UI removed — use editor/terminal. */
+  /** Legacy — Pro Git UI removed; handler kept for tests. */
   gitVcsRebase: 'dh:git:vcs:rebase',
-  /** @deprecated Pro Git UI removed — use editor/terminal. */
+  /** Legacy — Pro Git UI removed; handler kept for tests. */
   gitVcsStashPop: 'dh:git:vcs:stash-pop',
   gitVcsMergeAbort: 'dh:git:vcs:merge-abort',
   gitVcsRebaseAbort: 'dh:git:vcs:rebase-abort',
   gitVcsMergeContinue: 'dh:git:vcs:merge-continue',
   gitVcsRebaseContinue: 'dh:git:vcs:rebase-continue',
-  /** @deprecated Pro Git UI removed — use editor/terminal. */
+  /** Legacy — Pro Git UI removed; handler kept for tests. */
   gitVcsRebaseSkip: 'dh:git:vcs:rebase-skip',
-  /** @deprecated Pro Git UI removed — use editor/terminal. */
+  /** Legacy — Pro Git UI removed; handler kept for tests. */
   gitVcsRenameBranch: 'dh:git:vcs:rename-branch',
-  /** @deprecated Pro Git UI removed — resolve in editor. */
+  /** Legacy — Pro Git UI removed; handler kept for tests. */
   gitVcsConflictDiff: 'dh:git:vcs:conflict-diff',
-  /** @deprecated Pro Git UI removed — resolve in editor. */
+  /** Legacy — Pro Git UI removed; handler kept for tests. */
   gitVcsConflictHunks: 'dh:git:vcs:conflict-hunks',
-  /** @deprecated Pro Git UI removed — resolve in editor. */
+  /** Legacy — Pro Git UI removed; handler kept for tests. */
   gitVcsResolveConflict: 'dh:git:vcs:resolve-conflict',
-  /** @deprecated Pro Git UI removed — resolve in editor. */
+  /** Legacy — Pro Git UI removed; handler kept for tests. */
   gitVcsResolveHunk: 'dh:git:vcs:resolve-hunk',
   editorList: 'dh:editor:list',
   editorOpen: 'dh:editor:open',
   cloudGitCreatePr: 'dh:cloud:git:create-pr',
   cloudGitFindPr: 'dh:cloud:git:find-pr',
   cloudGitGetPrChecks: 'dh:cloud:git:get-pr-checks',
+  /** Removed from product scope — in-app PR merge; open PR in browser instead. Handler kept for contract tests. */
   cloudGitMergePr: 'dh:cloud:git:merge-pr',
   appInfo: 'dh:app:info',
   appUpdateCheck: 'dh:app:update:check',
   profileRunningStatus: 'dh:profile:running-status',
   profileCredentialsGet: 'dh:profile:credentials:get',
+  portsSuggest: 'dh:ports:suggest',
+  projectEnsureDir: 'dh:project:ensure_dir',
+  projectScaffold: 'dh:project:scaffold',
+  projectInstallDeps: 'dh:project:install_deps',
   fsExists: 'dh:fs:exists',
   /** Open a directory path in the system file manager (xdg-open). */
   fsOpen: 'dh:fs:open',
 } as const
 
-export type DockerActionPayload = { id: string; action: DockerContainerAction }
 export type DockerImageActionPayload = { id: string; action: DockerImageAction; force?: boolean }
 export type DockerVolumeActionPayload = { name: string; action: DockerVolumeAction }
 export type DockerNetworkActionPayload = { id: string; action: DockerNetworkAction }
-
-export type ComposeUpPayload = { profile: ComposeProfile }

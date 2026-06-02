@@ -7,9 +7,8 @@ export function GitDualLabel(props: {
   style?: CSSProperties
   inline?: boolean
 }): ReactElement {
-  const Tag = props.inline ? 'span' : 'span'
   return (
-    <Tag
+    <span
       className="git-dual-label"
       style={{
         display: 'inline-flex',
@@ -21,6 +20,6 @@ export function GitDualLabel(props: {
     >
       <span className="git-dual-label-primary">{props.primary}</span>
       {props.sub ? <span className="git-dual-label-sub">{props.sub}</span> : null}
-    </Tag>
+    </span>
   )
 }

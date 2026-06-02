@@ -196,6 +196,7 @@ async fn ipc_invoke(
         "dh:cloud:auth:status" => cloud_auth::ipc::handle_cloud_auth_status(&app).await,
         "dh:cloud:git:prs"
         | "dh:cloud:git:review-requests"
+        | "dh:cloud:git:inbox"
         | "dh:cloud:git:pipelines"
         | "dh:cloud:git:issues"
         | "dh:cloud:git:releases"

@@ -1,6 +1,5 @@
 import type { ReactElement } from 'react'
 import React from 'react'
-import { invoke } from '@tauri-apps/api/core'
 import { broadcastActiveProfileChange } from '../../lib/activeProfileSync'
 import { cancelProjectSetup, invalidateSetupRuns, readSetupSession } from '../projectSetupSession'
 import {
@@ -261,10 +260,7 @@ export function ProfilesBuilderTab({ vm }: { vm: ProfilesPageViewModel }): React
                               const hasSetup = readSetupSession()?.profileName === p.name
                               if (hasSetup) invalidateSetupRuns()
                               try {
-                                const r = (await invoke('ipc_invoke', {
-                                  channel: 'dh:compose:stop',
-                                  payload: { profile: p.name },
-                                })) as { ok?: boolean; error?: string }
+                                const r = await window.dh.composeStop({ profile: p.name })
                                 if (r.ok) {
                                   const nowRunning = await vm.refreshRunning()
                                   if (nowRunning.size === 0) {
@@ -318,10 +314,7 @@ export function ProfilesBuilderTab({ vm }: { vm: ProfilesPageViewModel }): React
                               vm.setActionLoading((prev) => ({ ...prev, [p.name]: 'restarting' }))
                               signalProfileSwitchStarting(p.name, { skipPoll: true })
                               try {
-                                const r = (await invoke('ipc_invoke', {
-                                  channel: 'dh:profile:switch',
-                                  payload: { from: p.name, to: p.name },
-                                })) as { ok?: boolean; error?: string }
+                                const r = await window.dh.profileSwitch({ from: p.name, to: p.name })
                                 if (!r.ok) {
                                   const errMsg = r.error || 'Failed'
                                   signalProfileSwitchFailed(errMsg)
@@ -390,13 +383,10 @@ export function ProfilesBuilderTab({ vm }: { vm: ProfilesPageViewModel }): React
                                 ? vm.activeProfileTemplate
                                 : undefined
                             try {
-                              const r = (await invoke('ipc_invoke', {
-                                channel: 'dh:profile:switch',
-                                payload: {
-                                  to: p.name,
-                                  ...(previousActive ? { from: previousActive } : {}),
-                                },
-                              })) as { ok?: boolean; error?: string; log?: string }
+                              const r = await window.dh.profileSwitch({
+                                to: p.name,
+                                ...(previousActive ? { from: previousActive } : {}),
+                              })
                               if (!r.ok) {
                                 const errMsg = r.error || r.log || 'Failed to start'
                                 signalProfileSwitchFailed(errMsg)

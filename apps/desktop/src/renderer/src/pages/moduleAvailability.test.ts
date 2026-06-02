@@ -9,16 +9,13 @@ function ensureBrowserGlobals(): void {
 }
 
 /**
- * Headless E2E: UI Load Verification
+ * Module availability smoke tests (Vitest, no browser/Tauri session).
  *
- * Tests that the LuminaDev UI can initialize and load critical components
- * without requiring a display server or X11.
- *
+ * Verifies renderer modules import cleanly and core error humanizers behave.
  * Run with: pnpm test:e2e
- * CI Integration: Use xvfb-run or headless environment
  */
 
-describe('headless-e2e: UI component initialization', () => {
+describe('module availability: runtime globals', () => {
   let windowErrors: string[] = []
   let tauriAvailable = false
 
@@ -138,7 +135,7 @@ describe('headless-e2e: UI component initialization', () => {
   })
 })
 
-describe('headless-e2e: page-specific rendering', () => {
+describe('module availability: page modules', () => {
   beforeAll(() => {
     ensureBrowserGlobals()
   })
@@ -199,7 +196,7 @@ describe('headless-e2e: page-specific rendering', () => {
   })
 })
 
-describe('headless-e2e: native session', () => {
+describe('module availability: headless environment', () => {
   it('should handle missing X11 display gracefully', () => {
     const hasDisplay = typeof process !== 'undefined' && !!process.env.DISPLAY
 
@@ -224,7 +221,7 @@ describe('headless-e2e: native session', () => {
   })
 })
 
-describe('headless-e2e: error recovery', () => {
+describe('module availability: error humanization', () => {
   it('should recover from missing Tauri context gracefully', () => {
     expect(() => {
       const w =

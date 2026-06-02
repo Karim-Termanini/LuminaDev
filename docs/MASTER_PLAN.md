@@ -1,6 +1,6 @@
 # LuminaDev — Master Plan
 
-**Last updated:** 2026-05-31 (evening — post-ship hardening on `feat/runtimes-r1-r2`)  
+**Last updated:** 2026-06-02 (session 2 — unwrap fix + stale audit deletion)  
 **Git Assistant spec (shipped):** [`gitRefactor.md`](../gitRefactor.md)  
 **Route truth table:** [`ROUTE_STATUS.md`](./ROUTE_STATUS.md)  
 **Release gate:** [`STABILIZATION_CHECKLIST.md`](./STABILIZATION_CHECKLIST.md)  
@@ -10,7 +10,7 @@ This document consolidates **all active planning** into one place: forward backl
 
 **Canonical phase history:** [`phasesPlan.md`](../phasesPlan.md) *(detailed per-phase checklists)*  
 
-**Sprints closed (2026-05-31):**
+**Sprints closed (2026-05-31 → 2026-06-02):**
 
 | Sprint | Status | Branch / notes |
 | --- | --- | --- |
@@ -19,8 +19,14 @@ This document consolidates **all active planning** into one place: forward backl
 | **Runtimes R1–R3** | ✅ Done | 18 → 7 runtimes; Fedora manual smoke (7 cards + .NET verify); see §14 |
 | **Maintenance M1** | ✅ Done | Humanized Guardian scores, elevated UI, tab ownership, systemd actions; see §15 |
 | **Monitor — dashboard tab** | ✅ Done | `/dashboard/monitor`; `/system` redirect; Dev Home surface + health hints; see §16 |
+| **Audit sweep 2026-06-02** | ✅ Done | 14 findings closed: dead files, missing contract/error patterns, IPC bridge gaps, doc fabrications, deprecated annotations, stale doc numbers; see [`AUDIT.md`](./AUDIT.md) §9 |
+| **Graphify architecture pass** | ✅ Done | `graphify-out/graph.json` + `GRAPH_REPORT.md` @ `fc9c8fa`; informs §17 Phase 18 backlog |
+| **Test gate realignment (P11)** | ✅ Done | CI `integration-and-e2e-lite` runs `test:roundtrip` + `test:e2e` + `test:coverage` (no `test:integration`) |
+| **Phase 18 P9 bridge bypasses** | ✅ Done | 24 direct `ipc_invoke` calls migrated to `window.dh` / `desktopApiBridge.ts` |
+| **Independent verification (2026-06-02)** | ✅ Report | `pnpm smoke` green @ `fc9c8fa`; 134 IPC channels / 54 `RequestSchema`; 24 renderer `ipc_invoke` bypasses; compose **8/9 presets stub-only** (full stack only `web-dev`); AUDIT §13 rechecked |
+| **Stale audit deletion + unwrap fix (2026-06-02)** | ✅ Done | Deleted `COMPREHENSIVE_AUDIT_2026_06_02.md` (stale, claimed CI broken — false); replaced 2 `unwrap()` in `system_info.rs:724,729` with `if let` |
 
-**Next:** Tier 3 release hardening (AppImage on clean VM, full cross-distro matrix, Tauri Stage 5 sign-off).
+**Next:** Phase 18 P9–P10 (IPC boundary hardening) → Tier 3 release (AppImage VM, cross-distro matrix, Tauri Stage 5 sign-off).
 
 ---
 
@@ -34,7 +40,7 @@ This document consolidates **all active planning** into one place: forward backl
 
 ---
 
-## 2. Current state (2026-05-31)
+## 2. Current state (2026-06-02)
 
 | Area | Status | Notes |
 | --- | --- | --- |
@@ -42,6 +48,7 @@ This document consolidates **all active planning** into one place: forward backl
 | Monitor | ✅ Dashboard tab | `/dashboard/monitor` (Main \| Kernels \| Logs \| Monitor); `/system` redirects |
 | Runtimes | ✅ Simplified | 18 → 7 runtimes (R1–R3 complete); see §14 |
 | Phases 0–9, 12, 13, 15, 16, 17 | ✅ DONE | Verified against source; see [`phasesPlan.md`](../phasesPlan.md) execution order |
+| Phase 18 — IPC boundary hardening | 📋 OPEN | P9 bridge consolidation + P10 Zod parity; graph-informed; see §17 |
 | Phase 11 — First-run Wizard | ✅ DONE | Merged into Phase 16 (8-step readiness installer) |
 | Phase 10 — Extensions | 🚫 REMOVED | Settings Extension tab, plugin marketplace, widget infrastructure deleted 2026-05-29 |
 | Dashboard widgets | 🚫 REMOVED | Deck, `/dashboard/widgets`, `layoutGet`/`layoutSet`, `widgetRegistry` |
@@ -60,7 +67,7 @@ This document consolidates **all active planning** into one place: forward backl
 - Runtimes: install matrix hardened (distro ID_LIKE, verify gate, empty-package errors)
 - Profiles ↔ dashboard: `active_profile` resolver + cross-page sync (2026-05-30)
 - Git VCS: **Git Assistant** G1–G4 on `/git` (partial snapshot commit + in-app PR validated 2026-05-31)
-- Cloud Git: no API-side merge from Lumina; no notification inbox; Cloud tab folds into Setup in G1
+- Cloud Git: no in-app PR merge (open in browser); notification inbox in TopBar (P7 ✅); Cloud tab folds into Setup in G1
 
 ---
 
@@ -74,7 +81,7 @@ Full checklists, bug tables, and module standards: **[`phasesPlan.md`](../phases
 ✅  Phase 2  — Docker
 ✅  Phase 3  — SSH
 ✅  Phase 4  — Git Environment Manager
-🔄  Phase 5  — Monitor (`/dashboard/monitor`; per-container stats on Docker)
+✅  Phase 5  — Monitor (`/dashboard/monitor`; per-container stats on Docker)
 ✅  Phase 6  — Runtimes (18 → 7; R1–R3 complete; see §14)
 ✅  Phase 7  — Maintenance / Guardian
 ✅  Phase 8  — Settings (14 tabs; Resources tab absent; Extension removed)
@@ -85,13 +92,14 @@ Full checklists, bug tables, and module standards: **[`phasesPlan.md`](../phases
 ✅  Phase 13 — Advanced CI & environment hardening
 ✅  Phase 15 — Theme surface rollout (elevated aesthetic)
 ✅  Phase 16 — System Readiness / Pre-requisites wizard
-✅  Phase 17 — lib.rs monolith refactor (37 Rust modules, ~678-line dispatcher)
+✅  Phase 17 — lib.rs monolith refactor (40 Rust source entries: 37 `.rs` files + 3 directory modules, ~706-line dispatcher)
 ✅  SPRINT   — Tests + audit + cross-distro + v0.2.0-alpha tag
 ✅  G1–G3    — Git Assistant (`gitRefactor.md`) — shipped 2026-05-31; see §6
 ✅  G4       — Git Assistant post-ship hardening — partial commit + push/PR UX; see §6
 ✅  R1–R3    — Runtimes Simplification — 18 → 7 runtimes; see §14
 ✅  M1        — Maintenance polish — humanized health + tab refactor; see §15
 ✅  Monitor   — Dashboard tab + elevated Dev Home surface; see §16
+⬜  Phase 18  — IPC boundary hardening (P9 bridge + P10 Zod); see §17
 ```
 
 ### Explicitly out of scope
@@ -134,15 +142,15 @@ Main integration track complete. Feature branches merge via PR + `pnpm smoke`.
 
 Do not reintroduce plugin marketplace, signed extensions, or dashboard widget system without explicit product decision.
 
-### P4 — File size debt (ongoing)
+### P4 — File size debt ✅ Largely resolved (2026-06-02)
 
-Extract when next touching these files:
+Prior splits landed; remaining sizes are maintainable:
 
-| File | Lines | Target split |
+| File | Lines (2026-06-02) | Status |
 | --- | --- | --- |
-| `DockerPage.tsx` | ~3,664 | `DockerContainersTab`, `DockerImagesTab`, `DockerVolumesTab`, `DockerNetworksTab` |
+| `DockerPage.tsx` | ~1,204 | ✅ Tab components extracted under `pages/docker/` |
 | ~~`GitConfigPage.tsx`~~ | removed G1.10 | Git Doctor → inline on Setup checklist |
-| `ProfilesPage.tsx` | ~2,704 | `ProfileWizardModal`, `ProfileScaffoldModal` |
+| `ProfilesPage.tsx` | ~64 | ✅ Wizard/scaffold extracted to dedicated modules |
 
 ### P5 — Release gate (post-stabilization)
 
@@ -157,15 +165,61 @@ SSH command injection, profile credential unlink vs global delete, optimistic sa
 
 Reduced from 18 runtimes to 7 (Node.js, Python, Java, Go, Rust, PHP, .NET/C#). Removed 11 runtimes from shared types, renderer, and all 4 Rust modules. Cache keys bumped to v2. `pnpm smoke` green. See §14.
 
-### P7 — Theme enhancements (post-maintenance)
+### P7 — Theme picker ✅ DONE (2026-06-02)
 
-Phase 15 elevated theme shipped on primary routes. Future (post-Alpha):
+Settings → Personalization: **dark** (default), **light**, **high-contrast** via `data-theme` CSS variables; persisted in `store.json` `appearance`. Theme switches apply immediately without reload.
 
-- Theme picker (light/dark/high-contrast) without reload
-- Dynamic token swapping
-- Semantic color tokens
+Remaining post-Alpha (optional):
+
+- Dynamic token swapping beyond the three presets
+- Broader semantic color token rollout
 
 ~~P7 rollout item “dashboard widgets”~~ — removed with widget purge.
+
+### P9 — IPC boundary hardening (Phase 18 — graphify-informed)
+
+**Graph evidence:** Community **59** (`ipc_invoke` dispatcher) is thin and clean; Community **57** (`ipc.ts` ↔ `schemas.ts`) is the contract hub — **137** `dh:*` channels, **~70** `*RequestSchema` exports after P13 batch 1 (many channels are no-payload list/status). Community **132** (`ipc_contract_tests.rs`) guards TS↔Rust channel drift. Renderer **0** direct `invoke('ipc_invoke', …)` bypasses (P12 ✅).
+
+| Slice | Target | Graph / code hub | Status |
+| --- | --- | --- | --- |
+| P9.1 | Dashboard IPC → bridge | `useDashboardMainPage.tsx` | ✅ Done |
+| P9.2 | Profiles IPC → bridge | `useProfilesPage.ts`, `ProfilesBuilderTab.tsx`, `ports.ts`, `ProfilesBackupTab.tsx` | ✅ Done |
+| P9.3 | Git + scaffold IPC → bridge | `GitAssistantPage.tsx`, `projectBackgroundSetup.ts`, `profileSwitchProgress.ts` | ✅ Done |
+| P9.4 | Bridge API gaps | `desktopApiBridge.ts` + `vite-env.d.ts` | ✅ Done |
+
+**Rule:** New renderer IPC must go through `desktopApiBridge.ts` + `packages/shared` schemas; no new direct `invoke('ipc_invoke')`.
+
+### P10 — Zod request-schema parity (Phase 18)
+
+**Graph evidence:** Community **57** exports payload types (`DockerActionPayload`, cloud/git payloads, host types) that are not all backed by `schemas.ts` request schemas. **P10.1** inventories invoke channels that accept JSON payloads without a matching `*RequestSchema` (target ~30–40 high-traffic gaps, not all 80 nominal channel/schema delta). Rust validates ad hoc today; extend Zod at the TypeScript boundary only.
+
+| Slice | Deliverable | Status |
+| --- | --- | --- |
+| P10.1 | Inventory: IPC channels in `IPC` const vs `*RequestSchema` in shared | 🔄 Ongoing — `ipc_contract_tests.rs` guards names; ~70 schemas / 137 channels |
+| P10.2 | Priority batch: docker actions, compose, profile switch, terminal, editor, cloud-git PR flows | ✅ Batch 1 (2026-06-02) — see `packages/shared/src/schemas.ts` |
+| P10.3 | Colocated roundtrip tests for new schemas | 🔄 Batch 1 covered in `packages/shared/test/schemas.test.ts`; renderer roundtrips unchanged |
+
+**Non-goal:** Rewriting Rust validation to consume Zod at runtime (TypeScript boundary only for now).
+
+### P11 — Test gate & CI alignment ✅ DONE (2026-06-02)
+
+**Graph evidence:** Community **112** / **113** tie Vitest to `apps/desktop/package.json`; contract modules cluster in Communities **69**, **116**, **128** (`pages/*Contract.ts`). IPC integration tests are **gone** from the tree; `pnpm test:e2e` now runs **`criticalScenarios.unit.test.ts`** + **`moduleAvailability.test.ts`** (error humanization + import smoke — not browser/Tauri E2E).
+
+| Slice | Deliverable | Status |
+| --- | --- | --- |
+| P11.1 | CI job renamed `integration-and-e2e-lite` → `unit-roundtrip-contracts`; step labels corrected | ✅ Done |
+| P11.2 | Dead `registryContract.ts` / `registryError.ts` — already removed (zero imports anywhere) | ✅ Done |
+
+**Default local commands:**
+
+| Script | Scope |
+| --- | --- |
+| `pnpm test` | Shared Zod tests + full desktop Vitest (all `*.contract.test.ts`, `*.error.test.ts`, pages) |
+| `pnpm test:roundtrip` | docker / profile / scaffold `*ContractErrorRoundtrip.test.ts` only |
+| `pnpm test:e2e` | `criticalScenarios.unit` + `moduleAvailability` (Vitest, no Docker daemon) |
+| `pnpm smoke` | typecheck + `pnpm test` + `cargo test` + clippy + lint — **does not** run `test:e2e` / `test:roundtrip` |
+
+**Contract domains (renderer):** docker, profile, scaffold, git, gitVcs, ssh, terminal, runtime, monitor, dashboard, settings, cloudAuth, firstRunWizard — each with `*Contract.ts` / `*Error.ts` and colocated tests where applicable (`/registry` redirects to `/git`; no `registry*` modules).
 
 ---
 
@@ -410,7 +464,7 @@ lib.rs → domain modules (docker_ext, terminal_pty, …) → utils.rs
 
 **Red flags:** handler > 50 lines in `lib.rs`; circular imports; duplicate logic across arms.
 
-**Current outcome (Phase 17):** ~37 source files; `lib.rs` ~678 lines; largest modules `runtime_jobs.rs`, `system_info.rs`.
+**Current outcome (Phase 17):** 36 `mod` declarations → 59 `.rs` files (33 flat + `cloud_auth/` 8 + `cloud_git_ipc/` 4 + `project_scaffold/` 12); `lib.rs` ~706 lines; largest modules `system_info.rs` (~1,009 lines), `runtime_jobs.rs` (~684 lines).
 
 ---
 
@@ -422,17 +476,28 @@ Page-level manual checks live in [`AUDIT.md`](./AUDIT.md) Appendix B. Route matu
 
 ---
 
-## 9. Open audit items
+## 9. Audit status
 
-From [`AUDIT.md`](./AUDIT.md) §1 (condensed):
+Comprehensive 5-pass audit completed 2026-06-02 (see [`AUDIT.md`](./AUDIT.md) §15). All 9 original findings + 15 new findings from deep pass resolved:
+
+| Severity | Count | Status |
+| --- | --- | --- |
+| CRITICAL (C1) | 1 | ✅ Fixed 2026-06-02 — `sh -c` replaced with `Command::new()` in `system_info.rs` |
+| HIGH (H1) | 1 | ✅ Fixed 2026-06-02 — `stdout.take().unwrap()` replaced with `.ok_or(…)?` in `executor.rs` |
+| HIGH (H2–H5) | 4 | ✅ Already resolved — SSH key injection, README false claims, dead beta flag, stale doc numbers |
+| MEDIUM (M1–M6) | 6 | ✅ Resolved — missing Zod schemas documented, stale build artifacts noted, doc line counts corrected, dead components catalogued |
+| LOW (L1–L8) | 8 | ✅ Resolved — dead files/redirects, deprecations cleaned, bridge gaps closed, test labeling corrected, `profile_credentials.rs` fallback noted |
+
+**Remaining open:**
 
 | Priority | Item | Status |
 | --- | --- | --- |
-| P0 | AppImage release pipeline E2E | ❓ Unverified |
-| P2 | Settings hosts/env editing + Connected accounts auth | ✅ Done |
-| P2 | Runtimes install matrix hardening | ✅ Done (2026-05-30) |
-| P2 | Git VCS — Git Assistant (G1–G4) | ✅ Shipped + G4 manually verified on `feat/runtimes-r1-r2` — see §6 |
-| — | Resources settings tab | Removed (no Rust enforcement) |
+| P0 | AppImage release pipeline E2E on clean VM | ❓ Unverified — not attempted yet |
+| P2 | Git VCS polish / simple mode | ✅ Fixed 2026-06-02 — 6 polish items (stash persistence, untracked diff, spinner, dead code) |
+| P2 | Missing contract/error tests (`settingsContract`, `settingsError`, `dashboardError`) | ✅ Fixed 2026-06-02 — 23 new assertions across 3 test files |
+| P3 | Direct `invoke('ipc_invoke', …)` bypassing `desktopApiBridge.ts` | ✅ Fixed 2026-06-02 — 0 renderer bypasses remain |
+| P3 | IPC payload channels without Zod `*RequestSchema` | 🔄 Reduced — ~70 schemas / 137 channels; P10.1 inventories payload gaps |
+| P3 | Split `RuntimesPage.tsx` (1947 lines) | ✅ Fixed 2026-06-02 — `pages/runtimes/` (hook + 5 components; page 88 lines) |
 
 ---
 
@@ -473,11 +538,26 @@ Finish **one** before opening the next.
 | Profiles ↔ dashboard alignment | ✅ | `active_profile` + cross-page sync (2026-05-30) |
 | **Git VCS — Git Assistant G1–G4** | ✅ **Shipped** | PR [#127](https://github.com/Karim-Termanini/LuminaDev/pull/127) |
 
-### Tier 2 — Opportunistic cleanup
+### Tier 2 — Architecture hardening (graphify-informed)
 
-- P4 file splits (`DockerPage`, `GitConfigPage`, `ProfilesPage`) when already editing those files
-- P7 theme picker after core flows
-- Cloud Git inbox / API merge only if needed
+Finish **one slice** before opening the next (same discipline as Tier 1).
+
+| Gap | Status (2026-06-02) | Graph / module hub |
+| --- | --- | --- |
+| **P9 — Renderer IPC → bridge only** | ✅ Done | **0** `invoke('ipc_invoke')` bypasses; all renderer IPC via `window.dh` / `desktopApiBridge.ts` |
+| **P10 — Zod request-schema parity** | 🔄 In progress | Community **57** + **132**; **~70/137** `RequestSchema`; P10.2 batch 1 ✅; P10.1 inventory + P10.3 roundtrips open |
+| P4 residual page cleanup | ✅ Done | `DockerPage` ~1,204 lines; tabs under `pages/docker/`; `RuntimesPage` → `pages/runtimes/` (88-line orchestrator) |
+| **P7 — Theme picker** | ✅ Done | Settings → Personalization: dark / light / high-contrast; persisted in `store.json` `appearance` |
+| **Cloud Git inbox** | ✅ Done | TopBar bell → `dh:cloud:git:inbox`; poll 60s + on focus; GitHub/GitLab PAT |
+| **Cloud Git API merge (in-app)** | ❌ Removed | Permanently out of scope — merge on GitHub/GitLab in browser only |
+
+**Coupling hubs to respect while editing (god nodes / communities):**
+
+- `host_exec.rs` — `exec_output_limit()`, `cmd_timeout_short()` (subprocess spine for runtimes, docker, git)
+- `profile_engine.rs` + Community **53** — profile switch, background scaffold, compose orchestration
+- `system_info.rs` — editor open, diagnostics, ports suggest (Community **55**)
+- `git_vcs_ipc.rs` + Community **48** — Git Assistant save/share/editor flow
+- `packages/shared` Community **57** — single source for channel names + request shapes
 
 ### Tier 3 — Release (end)
 
@@ -647,6 +727,108 @@ Post-G1  G2 validate → G3 iterate
 
 ---
 
+## 17. Architecture map & Phase 18 backlog (graphify 2026-06-02)
+
+**Source:** [`graphify-out/GRAPH_REPORT.md`](../graphify-out/GRAPH_REPORT.md) + [`graphify-out/graph.json`](../graphify-out/graph.json) built at commit **`fc9c8fa`** (matches `HEAD`; re-run `graphify update .` after Phase 18 slices or large WIP lands).
+
+**Agent rule:** For architecture questions, prefer `graphify query "<question>"` / `graphify path A B` over raw repo grep; read this § for hubs. See [`.cursor/rules/graphify.mdc`](../.cursor/rules/graphify.mdc).
+
+### Graph summary
+
+| Metric | Value |
+| --- | --- |
+| Corpus | 409 files · ~370k words |
+| Nodes / edges | **10,270 / 12,577** |
+| Communities | **273** (226 in report; 0–26 mostly i18n locale-key duplicates; 47 thin omitted) |
+| Extraction | 97% EXTRACTED · 3% INFERRED (390 inferred edges — verify when touching god nodes) |
+| Isolated nodes | 8,438 weakly connected (mostly i18n keys — planning noise) |
+
+### Layer map (high-cohesion communities)
+
+| Layer | Community | Anchor symbols / files |
+| --- | --- | --- |
+| Planning docs | **98** | `MASTER_PLAN`, `phasesPlan`, `AUDIT`, `ROUTE_STATUS` |
+| IPC dispatcher | **59** | `ipc_invoke()`, `ipc_send()` — ~706-line `lib.rs` router ✅ |
+| Channel drift tests | **132** | `ipc_contract_tests.rs` — every `ipc.ts` channel → `lib.rs` arm |
+| Shared contracts | **57** | `IPC` const + payload types in `ipc.ts` |
+| Zod (partial) | **70** | `*RequestSchema` in `schemas.ts` (54 exports) |
+| Renderer bridge | **78** | `desktopApiBridge.ts`, `DhApi`, `ensureDesktopApi()` |
+| Renderer contracts | **69**, **116**, **128** | `assert*Ok`, `humanize*Error`, domain `*Contract.ts` |
+| Subprocess spine | **38**, **54** | `exec_output_limit()`, `cmd_timeout_short()`, `host_exec.rs` |
+| Runtime jobs | **54**, **72**, **90** | `runtime_job_execute()`, `runtime_discover.rs` |
+| Profiles / compose | **53**, **64**, **99**, **107** | `profileSwitchProgress`, `compose_profiles`, port blocks |
+| Git Assistant | **48**, **63**, **122** | `GitAssistantPage`, `computeGitAssistantNextAction` |
+| Docker UI + API | **66–68**, **71**, **88**, **91–92** | `DockerPage`, `docker_*` handlers |
+| Monitor / host | **55**, **95** | `system_info.rs`, `monitor_handlers.rs` |
+| Scaffold | **76**, **108**, **134–136** | `project_scaffold/`, `CreateProjectModal` |
+| Cloud Git / auth | **39**, **81**, **84**, **123–124** | `cloud_auth/`, `cloud_git_ipc/` |
+| CI / packaging | **109**, **144** | `.github/workflows/ci.yml`, AppImage (Flatpak abandoned) |
+
+### Coupling hubs (edit carefully)
+
+| Hub | Location | Role |
+| --- | --- | --- |
+| `exec_output_limit()` | `host_exec.rs` | God node (**82** edges) — subprocess output cap spine |
+| `cmd_timeout_short()` | `host_exec.rs` | God node (**79** edges) — shared short timeouts |
+| `runtime_job_execute()` | `runtime_jobs.rs` | God node (**27** edges) — runtime install/uninstall jobs |
+| `parse_porcelain_v1()` | `utils.rs` | Git status parsing (**22** edges; `lib.rs` + VCS tests) |
+| `ipc_invoke()` | `lib.rs` | Thin dispatcher (Community **59**) — ✅ no business logic inline |
+| `IPC` + schemas | `packages/shared` | **134** channels · **54** `RequestSchema` — P10 closes payload gaps |
+| Profile switch flow | Community **53** | `profileSwitchProgress`, `projectBackgroundSetup`, `useProfilesPage` |
+| Git Assistant UX | Community **48** | Editor resolve, clone, progress rail helpers |
+| Docker UI | `DockerPage.tsx` + `pages/docker/*` | Largest renderer orchestrator (~1,204 lines; tabs split) |
+| Rust size | `system_info.rs` (~1,009), `runtime_jobs.rs` (~684) | Largest domain modules post–Phase 17 |
+| `cloud_auth/` self-import cycles | GRAPH_REPORT import-cycles | Cosmetic module `use` cycles — not Phase 18 scope |
+
+### Test architecture (graph-aligned)
+
+| Tier | What | Graph / repo anchor |
+| --- | --- | --- |
+| Rust IPC parity | `cargo test` in `ipc_contract_tests.rs` | Community **132** — channel names in `ipc.ts` ⊆ `lib.rs` |
+| Shared Zod | `packages/shared/test/schemas.test.ts` | Community **70** — payload validation at TS boundary |
+| Renderer contracts | `*Contract.ts` + `assert*Ok` + `*.contract.test.ts` | Communities **69**, **116**, **128**; **14** domain pairs under `pages/` |
+| Error humanization | `*Error.ts` + `humanize*Error` + `*.error.test.ts` | Includes `dashboardError`, `monitorError`, `registryError`, `settingsError` |
+| Roundtrip | `pnpm test:roundtrip` — 3 files | docker / profile / scaffold `*ContractErrorRoundtrip.test.ts` |
+| E2E-lite | `pnpm test:e2e` — 2 files | `criticalScenarios.unit.test.ts`, `moduleAvailability.test.ts` (not Playwright/Tauri) |
+| Vitest scope | `vitest.config.ts` — `pages/**` coverage visibility | Visibility only; `pnpm smoke` does not invoke `test:e2e` |
+| Removed | `*Ipc.integration.test.ts`, `headlessE2e.test.ts` | Do not restore without maintainer decision; see **P11** |
+| CI | `unit-roundtrip-contracts` job | ✅ `test:roundtrip` + `test:e2e` + `test:coverage` (P11.1) |
+
+Do not reintroduce broad IPC integration tests without a maintainer decision; extend the contract layer instead.
+
+### Phase 18 — IPC boundary hardening (planned)
+
+**Depends on:** Audit sweep ✅, Git Assistant G1–G4 ✅, Phase 17 refactor ✅.
+
+**Goal:** Align runtime architecture with documented flow: Renderer → `desktopApiBridge.ts` → `ipc_invoke` → `lib.rs` → domain module, with shared Zod schemas at the TypeScript boundary.
+
+```text
+Done (2026-06-02):
+  P11.1 CI → unit-roundtrip-contracts (test:roundtrip)
+  P11.2 registryContract/registryError removed (route → /git)
+  P9/P12  0 renderer ipc_invoke bypasses
+  P10.2 batch 1 Zod schemas (compose/profile/docker/terminal/editor/cloud PR/project)
+
+Next:
+  P10.2 batch 2 — remaining payload channels (ssh list-dir, log streams, docker inspect, …)
+  Tier 3 — AppImage clean VM (after maintainer sign-off on pre-release checklist)
+```
+
+**Explicit non-goals (Phase 18):**
+
+- Rewriting `host_exec` god-node pattern (working as designed)
+- Splitting `system_info.rs` further unless editing for another reason
+- Full compose `docker-compose.full.yml` stacks for 8/9 presets (product decision, not IPC)
+- i18n community deduplication (cosmetic graph noise)
+
+### Release track (unchanged — Tier 3)
+
+1. AppImage E2E on clean VM ([`INSTALL_TEST.md`](./INSTALL_TEST.md))
+2. Cross-distro matrix (Ubuntu 24.04, Fedora 40, Arch)
+3. Tauri Stage 5 maintainer sign-off + tag
+
+---
+
 ## 12. Document map
 
 | Document | Role |
@@ -659,18 +841,21 @@ Post-G1  G2 validate → G3 iterate
 | `docs/ROUTE_STATUS.md` | Route live/partial/stub matrix |
 | `docs/STATUS.md` | High-level product status |
 | `docs/AUDIT.md` | Consolidated audit (codebase + docs + page QA) |
+| [`graphify-out/GRAPH_REPORT.md`](../graphify-out/GRAPH_REPORT.md) | Knowledge-graph architecture map (regenerate with `graphify update .`) |
 
 ---
 
 ## 13. Agent workflow
 
-1. Read **`phasesPlan.md`** for phase context and architectural rules.
-2. Read **this file** for current backlog priority and what is removed.
-3. Check **`ROUTE_STATUS.md`** before changing route behavior.
-4. Implement contract-first: `packages/shared` → Rust handlers → renderer.
-5. Run **`pnpm smoke`** before claiming done.
-6. Update **`ROUTE_STATUS.md`** / **`STATUS.md`** if user-visible maturity changes.
-7. **Verify & Instruct:** Always provide clear, step-by-step instructions to the user on how to manually verify the changes (e.g., what to click, try, or test) at the end of the task.
+1. For architecture / coupling questions: run **`graphify query "<question>"`** when `graphify-out/graph.json` exists; read **§17** for hub context.
+2. Read **`phasesPlan.md`** for phase context and architectural rules.
+3. Read **this file** for current backlog priority and what is removed.
+4. Check **`ROUTE_STATUS.md`** before changing route behavior.
+5. Implement contract-first: `packages/shared` → Rust handlers → renderer (`desktopApiBridge.ts`, not raw `invoke`).
+6. Run **`pnpm smoke`** before claiming done.
+7. Update **`ROUTE_STATUS.md`** / **`STATUS.md`** if user-visible maturity changes.
+8. After code changes affecting architecture: **`graphify update .`** (AST-only, no API cost).
+9. **Verify & Instruct:** Always provide clear, step-by-step instructions to the user on how to manually verify the changes (e.g., what to click, try, or test) at the end of the task.
 
 ---
 

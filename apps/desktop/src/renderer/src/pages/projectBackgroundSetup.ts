@@ -1,4 +1,3 @@
-import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import i18n from 'i18next'
 import { humanizeScaffoldError } from './scaffoldError'
@@ -62,10 +61,7 @@ function friendlyInstallStep(raw: string): string {
 
 async function isProfileRunning(profileName: string): Promise<boolean> {
   try {
-    const res = (await invoke('ipc_invoke', {
-      channel: 'dh:profile:running-status',
-      payload: { names: [profileName] },
-    })) as { ok?: boolean; running?: string[] }
+    const res = await window.dh.profileRunningStatus({ names: [profileName] })
     return Boolean(res.ok && res.running?.includes(profileName))
   } catch {
     return false
@@ -133,16 +129,13 @@ async function runInstallPhase(
       signalProfileSwitchStep(lastInstallStep || snap.step, installProgress)
     }, INSTALL_CREEP_MS)
 
-    const installRes = (await invoke('ipc_invoke', {
-      channel: 'dh:project:install_deps',
-      payload: {
-        projectName,
-        profileName,
-        projectPath,
-        template,
-        toolchain,
-      },
-    })) as { ok?: boolean; error?: string; log?: string }
+    const installRes = await window.dh.projectInstallDeps({
+      projectName,
+      profileName,
+      projectPath,
+      template,
+      toolchain,
+    })
 
     if (!isSetupRunActive(runGen)) return 'cancelled'
 
@@ -179,10 +172,7 @@ export async function runBackgroundProjectSetup(
       persistSetupSession({ ...sessionFromOpts(opts), phase: 'stack' })
       signalProfileSwitchStep(i18n.t('main.setup.preparingDocker'), 20)
 
-      const sw = (await invoke('ipc_invoke', {
-        channel: 'dh:profile:switch',
-        payload: { to: profileName },
-      })) as { ok?: boolean; error?: string; log?: string }
+      const sw = await window.dh.profileSwitch({ to: profileName })
 
       if (!isSetupRunActive(runGen)) return
 

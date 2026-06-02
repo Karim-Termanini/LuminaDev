@@ -1,7 +1,12 @@
 import type { ReactElement } from 'react'
 import { useEffect, useState } from 'react'
 import { parseAppearance } from '@linux-dev-home/shared'
-import { applyAppearanceAccent, applyTheme, DEFAULT_ACCENT_HEX } from '../../theme/applyAccent'
+import {
+  applyAppearanceAccent,
+  applyTheme,
+  DEFAULT_ACCENT_HEX,
+  type ThemeMode,
+} from '../../theme/applyAccent'
 import { assertSettingsOk } from '../settingsContract'
 import { useTranslation } from 'react-i18next'
 import {
@@ -25,24 +30,52 @@ export function SettingsPersonalization(): ReactElement {
   const [accentDraft, setAccentDraft] = useState(DEFAULT_ACCENT_HEX)
   const [accentBusy, setAccentBusy] = useState(false)
   const [accentMsg, setAccentMsg] = useState<string | null>(null)
-  const [themeMode, setThemeMode] = useState<'dark' | 'light'>('dark')
+  const [themeMode, setThemeMode] = useState<ThemeMode>('dark')
 
   useEffect(() => {
     void window.dh.storeGet({ key: 'appearance' }).then((ap) => {
       if (ap.ok) {
         const parsed = parseAppearance(ap.data)
         setAccentDraft(parsed.accent ?? DEFAULT_ACCENT_HEX)
-        setThemeMode(parsed.theme ?? 'dark')
+        const stored = parsed.theme ?? 'dark'
+        setThemeMode(stored)
+        applyTheme(stored)
       }
     })
   }, [])
+
+  async function persistAppearance(patch: { accent?: string; theme?: ThemeMode }): Promise<void> {
+    const current = await window.dh.storeGet({ key: 'appearance' })
+    const base = current.ok ? parseAppearance(current.data) : {}
+    const res = await window.dh.storeSet({
+      key: 'appearance',
+      data: {
+        accent: patch.accent ?? base.accent ?? accentDraft,
+        theme: patch.theme ?? base.theme ?? themeMode,
+      },
+    })
+    assertSettingsOk(res)
+  }
+
+  async function onThemeChange(mode: ThemeMode): Promise<void> {
+    setThemeMode(mode)
+    applyTheme(mode)
+    setAccentBusy(true)
+    setAccentMsg(null)
+    try {
+      await persistAppearance({ theme: mode })
+    } catch (e) {
+      setAccentMsg(e instanceof Error ? e.message : t('personalization.saveFailed'))
+    } finally {
+      setAccentBusy(false)
+    }
+  }
 
   async function saveAccent(): Promise<void> {
     setAccentBusy(true)
     setAccentMsg(null)
     try {
-      const res = await window.dh.storeSet({ key: 'appearance', data: { accent: accentDraft, theme: themeMode } })
-      assertSettingsOk(res)
+      await persistAppearance({ accent: accentDraft, theme: themeMode })
       applyAppearanceAccent(accentDraft)
       applyTheme(themeMode)
       setAccentMsg(t('personalization.accentSaved'))
@@ -57,8 +90,7 @@ export function SettingsPersonalization(): ReactElement {
     setAccentBusy(true)
     setAccentMsg(null)
     try {
-      const res = await window.dh.storeSet({ key: 'appearance', data: { theme: themeMode } })
-      assertSettingsOk(res)
+      await persistAppearance({ theme: themeMode })
       setAccentDraft(DEFAULT_ACCENT_HEX)
       applyAppearanceAccent(undefined)
       applyTheme(themeMode)
@@ -70,9 +102,11 @@ export function SettingsPersonalization(): ReactElement {
     }
   }
 
-  const msgTone = accentMsg && (accentMsg.toLowerCase().includes('could not') || accentMsg.toLowerCase().includes('failed'))
-    ? 'error'
-    : 'success'
+  const msgTone =
+    accentMsg &&
+    (accentMsg.toLowerCase().includes('could not') || accentMsg.toLowerCase().includes('failed'))
+      ? 'error'
+      : 'success'
 
   return (
     <SettingsStack>
@@ -83,35 +117,62 @@ export function SettingsPersonalization(): ReactElement {
             options={[
               { value: 'dark', label: t('personalization.dark'), icon: 'moon' },
               { value: 'light', label: t('personalization.light'), icon: 'sun' },
+              {
+                value: 'high-contrast',
+                label: t('personalization.highContrast'),
+                icon: 'eye',
+              },
             ]}
-            onChange={(mode) => {
-              setThemeMode(mode)
-              applyTheme(mode)
-            }}
+            onChange={(mode) => void onThemeChange(mode)}
           />
         </div>
       </SettingsCard>
       <SettingsCard title={t('personalization.accentColor')} description={t('personalization.accentColorDesc')}>
-        <div style={{ padding: '12px 0 4px', display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'flex-end', alignItems: 'center' }}>
-            {ACCENT_PRESETS.map((p) => (
-              <button
-                key={p.hex}
-                type="button"
-                title={t(p.labelKey)}
-                className={`settings-color-swatch${accentDraft.toLowerCase() === p.hex ? ' active' : ''}`}
-                style={{ background: p.hex }}
-                onClick={() => setAccentDraft(p.hex)}
-              />
-            ))}
-            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-muted)' }}>
-              {t('personalization.custom')}
-              <input
-                type="color"
-                value={accentDraft}
-                onChange={(ev) => setAccentDraft(ev.target.value)}
-                style={{ width: 40, height: 36, padding: 0, border: '1px solid var(--border)', borderRadius: 8, cursor: 'pointer', background: 'transparent' }}
-              />
-            </label>
+        <div
+          style={{
+            padding: '12px 0 4px',
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: 8,
+            justifyContent: 'flex-end',
+            alignItems: 'center',
+          }}
+        >
+          {ACCENT_PRESETS.map((p) => (
+            <button
+              key={p.hex}
+              type="button"
+              title={t(p.labelKey)}
+              className={`settings-color-swatch${accentDraft.toLowerCase() === p.hex ? ' active' : ''}`}
+              style={{ background: p.hex }}
+              onClick={() => setAccentDraft(p.hex)}
+            />
+          ))}
+          <label
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 8,
+              fontSize: 12,
+              color: 'var(--text-muted)',
+            }}
+          >
+            {t('personalization.custom')}
+            <input
+              type="color"
+              value={accentDraft}
+              onChange={(ev) => setAccentDraft(ev.target.value)}
+              style={{
+                width: 40,
+                height: 36,
+                padding: 0,
+                border: '1px solid var(--border)',
+                borderRadius: 8,
+                cursor: 'pointer',
+                background: 'transparent',
+              }}
+            />
+          </label>
         </div>
       </SettingsCard>
       <SettingsActions>

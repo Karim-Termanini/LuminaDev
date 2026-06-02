@@ -275,10 +275,11 @@ pub(crate) async fn editor_open(_app: &AppHandle, body: &Value) -> Value {
     crate::project_scaffold::scaffold_editor_configs(&path_buf, &detected_template, cmd);
 
     // e.g. cmd is "flatpak run com.visualstudio.code" or "code"
-    let full_cmd = format!("{} \"{}\"", cmd, path);
-    let _ = tokio::process::Command::new("sh")
-        .arg("-c")
-        .arg(&full_cmd)
+    let parts: Vec<&str> = cmd.split_whitespace().collect();
+    let (program, args) = parts.split_first().unwrap_or((&"code", &[]));
+    let _ = tokio::process::Command::new(program)
+        .args(args)
+        .arg(&path_buf)
         .spawn();
     json!({ "ok": true })
 }
@@ -719,16 +720,16 @@ pub(crate) async fn startup_update_check(app: AppHandle) {
             if !store.is_object() {
                 store = json!({});
             }
-            {
-                let map = store.as_object_mut().unwrap();
+            if let Some(map) = store.as_object_mut() {
                 if !map.contains_key("update_settings") {
                     map.insert("update_settings".to_string(), json!({}));
                 }
             }
-            let update = store.get_mut("update_settings").unwrap();
-            update["lastChecked"] = json!(now_ms());
-            if let Some(v) = tag {
-                update["latestVersion"] = json!(v);
+            if let Some(update) = store.get_mut("update_settings") {
+                update["lastChecked"] = json!(now_ms());
+                if let Some(v) = tag {
+                    update["latestVersion"] = json!(v);
+                }
             }
             let _ = write_json(&store_path, &store);
         }

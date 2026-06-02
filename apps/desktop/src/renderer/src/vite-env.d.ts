@@ -387,6 +387,11 @@ declare global {
         reviewRequests?: import('@linux-dev-home/shared').CloudPullRequestEntry[]
         error?: string
       }>
+      cloudGitInbox: (payload?: { limit?: number }) => Promise<{
+        ok: boolean
+        items?: import('@linux-dev-home/shared').CloudGitInboxItem[]
+        error?: string
+      }>
       cloudGitPipelines: (payload: {
         provider: 'github' | 'gitlab'
         limit?: number
@@ -591,6 +596,32 @@ declare global {
       logStreamStop: (payload: { streamId: string }) => Promise<{ ok: boolean }>
       /** Open a path in the system file manager (xdg-open). */
       fsOpen: (payload: { path: string }) => Promise<{ ok: boolean }>
+      /** Suggest free host ports for profile env vars. */
+      portsSuggest: (payload: {
+        template: string
+        profile: string
+        subTemplate?: string
+      }) => Promise<{ ok: boolean; ports?: Record<string, number>; error?: string }>
+      projectEnsureDir: (payload: {
+        path: string
+      }) => Promise<{ ok: boolean; path?: string; error?: string }>
+      projectScaffold: (payload: Record<string, unknown>) => Promise<{
+        ok: boolean
+        path?: string
+        error?: string
+      }>
+      projectInstallDeps: (payload: Record<string, unknown>) => Promise<{
+        ok: boolean
+        error?: string
+        log?: string
+      }>
+      fsExists: (payload: { path: string }) => Promise<{ ok: boolean; exists?: boolean; error?: string }>
+      /** Stop a compose profile. */
+      composeStop: (payload: { profile: string }) => Promise<{ ok: boolean; log: string; error?: string }>
+      /** Which named profiles have a running compose project. */
+      profileRunningStatus: (payload: {
+        names: string[]
+      }) => Promise<{ ok: boolean; running?: string[]; error?: string }>
     }
   }
 }

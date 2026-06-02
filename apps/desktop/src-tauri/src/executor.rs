@@ -72,8 +72,14 @@ pub(crate) async fn runtime_bash_user_step(
         .spawn()
         .map_err(|e| format!("[RUNTIME_INSTALL_FAILED] spawn: {}", e))?;
 
-    let stdout = child.stdout.take().unwrap();
-    let stderr = child.stderr.take().unwrap();
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or("[RUNTIME_INSTALL_FAILED] stdout not piped")?;
+    let stderr = child
+        .stderr
+        .take()
+        .ok_or("[RUNTIME_INSTALL_FAILED] stderr not piped")?;
     let mut out_reader = tokio::io::BufReader::new(stdout).lines();
     let mut err_reader = tokio::io::BufReader::new(stderr).lines();
 
@@ -315,8 +321,14 @@ pub(crate) async fn sudo_bash_install_step(
         }
     };
 
-    let stdout = child.stdout.take().unwrap();
-    let stderr = child.stderr.take().unwrap();
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or("[ELEVATED_CMD_FAILED] stdout not piped")?;
+    let stderr = child
+        .stderr
+        .take()
+        .ok_or("[ELEVATED_CMD_FAILED] stderr not piped")?;
     let mut reader = tokio::io::BufReader::new(stdout).lines();
     let mut err_reader = tokio::io::BufReader::new(stderr).lines();
 

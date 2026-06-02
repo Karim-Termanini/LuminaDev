@@ -12,8 +12,8 @@ pub fn app_profile_credential_store(app: &AppHandle) -> ProfileCredentialStore {
     let path = app
         .path()
         .app_data_dir()
-        .map(|d| d.join("profile_credentials.enc"))
-        .unwrap_or_else(|_| PathBuf::from("/tmp/profile_credentials.enc"));
+        .expect("app data dir must be resolvable")
+        .join("profile_credentials.enc");
     ProfileCredentialStore::new(path)
 }
 

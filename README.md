@@ -13,15 +13,15 @@ Linux developer workstation dashboard — click-first flows for Docker, Git, pro
 | Area | Maturity | Summary |
 | --- | --- | --- |
 | [`/docker`](docs/ROUTE_STATUS.md) | **live** | Containers, images, volumes, networks, cleanup, port remap, per-container stats |
-| [`/git`](docs/ROUTE_STATUS.md) | **live** | Unified hub — Config, VCS (Smart-Flow), Cloud Git |
+| [`/git`](docs/ROUTE_STATUS.md) | **live** | Git Assistant — Setup → Project → Save → Share |
 | [`/dashboard`](docs/ROUTE_STATUS.md) | partial | Profile preset grid, metrics strip, kernels/logs sub-routes |
 | [`/profiles`](docs/ROUTE_STATUS.md) | partial | CRUD, compose variants, scaffolding (incl. data-science Python/R/both) |
-| [`/runtimes`](docs/ROUTE_STATUS.md) | partial | 17 language toolchains — status, install, uninstall preview |
+| [`/runtimes`](docs/ROUTE_STATUS.md) | partial | 7 language toolchains (Node, Python, Java, Go, Rust, PHP, .NET) — status, install, uninstall preview |
 | [`/ssh`](docs/ROUTE_STATUS.md) | partial | Keygen, GitHub test, remote setup, bookmarks |
 | [`/dashboard/monitor`](docs/ROUTE_STATUS.md) | live | CPU/RAM/disk metrics, processes, security snapshot (`/system` redirects) |
 | [`/maintenance`](docs/ROUTE_STATUS.md) | partial | Guardian health score, diagnostics bundle, scheduled tasks |
 | [`/settings`](docs/ROUTE_STATUS.md) | partial | 14 tabs — Dev Home layout, Connected accounts auth, System hosts/~/.profile editing |
-| [`/terminal`](docs/ROUTE_STATUS.md) | partial | Embedded shell (line-buffered, not full PTY) |
+| [`/terminal`](docs/ROUTE_STATUS.md) | partial | xterm + host PTY session; experimental multiplexer (beta) |
 
 Route-level detail: [`docs/ROUTE_STATUS.md`](docs/ROUTE_STATUS.md).
 
@@ -49,13 +49,17 @@ pnpm smoke        # Full CI gate: typecheck, test, lint, cargo test/clippy
 Other scripts:
 
 ```bash
-pnpm test         # Vitest (shared + desktop)
-pnpm typecheck    # TypeScript across workspace
-pnpm lint         # ESLint
-pnpm build        # Renderer bundle + compose profiles
+pnpm test              # Vitest (shared + desktop; all contract/error tests)
+pnpm test:roundtrip    # Contract error roundtrips (docker, profile, scaffold)
+pnpm test:e2e          # Vitest unit smoke (critical scenarios + module imports)
+pnpm typecheck         # TypeScript across workspace
+pnpm lint              # ESLint
+pnpm build             # Renderer bundle + compose profiles
 pnpm --filter desktop build:tauri   # Production desktop bundle
-pnpm pack:linux   # Linux packaging helper
+pnpm pack:linux        # Linux packaging helper
 ```
+
+Architecture map: [`graphify-out/GRAPH_REPORT.md`](graphify-out/GRAPH_REPORT.md) (@ `fc9c8fa`). Regenerate after structural changes: `graphify update .`
 
 ---
 
@@ -67,7 +71,7 @@ packages/shared/       IPC channel names, Zod schemas, shared types
 docker/compose/        Bundled compose profiles (web-dev, data-science, …)
 ```
 
-Rust backend: ~37 domain modules; `lib.rs` is a thin IPC dispatcher only. See [`CLAUDE.md`](CLAUDE.md) for architecture and agent guidance.
+Rust backend: **36 domain `mod` declarations** (59 `.rs` source files); `lib.rs` is a thin IPC dispatcher only. See [`CLAUDE.md`](CLAUDE.md) for architecture and agent guidance.
 
 ---
 
@@ -118,5 +122,3 @@ Runs workspace typecheck, tests, lint, and production build inside Node 20.
 ## License
 
 MIT — see [LICENSE](LICENSE).
-test change
-test change

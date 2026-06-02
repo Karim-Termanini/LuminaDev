@@ -518,6 +518,7 @@
   "assistant.changes.previewAria": "Diff für {{file}} anzeigen",
   "assistant.changes.previewLoading": "Diff wird geladen…",
   "assistant.changes.previewEmpty": "Kein Diff für diese Datei.",
+  "assistant.changes.previewUntracked": "Keine Diff-Vorschau für neue Dateien.",
   "assistant.changes.previewBinary": "Binärdatei — im Editor öffnen.",
   "assistant.branch.primary": "Branch",
   "assistant.branch.sub": "wechseln oder anlegen",

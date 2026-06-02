@@ -55,5 +55,8 @@
   "registry.inspect.title": "Inspect repository",
   "registry.inspect.placeholder": "Repository path",
   "registry.inspect.status": "Status",
-  "registry.recent.title": "Recent repositories"
+  "registry.recent.title": "Recent repositories",
+
+  "wizard.gitNamePlaceholder": "Your Name",
+  "wizard.gitEmailPlaceholder": "your.email@example.com"
 }

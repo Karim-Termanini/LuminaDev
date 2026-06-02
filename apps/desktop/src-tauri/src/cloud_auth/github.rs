@@ -1,7 +1,7 @@
 use crate::cloud_auth::helpers::{self, oauth_client_id_unconfigured};
 use crate::cloud_auth::remotes::github_actions_runs_list_url;
 use crate::cloud_auth::types::{
-    CloudCiCheckEntry, CloudIssueEntry, CloudPipelineEntry, CloudPrDetails,
+    CloudCiCheckEntry, CloudInboxEntry, CloudIssueEntry, CloudPipelineEntry, CloudPrDetails,
     CloudPullRequestEntry, CloudReleaseEntry, DeviceAuthChallenge, PollResult, StoredCredential,
 };
 
@@ -839,5 +839,88 @@ impl GitHubProvider {
             format!("https://{}/{}/pull/{}", hostname, full_name, pull_number)
         };
         Ok(web)
+    }
+
+    pub async fn list_inbox_notifications(
+        token: &str,
+        limit: usize,
+        hostname: &str,
+    ) -> Result<Vec<CloudInboxEntry>, String> {
+        let client = reqwest::Client::new();
+        let api_base = github_api_base(hostname);
+        let url = format!("{}/notifications", api_base);
+        let per_page = limit.clamp(1, 50);
+        let resp = client
+            .get(&url)
+            .header("Authorization", format!("Bearer {}", token))
+            .header("User-Agent", "LuminaDev/0.2.0")
+            .header("Accept", "application/vnd.github+json")
+            .query(&[
+                ("per_page", per_page.to_string()),
+                ("all", "true".to_string()),
+            ])
+            .send()
+            .await
+            .map_err(|e| format!("[CLOUD_GIT_NETWORK] GitHub notifications: {}", e))?;
+        if resp.status() == 401 {
+            return Err("[CLOUD_AUTH_INVALID_TOKEN] GitHub token is invalid or expired.".to_string());
+        }
+        if !resp.status().is_success() {
+            return Err(format!(
+                "[CLOUD_GIT_NETWORK] GitHub notifications returned {}",
+                resp.status()
+            ));
+        }
+        let rows: Vec<serde_json::Value> = resp
+            .json()
+            .await
+            .map_err(|e| format!("[CLOUD_GIT_NETWORK] GitHub notifications parse: {}", e))?;
+        let mut items = Vec::new();
+        for it in rows {
+            let reason = it["reason"].as_str().unwrap_or("");
+            let subject = &it["subject"];
+            let subject_type = subject["type"].as_str().unwrap_or("");
+            let category = match reason {
+                "mention" | "team_mention" => "mention",
+                "review_requested" => "review_request",
+                _ if subject_type == "PullRequest" => "pr_activity",
+                _ => continue,
+            };
+            let title = subject["title"].as_str().unwrap_or("Notification").to_string();
+            let mut url = subject["url"].as_str().unwrap_or("").to_string();
+            if url.is_empty() {
+                if let Some(repo) = it["repository"]["html_url"].as_str() {
+                    url = repo.to_string();
+                }
+            }
+            if url.is_empty() {
+                continue;
+            }
+            let repo = it["repository"]["full_name"]
+                .as_str()
+                .unwrap_or("")
+                .to_string();
+            let id = it["id"]
+                .as_str()
+                .map(|s| s.to_string())
+                .or_else(|| it["id"].as_i64().map(|n| n.to_string()))
+                .unwrap_or_else(|| format!("github-{}", items.len()));
+            let updated_at = it["updated_at"].as_str().unwrap_or("").to_string();
+            let unread = it["unread"].as_bool().unwrap_or(false);
+            items.push(CloudInboxEntry {
+                id: format!("github:{}", id),
+                provider: "github".to_string(),
+                category: category.to_string(),
+                title,
+                url,
+                repo,
+                updated_at,
+                unread,
+            });
+            if items.len() >= limit {
+                break;
+            }
+        }
+        Ok(items)
     }
 }

@@ -11,7 +11,9 @@
 
 ---
 
-## 🎯 Immediate Sprint (from `docs/SMART_FLOW_VCS.md`) — DO THIS NOW
+## 🎯 Immediate Sprint (from `docs/SMART_FLOW_VCS.md`) — ✅ COMPLETED 2026-05-01
+
+> **Historical:** This sprint shipped **v0.2.0-alpha**. Current active backlog → [`docs/MASTER_PLAN.md`](docs/MASTER_PLAN.md).
 
 **Critical paths only: Tests → Audit → Cross-distro → Release. Distribution is exclusively via GitHub Releases.**
 Cosmetic work (theming, drag-drop polish) blocked until after Day 10
@@ -145,7 +147,7 @@ Progress notes (2026-05-01, docs pass):
 - ❌ Drag-and-drop polish (basic HTML5 reorder already works — good enough)
 - ❌ Theme surface rollout across all routes (Maintenance theme is pilot; others wait)
 - ❌ Full-scope **Phase 12 Cloud Git** (as originally scoped) — core shipped; legacy pro UI retired in Git Assistant sprint (G1); notification inbox still out
-- Phase **8 Settings**: first **hub** shipped on `/settings`; **hosts editor** and **profile env files** remain future work
+- Phase **8 Settings**: first **hub** shipped on `/settings`; **hosts editor** and **profile env files** now live on **System** tab (2026-05-30)
 - ❌ **Extensions / plugin marketplace** — **removed from scope** (2026-05-29)
 - ❌ **Dashboard widget catalog/deck** — **removed from scope** (2026-05-29)
 - ❌ Policy Lock, Visual Change Preview
@@ -174,7 +176,9 @@ All five stabilization checklist items `done`. `pnpm smoke` green. See [`docs/ST
 
 ## 🏗️ Rust Backend Architecture Standards
 
-**CRITICAL:** `apps/desktop/src-tauri/src/lib.rs` must remain **thin Tauri entry point only**. All domain logic lives in dedicated modules. Current monolith (200KB+, 10K+ lines) refactored into modular structure.
+**CRITICAL:** `apps/desktop/src-tauri/src/lib.rs` must remain **thin Tauri entry point only**. All domain logic lives in dedicated modules. Former monolith refactored in **Phase 17** to ~706 lines, **59** `.rs` source files (36 `mod` declarations including `cloud_auth/`, `cloud_git_ipc/`, `project_scaffold/`).
+
+**Planning with graphify:** Active architecture map lives in [`graphify-out/GRAPH_REPORT.md`](graphify-out/GRAPH_REPORT.md) (built @ `fc9c8fa`). Before large refactors, run `graphify query "<domain>"` or read [`docs/MASTER_PLAN.md`](docs/MASTER_PLAN.md) §17. After merges that touch structure: `graphify update .` (AST-only). Do not treat i18n communities 0–26 as product modules.
 
 ### Module Organization Rules
 
@@ -256,7 +260,7 @@ pub async fn ipc_invoke(channel: &str, payload: Value, state: AppState) -> Resul
 
 ### Modularization ✅ DONE (Phase 17)
 
-6-module proposal superseded. Actual outcome: 30 top-level `.rs` files + `cloud_auth/` (7 sub-files) = 37 source files total. `lib.rs` is thin 678-line dispatcher with zero business logic inline. See Phase 17 results above.
+6-module proposal superseded. Actual outcome: **36 `mod` declarations** in `lib.rs` → **59 `.rs` files** (33 flat + `cloud_auth/` 8 + `cloud_git_ipc/` 4 + `project_scaffold/` **12**). `lib.rs` is thin ~706-line dispatcher with zero business logic inline. See Phase 17 results above.
 
 ---
 
@@ -284,7 +288,7 @@ pub async fn ipc_invoke(channel: &str, payload: Value, state: AppState) -> Resul
 ### Verified missing (not Alpha scope)
 
 - [x] **Minimal compose stub per preset** — each `docker/compose/<profile>/docker-compose.yml` is small Alpine `sleep infinity` service; project name set via `-p` CLI flag (no `name:` field in YAML); `dh:compose:up` resolves checkout, `LUMINA_DEV_COMPOSE_ROOT`, or bundled `docker/compose` (see `compose_profiles.rs` + `tauri.conf.json` `bundle.resources`).
-- [x] **Full stack definitions** — all 9 presets have `docker-compose.full.yml`: web-dev (nginx), infra (Traefik+Portainer+Prometheus), ai-ml (Jupyter+Ollama), data-science (Jupyter+Postgres), mobile (Appium+json-server), game-dev (Redis+game-server), docs (MkDocs), desktop-gui (Xpra), empty (Alpine workspace).
+- [ ] **Full stack definitions** — only `web-dev` preset has `docker-compose.full.yml` (nginx); the other 8 presets have `docker-compose.yml` stubs only (Alpine sleep loop). Full stack defs for infra, ai-ml, data-science, mobile, game-dev, docs, desktop-gui, and empty are **not implemented**.
 - [x] Preset ↔ store: `active_profile` is `ComposeProfile` id; dashboard + wizard + Profiles **Set Active** stay aligned
 
 _On-login automation lives under **Phase 9** (not Phase 1)._
@@ -610,50 +614,42 @@ When user clicks "Install" / "Fix":
 ### Phase 17 — lib.rs Monolith Refactoring
 
 **Status:** ✅ DONE (2026-05-28)
-**Scope:** Decomposed 3,963-line `lib.rs` into 37 Rust source files (33 domain modules, 678-line dispatcher).
+**Scope:** Decomposed 3,963-line `lib.rs` into 40 Rust source entries (33 domain modules + 3 directory modules, ~706-line dispatcher).
 
 **Results:**
 
-- `lib.rs`: 3,963 → 678 (82.9% reduction), 308 non-test dispatcher lines
-- ipc_invoke: 106 match-arm lines covering ~65 distinct channels (some arms use `|` multi-pattern), zero business logic inline
-- 37 Rust source files (`cloud_auth/` crate with 7 files; 2,303-line `runtime_jobs.rs` the largest module)
+- `lib.rs`: 3,963 → ~706 (82.2% reduction), ~268 non-test dispatcher lines
+- ipc_invoke: ~113 match arms (some use `|` multi-pattern), zero business logic inline
+- 36 `mod` declarations → 59 `.rs` files (`cloud_auth/` 8; `project_scaffold/` 12; `runtime_jobs.rs` ~684 lines; `system_info.rs` ~1,009 lines)
 - `executor.rs` (17 KB) actively used; exports `runtime_bash_user_step`, `sudo_bash_install_step`
-- Key large modules: `runtime_jobs.rs` (2,270 lines), `system_info.rs` (1,536 lines)
+- Key large modules: `system_info.rs` (~1,009 lines), `runtime_jobs.rs` (~684 lines)
 - cargo check: zero warnings, clippy: zero errors; Rust unit test count not re-verified post-refactor
 
 ---
 
 ## 📋 Future Phases — Scope & Dependencies
 
-Based on current app state (Phase 16 + Phase 7 complete), here's what remaining phases need:
+Based on current app state (Phase 17 + audit sweep complete), remaining work is **Phase 18 (IPC boundary hardening)** and **Tier 3 release**. Architecture map: [`graphify-out/GRAPH_REPORT.md`](../graphify-out/GRAPH_REPORT.md) @ `fc9c8fa`; backlog detail in [`docs/MASTER_PLAN.md`](./docs/MASTER_PLAN.md) §17.
 
-### Phase 8 — Settings ✅ DONE
+### Phase 18 — IPC boundary hardening (planned)
 
-15 tabs shipped → **14 tabs** (Extension removed). See Phase 8 section. Remaining gaps: Resources tab absent.
+**Status:** ⬜ Open — next active engineering track.
 
-### Phase 10 — Extensions ❌ REMOVED
+**Graph-informed rationale:** Knowledge graph (10,270 nodes @ `fc9c8fa`) shows a clean dispatcher (Community **59**, `ipc_invoke`), channel parity tests (Community **132**, `ipc_contract_tests.rs`), and a shared contract hub (Community **57**, `ipc.ts` ↔ `schemas.ts`). Renderer **0** direct `invoke('ipc_invoke', …)` bypasses (P9/P12 ✅ 2026-06-02); **~70** of **137** IPC channels have `*RequestSchema` after P13 batch 1 — P10 inventories **payload** gaps on high-traffic invoke paths (~30–40), not every no-arg list channel. God nodes (`exec_output_limit` 82 edges, `cmd_timeout_short` 79, `runtime_job_execute`, `parse_porcelain_v1`) sit in domain modules — do not refactor those as part of Phase 18.
 
-Out of scope. See Phase 10 section above.
+**Depends on:** Phase 17 ✅, Git Assistant G1–G4 ✅, audit sweep ✅.
 
-### Phase 15 — Theme Rollout ✅ DONE
+| Slice | Deliverable | Primary files | Status |
+| --- | --- | --- | --- |
+| P9.1–P9.4 | Renderer IPC → `window.dh` / bridge | `desktopApiBridge.ts`, `vite-env.d.ts`, all pages | ✅ Done 2026-06-02 |
+| P10.1–P10.3 | Zod payload-schema parity + roundtrip tests | `schemas.ts`, `ipc.ts`; extend `*ContractErrorRoundtrip.test.ts` pattern | 🔄 In progress |
+| P19 | Split `RuntimesPage.tsx` into per-runtime components | `pages/runtimes/` | ✅ Done 2026-06-02 |
 
-`theme-elevated.css` created; primary routes converted. Dynamic theme swapping without reload is post-Alpha enhancement.
+**Non-goals:** `host_exec` god-node rewrite; further `system_info.rs` split; full compose stacks for 8/9 presets.
 
-### Phase 9 — Profiles ✅ DONE
+**After each slice:** `pnpm smoke` + `graphify update .`.
 
-~~**Depends on:** Phase 8 (Settings must exist for profile env var storage)~~ — **shipped without Phase 8**; profile env vars stored in `store.json` directly.
-
-**Note:** Profiles feed into Phase 16 installer (compose profile selection). Tight coupling.
-
-### Phase 11 — First-run Wizard (Merged into Phase 16)
-
-**Status:** ✅ Merged into 8-step unified installer (Phase 16). No separate implementation needed.
-
-### UI/UX & Performance — ✅ DONE (2026-05-28)
-
-Runtimes lazy-load/caching, kernel grid, log multiplexing, and navigation polish shipped. Dashboard widgets **removed** 2026-05-29.
-
----
+**Test gate (P11 — ✅ DONE):** IPC integration and headless E2E tests removed. Desktop scripts: `test` (full Vitest), `test:roundtrip` (3 error roundtrip files), `test:e2e` (`criticalScenarios.unit` + `moduleAvailability`). `pnpm smoke` does not run `test:e2e`. CI job renamed `integration-and-e2e-lite` → `unit-roundtrip-contracts`; runs `pnpm test:roundtrip` + `test:e2e` + `test:coverage`.
 
 ## Execution Order
 
@@ -677,7 +673,10 @@ Runtimes lazy-load/caching, kernel grid, log multiplexing, and navigation polish
 ✅  UI/UX & Performance Debt (all 7 items, 2026-05-28)
 ✅  Audit Fixes (9 defects squashed, fuzzy search shipped, 2026-05-28)
 ❌  Phase 10 — Extensions (removed from scope 2026-05-29)
-✅  Phase 17  — lib.rs Monolith Refactoring (37 source files, 678-line dispatcher)
+✅  Phase 17  — lib.rs Monolith Refactoring (36 mods, 59 `.rs` files, ~706-line dispatcher)
 ✅  G1–G4    — Git Assistant (see MASTER_PLAN §6)
 ✅  R1–R3    — Runtimes Simplification (see MASTER_PLAN §14)
+⬜  Phase 18  — IPC boundary hardening (P9 bridge + P10 Zod; see MASTER_PLAN §17)
+✅  P11       — Test gate + CI alignment (`unit-roundtrip-contracts`; no `test:integration`)
+⬜  Tier 3    — AppImage E2E, cross-distro matrix, Tauri Stage 5 sign-off
 ```
