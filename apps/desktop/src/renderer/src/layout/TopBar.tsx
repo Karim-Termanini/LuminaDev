@@ -3,7 +3,24 @@ import type { CSSProperties, ReactElement } from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import type { ContainerRow, JobSummary } from '@linux-dev-home/shared'
+import type { CloudGitInboxItem, ContainerRow, JobSummary } from '@linux-dev-home/shared'
+import { useCloudGitInbox } from './useCloudGitInbox'
+
+function inboxCategoryLabel(
+  t: (key: string) => string,
+  category: CloudGitInboxItem['category']
+): string {
+  switch (category) {
+    case 'mention':
+      return t('topbar.inboxMentions')
+    case 'review_request':
+      return t('topbar.inboxReviews')
+    case 'pr_activity':
+      return t('topbar.inboxPrActivity')
+    default:
+      return category
+  }
+}
 
 export function TopBar(): ReactElement {
   const { t } = useTranslation('nav')
@@ -22,6 +39,8 @@ export function TopBar(): ReactElement {
   const [paletteGitRepos, setPaletteGitRepos] = useState<Array<{ name: string; path: string }>>([])
   const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const paletteOpenRef = useRef(false)
+  const cloudInbox = useCloudGitInbox(showNotifications)
+  const inboxUnread = cloudInbox.items.some((item) => item.unread)
 
   const titles: Record<string, string> = {
     '/workstation': t('topbar.workstation'),
@@ -715,7 +734,9 @@ export function TopBar(): ReactElement {
           style={{
             ...btnIcon,
             color:
-              showNotifications || jobs.some((j) => j.state === 'running')
+              showNotifications ||
+              jobs.some((j) => j.state === 'running') ||
+              inboxUnread
                 ? 'var(--accent)'
                 : 'var(--text-muted)',
             position: 'relative',
@@ -723,7 +744,7 @@ export function TopBar(): ReactElement {
           onClick={() => setShowNotifications(!showNotifications)}
         >
           <span className="codicon codicon-bell" />
-          {jobs.some((j) => j.state === 'running') && (
+          {(jobs.some((j) => j.state === 'running') || inboxUnread) && (
             <span
               style={{
                 position: 'absolute',
@@ -748,7 +769,7 @@ export function TopBar(): ReactElement {
               right: 0,
               top: '100%',
               marginTop: 8,
-              width: 320,
+              width: 360,
               background: 'var(--bg-panel)',
               border: '1px solid var(--border)',
               borderRadius: 8,
@@ -781,6 +802,77 @@ export function TopBar(): ReactElement {
               >
                 <span className="codicon codicon-close" style={{ fontSize: 12 }} />
               </button>
+            </div>
+            <div style={{ marginBottom: 12 }}>
+              <div
+                style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: 'var(--text-muted)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.06em',
+                  marginBottom: 6,
+                }}
+              >
+                {t('topbar.inboxGit')}
+              </div>
+              <div style={{ maxHeight: 180, overflowY: 'auto' }}>
+                {cloudInbox.loading && cloudInbox.items.length === 0 ? (
+                  <div style={{ color: 'var(--text-muted)', fontSize: 12, padding: '8px 0' }}>
+                    {t('topbar.inboxLoading')}
+                  </div>
+                ) : cloudInbox.error && cloudInbox.items.length === 0 ? (
+                  <div style={{ color: 'var(--orange)', fontSize: 12, padding: '8px 0' }}>
+                    {cloudInbox.error}
+                  </div>
+                ) : cloudInbox.items.length === 0 ? (
+                  <div style={{ color: 'var(--text-muted)', fontSize: 12, padding: '8px 0' }}>
+                    {t('topbar.inboxEmpty')}
+                  </div>
+                ) : (
+                  cloudInbox.items.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => void window.dh.openExternal(item.url)}
+                      style={{
+                        display: 'block',
+                        width: '100%',
+                        textAlign: 'left',
+                        padding: '8px 6px',
+                        marginBottom: 4,
+                        border: '1px solid var(--border)',
+                        borderRadius: 6,
+                        background: item.unread ? 'rgba(124, 77, 255, 0.08)' : 'transparent',
+                        color: 'var(--text)',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <div style={{ fontSize: 10, color: 'var(--accent)', marginBottom: 2 }}>
+                        {inboxCategoryLabel(t, item.category)} · {item.provider}
+                      </div>
+                      <div style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.35 }}>{item.title}</div>
+                      {item.repo ? (
+                        <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
+                          {item.repo}
+                        </div>
+                      ) : null}
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+            <div
+              style={{
+                fontSize: 11,
+                fontWeight: 700,
+                color: 'var(--text-muted)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.06em',
+                marginBottom: 6,
+              }}
+            >
+              {t('topbar.inboxJobs')}
             </div>
             <div style={{ maxHeight: 200, overflowY: 'auto' }}>
               {jobs.length === 0 ? (

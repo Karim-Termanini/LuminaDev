@@ -518,6 +518,7 @@
   "assistant.changes.previewAria": "معاينة الفرق لـ {{file}}",
   "assistant.changes.previewLoading": "جارٍ تحميل الفرق…",
   "assistant.changes.previewEmpty": "لا يوجد فرق لهذا الملف.",
+  "assistant.changes.previewUntracked": "لا توجد معاينة للفرق للملفات الجديدة.",
   "assistant.changes.previewBinary": "ملف ثنائي — افتحه في المحرر.",
   "assistant.branch.primary": "فرع",
   "assistant.branch.sub": "تبديل أو إنشاء",

@@ -11,6 +11,7 @@ pub async fn invoke(app: &AppHandle, channel: &str, body: &Value) -> Value {
     match channel {
         "dh:cloud:git:prs" => feeds::prs(app, body).await,
         "dh:cloud:git:review-requests" => feeds::review_requests(app, body).await,
+        "dh:cloud:git:inbox" => feeds::inbox(app, body).await,
         "dh:cloud:git:pipelines" => pipelines::pipelines(app, body).await,
         "dh:cloud:git:issues" => feeds::issues(app, body).await,
         "dh:cloud:git:releases" => feeds::releases(app, body).await,

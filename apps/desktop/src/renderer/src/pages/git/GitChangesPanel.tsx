@@ -119,6 +119,10 @@ function FileRows({
                   </p>
                 ) : diffText?.trim() ? (
                   <pre>{diffText}</pre>
+                ) : row.status === '?' ? (
+                  <p className="hp-muted" style={{ margin: 0, fontSize: 12 }}>
+                    {t('assistant.changes.previewUntracked')}
+                  </p>
                 ) : (
                   <p className="hp-muted" style={{ margin: 0, fontSize: 12 }}>
                     {t('assistant.changes.previewEmpty')}

@@ -55,5 +55,8 @@
   "registry.inspect.title": "فحص المستودع",
   "registry.inspect.placeholder": "مسار المستودع",
   "registry.inspect.status": "الحالة",
-  "registry.recent.title": "المستودعات الأخيرة"
+  "registry.recent.title": "المستودعات الأخيرة",
+
+  "wizard.gitNamePlaceholder": "اسمك",
+  "wizard.gitEmailPlaceholder": "بريدك@مثال.com"
 }

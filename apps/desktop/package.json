@@ -16,8 +16,8 @@
     "i18n:stubs": "node scripts/gen-i18n-stubs.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.web.json",
     "test": "vitest run",
-    "test:integration": "vitest run src/renderer/src/pages/dockerIpc.integration.test.ts",
-    "test:e2e": "vitest run src/renderer/src/pages/criticalScenarios.e2e.test.ts",
+    "test:roundtrip": "vitest run src/renderer/src/pages/dockerContractErrorRoundtrip.test.ts src/renderer/src/pages/profileContractErrorRoundtrip.test.ts src/renderer/src/pages/scaffoldContractErrorRoundtrip.test.ts",
+    "test:e2e": "vitest run src/renderer/src/pages/criticalScenarios.unit.test.ts src/renderer/src/pages/moduleAvailability.test.ts",
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {

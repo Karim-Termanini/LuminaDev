@@ -1,5 +1,4 @@
 import type { ReactElement } from 'react'
-import { invoke } from '@tauri-apps/api/core'
 import { TEMPLATE_ICONS } from './constants'
 import { btn, btnDanger } from './profilesStyles'
 import type { ProfilesPageViewModel } from './useProfilesPage'
@@ -44,10 +43,7 @@ export function ProfilesBackupTab({ vm }: { vm: ProfilesPageViewModel }): ReactE
               onClick={async () => {
                 // Stop all running compose stacks before clearing vm.profiles
                 for (const p of vm.profiles) {
-                  await invoke('ipc_invoke', {
-                    channel: 'dh:compose:down',
-                    payload: { profile: p.name },
-                  }).catch(() => {})
+                  await window.dh.composeDown({ profile: p.name }).catch(() => {})
                 }
                 await vm.save([], t('msg.cleared'))
               }}

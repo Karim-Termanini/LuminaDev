@@ -1,4 +1,3 @@
-import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 
 /** Persisted while a profile stack is starting (survives navigation and refresh). */
@@ -151,10 +150,7 @@ async function _swPollUntilRunning(target: string, generation: number): Promise<
       break
     }
     try {
-      const res = (await invoke('ipc_invoke', {
-        channel: 'dh:profile:running-status',
-        payload: { names: [target] },
-      })) as { ok?: boolean; running?: string[] }
+      const res = await window.dh.profileRunningStatus({ names: [target] })
       if (res.ok && res.running?.includes(target)) {
         if (!_sw.failed) {
           signalProfileSwitchStep('Stack running', 100)

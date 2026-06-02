@@ -30,11 +30,13 @@ export function applyAppearanceAccent(hex: string | undefined): void {
   root.style.setProperty('--accent-dim', `rgba(${r},${g},${b},0.35)`)
 }
 
-/** Set or remove `data-theme` on `<html>` to switch between dark (default) and light tokens. */
-export function applyTheme(theme: 'dark' | 'light' | undefined): void {
-  if (theme === 'light') {
-    document.documentElement.dataset['theme'] = 'light'
-  } else {
+export type ThemeMode = 'dark' | 'light' | 'high-contrast'
+
+/** Set or remove `data-theme` on `<html>` to switch color tokens (dark = default). */
+export function applyTheme(theme: ThemeMode | undefined): void {
+  if (!theme || theme === 'dark') {
     delete document.documentElement.dataset['theme']
+    return
   }
+  document.documentElement.dataset['theme'] = theme
 }

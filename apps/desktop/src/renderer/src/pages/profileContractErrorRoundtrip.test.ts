@@ -12,7 +12,7 @@ function toUserFacingMessage(result: unknown, fallback: string): string {
   }
 }
 
-describe('profile IPC contract integration', () => {
+describe('profile IPC contract + error roundtrip', () => {
   it('humanizes profile switch unavailable failure', () => {
     const msg = toUserFacingMessage(
       { ok: false, error: '[DOCKER_UNAVAILABLE] Docker daemon is not reachable' },

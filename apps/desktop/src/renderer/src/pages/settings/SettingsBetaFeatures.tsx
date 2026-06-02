@@ -10,11 +10,6 @@ const Flags = [
     descKey: 'beta.descExperimentalTerminalMultiplexer',
   },
   {
-    key: 'enable_ai_commit_suggestions',
-    labelKey: 'beta.labelAiCommitSuggestions',
-    descKey: 'beta.descAiCommitSuggestions',
-  },
-  {
     key: 'enable_profile_auto_switch',
     labelKey: 'beta.labelAutoSwitchProfile',
     descKey: 'beta.descAutoSwitchProfile',

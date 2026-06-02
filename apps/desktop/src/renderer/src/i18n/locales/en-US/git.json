@@ -516,6 +516,7 @@
   "assistant.changes.previewAria": "Preview diff for {{file}}",
   "assistant.changes.previewLoading": "Loading diff…",
   "assistant.changes.previewEmpty": "No diff to show for this file.",
+  "assistant.changes.previewUntracked": "No diff preview available for new files.",
   "assistant.changes.previewBinary": "Binary file — open in your editor to inspect.",
   "assistant.branch.sectionTitle": "Branch",
   "assistant.branch.sectionSubtitle": "Switch or create a branch without leaving this page.",

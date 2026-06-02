@@ -7,7 +7,6 @@ import {
   parseStoredActiveProfile,
   resolveActiveProfileName,
 } from '@linux-dev-home/shared'
-import { invoke } from '@tauri-apps/api/core'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { PROFILE_SWITCH_STORAGE_KEY } from '../profileSwitchProgress'
@@ -213,10 +212,9 @@ export function useProfilesPage() {
         return new Set()
       }
       try {
-        const res = (await invoke('ipc_invoke', {
-          channel: 'dh:profile:running-status',
-          payload: { names: profileList.map((p) => p.name) },
-        })) as { ok?: boolean; running?: string[] }
+        const res = await window.dh.profileRunningStatus({
+          names: profileList.map((p) => p.name),
+        })
         const running = new Set<string>(res.ok && res.running ? res.running : [])
         setRunningProfiles(running)
         // Only cache non-empty results to avoid overwriting valid state with transient empty
@@ -363,10 +361,7 @@ export function useProfilesPage() {
   async function removeAt(idx: number): Promise<void> {
     const profile = profiles[idx]
     if (profile) {
-      await invoke('ipc_invoke', {
-        channel: 'dh:compose:down',
-        payload: { profile: profile.name },
-      }).catch(() => {})
+      await window.dh.composeDown({ profile: profile.name }).catch(() => {})
       try {
         const ap = (await window.dh.storeGet({ key: 'active_profile' })) as {
           ok: boolean

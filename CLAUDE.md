@@ -11,9 +11,9 @@ pnpm test                           # Unit tests (`@linux-dev-home/shared` build
 pnpm typecheck                      # TypeScript across workspace
 pnpm lint                           # ESLint
 pnpm build                          # Renderer production bundle + copy compose profiles
-pnpm smoke                          # Full CI gate: typecheck + test + lint
-pnpm test:integration               # Docker IPC integration tests (needs Docker daemon)
-pnpm test:e2e                       # Critical scenarios E2E
+pnpm smoke                          # Full CI gate: typecheck + test + cargo test + lint (no test:e2e)
+pnpm test:roundtrip                 # docker/profile/scaffold contract error roundtrips
+pnpm test:e2e                       # Vitest unit: criticalScenarios + moduleAvailability (not browser E2E)
 pnpm test:coverage                  # Vitest with coverage
 
 # Run a single test file
@@ -96,3 +96,13 @@ All IPC responses use `{ ok: boolean; error?: string }` shape. Error strings are
 ## Agent Communication Rules
 
 - **Post-Task Instructions:** When the agent finishes their work or makes a change, they MUST provide the user with clear, step-by-step instructions on how to manually verify the change. Tell the user what to click, try, or test to ensure the implementation is correct.
+
+## graphify
+
+This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+
+Rules:
+- For codebase questions, first run `graphify query "<question>"` when graphify-out/graph.json exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
+- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
+- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
+- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).

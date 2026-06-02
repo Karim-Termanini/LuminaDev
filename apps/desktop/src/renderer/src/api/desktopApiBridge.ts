@@ -174,6 +174,7 @@ function createTauriDhApi(): DhApi {
     cloudAuthStatus: () => tauriInvoke(IPC.cloudAuthStatus),
     cloudGitPrs: (payload) => tauriInvoke(IPC.cloudGitPrs, payload),
     cloudGitReviewRequests: (payload) => tauriInvoke(IPC.cloudGitReviewRequests, payload),
+    cloudGitInbox: (payload) => tauriInvoke(IPC.cloudGitInbox, payload ?? {}),
     cloudGitPipelines: (payload) => tauriInvoke(IPC.cloudGitPipelines, payload),
     cloudGitIssues: (payload) => tauriInvoke(IPC.cloudGitIssues, payload),
     cloudGitReleases: (payload) => tauriInvoke(IPC.cloudGitReleases, payload),
@@ -208,6 +209,22 @@ function createTauriDhApi(): DhApi {
     cloudGitMergePr: (payload) => tauriInvoke(IPC.cloudGitMergePr, payload),
     appUpdateCheck: () => tauriInvoke(IPC.appUpdateCheck),
     profileCredentialsGet: (payload) => tauriInvoke(IPC.profileCredentialsGet, payload),
+    portsSuggest: (payload: {
+      template: string
+      profile: string
+      subTemplate?: string
+    }) => tauriInvoke(IPC.portsSuggest, payload),
+    composeStop: (payload: { profile: string }) =>
+      tauriInvoke(IPC.composeStop, payload),
+    profileRunningStatus: (payload: { names: string[] }) =>
+      tauriInvoke(IPC.profileRunningStatus, payload),
+    projectEnsureDir: (payload: { path: string }) =>
+      tauriInvoke(IPC.projectEnsureDir, payload),
+    projectScaffold: (payload: Record<string, unknown>) =>
+      tauriInvoke(IPC.projectScaffold, payload),
+    projectInstallDeps: (payload: Record<string, unknown>) =>
+      tauriInvoke(IPC.projectInstallDeps, payload),
+    fsExists: (payload: { path: string }) => tauriInvoke(IPC.fsExists, payload),
     logStreamStart: (payload: { source: 'compose' | 'container' | 'unified'; id?: string }) =>
       tauriInvoke<{ ok: boolean; streamId: string }>(IPC.logStreamStart, payload),
     logStreamStop: (payload: { streamId: string }) =>

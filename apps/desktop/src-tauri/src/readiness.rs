@@ -113,16 +113,19 @@ fn probe_hardware() -> HardwareStatus {
 }
 
 fn probe_disk_space(path: &str) -> (f64, f64) {
-    unsafe {
-        let mut stats: libc::statvfs = std::mem::zeroed();
-        let path_c = std::ffi::CString::new(path).unwrap();
-        if libc::statvfs(path_c.as_ptr(), &mut stats) == 0 {
-            let total = (stats.f_blocks as f64 * stats.f_frsize as f64) / 1024.0 / 1024.0 / 1024.0;
-            let free = (stats.f_bavail as f64 * stats.f_frsize as f64) / 1024.0 / 1024.0 / 1024.0;
-            return (total, free);
-        }
+    let path_c = match std::ffi::CString::new(path) {
+        Ok(c) => c,
+        Err(_) => return (0.0, 0.0),
+    };
+    let mut stats = std::mem::MaybeUninit::<libc::statvfs>::uninit();
+    let ret = unsafe { libc::statvfs(path_c.as_ptr(), stats.as_mut_ptr()) };
+    if ret != 0 {
+        return (0.0, 0.0);
     }
-    (0.0, 0.0)
+    let stats = unsafe { stats.assume_init() };
+    let total = (stats.f_blocks as f64 * stats.f_frsize as f64) / 1024.0 / 1024.0 / 1024.0;
+    let free = (stats.f_bavail as f64 * stats.f_frsize as f64) / 1024.0 / 1024.0 / 1024.0;
+    (total, free)
 }
 
 fn probe_software() -> SoftwareStatus {

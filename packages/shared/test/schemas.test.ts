@@ -1,9 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import {
+  CloudGitCreatePrRequestSchema,
+  CloudGitFindPrRequestSchema,
+  CloudGitGetPrChecksRequestSchema,
+  CloudGitMergePrRequestSchema,
+  CloudPrDetailsSchema,
+  ComposeDownRequestSchema,
   ComposeUpRequestSchema,
   CustomProfilesStoreSchema,
+  DockerActionRequestSchema,
   DockerErrorCodeSchema,
   DockerLogsRequestSchema,
+  EditorOpenRequestSchema,
+  FsExistsRequestSchema,
   GitCloneRequestSchema,
   GitConfigSetSchema,
   GitVcsStageRequestSchema,
@@ -12,6 +21,10 @@ import {
   parseOnLoginAutomation,
   parseSshBookmarks,
   parseStoredActiveProfile,
+  PortsSuggestRequestSchema,
+  ProfileRunningStatusRequestSchema,
+  ProfileSwitchRequestSchema,
+  ProjectScaffoldRequestSchema,
   RuntimeCheckDepsRequestSchema,
   WizardStateStoreSchema,
   RuntimeGetVersionsRequestSchema,
@@ -19,6 +32,7 @@ import {
   RuntimeUninstallPreviewRequestSchema,
   SshGenerateSchema,
   StoreSetRequestSchema,
+  TerminalCreateRequestSchema,
 } from '../src/schemas'
 import { isStoredActiveProfileValid, resolveActiveProfileName } from '../src/activeProfile'
 
@@ -88,6 +102,100 @@ describe('schemas', () => {
     expect(ComposeUpRequestSchema.parse({ profile: 'web-dev' })).toEqual({
       profile: 'web-dev',
     })
+  })
+
+  it('validates compose down/stop by custom profile name', () => {
+    expect(ComposeDownRequestSchema.parse({ profile: 'my-frontend' })).toEqual({
+      profile: 'my-frontend',
+    })
+    expect(() => ComposeDownRequestSchema.parse({ profile: '' })).toThrow()
+  })
+
+  it('validates profile switch and running-status payloads', () => {
+    expect(
+      ProfileSwitchRequestSchema.parse({
+        to: 'lab',
+        from: 'old-lab',
+        envVars: [{ key: 'PORT', value: '8080' }],
+      })
+    ).toMatchObject({ to: 'lab' })
+    expect(ProfileRunningStatusRequestSchema.parse({ names: ['a', 'b'] })).toEqual({
+      names: ['a', 'b'],
+    })
+  })
+
+  it('validates docker container actions', () => {
+    expect(
+      DockerActionRequestSchema.parse({ id: 'abc', action: 'restart' })
+    ).toMatchObject({ id: 'abc', action: 'restart' })
+    expect(() =>
+      DockerActionRequestSchema.parse({ id: 'abc', action: 'invalid' as never })
+    ).toThrow()
+  })
+
+  it('validates ports suggest, fs exists, editor open, terminal create', () => {
+    expect(
+      PortsSuggestRequestSchema.parse({
+        template: 'web-dev',
+        profile: 'my-app',
+        subTemplate: 'react-native',
+      })
+    ).toMatchObject({ profile: 'my-app' })
+    expect(FsExistsRequestSchema.parse({ path: '/tmp/x' })).toEqual({ path: '/tmp/x' })
+    expect(EditorOpenRequestSchema.parse({ path: '~/proj', cmd: 'code' })).toEqual({
+      path: '~/proj',
+      cmd: 'code',
+    })
+    expect(TerminalCreateRequestSchema.parse({ cols: 80, rows: 24, cmd: '/bin/bash' })).toEqual({
+      cols: 80,
+      rows: 24,
+      cmd: '/bin/bash',
+    })
+  })
+
+  it('validates project scaffold payload shape', () => {
+    expect(
+      ProjectScaffoldRequestSchema.parse({
+        path: '~/proj',
+        template: 'data-science',
+        options: { python: '3.12' },
+      })
+    ).toMatchObject({ template: 'data-science' })
+  })
+
+  it('validates cloud git PR IPC payloads', () => {
+    expect(
+      CloudGitCreatePrRequestSchema.parse({
+        provider: 'github',
+        repoPath: '/tmp/repo',
+        title: 'Fix bug',
+        head: 'feature',
+        base: 'main',
+      })
+    ).toMatchObject({ title: 'Fix bug' })
+    expect(
+      CloudGitFindPrRequestSchema.parse({
+        provider: 'gitlab',
+        repoPath: '/tmp/repo',
+        head: 'feature',
+      })
+    ).toMatchObject({ head: 'feature' })
+    expect(
+      CloudGitMergePrRequestSchema.parse({
+        provider: 'github',
+        repoPath: '/tmp/repo',
+        prUrl: 'https://github.com/o/r/pull/1',
+      })
+    ).toMatchObject({ prUrl: 'https://github.com/o/r/pull/1' })
+    expect(() =>
+      CloudGitCreatePrRequestSchema.parse({
+        provider: 'github',
+        repoPath: '/tmp/repo',
+        title: '',
+        head: 'feature',
+        base: 'main',
+      })
+    ).toThrow()
   })
 
   it('validates git clone url', () => {
@@ -279,6 +387,10 @@ describe('schemas', () => {
     expect(parseAppearance({ accent: 'not-a-color' })).toEqual({})
   })
 
+  it('parseAppearance keeps valid theme modes', () => {
+    expect(parseAppearance({ theme: 'high-contrast' })).toEqual({ theme: 'high-contrast' })
+  })
+
   it('parseAppearance keeps valid hex', () => {
     expect(parseAppearance({ accent: '#aabbcc' })).toEqual({ accent: '#aabbcc' })
   })
@@ -325,5 +437,36 @@ describe('schemas', () => {
 
   it('rejects git VCS stage paths with empty filePaths', () => {
     expect(() => GitVcsStageRequestSchema.parse({ repoPath: '/repo', filePaths: [] })).toThrow()
+  })
+
+  it('validates cloud git PR checks request and response shapes', () => {
+    expect(
+      CloudGitGetPrChecksRequestSchema.parse({
+        provider: 'github',
+        repoPath: '/home/user/repo',
+        reference: 'main',
+      }),
+    ).toEqual({
+      provider: 'github',
+      repoPath: '/home/user/repo',
+      reference: 'main',
+    })
+
+    expect(
+      CloudPrDetailsSchema.parse({
+        mergeable: true,
+        mergeable_state: 'clean',
+        base_branch: 'main',
+        checks: [{ id: '1', name: 'CI', status: 'completed', conclusion: 'success' }],
+      }),
+    ).toMatchObject({ mergeable: true, checks: [{ id: '1', name: 'CI' }] })
+
+    expect(() =>
+      CloudGitGetPrChecksRequestSchema.parse({
+        provider: 'github',
+        repoPath: '/repo',
+        reference: '',
+      }),
+    ).toThrow()
   })
 })

@@ -73,7 +73,6 @@ describe('SettingsBetaFeatures', () => {
   it('renders flag labels', () => {
     const html = wrap(<SettingsBetaFeatures />)
     expect(html).toContain('Terminal multiplexer')
-    expect(html).toContain('commit suggestions')
     expect(html).toContain('Auto-switch profile')
   })
 })

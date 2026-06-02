@@ -145,13 +145,12 @@ export function GitPullRequestPanel({
     )
   }
 
-  const needsPublishResolved = needsPublish
   const behindBase = behind != null && behind > 0
   const prFormLocked = !!existingPrUrl
   const canCreate =
     cloudConnected &&
     providerReady &&
-    !needsPublishResolved &&
+    !needsPublish &&
     !busy &&
     !prBusy &&
     !existingPrLoading &&
@@ -190,7 +189,7 @@ export function GitPullRequestPanel({
       )
       return
     }
-    if (needsPublishResolved) {
+    if (needsPublish) {
       setPrError(
         ahead == null && behind == null
           ? t('assistant.pr.noUpstream')
@@ -311,7 +310,6 @@ export function GitPullRequestPanel({
           value={body}
           disabled={busy || prBusy || prFormLocked}
           onChange={(e) => setBody(e.target.value)}
-          placeholder={PR_BODY_DEFAULT_TEMPLATE}
         />
       </label>
 

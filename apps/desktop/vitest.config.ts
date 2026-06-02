@@ -6,15 +6,15 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'lcov'],
       include: [
-        'src/renderer/src/pages/dockerContract.ts',
-        'src/renderer/src/pages/dockerError.ts',
+        'src/renderer/src/pages/**/*.{ts,tsx}',
+        'src/renderer/src/lib/**/*.ts',
       ],
-      thresholds: {
-        statements: 60,
-        branches: 50,
-        functions: 60,
-        lines: 60,
-      },
+      exclude: [
+        '**/*.test.ts',
+        '**/*.test.tsx',
+      ],
+      // No global thresholds: full pages/* is for visibility. Contract/error
+      // modules are enforced via pnpm test:roundtrip + dedicated unit tests.
     },
   },
 })

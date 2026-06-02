@@ -19,7 +19,7 @@ Artifact path depends on Tauri output (typically under `apps/desktop/src-tauri/t
 1. App launches without crash; readiness wizard completes on first run.
 2. Dashboard renders; host metrics update when `/proc` is readable.
 3. Docker panel lists containers or shows a clear error when the daemon/socket is unavailable.
-4. `/git` hub loads Config, VCS, and Cloud tabs.
+4. `/git` assistant loads — Setup → Project → Save → Share flow works.
 5. Settings hub opens all 14 tabs (no Extension tab).
 6. Embedded terminal shows a shell prompt; input works (line-buffered — vim/htop may not work).
 7. `pnpm smoke` equivalent passed on the build machine before packaging.

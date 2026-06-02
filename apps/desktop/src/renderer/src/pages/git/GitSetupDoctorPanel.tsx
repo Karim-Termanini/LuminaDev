@@ -79,6 +79,9 @@ export function GitSetupDoctorPanel({
           disabled={busy || phase === 'scanning'}
           onClick={() => void runScan()}
         >
+          {phase === 'scanning' ? (
+            <span className="codicon codicon-loading codicon-modifier-spin" aria-hidden />
+          ) : null}
           {phase === 'done' ? t('config.doctor.rescanBtn') : t('config.doctor.scanBtn')}
         </button>
       </div>

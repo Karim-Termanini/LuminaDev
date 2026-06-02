@@ -10,7 +10,6 @@ import {
   type CustomProfileEntry,
   type JobSummary,
 } from '@linux-dev-home/shared'
-import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { useCallback, useEffect, useMemo, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -161,10 +160,7 @@ export function useDashboardMainPage() {
     }
     const fetchGit = async () => {
       try {
-        const gs = (await invoke('ipc_invoke', {
-          channel: 'dh:git:vcs:status',
-          payload: { repoPath: projectPath },
-        })) as any
+        const gs = (await window.dh.gitVcsStatus({ repoPath: projectPath })) as any
         if (gs.ok) {
           setGitStatus({
             branch: gs.branch ?? 'unknown',
@@ -291,7 +287,8 @@ export function useDashboardMainPage() {
       /* keep default */
     }
 
-    invoke('ipc_invoke', { channel: 'dh:editor:list' })
+    void window.dh
+      .editorList()
       .then((res: any) => {
         if (res.ok && res.editors) {
           setInstalledEditors(res.editors)
@@ -330,10 +327,7 @@ export function useDashboardMainPage() {
           return
         }
 
-        const res = (await invoke('ipc_invoke', {
-          channel: 'dh:fs:exists',
-          payload: { path: storedPath },
-        })) as { ok?: boolean; exists?: boolean }
+        const res = await window.dh.fsExists({ path: storedPath })
         if (cancelled) return
 
         if (res.ok && res.exists) {
@@ -452,10 +446,7 @@ export function useDashboardMainPage() {
   const openProjectInEditor = async (path: string, cmd: string): Promise<boolean> => {
     if (!path || !cmd) return false
     persistPreferredEditorCmd(cmd)
-    const res = (await invoke('ipc_invoke', {
-      channel: 'dh:editor:open',
-      payload: { path, cmd },
-    })) as { ok?: boolean; error?: string }
+    const res = await window.dh.editorOpen({ path, cmd })
     if (!res.ok) {
       showToast(res.error || t('main.toast.failedOpenIDE'), 'error', { persist: true })
       return false
@@ -510,19 +501,16 @@ export function useDashboardMainPage() {
     setToast({ type: 'success', message: t('main.toast.scaffolding', { name }) })
 
     if (targetTemplate === 'data-science') {
-      const res = (await invoke('ipc_invoke', {
-        channel: 'dh:project:scaffold',
-        payload: {
-          path,
-          template: 'data-science',
-          options: dataScienceScaffoldOptions(createProjectToolchain, createProjectDeps, {
-            createNotebook: createProjectNotebook,
-            createMainScript: createProjectMainPy,
-          }),
-        },
-      })) as any
+      const res = await window.dh.projectScaffold({
+        path,
+        template: 'data-science',
+        options: dataScienceScaffoldOptions(createProjectToolchain, createProjectDeps, {
+          createNotebook: createProjectNotebook,
+          createMainScript: createProjectMainPy,
+        }),
+      })
 
-      if (res.ok) {
+      if (res.ok && res.path) {
         setProjectPath(res.path)
         await window.dh.storeSet({
           key: `project_dir_${selectedProfileName}`,
@@ -547,19 +535,16 @@ export function useDashboardMainPage() {
         setToast({ type: 'error', message: res.error || t('main.toast.failedScaffold') })
       }
     } else if (targetTemplate === 'web-dev') {
-      const res = (await invoke('ipc_invoke', {
-        channel: 'dh:project:scaffold',
-        payload: {
-          path,
-          template: 'web-dev',
-          options: {
-            dependencies: createProjectDeps,
-            devDependencies: {},
-          },
+      const res = await window.dh.projectScaffold({
+        path,
+        template: 'web-dev',
+        options: {
+          dependencies: createProjectDeps,
+          devDependencies: {},
         },
-      })) as any
+      })
 
-      if (res.ok) {
+      if (res.ok && res.path) {
         setProjectPath(res.path)
         await window.dh.storeSet({
           key: `project_dir_${selectedProfileName}`,
@@ -584,11 +569,12 @@ export function useDashboardMainPage() {
         setToast({ type: 'error', message: res.error || t('main.toast.failedScaffold') })
       }
     } else if (targetTemplate === 'mobile') {
-      const res = (await invoke('ipc_invoke', {
-        channel: 'dh:project:scaffold',
-        payload: { path, template: 'mobile', subTemplate: mobileSubTemplate },
-      })) as any
-      if (res.ok) {
+      const res = await window.dh.projectScaffold({
+        path,
+        template: 'mobile',
+        subTemplate: mobileSubTemplate,
+      })
+      if (res.ok && res.path) {
         setProjectPath(res.path)
         await window.dh.storeSet({
           key: `project_dir_${selectedProfileName}`,
@@ -601,11 +587,8 @@ export function useDashboardMainPage() {
         setToast({ type: 'error', message: res.error || t('main.toast.failedMobileScaffold') })
       }
     } else if (targetTemplate === 'ai-ml') {
-      const res = (await invoke('ipc_invoke', {
-        channel: 'dh:project:scaffold',
-        payload: { path, template: 'ai-ml' },
-      })) as any
-      if (res.ok) {
+      const res = await window.dh.projectScaffold({ path, template: 'ai-ml' })
+      if (res.ok && res.path) {
         setProjectPath(res.path)
         await window.dh.storeSet({
           key: `project_dir_${selectedProfileName}`,
@@ -618,11 +601,8 @@ export function useDashboardMainPage() {
         setToast({ type: 'error', message: res.error || t('main.toast.failedAIMLScaffold') })
       }
     } else if (targetTemplate === 'docs') {
-      const res = (await invoke('ipc_invoke', {
-        channel: 'dh:project:scaffold',
-        payload: { path, template: 'docs' },
-      })) as any
-      if (res.ok) {
+      const res = await window.dh.projectScaffold({ path, template: 'docs' })
+      if (res.ok && res.path) {
         setProjectPath(res.path)
         await window.dh.storeSet({
           key: `project_dir_${selectedProfileName}`,
@@ -635,11 +615,8 @@ export function useDashboardMainPage() {
         setToast({ type: 'error', message: res.error || t('main.toast.failedDocsScaffold') })
       }
     } else {
-      const res = (await invoke('ipc_invoke', {
-        channel: 'dh:project:ensure_dir',
-        payload: { path },
-      })) as any
-      if (res.ok) {
+      const res = await window.dh.projectEnsureDir({ path })
+      if (res.ok && res.path) {
         setProjectPath(res.path)
         await window.dh.storeSet({
           key: `project_dir_${selectedProfileName}`,
@@ -840,15 +817,13 @@ export function useDashboardMainPage() {
     setCreateProjectName('')
     setCreateProjectModalOpen(true)
     const tmpl = selectedProfile.baseTemplate || selectedProfile.name
-    void invoke('ipc_invoke', {
-      channel: 'dh:ports:suggest',
-      payload: {
+    void window.dh
+      .portsSuggest({
         template: tmpl,
         profile: selectedProfileName,
         subTemplate: mobileSubTemplate,
-      },
-    })
-      .then((r: any) => {
+      })
+      .then((r) => {
         if (r.ok && r.ports) setSuggestedPorts(r.ports)
       })
       .catch(() => {})

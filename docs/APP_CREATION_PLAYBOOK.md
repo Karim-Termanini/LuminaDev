@@ -151,6 +151,28 @@ Sensitive tokens (GitHub/GitLab) must never be stored in plain text.
 - **Why:** Protects against casual filesystem access/leaks without the UX friction of OS-keyring popups in early alpha stages.
 - **Transition:** Design for an easy migration path to system keychains (Option A) later.
 
+### 2.8 Shell Command Construction — Direct Process Spawn Only
+
+Never construct shell commands via string interpolation of user-controlled values.
+
+- **Bad:** `format!("{cmd} {path}")` passed to `sh -c` — allows `$(...)`, backticks, `;`, `&&`, `|` injection.
+- **Good:** Split `cmd` into program + args, use `Command::new(program).args(&args).arg(&path).spawn()` — bypasses the shell.
+- **Rule:** If you see `bash -c` or `sh -c` in Rust with any dynamic input, flag it as potential RCE.
+
+### 2.9 Prefer `.ok_or(…)?` Over `.unwrap()` on Option in Result Functions
+
+Never call `.unwrap()` on `Option` values that depend on prior setup configuration.
+
+- **Example:** `child.stdout.take().ok_or("[ERR] stdout not piped")?` instead of `.unwrap()`
+- **Why:** A refactor removing `.stdout(Stdio::piped())` would silently panic; `?` propagates cleanly.
+
+### 2.10 Audit Claims Must Be Code-Verified Before Acting
+
+Audit findings about dead code, missing files, or bypass counts can be stale.
+
+- **Example:** Audit claimed 24 raw `invoke('ipc_invoke')` bypass calls — grep found zero. Bridge was already migrated.
+- **Rule:** Grep + import analysis before deleting files or refactoring based on audit reports.
+
 ---
 
 ## 3) Scope control lessons
@@ -506,8 +528,9 @@ This file is a living engineering memory, not static documentation.
 ### Phase A — Immediate Gate (implemented)
 
 - Mandatory CI jobs:
-  - Lint + typecheck + unit tests (`bash scripts/smoke-ci.sh`)
-  - Production dependency audit (`pnpm audit --prod --audit-level=high`)
+  - `unit-roundtrip-contracts` — contract roundtrips + critical scenarios + module availability + coverage
+  - `native-linux-build` — Rust + Tauri compilation
+  - `codeql-analysis` — security scanning
   - Native Linux build (`pnpm --filter desktop build:tauri`; WebKit + Rust in CI)
   - Flatpak offline build smoke (`flatpak-builder ...offline.yml`)
 - SAST enabled through CodeQL workflow.
@@ -827,4 +850,59 @@ This file is a living engineering memory, not static documentation.
 - **Impact:** Inconsistent UX for DE/AR users; lint warnings blocked CI. 30+ TSX files needed `useTranslation` wiring across 14 namespaces × 3 languages.
 - **Fix implemented:** Added locale structural parity comparison to smoke gate. Removed unnecessary `t` from dep arrays. Systematically wired `useTranslation` into 30+ page/component files in a single batch pass.
 - **Preventive action:** Smoke gate must include locale structure diff. Never add a key to EN without parallel DE/AR keys in the same change. `t` is stable — omit from dep arrays unless `t` itself is called conditionally inside the effect. Batch cross-cutting infra changes in one pass.
+- **Status:** resolved
+
+#### 2026-06-02 — Shell injection in editor_open() via sh -c (CRITICAL)
+
+- **Area:** Security / Rust IPC
+- **Symptom:** `editor_open()` in `system_info.rs` constructed `sh -c` command via string interpolation of user-controlled `cmd` and `path`. `cmd` was unquoted; `path` double-quoted but allows `$()` expansion. Arbitrary command execution from renderer IPC caller.
+- **Root cause:** Convenience pattern from prototyping — shell invocation simpler than splitting cmd into program + args.
+- **Impact:** User-level RCE (not root, but unrestricted within user context).
+- **Fix implemented:** Replaced `sh -c` with `cmd.split_whitespace()` → `Command::new(program).args(&args).arg(&path).spawn()` — no shell.
+- **Preventive action:** Playbook rule 2.8: No `bash -c` / `sh -c` with user-controlled input. Use `Command::new()` direct spawn.
+- **Verification evidence:** `system_info.rs` diff confirmed.
+- **Status:** resolved
+
+#### 2026-06-02 — Unwrap panic risk in executor.rs (HIGH)
+
+- **Area:** Rust / Runtime jobs
+- **Symptom:** `child.stdout.take().unwrap()` and `child.stderr.take().unwrap()` at two call sites. Would panic if pipe configuration removed or reordered.
+- **Root cause:** `.unwrap()` on `Option` values dependent on prior `.stdout(Stdio::piped())` configuration.
+- **Impact:** Process crash on future refactor. Unlikely today but fragile.
+- **Fix implemented:** All 4 `.unwrap()` calls replaced with `.ok_or("[ERR] stdout/stderr not piped")?`.
+- **Preventive action:** Playbook rule 2.9: `.ok_or(…)?` over `.unwrap()` in `Result`-returning functions.
+- **Verification evidence:** `executor.rs` diff confirmed; zero `.take().unwrap()` remaining.
+- **Status:** resolved
+
+#### 2026-06-02 — CI job labeling misleading (unit tests called integration/E2E)
+
+- **Area:** CI / Documentation
+- **Symptom:** `integration-and-e2e-lite` job ran only Vitest unit tests. Labels mismatched actual test scope.
+- **Root cause:** Job name frozen from early CI design when real integration/E2E tests were planned but never written.
+- **Impact:** Contributor confusion.
+- **Fix implemented:** Renamed to `unit-roundtrip-contracts`; step labels corrected.
+- **Preventive action:** CI job names must match actual execution. Audit labels during stabilization passes.
+- **Verification evidence:** `ci.yml` diff confirmed.
+- **Status:** resolved
+
+#### 2026-06-02 — Missing contract/error tests for settings and dashboard
+
+- **Area:** Testing / Renderer
+- **Symptom:** `settingsContract.ts`, `settingsError.ts`, `dashboardError.ts` had zero test coverage.
+- **Root cause:** Test authoring lagged behind feature implementation.
+- **Impact:** Error message regressions would go undetected.
+- **Fix implemented:** 3 test files created: `settingsContract.test.ts` (6), `settingsError.test.ts` (5), `dashboardError.test.ts` (12) — 23 assertions, all green.
+- **Preventive action:** Every `*Contract.ts` / `*Error.ts` must have colocated `*.test.ts`.
+- **Verification evidence:** 23/23 tests passing.
+- **Status:** resolved
+
+#### 2026-06-02 — Documentation drift across plan files
+
+- **Area:** Documentation
+- **Symptom:** Stale claims: README "~37" (actual 40) modules; phasesPlan "hosts editor future work" (live); phasesPlan "monolith 200KB+" (~706 lines post-Phase 17); old sprint "DO THIS NOW" (completed 2026-05-01); MASTER_PLAN forward-declared C1/H1 "Fixed".
+- **Root cause:** Docs updated independently; no cross-reference gate after sprint closes.
+- **Impact:** Contributors acting on stale docs make incorrect decisions.
+- **Fix implemented:** All stale claims corrected; graph rebuilt with `graphify update .`.
+- **Preventive action:** After every sprint close, grep key metrics (line counts, module counts, route status) against canonical docs.
+- **Verification evidence:** All files diff-confirmed; graphify-out regenerated.
 - **Status:** resolved

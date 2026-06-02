@@ -26,7 +26,7 @@ Status legend:
 | `/cloud-git` | redirect | → `/git` |
 | `/registry` | redirect | → `/git` |
 | `/profiles` | partial | Custom-named environments only (user picks base template + name). CRUD + duplicate + export/import; Set Active / switch syncs dashboard. On launch: optional composeUp for active profile. |
-| `/terminal` | partial | Embedded terminal works; host/sandbox differences still affect behavior. |
+| `/terminal` | partial | xterm + host PTY (`portable_pty`); not a browser sandbox. Multiplexer behind beta flag. Vim/full-screen apps may still differ from a native terminal emulator. |
 | `/runtimes` | partial | Seven runtimes (Node, Python, Java, Go, Rust, PHP, .NET); status/version/deps/uninstall preview live; install/update/remove backend hardened for Ubuntu/Fedora/Arch. |
 | `/maintenance` | partial | Guardian + diagnostics + host probes. **Tasks**: user checklist on Overview + full editor on Schedule. **Git backups** on **Git Config → Backups**. No arbitrary host shell or full remediation. |
 | `/settings` | partial | Dev Home layout: personalization, SSH overview, **Connected accounts** (GitHub/GitLab auth), **System** tab (`/etc/hosts` read/edit via pkexec + diff-before-apply, process env diagnostics, `~/.profile` export editor), general, update, notifications, shortcuts, help, datetime, languages, app engine, builder, beta flags. **Extension tab removed** — not in scope. |

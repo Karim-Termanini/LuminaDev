@@ -12,7 +12,7 @@ function toUserFacingMessage(result: unknown, fallback: string): string {
   }
 }
 
-describe('scaffold IPC contract integration', () => {
+describe('scaffold IPC contract + error roundtrip', () => {
   it('humanizes missing path failure', () => {
     const msg = toUserFacingMessage(
       { ok: false, error: '[SCAFFOLD_FAILED] Missing path.' },

@@ -47,8 +47,9 @@ Status legend:
   - Smoke gate verification:
     - `bash scripts/smoke-ci.sh` passed (workspace typecheck + shared/desktop tests + lint) on 2026-04-29.
   - Extended strict contract/error handling beyond Docker across active desktop slices:
-    - `git`, `ssh`, `dashboard`, `monitor`, `registry`, `runtimes`, `terminal`
+    - `git`, `ssh`, `dashboard`, `monitor`, `registry`, `runtimes`, `terminal`, `settings`, `cloudAuth`, `firstRunWizard`, `scaffold`, `profile`
     - Evidence modules: `apps/desktop/src/renderer/src/pages/*Contract.ts`, `*Error.ts`, paired tests
+  - **2026-06-02 follow-up (P11):** IPC integration tests removed; `test:e2e` is Vitest unit-only. CI job `unit-roundtrip-contracts` runs `test:roundtrip` (no `test:integration`).
 
 ## 3) Privilege Boundary Evidence (Flatpak vs Host)
 

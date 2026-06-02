@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { humanizeDockerError } from './dockerError'
 
-describe('critical user-facing scenarios (e2e-lite)', () => {
+describe('critical error humanization scenarios', () => {
   it('docker action failure maps to actionable message', () => {
     const msg = humanizeDockerError('[DOCKER_UNAVAILABLE] daemon socket not reachable')
     expect(msg).toContain('Docker is not running')

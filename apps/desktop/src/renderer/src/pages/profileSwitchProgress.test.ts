@@ -1,9 +1,5 @@
 import { describe, expect, it, beforeEach, vi } from 'vitest'
 
-vi.mock('@tauri-apps/api/core', () => ({
-  invoke: vi.fn().mockResolvedValue({ ok: true, running: [] }),
-}))
-
 vi.mock('@tauri-apps/api/event', () => ({
   listen: vi.fn().mockResolvedValue(() => {}),
 }))
@@ -20,6 +16,11 @@ import {
 
 describe('profileSwitchProgress', () => {
   beforeEach(() => {
+    vi.stubGlobal('window', {
+      dh: {
+        profileRunningStatus: vi.fn().mockResolvedValue({ ok: true, running: [] }),
+      },
+    })
     const store = new Map<string, string>()
     vi.stubGlobal('localStorage', {
       getItem: (key: string) => store.get(key) ?? null,

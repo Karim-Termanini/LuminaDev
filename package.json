@@ -9,7 +9,7 @@
     "lint": "eslint .",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm --filter @linux-dev-home/shared build && pnpm --filter shared test && pnpm --filter desktop test",
-    "test:integration": "pnpm --filter desktop test:integration",
+    "test:roundtrip": "pnpm --filter desktop test:roundtrip",
     "test:e2e": "pnpm --filter desktop test:e2e",
     "test:coverage": "pnpm --filter @linux-dev-home/shared build && pnpm --filter desktop test:coverage",
     "audit:prod": "pnpm audit --prod --audit-level=high",

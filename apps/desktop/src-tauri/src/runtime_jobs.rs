@@ -215,6 +215,17 @@ pub(crate) async fn handle_runtime_installed_versions(body: &Value) -> Value {
     json!({ "ok": true, "versions": versions })
 }
 
+/// Format a Node.js dist index entry label from its `lts` field (string codename, bool, or other).
+fn node_dist_version_label(version: &str, lts: &Value) -> String {
+    if let Some(codename) = lts.as_str() {
+        format!("{version} (LTS: {codename})")
+    } else if lts.as_bool() == Some(true) {
+        format!("{version} (LTS)")
+    } else {
+        version.to_string()
+    }
+}
+
 pub(crate) async fn handle_runtime_get_versions(body: &Value) -> Value {
     let runtime_id = body
         .get("runtimeId")
@@ -281,14 +292,7 @@ pub(crate) async fn handle_runtime_get_versions(body: &Value) -> Value {
                                 item.get("version").and_then(|x| x.as_str()),
                                 item.get("lts"),
                             ) {
-                                let label = if lts.is_string() {
-                                    format!("{} (LTS: {})", v, lts.as_str().unwrap())
-                                } else if lts.as_bool().unwrap_or(false) {
-                                    format!("{} (LTS)", v)
-                                } else {
-                                    v.to_string()
-                                };
-                                versions.push(label);
+                                versions.push(node_dist_version_label(v, lts));
                             }
                         }
                     }
@@ -589,6 +593,26 @@ pub(crate) async fn handle_job_cancel(state: &AppState, body: &Value) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn node_dist_version_label_handles_lts_field_shapes() {
+        assert_eq!(
+            node_dist_version_label("v22.11.0", &json!("Iron")),
+            "v22.11.0 (LTS: Iron)"
+        );
+        assert_eq!(
+            node_dist_version_label("v20.10.0", &json!(true)),
+            "v20.10.0 (LTS)"
+        );
+        assert_eq!(
+            node_dist_version_label("v23.0.0", &json!(false)),
+            "v23.0.0"
+        );
+        assert_eq!(
+            node_dist_version_label("v23.0.0", &json!(null)),
+            "v23.0.0"
+        );
+    }
 
     #[test]
     fn job_runner_cancel_marks_running_job() {
