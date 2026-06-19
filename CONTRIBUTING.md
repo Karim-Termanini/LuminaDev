@@ -1,4 +1,4 @@
-# Contributing to LuminaDev
+# Contributing to KeelDev
 
 Thanks for contributing.
 
@@ -61,5 +61,5 @@ Or individually: `pnpm typecheck`, `pnpm test`, `pnpm lint`, `cargo test` in `ap
 
 ## Host boundary notes
 
-- **Compose preset stacks:** `dh:compose:up` resolves `docker/compose/<profile>` from the repo checkout, `LUMINA_DEV_COMPOSE_ROOT` (parent of `<profile>` dirs), or bundled `resource_dir()/docker/compose` when packaged.
-- **Full stack pilot:** If a profile directory contains `docker-compose.full.yml` and the app is launched with **`LUMINA_DEV_COMPOSE_FULL=1`** (or `true` / `yes`), `docker compose` uses **both** `-f docker-compose.yml` and `-f docker-compose.full.yml` (see `web-dev` for an example nginx sidecar). Without the env var, behavior is unchanged (stub only).
+- **Compose preset stacks:** `dh:compose:up` resolves `docker/compose/<profile>` from the repo checkout, `KEEL_DEV_COMPOSE_ROOT` (parent of `<profile>` dirs), or bundled `resource_dir()/docker/compose` when packaged.
+- **Full stack pilot:** If a profile directory contains `docker-compose.full.yml` and the app is launched with **`KEEL_DEV_COMPOSE_FULL=1`** (or `true` / `yes`), `docker compose` uses **both** `-f docker-compose.yml` and `-f docker-compose.full.yml` (see `web-dev` for an example nginx sidecar). Without the env var, behavior is unchanged (stub only).

@@ -50,6 +50,53 @@ fn with_discover(body: &str) -> String {
     format!("{PREAMBLE}{EMIT_FN}{body}")
 }
 
+/// Resolve the `java` binary the user's shell runs (mise-aware; ignores bare `/usr/bin/mise` shims).
+pub(crate) fn java_shell_binary_script() -> String {
+    with_preamble(
+        r#"if command -v mise >/dev/null 2>&1; then
+  p=$(mise which java 2>/dev/null)
+  if [ -n "$p" ] && [ -x "$p" ]; then readlink -f "$p" 2>/dev/null && exit 0; fi
+fi
+if command -v java >/dev/null 2>&1; then
+  home=$(java -XshowSettings:properties -version 2>&1 | awk -F'= ' '/java.home/ {print $2; exit}')
+  if [ -n "$home" ] && [ -x "$home/bin/java" ]; then readlink -f "$home/bin/java" 2>/dev/null && exit 0; fi
+fi
+p=$(command -v java 2>/dev/null)
+if [ -n "$p" ]; then
+  case "$p" in */mise|*/mise.exe) exit 1 ;; esac
+  rp=$(readlink -f "$p" 2>/dev/null || echo "$p")
+  case "$rp" in */mise|*/mise.exe) exit 1 ;; esac
+  case "$(basename "$rp")" in mise|mise.exe) exit 1 ;; esac
+  echo "$rp"
+  exit 0
+fi
+[ -n "$JAVA_HOME" ] && [ -x "$JAVA_HOME/bin/java" ] && readlink -f "$JAVA_HOME/bin/java" && exit 0
+[ -x "$HOME/.local/share/lumina/java/current/bin/java" ] && readlink -f "$HOME/.local/share/lumina/java/current/bin/java" && exit 0
+[ -x "$HOME/.sdkman/candidates/java/current/bin/java" ] && readlink -f "$HOME/.sdkman/candidates/java/current/bin/java" && exit 0
+exit 1"#,
+    )
+}
+
+pub(crate) async fn resolve_java_shell_binary_path() -> Option<String> {
+    use crate::host_exec::{cmd_timeout_short, exec_output_limit};
+    let script = java_shell_binary_script();
+    exec_output_limit("bash", &["-lc", &script], cmd_timeout_short())
+        .await
+        .ok()
+        .and_then(|out| {
+            let path = out.lines().find(|l| !l.trim().is_empty())?.trim().to_string();
+            if path.is_empty()
+                || path.ends_with("/mise")
+                || path.ends_with("/mise.exe")
+                || path.contains("/.local/share/mise/shims/")
+            {
+                None
+            } else {
+                Some(path)
+            }
+        })
+}
+
 pub(crate) fn list_installed_versions_script(runtime_id: &str) -> Option<String> {
     Some(match runtime_id {
         "node" => with_discover(&format!(
@@ -153,6 +200,11 @@ if [ -d "$HOME/.jdks" ]; then
     _java_dev_row "$d"
   done
 fi
+if [ -d "$HOME/.local/share/mise/installs/java" ]; then
+  for d in "$HOME/.local/share/mise/installs/java"/*; do
+    _java_dev_row "$d"
+  done
+fi
 for d in /usr/lib/jvm/* /usr/java/*; do
   _java_dev_row "$d"
 done
@@ -217,12 +269,7 @@ pub(crate) fn active_binary_script(runtime_id: &str) -> Option<String> {
         "python" => with_preamble(
             r#"pyenv which python 2>/dev/null || pyenv which python3 2>/dev/null || readlink -f "$(command -v python3 2>/dev/null || command -v python 2>/dev/null)" 2>/dev/null"#,
         ),
-        "java" => with_preamble(
-            r#"[ -n "$JAVA_HOME" ] && [ -x "$JAVA_HOME/bin/java" ] && readlink -f "$JAVA_HOME/bin/java" && exit 0
-[ -x "$HOME/.local/share/lumina/java/current/bin/java" ] && readlink -f "$HOME/.local/share/lumina/java/current/bin/java" && exit 0
-[ -x "$HOME/.sdkman/candidates/java/current/bin/java" ] && readlink -f "$HOME/.sdkman/candidates/java/current/bin/java" && exit 0
-readlink -f "$(command -v java 2>/dev/null)" 2>/dev/null"#,
-        ),
+        "java" => java_shell_binary_script(),
         "go" => with_preamble(
             r#"[ -x "$HOME/.local/share/lumina/go/current/bin/go" ] && readlink -f "$HOME/.local/share/lumina/go/current/bin/go" && exit 0
 readlink -f "$(command -v go 2>/dev/null)" 2>/dev/null"#,

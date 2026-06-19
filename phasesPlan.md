@@ -1,13 +1,13 @@
 > [!IMPORTANT]
-> **Architectural Notice:** LuminaDev is a **Full Hosted** environment manager. It is explicitly **NOT isolated** and does not use strict sandboxing (like cgroups or Docker-based build isolation) by design.
+> **Architectural Notice:** KeelDev is a **Full Hosted** environment manager. It is explicitly **NOT isolated** and does not use strict sandboxing (like cgroups or Docker-based build isolation) by design.
 >
 > **Design & Quality Standard:** Every modification, feature implementation, and user dialog/interaction must align with the technical efficiency, visual elegance, and premium user experience of **Microsoft Dev Home**.
 >
-> **Target Audience & UX Philosophy:** LuminaDev is designed for both **absolute beginners** and **advanced/professional developers**. All interfaces, layout sequences, warning dialogs, and setup flows must cater to both: providing clear, automated, one-click solutions and helpful context for beginners, while offering deep configuration, logs, and raw control options for power users.
+> **Target Audience & UX Philosophy:** KeelDev is designed for both **absolute beginners** and **advanced/professional developers**. All interfaces, layout sequences, warning dialogs, and setup flows must cater to both: providing clear, automated, one-click solutions and helpful context for beginners, while offering deep configuration, logs, and raw control options for power users.
 
-# LuminaDev — Product Phases Plan
+# KeelDev — Product Phases Plan
 
-> Living document. Route truth table: [`docs/ROUTE_STATUS.md`](docs/ROUTE_STATUS.md) | Unified plan: [`docs/MASTER_PLAN.md`](docs/MASTER_PLAN.md) | Audit: [`docs/AUDIT.md`](docs/AUDIT.md) | Release gate: [`docs/STABILIZATION_CHECKLIST.md`](docs/STABILIZATION_CHECKLIST.md)
+> Living document. Route truth table: [`docs/ROUTE_STATUS.md`](docs/ROUTE_STATUS.md) | Unified plan: [`docs/MASTER_PLAN.md`](docs/MASTER_PLAN.md) | AI Core spec: [`newCore.md`](newCore.md) | Audit: [`docs/AUDIT.md`](docs/AUDIT.md) | Release gate: [`docs/STABILIZATION_CHECKLIST.md`](docs/STABILIZATION_CHECKLIST.md)
 
 ---
 
@@ -52,7 +52,7 @@ Progress notes (2026-05-01):
   - package command builders, output truncation, repository-root discovery
 - Full Rust test suite now passes locally: `cd apps/desktop/src-tauri && cargo test -- --nocapture`.
 - Added second dedicated test module file: `apps/desktop/src-tauri/src/runtime_prune_contract_tests.rs`
-  - runtime version token edge-cases (`lumina_*` helpers)
+  - runtime version token edge-cases (`keel_*` helpers)
   - Docker prune preview response contract shape/types via `docker_prune_preview_payload(...)`
 - Added `.github/workflows/smoke-tests.yml` for dedicated Rust smoke/job-runner coverage.
 
@@ -93,7 +93,7 @@ Bug fixes priority (see Known Bugs table below):
 - [x] Bug #4 — Docker Hub official-image links normalized (`library/*` + bare names)
 Progress notes (2026-05-01, follow-up):
 - Hardened Docker-socket guidance in renderer error contracts: `[DOCKER_UNAVAILABLE]` and `[DOCKER_PERMISSION_DENIED]` now append explicit troubleshooting instructions.
-- Updated `EnvironmentBanner` Docker docs link to current LuminaDev repository path.
+- Updated `EnvironmentBanner` Docker docs link to current KeelDev repository path.
 - Hardened terminal failure fallback copy to include PTY focus guidance alongside external terminal fallback.
 - Runtime install validation hardened for Fedora Java: expanded tests for DNF major-version package selection (`8/11/17/latest`) and existing install-path checks.
 - Monitor metrics hardened: `/proc` reads now fallback to host-side reads through wrapped host execution when sandbox reads are unavailable.
@@ -287,7 +287,7 @@ pub async fn ipc_invoke(channel: &str, payload: Value, state: AppState) -> Resul
 
 ### Verified missing (not Alpha scope)
 
-- [x] **Minimal compose stub per preset** — each `docker/compose/<profile>/docker-compose.yml` is small Alpine `sleep infinity` service; project name set via `-p` CLI flag (no `name:` field in YAML); `dh:compose:up` resolves checkout, `LUMINA_DEV_COMPOSE_ROOT`, or bundled `docker/compose` (see `compose_profiles.rs` + `tauri.conf.json` `bundle.resources`).
+- [x] **Minimal compose stub per preset** — each `docker/compose/<profile>/docker-compose.yml` is small Alpine `sleep infinity` service; project name set via `-p` CLI flag (no `name:` field in YAML); `dh:compose:up` resolves checkout, `KEEL_DEV_COMPOSE_ROOT`, or bundled `docker/compose` (see `compose_profiles.rs` + `tauri.conf.json` `bundle.resources`).
 - [ ] **Full stack definitions** — only `web-dev` preset has `docker-compose.full.yml` (nginx); the other 8 presets have `docker-compose.yml` stubs only (Alpine sleep loop). Full stack defs for infra, ai-ml, data-science, mobile, game-dev, docs, desktop-gui, and empty are **not implemented**.
 - [x] Preset ↔ store: `active_profile` is `ComposeProfile` id; dashboard + wizard + Profiles **Set Active** stay aligned
 
@@ -564,7 +564,7 @@ When user clicks "Install" / "Fix":
 
 ## Known Bugs
 
-> **Git Assistant (2026-05-31):** G1–G3 shipped; **G4 hardening** on `feat/runtimes-r1-r2` — partial commit, push-with-local-changes, existing-PR probe, post-push copy. Manually verified on LuminaDev repo. See [`docs/MASTER_PLAN.md`](docs/MASTER_PLAN.md) §6 **G4**.
+> **Git Assistant (2026-05-31):** G1–G3 shipped; **G4 hardening** on `feat/runtimes-r1-r2` — partial commit, push-with-local-changes, existing-PR probe, post-push copy. Manually verified on KeelDev repo. See [`docs/MASTER_PLAN.md`](docs/MASTER_PLAN.md) §6 **G4**.
 
 | # | Page | Bug | Status |
 |---|------|-----|--------|
@@ -629,7 +629,9 @@ When user clicks "Install" / "Fix":
 
 ## 📋 Future Phases — Scope & Dependencies
 
-Based on current app state (Phase 17 + audit sweep complete), remaining work is **Phase 18 (IPC boundary hardening)** and **Tier 3 release**. Architecture map: [`graphify-out/GRAPH_REPORT.md`](../graphify-out/GRAPH_REPORT.md) @ `fc9c8fa`; backlog detail in [`docs/MASTER_PLAN.md`](./docs/MASTER_PLAN.md) §17.
+Based on current app state (Phase 17 + audit sweep complete), remaining **stabilization** work is **Phase 18 (IPC boundary hardening)** and **Tier 3 release**. **Forward product track** is **AI Core AC0–AC7** per [`newCore.md`](newCore.md) (canonical detailed spec — do not edit from planning passes).
+
+Architecture map: [`graphify-out/GRAPH_REPORT.md`](../graphify-out/GRAPH_REPORT.md) @ `fc9c8fa`; backlog detail in [`docs/MASTER_PLAN.md`](./docs/MASTER_PLAN.md) §17 (Phase 18) and §18 (AI Core).
 
 ### Phase 18 — IPC boundary hardening (planned)
 
@@ -650,6 +652,71 @@ Based on current app state (Phase 17 + audit sweep complete), remaining work is 
 **After each slice:** `pnpm smoke` + `graphify update .`.
 
 **Test gate (P11 — ✅ DONE):** IPC integration and headless E2E tests removed. Desktop scripts: `test` (full Vitest), `test:roundtrip` (3 error roundtrip files), `test:e2e` (`criticalScenarios.unit` + `moduleAvailability`). `pnpm smoke` does not run `test:e2e`. CI job renamed `integration-and-e2e-lite` → `unit-roundtrip-contracts`; runs `pnpm test:roundtrip` + `test:e2e` + `test:coverage`.
+
+### AI Core Integration — AC0–AC7 (planned, post Tier 3 preferred)
+
+**Status:** 📋 Not started — next major product arc after Phase 18 + release gate.
+
+**Product thesis:** Transform KeelDev into **"The Unified AI Developer Control Plane for Linux"** — orchestration layer between IDEs and LLMs. **Philosophy:** call existing tools via subprocess (`graphify`, `headroom`, `last30days-skill`, optional Agent-Reach); **< 2,000 lines Rust + < 500 lines TypeScript** new code. Full component breakdown, scenarios, risks, and success metrics: [`newCore.md`](newCore.md).
+
+**Phase ID convention:** **AC0–AC7** (AI Core) — distinct from historical product Phases 0–18.
+
+| AC | Timeline | Goal | Key deliverables |
+| --- | --- | --- | --- |
+| **AC0** | Weeks 1–2 | Foundation | OpenAI-compatible proxy @ `localhost:4317`; Bearer token `~/.config/keel/token`; basic routing; Tauri backend |
+| **AC1** | Weeks 3–4 | Knowledge Graph | `graphify` CLI (PyPI `graphifyy`); `notify` watcher; `petgraph`; persistence `~/.keel/graphs/<hash>.json` |
+| **AC2** | Week 5 | Compression | `~/Documents/GitHub/headroom/` or PyPI `headroom-ai`; proxy daemon + Rust fallback |
+| **AC3** | Weeks 6–7 | Git & PATH | KeelDev Rust autopilot — **not** sibling `odysseus/` repo |
+| **AC4** | Week 8 | Error Diagnoser | `last30days-skill/` + optional `Agent-Reach/` clones; one-click fix + cache |
+| **AC5** | Weeks 9–10 | Install Wizard | First-run 3-question flow; runtime install; PATH fix; starter project; initial graphify |
+| **AC6** | Weeks 11–12 | UI Integration | Dashboard chat panel; Git identity indicator; PATH/error notifications; API key + model settings |
+| **AC7** | Weeks 13–14 | Testing & Polish | Ubuntu/Fedora/Arch matrix; performance; documentation; beta release |
+
+**Builds on shipped phases:**
+
+| Shipped | AI Core extension |
+| --- | --- |
+| Phase 16 readiness wizard | AC5 narrows UX to 3 questions; critical Docker/Git probes retained |
+| Phase 4 / Git Assistant G1–G4 | AC3 adds automatic path-based identity switching (complements manual setup) |
+| Phase 6 runtimes (7 languages) | AC3 PATH manager + AC5 wizard install reuse runtime install matrix |
+| Settings System tab | AC3 PATH fixes extend `~/.profile` editor pattern |
+| Repo `graphify-out/` (dev tooling) | AC1 runtime graph is per-project under `~/.keel/graphs/` — separate concern |
+
+**Explicit non-goals:** Own LLM; full IDE; LSP; rewrite graphify/headroom/last30days in Rust; Dify workflow extraction; payment processing. See `newCore.md` § What We're NOT Building.
+
+**Depends on:** Phase 18 P10 (recommended); Tier 3 release (optional before AC6).
+
+**Sibling toolchain:** All subprocess deps cloned under **`~/Documents/GitHub/`** on maintainer machine. See [`docs/MASTER_PLAN.md`](docs/MASTER_PLAN.md) §18 *Sibling toolchain* + *Tool registry*. Proposed env: **`KEEL_DEV_TOOLS_ROOT`** (default `~/Documents/GitHub`).
+
+| Repo (under `~/Documents/GitHub/`) | AC | Role |
+| --- | --- | --- |
+| `headroom/` | AC2 | Context compression — `headroom proxy` / `headroom compress` |
+| `last30days-skill/` | AC4 | Recent-solution search — `skills/last30days/scripts/last30days.py` |
+| `Agent-Reach/` | AC4 (opt) | Deep web read/search — `agent-reach` CLI |
+| `codegraph/` | eval only | Semantic code intel — **not** AC1 v1 (graphify is canonical) |
+| `oh-my-pi/` | post-AC7 | `omp` agent — integration TBD |
+| `odysseus/` | ❌ | Separate product (`:7000`); newCore "Odysseus" = Keel AC3 Rust autopilot |
+| `dify/` | ❌ | Out of scope per `newCore.md` |
+
+**graphify (AC1):** PyPI package `graphifyy` (`uv tool install graphifyy` → `~/.local/bin/graphify`). Not a sibling repo; already used for LuminaDev `graphify-out/` planning graphs.
+
+**After each AC slice:** `pnpm smoke` + `graphify update .` + update [`ROUTE_STATUS.md`](docs/ROUTE_STATUS.md) when UI surfaces ship.
+
+### Product inventory — stay, delete, transform
+
+Full tables: [`docs/MASTER_PLAN.md`](docs/MASTER_PLAN.md) **§19**. Summary:
+
+**Already deleted (do not restore):** Extensions, dashboard widgets, Git pro UI, 11 runtimes, Flatpak, Electron, legacy integration tests.
+
+**Stays:** All primary routes (`/docker`, `/git`, `/profiles`, `/runtimes`, `/settings`, dashboard tabs, `/terminal`, `/ssh`, `/maintenance`); Git Assistant; 7 runtimes; 14 Settings tabs (no Extension/Resources); Tauri IPC stack; profiles/scaffold/compose; cloud auth (no in-app merge); `graphify-out/` for dev planning.
+
+**Transformed (AC):** Phase 16+11 wizards → AC5 single 3-question wizard (probes stay); dashboard + settings extended for AI proxy/chat; Git identity + PATH augmented (not replaced); runtime graphs → `~/.keel/graphs/`.
+
+**Scheduled delete (AC5):** `ReadinessWizardPage`, `FirstRunWizardPage`, `firstRunWizard*`, dual wizard gate in `App.tsx`.
+
+**Added (AC0–AC7):** AI proxy, knowledge graph service, Headroom wrapper, git context switcher, PATH manager, error diagnoser, dashboard chat, new IPC domains — see MASTER_PLAN §19E.
+
+**Never:** Full IDE, LSP, own LLM, Dify import, odysseus subprocess, Smart-Flow / second Git UI, widgets, in-app PR merge.
 
 ## Execution Order
 
@@ -677,6 +744,7 @@ Based on current app state (Phase 17 + audit sweep complete), remaining work is 
 ✅  G1–G4    — Git Assistant (see MASTER_PLAN §6)
 ✅  R1–R3    — Runtimes Simplification (see MASTER_PLAN §14)
 ⬜  Phase 18  — IPC boundary hardening (P9 bridge + P10 Zod; see MASTER_PLAN §17)
-✅  P11       — Test gate + CI alignment (`unit-roundtrip-contracts`; no `test:integration`)
 ⬜  Tier 3    — AppImage E2E, cross-distro matrix, Tauri Stage 5 sign-off
+⬜  AC0–AC7   — AI Core unified control plane (see newCore.md + MASTER_PLAN §18)
+✅  P11       — Test gate + CI alignment (`unit-roundtrip-contracts`; no `test:integration`)
 ```

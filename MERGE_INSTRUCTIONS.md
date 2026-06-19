@@ -27,7 +27,7 @@ This merge includes:
 ### Step 1: Run Full Test Suite (5–10 minutes)
 
 ```bash
-cd /home/karimodora/Documents/GitHub/LuminaDev
+cd /home/karimodora/Documents/GitHub/KeelDev
 
 # Verify no type errors
 pnpm typecheck
@@ -88,7 +88,7 @@ git diff HEAD -- docs/AUDIT.md                   # M1 fix
 ### Option 1: Single Comprehensive Commit (Recommended)
 
 ```bash
-cd /home/karimodora/Documents/GitHub/LuminaDev
+cd /home/karimodora/Documents/GitHub/KeelDev
 
 # Stage all changes
 git add -A
@@ -98,7 +98,7 @@ git commit -m "fix(audit): resolve C1–L4 findings + P11–P13 remediation pipe
 
 BREAKING CHANGES: None
 
-Complete comprehensive audit of LuminaDev codebase with 15 findings resolved:
+Complete comprehensive audit of KeelDev codebase with 15 findings resolved:
 
 CRITICAL (C1–C3):
 - C1: Fixed misleading docker-compose.yml claims (phasesPlan.md line 287)
@@ -143,7 +143,7 @@ git log -1 --stat
 ### Option 2: Multi-Commit Workflow (If Preferred)
 
 ```bash
-cd /home/karimodora/Documents/GitHub/LuminaDev
+cd /home/karimodora/Documents/GitHub/KeelDev
 
 # Commit 1: Critical/High findings
 git add phasesPlan.md packages/shared/src/ipc.ts apps/desktop/src/renderer/src/pages/{*Contract,*Error}.ts apps/desktop/src/renderer/src/api/desktopApiBridge.ts docs/INSTALL_TEST.md docs/AUDIT.md

@@ -37,7 +37,7 @@ Renderer → `desktopApiBridge.ts` → `invoke` / `ipc_send` → Rust `ipc_invok
 
 ### Rust backend (`apps/desktop/src-tauri/`)
 
-`compose_profiles.rs` resolves `docker/compose/<profile>` for `dh:compose:up` / `dh:compose:logs` (repo walk, `LUMINA_DEV_COMPOSE_ROOT`, or bundled resources from `tauri.conf.json`). Optional **`LUMINA_DEV_COMPOSE_FULL`** merges `docker-compose.full.yml` when present. Other domains live in focused modules (`runtime_jobs.rs`, `git_vcs_network.rs`, `git_vcs_file_diff.rs`, etc.); avoid growing new logic only in `lib.rs`.
+`compose_profiles.rs` resolves `docker/compose/<profile>` for `dh:compose:up` / `dh:compose:logs` (repo walk, `KEEL_DEV_COMPOSE_ROOT`, or bundled resources from `tauri.conf.json`). Optional **`KEEL_DEV_COMPOSE_FULL`** merges `docker-compose.full.yml` when present. **AI Core (forward):** subprocess tools resolve via PATH → **`KEEL_DEV_TOOLS_ROOT`** (default `~/Documents/GitHub`) → bundled resources — see [`docs/MASTER_PLAN.md`](docs/MASTER_PLAN.md) §18 tool registry (`headroom/`, `last30days-skill/`, `Agent-Reach/`). Other domains live in focused modules (`runtime_jobs.rs`, `git_vcs_network.rs`, `git_vcs_file_diff.rs`, etc.); avoid growing new logic only in `lib.rs`.
 
 Single dispatcher in `lib.rs` with two Tauri commands:
 
@@ -68,7 +68,8 @@ All IPC responses use `{ ok: boolean; error?: string }` shape. Error strings are
 
 | Doc | Use when |
 | --- | --- |
-| [`docs/MASTER_PLAN.md`](docs/MASTER_PLAN.md) | Active backlog, release gate, what is removed |
+| [`docs/MASTER_PLAN.md`](docs/MASTER_PLAN.md) | Active backlog, release gate, **§19 stay/delete/transform** |
+| [`newCore.md`](newCore.md) | AI Core AC0–AC7 forward track (proxy, graph, headroom, autopilot) — canonical spec |
 | [`phasesPlan.md`](phasesPlan.md) | Phase history, architecture rules, known bugs table |
 | [`docs/AUDIT.md`](docs/AUDIT.md) | Audit findings, manual page QA checklist |
 | [`docs/ROUTE_STATUS.md`](docs/ROUTE_STATUS.md) | Route live/partial/stub truth before changing UI behavior |

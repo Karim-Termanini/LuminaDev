@@ -5,8 +5,8 @@ Manual verification on a clean Linux VM before tagging a release. See also [`STA
 ## Build from source
 
 ```bash
-git clone https://github.com/Karim-Termanini/LuminaDev.git
-cd LuminaDev
+git clone https://github.com/Karim-Termanini/KeelDev.git
+cd KeelDev
 pnpm install
 pnpm smoke
 pnpm --filter desktop build:tauri
