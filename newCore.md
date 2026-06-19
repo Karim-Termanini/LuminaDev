@@ -506,6 +506,23 @@ To make this plan concrete, here is a step-by-step walkthrough of how a develope
 5. The user clicks **[Kill and Resolve]**.
 6. The process is terminated, the port is freed, and the server starts successfully without the user having to search Google or run command line tools like `lsof` or `kill`.
 
+### 🧠 Step 5: Hybrid AI Routing (Local vs. Cloud)
+1. The user wants to work with both local models (for simple/fast tasks) and state-of-the-art cloud models like `Claude 3.5 Sonnet` (for complex architecture questions) in VSCode without paying $20/month subscriptions.
+2. In KeelDev settings, the user enters their Anthropic API key once and downloads a lightweight local model (`Qwen-2.5-Coder-3B`) via Ollama.
+3. In VSCode (e.g. using the Continue or Cline extension), the user configures the API endpoint to point to KeelDev's proxy at `http://localhost:4317/v1` using the local token.
+4. **Scenario A (Inline Autocomplete - Local & Free):**
+   * As the user writes code, the IDE requests an inline completion.
+   * KeelDev's proxy intercepts the request, notes it is a lightweight completion request, and routes it to the local **Ollama** instance.
+   * The code is completed instantly, offline, and for zero token cost.
+5. **Scenario B (Complex System Design - Cloud & PAYG):**
+   * The user opens the chat panel and asks: *"How do I migrate our database tables to SQLite cleanly without losing current record relationships?"*
+   * VSCode sends the request to KeelDev.
+   * KeelDev queries the local **Knowledge Graph** to understand the DB schemas, compresses the context by 85% via **headroom**, and routes it to the cloud **Anthropic API**.
+   * The user receives a highly intelligent response from Claude 3.5 Sonnet, but because of headroom compression, the request only cost $0.01 instead of higher rates.
+6. **Scenario C (Offline Mode Fallback):**
+   * The user loses internet connectivity while traveling.
+   * KeelDev detects the offline state and automatically switches all requests (even those originally targeted at cloud models) to fallback to the local Ollama models so development never halts.
+
 ---
 
 ## Timeline & Phasing
