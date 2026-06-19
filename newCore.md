@@ -504,6 +504,8 @@ File Change Event
 
 ---
 
+---
+
 ## Component 7: Centralized Skill & Tool Registry (MCP Client)
 
 ### What It Does
