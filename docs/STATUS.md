@@ -56,7 +56,7 @@ Phases **0–17** shipped per `phasesPlan.md`.
 | Contracts | **57**, **70** | `ipc.ts` (**138** channel strings; **25** `dh:git:vcs:*`) + `ipcSchemaMap.ts` (**133/133** dispatcher Zod map) |
 | Bridge | **78** | `desktopApiBridge.ts` — all renderer IPC via `window.dh` ✅ |
 | Subprocess spine | **38**, **54** | `host_exec.rs` — `exec_output_limit` (82 edges), `cmd_timeout_short` (79) |
-| Profiles | **53** | Switch progress + background scaffold coupling |
+| Profiles | **53** | Switch progress + compose profile coupling (data-science **project** scaffold is on `/dashboard`, not Profiles) |
 | Git Assistant | **48**, **122** | Editor resolve, clone, `computeGitAssistantNextAction` |
 | Renderer bypass | — | **0** direct `invoke('ipc_invoke')` bypasses (P9/P12 ✅ 2026-06-02) |
 

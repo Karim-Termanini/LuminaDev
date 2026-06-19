@@ -135,6 +135,26 @@ pnpm typecheck && pnpm build && pnpm lint && pnpm test
 cd apps/desktop/src-tauri && cargo check && cargo test
 ```
 
+| 8 ESLint hook warnings (Git Assistant) | ⏸ **Open** | `react-hooks/exhaustive-deps` on epoch refs — non-blocking |
+
+### Closure vs `main` (PR #138)
+
+These items were **unfixed on `main`** at audit time and are **fixed on `doc/new-core-ai-plan`**:
+
+| Item | On `main` | On branch |
+| --- | --- | --- |
+| IPC **134/137** vs **138** | Stale in several docs | ✅ `SCHEMA_COVERAGE_ANALYSIS.md`, `CLAUDE.md`, `AUDIT.md` |
+| Routes **19** vs **20** | Missing `/system-readiness` | ✅ `ROUTE_STATUS.md`, `README.md` |
+| Git VCS **28** vs **25** | Stale | ✅ `SCHEMA_COVERAGE_ANALYSIS.md`, `CLAUDE.md` |
+| Rust **59** vs **62** `.rs` | Stale (59 = Phase 17 baseline) | ✅ Historical 59 noted; **62** current |
+| Vitest **62/66** vs **69** | Stale | ✅ **63** + **6** shared |
+| Terminal “line-buffered” | `STABILIZATION_CHECKLIST.md` | ✅ Real `portable_pty` documented |
+| “**24** bypasses” | Miscount in early audits | ✅ Retracted; **0** bypasses; `MASTER_PLAN.md` L26 explains |
+| README scaffold on Profiles | Wrong route | ✅ Dashboard row; Profiles says “no scaffolding” |
+| `blockedSharedDeps: []` hardcoded | Was empty stub | ✅ `runtime_remove.rs` calls `runtime_preview_blocked_shared_deps_for_runtime` |
+| First-call disk/net **0.0** | No prime sample | ✅ `METRICS_PRIME_MS` (300ms) in `monitor_handlers.rs` |
+| `pnpm build` / source–dist drift | Broken | ✅ P10 schemas restored + parity test |
+
 ---
 
 ## Deferred (not bugs)

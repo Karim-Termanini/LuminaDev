@@ -2,7 +2,7 @@
 
 > **Architectural notice:** KeelDev is a **Full Hosted** environment manager. It is explicitly **NOT isolated** and does not use strict sandboxing (like cgroups or Docker-based build isolation) by design.
 
-**Last updated:** 2026-06-19 (re-verification — Zod C1/M10 retractions; L1–L5 independent + §15 cross-ref)  
+**Last updated:** 2026-06-19 (re-verification + v3 closure table; inventory on `doc/new-core-ai-plan`)  
 **Primary pass:** 2026-05-28 (source-verified against `phasesPlan.md`, `CONTRIBUTING.md`, `README.md`)  
 **Secondary pass:** 2026-06-02 (full static analysis — Rust backend, renderer IPC, test coverage, doc cross-refs, security surface, dead code audit)  
 **Merged sources:** former `AUDIT_2026-05.md`, `docs/DOCS_AUDIT_2026-04.md`, `docs/PAGE_AUDIT.md` (all deleted after consolidation)
