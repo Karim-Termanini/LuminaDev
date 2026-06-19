@@ -173,6 +173,6 @@ These items were **unfixed on `main`** at audit time and are **fixed on `doc/new
 ```bash
 cd packages/shared && pnpm test   # build + ipcSchemaCoverage + source/dist parity
 cd apps/desktop/src-tauri && cargo test ipc_contract_tests -- --nocapture
-cd apps/desktop/src-tauri && cargo test compose_smoke git_vcs_smoke monitor_smoke ssh_smoke terminal_pty_smoke cloud_auth_smoke -- --nocapture
+cd apps/desktop/src-tauri && bash ../../../scripts/rust-domain-smoke.sh
 pnpm smoke
 ```

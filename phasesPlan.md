@@ -55,7 +55,7 @@ Progress notes (2026-05-01):
   - runtime version token edge-cases (`keel_*` helpers)
   - Docker prune preview response contract shape/types via `docker_prune_preview_payload(...)`
 - Added `.github/workflows/smoke-tests.yml` for dedicated Rust smoke/job-runner coverage.
-- **2026-06-19 (L6):** Domain integration smoke in `apps/desktop/src-tauri/tests/` — `compose_smoke`, `git_vcs_smoke`, `monitor_smoke`, `ssh_smoke`, `terminal_pty_smoke`, `cloud_auth_smoke` (+ shared `tests/common/`). CI runs via `cargo test compose_smoke git_vcs_smoke … -- --nocapture`. Docker-dependent and PTY tests skip gracefully when daemon/`/dev/ptmx` unavailable.
+- **2026-06-19 (L6):** Domain integration smoke in `apps/desktop/src-tauri/tests/` — `compose_smoke`, `git_vcs_smoke`, `monitor_smoke`, `ssh_smoke`, `terminal_pty_smoke`, `cloud_auth_smoke` (+ shared `tests/common/`). CI runs via `bash scripts/rust-domain-smoke.sh` (`cargo test --test …` per crate). Docker-dependent and PTY tests skip gracefully when daemon/`/dev/ptmx` unavailable.
 
 ### Day 5 — Deep Audit: Critical Paths
 

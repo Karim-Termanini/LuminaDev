@@ -96,7 +96,7 @@ jobs:
         working-directory: apps/desktop/src-tauri
         run: |
           cargo test --test docker_smoke -- --nocapture
-          cargo test compose_smoke git_vcs_smoke monitor_smoke ssh_smoke terminal_pty_smoke cloud_auth_smoke -- --nocapture
+          bash ../../../scripts/rust-domain-smoke.sh
           cargo test job_runner -- --nocapture
       - name: Build frontend bundle
         run: pnpm --filter desktop build:web
