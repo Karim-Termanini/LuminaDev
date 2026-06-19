@@ -136,6 +136,7 @@ KeelDev transforms from a dashboard into **"The Unified AI Developer Control Pla
 - Updates automatically as you change code
 - Provides context to AI without reading entire files every time
 - Works across all IDEs because it's system-level
+- Automatically generates and keeps `AGENTS.md` in sync at the project root
 
 ### How It Works (No Code)
 1. **Background Indexing:** KeelDev watches your project folders using filesystem events
@@ -144,7 +145,8 @@ KeelDev transforms from a dashboard into **"The Unified AI Developer Control Pla
 4. **Graph Storage:** All relationships stored as a graph in memory (Rust's `petgraph`)
 5. **Query Interface:** When AI asks about code, it queries the graph instead of reading files
 6. **Auto-Sync:** On file save, the graph updates incrementally (not full rebuild)
-7. **Persistence:** Graph stored in `~/.keel/graphs/<project_hash>.json`
+7. **AGENTS.md Exporter:** Periodically compiles the high-level codebase map, test conventions, and coding rules into a root `AGENTS.md` file so external agents (Cursor, Claude Code) read it automatically on project launch
+8. **Persistence:** Graph stored in `~/.keel/graphs/<project_hash>.json`
 
 ### What We Use
 - **`graphify`** (Python): Called via subprocess to parse code files and generate AST structure maps.
@@ -516,11 +518,13 @@ To make this plan concrete, here is a step-by-step walkthrough of how a develope
    * It calls the PM skills pack from **`pm-skills`** in the background to automatically design a starter database schema and write a skeleton PRD (Product Requirement Document).
    * It scaffolds a clean React + Node.js starter project using **`odysseus`** templates, initializes a local Git repository, and commits the initial project state.
    * It runs the indexer script from **`graphify`** in the background to build the initial Knowledge Graph mapping file dependencies and symbols.
+   * It automatically generates the `AGENTS.md` file in the project root containing the project conventions and AST structure map.
    * It displays a prominent button: **[Open Project in Cursor / VS Code]**.
 
 ### 💻 Step 2: Coding & Token/Credit Optimization (The AI Proxy & Compression)
 1. The user clicks the button, opening the project in their favorite IDE (e.g., Cursor).
-2. The IDE is pre-configured to point to the local KeelDev proxy (`http://localhost:4317`) instead of the default OpenAI servers, secured by a unique local API token (using **`system_prompts_leaks`** security patterns) to block malicious web browser attacks.
+2. The IDE (Cursor/Claude Code) automatically reads the generated `AGENTS.md` file from the root, immediately understanding the project layout and coding conventions without manual prompt explanations.
+3. The IDE is pre-configured to point to the local KeelDev proxy (`http://localhost:4317`) instead of the default OpenAI servers, secured by a unique local API token (using **`system_prompts_leaks`** security patterns) to block malicious web browser attacks.
 3. The user prompts the IDE's AI:
    > *"Create an expense input page and connect it to the Backend."*
 4. **In the background (sub-second processing):**
