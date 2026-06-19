@@ -30,6 +30,9 @@ jobs:
       - name: Rust Docker smoke tests
         working-directory: apps/desktop/src-tauri
         run: cargo test --test docker_smoke -- --nocapture
+      - name: Rust domain integration smoke tests
+        working-directory: apps/desktop/src-tauri
+        run: cargo test compose_smoke git_vcs_smoke monitor_smoke ssh_smoke terminal_pty_smoke cloud_auth_smoke -- --nocapture
       - name: Rust Job Runner tests
         working-directory: apps/desktop/src-tauri
         run: cargo test job_runner -- --nocapture

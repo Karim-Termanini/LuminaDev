@@ -220,12 +220,7 @@ git commit -m "docs: update planning and audit documentation to reflect current 
 
 ### Q: Is the schema gap (80 channels without explicit Zod) a problem?
 
-**A:** No. Analysis shows:
-- 54 documented schemas cover all high-complexity, high-risk channels
-- Remaining 80 are either no-param calls, generic payloads, or event listeners
-- Rust guard (ipc_contract_tests.rs) ensures channel name alignment
-- Full coverage would improve IDE autocomplete but isn't blocking
-- Deferred to Phase 19 as medium-priority improvement
+**No — retracted.** Dispatcher coverage is **133/133** in `packages/shared/src/ipcSchemaMap.ts`, guarded by `ipcSchemaCoverage.test.ts`. The original gap count ignored the canonical map, alias schemas, and `EmptyRequestSchema` for no-payload channels. See [`docs/CORRECTED_AUDIT_REPORT.md`](docs/CORRECTED_AUDIT_REPORT.md).
 
 ### Q: Should RuntimesPage.tsx be split before merging?
 

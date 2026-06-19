@@ -2,14 +2,14 @@
 
 > **Architectural notice:** KeelDev is a **Full Hosted** environment manager. It is explicitly **NOT isolated** and does not use strict sandboxing (like cgroups or Docker-based build isolation) by design.
 
-**Last updated:** 2026-06-02 (recheck pass — working tree + §15 closure verification)  
+**Last updated:** 2026-06-19 (re-verification — Zod C1/M10 retractions; L1–L5 independent + §15 cross-ref)  
 **Primary pass:** 2026-05-28 (source-verified against `phasesPlan.md`, `CONTRIBUTING.md`, `README.md`)  
 **Secondary pass:** 2026-06-02 (full static analysis — Rust backend, renderer IPC, test coverage, doc cross-refs, security surface, dead code audit)  
 **Merged sources:** former `AUDIT_2026-05.md`, `docs/DOCS_AUDIT_2026-04.md`, `docs/PAGE_AUDIT.md` (all deleted after consolidation)
 
 **Methodology:** Claims cross-checked by reading Rust modules, renderer pages, i18n locales, routing, IPC dispatch, and referenced docs. Line counts and module inventories verified against filesystem.
 
-**Planning context:** Active backlog → [`MASTER_PLAN.md`](./MASTER_PLAN.md). Phase history → [`phasesPlan.md`](../phasesPlan.md). Route truth → [`ROUTE_STATUS.md`](./ROUTE_STATUS.md).
+**Planning context:** Active backlog → [`MASTER_PLAN.md`](./MASTER_PLAN.md). Phase history → [`phasesPlan.md`](../phasesPlan.md). Route truth → [`ROUTE_STATUS.md`](./ROUTE_STATUS.md). Independent re-verification retractions → [`CORRECTED_AUDIT_REPORT.md`](./CORRECTED_AUDIT_REPORT.md).
 
 ---
 
@@ -19,7 +19,7 @@
 | --- | --- | --- | --- |
 | ✅ VERIFIED FIXED / RESOLVED | 56+ | 56+ | **72+** (all §15 findings closed) |
 | ⚠️ PARTIALLY FIXED | 2 | 0 | 0 |
-| ❌ STILL OPEN | 4 | **7** | **2** (AppImage E2E; P10 Zod payload gaps) |
+| ❌ STILL OPEN | 4 | **7** | **1** (AppImage E2E on clean VM) |
 | 🆕 NEW FINDINGS (that pass) | 9 | 9 | 9 (carried forward) |
 | 🆕 NEW FINDINGS (2026-06-02) | — | **15** | 15 (see §15 — all resolved) |
 | ✅ CLOSED from §15 (2026-06-02) | — | **16** | **22** (C1 + H1–H5 + M1–M4 + L1–L4 + doc cleanup sweep) |
@@ -29,13 +29,13 @@
 | Priority | Item | Status |
 | --- | --- | --- |
 | P0 | AppImage release pipeline E2E on clean VM | ❓ Unverified — not attempted yet |
-| P3 | IPC payload channels without Zod `*RequestSchema` in `packages/shared` | 🔄 Reduced — **~70** schemas / **137** channels; P10.1 inventories payload gaps |
+| P3 | IPC payload channels without Zod `*RequestSchema` in `packages/shared` | ✅ Closed 2026-06-19 — **138** `IPC` channel strings; **133/133** dispatcher Zod map (`ipcSchemaMap.ts`); see [`SCHEMA_COVERAGE_ANALYSIS.md`](./SCHEMA_COVERAGE_ANALYSIS.md) |
 | P3 | Split `RuntimesPage.tsx` into `pages/runtimes/` components | ✅ Fixed 2026-06-02 — 1947 → 88-line orchestrator + 5 modules |
 | P7 | Theme picker (dark / light / high-contrast) | ✅ Fixed 2026-06-02 — Settings → Personalization + `appearance` store |
 | P7 | Cloud Git notification inbox (TopBar) | ✅ Fixed 2026-06-02 — `dh:cloud:git:inbox`, poll 60s + focus |
 | — | Cloud Git in-app PR merge | ❌ Removed from scope permanently |
 | P3 | CI `integration-and-e2e-lite` calls removed `pnpm test:integration` | ✅ Fixed — runs `pnpm test:roundtrip` |
-| P3 | 24 direct `invoke('ipc_invoke', …)` calls bypassing `desktopApiBridge.ts` | ✅ Fixed 2026-06-02 — 0 renderer bypasses |
+| P3 | Renderer `invoke('ipc_invoke', …)` bypassing `desktopApiBridge.ts` | ✅ **0** remain — P12 fixed **1** in `SettingsUpdate.tsx` (2026-06-02). Retracted first-pass claim of **24** (miscounted `window.dh.*` + `listen()`); canonical write-up: [`IMPLEMENTATION_SUMMARY_P11_P13.md`](./IMPLEMENTATION_SUMMARY_P11_P13.md) §P12 |
 | P2 | Git VCS polish / simple mode | ✅ Fixed 2026-06-02 — stash persistence, untracked diff, spinner, dead code |
 
 **All §15 findings (C1, H1–H5, M1–M4, L1–L4) are confirmed ✅ FIXED.** See §15 for details. P3 rows are architectural backlog from the 2026-06-02 independent audit — explicitly out of scope for the 14-item doc/code sweep.
@@ -58,11 +58,11 @@
 | Total lines | 691 | **706** |
 | Non-test dispatcher | 308 | ~268 (lines 78–265) |
 | ipc_invoke arms | 52 | **~75 channel strings** (some `\|`-grouped) |
-| Domain modules | 14 | **36 `mod` declarations** → **59 `.rs` files** (`cloud_auth/` 8, `cloud_git_ipc/` 4, `project_scaffold/` **12** = 6 root + 6 `templates/`) |
+| Domain modules | 14 | **36 `mod` declarations** → **62 `.rs` files** under `src-tauri/src/` (**59** at Phase 17 + `ipc_contract_tests.rs` + `runtime_prune_contract_tests.rs` + `integration_test_support.rs`) |
 
 Dispatcher clean: zero inline business logic; all arms are one-line delegations. ✅
 
-**Module inventory (36 domain mods, 59 `.rs` source files):**
+**Module inventory (36 domain mods, 62 `.rs` source files):**
 - Flat (33): `state.rs`, `utils.rs`, `host_exec.rs`, `runtime_packages.rs`, `runtime_versioning.rs`, `runtime_paths.rs`, `runtime_discover.rs`, `runtime_verify.rs`, `runtime_install.rs`, `runtime_jobs.rs`, `runtime_remove.rs`, `runtime_logs.rs`, `compose_engine.rs`, `compose_ports.rs`, `compose_profiles.rs`, `docker_api.rs`, `docker_engine.rs`, `docker_ext.rs`, `executor.rs`, `git_doctor.rs`, `git_vcs_file_diff.rs`, `git_vcs_ipc.rs`, `git_vcs_network.rs`, `git_vcs_repo_state.rs`, `profile_credentials.rs`, `profile_engine.rs`, `readiness.rs`, `readiness_ipc.rs`, `store_engine.rs`, `system_info.rs`, `monitor_handlers.rs`, `ssh_handlers.rs`, `terminal_pty.rs`
 - Directory modules: `cloud_auth/` (8 files), `cloud_git_ipc/` (4 files), `project_scaffold/` (**12 files**: `mod.rs`, `deps_install.rs`, `editor_configs.rs`, `ports.rs`, `r_packages.rs`, `tests.rs`, `templates/mod.rs` + 5 template modules)
 - Plus `lib.rs` (706 lines) and test-only: `ipc_contract_tests.rs`, `runtime_prune_contract_tests.rs`
@@ -118,6 +118,7 @@ All `ipc_invoke` arms delegate to domain modules. Zero business logic inline. Ke
 | Dashboard 9 preset cards | ✅ Confirmed |
 | Dashboard widgets page | 🚫 REMOVED 2026-05-29 |
 | `removableDeps` empty stub | ✅ Real dry-run |
+| `blockedSharedDeps` hardcoded `[]` | ✅ Installed deps minus autoremove candidates (2026-06-19) |
 | OAuth client ID placeholders | ✅ Configurable via store |
 | Per-container stats | ✅ Shipped Docker page 2026-05-29 |
 
@@ -125,9 +126,7 @@ All `ipc_invoke` arms delegate to domain modules. Zero business logic inline. Ke
 
 ## 7. Routing — ✅ VERIFIED
 
-19 routes in `App.tsx`. Legacy `/git-config`, `/git-vcs`, `/cloud-git`, `/registry` redirect to `/git?tab=*`. `/dashboard/widgets` route **deleted** 2026-05-29.
-
-`ROUTE_STATUS.md` updated: `/git` primary; old git routes marked `redirect`.
+**20** `<Route>` declarations in `App.tsx` (includes `/`, nested dashboard routes, legacy redirects, and `/system-readiness`). Legacy `/git-config`, `/git-vcs`, `/cloud-git`, `/registry` redirect to `/git`. `/dashboard/widgets` route **deleted** 2026-05-29. Full matrix: [`ROUTE_STATUS.md`](./ROUTE_STATUS.md).
 
 ---
 
@@ -202,7 +201,7 @@ Remaining release blocker: **AppImage E2E verification on clean VM** (see [`MAST
 | AUDIT.md §2.1 lib.rs + cloud_auth counts | ✅ Fixed | 706 lines, 8 cloud_auth files |
 | README `/runtimes` “17 language toolchains” | ❌ **FALSE** | Code has **7** (H4) |
 | README `/git` “Config, VCS (Smart-Flow), Cloud Git” | ❌ **FALSE** | Git Assistant single-page UX (H5); see `ROUTE_STATUS.md` |
-| README “~37 domain modules” | ✅ Fixed 2026-06-02 | README: **36 `mod` declarations**, 59 `.rs` files |
+| README “~37 domain modules” | ✅ Fixed 2026-06-02 | README: **36 `mod` declarations**, **62** `.rs` files (59 at Phase 17 + 3 test/support modules) |
 | CONTRIBUTING.md claims | ✅ Accurate | |
 | Referenced docs exist | ✅ Verified | |
 
@@ -220,7 +219,7 @@ Historical docs audit (2026-04): see **Appendix A**.
 | P0 | AppImage E2E on clean VM | ❓ Open — not attempted in repo |
 | P0 | README `/runtimes` + `/git` false feature claims | ✅ Fixed — README lists 7 toolchains + Git Assistant |
 | P1 | `runtime_jobs.rs:285` — `lts.as_str().unwrap()` panic risk | ✅ Fixed 2026-06-02 |
-| P1 | Fix stale doc numbers (MASTER_PLAN.md, phasesPlan.md, README, AUDIT.md) | ✅ README + MASTER_PLAN aligned; **ROUTE_STATUS `/terminal`** still says line-buffered (code uses PTY) |
+| P1 | Fix stale doc numbers (MASTER_PLAN.md, phasesPlan.md, README, AUDIT.md) | ✅ README + MASTER_PLAN aligned; terminal PTY docs corrected (was line-buffered stub claim) |
 | P1 | Remove dead `enable_ai_commit_suggestions` beta flag | ✅ Fixed 2026-06-02 |
 | P1 | `system_info.rs` `startup_update_check()` — `unwrap()` on corrupted `store.json` | ✅ Fixed — uses `as_object_mut()` / `get_mut()` guards; no panic path |
 | P1 | Add Zod schemas for `CloudCiCheck`, `CloudPrDetails`, `CloudGitGetPrChecksRequest` | ✅ Fixed 2026-06-02 |
@@ -292,14 +291,29 @@ Findings from full static analysis: Rust backend security/correctness, renderer 
 | All Rust modules in `lib.rs` exist on disk | ✅ | 39 `mod` declarations, 39 matching files/dirs |
 | Zero `@ts-ignore` / `@ts-expect-error` in renderer | ✅ | Entire TypeScript codebase |
 | Zero `TODO`/`FIXME`/`HACK`/`XXX` in TypeScript | ✅ | |
-| 9 docker-compose profiles are real (not stubs) | ✅ | All have valid `docker-compose.yml` with services |
+| 9 docker-compose preset dirs | ✅ | **7** real base stacks; **game-dev** partial; **empty** no services; see [`STATUS.md`](./STATUS.md) |
 | 14 Settings tabs confirmed | ✅ | `SettingsShell.tsx` — 14 `SettingsNavId` members |
 | No `.env` files with secrets | ✅ | Glob search returns no results |
 | OAuth client IDs are public-by-design | ✅ | `cloud_auth/helpers.rs:5-6` — configurable via env vars |
-| 62 test files, 0 stubs, 0 dead imports | ✅ | Recheck: dead page imports removed; new contract roundtrip tests added |
+| **68** Vitest files (**63** `apps/desktop` + **5** `packages/shared/test`), 0 stubs, 0 dead imports | ✅ | `find apps/desktop packages/shared/test \\( -name '*.test.ts' -o -name '*.test.tsx' \\)` |
 | `compose_profiles.rs` resolution logic | ✅ | Env → repo walk → bundle fallback; full overlay support |
 | `KEEL_DEV_COMPOSE_FULL` overlay | ✅ | `1`/`true`/`yes` env var or profile store `composeVariant` field |
 | 3 i18n locales, 14 namespaces each | ✅ | 42 translation files total |
+| Monitor security ssh/journal probes via `bash -c` | ✅ | `monitor_handlers.rs:70,90` — pipelines for `sshd -T` + `journalctl` only; other probes use direct `Command` (independent **L2**) |
+| Rust domain integration smoke (`tests/*_smoke.rs`) | ✅ | Compose, Git VCS, Monitor, SSH, Terminal PTY, Cloud auth + `docker_smoke.rs` — `ci.yml`, `smoke-tests.yml` (independent **L4**) |
+| Production `unwrap()` / `expect()` (4 calls) | ✅ | 2× template `to_string_pretty` on hardcoded JSON; `lib.rs` `build().expect`; `profile_credentials.rs` `app_data_dir().expect` — benign (independent **L3**) |
+| `ComposeProfile` single source (`composeProfiles.ts`) | ✅ | `COMPOSE_PROFILES` tuple drives Zod + TS; no duplicate union in `ipc.ts` (independent **L5**) |
+| Zod dispatcher map (P10) | **133/133** | `ipcSchemaCoverage.test.ts` + [`CORRECTED_AUDIT_REPORT.md`](./CORRECTED_AUDIT_REPORT.md) |
+| Raw `invoke('ipc_invoke')` in renderer | ✅ | **0** bypasses; P12 fixed **1** (`SettingsUpdate.tsx`); **24** first-pass count retracted (see `IMPLEMENTATION_SUMMARY_P11_P13.md` §P12) |
+| Terminal PTY (M1) | ✅ | `terminal_pty.rs` + `portable_pty` 0.8 — not line-buffered; `STABILIZATION_CHECKLIST.md` L200 |
+| IPC channel count (M2) | ✅ | **138** in `ipc.ts` — not 134/137; `ipcSchemaCoverage.test.ts` |
+| Route count (M3) | ✅ | **20** `<Route>` in `App.tsx`; `/` + `/system-readiness` in [`ROUTE_STATUS.md`](./ROUTE_STATUS.md) |
+| Git VCS channels (M4) | ✅ | **25** `dh:git:vcs:*`; **16** UI-active in `pages/`; **9** legacy (contract tests) |
+| Rust `.rs` count (M5) | ✅ | **62** under `src-tauri/src` (59 Phase 17 + 3 test/support modules) |
+| Vitest file count (M6) | ✅ | **68** total (**63** desktop + **5** shared) |
+| Schema metrics (M7) | ✅ | **133/133** authoritative; see [`SCHEMA_COVERAGE_ANALYSIS.md`](./SCHEMA_COVERAGE_ANALYSIS.md) — retired 54/70/137 |
+| Data-science scaffold route (M8) | ✅ | `dataScienceCreateWizard.ts` on `/dashboard` only; Profiles has no scaffold UI — `README.md`, `ROUTE_STATUS.md` |
+| Monitor first-call disk/net (M9) | ✅ | `METRICS_PRIME_MS` 300ms prime in `monitor_handlers.rs`; `metrics_tests`; checklist no longer says "always 0" |
 | Conventional Commits throughout git history | ✅ | |
 
 ---
@@ -388,8 +402,7 @@ Use during manual QA on a real Tauri build. Legend: `[x]` verified, `[!]` was br
 
 ### Terminal (`/terminal`)
 
-- [ ] Shell prompt, input, resize
-- [-] Line-buffered (no full PTY for vim) — known limit
+- [ ] Shell prompt, input, resize; interactive apps via real PTY (`portable_pty`)
 
 ### Runtimes (`/runtimes`)
 

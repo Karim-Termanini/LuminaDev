@@ -1,4 +1,7 @@
 import { z } from 'zod'
+import { ComposeProfileSchema } from './composeProfiles.js'
+
+export { COMPOSE_PROFILES, ComposeProfileSchema, type ComposeProfile } from './composeProfiles.js'
 
 export const DockerActionSchema = z.enum(['start', 'stop', 'restart', 'remove'])
 export const DockerImageActionSchema = z.enum(['remove'])
@@ -124,18 +127,6 @@ export const HostExecRequestSchema = z.object({
   key: z.string().trim().min(1).max(256).optional(),
   value: z.string().max(8192).optional(),
 })
-
-export const ComposeProfileSchema = z.enum([
-  'web-dev',
-  'data-science',
-  'ai-ml',
-  'mobile',
-  'game-dev',
-  'infra',
-  'desktop-gui',
-  'docs',
-  'empty',
-])
 
 /** Per-profile environment variable. */
 export const ProfileEnvVarSchema = z.object({
@@ -737,7 +728,6 @@ export type DockerImageAction = z.infer<typeof DockerImageActionSchema>
 export type DockerVolumeAction = z.infer<typeof DockerVolumeActionSchema>
 export type DockerNetworkAction = z.infer<typeof DockerNetworkActionSchema>
 export type DockerErrorCode = z.infer<typeof DockerErrorCodeSchema>
-export type ComposeProfile = z.infer<typeof ComposeProfileSchema>
 export type CustomProfileEntry = z.infer<typeof CustomProfileEntrySchema>
 export type MaintenanceTask = z.infer<typeof MaintenanceTaskSchema>
 export type MaintenanceProfileHealth = z.infer<typeof MaintenanceProfileHealthSchema>
@@ -1023,3 +1013,64 @@ export const CloudGitMergePrRequestSchema = z.object({
   reference: z.string().min(1).max(256).optional(),
 })
 export type CloudGitMergePrRequest = z.infer<typeof CloudGitMergePrRequestSchema>
+
+/** Invoke channels that accept `{}` or omit payload entirely. */
+export const EmptyRequestSchema = z.object({}).strict()
+
+export const DockerCleanupRunRequestSchema = z.object({
+  containers: z.boolean().optional(),
+  images: z.boolean().optional(),
+  volumes: z.boolean().optional(),
+  networks: z.boolean().optional(),
+})
+export type DockerCleanupRunRequest = z.infer<typeof DockerCleanupRunRequestSchema>
+
+export const DockerInstallComponentSchema = z.enum(['docker', 'compose', 'buildx'])
+
+export const DockerInstallRequestSchema = z.object({
+  distro: z.enum(['ubuntu', 'fedora', 'arch']),
+  components: z.array(DockerInstallComponentSchema).optional(),
+})
+export type DockerInstallRequest = z.infer<typeof DockerInstallRequestSchema>
+
+export const DiagnosticsBundleCreateRequestSchema = z.object({
+  includeSensitive: z.boolean().optional(),
+  report: z.record(z.string(), z.unknown()).optional(),
+})
+export type DiagnosticsBundleCreateRequest = z.infer<typeof DiagnosticsBundleCreateRequestSchema>
+
+export const FsOpenRequestSchema = FsExistsRequestSchema
+export type FsOpenRequest = z.infer<typeof FsOpenRequestSchema>
+
+export const SystemReadinessFixRequestSchema = z.object({
+  id: z.string().min(1).max(128),
+})
+export type SystemReadinessFixRequest = z.infer<typeof SystemReadinessFixRequestSchema>
+
+export const RuntimeInstalledVersionsRequestSchema = z.object({
+  runtimeId: z.string().min(1).max(64),
+})
+export type RuntimeInstalledVersionsRequest = z.infer<
+  typeof RuntimeInstalledVersionsRequestSchema
+>
+
+export const RuntimeRemoveVersionRequestSchema = z.object({
+  runtimeId: z.string().min(1).max(64),
+  version: z.string().max(128).optional(),
+  path: z.string().min(1).max(4096),
+})
+export type RuntimeRemoveVersionRequest = z.infer<typeof RuntimeRemoveVersionRequestSchema>
+
+export const TerminalCloseRequestSchema = z.object({
+  id: z.string().min(1).max(128),
+})
+export type TerminalCloseRequest = z.infer<typeof TerminalCloseRequestSchema>
+
+export const ProfileCredentialsGetRequestSchema = ProfileCredentialsIdRequestSchema
+export type ProfileCredentialsGetRequest = z.infer<typeof ProfileCredentialsGetRequestSchema>
+
+export const GitVcsStatusRequestSchema = GitVcsRepoPathSchema
+export type GitVcsStatusRequest = z.infer<typeof GitVcsStatusRequestSchema>
+
+export const GitVcsConflictHunksRequestSchema = GitVcsConflictDiffRequestSchema
+export type GitVcsConflictHunksRequest = z.infer<typeof GitVcsConflictHunksRequestSchema>

@@ -170,7 +170,7 @@ Never call `.unwrap()` on `Option` values that depend on prior setup configurati
 
 Audit findings about dead code, missing files, or bypass counts can be stale.
 
-- **Example:** Audit claimed 24 raw `invoke('ipc_invoke')` bypass calls — grep found zero. Bridge was already migrated.
+- **Example:** Audit claimed **24** raw `invoke('ipc_invoke')` bypasses — grep found **1** (`SettingsUpdate.tsx`, since fixed); **0** remain. The 24 count wrongly included `window.dh.*` and `listen()`.
 - **Rule:** Grep + import analysis before deleting files or refactoring based on audit reports.
 
 ---

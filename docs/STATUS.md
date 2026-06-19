@@ -42,10 +42,10 @@ Phases **0–17** shipped per `phasesPlan.md`.
 **Still partial / open** ([`ROUTE_STATUS.md`](./ROUTE_STATUS.md), [`MASTER_PLAN.md`](./MASTER_PLAN.md) §9, §17):
 
 - AppImage E2E on clean VM (Tauri **Stage 4** packaging — distinct from product **Phase 5** Monitor, which shipped)
-- **Phase 18 — IPC boundary hardening:** P9/P12 bridge ✅ (0 renderer bypasses); P10 Zod (~70/137 channels); P19 RuntimesPage split ✅
+- **Phase 18 — IPC boundary hardening:** P9/P12 bridge ✅ (**0** raw `ipc_invoke` bypasses); P10 Zod ✅ (**133/133** dispatcher map); P19 RuntimesPage split ✅
 - **AI Core AC0–AC7 (forward):** Subprocess tools in `~/Documents/GitHub/` siblings. **Stay/delete/transform:** [`MASTER_PLAN.md`](./MASTER_PLAN.md) §19.
-- **Tests:** contract + `test:roundtrip` + `test:e2e`; CI `unit-roundtrip-contracts` (P11 ✅)
-- **Compose stacks:** 9 preset dirs; only `web-dev` has `docker-compose.full.yml` — other presets default to Alpine stub unless `KEEL_DEV_COMPOSE_FULL` + full file exist
+- **Tests:** contract + `test:roundtrip` + `test:e2e` + Rust `tests/*_smoke.rs` (compose, git, monitor, ssh, pty, cloud auth); CI `unit-roundtrip-contracts` + domain smoke (P11 ✅)
+- **Compose stacks:** 9 preset dirs under `docker/compose/` — **7** real base stacks (`web-dev`, `data-science`, `ai-ml`, `mobile`, `infra`, `desktop-gui`, `docs`); **game-dev** partial (redis + stub `game-server`); **empty** intentional `services: {}`. Only **web-dev** has optional `docker-compose.full.yml` (`LUMINA_DEV_COMPOSE_FULL`).
 
 ## Architecture snapshot (graphify @ `fc9c8fa`)
 
@@ -53,7 +53,7 @@ Phases **0–17** shipped per `phasesPlan.md`.
 | --- | --- | --- |
 | Dispatcher | **59** | `lib.rs` → `ipc_invoke` — thin router ✅ (~706 lines) |
 | Channel parity | **132** | `ipc_contract_tests.rs` — `ipc.ts` channels ⊆ `lib.rs` arms |
-| Contracts | **57**, **70** | `ipc.ts` (137 channels) + `schemas.ts` (~70 `RequestSchema`) |
+| Contracts | **57**, **70** | `ipc.ts` (**138** channel strings; **25** `dh:git:vcs:*`) + `ipcSchemaMap.ts` (**133/133** dispatcher Zod map) |
 | Bridge | **78** | `desktopApiBridge.ts` — all renderer IPC via `window.dh` ✅ |
 | Subprocess spine | **38**, **54** | `host_exec.rs` — `exec_output_limit` (82 edges), `cmd_timeout_short` (79) |
 | Profiles | **53** | Switch progress + background scaffold coupling |

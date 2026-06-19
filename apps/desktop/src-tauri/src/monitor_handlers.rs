@@ -188,6 +188,114 @@ pub(crate) async fn handle_monitor_security_drilldown() -> Value {
 // Metrics (dh:metrics)
 // ---------------------------------------------------------------------------
 
+/// Short wait on first metrics call so delta-based rates have a baseline sample.
+const METRICS_PRIME_MS: u64 = 300;
+
+struct CpuSample {
+    total: u64,
+    idle: u64,
+}
+
+struct NetSample {
+    rx: u64,
+    tx: u64,
+}
+
+struct DiskSample {
+    read_sectors: u64,
+    write_sectors: u64,
+}
+
+fn cpu_usage_percent(prev: &CpuSample, now: &CpuSample) -> f64 {
+    let delta_total = now.total.saturating_sub(prev.total);
+    let delta_idle = now.idle.saturating_sub(prev.idle);
+    if delta_total == 0 {
+        return 0.0;
+    }
+    ((1.0 - delta_idle as f64 / delta_total as f64) * 100.0).clamp(0.0, 100.0)
+}
+
+fn net_rates_mbps(prev: &NetSample, now: &NetSample, secs: f64) -> (f64, f64) {
+    let secs = secs.max(0.1);
+    let rx = (now.rx.saturating_sub(prev.rx) as f64 / secs / 1_000_000.0 * 8.0).max(0.0);
+    let tx = (now.tx.saturating_sub(prev.tx) as f64 / secs / 1_000_000.0 * 8.0).max(0.0);
+    (rx, tx)
+}
+
+fn disk_rates_mbps(prev: &DiskSample, now: &DiskSample, secs: f64) -> (f64, f64) {
+    let secs = secs.max(0.1);
+    let read = (now
+        .read_sectors
+        .saturating_sub(prev.read_sectors) as f64
+        * 512.0
+        / secs
+        / 1_000_000.0)
+        .max(0.0);
+    let write = (now
+        .write_sectors
+        .saturating_sub(prev.write_sectors) as f64
+        * 512.0
+        / secs
+        / 1_000_000.0)
+        .max(0.0);
+    (read, write)
+}
+
+async fn sample_cpu() -> CpuSample {
+    let stat_raw = read_proc_text("/proc/stat").await;
+    let first_line = stat_raw.lines().next().unwrap_or("");
+    let parts: Vec<u64> = first_line
+        .split_whitespace()
+        .skip(1)
+        .filter_map(|v| v.parse::<u64>().ok())
+        .collect();
+    let total: u64 = parts.iter().sum();
+    let idle = parts.get(3).copied().unwrap_or(0) + parts.get(4).copied().unwrap_or(0);
+    CpuSample { total, idle }
+}
+
+async fn sample_net() -> NetSample {
+    let net_raw = read_proc_text("/proc/net/dev").await;
+    let (rx, tx) = net_raw.lines().skip(2).fold((0u64, 0u64), |acc, l| {
+        let parts: Vec<&str> = l.split_whitespace().collect();
+        if parts.len() < 10 || parts[0].starts_with("lo:") {
+            return acc;
+        }
+        let rx = parts[1].parse::<u64>().unwrap_or(0);
+        let tx = parts[9].parse::<u64>().unwrap_or(0);
+        (acc.0 + rx, acc.1 + tx)
+    });
+    NetSample { rx, tx }
+}
+
+async fn sample_disk() -> DiskSample {
+    let disk_raw = read_proc_text("/proc/diskstats").await;
+    let (read_sectors, write_sectors) = disk_raw.lines().fold((0u64, 0u64), |acc, l| {
+        let p: Vec<&str> = l.split_whitespace().collect();
+        let name = p.get(2).copied().unwrap_or("");
+        if !is_physical_disk_name(name) {
+            return acc;
+        }
+        let r = p.get(5).and_then(|v| v.parse::<u64>().ok()).unwrap_or(0);
+        let w = p.get(9).and_then(|v| v.parse::<u64>().ok()).unwrap_or(0);
+        (acc.0 + r, acc.1 + w)
+    });
+    DiskSample {
+        read_sectors,
+        write_sectors,
+    }
+}
+
+async fn cpu_model_name() -> String {
+    let cpuinfo = read_proc_text("/proc/cpuinfo").await;
+    cpuinfo
+        .lines()
+        .find(|l| l.starts_with("model name"))
+        .and_then(|l| l.split_once(':').map(|x| x.1))
+        .map(|s| s.trim().to_string())
+        .unwrap_or_else(|| "Unknown CPU".to_string())
+}
+
 pub(crate) async fn handle_metrics(state: &AppState) -> Value {
     let meminfo = read_proc_text("/proc/meminfo").await;
     let parse_kb = |key: &str| -> u64 {
@@ -214,42 +322,113 @@ pub(crate) async fn handle_metrics(state: &AppState) -> Value {
         .take(3)
         .filter_map(|v| v.parse::<f64>().ok())
         .collect();
-    let (cpu_percent, cpu_model) = {
-        let stat_raw = read_proc_text("/proc/stat").await;
-        let first_line = stat_raw.lines().next().unwrap_or("");
-        let parts: Vec<u64> = first_line
-            .split_whitespace()
-            .skip(1)
-            .filter_map(|v| v.parse::<u64>().ok())
-            .collect();
-        let total: u64 = parts.iter().sum();
-        let idle = parts.get(3).copied().unwrap_or(0) + parts.get(4).copied().unwrap_or(0); // idle + iowait
+    let (cpu_percent, cpu_model, net_rx_mbps, net_tx_mbps, disk_read_mbps, disk_write_mbps) = {
+        let cpu_now = sample_cpu().await;
+        let net_now = sample_net().await;
+        let disk_now = sample_disk().await;
+        let cpu_model = cpu_model_name().await;
         let now_inst = std::time::Instant::now();
 
-        let mut prev = state.cpu_prev.lock().await;
-        let pct = if let Some((ptotal, pidle, _)) = *prev {
-            let delta_total = total.saturating_sub(ptotal);
-            let delta_idle = idle.saturating_sub(pidle);
-            if delta_total > 0 {
-                let usage = 1.0 - (delta_idle as f64 / delta_total as f64);
-                (usage * 100.0).clamp(0.0, 100.0)
-            } else {
-                0.0
-            }
+        let mut cpu_prev = state.cpu_prev.lock().await;
+        let mut net_prev = state.net_prev.lock().await;
+        let mut disk_prev = state.disk_prev.lock().await;
+        let need_prime = cpu_prev.is_none() || net_prev.is_none() || disk_prev.is_none();
+
+        if need_prime {
+            *cpu_prev = Some((cpu_now.total, cpu_now.idle, now_inst));
+            *net_prev = Some((net_now.rx, net_now.tx, now_inst));
+            *disk_prev = Some((
+                disk_now.read_sectors,
+                disk_now.write_sectors,
+                now_inst,
+            ));
+            drop(cpu_prev);
+            drop(net_prev);
+            drop(disk_prev);
+
+            tokio::time::sleep(std::time::Duration::from_millis(METRICS_PRIME_MS)).await;
+
+            let cpu_after = sample_cpu().await;
+            let net_after = sample_net().await;
+            let disk_after = sample_disk().await;
+            let after_inst = std::time::Instant::now();
+            let secs = after_inst.duration_since(now_inst).as_secs_f64();
+
+            let cpu_percent = cpu_usage_percent(&cpu_now, &cpu_after);
+            let (net_rx_mbps, net_tx_mbps) = net_rates_mbps(&net_now, &net_after, secs);
+            let (disk_read_mbps, disk_write_mbps) =
+                disk_rates_mbps(&disk_now, &disk_after, secs);
+
+            *state.cpu_prev.lock().await = Some((cpu_after.total, cpu_after.idle, after_inst));
+            *state.net_prev.lock().await = Some((net_after.rx, net_after.tx, after_inst));
+            *state.disk_prev.lock().await = Some((
+                disk_after.read_sectors,
+                disk_after.write_sectors,
+                after_inst,
+            ));
+
+            (
+                cpu_percent,
+                cpu_model,
+                net_rx_mbps,
+                net_tx_mbps,
+                disk_read_mbps,
+                disk_write_mbps,
+            )
         } else {
-            0.0
-        };
-        *prev = Some((total, idle, now_inst));
+            let cpu_percent = cpu_prev.as_ref().map(|(ptotal, pidle, _)| {
+                cpu_usage_percent(
+                    &CpuSample {
+                        total: *ptotal,
+                        idle: *pidle,
+                    },
+                    &cpu_now,
+                )
+            }).unwrap_or(0.0);
+            *cpu_prev = Some((cpu_now.total, cpu_now.idle, now_inst));
 
-        let cpuinfo = read_proc_text("/proc/cpuinfo").await;
-        let model = cpuinfo
-            .lines()
-            .find(|l| l.starts_with("model name"))
-            .and_then(|l| l.split_once(':').map(|x| x.1))
-            .map(|s| s.trim().to_string())
-            .unwrap_or_else(|| "Unknown CPU".to_string());
+            let (net_rx_mbps, net_tx_mbps) = net_prev
+                .as_ref()
+                .map(|(prx, ptx, pt)| {
+                    let secs = now_inst.duration_since(*pt).as_secs_f64();
+                    net_rates_mbps(
+                        &NetSample { rx: *prx, tx: *ptx },
+                        &net_now,
+                        secs,
+                    )
+                })
+                .unwrap_or((0.0, 0.0));
+            *net_prev = Some((net_now.rx, net_now.tx, now_inst));
 
-        (pct, model)
+            let (disk_read_mbps, disk_write_mbps) = disk_prev
+                .as_ref()
+                .map(|(pr, pw, pt)| {
+                    let secs = now_inst.duration_since(*pt).as_secs_f64();
+                    disk_rates_mbps(
+                        &DiskSample {
+                            read_sectors: *pr,
+                            write_sectors: *pw,
+                        },
+                        &disk_now,
+                        secs,
+                    )
+                })
+                .unwrap_or((0.0, 0.0));
+            *disk_prev = Some((
+                disk_now.read_sectors,
+                disk_now.write_sectors,
+                now_inst,
+            ));
+
+            (
+                cpu_percent,
+                cpu_model,
+                net_rx_mbps,
+                net_tx_mbps,
+                disk_read_mbps,
+                disk_write_mbps,
+            )
+        }
     };
     let disk_out = exec_output("df", &["-k", "/"]).await.unwrap_or_default();
     let (disk_total_gb, disk_free_gb) = disk_out
@@ -262,63 +441,6 @@ pub(crate) async fn handle_metrics(state: &AppState) -> Value {
             Some((total / 1024 / 1024, free / 1024 / 1024))
         })
         .unwrap_or((0, 0));
-    // Net I/O delta from /proc/net/dev
-    let net_raw = read_proc_text("/proc/net/dev").await;
-    let (net_rx_now, net_tx_now) = net_raw.lines().skip(2).fold((0u64, 0u64), |acc, l| {
-        let parts: Vec<&str> = l.split_whitespace().collect();
-        if parts.len() < 10 || parts[0].starts_with("lo:") {
-            return acc;
-        }
-        let rx = parts[1].parse::<u64>().unwrap_or(0);
-        let tx = parts[9].parse::<u64>().unwrap_or(0);
-        (acc.0 + rx, acc.1 + tx)
-    });
-    let now_inst = std::time::Instant::now();
-    let (net_rx_mbps, net_tx_mbps) = {
-        let mut prev = state.net_prev.lock().await;
-        let mbps = prev
-            .as_ref()
-            .map(|(prx, ptx, pt)| {
-                let secs = now_inst.duration_since(*pt).as_secs_f64().max(0.1);
-                let rx =
-                    (net_rx_now.saturating_sub(*prx) as f64 / secs / 1_000_000.0 * 8.0).max(0.0);
-                let tx =
-                    (net_tx_now.saturating_sub(*ptx) as f64 / secs / 1_000_000.0 * 8.0).max(0.0);
-                (rx, tx)
-            })
-            .unwrap_or((0.0, 0.0));
-        *prev = Some((net_rx_now, net_tx_now, now_inst));
-        mbps
-    };
-    // Disk I/O delta from /proc/diskstats (sectors = 512 bytes)
-    let disk_raw = read_proc_text("/proc/diskstats").await;
-    let (disk_read_now, disk_write_now) = disk_raw.lines().fold((0u64, 0u64), |acc, l| {
-        let p: Vec<&str> = l.split_whitespace().collect();
-        let name = p.get(2).copied().unwrap_or("");
-        if !is_physical_disk_name(name) {
-            return acc;
-        }
-        let r = p.get(5).and_then(|v| v.parse::<u64>().ok()).unwrap_or(0);
-        let w = p.get(9).and_then(|v| v.parse::<u64>().ok()).unwrap_or(0);
-        (acc.0 + r, acc.1 + w)
-    });
-    let disk_now_inst = std::time::Instant::now();
-    let (disk_read_mbps, disk_write_mbps) = {
-        let mut prev = state.disk_prev.lock().await;
-        let mbps = prev
-            .as_ref()
-            .map(|(pr, pw, pt)| {
-                let secs = disk_now_inst.duration_since(*pt).as_secs_f64().max(0.1);
-                let rd = (disk_read_now.saturating_sub(*pr) as f64 * 512.0 / secs / 1_000_000.0)
-                    .max(0.0);
-                let wr = (disk_write_now.saturating_sub(*pw) as f64 * 512.0 / secs / 1_000_000.0)
-                    .max(0.0);
-                (rd, wr)
-            })
-            .unwrap_or((0.0, 0.0));
-        *prev = Some((disk_read_now, disk_write_now, disk_now_inst));
-        mbps
-    };
     let svc_out = exec_output_limit(
         "systemctl",
         &[
@@ -422,4 +544,46 @@ pub(crate) async fn handle_profile_running_status(_app: &AppHandle, body: &Value
         .collect();
 
     json!({ "ok": true, "running": running })
+}
+
+#[cfg(test)]
+mod metrics_tests {
+    use super::*;
+
+    #[test]
+    fn cpu_usage_percent_from_delta() {
+        let prev = CpuSample { total: 100, idle: 80 };
+        let now = CpuSample { total: 200, idle: 150 };
+        assert!((cpu_usage_percent(&prev, &now) - 30.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn net_rates_mbps_from_byte_delta() {
+        let prev = NetSample { rx: 0, tx: 0 };
+        // 1_000_000 bytes in 1s => 8 Mbps
+        let now = NetSample {
+            rx: 1_000_000,
+            tx: 500_000,
+        };
+        let (rx, tx) = net_rates_mbps(&prev, &now, 1.0);
+        assert!((rx - 8.0).abs() < 0.01);
+        assert!((tx - 4.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn disk_rates_mbps_from_sector_delta() {
+        let prev = DiskSample {
+            read_sectors: 0,
+            write_sectors: 0,
+        };
+        let now = DiskSample {
+            read_sectors: 2048,
+            write_sectors: 1024,
+        };
+        let (read, write) = disk_rates_mbps(&prev, &now, 1.0);
+        let expected_read = 2048.0 * 512.0 / 1_000_000.0;
+        let expected_write = 1024.0 * 512.0 / 1_000_000.0;
+        assert!((read - expected_read).abs() < 0.01);
+        assert!((write - expected_write).abs() < 0.01);
+    }
 }
