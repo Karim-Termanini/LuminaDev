@@ -67,15 +67,13 @@ data/icons/
 
 ---
 
-### 🟡 MEDIUM: 627-line manual `Window.dh` type declaration
+### 🟡 MEDIUM: 627-line manual `Window.dh` type declaration — ✅ GUARDED (2026-06-19)
 
 **File:** `apps/desktop/src/renderer/src/vite-env.d.ts` (627 lines)
 
-**Problem:** The entire `window.dh` API is manually declared as a TypeScript interface. Every schema change, channel addition, or response shape modification requires **manual** updates to this file. It is not derived from Zod schemas or the IPC const.
+**Mitigation:** `desktopApiBridge.ts` uses `} satisfies DhApi` (compile-time). **`desktopApiBridge.contract.test.ts`** compares method names in `vite-env.d.ts` ↔ `createTauriDhApi()` on every CI run (`dhApiParity.ts`).
 
-**Risk:** The manually declared types can drift from the actual implementations in `desktopApiBridge.ts`, `schemas.ts`, or Rust handlers. There is no guard test that verifies `vite-env.d.ts` ↔ `desktopApiBridge.ts` parity.
-
-**Note:** The `satisfies DhApi` in `desktopApiBridge.ts` uses `DhApi = Window['dh']`, so at least the bridge and the declaration are cross-checked by TypeScript. But the declaration itself is unguarded against schema changes.
+**Remaining gap:** Payload/response shapes are not derived from Zod (post-P10 follow-up: bridge `.parse()` wiring).
 
 ---
 

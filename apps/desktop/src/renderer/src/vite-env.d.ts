@@ -1,4 +1,7 @@
 /// <reference types="vite/client" />
+///
+/// `window.dh` method surface — kept in sync with `api/desktopApiBridge.ts` via
+/// `satisfies DhApi` (compile-time) and `desktopApiBridge.contract.test.ts` (CI).
 
 import type {
   HostPortRow,
