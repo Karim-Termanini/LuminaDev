@@ -1,8 +1,8 @@
-# LuminaDev AI Integration — Detailed Technical Plan
+# KeelDev AI Integration — Detailed Technical Plan
 
 ## Executive Summary
 
-LuminaDev transforms from a dashboard into **"The Unified AI Developer Control Plane for Linux"** — a lightweight orchestration layer that sits between your IDEs and AI models, solving the fundamental problems that no single IDE can solve alone.
+KeelDev transforms from a dashboard into **"The Unified AI Developer Control Plane for Linux"** — a lightweight orchestration layer that sits between your IDEs and AI models, solving the fundamental problems that no single IDE can solve alone.
 
 **Core Philosophy:** Don't rewrite existing tools. Call them via subprocess. Orchestrate them with <1500 lines of Rust code.
 
@@ -58,7 +58,7 @@ LuminaDev transforms from a dashboard into **"The Unified AI Developer Control P
 │                     │                                          │
 │                     ▼                                          │
 │         ┌─────────────────────────┐                           │
-│         │   LuminaDev AI Proxy    │                           │
+│         │   KeelDev AI Proxy    │                           │
 │         │   (OpenAI-compatible)   │                           │
 │         │   localhost:4317        │                           │
 │         └───────────┬─────────────┘                           │
@@ -99,7 +99,7 @@ LuminaDev transforms from a dashboard into **"The Unified AI Developer Control P
 - Handles authentication and credit tracking
 
 ### How It Works (No Code)
-1. User configures their API keys (OpenAI, Anthropic) once in LuminaDev settings
+1. User configures their API keys (OpenAI, Anthropic) once in KeelDev settings
 2. User can also enable local models (Ollama) as an option
 3. All IDE requests go through the proxy
 4. Proxy routes requests based on priority: local first, cloud for complex tasks
@@ -111,7 +111,7 @@ LuminaDev transforms from a dashboard into **"The Unified AI Developer Control P
 - HTTP server with `/v1/chat/completions` endpoint
 - Request/response interception middleware
 - Model routing logic (local vs cloud)
-- Local API key authentication (generates a unique token on first run, stored in `~/.config/lumina/token`, which the IDE must pass in `Authorization: Bearer <token>` to prevent malicious browser page attacks)
+- Local API key authentication (generates a unique token on first run, stored in `~/.config/keel/token`, which the IDE must pass in `Authorization: Bearer <token>` to prevent malicious browser page attacks)
 - Usage logging and statistics
 
 ### What We Don't Build
@@ -132,13 +132,13 @@ LuminaDev transforms from a dashboard into **"The Unified AI Developer Control P
 - Works across all IDEs because it's system-level
 
 ### How It Works (No Code)
-1. **Background Indexing:** LuminaDev watches your project folders using filesystem events
+1. **Background Indexing:** KeelDev watches your project folders using filesystem events
 2. **AST Analysis:** For each code file, it uses `graphify` (Python) to build an Abstract Syntax Tree (AST)
 3. **Relationship Mapping:** It identifies which functions call which, class inheritance, import dependencies
 4. **Graph Storage:** All relationships stored as a graph in memory (Rust's `petgraph`)
 5. **Query Interface:** When AI asks about code, it queries the graph instead of reading files
 6. **Auto-Sync:** On file save, the graph updates incrementally (not full rebuild)
-7. **Persistence:** Graph stored in `~/.lumina/graphs/<project_hash>.json`
+7. **Persistence:** Graph stored in `~/.keel/graphs/<project_hash>.json`
 
 ### What We Use
 - `graphify` (Python): Called via subprocess to generate AST → JSON
@@ -205,7 +205,7 @@ LuminaDev transforms from a dashboard into **"The Unified AI Developer Control P
 **Problem:** Same project folder, different GitHub accounts (work vs personal). Manual switching leads to wrong authors, SSH key mixups, commit history conflicts.
 
 **How It Works (No Code):**
-1. LuminaDev monitors the current working directory (from all IDEs via file system)
+1. KeelDev monitors the current working directory (from all IDEs via file system)
 2. User defines rules: e.g., `/home/user/work/` = `company` identity, `/home/user/personal/` = `personal` identity
 3. On directory change, Rust checks: "Is this a Git repo? What's the path?"
 4. Automatically executes:
@@ -232,7 +232,7 @@ LuminaDev transforms from a dashboard into **"The Unified AI Developer Control P
 **Problem:** New users install Python but can't run `python` because PATH is missing `/usr/local/bin`. Or they install Node but it's not added to PATH. Or they don't know if something is installed at all.
 
 **How It Works (No Code):**
-1. **Discovery:** LuminaDev scans common PATH locations (`/usr/bin`, `/usr/local/bin`, `~/.local/bin`, `~/.nvm`, etc.)
+1. **Discovery:** KeelDev scans common PATH locations (`/usr/bin`, `/usr/local/bin`, `~/.local/bin`, `~/.nvm`, etc.)
 2. **Detection:** It checks if common runtimes are installed (Node, Python, Java, Go, Rust, etc.)
 3. **Validation:** It runs `which python`, `node --version`, etc., to confirm they're accessible
 4. **Fixes PATH Issues:**
@@ -250,7 +250,7 @@ LuminaDev transforms from a dashboard into **"The Unified AI Developer Control P
 - Shell config file parser (`~/.bashrc`, `~/.profile`, `~/.zshrc`)
 - Distribution detection (which package manager?)
 - Command execution wrapper with sudo handling via `pkexec`
-- One-click fix UI button + IDE reload suggestion (prompts user to restart IDE, or launch it directly from LuminaDev to inherit the updated environment variables)
+- One-click fix UI button + IDE reload suggestion (prompts user to restart IDE, or launch it directly from KeelDev to inherit the updated environment variables)
 
 **What We Don't Build:**
 - Full package manager (we use existing ones)
@@ -263,7 +263,7 @@ LuminaDev transforms from a dashboard into **"The Unified AI Developer Control P
 **Problem:** User sees a cryptic error (e.g., "docker: command not found" or "cannot allocate memory" or "port 8080 already in use"). They don't know what to do. Even if they Google, they might find outdated solutions.
 
 **How It Works (No Code):**
-1. **Error Capture:** LuminaDev monitors system logs, Docker logs, command outputs
+1. **Error Capture:** KeelDev monitors system logs, Docker logs, command outputs
 2. **Context Gathering:** Collects relevant information: error message, system state, installed packages, current configuration
 3. **Search:** Calls `last30days-skill` (JavaScript) to search Reddit, HN, GitHub, YouTube for recent solutions
 4. **Synthesis:** The local LLM (or cloud) reads the error + context + search results and proposes a solution
@@ -396,7 +396,7 @@ All other functionality comes from calling existing tools via subprocess.
 
 ### Scenario 1: New User First Launch
 
-1. User downloads and opens LuminaDev
+1. User downloads and opens KeelDev
 2. Wizard launches (first-run detection)
 3. Wizard asks 3 questions
 4. Wizard installs Node.js, Python, Git (via package manager)
@@ -408,22 +408,22 @@ All other functionality comes from calling existing tools via subprocess.
 
 ---
 
-### Scenario 2: Using LuminaDev with an IDE
+### Scenario 2: Using KeelDev with an IDE
 
 1. User opens VSCode and points it to the same project
-2. LuminaDev background watcher sees the directory is open
+2. KeelDev background watcher sees the directory is open
 3. Knowledge graph is already built from the wizard
 4. User installs Cursor and configures it to use `localhost:4317` as OpenAI endpoint
-5. User enters OpenAI API key in LuminaDev Settings (once)
+5. User enters OpenAI API key in KeelDev Settings (once)
 6. User starts coding in Cursor
-7. Cursor sends requests to LuminaDev proxy
-8. LuminaDev:
+7. Cursor sends requests to KeelDev proxy
+8. KeelDev:
    - Adds knowledge graph context to the prompt
    - Compresses the prompt with Headroom
    - Forwards to OpenAI API
    - Sends back the response
 9. User switches to work on personal project in `/home/user/personal/`
-10. LuminaDev detects directory change and switches Git identity automatically
+10. KeelDev detects directory change and switches Git identity automatically
 11. User switches to VSCode for personal project, same proxy works
 12. All IDEs share the same context, knowledge, and API credits
 
@@ -432,7 +432,7 @@ All other functionality comes from calling existing tools via subprocess.
 ### Scenario 3: Error Diagnosis
 
 1. User tries to run `docker-compose up` and fails
-2. LuminaDev captures the error log
+2. KeelDev captures the error log
 3. Error diagnoser activates:
    - Reads error: "port 8080 already in use"
    - Runs `lsof -i :8080` to find process using port
@@ -440,7 +440,7 @@ All other functionality comes from calling existing tools via subprocess.
    - Synthesizes solution: "Kill process with PID 1234"
 4. UI shows: "Error: port 8080 in use. Fix: Kill process 1234. Execute?"
 5. User clicks "Fix"
-6. LuminaDev runs `kill -9 1234`
+6. KeelDev runs `kill -9 1234`
 7. Success! User can run `docker-compose up` now
 
 ---
@@ -448,35 +448,35 @@ All other functionality comes from calling existing tools via subprocess.
 ### Scenario 4: PATH Issue Detection
 
 1. User tries `python` in terminal → `command not found`
-2. LuminaDev periodically scans PATH (or detects on command failure)
+2. KeelDev periodically scans PATH (or detects on command failure)
 3. Finds: Python installed at `/usr/bin/python3` but `/usr/bin` is not in PATH
 4. UI shows: "Python is installed but not in PATH. Fix it?"
 5. User clicks "Fix"
-6. LuminaDev adds `export PATH=/usr/bin:$PATH` to `~/.bashrc`
-7. User runs `source ~/.bashrc` (or LuminaDev executes it)
+6. KeelDev adds `export PATH=/usr/bin:$PATH` to `~/.bashrc`
+7. User runs `source ~/.bashrc` (or KeelDev executes it)
 8. `python` now works
 
 ---
 
-## Complete Practical Scenario: Building an ExpenseTracker App with LuminaDev
+## Complete Practical Scenario: Building an ExpenseTracker App with KeelDev
 
-To make this plan concrete, here is a step-by-step walkthrough of how a developer uses LuminaDev to build a personal expense tracking web application:
+To make this plan concrete, here is a step-by-step walkthrough of how a developer uses KeelDev to build a personal expense tracking web application:
 
 ### 🎬 Step 1: Initialization & One-Click Setup (The Wizard)
-1. The user opens LuminaDev for the first time and clicks "New Project".
+1. The user opens KeelDev for the first time and clicks "New Project".
 2. The Wizard asks exactly 3 questions:
    * **What do you want to build?** User selects `Web App (React + Node.js)`.
    * **Have you ever used the terminal before?** User selects `No` (prefers a simple visual interface).
    * **Do you know what Git and GitHub are?** User selects `Yes` and connects their GitHub account.
 3. **In the background (silent, one-click execution):**
-   * LuminaDev detects that `Node.js` and `npm` are not installed. It automatically installs them.
+   * KeelDev detects that `Node.js` and `npm` are not installed. It automatically installs them.
    * It detects that the PATH environment variable is missing the new runtimes and updates `~/.bashrc` automatically.
    * It scaffolds a clean React + Node.js starter project, initializes a local Git repository, and commits the initial project state.
    * It displays a prominent button: **[Open Project in Cursor / VS Code]**.
 
 ### 💻 Step 2: Coding & Token/Credit Optimization (The AI Proxy & Compression)
 1. The user clicks the button, opening the project in their favorite IDE (e.g., Cursor).
-2. The IDE is pre-configured to point to the local LuminaDev proxy (`http://localhost:4317`) instead of the default OpenAI servers, secured by a unique local API token to block malicious web browser attacks.
+2. The IDE is pre-configured to point to the local KeelDev proxy (`http://localhost:4317`) instead of the default OpenAI servers, secured by a unique local API token to block malicious web browser attacks.
 3. The user prompts the IDE's AI:
    > *"Create an expense input page and connect it to the Backend."*
 4. **In the background (sub-second processing):**
@@ -487,21 +487,21 @@ To make this plan concrete, here is a step-by-step walkthrough of how a develope
 
 ### 🔀 Step 3: Automatic Git Profile Switching (Git Context Switcher)
 1. Mid-development, the user opens a company project in `/home/karim/work/project-x` to make a quick hotfix.
-2. **Automatically:** The LuminaDev File Watcher detects the workspace directory change and instantly switches the Git configuration:
+2. **Automatically:** The KeelDev File Watcher detects the workspace directory change and instantly switches the Git configuration:
    ```bash
    git config --local user.name "Karim Work Identity"
    git config --local user.email "karim@company.com"
    ```
    It also points to the company's SSH key in `~/.ssh/config` for that repository.
 3. The user makes the fix, commits, and pushes.
-4. The commit goes to the company's repository with the correct work email and name. The user switches back to ExpenseTracker, and LuminaDev automatically swaps back to their personal Git credentials.
+4. The commit goes to the company's repository with the correct work email and name. The user switches back to ExpenseTracker, and KeelDev automatically swaps back to their personal Git credentials.
 
 ### 🚨 Step 4: One-Click Linux Troubleshooting (Error Diagnoser)
 1. While running the Express server in the IDE, the user encounters a port conflict:
    `Error: listen EADDRINUSE: address already in use :::3000`
-2. LuminaDev captures this error from the process logs.
+2. KeelDev captures this error from the process logs.
 3. The Diagnoser queries `last30days` and `Agent-Reach` to search the web for solutions to this specific error on the current Linux distribution.
-4. A notification appears on the LuminaDev dashboard:
+4. A notification appears on the KeelDev dashboard:
    > *"Port 3000 is blocked by a dangling Express process (PID: 5412). Would you like to terminate it and resolve the issue?"*
 5. The user clicks **[Kill and Resolve]**.
 6. The process is terminated, the port is freed, and the server starts successfully without the user having to search Google or run command line tools like `lsof` or `kill`.
@@ -576,7 +576,7 @@ To make this plan concrete, here is a step-by-step walkthrough of how a develope
 
 ## Key Differentiators
 
-### Why LuminaDev is Unique
+### Why KeelDev is Unique
 
 1. **Not an IDE:** Works with your existing IDEs, doesn't replace them
 2. **System-Level:** Solves PATH, environment, Git identity issues that IDEs can't touch
@@ -593,8 +593,8 @@ To make this plan concrete, here is a step-by-step walkthrough of how a develope
 | Risk | Mitigation |
 |------|------------|
 | Subprocess overhead slows requests | Cache graph responses, use debouncing, run headroom as a background daemon, or use Rust-native fallback |
-| Unauthorized local proxy queries | Require local token auth via `~/.config/lumina/token` for all incoming IDE requests |
-| Environment updates not visible in IDE | Advise restarting the IDE or launch IDEs directly from LuminaDev GUI |
+| Unauthorized local proxy queries | Require local token auth via `~/.config/keel/token` for all incoming IDE requests |
+| Environment updates not visible in IDE | Advise restarting the IDE or launch IDEs directly from KeelDev GUI |
 | Python/Node dependencies not installed | Ship common dependencies (Node/Python) in bundle, check at runtime |
 | graphify fails on large projects | Implement incremental updates, limit graph depth |
 | Headroom compression reduces quality | Allow users to disable compression, show compression preview |
@@ -606,7 +606,7 @@ To make this plan concrete, here is a step-by-step walkthrough of how a develope
 
 ## Conclusion
 
-This plan transforms LuminaDev into **the brain of your development environment** without requiring us to rewrite the world. We orchestrate existing open-source tools (graphify, headroom, last30days, Agent-Reach) from a lightweight Rust proxy, providing:
+This plan transforms KeelDev into **the brain of your development environment** without requiring us to rewrite the world. We orchestrate existing open-source tools (graphify, headroom, last30days, Agent-Reach) from a lightweight Rust proxy, providing:
 
 - **Unified AI access** across all IDEs
 - **Shared project memory** through knowledge graphs
