@@ -194,13 +194,18 @@ pub(crate) fn runtime_archlinux_java_set_cmd(profile: &str) -> String {
     format!("/usr/bin/archlinux-java set '{safe}'")
 }
 
-/// Resolve the system default `bin/java` from `archlinux-java get` (Arch Linux only).
-pub(crate) fn runtime_archlinux_java_binary_from_profile(profile: &str) -> Option<String> {
+/// Expected system JVM binary path for an Arch `archlinux-java` profile (no filesystem check).
+pub(crate) fn runtime_archlinux_java_binary_path_for_profile(profile: &str) -> Option<String> {
     let profile = profile.trim();
     if profile.is_empty() || profile.contains('/') {
         return None;
     }
-    let java_bin = format!("/usr/lib/jvm/{}/bin/java", profile);
+    Some(format!("/usr/lib/jvm/{}/bin/java", profile))
+}
+
+/// Resolve the system default `bin/java` from `archlinux-java get` (Arch Linux only).
+pub(crate) fn runtime_archlinux_java_binary_from_profile(profile: &str) -> Option<String> {
+    let java_bin = runtime_archlinux_java_binary_path_for_profile(profile)?;
     if std::path::Path::new(&java_bin).is_file() {
         Some(java_bin)
     } else {
@@ -518,8 +523,13 @@ mod tests {
             "/usr/bin/archlinux-java set 'java-21-openjdk'"
         );
         assert_eq!(
-            runtime_archlinux_java_binary_from_profile("java-21-openjdk"),
+            runtime_archlinux_java_binary_path_for_profile("java-21-openjdk"),
             Some("/usr/lib/jvm/java-21-openjdk/bin/java".to_string())
+        );
+        assert_eq!(
+            runtime_archlinux_java_binary_from_profile("java-21-openjdk"),
+            runtime_archlinux_java_binary_path_for_profile("java-21-openjdk")
+                .filter(|p| std::path::Path::new(p).is_file())
         );
         assert_eq!(java_major_from_archlinux_profile("java-21-openjdk"), Some(21));
         assert!(runtime_mise_java_set_cmd("temurin-21.0.11+10.0.LTS").contains("mise reshim"));
