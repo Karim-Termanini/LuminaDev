@@ -1,6 +1,6 @@
 # KeelDev — Master Plan
 
-**Last updated:** 2026-06-19 (AI Core roadmap + inventory pass; L1–L4 doc closure)  
+**Last updated:** 2026-06-19 (AI Core roadmap + inventory pass; L1–L4 doc closure; P10 batch 2 merged from main)
 **Git Assistant spec (shipped):** [`gitRefactor.md`](../gitRefactor.md)  
 **AI Core spec (forward):** [`newCore.md`](../newCore.md) — canonical detailed plan; do not edit from planning passes  
 **Route truth table:** [`ROUTE_STATUS.md`](./ROUTE_STATUS.md)  
@@ -64,7 +64,7 @@ KeelDev evolves from environment manager to **"The Unified AI Developer Control 
 | Monitor | ✅ Dashboard tab | `/dashboard/monitor` (Main \| Kernels \| Logs \| Monitor); `/system` redirects |
 | Runtimes | ✅ Simplified | 18 → 7 runtimes (R1–R3 complete); see §14 |
 | Phases 0–9, 12, 13, 15, 16, 17 | ✅ DONE | Verified against source; see [`phasesPlan.md`](../phasesPlan.md) execution order |
-| Phase 18 — IPC boundary hardening | ✅ DONE | P9 bridge + P10 Zod parity (`ipcSchemaMap.ts` **133/133**); see §17 |
+| Phase 18 — IPC boundary hardening | ✅ DONE | P9 bridge + P10 Zod parity (`ipcSchemaMap.ts` **133/133**); P10 batch 2 merged (#137); see §17 |
 | **AI Core AC0–AC7** | 📋 PLANNED | Post Tier 3; spec in [`newCore.md`](../newCore.md); see §18 |
 | Phase 11 — First-run Wizard | ✅ DONE | Merged into Phase 16 (8-step readiness installer); **AC5** will add 3-question first-run UX per `newCore.md` |
 | Phase 10 — Extensions | 🚫 REMOVED | Settings Extension tab, plugin marketplace, widget infrastructure deleted 2026-05-29 |

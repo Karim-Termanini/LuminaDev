@@ -297,7 +297,7 @@ Findings from full static analysis: Rust backend security/correctness, renderer 
 | OAuth client IDs are public-by-design | ✅ | `cloud_auth/helpers.rs:5-6` — configurable via env vars |
 | **71** Vitest files (**64** `apps/desktop` + **7** `packages/shared/test`), 0 stubs, 0 dead imports | ✅ | `find apps/desktop packages/shared/test \\( -name '*.test.ts' -o -name '*.test.tsx' \\)` — not `*.test.ts` only (**69**) |
 | `compose_profiles.rs` resolution logic | ✅ | Env → repo walk → bundle fallback; full overlay support |
-| `LUMINA_DEV_COMPOSE_FULL` overlay | ✅ | `1`/`true`/`yes` env var or profile store `composeVariant` field |
+| `KEEL_DEV_COMPOSE_FULL` overlay | ✅ | `1`/`true`/`yes` env var or profile store `composeVariant` field |
 | 3 i18n locales, 14 namespaces each | ✅ | 42 translation files total |
 | Monitor security ssh/journal probes via `bash -c` | ✅ | `monitor_handlers.rs:70,90` — pipelines for `sshd -T` + `journalctl` only; other probes use direct `Command` (independent **L2**) |
 | Rust domain integration smoke (`tests/*_smoke.rs`) | ✅ | Compose, Git VCS, Monitor, SSH, Terminal PTY, Cloud auth + `docker_smoke.rs` — `ci.yml`, `smoke-tests.yml` (independent **L4**) |
