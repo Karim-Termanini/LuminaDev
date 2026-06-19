@@ -1,8 +1,9 @@
 use super::*;
 use crate::host_exec::exec_result_limit;
+use crate::runtime_discover::resolve_java_shell_binary_path;
 use crate::runtime_packages::{
-    runtime_java_system_packages_for_version, runtime_read_host_distro,
-    runtime_system_package_available,
+    runtime_archlinux_java_active_binary_path, runtime_java_system_packages_for_version,
+    runtime_read_host_distro, runtime_system_package_available,
 };
 use crate::runtime_versioning::lumina_probe_meaningful_line;
 use crate::{
@@ -203,6 +204,11 @@ pub(crate) async fn handle_runtime_installed_versions(body: &Value) -> Value {
     if runtime_id != "rust" {
         if let Some(active) = runtime_active_binary_path(runtime_id).await {
             mark_default_installed_versions(&mut versions, &active);
+        }
+        if runtime_id == "java" {
+            if let Some(sys_path) = runtime_archlinux_java_active_binary_path().await {
+                mark_system_default_java_versions(&mut versions, &sys_path);
+            }
         }
     }
     if versions.is_empty() {
@@ -446,6 +452,11 @@ pub(crate) async fn handle_runtime_check_deps(body: &Value) -> Value {
 }
 
 async fn runtime_active_binary_path(runtime_id: &str) -> Option<String> {
+    if runtime_id == "java" {
+        if let Some(path) = resolve_java_shell_binary_path().await {
+            return Some(path);
+        }
+    }
     let script = active_binary_script(runtime_id)?;
     let out = exec_output_limit("bash", &["-lc", &script], cmd_timeout_short())
         .await
@@ -472,8 +483,35 @@ fn paths_refer_to_same_binary(a: &str, b: &str) -> bool {
     }
 }
 
-fn active_match_score(path: &str, active_path: &str, label: Option<&str>) -> Option<u8> {
-    if path != active_path && !paths_refer_to_same_binary(path, active_path) {
+fn java_row_matches_active(row_path: &str, row_java_home: Option<&str>, active_path: &str) -> bool {
+    if row_path == active_path || paths_refer_to_same_binary(row_path, active_path) {
+        return true;
+    }
+    if let Some(home) = row_java_home.filter(|h| !h.is_empty()) {
+        if active_path.starts_with(home) {
+            return true;
+        }
+        if paths_refer_to_same_binary(home, active_path.strip_suffix("/bin/java").unwrap_or(active_path)) {
+            return true;
+        }
+        let home_java = format!("{}/bin/java", home.trim_end_matches('/'));
+        if paths_refer_to_same_binary(&home_java, active_path) {
+            return true;
+        }
+    }
+    false
+}
+
+fn active_match_score(
+    path: &str,
+    active_path: &str,
+    label: Option<&str>,
+    java_home: Option<&str>,
+) -> Option<u8> {
+    let matches = path == active_path
+        || paths_refer_to_same_binary(path, active_path)
+        || java_row_matches_active(path, java_home, active_path);
+    if !matches {
         return None;
     }
     if path == active_path {
@@ -489,6 +527,27 @@ fn active_match_score(path: &str, active_path: &str, label: Option<&str>) -> Opt
     Some(rank)
 }
 
+fn mark_system_default_java_versions(versions: &mut [Value], system_path: &str) {
+    for entry in versions.iter_mut() {
+        if let Some(obj) = entry.as_object_mut() {
+            obj.remove("isSystemDefault");
+        }
+    }
+    for entry in versions.iter_mut() {
+        let Some(path) = entry.get("path").and_then(|v| v.as_str()) else {
+            continue;
+        };
+        let java_home = entry.get("javaHome").and_then(|v| v.as_str());
+        if !java_row_matches_active(path, java_home, system_path) {
+            continue;
+        }
+        if let Some(obj) = entry.as_object_mut() {
+            obj.insert("isSystemDefault".to_string(), json!(true));
+        }
+        break;
+    }
+}
+
 fn mark_default_installed_versions(versions: &mut [Value], active_path: &str) {
     let mut best: Option<(usize, u8)> = None;
     for (i, entry) in versions.iter().enumerate() {
@@ -496,7 +555,8 @@ fn mark_default_installed_versions(versions: &mut [Value], active_path: &str) {
             continue;
         };
         let label = entry.get("label").and_then(|v| v.as_str());
-        let Some(score) = active_match_score(path, active_path, label) else {
+        let java_home = entry.get("javaHome").and_then(|v| v.as_str());
+        let Some(score) = active_match_score(path, active_path, label, java_home) else {
             continue;
         };
         if best.map(|(_, s)| score < s).unwrap_or(true) {
@@ -673,6 +733,30 @@ mod tests {
             json!({ "version": "3.14.5", "path": "/home/u/.pyenv/versions/3.14.5/bin/python" }),
         ];
         mark_default_installed_versions(&mut versions, "/home/u/.pyenv/versions/3.14.5/bin/python");
+        assert_eq!(versions[0].get("isDefault"), None);
+        assert_eq!(versions[1].get("isDefault"), Some(&json!(true)));
+    }
+
+    #[test]
+    fn mark_default_java_matches_shell_binary_not_archlinux_config_only() {
+        let mut versions = vec![
+            json!({
+                "version": "21.0.11",
+                "path": "/usr/lib/jvm/java-21-openjdk/bin/java",
+                "javaHome": "/usr/lib/jvm/java-21-openjdk",
+                "label": "JDK 21.0.11"
+            }),
+            json!({
+                "version": "26.0.1",
+                "path": "/usr/lib/jvm/java-26-openjdk/bin/java",
+                "javaHome": "/usr/lib/jvm/java-26-openjdk",
+                "label": "JDK 26.0.1"
+            }),
+        ];
+        mark_default_installed_versions(
+            &mut versions,
+            "/usr/lib/jvm/java-26-openjdk/bin/java",
+        );
         assert_eq!(versions[0].get("isDefault"), None);
         assert_eq!(versions[1].get("isDefault"), Some(&json!(true)));
     }

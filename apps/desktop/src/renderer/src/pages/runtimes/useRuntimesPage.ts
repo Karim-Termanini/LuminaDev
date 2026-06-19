@@ -54,6 +54,7 @@ export function useRuntimesPage() {
     Record<string, InstalledVersionRow[]>
   >({})
   const [loadingInstalledVersions, setLoadingInstalledVersions] = useState(false)
+  const [trackedInstallJobId, setTrackedInstallJobId] = useState<string | null>(null)
 
   const loadVersionsForRuntime = useCallback(
     async (runtimeId: string, method: 'system' | 'local', resetDefault: boolean) => {
@@ -187,13 +188,26 @@ export function useRuntimesPage() {
       setSettingActivePath(installedVersionKey({ path, version: version ?? path }))
       setErrorMessage(null)
       try {
-        const res = await window.dh.runtimeSetActive({ runtimeId: selectedId, path, version })
+        const res = (await window.dh.runtimeSetActive({
+          runtimeId: selectedId,
+          path,
+          version,
+        })) as {
+          ok: boolean
+          error?: string
+          shellMismatch?: boolean
+          shellJavaPath?: string
+        }
         assertRuntimeOk(res, t('page.errorActive'))
-        setInstalledVersionsCache((prev) => {
-          const next = { ...prev }
-          delete next[selectedId]
-          return next
-        })
+        if (res.shellMismatch) {
+          setErrorMessage(
+            t('page.javaShellMismatch', {
+              path: res.shellJavaPath ?? t('page.javaShellMismatchUnknown'),
+            })
+          )
+        } else {
+          setErrorMessage(null)
+        }
         await refreshStatus()
         await loadInstalledVersions(selectedId, true)
       } catch (e) {
@@ -262,6 +276,10 @@ export function useRuntimesPage() {
     [runtimes, selectedId]
   )
   const activeJob = useMemo(() => {
+    if (trackedInstallJobId) {
+      const tracked = activeJobs.find((j) => j.id === trackedInstallJobId)
+      if (tracked) return tracked
+    }
     const jobsForRuntime = activeJobs.filter((j) => {
       const runtimeId = (j as JobSummary & { runtimeId?: string }).runtimeId
       if (runtimeId) return runtimeId === selectedId
@@ -269,8 +287,10 @@ export function useRuntimesPage() {
         (line) => line.includes(`runtime=${selectedId}`) || line.includes(`for ${selectedId}`)
       )
     })
+    const running = jobsForRuntime.filter((j) => j.state === 'running')
+    if (running.length > 0) return running[running.length - 1]
     return jobsForRuntime[jobsForRuntime.length - 1]
-  }, [activeJobs, selectedId])
+  }, [activeJobs, selectedId, trackedInstallJobId])
 
   const prevJobStateRef = useRef<string | undefined>(undefined)
   useEffect(() => {
@@ -282,6 +302,7 @@ export function useRuntimesPage() {
       void refreshStatus()
       void refreshDeps()
       void loadInstalledVersions(selectedId, true)
+      setTrackedInstallJobId(null)
     }
     prevJobStateRef.current = currentState
   }, [activeJob?.state, refreshStatus, refreshDeps, loadInstalledVersions, selectedId])
@@ -386,7 +407,8 @@ export function useRuntimesPage() {
 
   const detectedVersions = useMemo(() => {
     const cached = installedVersionsCache[selectedId]
-    if (cached !== undefined && cached.length > 0) return cached
+    if (cached !== undefined) return cached
+    if (loadingInstalledVersions) return []
     if (selectedRuntime?.installed && selectedRuntime.version) {
       return [
         {
@@ -397,8 +419,8 @@ export function useRuntimesPage() {
         },
       ]
     }
-    return cached ?? []
-  }, [installedVersionsCache, selectedId, selectedRuntime])
+    return []
+  }, [installedVersionsCache, selectedId, selectedRuntime, loadingInstalledVersions])
 
   useEffect(() => {
     if (displayedVersions.length === 0) return
@@ -411,6 +433,7 @@ export function useRuntimesPage() {
 
   const startInstall = async (id: string) => {
     setSelectedId(id)
+    setTrackedInstallJobId(null)
     const systemOnly = runtimeIsSystemOnly(id)
     if (systemOnly) {
       setInstallMethod('system')
@@ -421,36 +444,70 @@ export function useRuntimesPage() {
     void loadInstalledVersions(id, true)
   }
 
-  const runInstall = async () => {
+  const startRuntimeJob = async (
+    payload: Parameters<typeof window.dh.jobStart>[0],
+    returnStep: number
+  ): Promise<boolean> => {
+    setErrorMessage(null)
+    setTrackedInstallJobId(null)
     setWizardStep(3)
-    await window.dh.jobStart({
-      kind: 'runtime_install',
-      runtimeId: selectedId,
-      method: installMethod,
-      version: selectedVersion,
-      addToPath,
-    })
+    const res = (await window.dh.jobStart(payload)) as {
+      id?: string
+      ok?: boolean
+      error?: string
+    }
+    if (res.ok === false || res.error) {
+      setErrorMessage(humanizeRuntimeError(res.error || 'Could not start install job.'))
+      setWizardStep(returnStep)
+      return false
+    }
+    if (!res.id) {
+      setErrorMessage(humanizeRuntimeError('Install job did not start (missing job id).'))
+      setWizardStep(returnStep)
+      return false
+    }
+    setTrackedInstallJobId(res.id)
+    void refreshStatus(true)
+    return true
+  }
+
+  const runInstall = async () => {
+    const returnStep = isSystemOnlyRuntime ? 1 : 2
+    await startRuntimeJob(
+      {
+        kind: 'runtime_install',
+        runtimeId: selectedId,
+        method: installMethod,
+        version: selectedVersion,
+        addToPath,
+      },
+      returnStep
+    )
   }
 
   const runUpdate = async () => {
     setShowWizard(true)
     void loadInstalledVersions(selectedId)
-    setWizardStep(3)
-    await window.dh.jobStart({
-      kind: 'runtime_update',
-      runtimeId: selectedId,
-      method: installMethod,
-    })
+    await startRuntimeJob(
+      {
+        kind: 'runtime_update',
+        runtimeId: selectedId,
+        method: installMethod,
+      },
+      1
+    )
   }
 
   const runUninstall = async () => {
-    setWizardStep(3)
-    await window.dh.jobStart({
-      kind: 'runtime_uninstall',
-      runtimeId: selectedId,
-      method: installMethod,
-      removeMode,
-    })
+    await startRuntimeJob(
+      {
+        kind: 'runtime_uninstall',
+        runtimeId: selectedId,
+        method: installMethod,
+        removeMode,
+      },
+      1
+    )
   }
 
   const openUninstallModal = async () => {

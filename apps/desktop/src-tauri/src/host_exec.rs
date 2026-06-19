@@ -73,7 +73,15 @@ pub(crate) async fn exec_output_limit(
         if output.status.success() {
             Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
         } else {
-            Err(String::from_utf8_lossy(&output.stderr).trim().to_string())
+            let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+            let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if !stderr.is_empty() {
+                Err(stderr)
+            } else if !stdout.is_empty() {
+                Err(stdout)
+            } else {
+                Err(format!("command failed: {} {}", cmd, args.join(" ")))
+            }
         }
     };
     match tokio::time::timeout(limit, fut).await {

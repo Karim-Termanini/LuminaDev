@@ -5,6 +5,7 @@ import {
   formatRuntimeVersionDisplay,
   installedVersionKey,
   installedVersionLabel,
+  javaRowSupportsSetActive,
 } from './utils'
 import type { RuntimesPageViewModel } from './useRuntimesPage'
 
@@ -194,6 +195,9 @@ export function RuntimeDetailPanel({
                 const rowKey = installedVersionKey(v)
                 const displayLabel = installedVersionLabel(selectedId, v)
                 const isActive = v.isDefault === true
+                const isSystemDefault = v.isSystemDefault === true
+                const canSetActive =
+                  selectedId !== 'java' || javaRowSupportsSetActive(v.path)
                 return (
                   <div
                     key={rowKey}
@@ -267,7 +271,22 @@ export function RuntimeDetailPanel({
                           {t('page.active')}
                         </span>
                       )}
-                      {!isActive && (
+                      {!isActive && isSystemDefault && selectedId === 'java' && (
+                        <span
+                          style={{
+                            fontSize: 10,
+                            fontWeight: 800,
+                            color: 'var(--accent)',
+                            padding: '2px 8px',
+                            borderRadius: 10,
+                            border: '1px solid rgba(124, 77, 255, 0.35)',
+                            background: 'rgba(124, 77, 255, 0.08)',
+                          }}
+                        >
+                          {t('page.systemDefault')}
+                        </span>
+                      )}
+                      {!isActive && canSetActive && (
                         <button
                           type="button"
                           onClick={() => void setRuntimeActive(v.path, v.version)}

@@ -153,6 +153,112 @@ pub(crate) fn runtime_java_system_packages_for_version(
     }
 }
 
+/// Arch Linux `archlinux-java` profile for a pacman JDK package name.
+pub(crate) fn runtime_pacman_java_profile_for_pkg(pkg: &str) -> Option<&'static str> {
+    match pkg {
+        "jdk8-openjdk" => Some("java-8-openjdk"),
+        "jdk11-openjdk" => Some("java-11-openjdk"),
+        "jdk17-openjdk" => Some("java-17-openjdk"),
+        "jdk21-openjdk" => Some("java-21-openjdk"),
+        "jdk26-openjdk" => Some("java-26-openjdk"),
+        _ => None,
+    }
+}
+
+/// Arch Linux `archlinux-java` profile for a requested Java major version.
+pub(crate) fn runtime_pacman_java_profile_for_version(requested_version: &str) -> &'static str {
+    match runtime_java_major(requested_version).unwrap_or(21) {
+        8 => "java-8-openjdk",
+        11 => "java-11-openjdk",
+        17 => "java-17-openjdk",
+        21 => "java-21-openjdk",
+        26 => "java-26-openjdk",
+        _ => "java-21-openjdk",
+    }
+}
+
+/// Profile name from a system JVM binary path, e.g. `/usr/lib/jvm/java-21-openjdk/bin/java`.
+pub(crate) fn runtime_archlinux_java_profile_from_jvm_path(path: &str) -> Option<String> {
+    const PREFIX: &str = "/usr/lib/jvm/";
+    let rest = path.strip_prefix(PREFIX)?;
+    let profile = rest.split('/').next()?.trim();
+    if profile.is_empty() || profile == "default" || profile == "default-runtime" {
+        return None;
+    }
+    Some(profile.to_string())
+}
+
+/// Switch the system default JDK on Arch Linux (`archlinux-java set` requires root).
+pub(crate) fn runtime_archlinux_java_set_cmd(profile: &str) -> String {
+    let safe = profile.replace('\'', "'\\''");
+    format!("/usr/bin/archlinux-java set '{safe}'")
+}
+
+/// Expected system JVM binary path for an Arch `archlinux-java` profile (no filesystem check).
+pub(crate) fn runtime_archlinux_java_binary_path_for_profile(profile: &str) -> Option<String> {
+    let profile = profile.trim();
+    if profile.is_empty() || profile.contains('/') {
+        return None;
+    }
+    Some(format!("/usr/lib/jvm/{}/bin/java", profile))
+}
+
+/// Resolve the system default `bin/java` from `archlinux-java get` (Arch Linux only).
+pub(crate) fn runtime_archlinux_java_binary_from_profile(profile: &str) -> Option<String> {
+    let java_bin = runtime_archlinux_java_binary_path_for_profile(profile)?;
+    if std::path::Path::new(&java_bin).is_file() {
+        Some(java_bin)
+    } else {
+        None
+    }
+}
+
+pub(crate) async fn runtime_archlinux_java_active_binary_path() -> Option<String> {
+    let out = exec_output_limit(
+        "bash",
+        &["-lc", "/usr/bin/archlinux-java get 2>/dev/null"],
+        cmd_timeout_short(),
+    )
+    .await
+    .ok()?;
+    let profile = out.lines().find(|l| !l.trim().is_empty())?.trim();
+    runtime_archlinux_java_binary_from_profile(profile)
+}
+
+/// OpenJDK major from an Arch `archlinux-java` profile name (`java-21-openjdk` → 21).
+pub(crate) fn java_major_from_archlinux_profile(profile: &str) -> Option<u32> {
+    let rest = profile.strip_prefix("java-")?.strip_suffix("-openjdk")?;
+    rest.parse().ok()
+}
+
+/// `mise use -g` for an installed Java version id (directory name under mise installs).
+pub(crate) fn runtime_mise_java_set_cmd(version_id: &str) -> String {
+    let safe = version_id.replace('\'', "'\\''");
+    format!(
+        r#"export PATH="$HOME/.local/bin:$PATH"
+command -v mise >/dev/null 2>&1 || {{ echo '[RUNTIME_SET_ACTIVE_FAILED] mise is not installed.' >&2; exit 1; }}
+mise use -g 'java@{safe}' && mise reshim"#
+    )
+}
+
+/// Pick a mise Java install matching a major version and set it global (no-op when none match).
+pub(crate) fn runtime_mise_java_set_for_major_cmd(major: u32) -> String {
+    format!(
+        r#"export PATH="$HOME/.local/bin:$PATH"
+command -v mise >/dev/null 2>&1 || exit 0
+pick=""
+for d in "$HOME/.local/share/mise/installs/java"/*; do
+  [ -d "$d" ] || continue
+  bn=$(basename "$d")
+  echo "$bn" | grep -qE '(^|[^0-9]){major}([^0-9]|$)|^{major}\.' || continue
+  pick="$bn"
+  break
+done
+[ -z "$pick" ] && exit 0
+mise use -g "java@$pick" && mise reshim"#
+    )
+}
+
 /// Point `alternatives` at the JDK shipped by an RPM (Fedora/RHEL).
 pub(crate) fn runtime_dnf_java_alternatives_cmd(pkg: &str) -> String {
     format!(
@@ -394,6 +500,39 @@ mod tests {
             runtime_java_system_packages_for_version("dnf", "latest"),
             vec!["java-21-openjdk-devel".to_string()]
         );
+    }
+
+    #[test]
+    fn pacman_java_profile_mapping_matches_archlinux_java() {
+        assert_eq!(
+            runtime_pacman_java_profile_for_pkg("jdk21-openjdk"),
+            Some("java-21-openjdk")
+        );
+        assert_eq!(
+            runtime_pacman_java_profile_for_version("17 (LTS)"),
+            "java-17-openjdk"
+        );
+        assert_eq!(
+            runtime_archlinux_java_profile_from_jvm_path(
+                "/usr/lib/jvm/java-21-openjdk/bin/java"
+            ),
+            Some("java-21-openjdk".to_string())
+        );
+        assert_eq!(
+            runtime_archlinux_java_set_cmd("java-21-openjdk"),
+            "/usr/bin/archlinux-java set 'java-21-openjdk'"
+        );
+        assert_eq!(
+            runtime_archlinux_java_binary_path_for_profile("java-21-openjdk"),
+            Some("/usr/lib/jvm/java-21-openjdk/bin/java".to_string())
+        );
+        assert_eq!(
+            runtime_archlinux_java_binary_from_profile("java-21-openjdk"),
+            runtime_archlinux_java_binary_path_for_profile("java-21-openjdk")
+                .filter(|p| std::path::Path::new(p).is_file())
+        );
+        assert_eq!(java_major_from_archlinux_profile("java-21-openjdk"), Some(21));
+        assert!(runtime_mise_java_set_cmd("temurin-21.0.11+10.0.LTS").contains("mise reshim"));
     }
 
     #[test]

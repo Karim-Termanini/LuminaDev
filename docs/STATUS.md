@@ -1,13 +1,14 @@
-# LuminaDev Status Snapshot
+# KeelDev Status Snapshot
 
 Living snapshot updated when the release track changes materially.
 
-**Last updated:** 2026-06-02 (comprehensive audit sweep complete; RuntimesPage split; graphify 10,503 nodes)
+**Last updated:** 2026-06-19 (AI Core AC0–AC7 roadmap aligned with `newCore.md`)
 
 | Doc | Role |
 | --- | --- |
 | [`phasesPlan.md`](../phasesPlan.md) | Phase history + architecture standards |
-| [`MASTER_PLAN.md`](./MASTER_PLAN.md) | Unified active plan + backlog |
+| [`MASTER_PLAN.md`](./MASTER_PLAN.md) | Unified plan + backlog; **§19** stay/delete/transform |
+| [`newCore.md`](../newCore.md) | AI Core AC0–AC7 spec (canonical) |
 | [`graphify-out/GRAPH_REPORT.md`](../graphify-out/GRAPH_REPORT.md) | Knowledge-graph architecture map (@ `fc9c8fa`) |
 | [`AUDIT.md`](./AUDIT.md) | Consolidated audit + page QA |
 | [`STABILIZATION_CHECKLIST.md`](./STABILIZATION_CHECKLIST.md) | Stabilization gate evidence |
@@ -42,8 +43,9 @@ Phases **0–17** shipped per `phasesPlan.md`.
 
 - AppImage E2E on clean VM (Tauri **Stage 4** packaging — distinct from product **Phase 5** Monitor, which shipped)
 - **Phase 18 — IPC boundary hardening:** P9/P12 bridge ✅ (0 renderer bypasses); P10 Zod (~70/137 channels); P19 RuntimesPage split ✅
+- **AI Core AC0–AC7 (forward):** Subprocess tools in `~/Documents/GitHub/` siblings. **Stay/delete/transform:** [`MASTER_PLAN.md`](./MASTER_PLAN.md) §19.
 - **Tests:** contract + `test:roundtrip` + `test:e2e`; CI `unit-roundtrip-contracts` (P11 ✅)
-- **Compose stacks:** 9 preset dirs; only `web-dev` has `docker-compose.full.yml` — other presets default to Alpine stub unless `LUMINA_DEV_COMPOSE_FULL` + full file exist
+- **Compose stacks:** 9 preset dirs; only `web-dev` has `docker-compose.full.yml` — other presets default to Alpine stub unless `KEEL_DEV_COMPOSE_FULL` + full file exist
 
 ## Architecture snapshot (graphify @ `fc9c8fa`)
 

@@ -7,6 +7,19 @@ export type InstalledVersionRow = {
   label?: string
   javaHome?: string
   isDefault?: boolean
+  isSystemDefault?: boolean
+}
+
+/** Java rows Lumina can switch (mise global, archlinux-java, alternatives, etc.). */
+export function javaRowSupportsSetActive(path: string): boolean {
+  return (
+    path.includes('/usr/lib/jvm/') ||
+    path.includes('/usr/java/') ||
+    path.includes('/.local/share/lumina/java/') ||
+    path.includes('/.local/share/mise/installs/java/') ||
+    path.includes('/.sdkman/candidates/java/') ||
+    path.includes('/.jdks/')
+  )
 }
 
 export type UninstallPreview = {
