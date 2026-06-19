@@ -10,18 +10,30 @@ import {
   CustomProfilesStoreSchema,
   DockerActionRequestSchema,
   DockerErrorCodeSchema,
+  DockerGetTagsRequestSchema,
+  DockerInspectRequestSchema,
   DockerLogsRequestSchema,
+  DockerReconfigureRequestSchema,
+  DockerSearchRequestSchema,
+  DockerTerminalRequestSchema,
   EditorOpenRequestSchema,
   FsExistsRequestSchema,
   GitCloneRequestSchema,
+  GitConfigSetKeyRequestSchema,
+  GitConfigSetRequestSchema,
   GitConfigSetSchema,
+  GitRecentAddRequestSchema,
   GitVcsStageRequestSchema,
   HostExecRequestSchema,
+  LogStreamStartRequestSchema,
+  LogStreamStopRequestSchema,
   parseAppearance,
   parseOnLoginAutomation,
   parseSshBookmarks,
   parseStoredActiveProfile,
   PortsSuggestRequestSchema,
+  ProfileCredentialsIdRequestSchema,
+  ProfileCredentialsStoreRequestSchema,
   ProfileRunningStatusRequestSchema,
   ProfileSwitchRequestSchema,
   ProjectScaffoldRequestSchema,
@@ -30,10 +42,16 @@ import {
   RuntimeGetVersionsRequestSchema,
   RuntimeSetActiveRequestSchema,
   RuntimeUninstallPreviewRequestSchema,
+  SshGenerateRequestSchema,
   SshGenerateSchema,
+  SshListDirRequestSchema,
+  SshSetupRemoteKeyRequestSchema,
   StoreSetRequestSchema,
   TerminalCreateRequestSchema,
+  TerminalResizeRequestSchema,
+  TerminalWriteRequestSchema,
 } from '../src/schemas'
+import { JobCancelRequestSchema, JobStartRequestSchema } from '../src/foundation'
 import { isStoredActiveProfileValid, resolveActiveProfileName } from '../src/activeProfile'
 
 describe('schemas', () => {
@@ -468,5 +486,95 @@ describe('schemas', () => {
         reference: '',
       }),
     ).toThrow()
+  })
+
+  describe('P10 batch 2 — payload schemas', () => {
+    it('validates docker inspect, reconfigure, search, tags, terminal', () => {
+      expect(DockerInspectRequestSchema.parse({ id: 'abc123' })).toEqual({ id: 'abc123' })
+      expect(
+        DockerReconfigureRequestSchema.parse({
+          id: 'abc123',
+          ports: [{ hostPort: 8080, containerPort: 80, protocol: 'tcp' }],
+          networkMode: 'bridge',
+        }),
+      ).toMatchObject({ id: 'abc123', networkMode: 'bridge' })
+      expect(DockerSearchRequestSchema.parse('nginx')).toBe('nginx')
+      expect(DockerGetTagsRequestSchema.parse('library/nginx')).toBe('library/nginx')
+      expect(
+        DockerTerminalRequestSchema.parse({ containerId: 'c1', cols: 120, rows: 34 }),
+      ).toEqual({ containerId: 'c1', cols: 120, rows: 34 })
+      expect(() => DockerInspectRequestSchema.parse({ id: '' })).toThrow()
+    })
+
+    it('validates ssh list-dir and setup-remote-key', () => {
+      expect(
+        SshListDirRequestSchema.parse({
+          user: 'dev',
+          host: 'example.com',
+          port: 22,
+          remotePath: '/home/dev',
+        }),
+      ).toMatchObject({ user: 'dev', host: 'example.com' })
+      expect(
+        SshSetupRemoteKeyRequestSchema.parse({
+          user: 'dev',
+          host: 'example.com',
+          publicKey: 'ssh-ed25519 AAAA user@host',
+        }),
+      ).toMatchObject({ publicKey: 'ssh-ed25519 AAAA user@host' })
+      expect(() => SshSetupRemoteKeyRequestSchema.parse({ user: 'u', host: 'h', publicKey: '' })).toThrow()
+    })
+
+    it('validates log stream start/stop and terminal write/resize', () => {
+      expect(LogStreamStartRequestSchema.parse({ source: 'compose', id: 'web-dev' })).toEqual({
+        source: 'compose',
+        id: 'web-dev',
+      })
+      expect(LogStreamStopRequestSchema.parse({ streamId: 'stream-1' })).toEqual({
+        streamId: 'stream-1',
+      })
+      expect(TerminalWriteRequestSchema.parse({ id: 't1', data: 'ls\n' })).toEqual({
+        id: 't1',
+        data: 'ls\n',
+      })
+      expect(TerminalResizeRequestSchema.parse({ id: 't1', cols: 80, rows: 24 })).toEqual({
+        id: 't1',
+        cols: 80,
+        rows: 24,
+      })
+    })
+
+    it('validates profile credentials and job start payloads', () => {
+      expect(
+        ProfileCredentialsStoreRequestSchema.parse({ id: 'OPENAI_API_KEY', value: 'sk-test' }),
+      ).toEqual({ id: 'OPENAI_API_KEY', value: 'sk-test' })
+      expect(ProfileCredentialsIdRequestSchema.parse({ id: 'OPENAI_API_KEY' })).toEqual({
+        id: 'OPENAI_API_KEY',
+      })
+      expect(
+        JobStartRequestSchema.parse({ kind: 'runtime_install', runtimeId: 'node', method: 'local' }),
+      ).toMatchObject({ kind: 'runtime_install', runtimeId: 'node' })
+      expect(JobCancelRequestSchema.parse({ id: '550e8400-e29b-41d4-a716-446655440000' })).toEqual({
+        id: '550e8400-e29b-41d4-a716-446655440000',
+      })
+    })
+
+    it('aliases git recent/config and ssh generate request schemas', () => {
+      expect(GitRecentAddRequestSchema.parse({ path: '/home/user/repo' })).toEqual({
+        path: '/home/user/repo',
+      })
+      expect(
+        GitConfigSetRequestSchema.parse({
+          name: 'Dev',
+          email: 'dev@example.com',
+          target: 'host',
+        }),
+      ).toMatchObject({ email: 'dev@example.com' })
+      expect(GitConfigSetKeyRequestSchema.parse({ key: 'core.editor', value: 'vim' })).toEqual({
+        key: 'core.editor',
+        value: 'vim',
+      })
+      expect(SshGenerateRequestSchema).toBe(SshGenerateSchema)
+    })
   })
 })

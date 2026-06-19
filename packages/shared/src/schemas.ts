@@ -56,6 +56,36 @@ export const DockerContainerStatsRequestSchema = z.object({
   id: z.string().min(1).max(256),
 })
 
+export const DockerInspectRequestSchema = z.object({
+  id: z.string().min(1).max(256),
+})
+
+const DockerPortBindingRequestSchema = z.object({
+  hostPort: z.number().int().min(1).max(65535),
+  containerPort: z.number().int().min(1).max(65535),
+  protocol: z.enum(['tcp', 'udp']).optional(),
+})
+
+export const DockerReconfigureRequestSchema = z.object({
+  id: z.string().min(1).max(256),
+  ports: z.array(DockerPortBindingRequestSchema).optional(),
+  env: z.array(z.string().min(1).max(1024)).optional(),
+  networkMode: z.string().max(256).optional(),
+  restartPolicy: z.string().max(64).optional(),
+})
+
+/** Rust `docker_search` accepts a JSON string term (not an object wrapper). */
+export const DockerSearchRequestSchema = z.string().trim().min(1).max(256)
+
+/** Rust `docker_tags` accepts a JSON string image ref (not an object wrapper). */
+export const DockerGetTagsRequestSchema = z.string().trim().min(1).max(512)
+
+export const DockerTerminalRequestSchema = z.object({
+  containerId: z.string().min(1).max(256),
+  cols: z.number().int().min(10).max(500).optional(),
+  rows: z.number().int().min(5).max(200).optional(),
+})
+
 export const DockerContainerStatsResponseSchema = z.object({
   ok: z.boolean(),
   cpuPct: z.number().optional(),
@@ -474,6 +504,15 @@ export const ProfileRunningStatusRequestSchema = z.object({
   names: z.array(ProfileNameSchema).max(50),
 })
 
+export const ProfileCredentialsStoreRequestSchema = z.object({
+  id: z.string().min(1).max(128),
+  value: z.string().min(1).max(16_384),
+})
+
+export const ProfileCredentialsIdRequestSchema = z.object({
+  id: z.string().min(1).max(128),
+})
+
 export const DockerActionRequestSchema = z.object({
   id: z.string().min(1).max(256),
   action: DockerActionSchema,
@@ -522,6 +561,26 @@ export const TerminalCreateRequestSchema = z.object({
   env: z.record(z.string(), z.string().max(8192)).optional(),
 })
 
+export const TerminalWriteRequestSchema = z.object({
+  id: z.string().min(1).max(128),
+  data: z.string().max(65_536),
+})
+
+export const TerminalResizeRequestSchema = z.object({
+  id: z.string().min(1).max(128),
+  cols: z.number().int().min(1).max(500),
+  rows: z.number().int().min(1).max(500),
+})
+
+export const LogStreamStartRequestSchema = z.object({
+  source: z.enum(['compose', 'container', 'unified']).optional(),
+  id: z.string().max(256).optional(),
+})
+
+export const LogStreamStopRequestSchema = z.object({
+  streamId: z.string().min(1).max(128),
+})
+
 export const GitCloneRequestSchema = z.object({
   url: z.string().url().max(2048),
   targetDir: z.string().min(1).max(4096),
@@ -534,6 +593,7 @@ export const GitStatusRequestSchema = z.object({
 export const GitRecentAddSchema = z.object({
   path: z.string().min(1).max(4096),
 })
+export const GitRecentAddRequestSchema = GitRecentAddSchema
 
 export const GitConfigSetSchema = z.object({
   name: z.string().min(1),
@@ -542,15 +602,18 @@ export const GitConfigSetSchema = z.object({
   defaultEditor: z.string().max(256).optional(),
   target: z.enum(['sandbox', 'host']),
 })
+export const GitConfigSetRequestSchema = GitConfigSetSchema
 
 export const GitConfigListSchema = z.object({
   target: z.enum(['sandbox', 'host']),
 })
+export const GitConfigListRequestSchema = GitConfigListSchema
 
 export const GitConfigSetKeySchema = z.object({
   key: z.string().min(1).max(128),
   value: z.string().max(4096).optional(),
 })
+export const GitConfigSetKeyRequestSchema = GitConfigSetKeySchema
 
 export const GitDoctorScanResponseSchema = z.union([
   z.object({
@@ -578,13 +641,31 @@ export const SshGenerateSchema = z.object({
   target: z.enum(['sandbox', 'host']),
   email: z.string().optional(),
 })
+export const SshGenerateRequestSchema = SshGenerateSchema
 
 export const SshGetPubSchema = z.object({
   target: z.enum(['sandbox', 'host']),
 })
+export const SshGetPubRequestSchema = SshGetPubSchema
 
 export const SshTestGithubSchema = z.object({
   target: z.enum(['sandbox', 'host']),
+})
+export const SshTestGithubRequestSchema = SshTestGithubSchema
+
+export const SshListDirRequestSchema = z.object({
+  user: z.string().min(1).max(256),
+  host: z.string().min(1).max(256),
+  port: z.number().int().min(1).max(65535).optional(),
+  remotePath: z.string().max(4096).optional(),
+})
+
+export const SshSetupRemoteKeyRequestSchema = z.object({
+  user: z.string().min(1).max(256),
+  host: z.string().min(1).max(256),
+  port: z.number().int().min(1).max(65535).optional(),
+  password: z.string().max(512).optional(),
+  publicKey: z.string().min(1).max(8192),
 })
 
 export const RuntimeGetVersionsRequestSchema = z.object({
