@@ -93,7 +93,16 @@ Renderer → desktopApiBridge.ts → ipc_invoke / ipc_send → Rust handlers
 | --- | --- | --- |
 | Channel name parity TS ↔ Rust | `apps/desktop/src-tauri/src/ipc_contract_tests.rs` | Prevents drift in channel strings |
 | Schema map completeness | `packages/shared/test/ipcSchemaCoverage.test.ts` | Every dispatcher channel has a Zod schema |
+| **Source ↔ dist parity** | `packages/shared/test/ipcSchemaSourceDistParity.test.ts` | Every `ipcSchemaMap` payload schema exists in `src/` **and** `dist/` after build |
 | Payload roundtrips | `packages/shared/test/schemas.test.ts` | P10 batch parse tests |
+
+### Source/dist drift incident (2026-06-19)
+
+`ipcSchemaMap.ts` was added referencing P10 `*RequestSchema` exports that had been removed from `schemas.ts` while an older `dist/` still compiled. Symptom: `pnpm typecheck` / shared tests fail; desktop vitest could pass via stale `dist/`.
+
+**Resolution:** Restored all 20 payload schemas in `schemas.ts` (`6d36da8`). Shared `test` script runs `pnpm build` first; `ipcSchemaSourceDistParity.test.ts` fails if `dist/` lags source.
+
+**Rule:** Never rely on `dist/` without rebuilding shared after schema changes. Run `cd packages/shared && pnpm test` (build + vitest) or root `pnpm test`.
 
 ## Follow-up (post-P10)
 

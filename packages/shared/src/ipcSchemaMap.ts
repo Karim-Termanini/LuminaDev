@@ -258,6 +258,10 @@ const PAYLOAD: ReadonlyArray<readonly [IpcChannel, z.ZodTypeAny]> = [
   [IPC.fsOpen, FsOpenRequestSchema],
 ]
 
+/** Payload (channel, schema) pairs — exported for source/dist drift guard tests. */
+export const IPC_PAYLOAD_CHANNEL_SCHEMAS: ReadonlyArray<readonly [IpcChannel, z.ZodTypeAny]> =
+  PAYLOAD
+
 function buildIpcRequestSchemas(): Record<IpcChannel, z.ZodTypeAny> {
   const map = {} as Record<IpcChannel, z.ZodTypeAny>
   for (const channel of NO_PAYLOAD) {
