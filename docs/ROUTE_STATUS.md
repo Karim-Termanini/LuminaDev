@@ -1,5 +1,7 @@
 # Route Status Matrix (Tauri)
 
+**Route count:** **20** `<Route>` declarations in `apps/desktop/src/renderer/src/App.tsx` (includes `/`, nested dashboard routes, legacy redirects, and `/system-readiness`). Verify: `rg -c '<Route ' apps/desktop/src/renderer/src/App.tsx`.
+
 This file is the operator-facing truth table for UI behavior while hardening continues.
 Use it during manual verification to avoid treating placeholder behavior as regressions.
 
@@ -12,7 +14,8 @@ Status legend:
 
 | Route | Status | Notes |
 | --- | --- | --- |
-| `/dashboard` | partial | Custom profiles only; empty state until user creates one in Profiles. Slim container count + metrics strip. |
+| `/` | redirect | → `/dashboard` (default entry). |
+| `/dashboard` | partial | Custom profiles only; empty state until user creates one in Profiles. Slim container count + metrics strip. **Create project** flow (`CreateProjectModal` + `useDashboardMainPage`) — data-science scaffolding (Python/R/both) via `dataScienceCreateWizard.ts`. |
 | `/dashboard/kernels` | partial | GPU probe, service states, security audit; auto-refreshes every ~30s (lightweight snapshot, not a full device manager). |
 | `/dashboard/logs` | partial | Jobs poll ~2s; compose logs load for selected profile; not a full observability platform. |
 | `/dashboard/monitor` | live | Host metrics dashboard — live CPU/RAM/storage/network, security posture, ports, Docker, processes, Git config score. |
@@ -25,11 +28,12 @@ Status legend:
 | `/git-vcs` | redirect | → `/git` |
 | `/cloud-git` | redirect | → `/git` |
 | `/registry` | redirect | → `/git` |
-| `/profiles` | partial | Custom-named environments only (user picks base template + name). CRUD + duplicate + export/import; Set Active / switch syncs dashboard. On launch: optional composeUp for active profile. |
+| `/profiles` | partial | Custom-named environments only (user picks base template + name). CRUD + duplicate + export/import; Set Active / switch syncs dashboard. On launch: optional composeUp for active profile. **No** `dataScienceCreateWizard` / project scaffold UI — that lives on `/dashboard`. |
 | `/terminal` | partial | xterm + host PTY (`portable_pty`); not a browser sandbox. Multiplexer behind beta flag. Vim/full-screen apps may still differ from a native terminal emulator. |
 | `/runtimes` | partial | Seven runtimes (Node, Python, Java, Go, Rust, PHP, .NET); status/version/deps/uninstall preview live; install/update/remove backend hardened for Ubuntu/Fedora/Arch. |
 | `/maintenance` | partial | Guardian + diagnostics + host probes. **Tasks**: user checklist on Overview + full editor on Schedule. **Git backups** on **Git Config → Backups**. No arbitrary host shell or full remediation. |
 | `/settings` | partial | Dev Home layout: personalization, SSH overview, **Connected accounts** (GitHub/GitLab auth), **System** tab (`/etc/hosts` read/edit via pkexec + diff-before-apply, process env diagnostics, `~/.profile` export editor), general, update, notifications, shortcuts, help, datetime, languages, app engine, builder, beta flags. **Extension tab removed** — not in scope. |
+| `/system-readiness` | live | Host readiness report + fix actions (`SystemReadinessPage`); also surfaced as first-run **ReadinessWizard** before main shell. |
 
 ## Update Rule
 

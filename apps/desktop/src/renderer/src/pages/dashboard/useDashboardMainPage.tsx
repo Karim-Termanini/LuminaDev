@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import {
   type ContainerRow,
   type HostMetricsResponse,
@@ -9,6 +8,9 @@ import {
   isContainerRunningState,
   type CustomProfileEntry,
   type JobSummary,
+  profileStoreDeleteRequest,
+  profileStoreGetRequest,
+  profileStoreSetRequest,
 } from '@linux-dev-home/shared'
 import { listen } from '@tauri-apps/api/event'
 import { useCallback, useEffect, useMemo, useState, useRef } from 'react'
@@ -135,7 +137,7 @@ export function useDashboardMainPage() {
   }, [])
 
   useEffect(() => {
-    let interval: any
+    let interval: ReturnType<typeof setInterval> | undefined
     if (isScaffolding) {
       setScaffoldProgress(5)
       interval = setInterval(() => {
@@ -160,7 +162,7 @@ export function useDashboardMainPage() {
     }
     const fetchGit = async () => {
       try {
-        const gs = (await window.dh.gitVcsStatus({ repoPath: projectPath })) as any
+        const gs = await window.dh.gitVcsStatus({ repoPath: projectPath })
         if (gs.ok) {
           setGitStatus({
             branch: gs.branch ?? 'unknown',
@@ -276,10 +278,7 @@ export function useDashboardMainPage() {
       /* keep last known */
     }
     try {
-      const phd = (await window.dh.storeGet({ key: 'projects_home_dir' } as any)) as {
-        ok: boolean
-        data?: unknown
-      }
+      const phd = await window.dh.storeGet({ key: 'projects_home_dir' })
       if (phd.ok && typeof phd.data === 'string' && phd.data.trim()) {
         setProjectsHomeDir(phd.data.trim())
       }
@@ -289,10 +288,11 @@ export function useDashboardMainPage() {
 
     void window.dh
       .editorList()
-      .then((res: any) => {
-        if (res.ok && res.editors) {
-          setInstalledEditors(res.editors)
-          setSelectedEditorCmd((prev) => pickPreferredEditorCmd(res.editors, prev))
+      .then((res) => {
+        const editors = res.ok ? res.editors : undefined
+        if (editors) {
+          setInstalledEditors(editors)
+          setSelectedEditorCmd((prev) => pickPreferredEditorCmd(editors, prev))
         }
       })
       .catch(() => {})
@@ -310,9 +310,9 @@ export function useDashboardMainPage() {
 
     void (async () => {
       try {
-        const p = (await window.dh.storeGet({
-          key: `project_dir_${profileForLoad}`,
-        } as any)) as { ok: boolean; data?: unknown }
+        const p = await window.dh.storeGet(
+          profileStoreGetRequest('project_dir', profileForLoad)
+        )
         if (cancelled) return
 
         if (!p.ok || !p.data || typeof p.data !== 'string') {
@@ -323,7 +323,7 @@ export function useDashboardMainPage() {
         const storedPath = p.data.trim()
         if (!storedPath || isAutoComposeMountPath(storedPath, profileForLoad)) {
           setProjectPath(null)
-          await window.dh.storeDelete({ key: `project_dir_${profileForLoad}` })
+          await window.dh.storeDelete(profileStoreDeleteRequest('project_dir', profileForLoad))
           return
         }
 
@@ -334,7 +334,7 @@ export function useDashboardMainPage() {
           setProjectPath(storedPath)
         } else {
           setProjectPath(null)
-          await window.dh.storeDelete({ key: `project_dir_${profileForLoad}` })
+          await window.dh.storeDelete(profileStoreDeleteRequest('project_dir', profileForLoad))
         }
       } catch {
         if (!cancelled) setProjectPath(null)
@@ -432,10 +432,9 @@ export function useDashboardMainPage() {
       const selected = await window.dh.selectFolder()
       if (selected && typeof selected === 'string') {
         setProjectPath(selected)
-        await window.dh.storeSet({
-          key: `project_dir_${selectedProfileName}`,
-          data: selected,
-        } as any)
+        await window.dh.storeSet(
+          profileStoreSetRequest('project_dir', selectedProfileName, selected)
+        )
         showToast(t('main.toast.linkedWorkspace'), 'success')
       }
     } catch {
@@ -512,18 +511,15 @@ export function useDashboardMainPage() {
 
       if (res.ok && res.path) {
         setProjectPath(res.path)
-        await window.dh.storeSet({
-          key: `project_dir_${selectedProfileName}`,
-          data: res.path,
-        } as any)
-        await window.dh.storeSet({
-          key: `python_version_${selectedProfileName}`,
-          data: createProjectPythonVer,
-        } as any)
-        await window.dh.storeSet({
-          key: `postgres_version_${selectedProfileName}`,
-          data: createProjectPostgresVer,
-        } as any)
+        await window.dh.storeSet(
+          profileStoreSetRequest('project_dir', selectedProfileName, res.path)
+        )
+        await window.dh.storeSet(
+          profileStoreSetRequest('python_version', selectedProfileName, createProjectPythonVer)
+        )
+        await window.dh.storeSet(
+          profileStoreSetRequest('postgres_version', selectedProfileName, createProjectPostgresVer)
+        )
 
         closeCreateProjectModal()
         if (selectedEditorCmd) {
@@ -546,18 +542,15 @@ export function useDashboardMainPage() {
 
       if (res.ok && res.path) {
         setProjectPath(res.path)
-        await window.dh.storeSet({
-          key: `project_dir_${selectedProfileName}`,
-          data: res.path,
-        } as any)
-        await window.dh.storeSet({
-          key: `node_version_${selectedProfileName}`,
-          data: createProjectPythonVer,
-        } as any) // Reusing the same state variable for now
-        await window.dh.storeSet({
-          key: `postgres_version_${selectedProfileName}`,
-          data: createProjectPostgresVer,
-        } as any)
+        await window.dh.storeSet(
+          profileStoreSetRequest('project_dir', selectedProfileName, res.path)
+        )
+        await window.dh.storeSet(
+          profileStoreSetRequest('node_version', selectedProfileName, createProjectPythonVer)
+        )
+        await window.dh.storeSet(
+          profileStoreSetRequest('postgres_version', selectedProfileName, createProjectPostgresVer)
+        )
 
         closeCreateProjectModal()
         if (selectedEditorCmd) {
@@ -576,10 +569,9 @@ export function useDashboardMainPage() {
       })
       if (res.ok && res.path) {
         setProjectPath(res.path)
-        await window.dh.storeSet({
-          key: `project_dir_${selectedProfileName}`,
-          data: res.path,
-        } as any)
+        await window.dh.storeSet(
+          profileStoreSetRequest('project_dir', selectedProfileName, res.path)
+        )
         setToast({ type: 'success', message: t('main.toast.createdProject', { name }) })
         closeCreateProjectModal()
       } else {
@@ -590,10 +582,9 @@ export function useDashboardMainPage() {
       const res = await window.dh.projectScaffold({ path, template: 'ai-ml' })
       if (res.ok && res.path) {
         setProjectPath(res.path)
-        await window.dh.storeSet({
-          key: `project_dir_${selectedProfileName}`,
-          data: res.path,
-        } as any)
+        await window.dh.storeSet(
+          profileStoreSetRequest('project_dir', selectedProfileName, res.path)
+        )
         setToast({ type: 'success', message: t('main.toast.createdProject', { name }) })
         closeCreateProjectModal()
       } else {
@@ -604,10 +595,9 @@ export function useDashboardMainPage() {
       const res = await window.dh.projectScaffold({ path, template: 'docs' })
       if (res.ok && res.path) {
         setProjectPath(res.path)
-        await window.dh.storeSet({
-          key: `project_dir_${selectedProfileName}`,
-          data: res.path,
-        } as any)
+        await window.dh.storeSet(
+          profileStoreSetRequest('project_dir', selectedProfileName, res.path)
+        )
         setToast({ type: 'success', message: t('main.toast.createdProject', { name }) })
         closeCreateProjectModal()
       } else {
@@ -618,10 +608,9 @@ export function useDashboardMainPage() {
       const res = await window.dh.projectEnsureDir({ path })
       if (res.ok && res.path) {
         setProjectPath(res.path)
-        await window.dh.storeSet({
-          key: `project_dir_${selectedProfileName}`,
-          data: res.path,
-        } as any)
+        await window.dh.storeSet(
+          profileStoreSetRequest('project_dir', selectedProfileName, res.path)
+        )
         setToast({ type: 'success', message: t('main.toast.createdProject', { name }) })
         closeCreateProjectModal()
       } else {

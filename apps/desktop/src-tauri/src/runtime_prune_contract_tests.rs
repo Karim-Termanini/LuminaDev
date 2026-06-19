@@ -35,3 +35,30 @@ fn prune_preview_payload_uses_numeric_counts() {
   assert!(payload["preview"]["volumes"].is_u64());
   assert!(payload["preview"]["networks"].is_u64());
 }
+
+#[test]
+fn uninstall_preview_blocked_shared_deps_contract() {
+  use crate::runtime_packages::runtime_preview_blocked_shared_deps;
+
+  // Installed runtime deps minus packages the PM would autoremove = still-required shared libs.
+  let blocked = runtime_preview_blocked_shared_deps(
+    &["nodejs", "npm"],
+    &[
+      "libc6".to_string(),
+      "libgcc-s1".to_string(),
+      "libuv1".to_string(),
+    ],
+    &["libuv1".to_string()],
+  );
+  let payload = json!({
+    "ok": true,
+    "distro": "debian",
+    "runtimePackages": ["nodejs", "npm"],
+    "removableDeps": ["libuv1"],
+    "blockedSharedDeps": blocked,
+    "finalPackages": ["nodejs", "npm", "libuv1"],
+    "note": "preview"
+  });
+  assert_eq!(payload["blockedSharedDeps"], json!(["libc6", "libgcc-s1"]));
+  assert!(payload["blockedSharedDeps"].is_array());
+}

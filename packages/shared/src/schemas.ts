@@ -1,4 +1,7 @@
 import { z } from 'zod'
+import { ComposeProfileSchema } from './composeProfiles.js'
+
+export { COMPOSE_PROFILES, ComposeProfileSchema, type ComposeProfile } from './composeProfiles.js'
 
 export const DockerActionSchema = z.enum(['start', 'stop', 'restart', 'remove'])
 export const DockerImageActionSchema = z.enum(['remove'])
@@ -122,50 +125,38 @@ export const DockerNetworkActionRequestSchema = z.object({
   action: DockerNetworkActionSchema,
 })
 
+/** Whitelisted `dh:host:exec` commands — keep in sync with `system_info::host_exec_handler`. */
+export const HOST_EXEC_COMMANDS = [
+  'nvidia_smi_short',
+  'systemctl_is_active',
+  'systemctl_start',
+  'systemctl_stop',
+  'systemctl_is_active_fallback',
+  'maintenance_docker_system_df',
+  'maintenance_docker_ps_table',
+  'maintenance_journalctl_docker',
+  'maintenance_du_cache_tail',
+  'settings_read_hosts',
+  'settings_process_env',
+  'settings_write_hosts',
+  'settings_read_profile_env',
+  'settings_write_profile_env',
+] as const
+
+export type HostExecCommand = (typeof HOST_EXEC_COMMANDS)[number]
+
 export const HostExecRequestSchema = z.object({
-  command: z.enum([
-    'systemctl_is_active',
-    'nvidia_smi_short',
-    'flatpak_spawn_echo',
-    'docker_install_step',
-    /** Fixed whitelisted host probes; output shown in-app (Maintenance runbook). */
-    'maintenance_docker_system_df',
-    'maintenance_docker_ps_table',
-    'maintenance_journalctl_docker',
-    'maintenance_du_cache_tail',
-    /** Read-only `cat /etc/hosts` for Settings preview (bounded output server-side). */
-    'settings_read_hosts',
-    /** Allowlisted `std::env` keys from the app process (not a login shell); bounded text. */
-    'settings_process_env',
-    /** Write `/etc/hosts` via elevated copy (pkexec); `content` required. */
-    'settings_write_hosts',
-    /** Read `~/.profile` export lines for Settings profile env editor. */
-    'settings_read_profile_env',
-    /** Set/remove one `export KEY=VALUE` line in `~/.profile`; `action`, `key`, `value` required for set. */
-    'settings_write_profile_env',
-  ] as const),
+  command: z.enum(HOST_EXEC_COMMANDS),
   unit: z.string().max(128).optional(),
   user: z.boolean().optional(),
-  distro: z.enum(['ubuntu', 'fedora', 'arch']).optional(),
-  stepIndex: z.number().int().min(0).max(8).optional(),
+  /** Ordered unit names for `systemctl_is_active_fallback` (first match wins). */
+  units: z.array(z.string().max(128)).min(1).max(20).optional(),
   /** Full `/etc/hosts` body for `settings_write_hosts` (bounded server-side too). */
   content: z.string().max(48_000).optional(),
   action: z.enum(['set', 'remove']).optional(),
   key: z.string().trim().min(1).max(256).optional(),
   value: z.string().max(8192).optional(),
 })
-
-export const ComposeProfileSchema = z.enum([
-  'web-dev',
-  'data-science',
-  'ai-ml',
-  'mobile',
-  'game-dev',
-  'infra',
-  'desktop-gui',
-  'docs',
-  'empty',
-])
 
 /** Per-profile environment variable. */
 export const ProfileEnvVarSchema = z.object({
@@ -818,7 +809,6 @@ export type DockerImageAction = z.infer<typeof DockerImageActionSchema>
 export type DockerVolumeAction = z.infer<typeof DockerVolumeActionSchema>
 export type DockerNetworkAction = z.infer<typeof DockerNetworkActionSchema>
 export type DockerErrorCode = z.infer<typeof DockerErrorCodeSchema>
-export type ComposeProfile = z.infer<typeof ComposeProfileSchema>
 export type CustomProfileEntry = z.infer<typeof CustomProfileEntrySchema>
 export type MaintenanceTask = z.infer<typeof MaintenanceTaskSchema>
 export type MaintenanceProfileHealth = z.infer<typeof MaintenanceProfileHealthSchema>
@@ -1104,3 +1094,64 @@ export const CloudGitMergePrRequestSchema = z.object({
   reference: z.string().min(1).max(256).optional(),
 })
 export type CloudGitMergePrRequest = z.infer<typeof CloudGitMergePrRequestSchema>
+
+/** Invoke channels that accept `{}` or omit payload entirely. */
+export const EmptyRequestSchema = z.object({}).strict()
+
+export const DockerCleanupRunRequestSchema = z.object({
+  containers: z.boolean().optional(),
+  images: z.boolean().optional(),
+  volumes: z.boolean().optional(),
+  networks: z.boolean().optional(),
+})
+export type DockerCleanupRunRequest = z.infer<typeof DockerCleanupRunRequestSchema>
+
+export const DockerInstallComponentSchema = z.enum(['docker', 'compose', 'buildx'])
+
+export const DockerInstallRequestSchema = z.object({
+  distro: z.enum(['ubuntu', 'fedora', 'arch']),
+  components: z.array(DockerInstallComponentSchema).optional(),
+})
+export type DockerInstallRequest = z.infer<typeof DockerInstallRequestSchema>
+
+export const DiagnosticsBundleCreateRequestSchema = z.object({
+  includeSensitive: z.boolean().optional(),
+  report: z.record(z.string(), z.unknown()).optional(),
+})
+export type DiagnosticsBundleCreateRequest = z.infer<typeof DiagnosticsBundleCreateRequestSchema>
+
+export const FsOpenRequestSchema = FsExistsRequestSchema
+export type FsOpenRequest = z.infer<typeof FsOpenRequestSchema>
+
+export const SystemReadinessFixRequestSchema = z.object({
+  id: z.string().min(1).max(128),
+})
+export type SystemReadinessFixRequest = z.infer<typeof SystemReadinessFixRequestSchema>
+
+export const RuntimeInstalledVersionsRequestSchema = z.object({
+  runtimeId: z.string().min(1).max(64),
+})
+export type RuntimeInstalledVersionsRequest = z.infer<
+  typeof RuntimeInstalledVersionsRequestSchema
+>
+
+export const RuntimeRemoveVersionRequestSchema = z.object({
+  runtimeId: z.string().min(1).max(64),
+  version: z.string().max(128).optional(),
+  path: z.string().min(1).max(4096),
+})
+export type RuntimeRemoveVersionRequest = z.infer<typeof RuntimeRemoveVersionRequestSchema>
+
+export const TerminalCloseRequestSchema = z.object({
+  id: z.string().min(1).max(128),
+})
+export type TerminalCloseRequest = z.infer<typeof TerminalCloseRequestSchema>
+
+export const ProfileCredentialsGetRequestSchema = ProfileCredentialsIdRequestSchema
+export type ProfileCredentialsGetRequest = z.infer<typeof ProfileCredentialsGetRequestSchema>
+
+export const GitVcsStatusRequestSchema = GitVcsRepoPathSchema
+export type GitVcsStatusRequest = z.infer<typeof GitVcsStatusRequestSchema>
+
+export const GitVcsConflictHunksRequestSchema = GitVcsConflictDiffRequestSchema
+export type GitVcsConflictHunksRequest = z.infer<typeof GitVcsConflictHunksRequestSchema>

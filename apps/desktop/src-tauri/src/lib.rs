@@ -74,6 +74,8 @@ mod monitor_handlers;
 mod runtime_logs;
 mod ssh_handlers;
 mod terminal_pty;
+#[doc(hidden)]
+pub mod integration_test_support;
 
 #[tauri::command]
 async fn ipc_send(

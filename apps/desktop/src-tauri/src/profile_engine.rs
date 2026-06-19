@@ -474,6 +474,11 @@ pub(crate) async fn profile_switch(app: &AppHandle, body: &Value) -> Value {
     }
 }
 
+fn open_profile_credential_store(app: &AppHandle) -> Result<crate::profile_credentials::ProfileCredentialStore, Value> {
+    crate::profile_credentials::app_profile_credential_store(app)
+        .map_err(|e| json!({ "ok": false, "error": e }))
+}
+
 pub(crate) async fn profile_credentials_store(app: &AppHandle, body: &Value) -> Value {
     let id = body.get("id").and_then(|v| v.as_str()).unwrap_or_default();
     let value = body
@@ -483,7 +488,10 @@ pub(crate) async fn profile_credentials_store(app: &AppHandle, body: &Value) -> 
     if id.is_empty() || value.is_empty() {
         return json!({ "ok": false, "error": "[PROFILE_CRED_INVALID] 'id' and 'value' required" });
     }
-    let store = crate::profile_credentials::app_profile_credential_store(app);
+    let store = match open_profile_credential_store(app) {
+        Ok(s) => s,
+        Err(v) => return v,
+    };
     match store.save(id, value) {
         Ok(_) => json!({ "ok": true }),
         Err(e) => json!({ "ok": false, "error": e }),
@@ -491,7 +499,10 @@ pub(crate) async fn profile_credentials_store(app: &AppHandle, body: &Value) -> 
 }
 
 pub(crate) async fn profile_credentials_list(app: &AppHandle, _body: &Value) -> Value {
-    let store = crate::profile_credentials::app_profile_credential_store(app);
+    let store = match open_profile_credential_store(app) {
+        Ok(s) => s,
+        Err(v) => return v,
+    };
     match store.list_ids() {
         Ok(ids) => json!({ "ok": true, "ids": ids }),
         Err(e) => json!({ "ok": false, "error": e }),
@@ -503,7 +514,10 @@ pub(crate) async fn profile_credentials_delete(app: &AppHandle, body: &Value) ->
     if id.is_empty() {
         return json!({ "ok": false, "error": "[PROFILE_CRED_INVALID] 'id' required" });
     }
-    let store = crate::profile_credentials::app_profile_credential_store(app);
+    let store = match open_profile_credential_store(app) {
+        Ok(s) => s,
+        Err(v) => return v,
+    };
     match store.delete(id) {
         Ok(_) => json!({ "ok": true }),
         Err(e) => json!({ "ok": false, "error": e }),
@@ -515,7 +529,10 @@ pub(crate) async fn profile_credentials_get(app: &AppHandle, body: &Value) -> Va
     if id.is_empty() {
         return json!({ "ok": false, "error": "[PROFILE_CRED_INVALID] 'id' required" });
     }
-    let store = crate::profile_credentials::app_profile_credential_store(app);
+    let store = match open_profile_credential_store(app) {
+        Ok(s) => s,
+        Err(v) => return v,
+    };
     match store.load(id) {
         Ok(val) => json!({ "ok": true, "value": val }),
         Err(e) => json!({ "ok": false, "error": e }),

@@ -81,11 +81,9 @@ M  apps/desktop/src/renderer/src/pages/git/GitAssistantPage.tsx (import updated)
 
 **Status:** COMPLETED (Inaccuracy Corrected)
 
-**Finding:** Audit claimed "24 direct invoke() calls bypassing desktopApiBridge"
+**Finding:** Independent audit claimed **"24 direct invoke() calls bypassing desktopApiBridge"** — **incorrect**. P12 grep found **1** genuine raw `invoke('ipc_invoke', …)` (`SettingsUpdate.tsx`); fixed to `window.dh.appUpdateCheck()`. **0** bypasses remain.
 
-**Actual Results:** Only 1 genuine bypass found and fixed:
-
-#### Direct Invoke Bypass Found
+#### Direct Invoke Bypass Found (only instance)
 
 **File:** `apps/desktop/src/renderer/src/pages/settings/SettingsUpdate.tsx`
 
@@ -120,10 +118,7 @@ $ grep -r "invoke(" apps/desktop/src/renderer/src/pages --include="*.ts" --inclu
 0  ← No remaining bypasses
 ```
 
-**Note:** The audit's claim of "24 bypasses" was inaccurate. Investigation revealed:
-- `window.dh.*` calls are the bridge (not bypasses) — correct architecture
-- `listen()` calls from '@tauri-apps/api/event' are intentional event listeners
-- Only 1 raw `invoke()` call existed (now fixed)
+**Note:** The **24** figure was never accurate — it conflated correct `window.dh.*` bridge usage and `listen()` terminal events with raw `invoke('ipc_invoke')` bypasses.
 
 ---
 
@@ -137,11 +132,8 @@ $ grep -r "invoke(" apps/desktop/src/renderer/src/pages --include="*.ts" --inclu
 
 | Category | Count | Status |
 | --- | --- | --- |
-| Total IPC channels | 134 | All present |
-| Channels with RequestSchema | 54 | 40% coverage |
-| Channels without RequestSchema | 80 | 60% (mostly no-param or generic) |
-| Critical gaps requiring schemas | 5 | High-priority |
-| Medium-priority candidates | 12 | Can be deferred |
+| Total IPC channels | 138 | See [`SCHEMA_COVERAGE_ANALYSIS.md`](SCHEMA_COVERAGE_ANALYSIS.md) |
+| Dispatcher channels with Zod map | 133/133 | P10 batch 3 + `ipcSchemaMap.ts` |
 | Low-priority (no-param, simple) | ~60 | Non-critical |
 
 #### Channels Needing Priority Schemas (P1)
@@ -249,9 +241,9 @@ pnpm smoke        # Full CI gate
 
 | Claim | Actual | Adjustment |
 | --- | --- | --- |
-| 24 direct invoke() bypasses | 1 bypass | Audit inaccuracy; overstated by 24x |
-| 59 Rust .rs files | 61 .rs files | Includes 2 test modules |
-| 54 RequestSchemas cover critical gaps | 54 schemas sufficient | No urgent gap; rest is generic |
+| 24 direct invoke() bypasses | **1** bypass (fixed); **0** remain | Audit counted bridge + listeners; corrected in MASTER_PLAN + AUDIT 2026-06-19 |
+| 59 Rust .rs files | **62** .rs files | Phase 17 baseline 59 + 3 test/support modules |
+| 54 RequestSchemas cover critical gaps | **133/133** dispatcher map (P10) | Superseded 2026-06-19; see `SCHEMA_COVERAGE_ANALYSIS.md` |
 | Registry dead code blocking | 2 files removed | Now clean |
 | CI test:integration failure | Already fixed | No action taken (pre-fixed) |
 

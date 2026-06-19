@@ -418,6 +418,167 @@ pub(crate) async fn runtime_preview_removable_deps(pkg_mgr: &str, pkgs: &[&str])
     }
 }
 
+fn parse_apt_dep_token(token: &str) -> String {
+    token.split('(').next().unwrap_or(token).trim().to_string()
+}
+
+fn parse_apt_depends_lines(out: &str) -> Vec<String> {
+    out.lines()
+        .filter_map(|line| {
+            let line = line.trim();
+            if !(line.starts_with("Depends:") || line.starts_with("PreDepends:")) {
+                return None;
+            }
+            let token = line.split_whitespace().nth(1)?;
+            let name = parse_apt_dep_token(token);
+            if name.is_empty() || name == "<" {
+                None
+            } else {
+                Some(name)
+            }
+        })
+        .collect()
+}
+
+fn parse_dnf_repoquery_requires(out: &str) -> Vec<String> {
+    out.lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .filter(|line| !line.contains('(') && !line.starts_with('/'))
+        .map(|line| line.to_string())
+        .collect()
+}
+
+fn parse_pacman_qi_depends(out: &str) -> Vec<String> {
+    for line in out.lines() {
+        if let Some((_, rest)) = line.split_once("Depends On") {
+            let deps_part = rest.trim().trim_start_matches(':').trim();
+            return deps_part
+                .split_whitespace()
+                .map(|dep| dep.trim().to_string())
+                .filter(|dep| !dep.is_empty())
+                .collect();
+        }
+    }
+    vec![]
+}
+
+fn parse_rpm_requires_lines(out: &str) -> Vec<String> {
+    out.lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .filter(|line| !line.contains('(') && !line.starts_with('/'))
+        .map(|line| line.to_string())
+        .collect()
+}
+
+/// Installed packages that are direct dependencies of the runtime packages.
+pub(crate) async fn runtime_preview_installed_dependencies(
+    pkg_mgr: &str,
+    pkgs: &[&str],
+) -> Vec<String> {
+    if pkgs.is_empty() {
+        return vec![];
+    }
+
+    let mut deps = Vec::new();
+    match pkg_mgr {
+        "apt" => {
+            for pkg in pkgs {
+                let out = exec_output_limit(
+                    "apt-cache",
+                    &[
+                        "depends",
+                        "--no-recommends",
+                        "--no-suggests",
+                        "--no-conflicts",
+                        "--no-breaks",
+                        "--no-replaces",
+                        "--no-enhances",
+                        pkg,
+                    ],
+                    cmd_timeout_short(),
+                )
+                .await
+                .unwrap_or_default();
+                deps.extend(parse_apt_depends_lines(&out));
+            }
+        }
+        "dnf" | "yum" => {
+            for pkg in pkgs {
+                let out = exec_output_limit(
+                    pkg_mgr,
+                    &["repoquery", "--requires", "--installed", "--resolve", "--quiet", pkg],
+                    cmd_timeout_short(),
+                )
+                .await
+                .unwrap_or_default();
+                deps.extend(parse_dnf_repoquery_requires(&out));
+            }
+        }
+        "pacman" => {
+            for pkg in pkgs {
+                let out = exec_output_limit("pacman", &["-Qi", pkg], cmd_timeout_short())
+                    .await
+                    .unwrap_or_default();
+                deps.extend(parse_pacman_qi_depends(&out));
+            }
+        }
+        "zypper" => {
+            for pkg in pkgs {
+                let safe = pkg.replace('\'', "'\\''");
+                let cmd = format!("rpm -q --requires '{}' 2>/dev/null", safe);
+                let out = exec_output_limit("bash", &["-lc", &cmd], cmd_timeout_short())
+                    .await
+                    .unwrap_or_default();
+                deps.extend(parse_rpm_requires_lines(&out));
+            }
+        }
+        _ => return vec![],
+    }
+
+    deps.sort();
+    deps.dedup();
+
+    let mut installed = Vec::new();
+    for dep in deps {
+        if runtime_system_package_installed(pkg_mgr, &dep).await {
+            installed.push(dep);
+        }
+    }
+    installed
+}
+
+/// Dependencies that stay installed because other software still requires them.
+pub(crate) fn runtime_preview_blocked_shared_deps(
+    runtime_pkgs: &[&str],
+    installed_deps: &[String],
+    removable_deps: &[String],
+) -> Vec<String> {
+    let runtime_set: std::collections::HashSet<&str> = runtime_pkgs.iter().copied().collect();
+    let removable_set: std::collections::HashSet<&str> =
+        removable_deps.iter().map(|dep| dep.as_str()).collect();
+    let mut blocked: Vec<String> = installed_deps
+        .iter()
+        .filter(|dep| {
+            !runtime_set.contains(dep.as_str()) && !removable_set.contains(dep.as_str())
+        })
+        .cloned()
+        .collect();
+    blocked.sort();
+    blocked.dedup();
+    blocked
+}
+
+pub(crate) async fn runtime_preview_blocked_shared_deps_for_runtime(
+    pkg_mgr: &str,
+    runtime_pkgs: &[&str],
+    removable_deps: &[String],
+) -> Vec<String> {
+    let installed_deps = runtime_preview_installed_dependencies(pkg_mgr, runtime_pkgs).await;
+    runtime_preview_blocked_shared_deps(runtime_pkgs, &installed_deps, removable_deps)
+}
+
 pub(crate) fn pkg_remove_with_deps_cmd(pkg_mgr: &str, packages: &[&str]) -> String {
     let pkgs = packages.join(" ");
     match pkg_mgr {
@@ -544,6 +705,61 @@ mod tests {
         assert_eq!(
             pkg_remove_cmd("pacman", &["go"]),
             "pacman -R --noconfirm go"
+        );
+    }
+
+    #[test]
+    fn parse_apt_depends_lines_strips_version_constraints() {
+        let sample = "\
+nodejs
+  Depends: libc6
+  Depends: libnode72 (>= 12.22)
+  PreDepends: adduser
+  Recommends: ca-certificates
+";
+        assert_eq!(
+            parse_apt_depends_lines(sample),
+            vec![
+                "libc6".to_string(),
+                "libnode72".to_string(),
+                "adduser".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn parse_pacman_qi_depends_reads_depends_on_line() {
+        let sample = "\
+Name            : nodejs
+Version         : 23.7.0-1
+Depends On      : glibc libngtcp2 libuv
+Required By     : None
+";
+        assert_eq!(
+            parse_pacman_qi_depends(sample),
+            vec![
+                "glibc".to_string(),
+                "libngtcp2".to_string(),
+                "libuv".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn blocked_shared_deps_excludes_runtime_and_autoremove_candidates() {
+        let blocked = runtime_preview_blocked_shared_deps(
+            &["nodejs", "npm"],
+            &[
+                "libc6".to_string(),
+                "libgcc-s1".to_string(),
+                "libuv1".to_string(),
+                "npm".to_string(),
+            ],
+            &["libuv1".to_string()],
+        );
+        assert_eq!(
+            blocked,
+            vec!["libc6".to_string(), "libgcc-s1".to_string()]
         );
     }
 }

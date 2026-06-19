@@ -10,20 +10,26 @@ import {
   CustomProfilesStoreSchema,
   DockerActionRequestSchema,
   DockerErrorCodeSchema,
+  DiagnosticsBundleCreateRequestSchema,
+  DockerCleanupRunRequestSchema,
   DockerGetTagsRequestSchema,
   DockerInspectRequestSchema,
+  DockerInstallRequestSchema,
   DockerLogsRequestSchema,
   DockerReconfigureRequestSchema,
   DockerSearchRequestSchema,
   DockerTerminalRequestSchema,
   EditorOpenRequestSchema,
   FsExistsRequestSchema,
+  FsOpenRequestSchema,
   GitCloneRequestSchema,
   GitConfigSetKeyRequestSchema,
   GitConfigSetRequestSchema,
   GitConfigSetSchema,
   GitRecentAddRequestSchema,
   GitVcsStageRequestSchema,
+  GitVcsStatusRequestSchema,
+  GitVcsConflictHunksRequestSchema,
   HostExecRequestSchema,
   LogStreamStartRequestSchema,
   LogStreamStopRequestSchema,
@@ -38,6 +44,8 @@ import {
   ProfileSwitchRequestSchema,
   ProjectScaffoldRequestSchema,
   RuntimeCheckDepsRequestSchema,
+  RuntimeInstalledVersionsRequestSchema,
+  RuntimeRemoveVersionRequestSchema,
   WizardStateStoreSchema,
   RuntimeGetVersionsRequestSchema,
   RuntimeSetActiveRequestSchema,
@@ -47,11 +55,13 @@ import {
   SshListDirRequestSchema,
   SshSetupRemoteKeyRequestSchema,
   StoreSetRequestSchema,
+  SystemReadinessFixRequestSchema,
+  TerminalCloseRequestSchema,
   TerminalCreateRequestSchema,
   TerminalResizeRequestSchema,
   TerminalWriteRequestSchema,
 } from '../src/schemas'
-import { JobCancelRequestSchema, JobStartRequestSchema } from '../src/foundation'
+import { JobCancelRequestSchema, JobStartRequestSchema, SessionInfoRequestSchema } from '../src/foundation'
 import { isStoredActiveProfileValid, resolveActiveProfileName } from '../src/activeProfile'
 
 describe('schemas', () => {
@@ -59,6 +69,45 @@ describe('schemas', () => {
     expect(() =>
       HostExecRequestSchema.parse({ command: 'rm_rf_root' as never })
     ).toThrow()
+  })
+
+  it('rejects retired host exec commands not implemented in Rust', () => {
+    expect(() =>
+      HostExecRequestSchema.parse({ command: 'flatpak_spawn_echo' as never })
+    ).toThrow()
+    expect(() =>
+      HostExecRequestSchema.parse({ command: 'docker_install_step' as never })
+    ).toThrow()
+  })
+
+  it('accepts systemd host exec payloads used by dashboard and maintenance', () => {
+    expect(
+      HostExecRequestSchema.parse({
+        command: 'systemctl_is_active',
+        unit: 'sshd',
+        user: false,
+      }),
+    ).toEqual({ command: 'systemctl_is_active', unit: 'sshd', user: false })
+    expect(
+      HostExecRequestSchema.parse({
+        command: 'systemctl_start',
+        unit: 'nginx',
+        user: false,
+      }),
+    ).toEqual({ command: 'systemctl_start', unit: 'nginx', user: false })
+    expect(
+      HostExecRequestSchema.parse({
+        command: 'systemctl_stop',
+        unit: 'jupyter-lab',
+        user: true,
+      }),
+    ).toEqual({ command: 'systemctl_stop', unit: 'jupyter-lab', user: true })
+    expect(
+      HostExecRequestSchema.parse({
+        command: 'systemctl_is_active_fallback',
+        units: ['sshd', 'ssh'],
+      }),
+    ).toEqual({ command: 'systemctl_is_active_fallback', units: ['sshd', 'ssh'] })
   })
 
   it('accepts maintenance host probes', () => {
@@ -575,6 +624,51 @@ describe('schemas', () => {
         value: 'vim',
       })
       expect(SshGenerateRequestSchema).toBe(SshGenerateSchema)
+    })
+  })
+
+  describe('P10 batch 3 — remaining payload schemas', () => {
+    it('validates docker install, cleanup, diagnostics, fs open', () => {
+      expect(
+        DockerInstallRequestSchema.parse({ distro: 'arch', components: ['docker', 'compose'] }),
+      ).toMatchObject({ distro: 'arch' })
+      expect(
+        DockerCleanupRunRequestSchema.parse({
+          containers: true,
+          images: false,
+          volumes: true,
+        }),
+      ).toMatchObject({ containers: true, volumes: true })
+      expect(
+        DiagnosticsBundleCreateRequestSchema.parse({
+          includeSensitive: false,
+          report: { phase: 'P10' },
+        }),
+      ).toMatchObject({ includeSensitive: false })
+      expect(FsOpenRequestSchema.parse({ path: '/tmp' })).toEqual({ path: '/tmp' })
+      expect(() => DockerInstallRequestSchema.parse({ distro: 'debian' })).toThrow()
+    })
+
+    it('validates runtime, system readiness, terminal close, git vcs aliases', () => {
+      expect(RuntimeInstalledVersionsRequestSchema.parse({ runtimeId: 'node' })).toEqual({
+        runtimeId: 'node',
+      })
+      expect(
+        RuntimeRemoveVersionRequestSchema.parse({
+          runtimeId: 'node',
+          path: '/home/user/.nvm/versions/node/v20.0.0',
+          version: '20.0.0',
+        }),
+      ).toMatchObject({ runtimeId: 'node' })
+      expect(SystemReadinessFixRequestSchema.parse({ id: 'docker-group' })).toEqual({
+        id: 'docker-group',
+      })
+      expect(TerminalCloseRequestSchema.parse({ id: 'term-1' })).toEqual({ id: 'term-1' })
+      expect(GitVcsStatusRequestSchema.parse({ repoPath: '/repo' })).toEqual({ repoPath: '/repo' })
+      expect(
+        GitVcsConflictHunksRequestSchema.parse({ repoPath: '/repo', filePath: 'src/a.ts' }),
+      ).toEqual({ repoPath: '/repo', filePath: 'src/a.ts' })
+      expect(SessionInfoRequestSchema.parse({})).toEqual({})
     })
   })
 })

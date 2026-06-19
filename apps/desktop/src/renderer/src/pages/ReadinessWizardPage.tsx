@@ -1,6 +1,7 @@
 import type { ReactElement } from 'react'
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import type { ComposeProfile } from '@linux-dev-home/shared'
 import './ReadinessWizardPage.css'
 
 type RequirementStatus = 'ok' | 'warning' | 'error'
@@ -29,17 +30,6 @@ type InstallProgress = {
 }
 
 const TOTAL_STEPS = 8
-
-type ComposeProfile =
-  | 'web-dev'
-  | 'data-science'
-  | 'ai-ml'
-  | 'mobile'
-  | 'game-dev'
-  | 'infra'
-  | 'desktop-gui'
-  | 'docs'
-  | 'empty'
 
 const STARTER_PROFILES: Array<{ id: ComposeProfile; label: string; icon: string }> = [
   { id: 'web-dev', label: 'Web Development', icon: '🌐' },

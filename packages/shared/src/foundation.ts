@@ -1,6 +1,12 @@
 import { z } from 'zod'
 
-/** Runtime session info. */
+import { EmptyRequestSchema } from './schemas.js'
+
+/** No-payload request for `dh:session:info`. */
+export const SessionInfoRequestSchema = EmptyRequestSchema
+export type SessionInfoRequest = z.infer<typeof SessionInfoRequestSchema>
+
+/** Response subset for `dh:session:info` (full IPC envelope includes `ok`, `mode`, `platform`). */
 export const SessionInfoSchema = z.object({
   kind: z.literal('native'),
   /** Short hint for UI */

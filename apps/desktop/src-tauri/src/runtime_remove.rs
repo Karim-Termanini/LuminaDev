@@ -1,8 +1,8 @@
 use super::*;
 use crate::host_exec::{cmd_timeout_short, exec_output_limit};
 use crate::runtime_packages::{
-    runtime_preview_removable_deps, runtime_read_host_distro,
-    runtime_system_packages,
+    runtime_preview_blocked_shared_deps_for_runtime, runtime_preview_removable_deps,
+    runtime_read_host_distro, runtime_system_packages,
 };
 use crate::runtime_paths::{
     lumina_version_dir_from_path, nvm_version_dir_from_path, path_segment_after_marker,
@@ -77,6 +77,26 @@ pub(crate) async fn handle_runtime_uninstall_preview(body: &Value) -> Value {
             vec![]
         };
 
+    let removable_dep_names: Vec<String> = removable_deps
+        .iter()
+        .filter_map(|v| v.as_str().map(str::to_string))
+        .collect();
+    let blocked_shared_deps: Vec<Value> =
+        if remove_mode == "runtime_and_deps" && uses_pkg_mgr && !pkgs.is_empty() {
+            let pkg_strs: Vec<&str> = pkgs.to_vec();
+            runtime_preview_blocked_shared_deps_for_runtime(
+                pkg_mgr,
+                &pkg_strs,
+                &removable_dep_names,
+            )
+            .await
+            .into_iter()
+            .map(|p| json!(p))
+            .collect()
+        } else {
+            vec![]
+        };
+
     let mut final_pkgs = pkg_vals.clone();
     for d in &removable_deps {
         if !final_pkgs.contains(d) {
@@ -89,7 +109,7 @@ pub(crate) async fn handle_runtime_uninstall_preview(body: &Value) -> Value {
         "distro": distro,
         "runtimePackages": pkg_vals,
         "removableDeps": removable_deps,
-        "blockedSharedDeps": [],
+        "blockedSharedDeps": blocked_shared_deps,
         "finalPackages": final_pkgs,
         "note": note
     })

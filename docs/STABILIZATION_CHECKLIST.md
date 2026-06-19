@@ -180,7 +180,7 @@ Use this to audit which pages show live data and which show stubs/static content
 
 | Page / feature | Expected live data | Known stub / static |
 | --- | --- | --- |
-| **Monitor → Metrics** | CPU%, memory, disk, load avg from `/proc` | `diskReadMbps`, `diskWriteMbps`, `netRxMbps`, `netTxMbps` always 0 |
+| **Monitor → Metrics** | CPU%, memory, disk capacity, load avg from `/proc`; disk/net throughput from delta counters | First `dh:metrics` call primes a **~300ms** baseline (`METRICS_PRIME_MS` in `monitor_handlers.rs`) so rates are non-zero on first paint; idle host may still show ~0 Mbps |
 | **Monitor → Top processes** | `ps` output, refreshed | — |
 | **Monitor → Security** | `ufw`, `getenforce`, `sshd -T`, `journalctl` via bash | — |
 | **Monitor → System info** | `hostname`, `uname`, uptime | `ip`, `distro`, `shell`, `de`, `wm`, `gpu`, `packages`, `resolution` all optional / may be empty |
@@ -197,7 +197,7 @@ Use this to audit which pages show live data and which show stubs/static content
 | **SSH → generate / getPub / testGithub** | Real `ssh-keygen`, `ssh -T` | — |
 | **Git → config list / set** | Real `git config --global` | — |
 | **Git → clone / status** | Real git operations | — |
-| **Terminal** | Real shell via tokio spawn | No PTY (line-buffered only; no interactive apps like vim) |
+| **Terminal** | Real PTY via `terminal_pty.rs` (`portable_pty`: `native_pty_system`, resize, TTY semantics) | Embedded xterm.js; full-screen TUIs may differ slightly from native terminal emulators; **Open External Terminal** fallback |
 | **Compose** | Real `docker compose up/logs` | Needs compose files in `docker/compose/` |
 | **Diagnostics bundle** | Saves JSON to app data dir | — |
 | **Dashboard layout IPC** | _(removed 2026-05-29)_ | Widget deck and `layoutGet`/`layoutSet` channels removed with dashboard widgets |
@@ -266,5 +266,5 @@ Route-by-route live/partial/stub truth table: [`ROUTE_STATUS.md`](./ROUTE_STATUS
 | `docker:remap-port` | Clones container with new `-p`, stops/removes source on success |
 | SSH `~/.ssh` | Direct read/write via `ssh-keygen` on native host |
 | Docker socket | Requires daemon running + user in `docker` group (or rootless docker) |
-| Terminal | Line-buffered — not full PTY; external terminal fallback available |
+| Terminal | Real PTY (`portable_pty`); interactive apps (vim, etc.) supported on native builds | External terminal fallback for edge cases |
 

@@ -1,4 +1,5 @@
-import { ComposeProfileSchema, parseStoredActiveProfile, type ComposeProfile } from './schemas.js'
+import { ComposeProfileSchema, type ComposeProfile } from './composeProfiles.js'
+import { parseStoredActiveProfile } from './schemas.js'
 
 export type ActiveProfileRef = Pick<{ name: string; baseTemplate: ComposeProfile }, 'name' | 'baseTemplate'>
 

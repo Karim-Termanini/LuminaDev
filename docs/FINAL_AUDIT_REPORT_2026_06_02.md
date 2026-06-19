@@ -20,7 +20,7 @@ The comprehensive audit of KeelDev's codebase has been completed in two phases:
 - **P11.1:** CI pipeline verification → Already correct (uses test:roundtrip)
 - **P11.2:** Dead code cleanup → Registry files consolidated, 3 orphaned files deleted
 - **P12:** Bridge bypass audit → 1 genuine bypass found and fixed (not the claimed 24)
-- **P13:** Zod schema gap analysis → 54 schemas sufficient; 67 remaining channels use generics or no-param patterns
+- **P13:** Zod coverage re-audit → **133/133** dispatcher map via `ipcSchemaMap.ts` (first-pass “54 sufficient / 67 gap” was **false urgency** — see [`CORRECTED_AUDIT_REPORT.md`](./CORRECTED_AUDIT_REPORT.md))
 
 **Result:** Codebase is now cleaner, more consistent, and better understood. All pending changes are ready for merge and final testing.
 
@@ -34,12 +34,12 @@ The comprehensive audit of KeelDev's codebase has been completed in two phases:
 
 **Claim:** "All 9 Docker compose profiles have docker-compose.full.yml with full stacks"
 
-**Reality:** Only web-dev has full; 8 others are stubs
+**Reality:** Only web-dev has `docker-compose.full.yml` overlay *(still true)*. Base `docker-compose.yml` stacks were stub-only at audit time; **as of 2026-06-19** **7/9** presets ship real services, **game-dev** is partial, **empty** has no services — see [`STATUS.md`](STATUS.md).
 
 **Fix Applied:**
 - [phasesPlan.md](phasesPlan.md#L287): Line 287 updated
   - Old: "all 9 presets have docker-compose.full.yml"
-  - New: "only web-dev has one; 8 are stubs with Alpine sleep services"
+  - New: "only web-dev has one; 8 are stubs with Alpine sleep services" *(superseded — base stacks expanded since)*
 - Status: ✅ FIXED
 
 ---
@@ -270,9 +270,10 @@ const res = await window.dh.appUpdateCheck()
 
 ### ✅ Phase P13: Zod Schema Gap Analysis
 
-**Coverage Summary:**
-- **Total IPC channels:** 134
-- **With RequestSchema:** 54 (40%)
+**Coverage Summary** *(at report time; superseded — see [`SCHEMA_COVERAGE_ANALYSIS.md`](SCHEMA_COVERAGE_ANALYSIS.md))*:
+
+- **Total IPC channels:** 134 *(historical; **138** as of 2026-06-19 in `packages/shared/src/ipc.ts`)*
+- **With RequestSchema:** 54 (40%) *(historical; **133/133** dispatcher map after P10)*
 - **Without RequestSchema:** 80 (60%)
 
 **Analysis:**
@@ -470,7 +471,7 @@ Verification: pnpm smoke passes; cargo check ✅; no type errors; no bare unwrap
 | H5 (deprecated annotations) | "@deprecated Pro UI removed" (misleading) | Handler still wired | Clarified in H5 fix |
 | L1 (module count) | 37 .rs files, ~678 lines | 40 entries, ~706 lines | Documentation updated in L1 fix |
 | P12 (direct invoke bypasses) | "24 direct invoke() calls" | 1 genuine bypass (SettingsUpdate.tsx) | Overstated by ~24x; fixed in P12 |
-| P13 (schema gap) | ~80 channels lack schemas | 54 schemas sufficient; rest use generics | False urgency; deferred to Phase 19 |
+| P13 (schema coverage) | ~80 channels lack schemas | **133/133** via `ipcSchemaMap.ts` | First-pass count missed map + aliases + `EmptyRequestSchema` — **retracted** |
 
 ---
 

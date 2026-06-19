@@ -8,13 +8,13 @@ use tauri::{AppHandle, Manager};
 use crate::cloud_auth::chrono_now;
 
 /// Encrypted profile credentials file next to app data (`profile_credentials.enc`).
-pub fn app_profile_credential_store(app: &AppHandle) -> ProfileCredentialStore {
+pub fn app_profile_credential_store(app: &AppHandle) -> Result<ProfileCredentialStore, String> {
     let path = app
         .path()
         .app_data_dir()
-        .expect("app data dir must be resolvable")
+        .map_err(|e| format!("[PROFILE_CRED_STORE_PATH] {}", e))?
         .join("profile_credentials.enc");
-    ProfileCredentialStore::new(path)
+    Ok(ProfileCredentialStore::new(path))
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

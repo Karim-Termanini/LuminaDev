@@ -107,12 +107,18 @@ KeelDev transforms from a dashboard into **"The Unified AI Developer Control Pla
 6. Proxy applies context compression (Headroom) to save tokens
 7. All IDE traffic is unified under one credit/usage dashboard
 
+### What We Use
+- **`agentsview`**: Embedded local-first analytics dashboard to track token consumption, compute costs, and session statistics.
+- **`LMCache`**: KV cache manager integration for local LLMs (Ollama) to share/reuse KV prefixes across requests and lower generation latency.
+- **`stop-slop`**: System prompt formatting directives injected into the proxy to filter out passive AI writing clichés and formulaic prose from code comments and descriptions.
+- **`system_prompts_leaks`**: Prompt-hardening templates used to secure KeelDev's system prompts against malicious jailbreak and instruction leakage attempts.
+
 ### What We Build
 - HTTP server with `/v1/chat/completions` endpoint
 - Request/response interception middleware
-- Model routing logic (local vs cloud)
+- Model routing logic (local vs cloud) with LMCache prefix caching
 - Local API key authentication (generates a unique token on first run, stored in `~/.config/keel/token`, which the IDE must pass in `Authorization: Bearer <token>` to prevent malicious browser page attacks)
-- Usage logging and statistics
+- Cost, token, and performance statistics dashboard powered by `agentsview` log schema
 
 ### What We Don't Build
 - Our own LLM
@@ -130,6 +136,7 @@ KeelDev transforms from a dashboard into **"The Unified AI Developer Control Pla
 - Updates automatically as you change code
 - Provides context to AI without reading entire files every time
 - Works across all IDEs because it's system-level
+- Automatically generates and keeps `AGENTS.md` in sync at the project root
 
 ### How It Works (No Code)
 1. **Background Indexing:** KeelDev watches your project folders using filesystem events
@@ -138,10 +145,13 @@ KeelDev transforms from a dashboard into **"The Unified AI Developer Control Pla
 4. **Graph Storage:** All relationships stored as a graph in memory (Rust's `petgraph`)
 5. **Query Interface:** When AI asks about code, it queries the graph instead of reading files
 6. **Auto-Sync:** On file save, the graph updates incrementally (not full rebuild)
-7. **Persistence:** Graph stored in `~/.keel/graphs/<project_hash>.json`
+7. **AGENTS.md Exporter:** Periodically compiles the high-level codebase map, test conventions, and coding rules into a root `AGENTS.md` file so external agents (Cursor, Claude Code) read it automatically on project launch
+8. **Persistence:** Graph stored in `~/.keel/graphs/<project_hash>.json`
 
 ### What We Use
-- `graphify` (Python): Called via subprocess to generate AST → JSON
+- **`graphify`** (Python): Called via subprocess to parse code files and generate AST structure maps.
+- **`codegraph`**: Concept and schema layout for indexing codebase symbols and maintaining call graph relationships.
+- **`Understand-Anything`**: Context analyzer that extracts business flows (e.g., auth, payment) from the AST and flags them to the AI proxy.
 - `notify` (Rust crate): Filesystem watcher
 - `petgraph` (Rust crate): Graph data structure in memory
 
@@ -178,8 +188,8 @@ KeelDev transforms from a dashboard into **"The Unified AI Developer Control Pla
 5. **Post-Processing:** When model returns, responses are expanded back for user readability if needed
 
 ### What We Use
-- `headroom` (Python): Called via subprocess for heavy compression
-- Custom Rust tokenizer for quick compression without Python overhead
+- **`headroom`** (Python): Main subprocess engine for context/token pruning.
+- Custom Rust tokenizer for quick token length estimations. 
 
 ### What We Build
 - Subprocess daemon wrapper for headroom (run as a persistent long-running background process communicating via stdin/stdout to eliminate 50-200ms Python startup overhead on each chat message)
@@ -215,11 +225,16 @@ KeelDev transforms from a dashboard into **"The Unified AI Developer Control Pla
 5. No manual intervention needed — it just works
 6. Users see a subtle indicator in the dashboard: "Active Git Identity: Work/Personal"
 
+### What We Use
+- **`odysseus`**: Script execution library, vault storage logic for API/SSH credentials, and background task routines.
+- **`oh-my-pi`**: CLI harness concepts to run local system commands and query LSPs.
+- **`herdr`**: Rust terminal multiplexing server. Panes and terminal tabs in KeelDev are managed by `herdr` to keep terminal sessions sync'd with background agent states.
+
 **What We Build:**
 - Path-based rule engine (YAML config for users)
 - File watcher that monitors IDE activity (via open file handles or current directory polling)
 - Git config executor (runs `git config` commands)
-- UI indicator in dashboard
+- UI indicator in dashboard and terminal tabs managed by `herdr`
 
 **What We Don't Build:**
 - Git history rewriting tools
@@ -271,19 +286,48 @@ KeelDev transforms from a dashboard into **"The Unified AI Developer Control Pla
 6. **Feedback Loop:** If the fix works, it stores the solution. If not, it triggers a deeper search or suggests manual intervention
 
 **What We Use:**
-- `last30days-skill` (JavaScript): Called via `node` subprocess for recent solution search
-- Local LLM (Ollama) for solution synthesis
-- `Agent-Reach` (Python) optionally for deeper web scraping
+- **`last30days-skill`** (JavaScript): DuckDuckGo + HN + Reddit search aggregator.
+- **`Agent-Reach`** (Python): Omnichannel scraper (Reddit, YouTube, Twitter/X, GitHub) to search the web without official API keys.
+- **`chatwoot`**: Omnibus notification schema and inbox UI wrapper for triaging diagnostic reports.
 
 **What We Build:**
 - Error log collector (capture stderr from commands, system logs)
-- Search wrapper (call `last30days` or `Agent-Reach` subprocesses)
+- Search wrapper (calls `last30days` or `Agent-Reach` Python scripts)
 - Solution executor (execute shell commands with user confirmation)
-- Solution cache (store successful fixes for future reference)
+- Unified notification box for errors and triage logs (derived from `chatwoot` UI layout)
 
 **What We Don't Build:**
 - Web crawler from scratch (use `last30days` or `Agent-Reach`)
 - LLM training (use existing Ollama models)
+
+---
+
+
+---
+
+## Component 7: Centralized Skill & Tool Registry (MCP Host)
+
+### What It Does
+- Manages and runs custom tools, agentic skills, and MCP servers in a single place
+- Serves these skills globally to all connected IDEs (Cursor, VSCode, Zed)
+- Automatically scans new skills for security threats, prompt injections, and data leaks
+
+### How It Works (No Code)
+1. **Registration:** User defines a custom skill (a Python/Node script or local server) in KeelDev
+2. **Security Audit:** KeelDev automatically runs a static analysis scan on the skill script
+3. **Host serving:** KeelDev hosts the skill as an MCP (Model Context Protocol) tool
+4. **IDE Access:** When Cursor/VSCode queries the proxy, KeelDev advertises these tools
+5. **Orchestrated Execution:** The LLM requests tool execution → KeelDev runs it locally and returns the result
+
+### What We Use
+- **`dify`**: Workflow/Tool definitions schema. We support running dify-like tool YAML structures.
+- **`SkillSpector`** (NVIDIA): Static analysis engine to detect prompt injections and data leaks in registered scripts.
+- **`pm-skills`** & **`Anthropic-Cybersecurity-Skills`**: Built-in skill packs loaded into the registry for workspace management and security checks.
+
+### What We Build
+- Local MCP Server Host
+- NVIDIA `SkillSpector` subprocess executor for auditing new tools
+- Visual tool configuration dashboard
 
 ---
 
@@ -458,9 +502,9 @@ All other functionality comes from calling existing tools via subprocess.
 
 ---
 
-## Complete Practical Scenario: Building an ExpenseTracker App with KeelDev
+## Complete Practical Scenario: Building an ExpenseTracker App with KeelDev (Omnibus Integration)
 
-To make this plan concrete, here is a step-by-step walkthrough of how a developer uses KeelDev to build a personal expense tracking web application:
+To make this plan concrete, here is a step-by-step walkthrough of how a developer uses KeelDev to build a personal expense tracking web application, utilizing our 18 local tools:
 
 ### 🎬 Step 1: Initialization & One-Click Setup (The Wizard)
 1. The user opens KeelDev for the first time and clicks "New Project".
@@ -469,23 +513,30 @@ To make this plan concrete, here is a step-by-step walkthrough of how a develope
    * **Have you ever used the terminal before?** User selects `No` (prefers a simple visual interface).
    * **Do you know what Git and GitHub are?** User selects `Yes` and connects their GitHub account.
 3. **In the background (silent, one-click execution):**
-   * KeelDev detects that `Node.js` and `npm` are not installed. It automatically installs them.
+   * KeelDev detects that `Node.js` and `npm` are not installed. It automatically installs them using the environment modules from **`odysseus`**.
    * It detects that the PATH environment variable is missing the new runtimes and updates `~/.bashrc` automatically.
-   * It scaffolds a clean React + Node.js starter project, initializes a local Git repository, and commits the initial project state.
+   * It calls the PM skills pack from **`pm-skills`** in the background to automatically design a starter database schema and write a skeleton PRD (Product Requirement Document).
+   * It scaffolds a clean React + Node.js starter project using **`odysseus`** templates, initializes a local Git repository, and commits the initial project state.
+   * It runs the indexer script from **`graphify`** in the background to build the initial Knowledge Graph mapping file dependencies and symbols.
+   * It automatically generates the `AGENTS.md` file in the project root containing the project conventions and AST structure map.
    * It displays a prominent button: **[Open Project in Cursor / VS Code]**.
 
 ### 💻 Step 2: Coding & Token/Credit Optimization (The AI Proxy & Compression)
 1. The user clicks the button, opening the project in their favorite IDE (e.g., Cursor).
-2. The IDE is pre-configured to point to the local KeelDev proxy (`http://localhost:4317`) instead of the default OpenAI servers, secured by a unique local API token to block malicious web browser attacks.
+2. The IDE (Cursor/Claude Code) automatically reads the generated `AGENTS.md` file from the root, immediately understanding the project layout and coding conventions without manual prompt explanations.
+3. The IDE is pre-configured to point to the local KeelDev proxy (`http://localhost:4317`) instead of the default OpenAI servers, secured by a unique local API token (using **`system_prompts_leaks`** security patterns) to block malicious web browser attacks.
 3. The user prompts the IDE's AI:
    > *"Create an expense input page and connect it to the Backend."*
 4. **In the background (sub-second processing):**
-   * The proxy intercepts the request and runs **graphify** on the project in the background to fetch a lightweight Knowledge Graph of the React and Express code structure.
-   * It feeds the context to **headroom** (running as a persistent daemon in the background) to strip comments, whitespaces, and redundant files, compressing the prompt context by 85%.
-   * It forwards the compressed prompt to a local model (Ollama `Qwen-2.5-Coder-3B` based on hardware specs) or a cloud LLM using the user's PAYG developer API keys.
-5. **The Result:** The IDE generates and applies code changes quickly with **near-zero cost** in tokens and minimum battery/resource drain on the host machine.
+   * The proxy intercepts the request and checks the active workspace graph generated by **`graphify`** and structured like **`codegraph`** to fetch a lightweight mapping of the React and Express code structure.
+   * **`Understand-Anything`** extracts the business logic layer (Express routes, database operations) and injects it into the prompt.
+   * It feeds the context to **`headroom`** (running as a persistent daemon in the background) to strip comments, whitespaces, and redundant files, compressing the prompt context by 85%.
+   * It checks **`LMCache`** to see if a prefix KV cache for this repository context already exists in GPU/CPU memory to avoid reprocessing the entire system instruction set.
+   * It applies **`stop-slop`** rules to the system prompt to instruct the LLM to output clean, natural, human-like code comments.
+   * It forwards the compressed prompt to Ollama or a cloud LLM using the user's PAYG developer API keys.
+5. **The Result:** The IDE generates and applies code changes quickly with **near-zero cost** in tokens and minimum latency on the host machine. The session cost and tokens are logged on the dashboard via **`agentsview`**.
 
-### 🔀 Step 3: Automatic Git Profile Switching (Git Context Switcher)
+### 🔀 Step 3: Automatic Git Profile Switching & Terminal (Git Context Switcher & herdr)
 1. Mid-development, the user opens a company project in `/home/karim/work/project-x` to make a quick hotfix.
 2. **Automatically:** The KeelDev File Watcher detects the workspace directory change and instantly switches the Git configuration:
    ```bash
@@ -493,15 +544,16 @@ To make this plan concrete, here is a step-by-step walkthrough of how a develope
    git config --local user.email "karim@company.com"
    ```
    It also points to the company's SSH key in `~/.ssh/config` for that repository.
-3. The user makes the fix, commits, and pushes.
-4. The commit goes to the company's repository with the correct work email and name. The user switches back to ExpenseTracker, and KeelDev automatically swaps back to their personal Git credentials.
+3. In the KeelDev terminal tab, **`herdr`** splits the terminal layout and displays the status of the background indexing agent.
+4. The user makes the fix, commits, and pushes.
+5. The commit goes to the company's repository with the correct work email and name. The user switches back to ExpenseTracker, and KeelDev automatically swaps back to their personal Git credentials.
 
 ### 🚨 Step 4: One-Click Linux Troubleshooting (Error Diagnoser)
 1. While running the Express server in the IDE, the user encounters a port conflict:
    `Error: listen EADDRINUSE: address already in use :::3000`
 2. KeelDev captures this error from the process logs.
-3. The Diagnoser queries `last30days` and `Agent-Reach` to search the web for solutions to this specific error on the current Linux distribution.
-4. A notification appears on the KeelDev dashboard:
+3. The Diagnoser queries **`last30days-skill`** and **`Agent-Reach`** to search the web (Reddit, StackOverflow, HN) for solutions to this specific error on the current Linux distribution without needing official web search keys.
+4. A notification appears on the KeelDev triage inbox (designed like **`chatwoot`**):
    > *"Port 3000 is blocked by a dangling Express process (PID: 5412). Would you like to terminate it and resolve the issue?"*
 5. The user clicks **[Kill and Resolve]**.
 6. The process is terminated, the port is freed, and the server starts successfully without the user having to search Google or run command line tools like `lsof` or `kill`.
@@ -517,13 +569,11 @@ To make this plan concrete, here is a step-by-step walkthrough of how a develope
 5. **Scenario B (Complex System Design - Cloud & PAYG):**
    * The user opens the chat panel and asks: *"How do I migrate our database tables to SQLite cleanly without losing current record relationships?"*
    * VSCode sends the request to KeelDev.
-   * KeelDev queries the local **Knowledge Graph** to understand the DB schemas, compresses the context by 85% via **headroom**, and routes it to the cloud **Anthropic API**.
+   * KeelDev queries the local **Knowledge Graph** to understand the DB schemas, compresses the context by 85% via **`headroom`**, and routes it to the cloud **Anthropic API**.
    * The user receives a highly intelligent response from Claude 3.5 Sonnet, but because of headroom compression, the request only cost $0.01 instead of higher rates.
 6. **Scenario C (Offline Mode Fallback):**
    * The user loses internet connectivity while traveling.
    * KeelDev detects the offline state and automatically switches all requests (even those originally targeted at cloud models) to fallback to the local Ollama models so development never halts.
-
----
 
 ## Timeline & Phasing
 

@@ -21,7 +21,7 @@ Artifact path depends on Tauri output (typically under `apps/desktop/src-tauri/t
 3. Docker panel lists containers or shows a clear error when the daemon/socket is unavailable.
 4. `/git` assistant loads — Setup → Project → Save → Share flow works.
 5. Settings hub opens all 14 tabs (no Extension tab).
-6. Embedded terminal shows a shell prompt; input works (line-buffered — vim/htop may not work).
+6. Embedded terminal shows a shell prompt; input works via real PTY (`portable_pty` in `terminal_pty.rs`). Full-screen TUIs may differ slightly from a native terminal emulator; use **Open External Terminal** if needed.
 7. `pnpm smoke` equivalent passed on the build machine before packaging.
 
 ## Cross-distro spot checks

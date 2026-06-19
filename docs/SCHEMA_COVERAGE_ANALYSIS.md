@@ -1,278 +1,112 @@
-# Zod Schema Coverage Analysis (2026-06-02)
+# Zod Schema Coverage Analysis
 
-## Executive Summary
+**Last updated:** 2026-06-19 (Phase 18 P10)
 
-- **Total IPC channels:** 134
-- **Channels with RequestSchema:** 54 (40%)
-- **Channels without RequestSchema:** 80 (60%)
+## Source of truth
 
-**Note:** Not all channels require explicit Zod schemas. Many use simple payloads (empty, boolean, string, or well-documented generic types). This analysis identifies gaps where type safety could be improved.
+Do **not** cite retired figures (**54**, **~70**, **70/137**, **134**, **137**) from P13-era audits. Those counted different things (manual schema subsets, graphify community IDs, stale `IPC` sizes).
 
----
+**Authoritative dispatcher coverage:** `IPC_REQUEST_SCHEMAS` in `packages/shared/src/ipcSchemaMap.ts` — **133/133** (100%). Guard: `packages/shared/test/ipcSchemaCoverage.test.ts`.
 
-## Channels WITH RequestSchema (54 documented)
+Run live counts after any IPC or schema change:
 
-### Cloud Auth (4)
-- `dh:cloud:auth:connect-start` → `CloudAuthConnectStartRequestSchema`
-- `dh:cloud:auth:connect-poll` → `CloudAuthConnectPollRequestSchema`
-- `dh:cloud:auth:connect-pat` → `CloudAuthConnectPatRequestSchema`
-- `dh:cloud:auth:disconnect` → Missing explicit schema
+```bash
+cd packages/shared && pnpm exec vitest run test/ipcSchemaCoverage.test.ts
 
-### Cloud Git (6)
-- `dh:cloud:git:prs` → `CloudGitPrsRequestSchema`
-- `dh:cloud:git:review-requests` → `CloudGitReviewRequestsRequestSchema`
-- `dh:cloud:git:pipelines` → `CloudGitPipelinesRequestSchema`
-- `dh:cloud:git:issues` → `CloudGitIssuesRequestSchema`
-- `dh:cloud:git:releases` → `CloudGitReleasesRequestSchema`
-- `dh:cloud:git:get-pr-checks` → `CloudGitGetPrChecksRequestSchema`
+# IPC channel strings (expect 138)
+node -e "const fs=require('fs');const s=fs.readFileSync('packages/shared/src/ipc.ts','utf8');console.log([...s.matchAll(/'dh:[^']+'/g)].length)"
 
-### Compose (1)
-- `dh:compose:up` → `ComposeUpRequestSchema`
+# Git VCS namespace (expect 25)
+node -e "const fs=require('fs');const s=fs.readFileSync('packages/shared/src/ipc.ts','utf8');console.log([...s.matchAll(/'dh:git:vcs:[^']+'/g)].length)"
 
-### Docker (13)
-- `dh:docker:list` → No schema needed (no params)
-- `dh:docker:action` → No schema defined (handled generically)
-- `dh:docker:logs` → `DockerLogsRequestSchema`
-- `dh:docker:create` → `DockerCreateRequestSchema`
-- `dh:docker:images:list` → No schema (no params)
-- `dh:docker:image:action` → `DockerImageActionRequestSchema`
-- `dh:docker:volumes:list` → No schema (no params)
-- `dh:docker:volume:action` → `DockerVolumeActionRequestSchema`
-- `dh:docker:volume:create` → `DockerVolumeCreateRequestSchema`
-- `dh:docker:networks:list` → No schema (no params)
-- `dh:docker:network:action` → `DockerNetworkActionRequestSchema`
-- `dh:docker:network:create` → `DockerNetworkCreateRequestSchema`
-- `dh:docker:container:stats` → `DockerContainerStatsRequestSchema`
+# Exported RequestSchema names (informational — includes aliases; not channel coverage)
+rg -c 'export const \\w+RequestSchema' packages/shared/src/schemas.ts packages/shared/src/foundation.ts
 
-### Git VCS (21)
-- `dh:git:vcs:branches` → `GitVcsBranchesRequestSchema`
-- `dh:git:vcs:checkout` → `GitVcsCheckoutRequestSchema`
-- `dh:git:vcs:commit` → `GitVcsCommitRequestSchema`
-- `dh:git:vcs:conflict-diff` → `GitVcsConflictDiffRequestSchema`
-- `dh:git:vcs:diff` → `GitVcsDiffRequestSchema`
-- `dh:git:vcs:fetch` → `GitVcsFetchRequestSchema`
-- `dh:git:vcs:merge` → `GitVcsMergeRequestSchema`
-- `dh:git:vcs:merge-abort` → `GitVcsMergeAbortRequestSchema`
-- `dh:git:vcs:merge-continue` → `GitVcsMergeContinueRequestSchema`
-- `dh:git:vcs:pull` → `GitVcsPullRequestSchema`
-- `dh:git:vcs:push` → `GitVcsPushRequestSchema`
-- `dh:git:vcs:rebase` → `GitVcsRebaseRequestSchema`
-- `dh:git:vcs:rebase-abort` → `GitVcsRebaseAbortRequestSchema`
-- `dh:git:vcs:rebase-continue` → `GitVcsRebaseContinueRequestSchema`
-- `dh:git:vcs:rebase-skip` → `GitVcsRebaseSkipRequestSchema`
-- `dh:git:vcs:remotes` → `GitVcsRemotesRequestSchema`
-- `dh:git:vcs:rename-branch` → `GitVcsRenameBranchRequestSchema`
-- `dh:git:vcs:resolve-conflict` → `GitVcsResolveConflictRequestSchema`
-- `dh:git:vcs:resolve-hunk` → `GitVcsResolveHunkRequestSchema`
-- `dh:git:vcs:stage` → `GitVcsStageRequestSchema`
-- `dh:git:vcs:stash` → `GitVcsStashRequestSchema`
+# Vitest files (expect 64 desktop + 7 shared = 71; do not count *.test.ts only — that yields 69)
+find apps/desktop packages/shared/test \( -name '*.test.ts' -o -name '*.test.tsx' \) | wc -l
+# Desktop breakdown: 62 *.test.ts + 2 *.test.tsx (settings.test.tsx, profilesPage.smoke.test.tsx)
+# Often missed when counting *.test.ts only: desktopApiBridge.contract.test.ts + the two *.test.tsx above
 
-### Git (3)
-- `dh:git:clone` → `GitCloneRequestSchema`
-- `dh:git:status` → `GitStatusRequestSchema`
-- (git:recent:list, git:config:*, git:doctor:scan have no schemas)
+# Rust .rs under src-tauri/src (expect 62)
+find apps/desktop/src-tauri/src -name '*.rs' | wc -l
+```
 
-### Host (1)
-- `dh:host:exec` → `HostExecRequestSchema`
+## Current metrics (2026-06-19)
 
-### Runtimes (4)
-- `dh:runtime:check-deps` → `RuntimeCheckDepsRequestSchema`
-- `dh:runtime:get-versions` → `RuntimeGetVersionsRequestSchema`
-- `dh:runtime:set-active` → `RuntimeSetActiveRequestSchema`
-- `dh:runtime:uninstall:preview` → `RuntimeUninstallPreviewRequestSchema`
+| Metric | Value | Notes |
+| --- | --- | --- |
+| Total `IPC` channel strings | **138** | `Object.values(IPC)` in `ipc.ts` |
+| Excluded (dialog plugins + terminal events) | **5** | Not in `IPC_REQUEST_SCHEMAS` |
+| Dispatcher channels (`ipc_invoke` / `ipc_send`) | **133** | |
+| Channels in `IPC_REQUEST_SCHEMAS` | **133** (100%) | |
+| Payload channels (non-`EmptyRequestSchema`) | **~104** | From `ipcSchemaCoverageStats()` |
+| No-payload channels (`EmptyRequestSchema`) | **~29** | List/status/check channels |
+| Exported `*RequestSchema` consts | **106** | **103** in `schemas.ts` + **3** in `foundation.ts` — many are aliases of the same Zod object |
+| `dh:git:vcs:*` channels | **25** | All wired ipc.ts → bridge → Rust |
+| Git VCS UI-active (`window.dh.gitVcs*` in `pages/`) | **16** | Git Assistant + changes panel + remote sync |
+| Git VCS legacy (bridge only / contract tests) | **9** | Pro Git tab UI removed — handlers kept |
 
-### Store (3)
-- `dh:store:get` → `StoreGetRequestSchema`
-- `dh:store:set` → `StoreSetRequestSchema`
-- `dh:store:delete` → `StoreDeleteRequestSchema`
+### Git VCS channel breakdown
 
----
+**UI-active (16):** `status`, `branches`, `remotes`, `diff`, `stage`, `unstage`, `commit`, `pull`, `push`, `fetch`, `checkout`, `stash`, `merge-continue`, `merge-abort`, `rebase-continue`, `rebase-abort`.
 
-## Channels WITHOUT Explicit RequestSchema (80)
+**Legacy / contract-only (9):** `merge`, `rebase`, `stash-pop`, `rebase-skip`, `rename-branch`, `conflict-diff`, `conflict-hunks`, `resolve-conflict`, `resolve-hunk`.
 
-### App (2)
-- `dh:app:info` — no params needed
-- `dh:app:update:check` — no params
+First-pass audits claimed **28** `dh:git:vcs:*` channels — incorrect.
 
-### Cloud Auth (1)
-- `dh:cloud:auth:status` — no params
-- (Others: disconnected from schema coverage)
+## Counting methodology (M7)
 
-### Cloud Git (5)
-- `dh:cloud:git:create-pr` — uses generic payload
-- `dh:cloud:git:find-pr` — uses generic payload
-- `dh:cloud:git:merge-pr` — uses generic payload
-- `dh:cloud:git:review-requests` — see above
-- (Others: generic payloads)
+| What you might see | What it measured | Status |
+| --- | --- | --- |
+| **54** | P13 manual “documented schemas” subset | **Retired** |
+| **~70** / **70/137** | Partial export count or graphify community **70** | **Retired** — community ID ≠ schema count |
+| **91** / **94** | Lines matching `RequestSchema` in exports + `z.infer` types | **Informational only** — not dispatcher coverage |
+| **106** | `export const *RequestSchema` in `schemas.ts` + `foundation.ts` | **Informational** — aliases inflate vs unique Zod objects |
+| **133/133** | `IPC_REQUEST_SCHEMAS` map entries | **Authoritative** for boundary coverage |
+| **138** | `IPC` const size | **Authoritative** total channel strings |
 
-### Compose (2)
-- `dh:compose:down` — uses generic payload
-- `dh:compose:logs` — uses generic payload
-- `dh:compose:stop` — uses generic payload
+**Rule:** For “do we have Zod for every dispatcher channel?” use **133/133** only. Export-line counts are for maintainers auditing alias sprawl, not release gates.
 
-### Dialog (3)
-- `dh:dialog:folder` — handled via @tauri-apps/plugin-dialog
-- `dh:dialog:file:open` — handled via @tauri-apps/plugin-dialog
-- `dh:dialog:file:save` — handled via @tauri-apps/plugin-dialog
+## Excluded channels (intentionally outside map)
 
-### Docker (20+)
-- `dh:docker:check-installed` — no params
-- `dh:docker:install` — generic payload
-- `dh:docker:pull` → `DockerPullRequestSchema` (DOCUMENTED)
-- `dh:docker:search` — generic payload
-- `dh:docker:tags` — generic payload
-- `dh:docker:terminal` — generic payload
-- `dh:docker:prune` — no params
-- `dh:docker:prune:preview` — no params
-- `dh:docker:cleanup:run` — generic payload
-- `dh:docker:inspect` → `DockerInspectRequestSchema` (DOCUMENTED)
-- `dh:docker:reconfigure` → `DockerReconfigureRequestSchema` (DOCUMENTED)
-- `dh:docker:remap-port` → `DockerRemapPortRequestSchema` (DOCUMENTED)
+| Channel | Reason |
+| --- | --- |
+| `dh:dialog:folder` | `@tauri-apps/plugin-dialog` |
+| `dh:dialog:file:open` | `@tauri-apps/plugin-dialog` |
+| `dh:dialog:file:save` | `@tauri-apps/plugin-dialog` |
+| `dh:terminal:data` | Tauri event listener |
+| `dh:terminal:exit` | Tauri event listener |
 
-### Editor (2)
-- `dh:editor:list` — no params
-- `dh:editor:open` — generic payload
+## Architecture
 
-### Filesystem (2)
-- `dh:fs:exists` — generic payload
-- `dh:fs:open` — generic payload
+```
+Renderer → desktopApiBridge.ts → ipc_invoke / ipc_send → Rust handlers
+                ↑
+    IPC_REQUEST_SCHEMAS (packages/shared/src/ipcSchemaMap.ts)
+    *RequestSchema exports (packages/shared/src/schemas.ts + foundation.ts)
+```
 
-### Git (5+)
-- `dh:git:recent:list` — no params
-- `dh:git:recent:add` — generic payload
-- `dh:git:config:list` — generic payload
-- `dh:git:config:set` — generic payload
-- `dh:git:config:set-key` — generic payload
-- `dh:git:doctor:scan` — no params
+**P10 scope:** TypeScript Zod definitions + canonical channel map. The bridge does **not** call `.parse()` on every invoke yet; Rust still validates ad hoc.
 
-### Host (3)
-- `dh:host:distro` — no params
-- `dh:host:ports` — no params
-- `dh:host:sysinfo` — no params
+## Guards
 
-### Job (3)
-- `dh:job:start` — complex payload (handled in code)
-- `dh:job:list` — no params
-- `dh:job:cancel` — generic payload
+| Guard | Location | Purpose |
+| --- | --- | --- |
+| Channel name parity TS ↔ Rust | `apps/desktop/src-tauri/src/ipc_contract_tests.rs` | Prevents drift in channel strings |
+| Schema map completeness | `packages/shared/test/ipcSchemaCoverage.test.ts` | Every dispatcher channel has a Zod schema |
+| **Source ↔ dist parity** | `packages/shared/test/ipcSchemaSourceDistParity.test.ts` | Every `ipcSchemaMap` payload schema exists in `src/` **and** `dist/` after build |
+| **`window.dh` ↔ bridge** | `apps/desktop/src/renderer/src/api/desktopApiBridge.contract.test.ts` | Method names in `vite-env.d.ts` match `createTauriDhApi()` (`satisfies DhApi` at compile time) |
+| Payload roundtrips | `packages/shared/test/schemas.test.ts` | P10 batch parse tests |
 
-### Logs (2)
-- `dh:log:stream:start` — generic payload
-- `dh:log:stream:stop` — generic payload
+### Source/dist drift incident (2026-06-19)
 
-### Metrics (1)
-- `dh:metrics` — no params
+`ipcSchemaMap.ts` was added referencing P10 `*RequestSchema` exports that had been removed from `schemas.ts` while an older `dist/` still compiled. Symptom: `pnpm typecheck` / shared tests fail; desktop vitest could pass via stale `dist/`.
 
-### Monitor (3)
-- `dh:monitor:top-processes` — no params
-- `dh:monitor:security` — no params
-- `dh:monitor:security-drilldown` — generic payload
+**Resolution:** Restored all 20 payload schemas in `schemas.ts` (`6d36da8`). Shared `test` script runs `pnpm build` first; `ipcSchemaSourceDistParity.test.ts` fails if `dist/` lags source.
 
-### Performance (1)
-- `dh:perf:snapshot` — no params
+**Rule:** Never rely on `dist/` without rebuilding shared after schema changes. Run `cd packages/shared && pnpm test` (build + vitest) or root `pnpm test`.
 
-### Ports (1)
-- `dh:ports:suggest` — generic payload
+## Follow-up (post-P10)
 
-### Profile (5+)
-- `dh:profile:switch` — generic payload
-- `dh:profile:credentials:store` — generic payload
-- `dh:profile:credentials:list` — no params
-- `dh:profile:credentials:delete` — generic payload
-- `dh:profile:credentials:get` — generic payload
-- `dh:profile:running-status` — generic payload
-
-### Project (3)
-- `dh:project:ensure_dir` — generic payload
-- `dh:project:scaffold` — complex generic payload
-- `dh:project:install_deps` — complex generic payload
-
-### Runtimes (3+)
-- `dh:runtime:status` — no params
-- `dh:runtime:installed-versions` — generic payload
-- `dh:runtime:remove-version` — generic payload
-
-### Session (1)
-- `dh:session:info` — no params
-
-### SSH (6+)
-- `dh:ssh:generate` — generic payload
-- `dh:ssh:get:pub` — generic payload
-- `dh:ssh:test:github` — generic payload
-- `dh:ssh:list:dir` — generic payload
-- `dh:ssh:setup:remote:key` — generic payload
-- `dh:ssh:enable:local` — no params
-
-### System (2)
-- `dh:system:readiness:check` — no params
-- `dh:system:readiness:fix` — generic payload
-
-### Terminal (7+)
-- `dh:terminal:create` — complex payload (has schema? check)
-- `dh:terminal:write` — fire-and-forget via ipc_send
-- `dh:terminal:resize` — fire-and-forget via ipc_send
-- `dh:terminal:close` — fire-and-forget via ipc_send
-- `dh:terminal:data` — event listener
-- `dh:terminal:exit` — event listener
-- `dh:terminal:get-all-env` — no params
-- `dh:terminal:openExternal` — no params
-
----
-
-## Recommendations (Priority Order)
-
-### P1: Channels with complex/unvalidated payloads (5–7)
-These should have Zod schemas to prevent runtime errors:
-1. `dh:job:start` — currently complex inline parsing
-2. `dh:project:scaffold` — complex nested config
-3. `dh:project:install_deps` — complex nested config
-4. `dh:terminal:create` — PTY config (may already exist)
-5. `dh:cloud:git:create-pr` — PR config
-
-### P2: Commonly-used generic payloads (10–15)
-These would benefit from schemas for consistency:
-- `dh:docker:pull` (already has schema ✓)
-- `dh:profile:switch`
-- `dh:git:config:set`
-- `dh:ssh:generate`
-- `dh:system:readiness:fix`
-- `dh:compose:logs`
-- `dh:monitor:security-drilldown`
-
-### P3: Low-priority / simple types
-These are either no-param or simple string/boolean, not critical:
-- `dh:app:info`, `dh:metrics`, `dh:session:info` (no params)
-- `dh:editor:list`, `dh:job:list` (no params)
-- Dialogs (handled by plugin APIs, not IPC)
-
----
-
-## Current Guard: ipc_contract_tests.rs
-
-The Rust backend enforces channel name alignment with TypeScript via unit tests (`ipc_contract_tests.rs`), which verify that:
-1. All IPC channel names in Rust match `IPC` const in shared package
-2. Request payloads are validated at the Rust boundary (serde_json)
-3. Response types align between Rust and TypeScript
-
-**This guard is sufficient** to prevent misnamed channels and basic type errors. Full Zod coverage would improve IDE autocomplete and compile-time safety but is not blocking.
-
----
-
-## Effort Estimate
-
-- **P1 (job:start, project:*, terminal:create, cloud:git:create-pr):** 4–6 hours
-- **P2 (profile:switch, git:config:set, ssh:generate, etc.):** 6–8 hours
-- **P3 (low-priority):** 2–3 hours
-
-**Total:** ~15–18 hours for complete Zod parity (non-critical; can be phased).
-
----
-
-## Conclusion
-
-**Current state is acceptable.** The 54 documented schemas cover the highest-complexity, highest-risk channels. The remaining 80 channels are either:
-- **No-param calls** (safe to call without validation)
-- **Generic payloads** (validated at runtime by Rust)
-- **Event listeners** (handled outside IPC)
-- **Dialog operations** (handled by Tauri plugins)
-
-**Recommendation:** Schedule P1 channels for Phase 19 (post-release); defer P2/P3 to post-GA maintenance.
+- Wire `desktopApiBridge.ts` to `.parse()` with `IPC_REQUEST_SCHEMAS` (optional hardening).
+- Response `*ResponseSchema` Zod (out of P10 scope).

@@ -7,6 +7,8 @@ import { IPC } from '@linux-dev-home/shared'
 
 type DhApi = Window['dh']
 
+/** Compile-time guard: every bridge method must exist on `Window['dh']`. */
+
 const isTauriRuntime = (): boolean =>
   typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
 

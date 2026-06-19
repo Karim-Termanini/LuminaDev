@@ -37,14 +37,14 @@ Renderer → `desktopApiBridge.ts` → `invoke` / `ipc_send` → Rust `ipc_invok
 
 ### Rust backend (`apps/desktop/src-tauri/`)
 
-`compose_profiles.rs` resolves `docker/compose/<profile>` for `dh:compose:up` / `dh:compose:logs` (repo walk, `KEEL_DEV_COMPOSE_ROOT`, or bundled resources from `tauri.conf.json`). Optional **`KEEL_DEV_COMPOSE_FULL`** merges `docker-compose.full.yml` when present. **AI Core (forward):** subprocess tools resolve via PATH → **`KEEL_DEV_TOOLS_ROOT`** (default `~/Documents/GitHub`) → bundled resources — see [`docs/MASTER_PLAN.md`](docs/MASTER_PLAN.md) §18 tool registry (`headroom/`, `last30days-skill/`, `Agent-Reach/`). Other domains live in focused modules (`runtime_jobs.rs`, `git_vcs_network.rs`, `git_vcs_file_diff.rs`, etc.); avoid growing new logic only in `lib.rs`.
+`compose_profiles.rs` resolves `docker/compose/<profile>` for `dh:compose:up` / `dh:compose:logs` (repo walk, **`LUMINA_DEV_COMPOSE_ROOT`**, or bundled resources from `tauri.conf.json`). Optional **`LUMINA_DEV_COMPOSE_FULL`** merges `docker-compose.full.yml` when present. **AI Core (forward, not implemented):** proposed subprocess resolution PATH → `KEEL_DEV_TOOLS_ROOT` (default `~/Documents/GitHub`) → bundled resources — see [`docs/MASTER_PLAN.md`](docs/MASTER_PLAN.md) §18 tool registry (`headroom/`, `last30days-skill/`, `Agent-Reach/`). Other domains live in focused modules (`runtime_jobs.rs`, `git_vcs_network.rs`, `git_vcs_file_diff.rs`, etc.); avoid growing new logic only in `lib.rs`.
 
 Single dispatcher in `lib.rs` with two Tauri commands:
 
 - `ipc_invoke` — request/response handlers for all channels
 - `ipc_send` — fire-and-forget (terminal write/resize)
 
-Key known limits: `job:start` background tasks use `tokio::async_runtime::spawn` + `AppState.jobs`; runtime jobs update state after completion. Security probes use `bash -c` internally. `runtime:check-deps` and `runtime:uninstall:preview` are implemented but basic.
+Key known limits: `job:start` background tasks use `tokio::async_runtime::spawn` + `AppState.jobs`; runtime jobs update state after completion. Security probes use `bash -c` internally (monitor security: `sshd -T` and `journalctl` pipelines only). `runtime:check-deps` and `runtime:uninstall:preview` are implemented but basic.
 
 ### Error contracts
 
@@ -68,6 +68,8 @@ All IPC responses use `{ ok: boolean; error?: string }` shape. Error strings are
 
 | Doc | Use when |
 | --- | --- |
+| [`docs/NAMING.md`](docs/NAMING.md) | Product vs npm vs Freedesktop vs repo identifiers |
+| [`docs/CORRECTED_AUDIT_REPORT.md`](docs/CORRECTED_AUDIT_REPORT.md) | Independent re-verification (2026-06-19); retracted C1/M10 schema findings |
 | [`docs/MASTER_PLAN.md`](docs/MASTER_PLAN.md) | Active backlog, release gate, **§19 stay/delete/transform** |
 | [`newCore.md`](newCore.md) | AI Core AC0–AC7 forward track (proxy, graph, headroom, autopilot) — canonical spec |
 | [`phasesPlan.md`](phasesPlan.md) | Phase history, architecture rules, known bugs table |
@@ -82,9 +84,12 @@ All IPC responses use `{ ok: boolean; error?: string }` shape. Error strings are
 
 ### Shared package (`packages/shared/src/`)
 
-- `ipc.ts` — `IPC` const with all channel strings + TypeScript types
-- `schemas.ts` — Zod schemas for all request/response payloads
+- `ipc.ts` — `IPC` const with all channel strings + TypeScript types (**138** total; **25** `dh:git:vcs:*`)
+- `ipcSchemaMap.ts` — canonical channel → Zod map (**133/133** dispatcher coverage)
+- `schemas.ts` — Zod schemas for request/response payloads
 - `foundation.ts` — `JobStartRequest` and shared foundation types
+
+**Inventory counts:** use [`docs/SCHEMA_COVERAGE_ANALYSIS.md`](docs/SCHEMA_COVERAGE_ANALYSIS.md) — **138** IPC strings, **133/133** dispatcher Zod map, **106** exported `*RequestSchema` names (informational). Do not cite retired **54**, **~70**, **134**, or **137**. Graphify community **59**/**70** are cluster IDs, not file or schema counts. **20** routes, **62** Rust `.rs` files, **71** Vitest files (**64** desktop = **62** `*.test.ts` + **2** `*.test.tsx`, + **7** shared). Count with `find … \( -name '*.test.ts' -o -name '*.test.tsx' \)` — `*.test.ts` only undercounts by **2**.
 
 ## Commit Rules
 

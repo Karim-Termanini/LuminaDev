@@ -1,6 +1,6 @@
 # KeelDev — Master Plan
 
-**Last updated:** 2026-06-19 (AI Core roadmap + §19 stay/delete/transform inventory)  
+**Last updated:** 2026-06-19 (AI Core roadmap + inventory pass; L1–L4 doc closure; P10 batch 2 merged from main)
 **Git Assistant spec (shipped):** [`gitRefactor.md`](../gitRefactor.md)  
 **AI Core spec (forward):** [`newCore.md`](../newCore.md) — canonical detailed plan; do not edit from planning passes  
 **Route truth table:** [`ROUTE_STATUS.md`](./ROUTE_STATUS.md)  
@@ -23,11 +23,11 @@ This document consolidates **all active planning** into one place: forward backl
 | **Audit sweep 2026-06-02** | ✅ Done | 14 findings closed: dead files, missing contract/error patterns, IPC bridge gaps, doc fabrications, deprecated annotations, stale doc numbers; see [`AUDIT.md`](./AUDIT.md) §9 |
 | **Graphify architecture pass** | ✅ Done | `graphify-out/graph.json` + `GRAPH_REPORT.md` @ `fc9c8fa`; informs §17 Phase 18 backlog |
 | **Test gate realignment (P11)** | ✅ Done | CI `integration-and-e2e-lite` runs `test:roundtrip` + `test:e2e` + `test:coverage` (no `test:integration`) |
-| **Phase 18 P9 bridge bypasses** | ✅ Done | 24 direct `ipc_invoke` calls migrated to `window.dh` / `desktopApiBridge.ts` |
-| **Independent verification (2026-06-02)** | ✅ Report | `pnpm smoke` green @ `fc9c8fa`; 134 IPC channels / 54 `RequestSchema`; 24 renderer `ipc_invoke` bypasses; compose **8/9 presets stub-only** (full stack only `web-dev`); AUDIT §13 rechecked |
+| **Phase 18 P9 bridge bypasses** | ✅ Done | **0** renderer `invoke('ipc_invoke')` bypasses (P12 fixed the sole instance in `SettingsUpdate.tsx`). First-pass audit falsely claimed **24** — it counted `window.dh.*` bridge usage and `listen()` events; see [`IMPLEMENTATION_SUMMARY_P11_P13.md`](./IMPLEMENTATION_SUMMARY_P11_P13.md) §P12. |
+| **Independent verification (2026-06-02)** | ✅ Report | `pnpm smoke` green @ `fc9c8fa`; **138** IPC channels / **133/133** dispatcher Zod map; **0** raw `ipc_invoke` bypasses; compose **7/9 real base stacks**, **game-dev** partial stub, **empty** no services; only **web-dev** ships `docker-compose.full.yml` overlay; AUDIT §13 rechecked |
 | **Stale audit deletion + unwrap fix (2026-06-02)** | ✅ Done | Deleted `COMPREHENSIVE_AUDIT_2026_06_02.md` (stale, claimed CI broken — false); replaced 2 `unwrap()` in `system_info.rs:724,729` with `if let` |
 
-**Next (sequenced):** Phase 18 P10 batch 2 (Zod payload gaps) → Tier 3 release (AppImage VM, cross-distro matrix, Tauri Stage 5 sign-off) → **AI Core AC0–AC7** ([`newCore.md`](../newCore.md) § Timeline).
+**Next (sequenced):** Tier 3 release (AppImage VM, cross-distro matrix, Tauri Stage 5 sign-off) → **AI Core AC0–AC7** ([`newCore.md`](../newCore.md) § Timeline). Optional follow-up: bridge `.parse()` wiring for P10 schemas.
 
 ---
 
@@ -64,7 +64,7 @@ KeelDev evolves from environment manager to **"The Unified AI Developer Control 
 | Monitor | ✅ Dashboard tab | `/dashboard/monitor` (Main \| Kernels \| Logs \| Monitor); `/system` redirects |
 | Runtimes | ✅ Simplified | 18 → 7 runtimes (R1–R3 complete); see §14 |
 | Phases 0–9, 12, 13, 15, 16, 17 | ✅ DONE | Verified against source; see [`phasesPlan.md`](../phasesPlan.md) execution order |
-| Phase 18 — IPC boundary hardening | 📋 OPEN | P9 bridge consolidation + P10 Zod parity; graph-informed; see §17 |
+| Phase 18 — IPC boundary hardening | ✅ DONE | P9 bridge + P10 Zod parity (`ipcSchemaMap.ts` **133/133**); P10 batch 2 merged (#137); see §17 |
 | **AI Core AC0–AC7** | 📋 PLANNED | Post Tier 3; spec in [`newCore.md`](../newCore.md); see §18 |
 | Phase 11 — First-run Wizard | ✅ DONE | Merged into Phase 16 (8-step readiness installer); **AC5** will add 3-question first-run UX per `newCore.md` |
 | Phase 10 — Extensions | 🚫 REMOVED | Settings Extension tab, plugin marketplace, widget infrastructure deleted 2026-05-29 |
@@ -102,7 +102,7 @@ Full checklists, bug tables, and module standards: **[`phasesPlan.md`](../phases
 ✅  Phase 6  — Runtimes (18 → 7; R1–R3 complete; see §14)
 ✅  Phase 7  — Maintenance / Guardian
 ✅  Phase 8  — Settings (14 tabs; Resources tab absent; Extension removed)
-✅  Phase 9  — Profiles + scaffolding
+✅  Phase 9  — Profiles + dashboard project scaffold
 ❌  Phase 10 — Extensions (removed from scope 2026-05-29)
 ✅  Phase 11 — First-run Wizard (merged into Phase 16)
 ✅  Phase 12 — Cloud Git + legacy pro Git UI (Smart-Flow retired in G1; see §6)
@@ -116,7 +116,7 @@ Full checklists, bug tables, and module standards: **[`phasesPlan.md`](../phases
 ✅  R1–R3    — Runtimes Simplification — 18 → 7 runtimes; see §14
 ✅  M1        — Maintenance polish — humanized health + tab refactor; see §15
 ✅  Monitor   — Dashboard tab + elevated Dev Home surface; see §16
-⬜  Phase 18  — IPC boundary hardening (P9 bridge + P10 Zod); see §17
+✅  Phase 18  — IPC boundary hardening (P9 bridge + P10 Zod); see §17
 ⬜  AI Core   — AC0–AC7 unified AI control plane; see §18 + [`newCore.md`](../newCore.md)
 ```
 
@@ -199,7 +199,7 @@ Remaining post-Alpha (optional):
 
 ### P9 — IPC boundary hardening (Phase 18 — graphify-informed)
 
-**Graph evidence:** Community **59** (`ipc_invoke` dispatcher) is thin and clean; Community **57** (`ipc.ts` ↔ `schemas.ts`) is the contract hub — **137** `dh:*` channels, **~70** `*RequestSchema` exports after P13 batch 1 (many channels are no-payload list/status). Community **132** (`ipc_contract_tests.rs`) guards TS↔Rust channel drift. Renderer **0** direct `invoke('ipc_invoke', …)` bypasses (P12 ✅).
+**Graph evidence:** Community **59** (`ipc_invoke` dispatcher) is thin and clean; Community **57** (`ipc.ts` ↔ `schemas.ts` ↔ `ipcSchemaMap.ts`) is the contract hub — **138** `dh:*` channel strings, **133** dispatcher channels with Zod in `IPC_REQUEST_SCHEMAS` (100%). Community **132** (`ipc_contract_tests.rs`) guards TS↔Rust channel drift. Renderer **0** direct `invoke('ipc_invoke', …)` bypasses (P12 ✅).
 
 | Slice | Target | Graph / code hub | Status |
 | --- | --- | --- | --- |
@@ -212,13 +212,13 @@ Remaining post-Alpha (optional):
 
 ### P10 — Zod request-schema parity (Phase 18)
 
-**Graph evidence:** Community **57** exports payload types (`DockerActionPayload`, cloud/git payloads, host types) that are not all backed by `schemas.ts` request schemas. **P10.1** inventories invoke channels that accept JSON payloads without a matching `*RequestSchema` (target ~30–40 high-traffic gaps, not all 80 nominal channel/schema delta). Rust validates ad hoc today; extend Zod at the TypeScript boundary only.
+**Graph evidence:** Community **57** exports payload types that are now backed by `*RequestSchema` + `IPC_REQUEST_SCHEMAS` in `ipcSchemaMap.ts`. Rust validates ad hoc today; P10 adds Zod at the TypeScript boundary only (bridge `.parse()` wiring is follow-up).
 
 | Slice | Deliverable | Status |
 | --- | --- | --- |
-| P10.1 | Inventory: IPC channels in `IPC` const vs `*RequestSchema` in shared | 🔄 Ongoing — `ipc_contract_tests.rs` guards names; ~70 schemas / 137 channels |
-| P10.2 | Priority batch: docker actions, compose, profile switch, terminal, editor, cloud-git PR flows | ✅ Batch 1 (2026-06-02) — see `packages/shared/src/schemas.ts` |
-| P10.3 | Colocated roundtrip tests for new schemas | 🔄 Batch 1 covered in `packages/shared/test/schemas.test.ts`; renderer roundtrips unchanged |
+| P10.1 | Inventory: `IPC` const vs `IPC_REQUEST_SCHEMAS` | ✅ Done — `ipcSchemaCoverage.test.ts`; see [`SCHEMA_COVERAGE_ANALYSIS.md`](./SCHEMA_COVERAGE_ANALYSIS.md) |
+| P10.2 | Priority batches: docker, compose, profile, terminal, editor, cloud-git, ssh, runtime, git-vcs | ✅ Batches 1–3 (2026-06-02–19) — `packages/shared/src/schemas.ts` |
+| P10.3 | Colocated roundtrip + coverage tests | ✅ `schemas.test.ts` + `ipcSchemaCoverage.test.ts`; renderer roundtrips unchanged |
 
 **Non-goal:** Rewriting Rust validation to consume Zod at runtime (TypeScript boundary only for now).
 
@@ -284,7 +284,7 @@ Run on real Tauri build. Legend: verified in stabilization pass unless noted.
 - **Maintenance:** compose launch, diagnostics bundle
 - **Runtimes:** status list
 
-Known limits on **native** builds: terminal is line-buffered (no full PTY for vim); Docker requires socket access and often docker group membership.
+Known limits on **native** builds: embedded terminal uses real PTY (`portable_pty`) but may not match every native emulator edge case; **Open External Terminal** fallback available. Docker requires socket access and often docker group membership.
 
 ---
 
@@ -485,7 +485,7 @@ lib.rs → domain modules (docker_ext, terminal_pty, …) → utils.rs
 
 **Red flags:** handler > 50 lines in `lib.rs`; circular imports; duplicate logic across arms.
 
-**Current outcome (Phase 17):** 36 `mod` declarations → 59 `.rs` files (33 flat + `cloud_auth/` 8 + `cloud_git_ipc/` 4 + `project_scaffold/` 12); `lib.rs` ~706 lines; largest modules `system_info.rs` (~1,009 lines), `runtime_jobs.rs` (~684 lines).
+**Current outcome (Phase 17):** 36 `mod` declarations → **59 `.rs` files** at Phase 17 completion; **62** as of 2026-06-19 (+ `ipc_contract_tests.rs`, `runtime_prune_contract_tests.rs`, `integration_test_support.rs`). `lib.rs` ~706 lines; largest modules `system_info.rs` (~1,010 lines), `runtime_jobs.rs` (~792 lines).
 
 ---
 
@@ -517,7 +517,7 @@ Comprehensive 5-pass audit completed 2026-06-02 (see [`AUDIT.md`](./AUDIT.md) §
 | P2 | Git VCS polish / simple mode | ✅ Fixed 2026-06-02 — 6 polish items (stash persistence, untracked diff, spinner, dead code) |
 | P2 | Missing contract/error tests (`settingsContract`, `settingsError`, `dashboardError`) | ✅ Fixed 2026-06-02 — 23 new assertions across 3 test files |
 | P3 | Direct `invoke('ipc_invoke', …)` bypassing `desktopApiBridge.ts` | ✅ Fixed 2026-06-02 — 0 renderer bypasses remain |
-| P3 | IPC payload channels without Zod `*RequestSchema` | 🔄 Reduced — ~70 schemas / 137 channels; P10.1 inventories payload gaps |
+| P3 | IPC payload channels without Zod `*RequestSchema` | ✅ Closed — `ipcSchemaMap.ts` maps **133/133** dispatcher channels; see `ipcSchemaCoverage.test.ts` |
 | P3 | Split `RuntimesPage.tsx` (1947 lines) | ✅ Fixed 2026-06-02 — `pages/runtimes/` (hook + 5 components; page 88 lines) |
 
 ---
@@ -566,7 +566,7 @@ Finish **one slice** before opening the next (same discipline as Tier 1).
 | Gap | Status (2026-06-02) | Graph / module hub |
 | --- | --- | --- |
 | **P9 — Renderer IPC → bridge only** | ✅ Done | **0** `invoke('ipc_invoke')` bypasses; all renderer IPC via `window.dh` / `desktopApiBridge.ts` |
-| **P10 — Zod request-schema parity** | 🔄 In progress | Community **57** + **132**; **~70/137** `RequestSchema`; P10.2 batch 1 ✅; P10.1 inventory + P10.3 roundtrips open |
+| **P10 — Zod request-schema parity** | ✅ Done | Community **57** + **132**; **133/133** dispatcher channels in `IPC_REQUEST_SCHEMAS`; bridge parse wiring deferred |
 | P4 residual page cleanup | ✅ Done | `DockerPage` ~1,204 lines; tabs under `pages/docker/`; `RuntimesPage` → `pages/runtimes/` (88-line orchestrator) |
 | **P7 — Theme picker** | ✅ Done | Settings → Personalization: dark / light / high-contrast; persisted in `store.json` `appearance` |
 | **Cloud Git inbox** | ✅ Done | TopBar bell → `dh:cloud:git:inbox`; poll 60s + on focus; GitHub/GitLab PAT |
@@ -800,7 +800,7 @@ Post-G1  G2 validate → G3 iterate
 | IPC dispatcher | **59** | `ipc_invoke()`, `ipc_send()` — ~706-line `lib.rs` router ✅ |
 | Channel drift tests | **132** | `ipc_contract_tests.rs` — every `ipc.ts` channel → `lib.rs` arm |
 | Shared contracts | **57** | `IPC` const + payload types in `ipc.ts` |
-| Zod (partial) | **70** | `*RequestSchema` in `schemas.ts` (54 exports) |
+| Zod (P10) | **70** *(graphify community ID)* | `IPC_REQUEST_SCHEMAS` — **133/133** dispatcher coverage (`ipcSchemaMap.ts`) |
 | Renderer bridge | **78** | `desktopApiBridge.ts`, `DhApi`, `ensureDesktopApi()` |
 | Renderer contracts | **69**, **116**, **128** | `assert*Ok`, `humanize*Error`, domain `*Contract.ts` |
 | Subprocess spine | **38**, **54** | `exec_output_limit()`, `cmd_timeout_short()`, `host_exec.rs` |
@@ -822,11 +822,11 @@ Post-G1  G2 validate → G3 iterate
 | `runtime_job_execute()` | `runtime_jobs.rs` | God node (**27** edges) — runtime install/uninstall jobs |
 | `parse_porcelain_v1()` | `utils.rs` | Git status parsing (**22** edges; `lib.rs` + VCS tests) |
 | `ipc_invoke()` | `lib.rs` | Thin dispatcher (Community **59**) — ✅ no business logic inline |
-| `IPC` + schemas | `packages/shared` | **134** channels · **54** `RequestSchema` — P10 closes payload gaps |
+| `IPC` + schemas | `packages/shared` | **138** channel strings · **133/133** dispatcher schemas in `ipcSchemaMap.ts` |
 | Profile switch flow | Community **53** | `profileSwitchProgress`, `projectBackgroundSetup`, `useProfilesPage` |
 | Git Assistant UX | Community **48** | Editor resolve, clone, progress rail helpers |
 | Docker UI | `DockerPage.tsx` + `pages/docker/*` | Largest renderer orchestrator (~1,204 lines; tabs split) |
-| Rust size | `system_info.rs` (~1,009), `runtime_jobs.rs` (~684) | Largest domain modules post–Phase 17 |
+| Rust size | `system_info.rs` (~1,010), `runtime_jobs.rs` (~792) | Largest domain modules post–Phase 17 |
 | `cloud_auth/` self-import cycles | GRAPH_REPORT import-cycles | Cosmetic module `use` cycles — not Phase 18 scope |
 
 ### Test architecture (graph-aligned)
@@ -834,7 +834,7 @@ Post-G1  G2 validate → G3 iterate
 | Tier | What | Graph / repo anchor |
 | --- | --- | --- |
 | Rust IPC parity | `cargo test` in `ipc_contract_tests.rs` | Community **132** — channel names in `ipc.ts` ⊆ `lib.rs` |
-| Shared Zod | `packages/shared/test/schemas.test.ts` | Community **70** — payload validation at TS boundary |
+| Shared Zod | `packages/shared/test/schemas.test.ts` | Community **70** *(graph ID)* — see [`SCHEMA_COVERAGE_ANALYSIS.md`](./SCHEMA_COVERAGE_ANALYSIS.md) for counts |
 | Renderer contracts | `*Contract.ts` + `assert*Ok` + `*.contract.test.ts` | Communities **69**, **116**, **128**; **14** domain pairs under `pages/` |
 | Error humanization | `*Error.ts` + `humanize*Error` + `*.error.test.ts` | Includes `dashboardError`, `monitorError`, `registryError`, `settingsError` |
 | Roundtrip | `pnpm test:roundtrip` — 3 files | docker / profile / scaffold `*ContractErrorRoundtrip.test.ts` |
@@ -858,8 +858,11 @@ Done (2026-06-02):
   P9/P12  0 renderer ipc_invoke bypasses
   P10.2 batch 1 Zod schemas (compose/profile/docker/terminal/editor/cloud PR/project)
 
+Done (2026-06-19):
+  P10.2 batches 2–3 + ipcSchemaMap.ts + ipcSchemaCoverage.test.ts (133/133 dispatcher coverage)
+
 Next:
-  P10.2 batch 2 — remaining payload channels (ssh list-dir, log streams, docker inspect, …)
+  Bridge `.parse()` wiring (optional follow-up)
   Tier 3 — AppImage clean VM (after maintainer sign-off on pre-release checklist)
 ```
 
@@ -867,7 +870,7 @@ Next:
 
 - Rewriting `host_exec` god-node pattern (working as designed)
 - Splitting `system_info.rs` further unless editing for another reason
-- Full compose `docker-compose.full.yml` stacks for 8/9 presets (product decision, not IPC)
+- Optional `docker-compose.full.yml` overlays for non-`web-dev` presets (only **web-dev** ships one today — nginx sidecar via `LUMINA_DEV_COMPOSE_FULL`)
 - i18n community deduplication (cosmetic graph noise)
 
 ### Release track (unchanged — Tier 3)
@@ -914,7 +917,7 @@ Maintainer machine layout (Karim): all repos under **`~/Documents/GitHub/`**. Ke
 └── dify/               ← out of scope (newCore § NOT Building)
 ```
 
-**Env var (proposed, mirrors `KEEL_DEV_COMPOSE_ROOT`):**
+**Env var (proposed, mirrors `LUMINA_DEV_COMPOSE_ROOT`):**
 
 | Variable | Default (dev) | Purpose |
 | --- | --- | --- |
@@ -1007,11 +1010,12 @@ Legacy routes may keep **redirects** (`/git-config`, `/git-vcs`, `/cloud-git`, `
 | **Cloud auth** | Settings → Connected accounts; device flow + PAT; `cloud_auth/`, `cloud_git_ipc/` — **no in-app PR merge** |
 | **Runtimes** | 7 languages (Node, Python, Java, Go, Rust, PHP, .NET); install matrix, jobs, verify |
 | **Docker** | Full page: containers, images, volumes, networks, cleanup, remap, install wizard, per-container stats |
-| **Profiles** | CRUD, switch engine, scaffold (`project_scaffold/`), compose orchestration (`compose_profiles.rs`) |
+| **Profiles** | CRUD, switch engine, compose orchestration (`compose_profiles.rs`) |
+| **Project scaffold** | `project_scaffold/` IPC — invoked from **Dashboard** create-project flow (`dataScienceCreateWizard.ts`, web-dev path), not Profiles UI |
 | **Monitor / Maintenance** | Guardian, diagnostics bundle, dashboard monitor tab, maintenance tabs |
 | **Settings (14 tabs)** | Personalization, Remote, System (hosts + `~/.profile`), Accounts, General, Update, Notification, Shortcuts, Help, Date/Time, Languages, App Engine, Builder, Beta — **no Extension, no Resources** |
 | **Infrastructure** | Tauri app, `desktopApiBridge.ts`, `packages/shared` IPC+Zod, thin `lib.rs` dispatcher, domain Rust modules, job runner, command palette, i18n |
-| **Compose presets** | 9 profile dirs; stub `docker-compose.yml` each; `web-dev` full stack pilot only |
+| **Compose presets** | **9** dirs — **7** real base stacks + **game-dev** partial (`redis` + stub `game-server`) + **empty** `services: {}`; only **web-dev** ships optional `docker-compose.full.yml` overlay |
 | **Dev tooling in repo** | `graphify-out/` for **architecture planning** (agent `graphify query`) — separate from runtime `~/.keel/graphs/` (AC1) |
 | **Deprecated Rust IPC** | Unused `dh:git:vcs:*` handlers — **kept** for contract tests until zero-reference audit (§6); renderer must not call |
 
@@ -1051,7 +1055,7 @@ Delete only in the AC slice listed — after replacement is wired and tested.
 | --- | --- |
 | `dh:git:vcs:*` Rust IPC | Contract tests; delete only after zero-reference audit (§6) |
 | `SMART_FLOW_VCS.md` | Historical doc — keep, do not extend |
-| 8/9 compose stub-only presets | Product decision separate from AI Core |
+| `game-dev` `game-server` stub (`alpine:latest sleep infinity`) | Optional product work — only partial stub in compose presets; **7/9** real base stacks |
 | `/terminal` page | Stays partial; external IDE is primary coding surface per `newCore.md` |
 | Profile wizard (`pages/profiles/wizard/*`) | Stays — custom environment CRUD unrelated to AC5 install wizard |
 
