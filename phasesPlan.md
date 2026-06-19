@@ -1,11 +1,11 @@
 > [!IMPORTANT]
-> **Architectural Notice:** LuminaDev is a **Full Hosted** environment manager. It is explicitly **NOT isolated** and does not use strict sandboxing (like cgroups or Docker-based build isolation) by design.
+> **Architectural Notice:** KeelDev is a **Full Hosted** environment manager. It is explicitly **NOT isolated** and does not use strict sandboxing (like cgroups or Docker-based build isolation) by design.
 >
 > **Design & Quality Standard:** Every modification, feature implementation, and user dialog/interaction must align with the technical efficiency, visual elegance, and premium user experience of **Microsoft Dev Home**.
 >
-> **Target Audience & UX Philosophy:** LuminaDev is designed for both **absolute beginners** and **advanced/professional developers**. All interfaces, layout sequences, warning dialogs, and setup flows must cater to both: providing clear, automated, one-click solutions and helpful context for beginners, while offering deep configuration, logs, and raw control options for power users.
+> **Target Audience & UX Philosophy:** KeelDev is designed for both **absolute beginners** and **advanced/professional developers**. All interfaces, layout sequences, warning dialogs, and setup flows must cater to both: providing clear, automated, one-click solutions and helpful context for beginners, while offering deep configuration, logs, and raw control options for power users.
 
-# LuminaDev — Product Phases Plan
+# KeelDev — Product Phases Plan
 
 > Living document. Route truth table: [`docs/ROUTE_STATUS.md`](docs/ROUTE_STATUS.md) | Unified plan: [`docs/MASTER_PLAN.md`](docs/MASTER_PLAN.md) | Audit: [`docs/AUDIT.md`](docs/AUDIT.md) | Release gate: [`docs/STABILIZATION_CHECKLIST.md`](docs/STABILIZATION_CHECKLIST.md)
 
@@ -52,7 +52,7 @@ Progress notes (2026-05-01):
   - package command builders, output truncation, repository-root discovery
 - Full Rust test suite now passes locally: `cd apps/desktop/src-tauri && cargo test -- --nocapture`.
 - Added second dedicated test module file: `apps/desktop/src-tauri/src/runtime_prune_contract_tests.rs`
-  - runtime version token edge-cases (`lumina_*` helpers)
+  - runtime version token edge-cases (`keel_*` helpers)
   - Docker prune preview response contract shape/types via `docker_prune_preview_payload(...)`
 - Added `.github/workflows/smoke-tests.yml` for dedicated Rust smoke/job-runner coverage.
 
@@ -93,7 +93,7 @@ Bug fixes priority (see Known Bugs table below):
 - [x] Bug #4 — Docker Hub official-image links normalized (`library/*` + bare names)
 Progress notes (2026-05-01, follow-up):
 - Hardened Docker-socket guidance in renderer error contracts: `[DOCKER_UNAVAILABLE]` and `[DOCKER_PERMISSION_DENIED]` now append explicit troubleshooting instructions.
-- Updated `EnvironmentBanner` Docker docs link to current LuminaDev repository path.
+- Updated `EnvironmentBanner` Docker docs link to current KeelDev repository path.
 - Hardened terminal failure fallback copy to include PTY focus guidance alongside external terminal fallback.
 - Runtime install validation hardened for Fedora Java: expanded tests for DNF major-version package selection (`8/11/17/latest`) and existing install-path checks.
 - Monitor metrics hardened: `/proc` reads now fallback to host-side reads through wrapped host execution when sandbox reads are unavailable.
@@ -287,7 +287,7 @@ pub async fn ipc_invoke(channel: &str, payload: Value, state: AppState) -> Resul
 
 ### Verified missing (not Alpha scope)
 
-- [x] **Minimal compose stub per preset** — each `docker/compose/<profile>/docker-compose.yml` is small Alpine `sleep infinity` service; project name set via `-p` CLI flag (no `name:` field in YAML); `dh:compose:up` resolves checkout, `LUMINA_DEV_COMPOSE_ROOT`, or bundled `docker/compose` (see `compose_profiles.rs` + `tauri.conf.json` `bundle.resources`).
+- [x] **Minimal compose stub per preset** — each `docker/compose/<profile>/docker-compose.yml` is small Alpine `sleep infinity` service; project name set via `-p` CLI flag (no `name:` field in YAML); `dh:compose:up` resolves checkout, `KEEL_DEV_COMPOSE_ROOT`, or bundled `docker/compose` (see `compose_profiles.rs` + `tauri.conf.json` `bundle.resources`).
 - [ ] **Full stack definitions** — only `web-dev` preset has `docker-compose.full.yml` (nginx); the other 8 presets have `docker-compose.yml` stubs only (Alpine sleep loop). Full stack defs for infra, ai-ml, data-science, mobile, game-dev, docs, desktop-gui, and empty are **not implemented**.
 - [x] Preset ↔ store: `active_profile` is `ComposeProfile` id; dashboard + wizard + Profiles **Set Active** stay aligned
 
@@ -564,7 +564,7 @@ When user clicks "Install" / "Fix":
 
 ## Known Bugs
 
-> **Git Assistant (2026-05-31):** G1–G3 shipped; **G4 hardening** on `feat/runtimes-r1-r2` — partial commit, push-with-local-changes, existing-PR probe, post-push copy. Manually verified on LuminaDev repo. See [`docs/MASTER_PLAN.md`](docs/MASTER_PLAN.md) §6 **G4**.
+> **Git Assistant (2026-05-31):** G1–G3 shipped; **G4 hardening** on `feat/runtimes-r1-r2` — partial commit, push-with-local-changes, existing-PR probe, post-push copy. Manually verified on KeelDev repo. See [`docs/MASTER_PLAN.md`](docs/MASTER_PLAN.md) §6 **G4**.
 
 | # | Page | Bug | Status |
 |---|------|-----|--------|

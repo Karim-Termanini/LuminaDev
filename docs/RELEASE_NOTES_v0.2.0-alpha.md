@@ -1,4 +1,4 @@
-## LuminaDev v0.2.0-alpha (Draft)
+## KeelDev v0.2.0-alpha (Draft)
 
 > **Historical note (2026-05-30):** This draft reflects the alpha tag era. Flatpak was the primary distribution path at tag time; **Flatpak is now abandoned**. Current target is **GitHub Releases / AppImage**. Extension tab and dashboard widgets are **removed from scope**. See [`STATUS.md`](./STATUS.md) and [`MASTER_PLAN.md`](./MASTER_PLAN.md).
 

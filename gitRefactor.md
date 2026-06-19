@@ -1,12 +1,12 @@
 # Git Assistant — Product & Implementation Plan
 
-## For the LuminaDev Team
+## For the KeelDev Team
 
 ---
 
 ## Executive Summary
 
-**Product Thesis:** Lumina Git = "Set up once, open your project, save your work, send it online — and get plain-language help when Git says no."
+**Product Thesis:** Keel Git = "Set up once, open your project, save your work, send it online — and get plain-language help when Git says no."
 
 **The Shift:** Rename mentally from "Developer Git" to "Git Assistant" (or "Save & Share"). This is not a Git client. This is a helper that lives inside a development environment.
 
@@ -35,7 +35,7 @@ Every UI string changes. No technical jargon as primary text.
 
 ## Design standard (MS Dev Home)
 
-All Git Assistant UI uses the shared Lumina design system:
+All Git Assistant UI uses the shared Keel design system:
 
 - `hp-card`, `hp-btn`, `hp-input`, `hp-status-alert`, `hp-page-stack` (`theme/global.css`)
 - Page shell: `GitAssistantPage.css` — ambient gradients, elevated cards, gradient page title (same family as Monitor / Maintenance)
@@ -61,7 +61,7 @@ All Git Assistant UI uses the shared Lumina design system:
 │                                                             │
 ├─────────────────────────────────────────────────────────────┤
 │                                                             │
-│  Your project: ~/LuminaProjects/awesome-app                │
+│  Your project: ~/KeelProjects/awesome-app                │
 │  Branch: main                                              │
 │                                                             │
 │  Changed files (3)                                         │
@@ -171,9 +171,9 @@ Keep unused handlers for tests; document in `git_vcs_ipc.rs` module comment and 
 - **Behind remote** → Modal: "Get latest before sending." ONE button: Get latest. No merge vs rebase choice.
 - **Conflicts** → Modal: "This needs a code editor. We'll open the files for you." Open VS Code/Cursor at conflict paths.
 
-**Rule:** Lumina does NOT pretend to be a merge IDE for beginners. Honest ceiling.
+**Rule:** Keel does NOT pretend to be a merge IDE for beginners. Honest ceiling.
 
-### Cut from Lumina Git entirely (Rust IPC kept, `#[deprecated]` — see Part 9)
+### Cut from Keel Git entirely (Rust IPC kept, `#[deprecated]` — see Part 9)
 
 - Legacy three-tab hub (`GitVcsPage`, Config inspector, Cloud activity tab)
 - Config Inspector raw key table
@@ -195,7 +195,7 @@ Permanent footer (canonical copy):
 Need more than save, send, and sync? Use VS Code, Cursor, your terminal, or GitHub directly for advanced Git operations.
 ```
 
-No advanced page, no beta flag, no pro toggle inside Lumina.
+No advanced page, no beta flag, no pro toggle inside Keel.
 
 ---
 
@@ -222,7 +222,7 @@ Replace the Config overview (health scores, four dimensions, inspector) with a *
 
 ---
 
-## Part 6: Clone & Open (Match Rest of Lumina)
+## Part 6: Clone & Open (Match Rest of Keel)
 
 Beginners do not think in "target directory paths."
 
@@ -252,7 +252,7 @@ Beginners do not think in "target directory paths."
 
 ## Part 7: Conflict & "Someone Else Changed It" Philosophy
 
-**Core principle:** Beginners do not understand rebase. Lumina is traffic control, not conflict studio.
+**Core principle:** Beginners do not understand rebase. Keel is traffic control, not conflict studio.
 
 ### Rules Table
 
@@ -309,7 +309,7 @@ Fold "Cloud" into **Setup step 3** entirely.
 
 ### What We Don't Do
 
-- No PR/MR wizard inside Lumina
+- No PR/MR wizard inside Keel
 - No activity feed of team commits
 - No CI/CD pipeline display
 - No issues list
@@ -372,7 +372,7 @@ src/pages/git/
 | UI code        | ~60% fewer lines                                             |
 | Bug surface    | ~80% fewer Git-related edge cases                            |
 | Maintenance    | One UX path to test and document                             |
-| Positioning    | Lumina = "Linux dev environment + Docker + runtimes" — Git is enabling glue, not a second product |
+| Positioning    | Keel = "Linux dev environment + Docker + runtimes" — Git is enabling glue, not a second product |
 | Honest scope   | Beginners get hand-holding; pros are told to use their toolchain — no half-built GitKraken |
 
 ---
@@ -383,7 +383,7 @@ src/pages/git/
 | ------------------------------------------- | ------------------------------------------------------------ |
 | Intermediate users lose in-app merge/rebase | Document external-tool path clearly in one place. Footer link. |
 | Some users expect full Git client           | Product thesis is beginner-first. This is a deliberate trade-off. |
-| Power users want merge/rebase/PR in-app     | Footer + docs: editor, terminal, or GitHub. No Lumina advanced Git. |
+| Power users want merge/rebase/PR in-app     | Footer + docs: editor, terminal, or GitHub. No Keel advanced Git. |
 
 **Decision:** Acceptable if product thesis is beginner-first. Document once, clearly.
 
@@ -435,7 +435,7 @@ src/pages/git/
 | Honest external tool path    | Advanced page / pro toggle / second Git UI |
 
 **The new user journey:**
-1. Open Lumina → Git page
+1. Open Keel → Git page
 2. Setup: name, email, credential helper, GitHub (optional)
 3. Open or clone project
 4. Make changes → check files you want to save
@@ -443,7 +443,7 @@ src/pages/git/
 6. Send to GitHub
 7. Open GitHub to create PR
 
-**No staging. No rebase. No merge conflicts inside Lumina. No confusion.**
+**No staging. No rebase. No merge conflicts inside Keel. No confusion.**
 
 ---
 
@@ -464,7 +464,7 @@ src/pages/git/
 
 ### Tier 1 — Daily-driver gaps (do these first)
 
-What blocks *you* using LuminaDev as the main workstation tool:
+What blocks *you* using KeelDev as the main workstation tool:
 
 | Gap                                  | Why it matters for one user                                  |
 | :----------------------------------- | :----------------------------------------------------------- |

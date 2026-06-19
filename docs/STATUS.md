@@ -1,4 +1,4 @@
-# LuminaDev Status Snapshot
+# KeelDev Status Snapshot
 
 Living snapshot updated when the release track changes materially.
 
@@ -43,7 +43,7 @@ Phases **0–17** shipped per `phasesPlan.md`.
 - AppImage E2E on clean VM (Tauri **Stage 4** packaging — distinct from product **Phase 5** Monitor, which shipped)
 - **Phase 18 — IPC boundary hardening:** P9/P12 bridge ✅ (0 renderer bypasses); P10 Zod (~70/137 channels); P19 RuntimesPage split ✅
 - **Tests:** contract + `test:roundtrip` + `test:e2e`; CI `unit-roundtrip-contracts` (P11 ✅)
-- **Compose stacks:** 9 preset dirs; only `web-dev` has `docker-compose.full.yml` — other presets default to Alpine stub unless `LUMINA_DEV_COMPOSE_FULL` + full file exist
+- **Compose stacks:** 9 preset dirs; only `web-dev` has `docker-compose.full.yml` — other presets default to Alpine stub unless `KEEL_DEV_COMPOSE_FULL` + full file exist
 
 ## Architecture snapshot (graphify @ `fc9c8fa`)
 

@@ -1,6 +1,6 @@
-# LuminaDev — Consolidated Audit Report
+# KeelDev — Consolidated Audit Report
 
-> **Architectural notice:** LuminaDev is a **Full Hosted** environment manager. It is explicitly **NOT isolated** and does not use strict sandboxing (like cgroups or Docker-based build isolation) by design.
+> **Architectural notice:** KeelDev is a **Full Hosted** environment manager. It is explicitly **NOT isolated** and does not use strict sandboxing (like cgroups or Docker-based build isolation) by design.
 
 **Last updated:** 2026-06-02 (recheck pass — working tree + §15 closure verification)  
 **Primary pass:** 2026-05-28 (source-verified against `phasesPlan.md`, `CONTRIBUTING.md`, `README.md`)  
@@ -153,7 +153,7 @@ All `ipc_invoke` arms delegate to domain modules. Zero business logic inline. Ke
 
 ### 10.1 Profiles — compose project detection — ✅ FIXED
 
-- Removed `name: lumina-*` from compose YAML; `-p` flag is sole project name source
+- Removed `name: keel-*` from compose YAML; `-p` flag is sole project name source
 - `handle_profile_running_status` uses `docker compose ls --format json` exact match
 - Multi-profile simultaneous run supported; empty profile fallback on last stop
 
@@ -175,7 +175,7 @@ No `sudo_password` over IPC; Polkit (`pkexec`) for privilege escalation.
 
 ### 10.6 Compose profiles — hardcoded dev credentials
 
-`docker/compose/web-dev/docker-compose.yml:23` and `docker/compose/data-science/docker-compose.yml:19` contain hardcoded passwords (`POSTGRES_PASSWORD=luminadev`), and `data-science` has `JUPYTER_TOKEN=luminadev:9`. These are intentional development defaults inside containers (not host secrets) but users should be warned to change them for any exposed service.
+`docker/compose/web-dev/docker-compose.yml:23` and `docker/compose/data-science/docker-compose.yml:19` contain hardcoded passwords (`POSTGRES_PASSWORD=keeldev`), and `data-science` has `JUPYTER_TOKEN=keeldev:9`. These are intentional development defaults inside containers (not host secrets) but users should be warned to change them for any exposed service.
 
 ### 10.7 CodeRabbit P6 remediation — ✅ DONE (2026-05-29)
 
@@ -298,7 +298,7 @@ Findings from full static analysis: Rust backend security/correctness, renderer 
 | OAuth client IDs are public-by-design | ✅ | `cloud_auth/helpers.rs:5-6` — configurable via env vars |
 | 62 test files, 0 stubs, 0 dead imports | ✅ | Recheck: dead page imports removed; new contract roundtrip tests added |
 | `compose_profiles.rs` resolution logic | ✅ | Env → repo walk → bundle fallback; full overlay support |
-| `LUMINA_DEV_COMPOSE_FULL` overlay | ✅ | `1`/`true`/`yes` env var or profile store `composeVariant` field |
+| `KEEL_DEV_COMPOSE_FULL` overlay | ✅ | `1`/`true`/`yes` env var or profile store `composeVariant` field |
 | 3 i18n locales, 14 namespaces each | ✅ | 42 translation files total |
 | Conventional Commits throughout git history | ✅ | |
 

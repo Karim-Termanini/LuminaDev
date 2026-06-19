@@ -1,4 +1,4 @@
-# LuminaDev
+# KeelDev
 
 Linux developer workstation dashboard — click-first flows for Docker, Git, profiles, runtimes, system visibility, and local environment setup.
 

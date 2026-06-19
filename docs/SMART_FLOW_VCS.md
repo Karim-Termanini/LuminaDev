@@ -4,7 +4,7 @@
 
 This document is the **operational blueprint** for evolving Git VCS from “raw Git errors in a panel” into an **intelligent assistant**: the app understands repo state, blocks unsafe actions, explains *why*, and routes the user through merge/rebase/conflict resolution and (later) cloud PR creation—**without requiring a terminal**.
 
-**Design north star (VS Code–class clarity, Lumina simplicity):** prefer **banners + focused modals** over toast spam; prefer **one obvious next step** over a matrix of Git commands; never leak opaque `git(1)` stderr without a humanized layer (`humanizeGitVcsError` + `[GIT_VCS_*]` codes).
+**Design north star (VS Code–class clarity, Keel simplicity):** prefer **banners + focused modals** over toast spam; prefer **one obvious next step** over a matrix of Git commands; never leak opaque `git(1)` stderr without a humanized layer (`humanizeGitVcsError` + `[GIT_VCS_*]` codes).
 
 **UI reference:** Integration bar layout (Merge / Rebase, refs, FF-only, continue/abort/stash pop) matches the product screenshot committed as:
 
@@ -112,7 +112,7 @@ This document is the **operational blueprint** for evolving Git VCS from “raw 
 
 **After success:**
 
-- Show **inline success** with **Open PR/MR** link + **Copy link**; optionally deep link to Lumina Cloud Git activity.
+- Show **inline success** with **Open PR/MR** link + **Copy link**; optionally deep link to Keel Cloud Git activity.
 
 **IPC / security:**
 

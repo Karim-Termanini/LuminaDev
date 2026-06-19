@@ -1,4 +1,4 @@
-# LuminaDev — Master Plan
+# KeelDev — Master Plan
 
 **Last updated:** 2026-06-02 (session 2 — unwrap fix + stale audit deletion)  
 **Git Assistant spec (shipped):** [`gitRefactor.md`](../gitRefactor.md)  
@@ -34,7 +34,7 @@ This document consolidates **all active planning** into one place: forward backl
 
 > From [`phasesPlan.md`](../phasesPlan.md) — apply to every feature and dialog.
 
-- **Full Hosted:** LuminaDev is an environment manager on the host. It is **not** a strict sandbox (no cgroup/Docker-isolated build isolation by design).
+- **Full Hosted:** KeelDev is an environment manager on the host. It is **not** a strict sandbox (no cgroup/Docker-isolated build isolation by design).
 - **Design standard:** Technical efficiency, visual elegance, and premium UX aligned with **Microsoft Dev Home**.
 - **Audience:** Absolute beginners **and** professional developers — one-click automation with deep logs and raw control when needed.
 
@@ -127,7 +127,7 @@ Main integration track complete. Feature branches merge via PR + `pnpm smoke`.
 | Command palette live runtime data | ✅ `dh:runtime:status` on palette open |
 | phasesPlan + AUDIT accuracy pass | ✅ |
 | Sidebar collapsed + tooltip alignment | ✅ |
-| Docs link → `docs.luminadev.app` | ✅ |
+| Docs link → `docs.keeldev.app` | ✅ |
 | DashboardLogs search filter | ✅ |
 | Engine health + version in status bar | ✅ |
 
@@ -269,9 +269,9 @@ Known limits on **native** builds: terminal is line-buffered (no full PTY for vi
 
 ## 6. Git — Git Assistant sprint (single UX; legacy UI removed)
 
-**Product thesis (this sprint):** Lumina Git = *"Set up once, open your project, save your work, send it online — and get plain-language help when Git says no."* Not a Git client; enabling glue inside the dev environment. Full spec: [`gitRefactor.md`](../gitRefactor.md).
+**Product thesis (this sprint):** Keel Git = *"Set up once, open your project, save your work, send it online — and get plain-language help when Git says no."* Not a Git client; enabling glue inside the dev environment. Full spec: [`gitRefactor.md`](../gitRefactor.md).
 
-**Product rule:** There is **no** Lumina “advanced Git” mode — no second page, no beta flag, no header Pro toggle. Anything beyond setup / open / save / share / connect GitHub → **editor, terminal, or GitHub in the browser** (footer link states this once).
+**Product rule:** There is **no** Keel “advanced Git” mode — no second page, no beta flag, no header Pro toggle. Anything beyond setup / open / save / share / connect GitHub → **editor, terminal, or GitHub in the browser** (footer link states this once).
 
 **Implementation constraint:** Renderer-only. **Do not delete Rust IPC** the new UI no longer calls. Reuse `computeGitAssistantNextAction`, `humanizeGitVcsError`, Git Doctor IPC, cloud auth, `gitVcsStage` / `gitVcsCommit` / `gitVcsPull` / `gitVcsPush`. **Legacy pro renderer surfaces deleted (G1.10).**
 
@@ -318,7 +318,7 @@ Known limits on **native** builds: terminal is line-buffered (no full PTY for vi
 - [x] Pro-only IPC documented in shared JSDoc (channels kept; no Rust `#[deprecated]`)
 - [x] G1.9: Open on GitHub when connected (+ post-push hint when `ahead === 0`)
 
-**Removed from product (not relocated — gone from Lumina Git)**
+**Removed from product (not relocated — gone from Keel Git)**
 
 | Former surface | Disposition |
 | --- | --- |
@@ -403,7 +403,7 @@ Need more than save, send, and sync? Use VS Code, Cursor, your terminal, or GitH
 
 #### G4 — Post-ship hardening (2026-05-31)
 
-Follow-up on `feat/runtimes-r1-r2` after manual dogfooding on LuminaDev repo. All items verified in UI + git log.
+Follow-up on `feat/runtimes-r1-r2` after manual dogfooding on KeelDev repo. All items verified in UI + git log.
 
 | Fix | Status | Notes |
 | --- | --- | --- |
@@ -420,7 +420,7 @@ Follow-up on `feat/runtimes-r1-r2` after manual dogfooding on LuminaDev repo. Al
 
 - [x] Unit tests: `stagedPathsToUnstageBeforeCommit`, `resolveSnapshotCommitPaths`, `shouldShowGitPush`
 - [x] `pnpm smoke` green on branch
-- [x] Merge `feat/runtimes-r1-r2` to main via PR ([#127](https://github.com/Karim-Termanini/LuminaDev/pull/127))
+- [x] Merge `feat/runtimes-r1-r2` to main via PR ([#127](https://github.com/Karim-Termanini/KeelDev/pull/127))
 
 ### Explicit non-goals (Git — permanent)
 
@@ -536,7 +536,7 @@ Finish **one** before opening the next.
 | Settings hosts + profile env editing | ✅ | System tab: `/etc/hosts` + `~/.profile` via `hostExec` |
 | Runtimes install matrix | ✅ | Distro ID_LIKE, verify gate (2026-05-30) |
 | Profiles ↔ dashboard alignment | ✅ | `active_profile` + cross-page sync (2026-05-30) |
-| **Git VCS — Git Assistant G1–G4** | ✅ **Shipped** | PR [#127](https://github.com/Karim-Termanini/LuminaDev/pull/127) |
+| **Git VCS — Git Assistant G1–G4** | ✅ **Shipped** | PR [#127](https://github.com/Karim-Termanini/KeelDev/pull/127) |
 
 ### Tier 2 — Architecture hardening (graphify-informed)
 
