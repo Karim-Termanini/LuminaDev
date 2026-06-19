@@ -22,8 +22,11 @@ node -e "const fs=require('fs');const s=fs.readFileSync('packages/shared/src/ipc
 # Exported RequestSchema names (informational — includes aliases; not channel coverage)
 rg -c 'export const \\w+RequestSchema' packages/shared/src/schemas.ts packages/shared/src/foundation.ts
 
-# Vitest files (expect 63 desktop + 6 shared = 69)
-find apps/desktop -name '*.test.ts' -o -name '*.test.tsx' | wc -l
+# Vitest files (expect 63 desktop + 6 shared = 69; do not count *.test.ts only — that yields 67)
+find apps/desktop packages/shared/test \( -name '*.test.ts' -o -name '*.test.tsx' \) | wc -l
+# Desktop breakdown: 61 *.test.ts + 2 *.test.tsx (settings.test.tsx, profilesPage.smoke.test.tsx)
+find apps/desktop -name '*.test.ts' | wc -l
+find apps/desktop -name '*.test.tsx' | wc -l
 find packages/shared/test -name '*.test.ts' | wc -l
 
 # Rust .rs under src-tauri/src (expect 62)
