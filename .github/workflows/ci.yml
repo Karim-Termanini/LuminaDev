@@ -93,10 +93,12 @@ jobs:
           git config --global url."https://github.com/".insteadOf ssh://git@github.com/
       - run: pnpm install --frozen-lockfile
       - name: Rust smoke tests (Docker + Job Runner + domain integration)
-        working-directory: apps/desktop/src-tauri
         run: |
+          cd apps/desktop/src-tauri
           cargo test --test docker_smoke -- --nocapture
-          bash ../../../scripts/rust-domain-smoke.sh
+          cd ../../..
+          bash scripts/rust-domain-smoke.sh
+          cd apps/desktop/src-tauri
           cargo test job_runner -- --nocapture
       - name: Build frontend bundle
         run: pnpm --filter desktop build:web

@@ -31,7 +31,6 @@ jobs:
         working-directory: apps/desktop/src-tauri
         run: cargo test --test docker_smoke -- --nocapture
       - name: Rust domain integration smoke tests
-        working-directory: apps/desktop/src-tauri
         run: bash scripts/rust-domain-smoke.sh
       - name: Rust Job Runner tests
         working-directory: apps/desktop/src-tauri
