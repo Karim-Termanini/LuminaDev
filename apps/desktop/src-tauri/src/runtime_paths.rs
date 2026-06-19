@@ -81,6 +81,7 @@ pub(crate) fn validate_java_binary_path(path_raw: &str, home: &Path) -> Result<P
     .map_err(|e| format!("[RUNTIME_SET_ACTIVE_FAILED] Invalid path: {}", e))?;
   let allowed = [
     home.join(".local/share/lumina/java"),
+    home.join(".local/share/mise/installs/java"),
     home.join(".sdkman/candidates/java"),
     home.join(".jdks"),
     PathBuf::from("/usr/lib/jvm"),
@@ -88,7 +89,7 @@ pub(crate) fn validate_java_binary_path(path_raw: &str, home: &Path) -> Result<P
   ];
   if !allowed.iter().any(|prefix| abs.starts_with(prefix)) {
     return Err(
-      "[RUNTIME_SET_ACTIVE_FAILED] Unsupported Java path (expected Lumina, SDKMAN, .jdks, or /usr/lib/jvm)."
+      "[RUNTIME_SET_ACTIVE_FAILED] Unsupported Java path (expected Lumina, mise, SDKMAN, .jdks, or /usr/lib/jvm)."
         .to_string(),
     );
   }

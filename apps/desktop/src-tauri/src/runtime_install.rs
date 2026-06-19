@@ -6,9 +6,13 @@ use crate::host_exec::{
     cmd_timeout_short, exec_output_limit,
     get_global_daemon_auto_restart, get_global_thread_pool_size,
 };
+use crate::runtime_discover::resolve_java_shell_binary_path;
 use crate::runtime_packages::{
-    runtime_dnf_java_alternatives_cmd, runtime_java_system_packages_for_version, runtime_read_host_distro,
-    runtime_system_packages,
+    java_major_from_archlinux_profile, runtime_archlinux_java_profile_from_jvm_path,
+    runtime_archlinux_java_set_cmd, runtime_dnf_java_alternatives_cmd,
+    runtime_java_system_packages_for_version, runtime_mise_java_set_cmd,
+    runtime_mise_java_set_for_major_cmd, runtime_pacman_java_profile_for_pkg,
+    runtime_pacman_java_profile_for_version, runtime_read_host_distro, runtime_system_packages,
 };
 use crate::runtime_paths::{
     java_home_from_binary, validate_java_binary_path,
@@ -191,6 +195,9 @@ pub(crate) async fn runtime_job_execute(
                         r#"set -e
                  LUMINA_JAVA_DIR="$HOME/.local/share/lumina/java"
                  mkdir -p "$LUMINA_JAVA_DIR"
+                 if [ -L "$LUMINA_JAVA_DIR/current" ] && [ ! -e "$LUMINA_JAVA_DIR/current" ]; then
+                   rm -f "$LUMINA_JAVA_DIR/current"
+                 fi
                  TMP_JAVA="/tmp/lumina-java-{major}.tar.gz"
                  curl -fsSL "https://api.adoptium.net/v3/binary/latest/{major}/ga/linux/x64/jdk/hotspot/normal/eclipse" -o "$TMP_JAVA"
                  TMP_EXTRACT="$LUMINA_JAVA_DIR/.tmp-jdk-{major}-$$"
@@ -243,9 +250,35 @@ pub(crate) async fn runtime_job_execute(
                   ))
                             } else if runtime_system_package_installed(pkg_mgr, &pkg).await {
                                 logs.push(format!(
-                                    "NOTE: Java package {} is already installed; nothing to do.",
+                                    "NOTE: Java package {} is already installed.",
                                     pkg
                                 ));
+                                if pkg_mgr == "pacman" {
+                                    let profile = runtime_pacman_java_profile_for_pkg(&pkg)
+                                        .unwrap_or_else(|| {
+                                            runtime_pacman_java_profile_for_version(&version)
+                                        });
+                                    logs.push(format!(
+                                        "Switching default Java to {} via archlinux-java…",
+                                        profile
+                                    ));
+                                    if let Err(e) = runtime_archlinux_java_set_default(
+                                        profile,
+                                        password_opt,
+                                        &mut logs,
+                                        Some(app.clone()),
+                                        Some(job_id.clone()),
+                                        80,
+                                        15,
+                                    )
+                                    .await
+                                    {
+                                        logs.push(format!(
+                                            "WARNING: archlinux-java set failed: {}",
+                                            e.trim()
+                                        ));
+                                    }
+                                }
                                 Ok(())
                             } else {
                                 let cmd = match pkg_mgr {
@@ -290,6 +323,31 @@ pub(crate) async fn runtime_job_execute(
                                             10,
                                         )
                                         .await;
+                                    } else if pkg_mgr == "pacman" {
+                                        let profile = runtime_pacman_java_profile_for_pkg(&pkg)
+                                            .unwrap_or_else(|| {
+                                                runtime_pacman_java_profile_for_version(&version)
+                                            });
+                                        logs.push(format!(
+                                            "Setting default Java to {} via archlinux-java…",
+                                            profile
+                                        ));
+                                        if let Err(e) = runtime_archlinux_java_set_default(
+                                            profile,
+                                            password_opt,
+                                            &mut logs,
+                                            Some(app.clone()),
+                                            Some(job_id.clone()),
+                                            85,
+                                            10,
+                                        )
+                                        .await
+                                        {
+                                            logs.push(format!(
+                                                "WARNING: archlinux-java set failed: {}",
+                                                e.trim()
+                                            ));
+                                        }
                                     }
                                     Ok(())
                                 }
@@ -469,6 +527,9 @@ fi"#;
                     r#"set -e
                  LUMINA_JAVA_DIR="$HOME/.local/share/lumina/java"
                  mkdir -p "$LUMINA_JAVA_DIR"
+                 if [ -L "$LUMINA_JAVA_DIR/current" ] && [ ! -e "$LUMINA_JAVA_DIR/current" ]; then
+                   rm -f "$LUMINA_JAVA_DIR/current"
+                 fi
                  TMP_JAVA="/tmp/lumina-java-{major}.tar.gz"
                  curl -fsSL "https://api.adoptium.net/v3/binary/latest/{major}/ga/linux/x64/jdk/hotspot/normal/eclipse" -o "$TMP_JAVA"
                  TMP_EXTRACT="$LUMINA_JAVA_DIR/.tmp-jdk-{major}-$$"
@@ -750,6 +811,97 @@ fi"#;
     }
 }
 
+fn mise_java_version_id_from_path(path: &Path, home: &Path) -> Option<String> {
+    let abs = std::fs::canonicalize(path).ok()?;
+    let marker = home.join(".local/share/mise/installs/java");
+    if !abs.starts_with(&marker) {
+        return None;
+    }
+    abs.parent()?
+        .parent()?
+        .file_name()?
+        .to_str()
+        .map(str::to_string)
+}
+
+async fn runtime_mise_java_set_global(version_id: &str) -> Result<(), String> {
+    let cmd = runtime_mise_java_set_cmd(version_id);
+    exec_output_limit("bash", &["-lc", &cmd], cmd_timeout_short())
+        .await
+        .map(|_| ())
+        .map_err(|e| format!("[RUNTIME_SET_ACTIVE_FAILED] {}", e.trim()))
+}
+
+/// Drop a broken Lumina `current` symlink and stale `# lumina-java` PATH exports that override mise.
+async fn runtime_cleanup_broken_lumina_java_profile(home: &Path) {
+    let safe_home = home.to_string_lossy().replace('\'', "'\\''");
+    let cmd = format!(
+        r#"set -e
+link='{safe_home}/.local/share/lumina/java/current'
+if [ -L "$link" ] && [ ! -x "$link/bin/java" ]; then rm -f "$link"; fi
+marker='# lumina-java'
+for f in '{safe_home}/.profile' '{safe_home}/.bashrc' '{safe_home}/.zshrc'; do
+  [ -f "$f" ] || continue
+  grep -q "$marker" "$f" || continue
+  if [ -L "$link" ] && [ -x "$link/bin/java" ]; then continue; fi
+  sed -i '/^# lumina-java$/,+2d' "$f"
+done"#
+    );
+    let _ = exec_output_limit("bash", &["-lc", &cmd], cmd_timeout_short()).await;
+}
+
+async fn runtime_java_major_from_binary(path: &str) -> Option<u32> {
+    let safe = path.replace('\'', "'\\''");
+    let cmd = format!("\"{safe}\" -version 2>&1 | head -1");
+    let out = exec_output_limit("bash", &["-lc", &cmd], cmd_timeout_short())
+        .await
+        .ok()?;
+    runtime_java_major(&out)
+}
+
+async fn java_shell_matches_requested(shell: &str, requested: &str) -> bool {
+    if shell == requested {
+        return true;
+    }
+    if std::fs::canonicalize(shell)
+        .ok()
+        .zip(std::fs::canonicalize(requested).ok())
+        .map(|(a, b)| a == b)
+        .unwrap_or(false)
+    {
+        return true;
+    }
+    match (
+        runtime_java_major_from_binary(shell).await,
+        runtime_java_major_from_binary(requested).await,
+    ) {
+        (Some(a), Some(b)) => a == b,
+        _ => false,
+    }
+}
+
+async fn runtime_archlinux_java_set_default(
+    profile: &str,
+    password_opt: Option<&str>,
+    logs: &mut Vec<String>,
+    app: Option<AppHandle>,
+    job_id: Option<String>,
+    base_progress: u32,
+    step_weight: u32,
+) -> Result<(), String> {
+    let cmd = runtime_archlinux_java_set_cmd(profile);
+    sudo_bash_install_step(
+        &cmd,
+        password_opt,
+        logs,
+        app,
+        job_id,
+        base_progress,
+        step_weight,
+    )
+    .await
+}
+
 async fn runtime_set_java_active(home: &Path, path_raw: &str) -> Value {
     let path = match validate_java_binary_path(path_raw, home) {
         Ok(p) => p,
@@ -758,7 +910,14 @@ async fn runtime_set_java_active(home: &Path, path_raw: &str) -> Value {
     let path_str = path.to_string_lossy().to_string();
     let safe_java = path_str.replace('\'', "'\\''");
 
-    let res: Result<(), String> = if path_str.contains("/.local/share/lumina/java/") {
+    let res: Result<(), String> = if path_str.contains("/.local/share/mise/installs/java/") {
+        let Some(version_id) = mise_java_version_id_from_path(&path, home) else {
+            return json!({ "ok": false, "error": "[RUNTIME_SET_ACTIVE_FAILED] Could not resolve mise Java version id." });
+        };
+        let res = runtime_mise_java_set_global(&version_id).await;
+        runtime_cleanup_broken_lumina_java_profile(home).await;
+        res
+    } else if path_str.contains("/.local/share/lumina/java/") {
         let Some(jdk_dir) = java_home_from_binary(&path) else {
             return json!({ "ok": false, "error": "[RUNTIME_SET_ACTIVE_FAILED] Could not resolve Java install directory." });
         };
@@ -806,26 +965,61 @@ async fn runtime_set_java_active(home: &Path, path_raw: &str) -> Value {
             .map(|_| ())
             .map_err(|e| format!("[RUNTIME_SET_ACTIVE_FAILED] {}", e.trim()))
     } else if path_str.starts_with("/usr/lib/jvm/") || path_str.starts_with("/usr/java/") {
-        let jdk_dir = java_home_from_binary(&path).unwrap_or_else(|| path.clone());
-        let javac = jdk_dir.join("bin/javac");
-        let cmd = if javac.exists() {
-            let safe_javac = javac.to_string_lossy().replace('\'', "'\\''");
-            format!(
-                "alternatives --set java '{safe_java}' && alternatives --set javac '{safe_javac}'"
+        if let Some(profile) = runtime_archlinux_java_profile_from_jvm_path(&path_str) {
+            let mut logs = Vec::new();
+            let arch_res = runtime_archlinux_java_set_default(
+                &profile,
+                None,
+                &mut logs,
+                None,
+                None,
+                0,
+                70,
             )
+            .await;
+            if let Some(major) = java_major_from_archlinux_profile(&profile) {
+                let cmd = runtime_mise_java_set_for_major_cmd(major);
+                let _ = exec_output_limit("bash", &["-lc", &cmd], cmd_timeout_short()).await;
+            }
+            runtime_cleanup_broken_lumina_java_profile(home).await;
+            if arch_res.is_ok() {
+                Ok(())
+            } else {
+                // archlinux-java needs root; mise may still satisfy the shell Java version.
+                Ok(())
+            }
         } else {
-            format!("alternatives --set java '{safe_java}'")
-        };
-        let mut logs = Vec::new();
-        sudo_bash_install_step(&cmd, None, &mut logs, None, None, 0, 100)
-            .await
-            .map_err(|e| format!("[RUNTIME_SET_ACTIVE_FAILED] {}", e))
+            let jdk_dir = java_home_from_binary(&path).unwrap_or_else(|| path.clone());
+            let javac = jdk_dir.join("bin/javac");
+            let cmd = if javac.exists() {
+                let safe_javac = javac.to_string_lossy().replace('\'', "'\\''");
+                format!(
+                    "alternatives --set java '{safe_java}' && alternatives --set javac '{safe_javac}'"
+                )
+            } else {
+                format!("alternatives --set java '{safe_java}'")
+            };
+            let mut logs = Vec::new();
+            sudo_bash_install_step(&cmd, None, &mut logs, None, None, 0, 100)
+                .await
+                .map_err(|e| format!("[RUNTIME_SET_ACTIVE_FAILED] {}", e))
+        }
     } else {
         Err("[RUNTIME_SET_ACTIVE_FAILED] Unsupported Java path.".to_string())
     };
 
     match res {
-        Ok(()) => json!({ "ok": true }),
+        Ok(()) => {
+            let shell_java = resolve_java_shell_binary_path().await;
+            let mut payload = json!({ "ok": true, "activePath": path_str });
+            if let Some(shell) = shell_java {
+                payload["shellJavaPath"] = json!(shell);
+                if !java_shell_matches_requested(&shell, &path_str).await {
+                    payload["shellMismatch"] = json!(true);
+                }
+            }
+            payload
+        }
         Err(e) => json!({ "ok": false, "error": e }),
     }
 }
