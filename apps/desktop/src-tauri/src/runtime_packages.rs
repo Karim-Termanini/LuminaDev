@@ -231,6 +231,58 @@ pub(crate) fn java_major_from_archlinux_profile(profile: &str) -> Option<u32> {
     rest.parse().ok()
 }
 
+/// Link an external Node tree (e.g. nvm) into mise and pin it globally — works in fish/Omarchy.
+pub(crate) fn runtime_mise_node_link_and_use_cmd(version_id: &str, install_dir: &str) -> String {
+    let safe_ver = version_id.replace('\'', "'\\''");
+    let safe_dir = install_dir.replace('\'', "'\\''");
+    format!(
+        r#"export PATH="$HOME/.local/bin:$PATH"
+MISE=$(command -v mise 2>/dev/null || echo "$HOME/.local/bin/mise")
+[ -x "$MISE" ] || {{ echo '[RUNTIME_SET_ACTIVE_FAILED] mise is not installed.' >&2; exit 1; }}
+"$MISE" link -f "node@{safe_ver}" '{safe_dir}'
+"$MISE" use -g "node@{safe_ver}"
+"$MISE" reshim"#
+    )
+}
+
+/// Best-effort nvm default for bash login shells (fish uses mise).
+pub(crate) fn runtime_nvm_set_default_cmd(tag: &str) -> String {
+    let safe_tag = tag.replace('\'', "'\\''");
+    format!(
+        r#"{NVM_BASH_RESOLVE}
+if [ -s "$NVM_DIR/nvm.sh" ]; then
+  . "$NVM_DIR/nvm.sh"
+  unset npm_config_prefix NPM_CONFIG_PREFIX npm_CONFIG_PREFIX
+  export NPM_CONFIG_USERCONFIG=/dev/null
+  nvm alias default '{safe_tag}' 2>/dev/null || true
+  nvm use default 2>/dev/null || true
+fi"#,
+        NVM_BASH_RESOLVE = NVM_BASH_RESOLVE
+    )
+}
+
+/// `mise use -g` for an installed runtime version (directory name under mise installs).
+pub(crate) fn runtime_mise_runtime_set_cmd(tool: &str, version_id: &str) -> String {
+    let safe_spec = format!("{}@{}", tool, version_id).replace('\'', "'\\''");
+    format!(
+        r#"export PATH="$HOME/.local/bin:$PATH"
+MISE=$(command -v mise 2>/dev/null || echo "$HOME/.local/bin/mise")
+[ -x "$MISE" ] || {{ echo '[RUNTIME_SET_ACTIVE_FAILED] mise is not installed.' >&2; exit 1; }}
+"$MISE" use -g '{safe_spec}' && "$MISE" reshim"#
+    )
+}
+
+/// Clear a mise global tool pin so nvm/pyenv can win on PATH.
+pub(crate) fn runtime_mise_runtime_unuse_cmd(tool: &str) -> String {
+    let safe_tool = tool.replace('\'', "'\\''");
+    format!(
+        r#"export PATH="$HOME/.local/bin:$PATH"
+MISE=$(command -v mise 2>/dev/null || echo "$HOME/.local/bin/mise")
+[ -x "$MISE" ] || exit 0
+"$MISE" unuse -g '{safe_tool}' && "$MISE" reshim"#
+    )
+}
+
 /// `mise use -g` for an installed Java version id (directory name under mise installs).
 pub(crate) fn runtime_mise_java_set_cmd(version_id: &str) -> String {
     let safe = version_id.replace('\'', "'\\''");
@@ -303,6 +355,9 @@ pub(crate) async fn runtime_system_package_installed(pkg_mgr: &str, pkg: &str) -
 }
 
 pub(crate) fn pkg_upgrade_cmd(pkg_mgr: &str, packages: &[&str]) -> String {
+    if pkg_mgr == "pacman" && packages.contains(&"nodejs") {
+        return pacman_node_packages_cmd(packages);
+    }
     let pkgs = packages.join(" ");
     match pkg_mgr {
         "apt" => format!(
@@ -314,6 +369,71 @@ pub(crate) fn pkg_upgrade_cmd(pkg_mgr: &str, packages: &[&str]) -> String {
         "zypper" => format!("zypper update -y {}", pkgs),
         _ => format!("apt-get install --only-upgrade -y {}", pkgs),
     }
+}
+
+/// Resolve NVM_DIR for Omarchy/XDG (`~/.config/nvm`) and default `~/.nvm`.
+pub(crate) const NVM_BASH_RESOLVE: &str = r#"if [ -s "${NVM_DIR:-}/nvm.sh" ]; then
+  :
+elif [ -s "$HOME/.config/nvm/nvm.sh" ]; then
+  export NVM_DIR="$HOME/.config/nvm"
+elif [ -s "$HOME/.nvm/nvm.sh" ]; then
+  export NVM_DIR="$HOME/.nvm"
+else
+  export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+fi"#;
+
+/// Arch: `nodejs` conflicts with `nodejs-lts-jod`; remove LTS before installing current.
+pub(crate) fn pacman_node_packages_cmd(packages: &[&str]) -> String {
+    let pkgs = packages.join(" ");
+    let mut parts: Vec<String> = Vec::new();
+    if packages.contains(&"nodejs") {
+        parts.push(
+            "if pacman -Qi nodejs-lts-jod >/dev/null 2>&1; then pacman -R --noconfirm nodejs-lts-jod; fi"
+                .to_string(),
+        );
+    }
+    parts.push(format!("pacman -S --noconfirm --needed {}", pkgs));
+    parts.join(" && ")
+}
+
+pub(crate) fn pkg_install_one_cmd(pkg_mgr: &str, pkg: &str) -> String {
+    if pkg_mgr == "pacman" && (pkg == "nodejs" || pkg == "npm") {
+        return pacman_node_packages_cmd(&[pkg]);
+    }
+    match pkg_mgr {
+        "apt" => format!("DEBIAN_FRONTEND=noninteractive apt-get install -y {}", pkg),
+        "dnf" => format!("dnf install -y {}", pkg),
+        "pacman" => format!("pacman -S --needed --noconfirm {}", pkg),
+        "zypper" => format!("zypper install -y {}", pkg),
+        _ => format!("apt-get install -y {}", pkg),
+    }
+}
+
+/// nvm install + use for local Node (honours XDG nvm dir; skips re-clone when present).
+pub(crate) fn runtime_nvm_install_cmd(version: &str) -> String {
+    let v = version.replace('\'', "'\\''");
+    format!(
+        r#"set -e
+{NVM_BASH_RESOLVE}
+NPMRC="$HOME/.npmrc"
+if [ -f "$NPMRC" ] && grep -qE '^[[:space:]]*(prefix|globalconfig)[[:space:]]*=' "$NPMRC" 2>/dev/null; then
+  TS="$(date +%s)"
+  cp -p "$NPMRC" "$NPMRC.lumina-nvm-backup-$TS"
+  sed -i '/^[[:space:]]*prefix[[:space:]]*=/d;/^[[:space:]]*globalconfig[[:space:]]*=/d' "$NPMRC"
+  echo "NOTE: Removed incompatible prefix/globalconfig entries from ~/.npmrc (backup: $NPMRC.lumina-nvm-backup-$TS)." >&2
+fi
+if [ ! -s "$NVM_DIR/nvm.sh" ]; then
+  curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.0/install.sh | bash
+  {NVM_BASH_RESOLVE}
+fi
+. "$NVM_DIR/nvm.sh"
+unset npm_config_prefix NPM_CONFIG_PREFIX npm_CONFIG_PREFIX
+export NPM_CONFIG_USERCONFIG=/dev/null
+nvm install '{v}'
+nvm use --delete-prefix '{v}'"#,
+        NVM_BASH_RESOLVE = NVM_BASH_RESOLVE,
+        v = v
+    )
 }
 
 pub(crate) fn pkg_remove_cmd(pkg_mgr: &str, packages: &[&str]) -> String {
@@ -697,10 +817,25 @@ mod tests {
     }
 
     #[test]
+    fn mise_node_link_and_use_cmd_links_nvm_tree_via_mise() {
+        let cmd = runtime_mise_node_link_and_use_cmd(
+            "v24.17.0",
+            "/home/u/.config/nvm/versions/node/v24.17.0",
+        );
+        assert!(cmd.contains("link -f \"node@v24.17.0\""));
+        assert!(cmd.contains("use -g \"node@v24.17.0\""));
+        assert!(cmd.contains("reshim"));
+    }
+
+    #[test]
     fn pkg_command_builders_generate_expected_strings() {
         assert_eq!(
             pkg_upgrade_cmd("apt", &["nodejs", "npm"]),
             "DEBIAN_FRONTEND=noninteractive apt-get install --only-upgrade -y nodejs npm"
+        );
+        assert_eq!(
+            pkg_upgrade_cmd("pacman", &["nodejs", "npm"]),
+            "if pacman -Qi nodejs-lts-jod >/dev/null 2>&1; then pacman -R --noconfirm nodejs-lts-jod; fi && pacman -S --noconfirm --needed nodejs npm"
         );
         assert_eq!(
             pkg_remove_cmd("pacman", &["go"]),

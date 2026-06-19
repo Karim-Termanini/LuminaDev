@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import '../SettingsPage.css'
@@ -96,6 +96,12 @@ export function SettingsShell(): ReactElement {
   const [navId, setNavId] = useState<SettingsNavId>(
     rawTab && validIds.includes(rawTab) ? rawTab : 'personalization'
   )
+
+  useEffect(() => {
+    if (rawTab && validIds.includes(rawTab)) {
+      setNavId(rawTab)
+    }
+  }, [rawTab, validIds])
 
   function navigate(id: SettingsNavId): void {
     setNavId(id)

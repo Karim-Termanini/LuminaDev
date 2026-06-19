@@ -69,6 +69,31 @@ export function installedVersionKey(row: InstalledVersionRow): string {
   return `${row.path}\0${row.version}`
 }
 
+/** Match an installed row to the shell-resolved active binary path from set-active. */
+export function installedVersionMatchesActive(rowPath: string, activePath: string): boolean {
+  if (!activePath) return false
+  const norm = (p: string) => p.replace(/\\/g, '/').trim()
+  const row = norm(rowPath)
+  const active = norm(activePath)
+  if (row === active || row.endsWith(active) || active.endsWith(row)) return true
+  if (
+    (row.includes('/usr/bin/') || row.includes('/usr/local/bin/')) &&
+    (active.includes('/usr/bin/') || active.includes('/usr/local/bin/'))
+  ) {
+    return true
+  }
+  const nodeTag = (p: string) => {
+    const nvm = p.match(/\/versions\/node\/([^/]+)\/bin\/node$/)
+    if (nvm) return nvm[1]
+    const mise = p.match(/\/mise\/installs\/node\/([^/]+)\/bin\/node$/)
+    if (mise) return mise[1]
+    return null
+  }
+  const a = nodeTag(row)
+  const b = nodeTag(active)
+  return a !== null && a === b
+}
+
 /** Prefer a sensible default when the version API returns many entries (e.g. Node: first LTS row). */
 export function pickDefaultRuntimeVersion(runtimeId: string, versions: string[]): string {
   if (versions.length === 0) return 'latest'

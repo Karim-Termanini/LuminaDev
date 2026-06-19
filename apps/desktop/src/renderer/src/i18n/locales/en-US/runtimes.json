@@ -14,6 +14,7 @@
   "page.errorDeps": "Failed to check runtime dependencies.",
   "page.errorActive": "Failed to set active runtime.",
   "page.javaShellMismatch": "Could not switch the shell Java (still {{path}}). Try: mise use -g java@<version> in a terminal, or open a new terminal after retrying.",
+  "page.nodeShellMismatch": "Terminal still shows {{path}}. Open a new fish terminal — Omarchy caches PATH until login reloads mise hook-env.",
   "page.javaShellMismatchUnknown": "another Java on PATH",
   "page.errorRemove": "Failed to remove version.",
   "node.desc": "Node.js is a JavaScript runtime built on Chrome's V8 JavaScript engine. Ideal for scalable network applications.",

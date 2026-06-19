@@ -7,6 +7,152 @@ use crate::utils::{is_physical_disk_name, sanitize_compose_project_name};
 
 // ---------------------------------------------------------------------------
 
+/// True when `ufw status` output indicates an active firewall (not "inactive").
+pub(crate) fn parse_ufw_status_active(output: &str) -> bool {
+    output.lines().any(|line| {
+        let t = line.trim().to_ascii_lowercase();
+        t.starts_with("status:") && t.contains("active") && !t.contains("inactive")
+    })
+}
+
+async fn probe_ufw_active() -> bool {
+    if exec_output_limit("systemctl", &["is-active", "ufw"], cmd_timeout_short())
+        .await
+        .map(|o| o.trim() == "active")
+        .unwrap_or(false)
+    {
+        return true;
+    }
+    exec_output_limit("ufw", &["status"], cmd_timeout_short())
+        .await
+        .map(|o| parse_ufw_status_active(&o))
+        .unwrap_or(false)
+}
+
+async fn probe_firewalld_active() -> bool {
+    if exec_output_limit("systemctl", &["is-active", "firewalld"], cmd_timeout_short())
+        .await
+        .map(|o| o.trim() == "active")
+        .unwrap_or(false)
+    {
+        return true;
+    }
+    exec_output_limit("firewall-cmd", &["--state"], cmd_timeout_short())
+        .await
+        .map(|o| o.to_ascii_lowercase().contains("running"))
+        .unwrap_or(false)
+}
+
+async fn probe_sshd_test_config() -> String {
+    exec_output_limit("sshd", &["-T"], cmd_timeout_short())
+        .await
+        .unwrap_or_default()
+        .to_ascii_lowercase()
+}
+
+/// Last non-comment `Directive value` wins across concatenated sshd config fragments.
+pub(crate) fn parse_sshd_directive(config: &str, directive: &str) -> Option<String> {
+    let want = directive.to_ascii_lowercase();
+    let mut last: Option<String> = None;
+    for line in config.lines() {
+        let t = line.trim();
+        if t.is_empty() || t.starts_with('#') {
+            continue;
+        }
+        let mut parts = t.split_whitespace();
+        let key = parts.next()?.to_ascii_lowercase();
+        let val = parts.next()?.to_ascii_lowercase();
+        if key == want {
+            last = Some(val);
+        }
+    }
+    last
+}
+
+fn expand_sshd_include_pattern(pattern: &str) -> Vec<std::path::PathBuf> {
+    if !pattern.contains('*') {
+        let path = std::path::PathBuf::from(pattern);
+        return if path.is_file() { vec![path] } else { vec![] };
+    }
+    let (dir, file_glob) = match pattern.rsplit_once('/') {
+        Some((d, g)) => (d, g),
+        None => (".", pattern),
+    };
+    let prefix = file_glob.trim_end_matches('*');
+    let mut paths: Vec<std::path::PathBuf> = std::fs::read_dir(dir)
+        .ok()
+        .into_iter()
+        .flatten()
+        .filter_map(|e| e.ok())
+        .map(|e| e.path())
+        .filter(|p| {
+            p.is_file()
+                && p.file_name()
+                    .and_then(|n| n.to_str())
+                    .map(|n| n.starts_with(prefix))
+                    .unwrap_or(false)
+        })
+        .collect();
+    paths.sort();
+    paths
+}
+
+async fn read_sshd_config_blob() -> String {
+    let main = std::path::Path::new("/etc/ssh/sshd_config");
+    let Ok(content) = tokio::fs::read_to_string(main).await else {
+        return String::new();
+    };
+    let mut blob = content.clone();
+    for line in content.lines() {
+        let t = line.trim();
+        if !t.to_ascii_lowercase().starts_with("include ") {
+            continue;
+        }
+        let Some(pattern) = t.split_whitespace().nth(1) else {
+            continue;
+        };
+        for path in expand_sshd_include_pattern(pattern) {
+            if let Ok(extra) = tokio::fs::read_to_string(&path).await {
+                blob.push('\n');
+                blob.push_str(&extra);
+            }
+        }
+    }
+    blob
+}
+
+pub(crate) fn resolve_ssh_password_auth(sshd_t: &str, config: &str) -> &'static str {
+    if sshd_t.contains("passwordauthentication no") {
+        return "no";
+    }
+    if sshd_t.contains("passwordauthentication yes") {
+        return "yes";
+    }
+    match parse_sshd_directive(config, "PasswordAuthentication").as_deref() {
+        Some("no" | "false") => "no",
+        Some("yes" | "true") => "yes",
+        _ => "yes",
+    }
+}
+
+pub(crate) fn resolve_ssh_permit_root_login(sshd_t: &str, config: &str) -> &'static str {
+    if sshd_t.contains("permitrootlogin yes") {
+        return "yes";
+    }
+    if sshd_t.contains("permitrootlogin no")
+        || sshd_t.contains("permitrootlogin prohibit-password")
+        || sshd_t.contains("permitrootlogin without-password")
+        || sshd_t.contains("permitrootlogin forced-commands-only")
+    {
+        return "no";
+    }
+    match parse_sshd_directive(config, "PermitRootLogin").as_deref() {
+        Some("yes") => "yes",
+        Some("no" | "prohibit-password" | "without-password" | "forced-commands-only") => "no",
+        _ => "no",
+    }
+}
+
 pub(crate) async fn handle_monitor_top_processes() -> Value {
     match exec_output_limit(
         "ps",
@@ -43,14 +189,8 @@ pub(crate) async fn handle_monitor_top_processes() -> Value {
 }
 
 pub(crate) async fn handle_monitor_security() -> Value {
-    let ufw_active = exec_output_limit("ufw", &["status"], cmd_timeout_short())
-        .await
-        .map(|o| o.contains("active"))
-        .unwrap_or(false);
-    let firewalld_running = exec_output_limit("firewall-cmd", &["--state"], cmd_timeout_short())
-        .await
-        .map(|o| o.contains("running"))
-        .unwrap_or(false);
+    let ufw_active = probe_ufw_active().await;
+    let firewalld_running = probe_firewalld_active().await;
     let firewall = if ufw_active || firewalld_running {
         "active"
     } else {
@@ -66,26 +206,14 @@ pub(crate) async fn handle_monitor_security() -> Value {
             }
         })
         .unwrap_or_else(|_| "unknown");
-    let ssh_config = exec_output_limit(
-        "bash",
-        &[
-            "-c",
-            "sshd -T 2>/dev/null | awk '/permitrootlogin|passwordauthentication/'",
-        ],
-        cmd_timeout_short(),
-    )
-    .await
-    .unwrap_or_default();
-    let root_login = if ssh_config.contains("permitrootlogin yes") {
-        "yes"
-    } else {
-        "no"
-    };
-    let pw_auth = if ssh_config.contains("passwordauthentication no") {
-        "no"
-    } else {
-        "yes"
-    };
+    let sshd_t = probe_sshd_test_config().await;
+    let ssh_config_blob = read_sshd_config_blob().await;
+    let root_login = resolve_ssh_permit_root_login(&sshd_t, &ssh_config_blob);
+    let pw_auth = resolve_ssh_password_auth(&sshd_t, &ssh_config_blob);
+    let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+    let ssh_host_key_present = ["/.ssh/id_ed25519.pub", "/.ssh/id_rsa.pub"]
+        .iter()
+        .any(|suffix| std::path::Path::new(&format!("{home}{suffix}")).exists());
     let failed_auth_24h = exec_output_limit(
         "bash",
         &[
@@ -125,6 +253,7 @@ pub(crate) async fn handle_monitor_security() -> Value {
         "selinux": selinux,
         "sshPermitRootLogin": root_login,
         "sshPasswordAuth": pw_auth,
+        "sshHostKeyPresent": ssh_host_key_present,
         "failedAuth24h": failed_auth_24h,
         "riskyOpenPorts": risky
       }
@@ -585,5 +714,56 @@ mod metrics_tests {
         let expected_write = 1024.0 * 512.0 / 1_000_000.0;
         assert!((read - expected_read).abs() < 0.01);
         assert!((write - expected_write).abs() < 0.01);
+    }
+}
+
+#[cfg(test)]
+mod security_probe_tests {
+    use super::{
+        parse_sshd_directive, parse_ufw_status_active, resolve_ssh_password_auth,
+        resolve_ssh_permit_root_login,
+    };
+
+    #[test]
+    fn ufw_status_active_only_when_status_line_active() {
+        assert!(parse_ufw_status_active("Status: active\n"));
+        assert!(!parse_ufw_status_active("Status: inactive\n"));
+        assert!(!parse_ufw_status_active("ERROR: You need to be root to run this script\n"));
+    }
+
+    #[test]
+    fn parse_sshd_directive_uses_last_uncommented_value() {
+        let cfg = "#PasswordAuthentication yes\nPasswordAuthentication no\n";
+        assert_eq!(
+            parse_sshd_directive(cfg, "PasswordAuthentication").as_deref(),
+            Some("no")
+        );
+    }
+
+    #[test]
+    fn resolve_password_auth_from_config_when_sshd_t_unavailable() {
+        let cfg = "Include /etc/ssh/sshd_config.d/*.conf\nPasswordAuthentication no\n";
+        assert_eq!(resolve_ssh_password_auth("", cfg), "no");
+        assert_eq!(resolve_ssh_password_auth("sshd: no hostkeys available", cfg), "no");
+    }
+
+    #[test]
+    fn resolve_password_auth_prefers_sshd_t_when_present() {
+        assert_eq!(
+            resolve_ssh_password_auth("passwordauthentication yes", "PasswordAuthentication no"),
+            "yes"
+        );
+        assert_eq!(
+            resolve_ssh_password_auth("passwordauthentication no", "PasswordAuthentication yes"),
+            "no"
+        );
+    }
+
+    #[test]
+    fn resolve_root_login_from_config_when_sshd_t_unavailable() {
+        assert_eq!(
+            resolve_ssh_permit_root_login("", "#PermitRootLogin yes\nPermitRootLogin no\n"),
+            "no"
+        );
     }
 }

@@ -894,6 +894,122 @@
   font-weight: 600;
 }
 
+.monitor-security-fixes {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+}
+
+.monitor-security-fixes-lead {
+  margin: 0 0 12px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.monitor-security-fixes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.monitor-security-fix-guide {
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(124, 77, 255, 0.35);
+  background: rgba(124, 77, 255, 0.08);
+}
+
+.monitor-security-fix-guide-title {
+  font-size: 12px;
+  font-weight: 700;
+  margin-bottom: 6px;
+  color: var(--text);
+}
+
+.monitor-security-fix-guide-body {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--text-muted);
+}
+
+.monitor-security-fix-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--orange) 22%, var(--border));
+  background: color-mix(in srgb, var(--orange) 6%, var(--bg-widget));
+}
+
+.monitor-security-fix-step {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  background: rgba(124, 77, 255, 0.2);
+  color: var(--accent, #7c4dff);
+  border: 1px solid rgba(124, 77, 255, 0.4);
+}
+
+.monitor-security-fix-row-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.monitor-security-fix-hint {
+  margin: 0 0 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.monitor-security-fix-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.monitor-security-fix-status {
+  margin-top: 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.monitor-security-fix-status.is-ok {
+  color: var(--green);
+}
+
+.monitor-security-fix-status.is-info {
+  color: var(--accent, #7c4dff);
+}
+
+.monitor-security-fix-status.is-error {
+  color: var(--red);
+}
+
+.monitor-security-fix-fallback {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+
+#monitor-focus-security,
+#monitor-focus-cpu,
+#monitor-focus-memory {
+  scroll-margin-top: 20px;
+}
+
 /* Anchors */
 #monitor-overview,
 #monitor-network,

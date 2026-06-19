@@ -1,7 +1,7 @@
 use serde_json::{json, Value};
 
 use crate::host_exec::{
-    cmd_timeout_long, cmd_timeout_ssh, exec_output, exec_output_limit,
+    cmd_timeout_long, cmd_timeout_ssh, exec_output, exec_pkexec_script_file,
     exec_result_limit, exec_sshpass_ssh, get_global_ipc_timeout,
 };
 
@@ -122,7 +122,25 @@ pub(crate) async fn handle_ssh_test_github() -> Value {
         Ok((stdout, stderr)) => {
             json!({ "ok": true, "output": format!("{}{}", stdout, stderr), "code": 0 })
         }
-        Err(e) => json!({ "ok": true, "output": e, "code": 1 }),
+        Err(e) => {
+            let output = e.trim().to_string();
+            let authed = output.contains("successfully authenticated")
+                || output.contains("You've successfully authenticated")
+                || output.starts_with("Hi ");
+            let timed_out = output.starts_with("[HOST_COMMAND_TIMEOUT]");
+            json!({
+                "ok": authed && !timed_out,
+                "output": output,
+                "code": if authed { 1 } else { -1 },
+                "error": if timed_out {
+                    Some(output.clone())
+                } else if !authed {
+                    Some(format!("[SSH_TEST_GITHUB_FAILED] {}", output))
+                } else {
+                    None
+                }
+            })
+        }
     }
 }
 
@@ -266,7 +284,7 @@ pub(crate) async fn handle_ssh_enable_local() -> Value {
 
     let script_str = tmp_path.to_string_lossy().to_string();
     // cmd_timeout_long() gives the user enough time to interact with the polkit dialog
-    let result = exec_output_limit("pkexec", &[&script_str], cmd_timeout_long()).await;
+    let result = exec_pkexec_script_file(&script_str, cmd_timeout_long()).await;
     let _ = std::fs::remove_file(&tmp_path);
 
     match result {
@@ -279,9 +297,7 @@ pub(crate) async fn handle_ssh_enable_local() -> Value {
         }
         Err(e) => {
             let msg = e.trim().to_string();
-            // pkexec exit 126 = user dismissed the dialog (cancelled)
-            let cancelled =
-                msg.contains("126") || msg.to_lowercase().contains("cancel") || msg.is_empty();
+            let cancelled = msg.contains("[PKEXEC_CANCELLED]");
             if cancelled {
                 json!({ "ok": false, "log": "✗ Cancelled by user", "error": "[SSH_ENABLE_LOCAL_FAILED] Authentication cancelled." })
             } else {

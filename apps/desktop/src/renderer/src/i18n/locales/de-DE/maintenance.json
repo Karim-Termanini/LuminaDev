@@ -174,12 +174,14 @@
   "diag.docker.action": "Docker-Seite öffnen",
   "diag.security.pass.summary": "Sicherheits-Baseline in Ordnung.",
   "diag.security.pass.hint": "Firewall aktiv, SSH-Passwort-Login deaktiviert.",
+  "diag.security.warn.summary": "Firewall aktiv — optionale SSH-Härtung ausstehend.",
   "diag.security.fail.summary": "Sicherheitseinstellungen prüfen.",
   "diag.security.fail.hintFirewall": "Firewall nicht aktiv.",
   "diag.security.fail.hintSshPassword": "SSH erlaubt Passwort-Login — Schlüssel bevorzugen.",
   "diag.security.fail.hintBoth": "Firewall aus und SSH-Passwort-Login an.",
   "diag.security.fail.hintGeneric": "Firewall und SSH prüfen.",
-  "diag.security.action": "System-Einstellungen öffnen",
+  "diag.security.action": "Fixes im Monitor prüfen",
+  "diag.security.actionSsh": "SSH absichern",
   "diag.git.pass.summary": "Git-Identität konfiguriert.",
   "diag.git.pass.hint": "Name und E-Mail für Commits gesetzt.",
   "diag.git.fail.summary": "Git user.name oder user.email fehlt.",
@@ -202,7 +204,7 @@
   "diag.a11y.pass.summary": "Barrierefreiheits-Baseline bestanden.",
   "diag.a11y.pass.hint": "Labels und Landmarks OK.",
   "diag.a11y.fail.summary": "Barrierefreiheits-Probleme in der UI.",
-  "diag.a11y.fail.hint": "{{unlabeledInputs}} Inputs, {{unlabeledButtons}} Buttons ohne Label, {{imagesMissingAlt}} Bilder ohne Alt.",
+  "diag.a11y.fail.hint": "{{unlabeledInputs}} Inputs, {{unlabeledButtons}} Buttons ohne Label, {{imagesMissingAlt}} Bilder ohne Alt. Das sind UI-Labels der App — hier gibt es keinen automatischen Fix.",
   "diag.a11y.action": "Problem melden",
 
   "guardian.description": "Jede Ebene liest ein bestimmtes IPC-Signal. Der Hauptwert ist <0>100</0> abzüglich der Abzüge, die auf fehlschlagenden Ebenen angezeigt werden (abgerundet auf 0). Dies ist die codierte Definition von \"Guardian\" in dieser App — kein separates Marketing-Score.",
@@ -229,6 +231,19 @@
   "layerTooltip.container_fleet": "Anteil gestoppter oder abgestürzter Docker-Container",
   "layerTooltip.process_health": "Höchste CPU- oder Speichernutzung unter Top-Prozessen",
   "layerTooltip.host_security": "Firewall-Status und SSH-Passwort-Authentifizierung",
+
+  "layerAction.host_compute": "CPU im Monitor anzeigen",
+  "layerAction.host_compute_stressed": "Hohe CPU-Last — Monitor öffnen",
+  "layerAction.memory_pressure": "Speicher im Monitor anzeigen",
+  "layerAction.memory_pressure_stressed": "Hoher Speicherdruck — Monitor öffnen",
+  "layerAction.storage_pressure": "Festplatte im Monitor anzeigen",
+  "layerAction.storage_pressure_stressed": "Wenig Speicherplatz — Bereinigung starten",
+  "layerAction.container_fleet": "Docker öffnen",
+  "layerAction.container_fleet_stressed": "Gestoppte Container beheben — Docker öffnen",
+  "layerAction.process_health": "Top-Prozesse prüfen",
+  "layerAction.process_health_stressed": "Hohe Prozesslast — prüfen",
+  "layerAction.host_security": "Sicherheit im Monitor prüfen",
+  "layerAction.host_security_stressed": "Sicherheitsrisiken — Haltung prüfen",
 
   "guardian.overallExcellent": "Alles in Ordnung",
   "guardian.overallHealthy": "Gesund",
@@ -292,5 +307,6 @@
   "statusPill.active": "aktiv",
   "statusPill.inactive": "inaktiv",
   "statusPill.unknown": "unbekannt",
-  "statusPill.notInstalled": "nicht installiert"
+  "statusPill.notInstalled": "nicht installiert",
+  "statusPill.warning": "Warnung"
 }

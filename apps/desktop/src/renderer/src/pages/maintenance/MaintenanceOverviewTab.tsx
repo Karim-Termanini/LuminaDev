@@ -6,6 +6,7 @@ import { getGuardianLayerPressureScore } from '../maintenanceHealth'
 import { getMaintenanceOverallLabel } from '../maintenanceHealth'
 import { GUARDIAN_LAYER_LABELS } from './constants'
 import { GuardianLayerTile, OverviewNav } from './MaintenanceUi'
+import type { GuardianLayerId } from '../maintenanceGuardian'
 import type { TabId } from './types'
 
 type Guardian = ReturnType<typeof import('../maintenanceGuardian').evaluateGuardian>
@@ -25,6 +26,7 @@ export function MaintenanceOverviewTab({
   security,
   pendingTasks,
   onOpenTab,
+  onGuardianLayerAction,
   onOpenScheduleTab,
   onUpdateTaskDone,
 }: {
@@ -42,6 +44,7 @@ export function MaintenanceOverviewTab({
   security: HostSecuritySnapshot | null
   pendingTasks: Array<{ id: string; title: string; done: boolean }>
   onOpenTab: (tab: TabId) => void
+  onGuardianLayerAction: (layerId: GuardianLayerId) => void
   onOpenScheduleTab: () => void
   onUpdateTaskDone: (taskId: string, done: boolean) => void
 }): ReactElement {
@@ -110,6 +113,7 @@ export function MaintenanceOverviewTab({
               deduction={layer.deduction}
               ok={layer.ok}
               pressureScore={getGuardianLayerPressureScore(layer.id, m, containers, topProcesses, security)}
+              onAction={onGuardianLayerAction}
             />
           ))}
         </div>

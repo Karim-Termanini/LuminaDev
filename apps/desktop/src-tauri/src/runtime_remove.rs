@@ -2,13 +2,13 @@ use super::*;
 use crate::host_exec::{cmd_timeout_short, exec_output_limit};
 use crate::runtime_packages::{
     runtime_preview_blocked_shared_deps_for_runtime, runtime_preview_removable_deps,
-    runtime_read_host_distro, runtime_system_packages,
+    runtime_read_host_distro, runtime_system_packages, NVM_BASH_RESOLVE,
 };
 use crate::runtime_paths::{
-    lumina_version_dir_from_path, nvm_version_dir_from_path, path_segment_after_marker,
+    lumina_version_dir_from_path, mise_install_version_from_path, nvm_node_tag_from_path,
+    nvm_version_dir_from_path, path_segment_after_marker,
 };
 
-const NVM_MARKER: &str = "/.nvm/versions/node/";
 const PYENV_MARKER: &str = "/.pyenv/versions/";
 const RUSTUP_MARKER: &str = "/.rustup/toolchains/";
 pub(crate) async fn handle_runtime_uninstall_preview(body: &Value) -> Value {
@@ -136,14 +136,19 @@ pub(crate) async fn handle_runtime_remove_version(body: &Value) -> Value {
     }
 
 
-    if path_str.contains(NVM_MARKER) {
-        let tag = path_segment_after_marker(path_str, NVM_MARKER).unwrap_or_else(|| version.clone());
+    use crate::runtime_paths::NVM_NODE_MARKERS;
+
+    if NVM_NODE_MARKERS.iter().any(|m| path_str.contains(m)) {
+        let tag = nvm_node_tag_from_path(path_str).unwrap_or_else(|| version.clone());
         if tag.is_empty() {
             return json!({ "ok": false, "error": "[REMOVE_VERSION_FAILED] could not determine nvm version tag." });
         }
         let cmd = format!(
-            r#"export NVM_DIR="${{NVM_DIR:-$HOME/.nvm}}"; [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"; nvm uninstall '{}' 2>&1"#,
-            tag.replace('\'', "'\\''")
+            r#"{NVM_BASH_RESOLVE}
+. "$NVM_DIR/nvm.sh"
+nvm uninstall '{tag}' 2>&1"#,
+            NVM_BASH_RESOLVE = NVM_BASH_RESOLVE,
+            tag = tag.replace('\'', "'\\''")
         );
         if exec_output_limit("bash", &["-lc", &cmd], cmd_timeout_short())
             .await
@@ -215,8 +220,9 @@ pub(crate) async fn handle_runtime_remove_version(body: &Value) -> Value {
 
     let mise_marker = format!("/.local/share/mise/installs/{}/", runtime_id);
     if path_str.contains(&mise_marker) || runtime_id == "php" {
-        let mise_version =
-            path_segment_after_marker(path_str, &mise_marker).unwrap_or_else(|| version.clone());
+        let mise_version = mise_install_version_from_path(path_str, runtime_id)
+            .or_else(|| path_segment_after_marker(path_str, &mise_marker))
+            .unwrap_or_else(|| version.clone());
         if mise_version.is_empty() {
             return json!({ "ok": false, "error": "[REMOVE_VERSION_FAILED] version required for mise-managed runtime." });
         }

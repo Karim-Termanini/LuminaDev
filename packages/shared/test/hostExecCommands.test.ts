@@ -22,6 +22,9 @@ const RUST_HOST_EXEC_COMMANDS = [
   'settings_write_hosts',
   'settings_read_profile_env',
   'settings_write_profile_env',
+  'security_ufw_enable',
+  'security_sshd_disable_password',
+  'security_sshd_disable_root',
 ] as const
 
 describe('host exec command parity', () => {

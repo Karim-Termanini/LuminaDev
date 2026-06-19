@@ -2,12 +2,14 @@ import type { SshBookmark } from '@linux-dev-home/shared'
 import type { TFunction } from 'i18next'
 import type { ReactElement } from 'react'
 import { Trans } from 'react-i18next'
+import { GITHUB_SSH_KEYS_URL, isGithubPublicKeyDenied } from './githubTest'
 import { area, stepCircle, stepText, stepTitle } from './sshStyles'
 
 export function SshLeftColumn({
   t,
   enableLocalLog,
   enableLocalBusy,
+  localSshEnabled,
   onEnableLocalSsh,
   email,
   setEmail,
@@ -48,6 +50,7 @@ export function SshLeftColumn({
   t: TFunction<'ssh'>
   enableLocalLog: string
   enableLocalBusy: boolean
+  localSshEnabled: boolean | null
   onEnableLocalSsh: () => void
   email: string
   setEmail: (v: string) => void
@@ -127,12 +130,33 @@ export function SshLeftColumn({
                 className="hp-btn hp-btn-primary"
                 style={{ whiteSpace: 'nowrap', flexShrink: 0 }}
                 onClick={() => void onEnableLocalSsh()}
-                disabled={enableLocalBusy}
+                disabled={enableLocalBusy || localSshEnabled === true}
               >
-                {enableLocalBusy ? t('enable.inProgress') : t('enable.btn')}
+                {enableLocalBusy
+                  ? t('enable.inProgress')
+                  : localSshEnabled
+                    ? t('enable.alreadyEnabled')
+                    : t('enable.btn')}
               </button>
             </div>
-            {enableLocalLog && (
+            {localSshEnabled ? (
+              <div
+                style={{
+                  margin: 0,
+                  fontSize: 12,
+                  padding: '8px 12px',
+                  borderRadius: 6,
+                  border: '1px solid var(--green)',
+                  background: 'rgba(76, 175, 80, 0.1)',
+                  color: 'var(--green)',
+                  lineHeight: 1.5,
+                }}
+                role="status"
+              >
+                {t('enable.alreadyEnabledDetail')}
+              </div>
+            ) : null}
+            {enableLocalLog && !localSshEnabled ? (
               <pre
                 style={{
                   margin: 0,
@@ -148,7 +172,7 @@ export function SshLeftColumn({
               >
                 {enableLocalLog}
               </pre>
-            )}
+            ) : null}
           </div>
         </section>
 
@@ -254,6 +278,32 @@ export function SshLeftColumn({
                     <div className="mono" style={{ fontSize: 11 }}>
                       {testResult}
                     </div>
+                    {testOk === false && isGithubPublicKeyDenied(testResult) ? (
+                      <div className="ssh-github-setup-help" style={{ marginTop: 10 }}>
+                        <p style={{ margin: '0 0 8px', fontSize: 12, lineHeight: 1.5, color: 'var(--text)' }}>
+                          {t('identity.githubPublickeySteps')}
+                        </p>
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                          <button
+                            type="button"
+                            className="hp-btn hp-btn-primary"
+                            onClick={() => {
+                              void onLoadPubAndCopy()
+                            }}
+                            disabled={busy}
+                          >
+                            {t('identity.copyBtn')}
+                          </button>
+                          <button
+                            type="button"
+                            className="hp-btn"
+                            onClick={() => void window.dh.openExternal(GITHUB_SSH_KEYS_URL)}
+                          >
+                            {t('identity.openGithubSshSettings')}
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
                 )}
                 {pubKey && <textarea readOnly value={pubKey} style={{ ...area, marginTop: 12 }} />}

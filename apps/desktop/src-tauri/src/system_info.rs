@@ -334,9 +334,67 @@ pub(crate) async fn host_exec_handler(body: &Value) -> Value {
         "settings_write_hosts" => host_exec_write_hosts(body).await,
         "settings_read_profile_env" => host_exec_read_profile_env().await,
         "settings_write_profile_env" => host_exec_write_profile_env(body).await,
+        "security_ufw_enable" => host_exec_security_ufw_enable().await,
+        "security_sshd_disable_password" => host_exec_security_sshd_disable_password().await,
+        "security_sshd_disable_root" => host_exec_security_sshd_disable_root().await,
         _ => {
             json!({ "ok": false, "result": Value::Null, "error": "[HOST_EXEC_NOT_ALLOWED] command not allowed" })
         }
+    }
+}
+
+async fn host_exec_security_sshd_disable_password() -> Value {
+    const SCRIPT: &str = r#"set -e
+apply_pw_off() {
+  local f="$1"
+  [ -f "$f" ] || return 0
+  sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' "$f"
+}
+apply_pw_off /etc/ssh/sshd_config
+if [ -d /etc/ssh/sshd_config.d ]; then
+  for f in /etc/ssh/sshd_config.d/*.conf; do
+    apply_pw_off "$f"
+  done
+fi
+systemctl reload sshd 2>/dev/null || systemctl reload ssh 2>/dev/null || service ssh reload 2>/dev/null || true
+out=$(sshd -T 2>/dev/null | awk '/^passwordauthentication /{print tolower($0)}')
+if [ -z "$out" ] && [ -r /etc/ssh/sshd_config ]; then
+  out=$(grep -E '^[[:space:]]*PasswordAuthentication[[:space:]]' /etc/ssh/sshd_config /etc/ssh/sshd_config.d/*.conf 2>/dev/null | tail -1 | awk '{print "passwordauthentication " tolower($2)}')
+fi
+printf '%s\n' "$out"
+"#;
+    match crate::host_exec::exec_elevated_bash_script(SCRIPT, cmd_timeout_long()).await {
+        Ok(out) => json!({ "ok": true, "result": truncate_probe_output(&out) }),
+        Err(e) => json!({
+            "ok": false,
+            "result": Value::Null,
+            "error": format!("[SECURITY_SSHD_DISABLE_PASSWORD_FAILED] {}", e)
+        }),
+    }
+}
+
+async fn host_exec_security_sshd_disable_root() -> Value {
+    const SCRIPT: &str = r#"set -e
+apply_root_off() {
+  local f="$1"
+  [ -f "$f" ] || return 0
+  sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin no/' "$f"
+}
+apply_root_off /etc/ssh/sshd_config
+if [ -d /etc/ssh/sshd_config.d ]; then
+  for f in /etc/ssh/sshd_config.d/*.conf; do
+    apply_root_off "$f"
+  done
+fi
+systemctl reload sshd 2>/dev/null || systemctl reload ssh 2>/dev/null || service ssh reload 2>/dev/null || true
+"#;
+    match crate::host_exec::exec_elevated_bash_script(SCRIPT, cmd_timeout_long()).await {
+        Ok(out) => json!({ "ok": true, "result": truncate_probe_output(&out) }),
+        Err(e) => json!({
+            "ok": false,
+            "result": Value::Null,
+            "error": format!("[SECURITY_SSHD_DISABLE_ROOT_FAILED] {}", e)
+        }),
     }
 }
 
@@ -428,6 +486,37 @@ async fn host_exec_systemctl_stop(body: &Value) -> Value {
         Err(e) => {
             json!({ "ok": false, "result": Value::Null, "error": format!("[SYSTEMCTL_STOP_FAILED] {}", e) })
         }
+    }
+}
+
+async fn host_exec_security_ufw_enable() -> Value {
+    const SCRIPT: &str = r#"set -e
+if command -v ufw >/dev/null 2>&1; then
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl start ufw 2>/dev/null || true
+  fi
+  ufw allow OpenSSH 2>/dev/null || ufw allow ssh 2>/dev/null || true
+  ufw --force enable
+  ufw status
+elif command -v firewall-cmd >/dev/null 2>&1; then
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl start firewalld 2>/dev/null || true
+  fi
+  firewall-cmd --permanent --add-service=ssh 2>/dev/null || true
+  firewall-cmd --reload
+  firewall-cmd --state
+else
+  echo "No ufw or firewalld found"
+  exit 1
+fi
+"#;
+    match crate::host_exec::exec_elevated_bash_script(SCRIPT, cmd_timeout_long()).await {
+        Ok(out) => json!({ "ok": true, "result": truncate_probe_output(&out) }),
+        Err(e) => json!({
+            "ok": false,
+            "result": Value::Null,
+            "error": format!("[SECURITY_UFW_ENABLE_FAILED] {}", e)
+        }),
     }
 }
 

@@ -60,6 +60,95 @@ fn host_command(cmd: &str, args: &[&str]) -> Command {
     command
 }
 
+/// Ensure pkexec can reach the session polkit agent on Wayland/X11.
+fn configure_pkexec_gui_env(command: &mut Command) {
+    if std::env::var("DBUS_SESSION_BUS_ADDRESS").is_err() {
+        if let Ok(runtime) = std::env::var("XDG_RUNTIME_DIR") {
+            let bus_path = format!("{}/bus", runtime.trim_end_matches('/'));
+            if std::path::Path::new(&bus_path).exists() {
+                command.env(
+                    "DBUS_SESSION_BUS_ADDRESS",
+                    format!("unix:path={bus_path}"),
+                );
+            }
+        }
+    }
+}
+
+fn humanize_pkexec_failure(raw: &str) -> String {
+    let msg = raw.trim();
+    let lower = msg.to_lowercase();
+    if lower.contains("no authentication agent")
+        || lower.contains("cannot register authentication agent")
+        || (lower.contains("not authorized") && lower.contains("obtain authentication"))
+    {
+        return "[PKEXEC_NO_AGENT] No polkit password dialog is available. Start polkit-gnome-authentication-agent-1 (or your desktop polkit agent) and try again, or run the copy command in a terminal.".to_string();
+    }
+    if msg.contains("126") || lower.contains("cancel") || lower.contains("dismissed") {
+        return "[PKEXEC_CANCELLED] Authentication cancelled.".to_string();
+    }
+    format!("[PKEXEC_FAILED] {msg}")
+}
+
+/// Run pkexec with GUI session env; prefer passwordless sudo when configured.
+pub(crate) async fn exec_pkexec_limit(args: &[&str], limit: Duration) -> Result<String, String> {
+    let fut = async {
+        let mut command = Command::new("pkexec");
+        configure_pkexec_gui_env(&mut command);
+        command.args(args);
+        let output = command
+            .output()
+            .await
+            .map_err(|e| format!("[EXEC_ERROR] {}", e))?;
+        if output.status.success() {
+            Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+        } else {
+            let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+            let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            let combined = if !stderr.is_empty() {
+                stderr
+            } else if !stdout.is_empty() {
+                stdout
+            } else {
+                format!("pkexec failed: {}", args.join(" "))
+            };
+            Err(humanize_pkexec_failure(&combined))
+        }
+    };
+    match tokio::time::timeout(limit, fut).await {
+        Ok(inner) => inner,
+        Err(_) => Err(format!("[HOST_COMMAND_TIMEOUT] pkexec {}", args.join(" "))),
+    }
+}
+
+/// Elevated `bash -c` — passwordless sudo first, then pkexec polkit dialog.
+pub(crate) async fn exec_elevated_bash_script(
+    script: &str,
+    limit: Duration,
+) -> Result<String, String> {
+    if exec_output_limit("sudo", &["-n", "true"], Duration::from_secs(2))
+        .await
+        .is_ok()
+    {
+        return exec_output_limit("sudo", &["-n", "bash", "-c", script], limit).await;
+    }
+    exec_pkexec_limit(&["bash", "-c", script], limit).await
+}
+
+/// Elevated script file — passwordless sudo first, then pkexec.
+pub(crate) async fn exec_pkexec_script_file(
+    script_path: &str,
+    limit: Duration,
+) -> Result<String, String> {
+    if exec_output_limit("sudo", &["-n", "true"], Duration::from_secs(2))
+        .await
+        .is_ok()
+    {
+        return exec_output_limit("sudo", &["-n", "bash", script_path], limit).await;
+    }
+    exec_pkexec_limit(&[script_path], limit).await
+}
+
 pub(crate) async fn exec_output_limit(
     cmd: &str,
     args: &[&str],
@@ -205,6 +294,31 @@ pub(crate) async fn exec_sshpass_ssh(
     match timeout(limit, fut).await {
         Ok(inner) => inner,
         Err(_) => Err("[HOST_COMMAND_TIMEOUT] sshpass ssh".to_string()),
+    }
+}
+
+/// User login shell from `$SHELL` (falls back to bash).
+pub(crate) fn user_login_shell() -> String {
+    std::env::var("SHELL")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| "/bin/bash".to_string())
+}
+
+pub(crate) fn user_shell_is_fish() -> bool {
+    user_login_shell().contains("fish")
+}
+
+/// Run a script in the user's login shell (fish `-l -c`, bash/zsh `-lc`).
+pub(crate) async fn exec_user_login_shell_output(
+    body: &str,
+    limit: Duration,
+) -> Result<String, String> {
+    let shell = user_login_shell();
+    if user_shell_is_fish() {
+        exec_output_limit(&shell, &["-l", "-c", body], limit).await
+    } else {
+        exec_output_limit(&shell, &["-lc", body], limit).await
     }
 }
 

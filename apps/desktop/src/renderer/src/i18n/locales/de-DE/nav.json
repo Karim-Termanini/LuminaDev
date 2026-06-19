@@ -36,6 +36,7 @@
   "topbar.inboxPrActivity": "PR-Aktivität",
   "topbar.inboxLoading": "Cloud-Benachrichtigungen werden geladen…",
   "topbar.inboxEmpty": "Keine Erwähnungen, Reviews oder PR-Updates. Konten unter Einstellungen verbinden.",
+  "topbar.inboxConnectAccounts": "Verbundene Konten öffnen",
   "topbar.system": "System",
   "topbar.workstation": "Workstation",
   "topbar.docker": "Docker",

@@ -38,6 +38,7 @@ const secOk: HostSecuritySnapshot = {
   selinux: '',
   sshPermitRootLogin: 'no',
   sshPasswordAuth: 'no',
+  sshHostKeyPresent: true,
   failedAuth24h: 0,
   riskyOpenPorts: [],
 }

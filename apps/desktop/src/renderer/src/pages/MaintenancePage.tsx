@@ -168,6 +168,7 @@ export function MaintenancePage(): ReactElement {
             security={security}
             pendingTasks={pendingTasks}
             onOpenTab={setActiveTab}
+            onGuardianLayerAction={vm.onGuardianLayerAction}
             onOpenScheduleTab={() => setActiveTab('Scheduled / Automation')}
             onUpdateTaskDone={(taskId, done) => void updateTask(taskId, { done })}
           />

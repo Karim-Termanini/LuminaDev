@@ -14,6 +14,7 @@
   "page.errorDeps": "Fehler beim Prüfen der Laufzeitabhängigkeiten.",
   "page.errorActive": "Fehler beim Setzen der aktiven Laufzeitumgebung.",
   "page.javaShellMismatch": "Shell-Java konnte nicht gewechselt werden (weiterhin {{path}}). Versuche: mise use -g java@<version> in einem Terminal, oder öffne ein neues Terminal nach erneutem Versuch.",
+  "page.nodeShellMismatch": "Shell-Node weicht ab ({{path}}). Omarchy nutzt mise in fish — mise use -g node@<version> ausführen oder neues Terminal öffnen. Für nvm: fish muss nvm laden oder bash verwenden.",
   "page.javaShellMismatchUnknown": "eine andere Java-Installation im PATH",
   "page.errorRemove": "Fehler beim Entfernen der Version.",
   "node.desc": "Node.js ist eine JavaScript-Laufzeitumgebung, die auf Chrome V8 basiert. Ideal für skalierbare Netzwerkanwendungen.",

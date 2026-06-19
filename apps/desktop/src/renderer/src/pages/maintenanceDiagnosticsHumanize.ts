@@ -3,6 +3,7 @@ export type MaintenanceDiagnosticCheck = {
   label: string
   ok: boolean
   details: string
+  severity?: 'pass' | 'warn' | 'fail'
 }
 
 export type MaintenanceDiagnosticAction = {
@@ -69,6 +70,14 @@ export function humanizeMaintenanceDiagnostic(
           technical,
         }
       }
+      if (check.severity === 'warn' && firewall === 'active' && sshPassword === 'yes') {
+        return {
+          summary: t(`${base}.warn.summary`),
+          hint: t(`${base}.fail.hintSshPassword`),
+          technical,
+          action: { labelKey: `${base}.actionSsh`, href: '/ssh?wizard=1' },
+        }
+      }
       const issues: string[] = []
       if (firewall && firewall !== 'active') issues.push('firewall')
       if (sshPassword === 'yes') issues.push('sshPassword')
@@ -83,7 +92,7 @@ export function humanizeMaintenanceDiagnostic(
                 ? t(`${base}.fail.hintFirewall`)
                 : t(`${base}.fail.hintGeneric`),
         technical,
-        action: { labelKey: `${base}.action`, href: '/settings?tab=system' },
+        action: { labelKey: `${base}.action`, href: '/dashboard/monitor?tab=overview&focus=security' },
       }
     }
     case 'git': {
@@ -155,7 +164,6 @@ export function humanizeMaintenanceDiagnostic(
         summary: t(`${base}.fail.summary`),
         hint: t(`${base}.fail.hint`, { unlabeledInputs, unlabeledButtons, imagesMissingAlt }),
         technical,
-        action: { labelKey: `${base}.action`, href: '/settings?tab=help-about' },
       }
     }
     default:

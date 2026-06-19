@@ -1,7 +1,7 @@
 import type { ReactElement, ReactNode } from 'react'
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import type { ContainerRow, HostMetricsResponse, HostPortRow, HostSecurityDrilldown, HostSecuritySnapshot, HostSysInfo, TopProcessRow } from '@linux-dev-home/shared'
 import { humanizeDashboardError } from './dashboardError'
 import { assertGitOk } from './gitContract'
@@ -14,6 +14,7 @@ import {
   type MonitorHealthMetric,
 } from './monitorHealth'
 import './MonitorPage.css'
+import { MonitorSecurityRemediations } from './MonitorSecurityRemediations'
 
 // ─── Git global config score (aligned with Git Config page) ─────────────────
 
@@ -128,6 +129,7 @@ function MetricHealthHint({
 
 export function MonitorPage(): ReactElement {
   const { t } = useTranslation('monitor')
+  const [searchParams] = useSearchParams()
   const [metrics, setMetrics] = useState<HostMetricsResponse | null>(null)
   const [ports, setPorts] = useState<HostPortRow[]>([])
   const [sysInfo, setSysInfo] = useState<HostSysInfo | null>(null)
@@ -294,6 +296,27 @@ export function MonitorPage(): ReactElement {
     document.getElementById(entry.anchorId)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
+  const scrollToMonitorFocus = useCallback((tab: MonitorTabId, focus?: string | null) => {
+    setActiveTab(tab)
+    if (tab === 'processes') setDetailsOpen(true)
+    window.setTimeout(() => {
+      if (focus) {
+        document.getElementById(`monitor-focus-${focus}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        return
+      }
+      const entry = MONITOR_TABS.find((item) => item.id === tab)
+      if (entry) {
+        document.getElementById(entry.anchorId)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }
+    }, 80)
+  }, [])
+
+  useEffect(() => {
+    const tab = searchParams.get('tab') as MonitorTabId | null
+    if (!tab || !MONITOR_TABS.some((item) => item.id === tab)) return
+    scrollToMonitorFocus(tab, searchParams.get('focus'))
+  }, [searchParams, scrollToMonitorFocus])
+
   const gitTotal = gitCfg ? gitTotalConfigScore(gitCfg) : null
 
   return (
@@ -366,6 +389,7 @@ export function MonitorPage(): ReactElement {
         </nav>
 
       <div id="monitor-overview" className="monitor-grid-metrics monitor-grid-primary">
+        <div id="monitor-focus-cpu">
         <MetricCard
           title={t('metrics.cpu')}
           value={m ? `${m.cpuUsagePercent.toFixed(1)}%` : '—'}
@@ -376,7 +400,9 @@ export function MonitorPage(): ReactElement {
           <MetricHealthHint metric="cpu" value={m?.cpuUsagePercent} t={t} />
           <LiveLineChart data={cpuHistory} color="var(--accent)" height={60} />
         </MetricCard>
+        </div>
 
+        <div id="monitor-focus-memory">
         <MetricCard
           title={t('metrics.memory')}
           value={m ? `${memPct}%` : '—'}
@@ -401,6 +427,7 @@ export function MonitorPage(): ReactElement {
             <span>{t('metrics.swap_total', { value: m?.swapTotalMb ?? 0 })}</span>
           </div>
         </MetricCard>
+        </div>
 
         <MetricCard
           title={t('metrics.storage')}
@@ -525,6 +552,7 @@ export function MonitorPage(): ReactElement {
         </MetricCard>
       </div>
 
+      <div id="monitor-focus-security">
       <MetricCard title={t('security.title')} subValue={t('security.subtitle')} icon="shield" tone="security">
         <div className="monitor-stack">
           <div className="monitor-panel-block" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
@@ -578,6 +606,8 @@ export function MonitorPage(): ReactElement {
           </div>
         </div>
       </MetricCard>
+      <MonitorSecurityRemediations security={security} onRefresh={() => void refreshStatic()} />
+      </div>
 
       <section className="monitor-details">
         <button

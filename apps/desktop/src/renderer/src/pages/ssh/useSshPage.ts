@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { assertSshOk } from '../sshContract'
 import { humanizeSshError } from '../sshError'
+import { isGithubPublicKeyDenied } from './githubTest'
 import { shQuote } from './shQuote'
 import type { SshSession, SshTarget } from './types'
 
@@ -21,6 +22,7 @@ export function useSshPage() {
 
   const [enableLocalLog, setEnableLocalLog] = useState('')
   const [enableLocalBusy, setEnableLocalBusy] = useState(false)
+  const [localSshEnabled, setLocalSshEnabled] = useState<boolean | null>(null)
   const [showPrereqs, setShowPrereqs] = useState(false)
 
   const [newBmName, setNewBmName] = useState('')
@@ -71,7 +73,23 @@ export function useSshPage() {
   useEffect(() => {
     void loadBookmarks()
     void loadPub()
+    void probeLocalSshStatus()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function probeLocalSshStatus(): Promise<boolean> {
+    try {
+      const res = (await window.dh.hostExec({
+        command: 'systemctl_is_active_fallback',
+        units: ['sshd', 'ssh'],
+      })) as { ok: boolean; result?: string }
+      const active = res.ok && res.result === 'active'
+      setLocalSshEnabled(active)
+      return active
+    } catch {
+      setLocalSshEnabled(false)
+      return false
+    }
+  }
 
   async function loadBookmarks(): Promise<void> {
     try {
@@ -128,13 +146,21 @@ export function useSshPage() {
   }
 
   async function enableLocalSsh(): Promise<void> {
+    if (localSshEnabled) return
     setEnableLocalBusy(true)
-    setEnableLocalLog('')
+    setEnableLocalLog(t('enable.waitingAuth'))
     try {
       const res = await window.dh.sshEnableLocal()
-      setEnableLocalLog(res.log + (res.error ? `\n✗ ${humanizeSshError(res.error, t)}` : ''))
+      if (res.ok) {
+        setLocalSshEnabled(true)
+        setEnableLocalLog(res.log.trim())
+      } else {
+        setEnableLocalLog(res.log + (res.error ? `\n✗ ${humanizeSshError(res.error, t)}` : ''))
+        await probeLocalSshStatus()
+      }
     } catch (e) {
       setEnableLocalLog(`✗ ${humanizeSshError(e, t)}`)
+      await probeLocalSshStatus()
     } finally {
       setEnableLocalBusy(false)
     }
@@ -206,11 +232,16 @@ export function useSshPage() {
       const res = await window.dh.sshTestGithub({ target })
       setTestResult(res.output)
       setTestOk(res.ok)
-      setStatus(
-        res.ok
-          ? t('identity.testSuccess')
-          : `❌ ${humanizeSshError(res.error || t('identity.testFailGeneric', { code: res.code ?? 'n/a' }), t)}`
-      )
+      if (!res.ok && isGithubPublicKeyDenied(res.output)) {
+        await loadPub()
+        setStatus(t('identity.githubPublickeyHelp'))
+      } else {
+        setStatus(
+          res.ok
+            ? t('identity.testSuccess')
+            : `❌ ${humanizeSshError(res.error || t('identity.testFailGeneric', { code: res.code ?? 'n/a' }), t)}`
+        )
+      }
     } catch (e) {
       setStatus(humanizeSshError(e, t))
       setTestOk(false)
@@ -575,6 +606,7 @@ export function useSshPage() {
     bookmarks,
     enableLocalLog,
     enableLocalBusy,
+    localSshEnabled,
     showPrereqs,
     setShowPrereqs,
     newBmName,

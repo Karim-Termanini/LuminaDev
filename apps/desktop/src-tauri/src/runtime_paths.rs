@@ -39,16 +39,64 @@ pub(crate) fn path_home_before_marker(path: &str, marker: &str) -> Option<PathBu
   }
 }
 
+pub(crate) const NVM_NODE_MARKERS: [&str; 2] =
+  ["/.config/nvm/versions/node/", "/.nvm/versions/node/"];
+
+pub(crate) fn nvm_node_tag_from_path(path: &str) -> Option<String> {
+  for marker in NVM_NODE_MARKERS {
+    if path.contains(marker) {
+      return path_segment_after_marker(path, marker);
+    }
+  }
+  None
+}
+
+pub(crate) fn mise_install_version_from_path(path: &str, runtime_id: &str) -> Option<String> {
+  let marker = format!("/.local/share/mise/installs/{}/", runtime_id);
+  if path.contains(&marker) {
+    path_segment_after_marker(path, &marker)
+  } else {
+    None
+  }
+}
+
+pub(crate) fn is_system_node_binary_path(path: &str) -> bool {
+  path.starts_with("/usr/bin/") || path.starts_with("/usr/local/bin/")
+}
+
+/// Resolve a Node binary path for set-active (home-managed or system `/usr/bin/node`).
+pub(crate) fn resolve_node_set_active_path(
+  home: &Path,
+  path_raw: &str,
+) -> Result<PathBuf, String> {
+  let trimmed = path_raw.trim();
+  if trimmed.is_empty() {
+    return Err("[RUNTIME_SET_ACTIVE_FAILED] Missing path.".to_string());
+  }
+  if is_system_node_binary_path(trimmed) {
+    let path = Path::new(trimmed);
+    return match std::fs::canonicalize(path) {
+      Ok(abs) => Ok(abs),
+      Err(_) => Ok(path.to_path_buf()),
+    };
+  }
+  lumina_path_must_be_under_home(home, Path::new(trimmed))
+}
+
 pub(crate) fn nvm_version_dir_from_path(path: &str) -> Option<PathBuf> {
-  const MARKER: &str = "/.nvm/versions/node/";
-  let tag = path_segment_after_marker(path, MARKER)?;
-  let home = path_home_before_marker(path, MARKER)?;
-  Some(
-    home.join(".nvm")
-      .join("versions")
-      .join("node")
-      .join(tag),
-  )
+  for marker in NVM_NODE_MARKERS {
+    if let Some(tag) = path_segment_after_marker(path, marker) {
+      if let Some(home) = path_home_before_marker(path, marker) {
+        let rel = if marker.contains(".config/nvm") {
+          home.join(".config").join("nvm")
+        } else {
+          home.join(".nvm")
+        };
+        return Some(rel.join("versions").join("node").join(tag));
+      }
+    }
+  }
+  None
 }
 
 pub(crate) fn lumina_version_dir_from_path(path: &str, runtime_id: &str) -> Option<PathBuf> {
@@ -140,9 +188,41 @@ mod tests {
       dir,
       PathBuf::from("/home/karimodora/.nvm/versions/node/v25.2.0")
     );
+    assert_eq!(nvm_node_tag_from_path(p).as_deref(), Some("v25.2.0"));
+  }
+
+  #[test]
+  fn nvm_xdg_config_paths_resolve_tag_and_dir() {
+    let p = "/home/karimodora/.config/nvm/versions/node/v24.17.0/bin/node";
+    assert_eq!(nvm_node_tag_from_path(p).as_deref(), Some("v24.17.0"));
     assert_eq!(
-      path_segment_after_marker(p, "/.nvm/versions/node/").as_deref(),
-      Some("v25.2.0")
+      nvm_version_dir_from_path(p).unwrap(),
+      PathBuf::from("/home/karimodora/.config/nvm/versions/node/v24.17.0")
     );
+  }
+
+  #[test]
+  fn mise_node_version_from_binary_path() {
+    let p = "/home/karimodora/.local/share/mise/installs/node/26.2.0/bin/node";
+    assert_eq!(
+      mise_install_version_from_path(p, "node").as_deref(),
+      Some("26.2.0")
+    );
+  }
+
+  #[test]
+  fn system_node_path_detection() {
+    assert!(is_system_node_binary_path("/usr/bin/node"));
+    assert!(is_system_node_binary_path("/usr/local/bin/node"));
+    assert!(!is_system_node_binary_path(
+      "/home/u/.config/nvm/versions/node/v24/bin/node"
+    ));
+  }
+
+  #[test]
+  fn resolve_node_set_active_path_allows_system_node() {
+    let home = PathBuf::from("/home/karimodora");
+    let p = resolve_node_set_active_path(&home, "/usr/bin/node").unwrap();
+    assert!(p.ends_with("node"));
   }
 }
