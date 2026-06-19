@@ -102,7 +102,7 @@ Full checklists, bug tables, and module standards: **[`phasesPlan.md`](../phases
 ✅  Phase 6  — Runtimes (18 → 7; R1–R3 complete; see §14)
 ✅  Phase 7  — Maintenance / Guardian
 ✅  Phase 8  — Settings (14 tabs; Resources tab absent; Extension removed)
-✅  Phase 9  — Profiles + scaffolding
+✅  Phase 9  — Profiles + dashboard project scaffold
 ❌  Phase 10 — Extensions (removed from scope 2026-05-29)
 ✅  Phase 11 — First-run Wizard (merged into Phase 16)
 ✅  Phase 12 — Cloud Git + legacy pro Git UI (Smart-Flow retired in G1; see §6)

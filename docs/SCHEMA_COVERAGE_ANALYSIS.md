@@ -22,7 +22,7 @@ node -e "const fs=require('fs');const s=fs.readFileSync('packages/shared/src/ipc
 # Exported RequestSchema names (informational — includes aliases; not channel coverage)
 rg -c 'export const \\w+RequestSchema' packages/shared/src/schemas.ts packages/shared/src/foundation.ts
 
-# Vitest files (expect 63 desktop + 5 shared = 68)
+# Vitest files (expect 63 desktop + 6 shared = 69)
 find apps/desktop -name '*.test.ts' -o -name '*.test.tsx' | wc -l
 find packages/shared/test -name '*.test.ts' | wc -l
 

@@ -295,7 +295,7 @@ Findings from full static analysis: Rust backend security/correctness, renderer 
 | 14 Settings tabs confirmed | ✅ | `SettingsShell.tsx` — 14 `SettingsNavId` members |
 | No `.env` files with secrets | ✅ | Glob search returns no results |
 | OAuth client IDs are public-by-design | ✅ | `cloud_auth/helpers.rs:5-6` — configurable via env vars |
-| **68** Vitest files (**63** `apps/desktop` + **5** `packages/shared/test`), 0 stubs, 0 dead imports | ✅ | `find apps/desktop packages/shared/test \\( -name '*.test.ts' -o -name '*.test.tsx' \\)` |
+| **68** Vitest files (**63** `apps/desktop` + **6** `packages/shared/test`), 0 stubs, 0 dead imports | ✅ | `find apps/desktop packages/shared/test \\( -name '*.test.ts' -o -name '*.test.tsx' \\)` |
 | `compose_profiles.rs` resolution logic | ✅ | Env → repo walk → bundle fallback; full overlay support |
 | `KEEL_DEV_COMPOSE_FULL` overlay | ✅ | `1`/`true`/`yes` env var or profile store `composeVariant` field |
 | 3 i18n locales, 14 namespaces each | ✅ | 42 translation files total |
@@ -310,7 +310,7 @@ Findings from full static analysis: Rust backend security/correctness, renderer 
 | Route count (M3) | ✅ | **20** `<Route>` in `App.tsx`; `/` + `/system-readiness` in [`ROUTE_STATUS.md`](./ROUTE_STATUS.md) |
 | Git VCS channels (M4) | ✅ | **25** `dh:git:vcs:*`; **16** UI-active in `pages/`; **9** legacy (contract tests) |
 | Rust `.rs` count (M5) | ✅ | **62** under `src-tauri/src` (59 Phase 17 + 3 test/support modules) |
-| Vitest file count (M6) | ✅ | **68** total (**63** desktop + **5** shared) |
+| Vitest file count (M6) | ✅ | **69** total (**63** desktop + **6** shared) |
 | Schema metrics (M7) | ✅ | **133/133** authoritative; see [`SCHEMA_COVERAGE_ANALYSIS.md`](./SCHEMA_COVERAGE_ANALYSIS.md) — retired 54/70/137 |
 | Data-science scaffold route (M8) | ✅ | `dataScienceCreateWizard.ts` on `/dashboard` only; Profiles has no scaffold UI — `README.md`, `ROUTE_STATUS.md` |
 | Monitor first-call disk/net (M9) | ✅ | `METRICS_PRIME_MS` 300ms prime in `monitor_handlers.rs`; `metrics_tests`; checklist no longer says "always 0" |

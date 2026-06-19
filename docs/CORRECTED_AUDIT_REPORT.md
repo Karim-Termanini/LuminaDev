@@ -37,7 +37,7 @@
 | **M3** | Route count / missing routes | ✅ **Docs fixed** | **20** `<Route>` in `App.tsx`; `/` redirect + `/system-readiness` in `ROUTE_STATUS.md` and `AUDIT.md` §7 |
 | **M4** | Git VCS channel count (claimed 28) | ✅ **Docs fixed** | **25** `dh:git:vcs:*`; **16** UI-active (`window.dh.gitVcs*` in `pages/`); **9** legacy (Pro Git UI removed, contract tests) — `CLAUDE.md`, `SCHEMA_COVERAGE_ANALYSIS.md` |
 | **M5** | Rust `.rs` file count | ✅ **Docs fixed** | **62** under `src-tauri/src` (59 Phase 17 + 3 test/support modules) |
-| **M6** | Vitest file count | ✅ **Docs fixed** | **68** total (**63** desktop + **5** shared) |
+| **M6** | Vitest file count | ✅ **Docs fixed** | **69** total (**63** desktop + **6** shared) — includes `ipcSchemaSourceDistParity.test.ts` |
 | **M7** | Mixed schema metrics in docs | ✅ **Docs fixed** | **`SCHEMA_COVERAGE_ANALYSIS.md` rewritten** — **133/133** authoritative; retired 54/70/137; export count **106** informational only |
 | **M8** | Data-science scaffolding attributed to `/profiles` | ✅ **Docs fixed** | `dataScienceCreateWizard.ts` imported only by `CreateProjectModal.tsx` + `useDashboardMainPage.tsx` on `/dashboard`; `README.md`, `ROUTE_STATUS.md`, `MASTER_PLAN.md` |
 | **M9** | First-call monitor disk/net metrics return `0.0` | ✅ **Fixed** | `METRICS_PRIME_MS` (300ms) baseline in `monitor_handlers.rs` for CPU/net/disk deltas; `metrics_tests`; `STABILIZATION_CHECKLIST.md` corrected (not “always 0”) |
@@ -65,8 +65,75 @@
 | `<Route>` declarations | **20** | `rg -c '<Route ' apps/desktop/src/renderer/src/App.tsx` |
 | `dh:git:vcs:*` channels | **25** (**16** UI-active, **9** legacy) | `ipc.ts`; `rg -o 'window\.dh\.gitVcs\w+' apps/desktop/src/renderer/src/pages` |
 | Rust `.rs` files | **62** | `find apps/desktop/src-tauri/src -name '*.rs' \| wc -l` |
-| Vitest files | **68** (**63** + **5**) | `find` desktop + `packages/shared/test` |
+| Vitest files | **69** (**63** + **6**) | `find` desktop + `packages/shared/test` |
 | Compose presets | **9** dirs; **7** real + partial + empty | `docker/compose/` |
+
+---
+
+## Summary v3 — command-run verification (2026-06-19)
+
+Re-ran gates on branch `doc/new-core-ai-plan` after schema/dist/compose fixes (`6d36da8`, `c0879d9`).
+
+### BUILD / CI (was failing → green)
+
+| Finding | Severity (v3) | Status | Evidence |
+| --- | --- | --- | --- |
+| `pnpm build` fails (17 shared type errors) | CRITICAL | ✅ **Fixed** | P10 `*RequestSchema` restored in `schemas.ts`; `pnpm build` green |
+| `pnpm typecheck` fails (22 errors) | CRITICAL | ✅ **Fixed** | `pnpm typecheck` green (shared + desktop) |
+| `pnpm lint` fails (2 errors) | HIGH | ✅ **Fixed** | 0 errors; 6 `react-hooks/exhaustive-deps` warnings remain (Git Assistant — LOW) |
+| `dist/` stale vs source | CRITICAL | ✅ **Fixed** | Shared `test` runs `pnpm build` first; `ipcSchemaSourceDistParity.test.ts` |
+| Desktop tests pass on stale dist | HIGH | ✅ **Fixed** | Desktop `test` builds shared first; parity guard |
+| `cargo test` compose `PROJECT_DIR` | MEDIUM | ✅ **Fixed** | `compose_smoke.rs` sets `PROJECT_DIR` temp dir |
+
+### SOURCE bugs (was failing → fixed)
+
+| Bug | Severity (v3) | Status | Fix |
+| --- | --- | --- | --- |
+| `ProfileCredentialsIdRequestSchema` undefined at `schemas.ts:1069` | CRITICAL | ✅ **Fixed** | Defined at `schemas.ts:503`; alias at `:1150` |
+| 21 nonexistent `ipcSchemaMap` imports | CRITICAL | ✅ **Fixed** | All payload schemas restored; map compiles against source |
+| `BASE_TEMPLATES` undefined in profiles smoke | HIGH | ✅ **Fixed** | `COMPOSE_PROFILES` exported from `index.ts`; shared build before desktop vitest |
+| Git Assistant ref-in-cleanup hooks | LOW | ⏸ **Open** | 4 warnings — intentional epoch guards; not release blockers |
+
+### Documentation (v3 audit items)
+
+| Doc error | Status |
+| --- | --- |
+| IPC 134/137 vs **138** | ✅ Fixed — `SCHEMA_COVERAGE_ANALYSIS.md`, `AUDIT.md` §15.5 |
+| Terminal “line-buffered” vs real PTY | ✅ Fixed — `STABILIZATION_CHECKLIST.md` |
+| Git VCS **28** vs **25** | ✅ Fixed — `CLAUDE.md`, `SCHEMA_COVERAGE_ANALYSIS.md` |
+| Rust **59** vs **62** `.rs` | ✅ Fixed — historical 59 at Phase 17; **62** current (+3 test/support) |
+| Vitest **62/66** vs **69** | ✅ Fixed — **63** desktop + **6** shared |
+| Routes **19** vs **20** | ✅ Fixed — `/system-readiness` in `ROUTE_STATUS.md`, `AUDIT.md` §7 |
+| “24 bypasses” vs **0** | ✅ Retracted — P12 fixed **1**; miscount documented in `MASTER_PLAN.md` |
+| Data-science scaffold on Profiles | ✅ Fixed — `/dashboard` in `README.md`, `ROUTE_STATUS.md` |
+| “8/9 compose stubs” | ✅ Fixed — **7/9** real + game-dev partial + empty |
+| Schema counts 54/70/91 inconsistent | ✅ Retired — **133/133** authoritative in `SCHEMA_COVERAGE_ANALYSIS.md` |
+
+### Verified true (unchanged)
+
+| Claim | Status |
+| --- | --- |
+| `cargo check` clean | ✅ 0 errors, 0 warnings |
+| Real PTY (`portable-pty` 0.8) | ✅ `terminal_pty.rs` |
+| Real GitHub API update check | ✅ `reqwest` in update flow |
+| `/proc` metrics live | ✅ `monitor_handlers.rs` + `METRICS_PRIME_MS` |
+| Runtime check-deps probes host | ✅ `runtime_packages.rs` |
+| Git Doctor 9 parallel checks | ✅ `git_doctor.rs` |
+| 0 `@ts-ignore` / `@ts-expect-error` | ✅ grep |
+| 0 `TODO`/`FIXME`/`HACK`/`XXX` in TS | ✅ grep |
+| 0 renderer `invoke('ipc_invoke')` | ✅ grep |
+| **14** Settings tabs | ✅ `SettingsShell.tsx` `NAV` array |
+| **14** i18n namespaces | ✅ `locales/en-US/` |
+| **9** compose presets in schema | ✅ `composeProfiles.ts` |
+| Extensions/widgets removed | ✅ no routes |
+| `lib.rs` thin dispatcher (~706 lines) | ✅ |
+
+### Gate commands (all green @ 2026-06-19)
+
+```bash
+pnpm typecheck && pnpm build && pnpm lint && pnpm test
+cd apps/desktop/src-tauri && cargo check && cargo test
+```
 
 ---
 
@@ -84,7 +151,7 @@
 ## Verification commands
 
 ```bash
-cd packages/shared && pnpm exec vitest run test/ipcSchemaCoverage.test.ts
+cd packages/shared && pnpm test   # build + ipcSchemaCoverage + source/dist parity
 cd apps/desktop/src-tauri && cargo test ipc_contract_tests -- --nocapture
 cd apps/desktop/src-tauri && cargo test compose_smoke git_vcs_smoke monitor_smoke ssh_smoke terminal_pty_smoke cloud_auth_smoke -- --nocapture
 pnpm smoke

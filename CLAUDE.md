@@ -88,7 +88,7 @@ All IPC responses use `{ ok: boolean; error?: string }` shape. Error strings are
 - `schemas.ts` — Zod schemas for request/response payloads
 - `foundation.ts` — `JobStartRequest` and shared foundation types
 
-**Inventory counts:** use [`docs/SCHEMA_COVERAGE_ANALYSIS.md`](docs/SCHEMA_COVERAGE_ANALYSIS.md) — **138** IPC strings, **133/133** dispatcher Zod map, **106** exported `*RequestSchema` names (informational). Do not cite retired **54**, **~70**, **134**, or **137**. Graphify community **59**/**70** are cluster IDs, not file or schema counts. **20** routes, **62** Rust `.rs` files, **68** Vitest files (**63**+**5**).
+**Inventory counts:** use [`docs/SCHEMA_COVERAGE_ANALYSIS.md`](docs/SCHEMA_COVERAGE_ANALYSIS.md) — **138** IPC strings, **133/133** dispatcher Zod map, **106** exported `*RequestSchema` names (informational). Do not cite retired **54**, **~70**, **134**, or **137**. Graphify community **59**/**70** are cluster IDs, not file or schema counts. **20** routes, **62** Rust `.rs` files, **69** Vitest files (**63**+**6**).
 
 ## Commit Rules
 
