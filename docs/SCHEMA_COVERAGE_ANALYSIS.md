@@ -97,6 +97,7 @@ Renderer → desktopApiBridge.ts → ipc_invoke / ipc_send → Rust handlers
 | Channel name parity TS ↔ Rust | `apps/desktop/src-tauri/src/ipc_contract_tests.rs` | Prevents drift in channel strings |
 | Schema map completeness | `packages/shared/test/ipcSchemaCoverage.test.ts` | Every dispatcher channel has a Zod schema |
 | **Source ↔ dist parity** | `packages/shared/test/ipcSchemaSourceDistParity.test.ts` | Every `ipcSchemaMap` payload schema exists in `src/` **and** `dist/` after build |
+| **`window.dh` ↔ bridge** | `apps/desktop/src/renderer/src/api/desktopApiBridge.contract.test.ts` | Method names in `vite-env.d.ts` match `createTauriDhApi()` (`satisfies DhApi` at compile time) |
 | Payload roundtrips | `packages/shared/test/schemas.test.ts` | P10 batch parse tests |
 
 ### Source/dist drift incident (2026-06-19)
