@@ -485,7 +485,7 @@ lib.rs → domain modules (docker_ext, terminal_pty, …) → utils.rs
 
 **Red flags:** handler > 50 lines in `lib.rs`; circular imports; duplicate logic across arms.
 
-**Current outcome (Phase 17):** 36 `mod` declarations → **59 `.rs` files** at Phase 17 completion; **62** as of 2026-06-19 (+ `ipc_contract_tests.rs`, `runtime_prune_contract_tests.rs`, `integration_test_support.rs`). `lib.rs` ~706 lines; largest modules `system_info.rs` (~1,009 lines), `runtime_jobs.rs` (~684 lines).
+**Current outcome (Phase 17):** 36 `mod` declarations → **59 `.rs` files** at Phase 17 completion; **62** as of 2026-06-19 (+ `ipc_contract_tests.rs`, `runtime_prune_contract_tests.rs`, `integration_test_support.rs`). `lib.rs` ~706 lines; largest modules `system_info.rs` (~1,010 lines), `runtime_jobs.rs` (~792 lines).
 
 ---
 
@@ -826,7 +826,7 @@ Post-G1  G2 validate → G3 iterate
 | Profile switch flow | Community **53** | `profileSwitchProgress`, `projectBackgroundSetup`, `useProfilesPage` |
 | Git Assistant UX | Community **48** | Editor resolve, clone, progress rail helpers |
 | Docker UI | `DockerPage.tsx` + `pages/docker/*` | Largest renderer orchestrator (~1,204 lines; tabs split) |
-| Rust size | `system_info.rs` (~1,009), `runtime_jobs.rs` (~684) | Largest domain modules post–Phase 17 |
+| Rust size | `system_info.rs` (~1,010), `runtime_jobs.rs` (~792) | Largest domain modules post–Phase 17 |
 | `cloud_auth/` self-import cycles | GRAPH_REPORT import-cycles | Cosmetic module `use` cycles — not Phase 18 scope |
 
 ### Test architecture (graph-aligned)
@@ -917,7 +917,7 @@ Maintainer machine layout (Karim): all repos under **`~/Documents/GitHub/`**. Ke
 └── dify/               ← out of scope (newCore § NOT Building)
 ```
 
-**Env var (proposed, mirrors `KEEL_DEV_COMPOSE_ROOT`):**
+**Env var (proposed, mirrors `LUMINA_DEV_COMPOSE_ROOT`):**
 
 | Variable | Default (dev) | Purpose |
 | --- | --- | --- |

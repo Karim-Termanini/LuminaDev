@@ -1,4 +1,4 @@
-# CORRECTED FINAL AUDIT REPORT — LuminaDev
+# CORRECTED FINAL AUDIT REPORT — KeelDev
 
 **Supersedes:** First-pass independent audit (`auditBig.md` narrative; partial counts in early P13 docs).  
 **Date:** 2026-06-19 (re-verification pass)  
@@ -37,7 +37,7 @@
 | **M3** | Route count / missing routes | ✅ **Docs fixed** | **20** `<Route>` in `App.tsx`; `/` redirect + `/system-readiness` in `ROUTE_STATUS.md` and `AUDIT.md` §7 |
 | **M4** | Git VCS channel count (claimed 28) | ✅ **Docs fixed** | **25** `dh:git:vcs:*`; **16** UI-active (`window.dh.gitVcs*` in `pages/`); **9** legacy (Pro Git UI removed, contract tests) — `CLAUDE.md`, `SCHEMA_COVERAGE_ANALYSIS.md` |
 | **M5** | Rust `.rs` file count | ✅ **Docs fixed** | **62** under `src-tauri/src` (59 Phase 17 + 3 test/support modules) |
-| **M6** | Vitest file count | ✅ **Docs fixed** | **69** total — desktop **63** (**61** `*.test.ts` + **2** `*.test.tsx`) + **6** shared; `*.test.ts`-only count is **67** (undercounts) |
+| **M6** | Vitest file count | ✅ **Docs fixed** | **71** total — desktop **64** (**62** `*.test.ts` + **2** `*.test.tsx`) + **7** shared; `*.test.ts`-only count is **69** (undercounts) |
 | **M7** | Mixed schema metrics in docs | ✅ **Docs fixed** | **`SCHEMA_COVERAGE_ANALYSIS.md` rewritten** — **133/133** authoritative; retired 54/70/137; export count **106** informational only |
 | **M8** | Data-science scaffolding attributed to `/profiles` | ✅ **Docs fixed** | `dataScienceCreateWizard.ts` imported only by `CreateProjectModal.tsx` + `useDashboardMainPage.tsx` on `/dashboard`; `README.md`, `ROUTE_STATUS.md`, `MASTER_PLAN.md` |
 | **M9** | First-call monitor disk/net metrics return `0.0` | ✅ **Fixed** | `METRICS_PRIME_MS` (300ms) baseline in `monitor_handlers.rs` for CPU/net/disk deltas; `metrics_tests`; `STABILIZATION_CHECKLIST.md` corrected (not “always 0”) |
@@ -48,7 +48,7 @@
 | --- | --- | --- | --- |
 | **L1** | Compose “8/9 stub-only” doc claim | ✅ **Docs fixed** | **7/9** real base stacks; **game-dev** partial (`redis` + stub `game-server`); **empty** `services: {}` — `MASTER_PLAN.md`, `phasesPlan.md`, `STATUS.md` |
 | **L2** | Monitor security uses `bash -c` for two probes | ✅ **Verified** | `monitor_handlers.rs` — `sshd -T \| awk` and `journalctl \| grep \| wc -l` pipelines only; other probes use direct `Command`; `CLAUDE.md`, `AUDIT.md` §15.5 |
-| **L3** | Production `unwrap()` / `expect()` (4 calls) | ✅ **Verified** | 2× `serde_json::to_string_pretty` on hardcoded `json!()` in `web_dev.rs` / `mobile.rs`; `build().expect` in `lib.rs`; `app_data_dir().expect` in `profile_credentials.rs` — all benign |
+| **L3** | Production `unwrap()` / `expect()` (3 calls) | ✅ **Verified** | 2× `serde_json::to_string_pretty` on hardcoded `json!()` in `web_dev.rs` / `mobile.rs`; `build().expect` in `lib.rs` — credential store path uses `map_err` |
 | **L4** | No Rust integration tests for critical domains | ✅ **Fixed** | `tests/*_smoke.rs`: compose, git_vcs, monitor, ssh, terminal_pty, cloud_auth + `docker_smoke.rs`; wired in `ci.yml` + `smoke-tests.yml` |
 | **L5** | `ComposeProfile` list duplicated | ✅ **Fixed** | Single source: `composeProfiles.ts` → `ComposeProfileSchema` |
 
@@ -65,7 +65,7 @@
 | `<Route>` declarations | **20** | `rg -c '<Route ' apps/desktop/src/renderer/src/App.tsx` |
 | `dh:git:vcs:*` channels | **25** (**16** UI-active, **9** legacy) | `ipc.ts`; `rg -o 'window\.dh\.gitVcs\w+' apps/desktop/src/renderer/src/pages` |
 | Rust `.rs` files | **62** | `find apps/desktop/src-tauri/src -name '*.rs' \| wc -l` |
-| Vitest files | **69** (**63** desktop + **6** shared) | `find apps/desktop packages/shared/test \( -name '*.test.ts' -o -name '*.test.tsx' \)` — not `*.test.ts` only (**67**) |
+| Vitest files | **71** (**64** desktop + **7** shared) | `find apps/desktop packages/shared/test \( -name '*.test.ts' -o -name '*.test.tsx' \)` — not `*.test.ts` only (**69**) |
 | Compose presets | **9** dirs; **7** real + partial + empty | `docker/compose/` |
 
 ---
@@ -102,7 +102,7 @@ Re-ran gates on branch `doc/new-core-ai-plan` after schema/dist/compose fixes (`
 | Terminal “line-buffered” vs real PTY | ✅ Fixed — `STABILIZATION_CHECKLIST.md` |
 | Git VCS **28** vs **25** | ✅ Fixed — `CLAUDE.md`, `SCHEMA_COVERAGE_ANALYSIS.md` |
 | Rust **59** vs **62** `.rs` | ✅ Fixed — historical 59 at Phase 17; **62** current (+3 test/support) |
-| Vitest **62/66** vs **69** | ✅ Fixed — **63** desktop (**61** `.test.ts` + **2** `.test.tsx`) + **6** shared |
+| Vitest **62/66** vs **71** | ✅ Fixed — **64** desktop (**62** `.test.ts` + **2** `.test.tsx`) + **7** shared |
 | Routes **19** vs **20** | ✅ Fixed — `/system-readiness` in `ROUTE_STATUS.md`, `AUDIT.md` §7 |
 | “24 bypasses” vs **0** | ✅ Retracted — P12 fixed **1**; miscount documented in `MASTER_PLAN.md` |
 | Data-science scaffold on Profiles | ✅ Fixed — `/dashboard` in `README.md`, `ROUTE_STATUS.md` |
@@ -147,7 +147,7 @@ These items were **unfixed on `main`** at audit time and are **fixed on `doc/new
 | Routes **19** vs **20** | Missing `/system-readiness` | ✅ `ROUTE_STATUS.md`, `README.md` |
 | Git VCS **28** vs **25** | Stale | ✅ `SCHEMA_COVERAGE_ANALYSIS.md`, `CLAUDE.md` |
 | Rust **59** vs **62** `.rs` | Stale (59 = Phase 17 baseline) | ✅ Historical 59 noted; **62** current |
-| Vitest **62/66** vs **69** | Stale | ✅ **63** desktop (**61** `.test.ts` + **2** `.test.tsx`) + **6** shared |
+| Vitest **62/66** vs **71** | Stale | ✅ **64** desktop (**62** `.test.ts` + **2** `.test.tsx`) + **7** shared |
 | Terminal “line-buffered” | `STABILIZATION_CHECKLIST.md` | ✅ Real `portable_pty` documented |
 | “**24** bypasses” | Miscount in early audits | ✅ Retracted; **0** bypasses; `MASTER_PLAN.md` L26 explains |
 | README scaffold on Profiles | Wrong route | ✅ Dashboard row; Profiles says “no scaffolding” |

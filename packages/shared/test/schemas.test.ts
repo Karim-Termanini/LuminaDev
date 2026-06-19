@@ -71,6 +71,45 @@ describe('schemas', () => {
     ).toThrow()
   })
 
+  it('rejects retired host exec commands not implemented in Rust', () => {
+    expect(() =>
+      HostExecRequestSchema.parse({ command: 'flatpak_spawn_echo' as never })
+    ).toThrow()
+    expect(() =>
+      HostExecRequestSchema.parse({ command: 'docker_install_step' as never })
+    ).toThrow()
+  })
+
+  it('accepts systemd host exec payloads used by dashboard and maintenance', () => {
+    expect(
+      HostExecRequestSchema.parse({
+        command: 'systemctl_is_active',
+        unit: 'sshd',
+        user: false,
+      }),
+    ).toEqual({ command: 'systemctl_is_active', unit: 'sshd', user: false })
+    expect(
+      HostExecRequestSchema.parse({
+        command: 'systemctl_start',
+        unit: 'nginx',
+        user: false,
+      }),
+    ).toEqual({ command: 'systemctl_start', unit: 'nginx', user: false })
+    expect(
+      HostExecRequestSchema.parse({
+        command: 'systemctl_stop',
+        unit: 'jupyter-lab',
+        user: true,
+      }),
+    ).toEqual({ command: 'systemctl_stop', unit: 'jupyter-lab', user: true })
+    expect(
+      HostExecRequestSchema.parse({
+        command: 'systemctl_is_active_fallback',
+        units: ['sshd', 'ssh'],
+      }),
+    ).toEqual({ command: 'systemctl_is_active_fallback', units: ['sshd', 'ssh'] })
+  })
+
   it('accepts maintenance host probes', () => {
     expect(HostExecRequestSchema.parse({ command: 'maintenance_docker_system_df' })).toEqual({
       command: 'maintenance_docker_system_df',

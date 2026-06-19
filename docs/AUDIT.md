@@ -278,7 +278,7 @@ Findings from full static analysis: Rust backend security/correctness, renderer 
 | L1 | `RegistryPage.tsx` + `RegistryPage.css` | Dead component — route redirects to `/git` | ✅ **Deleted** |
 | L2 | `SystemPage.tsx` | Dead component — route redirects to `/dashboard/monitor` | ✅ **Deleted** |
 | L3 | `src/dashboard/CustomProfileWizardModal.tsx` | Orphaned — never imported | ✅ **Deleted** |
-| L4 | `profile_credentials.rs:16` | World-readable `/tmp/profile_credentials.enc` fallback | ✅ **Fixed** — `app_data_dir().expect(...)`; no temp fallback |
+| L4 | `profile_credentials.rs` app data path | Unresolved `app_data_dir()` panicked via `expect()` | ✅ **Fixed** — `map_err` → `[PROFILE_CRED_STORE_PATH]` IPC error |
 | L5 | `WizardFlow.tsx:229,235` | Hardcoded git name/email placeholders | ✅ **Fixed** — `t('wizard.gitNamePlaceholder')` / `t('wizard.gitEmailPlaceholder')` in all 3 locales |
 | L6 | 5 mislabeled test files | Integration/E2E labels overstated capability | ✅ **Fixed** — `module availability` + `contract + error roundtrip` describe labels |
 | L7 | `vitest.config.ts` | Coverage restricted to 2 docker files | ✅ **Fixed** — `pages/**/*.{ts,tsx}` + `lib/**/*.ts`, tests excluded; global thresholds removed (reporting-only scope) |
@@ -295,13 +295,13 @@ Findings from full static analysis: Rust backend security/correctness, renderer 
 | 14 Settings tabs confirmed | ✅ | `SettingsShell.tsx` — 14 `SettingsNavId` members |
 | No `.env` files with secrets | ✅ | Glob search returns no results |
 | OAuth client IDs are public-by-design | ✅ | `cloud_auth/helpers.rs:5-6` — configurable via env vars |
-| **69** Vitest files (**63** `apps/desktop` + **6** `packages/shared/test`), 0 stubs, 0 dead imports | ✅ | `find apps/desktop packages/shared/test \\( -name '*.test.ts' -o -name '*.test.tsx' \\)` |
+| **71** Vitest files (**64** `apps/desktop` + **7** `packages/shared/test`), 0 stubs, 0 dead imports | ✅ | `find apps/desktop packages/shared/test \\( -name '*.test.ts' -o -name '*.test.tsx' \\)` — not `*.test.ts` only (**69**) |
 | `compose_profiles.rs` resolution logic | ✅ | Env → repo walk → bundle fallback; full overlay support |
-| `KEEL_DEV_COMPOSE_FULL` overlay | ✅ | `1`/`true`/`yes` env var or profile store `composeVariant` field |
+| `LUMINA_DEV_COMPOSE_FULL` overlay | ✅ | `1`/`true`/`yes` env var or profile store `composeVariant` field |
 | 3 i18n locales, 14 namespaces each | ✅ | 42 translation files total |
 | Monitor security ssh/journal probes via `bash -c` | ✅ | `monitor_handlers.rs:70,90` — pipelines for `sshd -T` + `journalctl` only; other probes use direct `Command` (independent **L2**) |
 | Rust domain integration smoke (`tests/*_smoke.rs`) | ✅ | Compose, Git VCS, Monitor, SSH, Terminal PTY, Cloud auth + `docker_smoke.rs` — `ci.yml`, `smoke-tests.yml` (independent **L4**) |
-| Production `unwrap()` / `expect()` (4 calls) | ✅ | 2× template `to_string_pretty` on hardcoded JSON; `lib.rs` `build().expect`; `profile_credentials.rs` `app_data_dir().expect` — benign (independent **L3**) |
+| Production `unwrap()` / `expect()` (3 calls) | ✅ | 2× template `to_string_pretty` on hardcoded JSON; `lib.rs` `build().expect` — no production `expect()` in credential store (returns IPC error on path failure) |
 | `ComposeProfile` single source (`composeProfiles.ts`) | ✅ | `COMPOSE_PROFILES` tuple drives Zod + TS; no duplicate union in `ipc.ts` (independent **L5**) |
 | Zod dispatcher map (P10) | **133/133** | `ipcSchemaCoverage.test.ts` + [`CORRECTED_AUDIT_REPORT.md`](./CORRECTED_AUDIT_REPORT.md) |
 | Raw `invoke('ipc_invoke')` in renderer | ✅ | **0** bypasses; P12 fixed **1** (`SettingsUpdate.tsx`); **24** first-pass count retracted (see `IMPLEMENTATION_SUMMARY_P11_P13.md` §P12) |
@@ -310,7 +310,7 @@ Findings from full static analysis: Rust backend security/correctness, renderer 
 | Route count (M3) | ✅ | **20** `<Route>` in `App.tsx`; `/` + `/system-readiness` in [`ROUTE_STATUS.md`](./ROUTE_STATUS.md) |
 | Git VCS channels (M4) | ✅ | **25** `dh:git:vcs:*`; **16** UI-active in `pages/`; **9** legacy (contract tests) |
 | Rust `.rs` count (M5) | ✅ | **62** under `src-tauri/src` (59 Phase 17 + 3 test/support modules) |
-| Vitest file count (M6) | ✅ | **69** total — **63** desktop (**61** `*.test.ts` + **2** `*.test.tsx`) + **6** shared |
+| Vitest file count (M6) | ✅ | **71** total — **64** desktop (**62** `*.test.ts` + **2** `*.test.tsx`) + **7** shared |
 | Schema metrics (M7) | ✅ | **133/133** authoritative; see [`SCHEMA_COVERAGE_ANALYSIS.md`](./SCHEMA_COVERAGE_ANALYSIS.md) — retired 54/70/137 |
 | Data-science scaffold route (M8) | ✅ | `dataScienceCreateWizard.ts` on `/dashboard` only; Profiles has no scaffold UI — `README.md`, `ROUTE_STATUS.md` |
 | Monitor first-call disk/net (M9) | ✅ | `METRICS_PRIME_MS` 300ms prime in `monitor_handlers.rs`; `metrics_tests`; checklist no longer says "always 0" |

@@ -621,9 +621,9 @@ When user clicks "Install" / "Fix":
 
 - `lib.rs`: 3,963 → ~706 (82.2% reduction), ~268 non-test dispatcher lines
 - ipc_invoke: ~113 match arms (some use `|` multi-pattern), zero business logic inline
-- 36 `mod` declarations → 59 `.rs` files (`cloud_auth/` 8; `project_scaffold/` 12; `runtime_jobs.rs` ~684 lines; `system_info.rs` ~1,009 lines)
+- 36 `mod` declarations → 59 `.rs` files (`cloud_auth/` 8; `project_scaffold/` 12; `runtime_jobs.rs` ~792 lines; `system_info.rs` ~1,010 lines)
 - `executor.rs` (17 KB) actively used; exports `runtime_bash_user_step`, `sudo_bash_install_step`
-- Key large modules: `system_info.rs` (~1,009 lines), `runtime_jobs.rs` (~684 lines)
+- Key large modules: `system_info.rs` (~1,010 lines), `runtime_jobs.rs` (~792 lines)
 - cargo check: zero warnings, clippy: zero errors; Rust unit test count not re-verified post-refactor
 
 ---

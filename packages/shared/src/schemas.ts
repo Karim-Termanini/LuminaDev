@@ -125,32 +125,32 @@ export const DockerNetworkActionRequestSchema = z.object({
   action: DockerNetworkActionSchema,
 })
 
+/** Whitelisted `dh:host:exec` commands — keep in sync with `system_info::host_exec_handler`. */
+export const HOST_EXEC_COMMANDS = [
+  'nvidia_smi_short',
+  'systemctl_is_active',
+  'systemctl_start',
+  'systemctl_stop',
+  'systemctl_is_active_fallback',
+  'maintenance_docker_system_df',
+  'maintenance_docker_ps_table',
+  'maintenance_journalctl_docker',
+  'maintenance_du_cache_tail',
+  'settings_read_hosts',
+  'settings_process_env',
+  'settings_write_hosts',
+  'settings_read_profile_env',
+  'settings_write_profile_env',
+] as const
+
+export type HostExecCommand = (typeof HOST_EXEC_COMMANDS)[number]
+
 export const HostExecRequestSchema = z.object({
-  command: z.enum([
-    'systemctl_is_active',
-    'nvidia_smi_short',
-    'flatpak_spawn_echo',
-    'docker_install_step',
-    /** Fixed whitelisted host probes; output shown in-app (Maintenance runbook). */
-    'maintenance_docker_system_df',
-    'maintenance_docker_ps_table',
-    'maintenance_journalctl_docker',
-    'maintenance_du_cache_tail',
-    /** Read-only `cat /etc/hosts` for Settings preview (bounded output server-side). */
-    'settings_read_hosts',
-    /** Allowlisted `std::env` keys from the app process (not a login shell); bounded text. */
-    'settings_process_env',
-    /** Write `/etc/hosts` via elevated copy (pkexec); `content` required. */
-    'settings_write_hosts',
-    /** Read `~/.profile` export lines for Settings profile env editor. */
-    'settings_read_profile_env',
-    /** Set/remove one `export KEY=VALUE` line in `~/.profile`; `action`, `key`, `value` required for set. */
-    'settings_write_profile_env',
-  ] as const),
+  command: z.enum(HOST_EXEC_COMMANDS),
   unit: z.string().max(128).optional(),
   user: z.boolean().optional(),
-  distro: z.enum(['ubuntu', 'fedora', 'arch']).optional(),
-  stepIndex: z.number().int().min(0).max(8).optional(),
+  /** Ordered unit names for `systemctl_is_active_fallback` (first match wins). */
+  units: z.array(z.string().max(128)).min(1).max(20).optional(),
   /** Full `/etc/hosts` body for `settings_write_hosts` (bounded server-side too). */
   content: z.string().max(48_000).optional(),
   action: z.enum(['set', 'remove']).optional(),

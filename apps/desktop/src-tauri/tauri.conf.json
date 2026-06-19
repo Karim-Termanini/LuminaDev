@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "LuminaDev",
+  "productName": "KeelDev",
   "version": "0.2.0",
   "identifier": "io.github.karimodora.luminadev",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "LuminaDev",
+        "title": "KeelDev",
         "width": 1280,
         "height": 900,
         "resizable": true
@@ -26,9 +26,9 @@
     "active": true,
     "targets": "all",
     "icon": [
-      "../../data/icons/hicolor/32x32/apps/io.github.karimodora.LinuxDevHome.png",
-      "../../data/icons/hicolor/128x128/apps/io.github.karimodora.LinuxDevHome.png",
-      "../../data/icons/hicolor/256x256/apps/io.github.karimodora.LinuxDevHome.png"
+      "../../../data/icons/hicolor/32x32/apps/io.github.karimodora.LinuxDevHome.png",
+      "../../../data/icons/hicolor/128x128/apps/io.github.karimodora.LinuxDevHome.png",
+      "../../../data/icons/hicolor/256x256/apps/io.github.karimodora.LinuxDevHome.png"
     ],
     "resources": [
       "../../../docker/compose"

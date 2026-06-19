@@ -1,4 +1,5 @@
 export * from './schemas.js'
+export * from './profileStoreKeys.js'
 export * from './composeProfiles.js'
 export * from './activeProfile.js'
 export * from './composeProject.js'
