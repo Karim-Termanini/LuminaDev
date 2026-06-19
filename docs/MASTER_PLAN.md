@@ -1,7 +1,8 @@
 # KeelDev — Master Plan
 
-**Last updated:** 2026-06-02 (session 2 — unwrap fix + stale audit deletion)  
+**Last updated:** 2026-06-19 (AI Core roadmap + §19 stay/delete/transform inventory)  
 **Git Assistant spec (shipped):** [`gitRefactor.md`](../gitRefactor.md)  
+**AI Core spec (forward):** [`newCore.md`](../newCore.md) — canonical detailed plan; do not edit from planning passes  
 **Route truth table:** [`ROUTE_STATUS.md`](./ROUTE_STATUS.md)  
 **Release gate:** [`STABILIZATION_CHECKLIST.md`](./STABILIZATION_CHECKLIST.md)  
 **Quality gate:** `pnpm smoke` must pass before merge
@@ -26,7 +27,7 @@ This document consolidates **all active planning** into one place: forward backl
 | **Independent verification (2026-06-02)** | ✅ Report | `pnpm smoke` green @ `fc9c8fa`; 134 IPC channels / 54 `RequestSchema`; 24 renderer `ipc_invoke` bypasses; compose **8/9 presets stub-only** (full stack only `web-dev`); AUDIT §13 rechecked |
 | **Stale audit deletion + unwrap fix (2026-06-02)** | ✅ Done | Deleted `COMPREHENSIVE_AUDIT_2026_06_02.md` (stale, claimed CI broken — false); replaced 2 `unwrap()` in `system_info.rs:724,729` with `if let` |
 
-**Next:** Phase 18 P9–P10 (IPC boundary hardening) → Tier 3 release (AppImage VM, cross-distro matrix, Tauri Stage 5 sign-off).
+**Next (sequenced):** Phase 18 P10 batch 2 (Zod payload gaps) → Tier 3 release (AppImage VM, cross-distro matrix, Tauri Stage 5 sign-off) → **AI Core AC0–AC7** ([`newCore.md`](../newCore.md) § Timeline).
 
 ---
 
@@ -37,6 +38,21 @@ This document consolidates **all active planning** into one place: forward backl
 - **Full Hosted:** KeelDev is an environment manager on the host. It is **not** a strict sandbox (no cgroup/Docker-isolated build isolation by design).
 - **Design standard:** Technical efficiency, visual elegance, and premium UX aligned with **Microsoft Dev Home**.
 - **Audience:** Absolute beginners **and** professional developers — one-click automation with deep logs and raw control when needed.
+
+### Forward product thesis (AI Core — [`newCore.md`](../newCore.md))
+
+KeelDev evolves from environment manager to **"The Unified AI Developer Control Plane for Linux"** — a lightweight orchestration layer between IDEs and AI models. **Core philosophy:** do not rewrite existing tools; call them via subprocess; orchestrate with **< 2,000 lines Rust + < 500 lines TypeScript** (see `newCore.md` § Total Code estimate).
+
+| Problem | AI Core response | Builds on existing |
+| --- | --- | --- |
+| 4 IDE chaos, duplicate API keys/credits | OpenAI-compatible **AI Proxy** (`localhost:4317`, Bearer token in `~/.config/keel/token`) | Settings Connected accounts; `host_exec` subprocess spine |
+| Heavy local AI / token waste | **Headroom** compression + hybrid local/cloud routing | — |
+| Context fragmentation across IDEs | **Knowledge Graph** via **graphify** (PyPI) + `notify` watcher | Repo `graphify-out/` for dev planning; runtime graphs under `~/.keel/graphs/` |
+| Git identity chaos | **Git Context Switcher** — path-based YAML rules | Git Assistant G1–G4; **not** the sibling `odysseus/` repo |
+| Linux beginner hell (PATH, errors) | **PATH Manager** + **Error Diagnoser** | Sibling clones: `last30days-skill/`, optional `Agent-Reach/` under `~/Documents/GitHub/` |
+| First-run overload | **3-question Install Wizard** (build goal / terminal experience / Git knowledge) | Phase 16 eight-step readiness (retained for probes; wizard UX narrows per `newCore.md` Component 5) |
+
+**Explicit non-goals (AI Core):** own LLM, full IDE, LSP server, package manager rewrite, Dify workflow engine extraction, rewriting graphify/headroom/last30days in Rust. See `newCore.md` § What We're NOT Building.
 
 ---
 
@@ -49,7 +65,8 @@ This document consolidates **all active planning** into one place: forward backl
 | Runtimes | ✅ Simplified | 18 → 7 runtimes (R1–R3 complete); see §14 |
 | Phases 0–9, 12, 13, 15, 16, 17 | ✅ DONE | Verified against source; see [`phasesPlan.md`](../phasesPlan.md) execution order |
 | Phase 18 — IPC boundary hardening | 📋 OPEN | P9 bridge consolidation + P10 Zod parity; graph-informed; see §17 |
-| Phase 11 — First-run Wizard | ✅ DONE | Merged into Phase 16 (8-step readiness installer) |
+| **AI Core AC0–AC7** | 📋 PLANNED | Post Tier 3; spec in [`newCore.md`](../newCore.md); see §18 |
+| Phase 11 — First-run Wizard | ✅ DONE | Merged into Phase 16 (8-step readiness installer); **AC5** will add 3-question first-run UX per `newCore.md` |
 | Phase 10 — Extensions | 🚫 REMOVED | Settings Extension tab, plugin marketplace, widget infrastructure deleted 2026-05-29 |
 | Dashboard widgets | 🚫 REMOVED | Deck, `/dashboard/widgets`, `layoutGet`/`layoutSet`, `widgetRegistry` |
 | UI/UX debt (6 items) | ✅ DONE | 2026-05-28 — runtimes cache, kernels grid, logs multiplex, nav polish |
@@ -100,9 +117,12 @@ Full checklists, bug tables, and module standards: **[`phasesPlan.md`](../phases
 ✅  M1        — Maintenance polish — humanized health + tab refactor; see §15
 ✅  Monitor   — Dashboard tab + elevated Dev Home surface; see §16
 ⬜  Phase 18  — IPC boundary hardening (P9 bridge + P10 Zod); see §17
+⬜  AI Core   — AC0–AC7 unified AI control plane; see §18 + [`newCore.md`](../newCore.md)
 ```
 
 ### Explicitly out of scope
+
+Full stay / delete / transform inventory for the AI Core transition: **§19**.
 
 - Extensions / plugin marketplace / Settings Extension tab
 - Dashboard widget catalog, deck, layout IPC
@@ -110,6 +130,7 @@ Full checklists, bug tables, and module standards: **[`phasesPlan.md`](../phases
 - Full theme rollout to every secondary route (Maintenance pilot done)
 - Policy Lock, Visual Change Preview
 - Package-manager distribution (GitHub Releases / AppImage only)
+- Full IDE, LSP server, own LLM, Dify workflow engine, in-app cloud PR merge (see §19 **Never**)
 
 ---
 
@@ -565,6 +586,34 @@ Finish **one slice** before opening the next (same discipline as Tier 1).
 2. Cross-distro smoke (Ubuntu, Fedora, Arch)
 3. Tauri Stage 5 sign-off + tag
 
+### Tier 4 — AI Core integration (post Tier 3)
+
+**Canonical spec:** [`newCore.md`](../newCore.md). **Phase IDs AC0–AC7** avoid collision with historical product Phases 0–18.
+
+Finish **one AC slice** before opening the next (same discipline as Tier 1–2). Estimated **14 weeks** per `newCore.md` § Timeline.
+
+| AC | Weeks | Deliverable | Rust modules (new) | Subprocess deps |
+| --- | --- | --- | --- | --- |
+| **AC0** | 1–2 | OpenAI-compatible proxy (`/v1/chat/completions`), local Bearer auth, usage logging, Tauri integration | `ai_proxy.rs` (~400 lines) | Ollama + cloud APIs (HTTP forward) |
+| **AC1** | 3–4 | Knowledge graph: `graphify` wrapper, `notify` watcher, `petgraph` in-memory store, query API for context injection | `knowledge_graph.rs` (~200 lines) | `graphify update/query` (PyPI `graphifyy`; see §18 toolchain) |
+| **AC2** | 5 | Headroom pipeline: daemon wrapper + Rust fallback compression before proxy forward | `context_compress.rs` (~150 lines) | `headroom` CLI from [`../headroom/`](../headroom/) clone |
+| **AC3** | 6–7 | Git identity switcher (YAML path rules) + PATH scanner/fixer + shell config parser | `git_context.rs`, `path_manager.rs` (~250 lines) | `git`, distro PM via `pkexec` — **built in KeelDev**, not `odysseus/` repo |
+| **AC4** | 8 | Error diagnoser: log collector, `last30days-skill` search, solution executor + cache | `error_diagnose.rs` (~200 lines) | [`../last30days-skill/`](../last30days-skill/) + optional [`../Agent-Reach/`](../Agent-Reach/) |
+| **AC5** | 9–10 | 3-question install wizard, starter project scaffold, initial graphify run | wizard logic (~150 lines Rust) | existing scaffold IPC + graphify |
+| **AC6** | 11–12 | Dashboard UI: chat panel, Git identity indicator, PATH notifications, error panel, API key / model settings | ~400 lines TS | — |
+| **AC7** | 13–14 | Cross-distro testing, performance, docs, beta release | — | — |
+
+**Success metrics (from `newCore.md`):** token savings 60–95% via Headroom; IDE support = any OpenAI-compatible client; wizard completion < 5 min; PATH fix > 95%; proxy RAM < 512MB (excluding LLM).
+
+**Coupling with shipped work:**
+
+- **AC0** settings surface → extend Settings (API keys already on Connected accounts; add proxy token + model routing prefs).
+- **AC1** graph persistence → `~/.keel/graphs/<project_hash>.json` (distinct from dev-repo `graphify-out/` used for architecture planning).
+- **AC3** Git switcher → complements Git Assistant manual identity setup; does not replace G1–G4 save/share flow.
+- **AC5** wizard → narrows Phase 16 readiness for repeat users; blocking probes remain for Docker/Git critical path.
+
+**Explicit non-goals (Tier 4):** see `newCore.md` § What We're NOT Building and § Risks & Mitigations.
+
 ### Git Assistant sprint timeline (G1)
 
 Suggested slice order inside G1 (can parallelize G1.4 strings with G1.2 layout):
@@ -829,12 +878,238 @@ Next:
 
 ---
 
+## 18. AI Core Integration — AC0–AC7 (graphify-informed forward track)
+
+**Canonical spec:** [`newCore.md`](../newCore.md) — **read-only reference**; planning updates go in this file and `phasesPlan.md`, not in `newCore.md`.
+
+**Depends on:** Phase 18 P10 (recommended) ✅ or in parallel after P9; Tier 3 release gate optional but preferred before AC6 UI polish.
+
+**Architecture (from `newCore.md`):**
+
+```text
+IDEs (Cursor, VSCode, Zed, …)
+        ↓ OpenAI API → localhost:4317 (Bearer ~/.config/keel/token)
+KeelDev AI Proxy
+        ├→ Knowledge Graph (graphify + notify + petgraph)
+        ├→ Context Compressor (headroom daemon + Rust fallback)
+        └→ System/Git Autopilot (PATH, git identity, error diagnoser)
+        ↓
+LLM Backend (Ollama + cloud APIs)
+Background File Watcher → incremental graph + git identity triggers
+```
+
+### Sibling toolchain — local dev layout
+
+Maintainer machine layout (Karim): all repos under **`~/Documents/GitHub/`**. KeelDev resolves subprocess tools the same way compose resolves profiles: **PATH first**, then **`KEEL_DEV_TOOLS_ROOT`**, then bundled resources (AC0+ packaging TBD).
+
+```text
+~/Documents/GitHub/
+├── LuminaDev/          ← KeelDev (this repo)
+├── headroom/           ← AC2 context compression
+├── last30days-skill/   ← AC4 error/solution search
+├── Agent-Reach/        ← AC4 optional deep web scrape
+├── codegraph/          ← optional code-intelligence eval (not graphify)
+├── oh-my-pi/           ← optional agent surface (post-AC7 eval)
+├── odysseus/           ← separate self-hosted workspace (:7000) — NOT an AC subprocess
+└── dify/               ← out of scope (newCore § NOT Building)
+```
+
+**Env var (proposed, mirrors `KEEL_DEV_COMPOSE_ROOT`):**
+
+| Variable | Default (dev) | Purpose |
+| --- | --- | --- |
+| `KEEL_DEV_TOOLS_ROOT` | `~/Documents/GitHub` | Parent dir for sibling clone paths when CLI not on PATH |
+
+**Resolution order per tool:** (1) executable on `PATH` → (2) `$KEEL_DEV_TOOLS_ROOT/<repo>/…` dev entrypoint → (3) Tauri `resource_dir()` bundle (production).
+
+### Tool registry (subprocess contracts)
+
+| Tool | AC | Local clone | Dev install | KeelDev invokes |
+| --- | --- | --- | --- | --- |
+| **graphify** | AC1 | *(PyPI only — not a sibling repo)* | `uv tool install graphifyy` → `~/.local/bin/graphify` | `graphify update <dir>`, `graphify query "<q>"` — output JSON under `graphify-out/` or `~/.keel/graphs/<hash>.json` |
+| **headroom** | AC2 | `headroom/` | `cd headroom && pip install -e ".[proxy]"` or `uv pip install -e .` | `headroom proxy --port <port>` (daemon) or `headroom compress` / library via stdin/stdout wrapper per `newCore.md` |
+| **last30days-skill** | AC4 | `last30days-skill/` | `node` + repo scripts on PATH | `python3 skills/last30days/scripts/last30days.py "<query>"` (cwd = repo root) |
+| **Agent-Reach** | AC4 (opt) | `Agent-Reach/` | `cd Agent-Reach && pip install -e .` | `agent-reach doctor`; platform read/search subcommands when last30days insufficient |
+| **codegraph** | — (eval) | `codegraph/` | `npm i -g @colbymchenry/codegraph` or clone + install script | `codegraph update`, `codegraph query` — **not** wired in AC1 v1; graphify remains canonical per `newCore.md` |
+| **oh-my-pi** | post-AC7 | `oh-my-pi/` | `bun install -g @oh-my-pi/pi-coding-agent` or `omp.sh` installer | `omp` — listed in `newCore.md` success metrics; integration TBD after AC7 |
+| **odysseus** | ❌ | `odysseus/` | Docker `:7000` | **Do not subprocess.** newCore diagram label "Odysseus" = Keel-built **System/Git Autopilot** (AC3 Rust), not the `odysseus-ai` workspace repo |
+| **dify** | ❌ | `dify/` | — | **Out of scope** — newCore forbids extracting Dify workflow engine |
+
+**graphify vs codegraph:** LuminaDev planning already uses **graphify** (`graphify-out/`, agent `graphify query`). **codegraph** is a sibling clone for optional semantic-intelligence experiments; do not conflate the two in IPC or docs.
+
+**headroom note:** Upstream is Rust + Python (`headroom-ai` on PyPI, maturin `_core` extension). AC2 daemon should wrap the **`headroom` CLI**, not a hand-rolled Python-only script.
+
+### Component map
+
+| # | Component | Status | Notes |
+| --- | --- | --- | --- |
+| 1 | AI Proxy | 📋 AC0 | `/v1/chat/completions`; model routing local-first; usage dashboard |
+| 2 | Knowledge Graph Engine | 📋 AC1 | **graphify** (PyPI `graphifyy`); see §18 tool registry |
+| 3 | Context Compressor (Headroom) | 📋 AC2 | **`~/Documents/GitHub/headroom/`** or PyPI `headroom-ai`; CLI daemon + Rust fallback |
+| 4A | Git Context Switcher | 📋 AC3 | KeelDev Rust — **not** the sibling `odysseus/` repo (codename only in `newCore.md`) |
+| 4B | PATH & Environment Manager | 📋 AC3 | Extends runtime discovery + System tab profile exports |
+| 4C | Error Diagnoser | 📋 AC4 | **`last30days-skill/`** + optional **`Agent-Reach/`** clones |
+| 5 | Installation Wizard (3 questions) | 📋 AC5 | Replaces lightweight first-run UX; integrates Phase 16 probes |
+| 6 | Background File Watcher | 📋 AC1 + AC3 | `notify` + 500ms debounce; graph + git identity triggers |
+
+### IPC / contract expectations (preliminary)
+
+New domains will follow existing pattern: `packages/shared` (`IPC` + Zod) → Rust module → renderer via `desktopApiBridge.ts`. Anticipated channel families (names TBD at AC0 kickoff):
+
+- `dh:ai:proxy:*` — status, usage stats, model list
+- `dh:ai:graph:*` — query, rebuild, watch status
+- `dh:ai:compress:*` — preview ratio, toggle
+- `dh:git:context:*` — rules CRUD, active identity
+- `dh:path:*` — scan, fix, install missing runtime
+- `dh:diagnose:*` — capture error, search, execute fix
+
+Each domain gets `*Contract.ts`, `*Error.ts`, and colocated tests per CLAUDE.md conventions.
+
+### Agent checklist (AI Core slices)
+
+- [ ] Read [`newCore.md`](../newCore.md) component section before starting an AC slice
+- [ ] Confirm sibling clones under `~/Documents/GitHub/` (or set `KEEL_DEV_TOOLS_ROOT`) before subprocess integration work
+- [ ] Subprocess calls via existing `host_exec` / `exec_output_limit` patterns — no new god nodes in `lib.rs`
+- [ ] `pnpm smoke` green before declaring slice done
+- [ ] New IPC: shared schema → Rust handler → bridge only
+- [ ] `graphify update .` after structural changes
+- [ ] Update [`ROUTE_STATUS.md`](./ROUTE_STATUS.md) when user-visible surfaces ship (AC6)
+
+---
+
+## 19. Product inventory — stay, delete, transform
+
+**Purpose:** Single truth table for what remains in KeelDev through the AI Core transition ([`newCore.md`](../newCore.md)). KeelDev stays an **environment manager + orchestration layer**, not an IDE.
+
+### A. Already deleted — do not restore
+
+| Area | What was removed | When |
+| --- | --- | --- |
+| **Extensions** | Settings Extension tab, plugin marketplace, signed extensions | 2026-05-29 |
+| **Dashboard widgets** | Widget deck, `/dashboard/widgets`, `layoutGet`/`layoutSet` IPC, `widgetRegistry` | 2026-05-29 |
+| **Git pro UI** | Three-tab hub, `GitVcsPage`, integrate bar, conflict studio, CI panel, config inspector, PR wizard, Smart-Flow bar | G1 2026-05-31 |
+| **Runtimes (11)** | Ruby, Bun, Zig, C/C++, MATLAB, Dart, Flutter, Julia, Lua, Lisp, R — types, probes, install jobs | R1–R2 2026-05-31 |
+| **Distribution** | Flatpak / Flathub pathway | 2026-05-28 |
+| **Tests** | `*Ipc.integration.test.ts`, `headlessE2e.test.ts`, `registryContract`/`registryError` | P11 2026-06-02 |
+| **Docs** | `docs/superpowers/plans/*`, `FORWARD_PLAN_2026-05-28.md`, `phasesPlan.original.md`, stale `COMPREHENSIVE_AUDIT_2026_06_02.md` | 2026-05-30 / 2026-06-02 |
+| **Electron** | Entire Electron shell — all IPC is Tauri/Rust | Tauri Stages 0–3 |
+
+Legacy routes may keep **redirects** (`/git-config`, `/git-vcs`, `/cloud-git`, `/registry`, `/system`) for bookmarks only — no restored pages.
+
+### B. Stays in the project (unchanged through AC0–AC7)
+
+**Product rule:** Existing shipped surfaces remain unless listed in **C** (transform) or **D** (scheduled delete).
+
+| Layer | Stays |
+| --- | --- |
+| **Routes (primary)** | `/dashboard` (+ kernels, logs, monitor tabs), `/docker`, `/ssh`, `/git`, `/profiles`, `/terminal`, `/runtimes`, `/maintenance`, `/settings` |
+| **Git UX** | Git Assistant only on `/git` — setup → project → save → share; Create PR in-panel; Git Doctor inline |
+| **Cloud auth** | Settings → Connected accounts; device flow + PAT; `cloud_auth/`, `cloud_git_ipc/` — **no in-app PR merge** |
+| **Runtimes** | 7 languages (Node, Python, Java, Go, Rust, PHP, .NET); install matrix, jobs, verify |
+| **Docker** | Full page: containers, images, volumes, networks, cleanup, remap, install wizard, per-container stats |
+| **Profiles** | CRUD, switch engine, scaffold (`project_scaffold/`), compose orchestration (`compose_profiles.rs`) |
+| **Monitor / Maintenance** | Guardian, diagnostics bundle, dashboard monitor tab, maintenance tabs |
+| **Settings (14 tabs)** | Personalization, Remote, System (hosts + `~/.profile`), Accounts, General, Update, Notification, Shortcuts, Help, Date/Time, Languages, App Engine, Builder, Beta — **no Extension, no Resources** |
+| **Infrastructure** | Tauri app, `desktopApiBridge.ts`, `packages/shared` IPC+Zod, thin `lib.rs` dispatcher, domain Rust modules, job runner, command palette, i18n |
+| **Compose presets** | 9 profile dirs; stub `docker-compose.yml` each; `web-dev` full stack pilot only |
+| **Dev tooling in repo** | `graphify-out/` for **architecture planning** (agent `graphify query`) — separate from runtime `~/.keel/graphs/` (AC1) |
+| **Deprecated Rust IPC** | Unused `dh:git:vcs:*` handlers — **kept** for contract tests until zero-reference audit (§6); renderer must not call |
+
+**Sibling repos:** `headroom/`, `last30days-skill/`, `Agent-Reach/` stay **external** — KeelDev subprocesses them; does not vendor or merge their codebases. `dify/`, `odysseus/` stay **unintegrated**.
+
+### C. Transformed during AI Core (keep domain, change UX or wiring)
+
+| Existing | AC slice | What changes |
+| --- | --- | --- |
+| **Phase 16 + 11 wizards** | AC5 | Two-page chain (`ReadinessWizardPage` → `FirstRunWizardPage`) replaced by **one 3-question install wizard**; **probe matrix + pkexec fixes stay** (runs silently or as progress steps) |
+| **Dashboard `/dashboard`** | AC6 | Adds **AI chat panel**, tool status cards, credit/usage summary, error/PATH notification strip — preset profile grid **stays** |
+| **Settings** | AC0, AC3, AC6 | **Extends** (not replaces): API keys + model routing, proxy token, Headroom toggle, Git identity **path rules** YAML, compression preview — Connected accounts tab **stays** |
+| **Git identity** | AC3 | Manual identity (Git Assistant + Settings) **stays**; adds **automatic path-based switcher** + dashboard indicator |
+| **PATH / runtimes** | AC3, AC5 | Runtimes page + runtime install IPC **stay**; adds PATH scan/fix one-click + wizard-driven install |
+| **System tab** | AC3 | `~/.profile` / hosts editors **stay**; PATH fixer reuses same pkexec / shell-config patterns |
+| **First-run store keys** | AC5 | `readiness_wizard_complete` / `first_run_wizard_complete` → likely **single** `ai_install_wizard_complete` (or equivalent); migrate on first launch after upgrade |
+| **Error handling UX** | AC4 | Scattered humanized errors **stay**; adds centralized **Error Diagnoser** panel with search + one-click fix |
+| **Proxy role** | AC0–AC2 | IDEs use `localhost:4317` + Bearer token — **KeelDev becomes API key owner**; IDEs no longer need per-IDE OpenAI keys (product shift, not route deletion) |
+| **`graphify` usage** | AC1 | Dev repo `graphify-out/` **stays** for planning; runtime project graphs move to `~/.keel/graphs/<hash>.json` |
+
+### D. Scheduled deletion when AI Core ships
+
+Delete only in the AC slice listed — after replacement is wired and tested.
+
+| Delete target | AC | Replacement |
+| --- | --- | --- |
+| `ReadinessWizardPage.tsx` + CSS | AC5 | Unified install wizard (3 questions + embedded probes) |
+| `FirstRunWizardPage.tsx` + CSS | AC5 | Same unified wizard |
+| `firstRunWizardContract.ts`, `firstRunWizardError.ts`, `*.test.ts` | AC5 | `*InstallWizard*` contract/error pair (name TBD at implementation) |
+| `App.tsx` dual wizard gate (`showReadinessWizard` / `showFirstRunWizard` chain) | AC5 | Single first-run / install wizard gate |
+| Settings → "Run Setup Wizard Again" reset wiring | AC5 | Reset unified wizard + re-probe (same intent, new keys) |
+| `setupWizard.ts` first-run-only reset | AC5 | Fold into install wizard reset helper |
+
+**Not scheduled for AC0–AC7** (explicit keep):
+
+| Item | Reason |
+| --- | --- |
+| `dh:git:vcs:*` Rust IPC | Contract tests; delete only after zero-reference audit (§6) |
+| `SMART_FLOW_VCS.md` | Historical doc — keep, do not extend |
+| 8/9 compose stub-only presets | Product decision separate from AI Core |
+| `/terminal` page | Stays partial; external IDE is primary coding surface per `newCore.md` |
+| Profile wizard (`pages/profiles/wizard/*`) | Stays — custom environment CRUD unrelated to AC5 install wizard |
+
+### E. Added during AI Core (net-new)
+
+| AC | Rust (est.) | Renderer (est.) | Surfaces / artifacts |
+| --- | --- | --- | --- |
+| AC0 | `ai_proxy.rs` ~400 | Settings AI section | `localhost:4317`, `~/.config/keel/token`, usage log |
+| AC1 | `knowledge_graph.rs` ~200, file watcher ~100 | — | `~/.keel/graphs/*.json`, `dh:ai:graph:*` IPC |
+| AC2 | `context_compress.rs` ~150 | compression toggle | Headroom daemon wrapper |
+| AC3 | `git_context.rs`, `path_manager.rs` ~250 | identity indicator, PATH cards | `~/.config/keel/git-rules.yaml` (path TBD) |
+| AC4 | `error_diagnose.rs` ~200 | error diagnosis panel | solution cache, `dh:diagnose:*` IPC |
+| AC5 | install wizard logic ~150 | unified wizard page | starter scaffold + initial graphify |
+| AC6 | — | ~400 TS | dashboard chat, notifications, API/model settings UI |
+| AC7 | YAML workflow runner ~200 (if scoped) | — | optional tiny runner per `newCore.md`; **not** Dify |
+
+New IPC families: `dh:ai:proxy:*`, `dh:ai:graph:*`, `dh:ai:compress:*`, `dh:git:context:*`, `dh:path:*`, `dh:diagnose:*` — each with shared Zod + contract/error tests.
+
+### F. Never in this repo (permanent non-goals)
+
+| Never build | Source |
+| --- | --- |
+| Full IDE / editor / LSP server | `newCore.md` |
+| Own LLM training or hosting (use Ollama + cloud APIs) | `newCore.md` |
+| Rewrite graphify, headroom, last30days, Agent-Reach in Rust | `newCore.md` |
+| Import / fork **dify/** workflow engine | `newCore.md` + sibling repo out of scope |
+| Subprocess **odysseus/** workspace | §18 — codename only |
+| In-app Git merge/rebase studio, Smart-Flow, second Git UI | §6 G1 |
+| Extensions, dashboard widgets, layout IPC | §3 |
+| Cloud Git in-app PR **merge** | Tier 2 |
+| Flatpak, npm deb package, Policy Lock, Visual Change Preview | §3, phasesPlan |
+| Settings Resources tab (CPU/RAM sliders) | Phase 8 — deferred |
+| Full `docker-compose.full.yml` for all 9 presets | unless explicit product decision |
+| Browser E2E / restored IPC integration tests | P11 — maintainer decision only |
+
+### G. Route matrix after AI Core (target)
+
+| Route | Today | After AC6 |
+| --- | --- | --- |
+| `/dashboard` | partial | partial → **live** intent: project hub + AI chat + tool cards |
+| `/dashboard/monitor` | live | **stay** live |
+| `/docker`, `/runtimes`, `/maintenance` | partial/live mix | **stay** — same routes, richer notifications from AC3/AC4 |
+| `/git` | live | **stay** live + AC3 identity indicator may appear in dashboard/topbar |
+| `/settings` | partial | **stay** — extended tabs, not fewer |
+| `/dashboard/widgets` | removed | **stay** removed |
+| Install / readiness | blocking 8-step + 3-step chain | **single** AC5 wizard (no separate readiness page) |
+
+Update [`ROUTE_STATUS.md`](./ROUTE_STATUS.md) when AC5/AC6 land.
+
+---
+
 ## 12. Document map
 
 | Document | Role |
 | --- | --- |
 | **`phasesPlan.md`** | Canonical phase history + bug table + architecture rules |
-| **`docs/MASTER_PLAN.md`** (this file) | Unified active plan + backlog + release gate |
+| **`docs/MASTER_PLAN.md`** (this file) | Unified active plan + backlog + release gate; **§19** inventory |
+| **`newCore.md`** | AI Core AC0–AC7 detailed spec (**canonical; do not edit from planning passes**) |
 | **`gitRefactor.md`** | Git Assistant product + G1/G2/G3 spec (**shipped**; G4 hardening in §6) |
 | `docs/SMART_FLOW_VCS.md` | Historical Smart-Flow blueprint (superseded by §6; do not extend) |
 | `docs/STABILIZATION_CHECKLIST.md` | Stabilization evidence + B5 manual checklist |
@@ -847,9 +1122,9 @@ Next:
 
 ## 13. Agent workflow
 
-1. For architecture / coupling questions: run **`graphify query "<question>"`** when `graphify-out/graph.json` exists; read **§17** for hub context.
+1. For architecture / coupling questions: run **`graphify query "<question>"`** when `graphify-out/graph.json` exists; read **§17** for hub context; read **§18** + [`newCore.md`](../newCore.md) for AI Core work.
 2. Read **`phasesPlan.md`** for phase context and architectural rules.
-3. Read **this file** for current backlog priority and what is removed.
+3. Read **this file** for current backlog priority, **§19 stay/delete/transform**, and what is removed.
 4. Check **`ROUTE_STATUS.md`** before changing route behavior.
 5. Implement contract-first: `packages/shared` → Rust handlers → renderer (`desktopApiBridge.ts`, not raw `invoke`).
 6. Run **`pnpm smoke`** before claiming done.
