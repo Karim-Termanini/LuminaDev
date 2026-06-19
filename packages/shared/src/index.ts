@@ -1,4 +1,5 @@
 export * from './schemas.js'
+export * from './composeProfiles.js'
 export * from './activeProfile.js'
 export * from './composeProject.js'
 export * from './ipc.js'

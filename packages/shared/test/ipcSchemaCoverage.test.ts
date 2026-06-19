@@ -6,7 +6,7 @@ import {
   IPC_REQUEST_SCHEMAS,
   ipcSchemaCoverageStats,
 } from '../src/ipcSchemaMap'
-import { JobCancelRequestSchema, JobStartRequestSchema, SessionInfoRequestSchema } from '../src/foundation'
+import { SessionInfoRequestSchema } from '../src/foundation'
 import { EmptyRequestSchema, GitVcsStatusRequestSchema } from '../src/schemas'
 
 describe('ipcSchemaCoverage', () => {

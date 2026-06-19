@@ -59,11 +59,18 @@ fn compose_config_validate_smoke() {
     }
 
     let compose_root = common::repo_root().join("docker/compose");
+    let project_dir = std::env::temp_dir().join("keel-compose-config-smoke");
+    let _ = std::fs::create_dir_all(&project_dir);
+    let project_dir = project_dir
+        .to_str()
+        .expect("temp compose smoke path must be valid UTF-8");
+
     for id in common::compose_preset_ids_from_shared() {
         let dir = compose_root.join(&id);
         let mut cmd = Command::new("docker");
         cmd.args(["compose", "-f", "docker-compose.yml", "config", "--quiet"]);
         cmd.current_dir(&dir);
+        cmd.env("PROJECT_DIR", project_dir);
         let output = cmd.output().expect("docker compose config");
         assert!(
             output.status.success(),
