@@ -69,14 +69,8 @@ All IPC responses use `{ ok: boolean; error?: string }` shape. Error strings are
 | Doc | Use when |
 | --- | --- |
 | [`docs/NAMING.md`](docs/NAMING.md) | Product vs npm vs Freedesktop vs repo identifiers |
-| [`docs/CORRECTED_AUDIT_REPORT.md`](docs/CORRECTED_AUDIT_REPORT.md) | Independent re-verification (2026-06-19); retracted C1/M10 schema findings |
-| [`docs/MASTER_PLAN.md`](docs/MASTER_PLAN.md) | Active backlog, release gate, **§19 stay/delete/transform** |
-| [`newCore.md`](newCore.md) | AI Core AC0–AC7 forward track (proxy, graph, headroom, autopilot) — canonical spec |
-| [`phasesPlan.md`](phasesPlan.md) | Phase history, architecture rules, known bugs table |
-| [`docs/AUDIT.md`](docs/AUDIT.md) | Audit findings, manual page QA checklist |
-| [`docs/ROUTE_STATUS.md`](docs/ROUTE_STATUS.md) | Route live/partial/stub truth before changing UI behavior |
-| [`docs/SMART_FLOW_VCS.md`](docs/SMART_FLOW_VCS.md) | Git VCS Smart-Flow (`/git?tab=vcs`) roadmap |
-| [`docs/STABILIZATION_CHECKLIST.md`](docs/STABILIZATION_CHECKLIST.md) | Stabilization evidence + B5 manual tests |
+| [`docs/BRANCHING.md`](docs/BRANCHING.md) | Git branching and packaging rules |
+| [`docs/COMMIT_QUALITY_RULES.md`](docs/COMMIT_QUALITY_RULES.md) | Mandatory commit quality standard |
 
 **Removed from product (do not reintroduce without explicit decision):** Settings Extension tab, dashboard widgets, `layoutGet`/`layoutSet` IPC, `widgetRegistry`.
 
