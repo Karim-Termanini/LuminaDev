@@ -65,6 +65,13 @@ KeelDev transforms from a dashboard into **"The Unified AI Developer Control Pla
   - [Phase B: Open Core](#phase-b-open-core--community-seed-full-release--week-16)
   - [Phase C: Full Governance](#phase-c-full-open-governance-post-release--month-6)
 - [Conclusion](#conclusion)
+- [Current Status, Route Matrix & Development Standards](#current-status-route-matrix--development-standards)
+  - [1. Current Implementation Status & History](#1-current-implementation-status--history)
+  - [2. Active Priority Backlog](#2-active-priority-backlog)
+  - [3. Route Status Matrix](#3-route-status-matrix)
+  - [4. Rust Backend Architecture Standards](#4-rust-backend-architecture-standards)
+  - [5. Application Coding & Security Playbook](#5-application-coding--security-playbook)
+  - [6. Verification Plan & Release Gate Checklist (B5)](#6-verification-plan--release-gate-checklist-b5)
 
 ---
 
@@ -1890,3 +1897,105 @@ This plan transforms KeelDev into **the brain of your development environment** 
 - **Air-gapped / offline support** — every subsystem works without internet
 - **Power-user control** via hierarchical per-project configuration and environment variable overrides
 - **Enterprise-grade isolation** available via Firecracker microVM sandboxing (opt-in)
+
+---
+
+## Current Status, Route Matrix & Development Standards
+
+### 1. Current Implementation Status & History
+
+The project has evolved through several phases of stabilization and refactoring:
+- **Phases 0–9, 12, 13, 15, 16, 17:** Shipped and verified.
+- **Runtimes Simplification (R1–R3):** Completed (2026-05-31). The language support has been simplified from 18 runtimes to 7 core runtimes: Node.js, Python, Java, Go, Rust, PHP, and .NET/C#. This reduction resolved cross-distro package mapping inconsistencies and simplified the testing matrix.
+- **Git Assistant (G1–G4):** Shipped and hardened. KeelDev's Git experience is focused entirely on a single UX flow (**Setup → Project → Save → Share**), with legacy tabbed interfaces and complex rebasing/merging screens removed. It supports partial commit (excluding deselected files), upstream push with dirty working trees, and in-app pull requests (creating a PR, probing for existing PRs, and viewing it on the remote).
+- **Maintenance (M1):** Maintenance/Guardian metrics humanized, providing clean pressure warnings (RAM/disk) and systemd services integration.
+- **Monitor Dashboard:** The `/dashboard/monitor` tab provides real-time host metrics, GPU probes (lspci / nvidia-smi), and security auditing of open ports.
+- **IPC Hardening (Phase 18):** Completed. Replaced direct Tauri `invoke` calls from the renderer with the structured bridge (`window.dh` / `desktopApiBridge.ts`). Added Zod request schema validation covering 133/133 dispatcher channels to guarantee TS-to-Rust type safety.
+
+---
+
+### 2. Active Priority Backlog
+
+#### Tier 3 — Release Preparation
+1. **AppImage verification on clean VM:** Build the AppImage bundle and verify it works without host dependency failures on an isolated virtual machine.
+2. **Cross-distro testing matrix:** Test the build natively on Arch Linux (strict sandbox/symlink verification) and Fedora (dnf/headless setup).
+3. **Release Tagging:** Finalize the v0.2.0-alpha release and establish the production build pipeline.
+
+#### Tier 4 — AI Core Integration (AC0–AC7)
+- **AC0 (Weeks 1–2):** OpenAI proxy, local token authentication, routing logic, and observability setup.
+- **AC1 (Weeks 3–4):** Knowledge Graph Daemon (AST indexer wrapper for `graphify` + `notify` watcher).
+- **AC2 (Week 5):** Headroom context compressor (sub-process CLI wrapper).
+- **AC3 (Weeks 6–7):** Autopilot module (PATH manager + Git identity context switcher).
+- **AC4 (Week 8):** Error Diagnoser (scrapers + local SQLite knowledge database).
+- **AC5 (Weeks 9–10):** Three-question first-run wizard and project scaffolding.
+- **AC6 (Weeks 11–12):** Dashboard chat UI panel, settings, and theme customization.
+- **AC7 (Weeks 13–14):** Validation, cross-distro testing, and community beta release.
+
+---
+
+### 3. Route Status Matrix
+
+The route layout has been consolidated into 20 paths. The status map below dictates the expected system behavior:
+
+| Route | Status | Notes |
+| --- | --- | --- |
+| `/` | redirect | Automatically redirects to `/dashboard`. |
+| `/dashboard` | partial | Shows active profiles. Scaffolds projects via `dataScienceCreateWizard`. |
+| `/dashboard/kernels` | partial | GPU snapshot, kernel metrics, security audit. Refreshes every 30s. |
+| `/dashboard/logs` | partial | Streamed jobs and docker-compose logs for the active profile. |
+| `/dashboard/monitor` | live | Real-time CPU/RAM/storage/network metrics, open ports audit, system processes. |
+| `/docker` | live | Complete Docker management (containers, images, volumes, networks, compose profiles). |
+| `/ssh` | partial | SSH key generation, copy pubkey, and remote connection diagnostics. |
+| `/git` | live | **Git Assistant** (Setup, Project, Save, Share) with PR creator and Git Doctor diagnostics. |
+| `/profiles` | partial | Profile creation, template selection, and active profile switching. |
+| `/terminal` | partial | Embedded xterm using host PTY (`portable_pty`). |
+| `/runtimes` | partial | Verification, status list, and dependency installer for the 7 active runtimes. |
+| `/maintenance` | partial | Guardian health check, diagnostic bundle generation, and tasks schedule editor. |
+| `/settings` | partial | Personalization (dark/light/high-contrast), Connected accounts (OAuth), and System configuration. |
+| `/system-readiness` | live | Prerequisites verification (surfaced as first-run wizard). |
+
+---
+
+### 4. Rust Backend Architecture Standards
+
+To keep the codebase maintainable and prevent compile-time regression, the backend architecture adheres to these strict rules:
+
+- **Thin Entrypoint:** `src-tauri/src/lib.rs` must not contain business or domain logic. Its roles are limited to:
+  - Crate imports and `mod` declarations.
+  - Tauri state struct definitions.
+  - The `ipc_invoke` and `ipc_send` channel dispatchers.
+  - One-line wrappers calling domain modules.
+- **Module Splitting:** Move domain functions to separate files (e.g., `git_vcs_ipc.rs`, `runtime_jobs.rs`) once a module exceeds 200 lines or addresses a single domain.
+- **Dependency Flow:** Domain logic flows unidirectionally. Never allow circular references between domain modules.
+  ```text
+  lib.rs → domain modules (docker_ext, system_info, etc.) → utils.rs
+  ```
+
+---
+
+### 5. Application Coding & Security Playbook
+
+#### A) Shell Command Execution & RCE Prevention
+- **Direct Process Spawning:** Never pass interpolated user strings to a shell command (e.g., `sh -c` or `bash -c`). Split the program and arguments, and use `Command::new(prog).args(args)` directly to prevent Remote Code Execution (RCE) via command injection.
+- **Secure Token Injection:** For subprocesses requiring authentication (like `git push`), use the `GIT_ASKPASS` environment variable pointing to a temporary executable shell script. Set permissions to `chmod 700` and delete the script immediately after completion.
+
+#### B) Error Handling & Safety
+- **No panics/unwraps:** Never use `.unwrap()` on `Option` or `Result` types inside backend IPC handlers. Replace with `.ok_or("[ERR] message")?` or pattern matching to propagate errors cleanly.
+- **Normalized Error Contracts:** Map low-level OS/Docker/Git errors to stable, predefined codes (e.g., `[DOCKER_UNAVAILABLE]`, `[GIT_VCS_NO_REMOTE]`). The frontend `*Error.ts` mappers translate these codes into humanized error messages.
+
+#### C) Schema Validation
+- All IPC calls must pass through `desktopApiBridge.ts`.
+- Payload parameters are validated at the TypeScript boundary via Zod schemas defined in `@linux-dev-home/shared`.
+
+---
+
+### 6. Verification Plan & Release Gate Checklist (B5)
+
+Before tagging a release, the following manual checklist must be verified on a clean native build:
+- **Startup:** Launch app, pass first-run wizard, and verify the main dashboard loads.
+- **Docker:** List containers, inspect images, run compose up/down, and check system pruning.
+- **Terminal:** Verify embedded PTY interactive input and output (confirm no double-character echo or carriage return offset).
+- **SSH:** Generate keys, copy public key, and test GitHub connection.
+- **Git Config:** Verify that the Git Assistant Setup checklist passes and correctly identifies Missing Git attributes.
+- **Monitor:** Verify real-time CPU/RAM calculation and process lists.
+- **Runtimes:** Scan the system package managers and check dependencies verification.
