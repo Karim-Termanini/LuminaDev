@@ -1,6 +1,6 @@
 # KeelDev — Master Plan
 
-**Last updated:** 2026-06-19 (AI Core roadmap + inventory pass; L1–L4 doc closure; P10 batch 2 merged from main)
+**Last updated:** 2026-06-20 (Rust module line counts + Vitest inventory)
 **Git Assistant spec (shipped):** [`gitRefactor.md`](../gitRefactor.md)  
 **AI Core spec (forward):** [`newCore.md`](../newCore.md) — canonical detailed plan; do not edit from planning passes  
 **Route truth table:** [`ROUTE_STATUS.md`](./ROUTE_STATUS.md)  
@@ -109,7 +109,7 @@ Full checklists, bug tables, and module standards: **[`phasesPlan.md`](../phases
 ✅  Phase 13 — Advanced CI & environment hardening
 ✅  Phase 15 — Theme surface rollout (elevated aesthetic)
 ✅  Phase 16 — System Readiness / Pre-requisites wizard
-✅  Phase 17 — lib.rs monolith refactor (40 Rust source entries: 37 `.rs` files + 3 directory modules, ~706-line dispatcher)
+✅  Phase 17 — lib.rs monolith refactor (40 Rust source entries: 37 `.rs` files + 3 directory modules, ~709-line dispatcher)
 ✅  SPRINT   — Tests + audit + cross-distro + v0.2.0-alpha tag
 ✅  G1–G3    — Git Assistant (`gitRefactor.md`) — shipped 2026-05-31; see §6
 ✅  G4       — Git Assistant post-ship hardening — partial commit + push/PR UX; see §6
@@ -485,7 +485,7 @@ lib.rs → domain modules (docker_ext, terminal_pty, …) → utils.rs
 
 **Red flags:** handler > 50 lines in `lib.rs`; circular imports; duplicate logic across arms.
 
-**Current outcome (Phase 17):** 36 `mod` declarations → **59 `.rs` files** at Phase 17 completion; **62** as of 2026-06-19 (+ `ipc_contract_tests.rs`, `runtime_prune_contract_tests.rs`, `integration_test_support.rs`). `lib.rs` ~706 lines; largest modules `system_info.rs` (~1,010 lines), `runtime_jobs.rs` (~792 lines).
+**Current outcome (2026-06-20):** 36 `mod` declarations → **62** `.rs` files under `src-tauri/src/` (+ `ipc_contract_tests.rs`, `runtime_prune_contract_tests.rs`, `integration_test_support.rs`). `lib.rs` ~709 lines; largest modules `system_info.rs` (~1,099 lines), `runtime_jobs.rs` (~834 lines).
 
 ---
 
@@ -665,17 +665,15 @@ Post-G1  G2 validate → G3 iterate
 | Phase | Goal | Target | Exit criteria |
 | --- | --- | --- | --- |
 | **R1 — Strip** | Remove 11 runtimes from renderer + discovery | ✅ Done | Runtimes page shows only 7; no references to removed runtimes in UI |
-| **R2 — Clean** | Remove Rust handlers + shared types for removed runtimes | ✅ Done | `runtime_discover.rs`, `runtime_jobs.rs`, `runtime_packages.rs`, `runtime_verify.rs` all pruned; `RUNTIME_SYSTEM_ONLY_IDS` → `['php']`; `RUNTIME_DETAILS` trimmed to 7; cache keys bumped to v2; `pnpm smoke` green |
+| **R2 — Clean** | Remove Rust handlers + shared types for removed runtimes | ✅ Done | `runtime_discover.rs`, `runtime_jobs.rs`, `runtime_packages.rs`, `runtime_verify.rs` all pruned; `RUNTIME_SYSTEM_ONLY_IDS` → `['php']`; `pages/runtimes/constants.ts` `RUNTIME_DETAILS` trimmed to 7; cache keys bumped to v2; `pnpm smoke` green |
 | **R3 — Harden** | Audit + test remaining 7 runtimes end-to-end | ✅ Done | 7 cards on Fedora; .NET system install + VERIFY OK; `ROUTE_STATUS.md` updated; full Ubuntu/Arch matrix deferred to Tier 3 §5 P5 |
 
 #### R1 — Strip (work breakdown)
 
 | Slice | Deliverable | Notes |
 | --- | --- | --- |
-| R1.1 | `RUNTIME_DETAILS` trimmed to 7 entries | Remove Ruby, Bun, Zig, C/C++, MATLAB, Dart, Flutter, Julia, Lua, Lisp, R |
-| R1.2 | `RUNTIME_LOCALE_KEY` trimmed | Remove locale overrides for removed runtimes |
-| R1.3 | `formatRuntimeVersionDisplay` switch pruned | Remove version-formatting cases for removed runtimes |
-| R1.4 | UI test: page renders without errors | Open `/runtimes` — only 7 cards shown; no blank or broken entries |
+| R1.1 | Renderer catalog trimmed to 7 runtimes | `RUNTIME_IDS` in `packages/shared`; icons/links in `pages/runtimes/constants.ts` (`RUNTIME_DETAILS`); version labels via `formatRuntimeVersionDisplay()` in `pages/runtimes/utils.ts` — **not** in `packages/shared` (R1–R3 moved display helpers to renderer). `RUNTIME_LOCALE_KEY` removed; do not reintroduce. |
+| R1.2 | UI test: page renders without errors | Open `/runtimes` — only 7 cards shown; no blank or broken entries |
 
 #### R2 — Clean (work breakdown)
 
@@ -701,7 +699,7 @@ Post-G1  G2 validate → G3 iterate
 
 ### Explicit non-goals (Runtimes sprint)
 
-- Adding new runtimes to the 7 (not in scope)
+- Re-adding `RUNTIME_LOCALE_KEY` or moving `formatRuntimeVersionDisplay` back to `packages/shared`
 - Improving install UX beyond existing wizard (not a UX sprint)
 - Adding mise/asdf support for runtimes that don't already have it
 - Removing Docker-based runtime support (unrelated)
@@ -712,7 +710,7 @@ Post-G1  G2 validate → G3 iterate
 - [x] `pnpm typecheck` passes after all TypeScript removals
 - [x] `pnpm smoke` green before declaring R2 done
 - [x] No stale import references to removed runtime types
-- [x] `RUNTIME_DETAILS` keys match `status_probe_script` match arms exactly (7 items)
+- [x] `RUNTIME_DETAILS` (`pages/runtimes/constants.ts`) keys match `status_probe_script` match arms exactly (7 items)
 - [x] `SYSTEM_ONLY_RUNTIMES` (Rust) matches `RUNTIME_SYSTEM_ONLY_IDS` (TypeScript)
 - [x] Version cache storage (`dh:runtimes:versions-cache:v2`) invalidated or keyed by runtime ID
 - [x] Update [`ROUTE_STATUS.md`](./ROUTE_STATUS.md) when `/runtimes` UX changes
@@ -797,7 +795,7 @@ Post-G1  G2 validate → G3 iterate
 | Layer | Community | Anchor symbols / files |
 | --- | --- | --- |
 | Planning docs | **98** | `MASTER_PLAN`, `phasesPlan`, `AUDIT`, `ROUTE_STATUS` |
-| IPC dispatcher | **59** | `ipc_invoke()`, `ipc_send()` — ~706-line `lib.rs` router ✅ |
+| IPC dispatcher | **59** | `ipc_invoke()`, `ipc_send()` — ~709-line `lib.rs` router ✅ |
 | Channel drift tests | **132** | `ipc_contract_tests.rs` — every `ipc.ts` channel → `lib.rs` arm |
 | Shared contracts | **57** | `IPC` const + payload types in `ipc.ts` |
 | Zod (P10) | **70** *(graphify community ID)* | `IPC_REQUEST_SCHEMAS` — **133/133** dispatcher coverage (`ipcSchemaMap.ts`) |
@@ -826,7 +824,7 @@ Post-G1  G2 validate → G3 iterate
 | Profile switch flow | Community **53** | `profileSwitchProgress`, `projectBackgroundSetup`, `useProfilesPage` |
 | Git Assistant UX | Community **48** | Editor resolve, clone, progress rail helpers |
 | Docker UI | `DockerPage.tsx` + `pages/docker/*` | Largest renderer orchestrator (~1,204 lines; tabs split) |
-| Rust size | `system_info.rs` (~1,010), `runtime_jobs.rs` (~792) | Largest domain modules post–Phase 17 |
+| Rust size | `lib.rs` (~709), `system_info.rs` (~1,099), `runtime_jobs.rs` (~834) | Largest Rust modules (2026-06-20 `wc -l`) |
 | `cloud_auth/` self-import cycles | GRAPH_REPORT import-cycles | Cosmetic module `use` cycles — not Phase 18 scope |
 
 ### Test architecture (graph-aligned)
@@ -839,7 +837,7 @@ Post-G1  G2 validate → G3 iterate
 | Error humanization | `*Error.ts` + `humanize*Error` + `*.error.test.ts` | Includes `dashboardError`, `monitorError`, `registryError`, `settingsError` |
 | Roundtrip | `pnpm test:roundtrip` — 3 files | docker / profile / scaffold `*ContractErrorRoundtrip.test.ts` |
 | E2E-lite | `pnpm test:e2e` — 2 files | `criticalScenarios.unit.test.ts`, `moduleAvailability.test.ts` (not Playwright/Tauri) |
-| Vitest scope | `vitest.config.ts` — `pages/**` coverage visibility | Visibility only; `pnpm smoke` does not invoke `test:e2e` |
+| Vitest scope | **74** files — **67** desktop + **7** shared; `vitest.config.ts` — `pages/**` coverage visibility | Count with `find … \( -name '*.test.ts' -o -name '*.test.tsx' \)`; `*.test.ts` only yields **72** |
 | Removed | `*Ipc.integration.test.ts`, `headlessE2e.test.ts` | Do not restore without maintainer decision; see **P11** |
 | CI | `unit-roundtrip-contracts` job | ✅ `test:roundtrip` + `test:e2e` + `test:coverage` (P11.1) |
 

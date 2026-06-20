@@ -328,34 +328,34 @@ export const IPC = {
   gitVcsBranches: 'dh:git:vcs:branches',
   gitVcsCheckout: 'dh:git:vcs:checkout',
   gitVcsStash: 'dh:git:vcs:stash',
-  /** Legacy — Pro Git UI removed; handler kept for tests. */
+  /** @deprecated Legacy — Pro Git UI removed; handler kept for contract tests. Renderer must not call. */
   gitVcsMerge: 'dh:git:vcs:merge',
-  /** Legacy — Pro Git UI removed; handler kept for tests. */
+  /** @deprecated Legacy — Pro Git UI removed; handler kept for contract tests. Renderer must not call. */
   gitVcsRebase: 'dh:git:vcs:rebase',
-  /** Legacy — Pro Git UI removed; handler kept for tests. */
+  /** @deprecated Legacy — Pro Git UI removed; handler kept for contract tests. Renderer must not call. */
   gitVcsStashPop: 'dh:git:vcs:stash-pop',
   gitVcsMergeAbort: 'dh:git:vcs:merge-abort',
   gitVcsRebaseAbort: 'dh:git:vcs:rebase-abort',
   gitVcsMergeContinue: 'dh:git:vcs:merge-continue',
   gitVcsRebaseContinue: 'dh:git:vcs:rebase-continue',
-  /** Legacy — Pro Git UI removed; handler kept for tests. */
+  /** @deprecated Legacy — Pro Git UI removed; handler kept for contract tests. Renderer must not call. */
   gitVcsRebaseSkip: 'dh:git:vcs:rebase-skip',
-  /** Legacy — Pro Git UI removed; handler kept for tests. */
+  /** @deprecated Legacy — Pro Git UI removed; handler kept for contract tests. Renderer must not call. */
   gitVcsRenameBranch: 'dh:git:vcs:rename-branch',
-  /** Legacy — Pro Git UI removed; handler kept for tests. */
+  /** @deprecated Legacy — Pro Git UI removed; handler kept for contract tests. Renderer must not call. */
   gitVcsConflictDiff: 'dh:git:vcs:conflict-diff',
-  /** Legacy — Pro Git UI removed; handler kept for tests. */
+  /** @deprecated Legacy — Pro Git UI removed; handler kept for contract tests. Renderer must not call. */
   gitVcsConflictHunks: 'dh:git:vcs:conflict-hunks',
-  /** Legacy — Pro Git UI removed; handler kept for tests. */
+  /** @deprecated Legacy — Pro Git UI removed; handler kept for contract tests. Renderer must not call. */
   gitVcsResolveConflict: 'dh:git:vcs:resolve-conflict',
-  /** Legacy — Pro Git UI removed; handler kept for tests. */
+  /** @deprecated Legacy — Pro Git UI removed; handler kept for contract tests. Renderer must not call. */
   gitVcsResolveHunk: 'dh:git:vcs:resolve-hunk',
   editorList: 'dh:editor:list',
   editorOpen: 'dh:editor:open',
   cloudGitCreatePr: 'dh:cloud:git:create-pr',
   cloudGitFindPr: 'dh:cloud:git:find-pr',
   cloudGitGetPrChecks: 'dh:cloud:git:get-pr-checks',
-  /** Removed from product scope — in-app PR merge; open PR in browser instead. Handler kept for contract tests. */
+  /** @deprecated Removed from product scope — in-app PR merge; handler kept for contract tests. Open PR in browser instead. */
   cloudGitMergePr: 'dh:cloud:git:merge-pr',
   appInfo: 'dh:app:info',
   appUpdateCheck: 'dh:app:update:check',
