@@ -177,7 +177,7 @@ All five stabilization checklist items `done`. `pnpm smoke` green. See [`docs/ST
 
 ## 🏗️ Rust Backend Architecture Standards
 
-**CRITICAL:** `apps/desktop/src-tauri/src/lib.rs` must remain **thin Tauri entry point only**. All domain logic lives in dedicated modules. Former monolith refactored in **Phase 17** to ~706 lines, **59** `.rs` source files at completion (**62** current: + `ipc_contract_tests.rs`, `runtime_prune_contract_tests.rs`, `integration_test_support.rs`; 36 `mod` declarations including `cloud_auth/`, `cloud_git_ipc/`, `project_scaffold/`).
+**CRITICAL:** `apps/desktop/src-tauri/src/lib.rs` must remain **thin Tauri entry point only**. All domain logic lives in dedicated modules. Former monolith refactored in **Phase 17** to ~706 lines at ship (**709** current, 2026-06-20), **59** `.rs` source files at completion (**62** current: + `ipc_contract_tests.rs`, `runtime_prune_contract_tests.rs`, `integration_test_support.rs`; 36 `mod` declarations including `cloud_auth/`, `cloud_git_ipc/`, `project_scaffold/`).
 
 **Planning with graphify:** Active architecture map lives in [`graphify-out/GRAPH_REPORT.md`](graphify-out/GRAPH_REPORT.md) (built @ `fc9c8fa`). Before large refactors, run `graphify query "<domain>"` or read [`docs/MASTER_PLAN.md`](docs/MASTER_PLAN.md) §17. After merges that touch structure: `graphify update .` (AST-only). Do not treat i18n communities 0–26 as product modules.
 
@@ -261,7 +261,7 @@ pub async fn ipc_invoke(channel: &str, payload: Value, state: AppState) -> Resul
 
 ### Modularization ✅ DONE (Phase 17)
 
-6-module proposal superseded. Actual outcome: **36 `mod` declarations** in `lib.rs` → **59 `.rs` files** at Phase 17 (**62** current — +3 test/support modules). `lib.rs` is thin ~706-line dispatcher with zero business logic inline. See Phase 17 results above.
+6-module proposal superseded. Actual outcome: **36 `mod` declarations** in `lib.rs` → **59 `.rs` files** at Phase 17 (**62** current — +3 test/support modules). `lib.rs` is thin ~709-line dispatcher with zero business logic inline. See Phase 17 results above.
 
 ---
 
@@ -615,15 +615,15 @@ When user clicks "Install" / "Fix":
 ### Phase 17 — lib.rs Monolith Refactoring
 
 **Status:** ✅ DONE (2026-05-28)
-**Scope:** Decomposed 3,963-line `lib.rs` into 40 Rust source entries (33 domain modules + 3 directory modules, ~706-line dispatcher).
+**Scope:** Decomposed 3,963-line `lib.rs` into 40 Rust source entries (33 domain modules + 3 directory modules, ~706-line dispatcher at ship; **709** current).
 
 **Results:**
 
-- `lib.rs`: 3,963 → ~706 (82.2% reduction), ~268 non-test dispatcher lines
+- `lib.rs`: 3,963 → ~706 at Phase 17 ship (**709** current, 2026-06-20), ~268 non-test dispatcher lines
 - ipc_invoke: ~113 match arms (some use `|` multi-pattern), zero business logic inline
-- 36 `mod` declarations → 59 `.rs` files (`cloud_auth/` 8; `project_scaffold/` 12; `runtime_jobs.rs` ~792 lines; `system_info.rs` ~1,010 lines)
+- 36 `mod` declarations → 59 `.rs` files (`cloud_auth/` 8; `project_scaffold/` 12; `runtime_jobs.rs` ~834 lines; `system_info.rs` ~1,099 lines — current 2026-06-20)
 - `executor.rs` (17 KB) actively used; exports `runtime_bash_user_step`, `sudo_bash_install_step`
-- Key large modules: `system_info.rs` (~1,010 lines), `runtime_jobs.rs` (~792 lines)
+- Key large modules: `lib.rs` (~709 lines), `system_info.rs` (~1,099 lines), `runtime_jobs.rs` (~834 lines)
 - cargo check: zero warnings, clippy: zero errors; Rust unit test count not re-verified post-refactor
 
 ---
@@ -741,7 +741,7 @@ Full tables: [`docs/MASTER_PLAN.md`](docs/MASTER_PLAN.md) **§19**. Summary:
 ✅  UI/UX & Performance Debt (all 7 items, 2026-05-28)
 ✅  Audit Fixes (9 defects squashed, fuzzy search shipped, 2026-05-28)
 ❌  Phase 10 — Extensions (removed from scope 2026-05-29)
-✅  Phase 17  — lib.rs Monolith Refactoring (36 mods, 59 `.rs` at ship → **62** current, ~706-line dispatcher)
+✅  Phase 17  — lib.rs Monolith Refactoring (36 mods, 59 `.rs` at ship → **62** current, ~709-line dispatcher)
 ✅  G1–G4    — Git Assistant (see MASTER_PLAN §6)
 ✅  R1–R3    — Runtimes Simplification (see MASTER_PLAN §14)
 ⬜  Phase 18  — IPC boundary hardening (P9 bridge + P10 Zod; see MASTER_PLAN §17)

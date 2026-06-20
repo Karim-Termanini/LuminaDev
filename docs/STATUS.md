@@ -51,7 +51,7 @@ Phases **0–17** shipped per `phasesPlan.md`.
 
 | Layer | Community | Hub / notes |
 | --- | --- | --- |
-| Dispatcher | **59** | `lib.rs` → `ipc_invoke` — thin router ✅ (~706 lines) |
+| Dispatcher | **59** | `lib.rs` → `ipc_invoke` — thin router ✅ (~709 lines); largest modules: `system_info.rs` ~1,099, `runtime_jobs.rs` ~834 |
 | Channel parity | **132** | `ipc_contract_tests.rs` — `ipc.ts` channels ⊆ `lib.rs` arms |
 | Contracts | **57**, **70** | `ipc.ts` (**138** channel strings; **25** `dh:git:vcs:*`) + `ipcSchemaMap.ts` (**133/133** dispatcher Zod map) |
 | Bridge | **78** | `desktopApiBridge.ts` — all renderer IPC via `window.dh` ✅ |

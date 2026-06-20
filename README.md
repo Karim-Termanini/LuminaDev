@@ -26,7 +26,7 @@ Linux developer workstation dashboard — click-first flows for Docker, Git, pro
 
 Route-level detail: [`docs/ROUTE_STATUS.md`](docs/ROUTE_STATUS.md).
 
-**Verified inventory (2026-06-19):** **138** IPC channels · **133/133** dispatcher Zod map · **20** routes · **25** `dh:git:vcs:*` · **62** Rust `.rs` under `src-tauri/src` · **71** Vitest files (**64** desktop = **62** `*.test.ts` + **2** `*.test.tsx`, + **7** shared) · **0** renderer `ipc_invoke` bypasses. Guards: `ipcSchemaCoverage.test.ts`, `ipcSchemaSourceDistParity.test.ts`. Full audit closure: [`docs/CORRECTED_AUDIT_REPORT.md`](docs/CORRECTED_AUDIT_REPORT.md).
+**Verified inventory (2026-06-20):** **138** IPC channels · **133/133** dispatcher Zod map · **20** routes · **25** `dh:git:vcs:*` · **62** Rust `.rs` under `src-tauri/src` · largest modules `lib.rs` **709** / `system_info.rs` **1,099** / `runtime_jobs.rs` **834** lines · **74** Vitest files (**67** desktop = **65** `*.test.ts` + **2** `*.test.tsx`, + **7** shared) · **0** renderer `ipc_invoke` bypasses. Guards: `ipcSchemaCoverage.test.ts`, `ipcSchemaSourceDistParity.test.ts`. Full audit closure: [`docs/CORRECTED_AUDIT_REPORT.md`](docs/CORRECTED_AUDIT_REPORT.md).
 
 **Removed from scope (2026-05-29):** Settings Extension tab / plugin marketplace; dashboard widget catalog and layout IPC.
 

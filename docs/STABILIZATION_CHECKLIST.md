@@ -141,7 +141,7 @@ Stabilization is considered complete only when:
 
   **Known accuracy notes (not blockers):**
   - Job runner (`job:start`, `job:list`): UI pipeline ready; `runtime_install` uses sleep-based simulation. `job:start` returns `{ id }` (no `ok`); `job:list` returns bare array — matches renderer typings, intentional.
-  - Security probes (`dh:monitor:security`, `security-drilldown`): logic in Rust, commands via `bash -c` (`ufw`, `getenforce`, `sshd -T`, `journalctl`, `ss`). Not pure Rust, not a bug.
+  - Security probes (`dh:monitor:security`, `security-drilldown`): journal pipelines via `bash -c` in `monitor_handlers.rs`; other fields use direct `Command` or config reads. Broader `bash -c` / `bash -lc` inventory: `CLAUDE.md`.
   - Runtime versions (`dh:runtime:get-versions`): Node/Go/Python fetch from public APIs; all others return `["latest"]`. `check-deps` and `uninstall:preview` return empty stubs.
   - Electron stack removed from repo (2026-04-30): `main/`, `preload/`, `electron.vite.config.ts`, `node-pty`, `dockerode`, `simple-git`, Electron scripts. Repo is now Tauri-only.
 

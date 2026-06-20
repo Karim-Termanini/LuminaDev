@@ -2,7 +2,7 @@
 
 > **Architectural notice:** KeelDev is a **Full Hosted** environment manager. It is explicitly **NOT isolated** and does not use strict sandboxing (like cgroups or Docker-based build isolation) by design.
 
-**Last updated:** 2026-06-19 (re-verification + v3 closure table; inventory on `doc/new-core-ai-plan`)  
+**Last updated:** 2026-06-20 (inventory sync: Vitest **74**, Rust line counts, `bash -c` scope)  
 **Primary pass:** 2026-05-28 (source-verified against `phasesPlan.md`, `CONTRIBUTING.md`, `README.md`)  
 **Secondary pass:** 2026-06-02 (full static analysis — Rust backend, renderer IPC, test coverage, doc cross-refs, security surface, dead code audit)  
 **Merged sources:** former `AUDIT_2026-05.md`, `docs/DOCS_AUDIT_2026-04.md`, `docs/PAGE_AUDIT.md` (all deleted after consolidation)
@@ -15,14 +15,14 @@
 
 ## 1. Executive Summary
 
-| Status | Count (2026-05-28 pass) | Count (2026-06-02 pass) | Count (2026-06-02 final) |
-| --- | --- | --- | --- |
-| ✅ VERIFIED FIXED / RESOLVED | 56+ | 56+ | **72+** (all §15 findings closed) |
-| ⚠️ PARTIALLY FIXED | 2 | 0 | 0 |
-| ❌ STILL OPEN | 4 | **7** | **1** (AppImage E2E on clean VM) |
-| 🆕 NEW FINDINGS (that pass) | 9 | 9 | 9 (carried forward) |
-| 🆕 NEW FINDINGS (2026-06-02) | — | **15** | 15 (see §15 — all resolved) |
-| ✅ CLOSED from §15 (2026-06-02) | — | **16** | **22** (C1 + H1–H5 + M1–M4 + L1–L4 + doc cleanup sweep) |
+| Status | Count (2026-05-28 pass) | Count (2026-06-02 pass) | Count (2026-06-02 final) | Count (2026-06-20 doc sync) |
+| --- | --- | --- | --- | --- |
+| ✅ VERIFIED FIXED / RESOLVED | 56+ | 56+ | **72+** (all §15 findings closed) | **72+** (unchanged; inventory counts refreshed) |
+| ⚠️ PARTIALLY FIXED | 2 | 0 | 0 | 0 |
+| ❌ STILL OPEN | 4 | **7** | **1** (AppImage E2E on clean VM) | **1** |
+| 🆕 NEW FINDINGS (that pass) | 9 | 9 | 9 (carried forward) | 9 |
+| 🆕 NEW FINDINGS (2026-06-02) | — | **15** | 15 (see §15 — all resolved) | 15 |
+| ✅ CLOSED from §15 (2026-06-02) | — | **16** | **22** (C1 + H1–H5 + M1–M4 + L1–L4 + doc cleanup sweep) | 22 |
 
 ### Current open items (2026-06-02 final)
 
@@ -51,21 +51,23 @@
 
 ### 2.1 `lib.rs` Monolith — ✅ VERIFIED FIXED
 
-**Checked:** `apps/desktop/src-tauri/src/lib.rs` — **~706 lines** (up from ~677 due to further refactoring and additions since Phase 17).
+**Checked:** `apps/desktop/src-tauri/src/lib.rs` — **~709 lines** (2026-06-20; was ~706 at 2026-06-02 audit, ~677 pre–Phase 17 additions).
 
-| Metric | phasesPlan claim | **Actual (2026-06-02)** |
-| --- | --- | --- |
-| Total lines | 691 | **706** |
-| Non-test dispatcher | 308 | ~268 (lines 78–265) |
-| ipc_invoke arms | 52 | **~75 channel strings** (some `\|`-grouped) |
-| Domain modules | 14 | **36 `mod` declarations** → **62 `.rs` files** under `src-tauri/src/` (**59** at Phase 17 + `ipc_contract_tests.rs` + `runtime_prune_contract_tests.rs` + `integration_test_support.rs`) |
+| Metric | phasesPlan claim | **Actual (2026-06-02)** | **Actual (2026-06-20)** |
+| --- | --- | --- | --- |
+| Total lines | 691 | **706** | **709** |
+| Non-test dispatcher | 308 | ~268 (lines 78–265) | unchanged |
+| ipc_invoke arms | 52 | **~75 channel strings** (some `\|`-grouped) | unchanged |
+| Domain modules | 14 | **36 `mod` declarations** → **62 `.rs` files** | unchanged (+3 test/support since Phase 17) |
 
 Dispatcher clean: zero inline business logic; all arms are one-line delegations. ✅
 
 **Module inventory (36 domain mods, 62 `.rs` source files):**
 - Flat (33): `state.rs`, `utils.rs`, `host_exec.rs`, `runtime_packages.rs`, `runtime_versioning.rs`, `runtime_paths.rs`, `runtime_discover.rs`, `runtime_verify.rs`, `runtime_install.rs`, `runtime_jobs.rs`, `runtime_remove.rs`, `runtime_logs.rs`, `compose_engine.rs`, `compose_ports.rs`, `compose_profiles.rs`, `docker_api.rs`, `docker_engine.rs`, `docker_ext.rs`, `executor.rs`, `git_doctor.rs`, `git_vcs_file_diff.rs`, `git_vcs_ipc.rs`, `git_vcs_network.rs`, `git_vcs_repo_state.rs`, `profile_credentials.rs`, `profile_engine.rs`, `readiness.rs`, `readiness_ipc.rs`, `store_engine.rs`, `system_info.rs`, `monitor_handlers.rs`, `ssh_handlers.rs`, `terminal_pty.rs`
 - Directory modules: `cloud_auth/` (8 files), `cloud_git_ipc/` (4 files), `project_scaffold/` (**12 files**: `mod.rs`, `deps_install.rs`, `editor_configs.rs`, `ports.rs`, `r_packages.rs`, `tests.rs`, `templates/mod.rs` + 5 template modules)
-- Plus `lib.rs` (706 lines) and test-only: `ipc_contract_tests.rs`, `runtime_prune_contract_tests.rs`
+- Plus `lib.rs` (**709** lines, 2026-06-20) and test-only: `ipc_contract_tests.rs`, `runtime_prune_contract_tests.rs`
+
+**Largest Rust modules (2026-06-20 `wc -l`):** `system_info.rs` **1,099**, `runtime_jobs.rs` **834** — do not cite retired **~1,010** / **~792**.
 
 ### 2.2 `removableDeps` — ✅ VERIFIED FIXED
 
@@ -194,11 +196,11 @@ Remaining release blocker: **AppImage E2E verification on clean VM** (see [`MAST
 
 | Area | Status | 2026-06-02 note |
 | --- | --- | --- |
-| phasesPlan.md line counts / Phase 17 | ✅ Fixed | ~706-line dispatcher, 40 entries, current module sizes |
+| phasesPlan.md line counts / Phase 17 | ✅ Fixed | ~709-line dispatcher, 40 entries, current module sizes (2026-06-20) |
 | ROUTE_STATUS.md `/git` + redirects | ✅ Fixed | Git Assistant accurate |
 | README Quality Gate Policy | ✅ Rewritten | |
 | MASTER_PLAN.md P4 file-size debt | ✅ Fixed | Splits marked done with current line counts |
-| AUDIT.md §2.1 lib.rs + cloud_auth counts | ✅ Fixed | 706 lines, 8 cloud_auth files |
+| AUDIT.md §2.1 lib.rs + cloud_auth counts | ✅ Fixed | 709 lines (2026-06-20), 8 cloud_auth files |
 | README `/runtimes` “17 language toolchains” | ❌ **FALSE** | Code has **7** (H4) |
 | README `/git` “Config, VCS (Smart-Flow), Cloud Git” | ❌ **FALSE** | Git Assistant single-page UX (H5); see `ROUTE_STATUS.md` |
 | README “~37 domain modules” | ✅ Fixed 2026-06-02 | README: **36 `mod` declarations**, **62** `.rs` files (59 at Phase 17 + 3 test/support modules) |
@@ -267,8 +269,8 @@ Findings from full static analysis: Rust backend security/correctness, renderer 
 | M1 | `packages/shared/src/schemas.ts:884-907` | 3 TypeScript interfaces (`CloudCiCheck`, `CloudPrDetails`, `CloudGitGetPrChecksRequest`) have NO Zod schemas — bypass IPC boundary validation | ✅ Fixed — converted to Zod schemas |
 | M2 | `packages/shared/dist/widgetRegistry.*` | Stale build artifacts — source deleted per CLAUDE.md but 3 dist files remain | ✅ Fixed — dist files removed |
 | M3 | `MASTER_PLAN.md` §4 | P4 file-size debt claims are stale: `DockerPage.tsx` ~3,664 (actual **1,204**), `ProfilesPage.tsx` ~2,704 (actual **64**) — splits already done | ✅ Fixed |
-| M4 | `phasesPlan.md` Phase 17 | Stale line counts: `runtime_jobs.rs` claims ~2,303 (actual **684**), `system_info.rs` claims ~1,536 (actual **1,009**) | ✅ Fixed |
-| M5 | AUDIT.md §2.1 | Stale lib.rs count (~677 vs actual **706**) and cloud_auth file count (7 vs **8**) | ✅ Fixed (2026-06-02 pass) |
+| M4 | `phasesPlan.md` Phase 17 | Stale line counts: `runtime_jobs.rs` claimed ~2,303 (was **684** at 2026-06-02 fix; **834** current), `system_info.rs` claimed ~1,536 (was **1,009** at fix; **1,099** current) | ✅ Fixed — counts refreshed 2026-06-20 |
+| M5 | AUDIT.md §2.1 | Stale lib.rs count (~677 at pre–Phase 17; **706** at 2026-06-02; **709** current) and cloud_auth file count (7 vs **8**) | ✅ Fixed — refreshed 2026-06-20 |
 | M6 | `SettingsBetaFeatures.tsx:13` | `enable_ai_commit_suggestions` flag toggle is rendered but **no consumer exists** — dead code | ✅ Fixed — flag removed |
 
 ### 15.4 LOW severity — ✅ CLOSED or IMPROVED (2026-06-02)
@@ -295,11 +297,11 @@ Findings from full static analysis: Rust backend security/correctness, renderer 
 | 14 Settings tabs confirmed | ✅ | `SettingsShell.tsx` — 14 `SettingsNavId` members |
 | No `.env` files with secrets | ✅ | Glob search returns no results |
 | OAuth client IDs are public-by-design | ✅ | `cloud_auth/helpers.rs:5-6` — configurable via env vars |
-| **71** Vitest files (**64** `apps/desktop` + **7** `packages/shared/test`), 0 stubs, 0 dead imports | ✅ | `find apps/desktop packages/shared/test \\( -name '*.test.ts' -o -name '*.test.tsx' \\)` — not `*.test.ts` only (**69**) |
+| **74** Vitest files (**67** `apps/desktop` + **7** `packages/shared/test`), 0 stubs, 0 dead imports | ✅ | `find apps/desktop packages/shared/test \\( -name '*.test.ts' -o -name '*.test.tsx' \\)` — not `*.test.ts` only (**72**) |
 | `compose_profiles.rs` resolution logic | ✅ | Env → repo walk → bundle fallback; full overlay support |
 | `KEEL_DEV_COMPOSE_FULL` overlay | ✅ | `1`/`true`/`yes` env var or profile store `composeVariant` field |
 | 3 i18n locales, 14 namespaces each | ✅ | 42 translation files total |
-| Monitor security ssh/journal probes via `bash -c` | ✅ | `monitor_handlers.rs:70,90` — pipelines for `sshd -T` + `journalctl` only; other probes use direct `Command` (independent **L2**) |
+| Monitor security journal probes via `bash -c` | ✅ | `monitor_handlers.rs` — `journalctl` pipelines; other security fields use direct `Command` / config file reads (see **L2** in [`CORRECTED_AUDIT_REPORT.md`](./CORRECTED_AUDIT_REPORT.md)) |
 | Rust domain integration smoke (`tests/*_smoke.rs`) | ✅ | Compose, Git VCS, Monitor, SSH, Terminal PTY, Cloud auth + `docker_smoke.rs` — `ci.yml`, `smoke-tests.yml` (independent **L4**) |
 | Production `unwrap()` / `expect()` (3 calls) | ✅ | 2× template `to_string_pretty` on hardcoded JSON; `lib.rs` `build().expect` — no production `expect()` in credential store (returns IPC error on path failure) |
 | `ComposeProfile` single source (`composeProfiles.ts`) | ✅ | `COMPOSE_PROFILES` tuple drives Zod + TS; no duplicate union in `ipc.ts` (independent **L5**) |
@@ -310,7 +312,7 @@ Findings from full static analysis: Rust backend security/correctness, renderer 
 | Route count (M3) | ✅ | **20** `<Route>` in `App.tsx`; `/` + `/system-readiness` in [`ROUTE_STATUS.md`](./ROUTE_STATUS.md) |
 | Git VCS channels (M4) | ✅ | **25** `dh:git:vcs:*`; **16** UI-active in `pages/`; **9** legacy (contract tests) |
 | Rust `.rs` count (M5) | ✅ | **62** under `src-tauri/src` (59 Phase 17 + 3 test/support modules) |
-| Vitest file count (M6) | ✅ | **71** total — **64** desktop (**62** `*.test.ts` + **2** `*.test.tsx`) + **7** shared |
+| Vitest file count (M6) | ✅ | **74** total — **67** desktop (**65** `*.test.ts` + **2** `*.test.tsx`) + **7** shared (updated 2026-06-20) |
 | Schema metrics (M7) | ✅ | **133/133** authoritative; see [`SCHEMA_COVERAGE_ANALYSIS.md`](./SCHEMA_COVERAGE_ANALYSIS.md) — retired 54/70/137 |
 | Data-science scaffold route (M8) | ✅ | `dataScienceCreateWizard.ts` on `/dashboard` only; Profiles has no scaffold UI — `README.md`, `ROUTE_STATUS.md` |
 | Monitor first-call disk/net (M9) | ✅ | `METRICS_PRIME_MS` 300ms prime in `monitor_handlers.rs`; `metrics_tests`; checklist no longer says "always 0" |

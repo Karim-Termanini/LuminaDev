@@ -1,6 +1,6 @@
 # Zod Schema Coverage Analysis
 
-**Last updated:** 2026-06-19 (Phase 18 P10)
+**Last updated:** 2026-06-20 (Phase 18 P10)
 
 ## Source of truth
 
@@ -22,16 +22,20 @@ node -e "const fs=require('fs');const s=fs.readFileSync('packages/shared/src/ipc
 # Exported RequestSchema names (informational — includes aliases; not channel coverage)
 rg -c 'export const \\w+RequestSchema' packages/shared/src/schemas.ts packages/shared/src/foundation.ts
 
-# Vitest files (expect 64 desktop + 7 shared = 71; do not count *.test.ts only — that yields 69)
+# Vitest files (expect 67 desktop + 7 shared = 74; do not count *.test.ts only — that yields 72)
 find apps/desktop packages/shared/test \( -name '*.test.ts' -o -name '*.test.tsx' \) | wc -l
-# Desktop breakdown: 62 *.test.ts + 2 *.test.tsx (settings.test.tsx, profilesPage.smoke.test.tsx)
+# Desktop breakdown: 65 *.test.ts + 2 *.test.tsx (settings.test.tsx, profilesPage.smoke.test.tsx)
 # Often missed when counting *.test.ts only: desktopApiBridge.contract.test.ts + the two *.test.tsx above
 
 # Rust .rs under src-tauri/src (expect 62)
 find apps/desktop/src-tauri/src -name '*.rs' | wc -l
+
+# Largest Rust modules (2026-06-20; do not cite retired ~706 / ~1,010 / ~792)
+wc -l apps/desktop/src-tauri/src/{lib.rs,system_info.rs,runtime_jobs.rs}
+# expect: 709, 1099, 834
 ```
 
-## Current metrics (2026-06-19)
+## Current metrics (2026-06-20)
 
 | Metric | Value | Notes |
 | --- | --- | --- |
@@ -45,6 +49,8 @@ find apps/desktop/src-tauri/src -name '*.rs' | wc -l
 | `dh:git:vcs:*` channels | **25** | All wired ipc.ts → bridge → Rust |
 | Git VCS UI-active (`window.dh.gitVcs*` in `pages/`) | **16** | Git Assistant + changes panel + remote sync |
 | Git VCS legacy (bridge only / contract tests) | **9** | Pro Git tab UI removed — handlers kept |
+| Vitest test files | **74** | **67** desktop (**65** `*.test.ts` + **2** `*.test.tsx`) + **7** shared |
+| Largest Rust modules | **709** / **1,099** / **834** | `lib.rs` / `system_info.rs` / `runtime_jobs.rs` — `wc -l` (2026-06-20) |
 
 ### Git VCS channel breakdown
 
@@ -62,6 +68,9 @@ First-pass audits claimed **28** `dh:git:vcs:*` channels — incorrect.
 | **~70** / **70/137** | Partial export count or graphify community **70** | **Retired** — community ID ≠ schema count |
 | **91** / **94** | Lines matching `RequestSchema` in exports + `z.infer` types | **Informational only** — not dispatcher coverage |
 | **106** | `export const *RequestSchema` in `schemas.ts` + `foundation.ts` | **Informational** — aliases inflate vs unique Zod objects |
+| **71** | Vitest file count before 2026-06-20 (64 desktop + 7 shared) | **Retired** — use **74** (67 + 7) |
+| **~1,010** / **~792** | `system_info.rs` / `runtime_jobs.rs` line counts (pre–2026-06-20 docs) | **Retired** — use **1,099** / **834** (`wc -l` 2026-06-20) |
+| **~706** | `lib.rs` dispatcher at Phase 17 ship | **Historical** — **709** current |
 | **133/133** | `IPC_REQUEST_SCHEMAS` map entries | **Authoritative** for boundary coverage |
 | **138** | `IPC` const size | **Authoritative** total channel strings |
 

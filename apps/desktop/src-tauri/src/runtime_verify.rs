@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use crate::host_exec::{cmd_timeout_short, exec_result_limit};
 use crate::runtime_packages::NVM_BASH_RESOLVE;
 use crate::runtime_versioning::{
@@ -18,30 +20,25 @@ pub(crate) async fn runtime_append_verify(
         requested_version.trim(),
         method
     ));
-    let node_probe = if runtime_id == "node" {
-        Some(format!(
+    let probe: Cow<'_, str> = match runtime_id {
+        "node" => Cow::Owned(format!(
             r#"{NVM_BASH_RESOLVE}
 ([ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh" && node --version 2>&1) || (command -v node >/dev/null 2>&1 && node --version 2>&1) || echo MISSING"#,
             NVM_BASH_RESOLVE = NVM_BASH_RESOLVE
-        ))
-    } else {
-        None
-    };
-    let probe = match runtime_id {
-        "node" => node_probe.as_deref().unwrap(),
-        "python" => "([ -d \"$HOME/.pyenv\" ] && export PYENV_ROOT=\"$HOME/.pyenv\" && export PATH=\"$PYENV_ROOT/bin:$PATH\" && eval \"$(pyenv init -)\" && python3 --version 2>&1) || (command -v python3 >/dev/null 2>&1 && python3 --version 2>&1) || echo MISSING",
-        "go" => "([ -x \"$HOME/.local/share/lumina/go/current/bin/go\" ] && \"$HOME/.local/share/lumina/go/current/bin/go\" version 2>&1) || ([ -x \"$HOME/.local/share/lumina/go/bin/go\" ] && \"$HOME/.local/share/lumina/go/bin/go\" version 2>&1) || (command -v go >/dev/null 2>&1 && go version 2>&1) || echo MISSING",
-        "rust" => "unset RUSTUP_TOOLCHAIN; ([ -x \"$HOME/.cargo/bin/rustup\" ] && \"$HOME/.cargo/bin/rustup\" show active-toolchain 2>&1 | head -1) || ([ -x \"$HOME/.cargo/bin/rustc\" ] && \"$HOME/.cargo/bin/rustc\" --version 2>&1) || (command -v rustc >/dev/null 2>&1 && rustc --version 2>&1) || echo MISSING",
-        "java" if method == "local" => "([ -x \"$HOME/.local/share/lumina/java/current/bin/java\" ] && \"$HOME/.local/share/lumina/java/current/bin/java\" -version 2>&1 | head -1) || echo MISSING",
-        "java" => "command -v java >/dev/null 2>&1 && java -version 2>&1 | head -1 || echo MISSING",
-        "php" => "command -v php >/dev/null 2>&1 && php --version 2>&1 | head -1 || echo MISSING",
-        "dotnet" => "([ -x \"$HOME/.dotnet/dotnet\" ] && \"$HOME/.dotnet/dotnet\" --version 2>&1) || (command -v dotnet >/dev/null 2>&1 && dotnet --version 2>&1) || echo MISSING",
+        )),
+        "python" => Cow::Borrowed("([ -d \"$HOME/.pyenv\" ] && export PYENV_ROOT=\"$HOME/.pyenv\" && export PATH=\"$PYENV_ROOT/bin:$PATH\" && eval \"$(pyenv init -)\" && python3 --version 2>&1) || (command -v python3 >/dev/null 2>&1 && python3 --version 2>&1) || echo MISSING"),
+        "go" => Cow::Borrowed("([ -x \"$HOME/.local/share/lumina/go/current/bin/go\" ] && \"$HOME/.local/share/lumina/go/current/bin/go\" version 2>&1) || ([ -x \"$HOME/.local/share/lumina/go/bin/go\" ] && \"$HOME/.local/share/lumina/go/bin/go\" version 2>&1) || (command -v go >/dev/null 2>&1 && go version 2>&1) || echo MISSING"),
+        "rust" => Cow::Borrowed("unset RUSTUP_TOOLCHAIN; ([ -x \"$HOME/.cargo/bin/rustup\" ] && \"$HOME/.cargo/bin/rustup\" show active-toolchain 2>&1 | head -1) || ([ -x \"$HOME/.cargo/bin/rustc\" ] && \"$HOME/.cargo/bin/rustc\" --version 2>&1) || (command -v rustc >/dev/null 2>&1 && rustc --version 2>&1) || echo MISSING"),
+        "java" if method == "local" => Cow::Borrowed("([ -x \"$HOME/.local/share/lumina/java/current/bin/java\" ] && \"$HOME/.local/share/lumina/java/current/bin/java\" -version 2>&1 | head -1) || echo MISSING"),
+        "java" => Cow::Borrowed("command -v java >/dev/null 2>&1 && java -version 2>&1 | head -1 || echo MISSING"),
+        "php" => Cow::Borrowed("command -v php >/dev/null 2>&1 && php --version 2>&1 | head -1 || echo MISSING"),
+        "dotnet" => Cow::Borrowed("([ -x \"$HOME/.dotnet/dotnet\" ] && \"$HOME/.dotnet/dotnet\" --version 2>&1) || (command -v dotnet >/dev/null 2>&1 && dotnet --version 2>&1) || echo MISSING"),
         _ => {
             logs.push(format!("VERIFY: skipped (unknown runtime '{}')", runtime_id));
             return true;
         }
     };
-    match exec_result_limit("bash", &["-lc", probe], cmd_timeout_short()).await {
+    match exec_result_limit("bash", &["-lc", probe.as_ref()], cmd_timeout_short()).await {
         Ok((stdout, stderr)) => {
             let line = lumina_probe_meaningful_line(&stdout, &stderr);
             if line.contains("MISSING") || line.is_empty() {
