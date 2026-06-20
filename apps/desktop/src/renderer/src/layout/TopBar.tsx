@@ -1,6 +1,6 @@
 import './TopBar.css'
 import type { CSSProperties, ReactElement } from 'react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import type { CloudGitInboxItem, ContainerRow, JobSummary } from '@linux-dev-home/shared'
@@ -22,6 +22,23 @@ function inboxCategoryLabel(
   }
 }
 
+const DISMISSED_JOBS_KEY = 'lumina_notif_dismissed_jobs'
+
+function readDismissedJobIds(): Set<string> {
+  try {
+    const raw = sessionStorage.getItem(DISMISSED_JOBS_KEY)
+    if (!raw) return new Set()
+    const parsed = JSON.parse(raw) as unknown
+    return new Set(Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : [])
+  } catch {
+    return new Set()
+  }
+}
+
+function writeDismissedJobIds(ids: Set<string>): void {
+  sessionStorage.setItem(DISMISSED_JOBS_KEY, JSON.stringify([...ids]))
+}
+
 export function TopBar(): ReactElement {
   const { t } = useTranslation('nav')
   const location = useLocation()
@@ -30,6 +47,7 @@ export function TopBar(): ReactElement {
   const [q, setQ] = useState('')
   const [showNotifications, setShowNotifications] = useState(false)
   const [jobs, setJobs] = useState<JobSummary[]>([])
+  const [dismissedJobIds, setDismissedJobIds] = useState<Set<string>>(readDismissedJobIds)
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [paletteIdx, setPaletteIdx] = useState(0)
   const [paletteContainers, setPaletteContainers] = useState<ContainerRow[]>([])
@@ -41,6 +59,28 @@ export function TopBar(): ReactElement {
   const paletteOpenRef = useRef(false)
   const cloudInbox = useCloudGitInbox(showNotifications)
   const inboxUnread = cloudInbox.items.some((item) => item.unread)
+  const failedJobs = useMemo(
+    () => jobs.filter((j) => j.state === 'failed' && !dismissedJobIds.has(j.id)),
+    [jobs, dismissedJobIds]
+  )
+  const hasRunningJobs = jobs.some((j) => j.state === 'running')
+  const showNotifBadge = hasRunningJobs || inboxUnread || failedJobs.length > 0
+
+  const dismissFailedJobNotifications = useCallback(() => {
+    const failedIds = jobs.filter((j) => j.state === 'failed').map((j) => j.id)
+    if (failedIds.length === 0) return
+    setDismissedJobIds((prev) => {
+      const next = new Set(prev)
+      for (const id of failedIds) next.add(id)
+      writeDismissedJobIds(next)
+      return next
+    })
+  }, [jobs])
+
+  const openRuntimesFromNotification = useCallback(() => {
+    setShowNotifications(false)
+    navigate('/runtimes')
+  }, [navigate])
 
   const titles: Record<string, string> = {
     '/workstation': t('topbar.workstation'),
@@ -734,9 +774,7 @@ export function TopBar(): ReactElement {
           style={{
             ...btnIcon,
             color:
-              showNotifications ||
-              jobs.some((j) => j.state === 'running') ||
-              inboxUnread
+              showNotifications || showNotifBadge
                 ? 'var(--accent)'
                 : 'var(--text-muted)',
             position: 'relative',
@@ -744,7 +782,7 @@ export function TopBar(): ReactElement {
           onClick={() => setShowNotifications(!showNotifications)}
         >
           <span className="codicon codicon-bell" />
-          {(jobs.some((j) => j.state === 'running') || inboxUnread) && (
+          {showNotifBadge && (
             <span
               style={{
                 position: 'absolute',
@@ -792,7 +830,10 @@ export function TopBar(): ReactElement {
               <span id="notifications-title">{t('topbar.notifications')}</span>
               <button
                 type="button"
-                onClick={() => setShowNotifications(false)}
+                onClick={() => {
+                  dismissFailedJobNotifications()
+                  setShowNotifications(false)
+                }}
                 style={{
                   background: 'none',
                   border: 'none',
@@ -824,6 +865,22 @@ export function TopBar(): ReactElement {
                 ) : cloudInbox.error && cloudInbox.items.length === 0 ? (
                   <div style={{ color: 'var(--orange)', fontSize: 12, padding: '8px 0' }}>
                     {cloudInbox.error}
+                    <button
+                      type="button"
+                      onClick={() => navigate('/settings?tab=accounts')}
+                      style={{
+                        display: 'block',
+                        marginTop: 8,
+                        background: 'none',
+                        border: 'none',
+                        color: 'var(--accent)',
+                        cursor: 'pointer',
+                        padding: 0,
+                        fontSize: 12,
+                      }}
+                    >
+                      {t('topbar.inboxConnectAccounts')}
+                    </button>
                   </div>
                 ) : cloudInbox.items.length === 0 ? (
                   <div style={{ color: 'var(--text-muted)', fontSize: 12, padding: '8px 0' }}>
@@ -891,14 +948,29 @@ export function TopBar(): ReactElement {
                   .slice(-5)
                   .reverse()
                   .map((j) => (
-                    <div
+                    <button
                       key={j.id}
+                      type="button"
+                      onClick={() => {
+                        if (j.kind.startsWith('runtime_') || j.kind === 'install_deps') {
+                          openRuntimesFromNotification()
+                        }
+                      }}
                       style={{
                         display: 'flex',
                         flexDirection: 'column',
                         gap: 2,
                         padding: '6px 0',
+                        width: '100%',
+                        textAlign: 'left',
+                        background: 'transparent',
+                        border: 'none',
                         borderBottom: '1px solid rgba(255, 255, 255, 0.04)',
+                        color: 'inherit',
+                        cursor:
+                          j.kind.startsWith('runtime_') || j.kind === 'install_deps'
+                            ? 'pointer'
+                            : 'default',
                       }}
                     >
                       <div
@@ -941,7 +1013,19 @@ export function TopBar(): ReactElement {
                           />
                         </div>
                       )}
-                    </div>
+                      {j.state === 'failed' && j.logTail.length > 0 ? (
+                        <div
+                          style={{
+                            fontSize: 10,
+                            color: 'var(--text-muted)',
+                            lineHeight: 1.35,
+                            marginTop: 2,
+                          }}
+                        >
+                          {j.logTail[j.logTail.length - 1]}
+                        </div>
+                      ) : null}
+                    </button>
                   ))
               )}
             </div>

@@ -2,7 +2,8 @@
 //! Lumina install dirs are included but never exclusive.
 
 const PREAMBLE: &str = r#"export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
-[ -s "$HOME/.nvm/nvm.sh" ] && . "$HOME/.nvm/nvm.sh" 2>/dev/null
+[ -s "$HOME/.config/nvm/nvm.sh" ] && export NVM_DIR="$HOME/.config/nvm" && . "$HOME/.config/nvm/nvm.sh" 2>/dev/null
+[ -s "$HOME/.nvm/nvm.sh" ] && export NVM_DIR="$HOME/.nvm" && . "$HOME/.nvm/nvm.sh" 2>/dev/null
 command -v mise >/dev/null 2>&1 && eval "$("$HOME/.local/bin/mise" activate bash 2>/dev/null || mise activate bash 2>/dev/null)" 2>/dev/null
 command -v pyenv >/dev/null 2>&1 && eval "$(pyenv init - --path 2>/dev/null)" 2>/dev/null
 "#;
@@ -77,6 +78,191 @@ exit 1"#,
     )
 }
 
+/// Reject mise shims and bare `mise` executables masquerading as node.
+pub(crate) fn sanitize_node_binary_path(path: &str) -> Option<String> {
+    let path = path.trim();
+    if path.is_empty()
+        || path.ends_with("/mise")
+        || path.ends_with("/mise.exe")
+        || path.contains("/.local/share/mise/shims/")
+        || path == "/usr/bin/mise"
+    {
+        None
+    } else {
+        Some(path.to_string())
+    }
+}
+
+/// Resolve the `node` binary the login shell would run (mise global pin, else first real node on PATH).
+pub(crate) fn node_shell_binary_script() -> String {
+    r#"export PATH="$HOME/.local/bin:$PATH"
+if command -v mise >/dev/null 2>&1; then
+  p=$(mise which node 2>/dev/null)
+  if [ -n "$p" ] && [ -x "$p" ]; then
+    rp=$(readlink -f "$p" 2>/dev/null || echo "$p")
+    case "$rp" in */mise|*/mise.exe|*/.local/share/mise/shims/*) ;; *)
+      echo "$rp"
+      exit 0
+    ;; esac
+  fi
+fi
+IFS=':' read -ra __lumina_path_dirs <<< "$PATH"
+for dir in "${__lumina_path_dirs[@]}"; do
+  [ -n "$dir" ] || continue
+  case "$dir" in *"/.local/share/mise/shims"*) continue ;; esac
+  [ -x "$dir/node" ] || continue
+  rp=$(readlink -f "$dir/node" 2>/dev/null || echo "$dir/node")
+  case "$rp" in */mise|*/mise.exe|*/.local/share/mise/shims/*) continue ;; esac
+  case "$(basename "$rp")" in mise|mise.exe) continue ;; esac
+  echo "$rp"
+  exit 0
+done
+exit 1"#
+        .to_string()
+}
+
+/// Fish login probe — skip mise shims when no global node pin is active.
+pub(crate) fn node_shell_binary_script_fish() -> String {
+    r#"function __lumina_real_node_path
+  if command -q mise
+    set -l p (mise which node 2>/dev/null)
+    if test -n "$p"; and test -x "$p"
+      set -l rp (readlink -f $p 2>/dev/null)
+      if test -z "$rp"; set rp $p; end
+      if not string match -q '*\/mise/shims/*' $rp
+        if test "$rp" != /usr/bin/mise
+          echo $rp
+          return 0
+        end
+      end
+    end
+  end
+  for dir in (string split : -- $PATH)
+    if string match -q '*\/mise/shims*' $dir
+      continue
+    end
+    set -l p "$dir/node"
+    if test -x "$p"
+      set -l rp (readlink -f $p 2>/dev/null)
+      if test -z "$rp"; set rp $p; end
+      if test "$rp" = /usr/bin/mise
+        continue
+      end
+      if string match -q '*\/mise/shims/*' $rp
+        continue
+      end
+      echo $rp
+      return 0
+    end
+  end
+  return 1
+end
+__lumina_real_node_path"#
+        .to_string()
+}
+
+pub(crate) fn node_shell_version_script_bash() -> String {
+    r#"export PATH="$HOME/.local/bin:$PATH"
+__lumina_node_bin=""
+if command -v mise >/dev/null 2>&1; then
+  p=$(mise which node 2>/dev/null)
+  if [ -n "$p" ] && [ -x "$p" ]; then
+    rp=$(readlink -f "$p" 2>/dev/null || echo "$p")
+    case "$rp" in */mise|*/mise.exe|*/.local/share/mise/shims/*) ;; *)
+      __lumina_node_bin="$rp"
+    ;; esac
+  fi
+fi
+if [ -z "$__lumina_node_bin" ]; then
+  IFS=':' read -ra __lumina_path_dirs <<< "$PATH"
+  for dir in "${__lumina_path_dirs[@]}"; do
+    [ -n "$dir" ] || continue
+    case "$dir" in *"/.local/share/mise/shims"*) continue ;; esac
+    [ -x "$dir/node" ] || continue
+    rp=$(readlink -f "$dir/node" 2>/dev/null || echo "$dir/node")
+    case "$rp" in */mise|*/mise.exe|*/.local/share/mise/shims/*) continue ;; esac
+    case "$(basename "$rp")" in mise|mise.exe) continue ;; esac
+    __lumina_node_bin="$rp"
+    break
+  done
+fi
+[ -n "$__lumina_node_bin" ] || exit 1
+"$__lumina_node_bin" --version 2>&1"#
+        .to_string()
+}
+
+pub(crate) fn node_shell_version_script_fish() -> String {
+    r#"function __lumina_real_node_path
+  if command -q mise
+    set -l p (mise which node 2>/dev/null)
+    if test -n "$p"; and test -x "$p"
+      set -l rp (readlink -f $p 2>/dev/null)
+      if test -z "$rp"; set rp $p; end
+      if not string match -q '*\/mise/shims/*' $rp
+        if test "$rp" != /usr/bin/mise
+          echo $rp
+          return 0
+        end
+      end
+    end
+  end
+  for dir in (string split : -- $PATH)
+    if string match -q '*\/mise/shims*' $dir
+      continue
+    end
+    set -l p "$dir/node"
+    if test -x "$p"
+      set -l rp (readlink -f $p 2>/dev/null)
+      if test -z "$rp"; set rp $p; end
+      if test "$rp" = /usr/bin/mise
+        continue
+      end
+      if string match -q '*\/mise/shims/*' $rp
+        continue
+      end
+      echo $rp
+      return 0
+    end
+  end
+  return 1
+end
+set -l __p (__lumina_real_node_path)
+test -z "$__p"; and exit 1
+$__p --version 2>&1"#
+        .to_string()
+}
+
+pub(crate) async fn resolve_node_shell_binary_path() -> Option<String> {
+    use crate::host_exec::{cmd_timeout_short, exec_user_login_shell_output, user_shell_is_fish};
+    let script = if user_shell_is_fish() {
+        node_shell_binary_script_fish()
+    } else {
+        node_shell_binary_script()
+    };
+    exec_user_login_shell_output(&script, cmd_timeout_short())
+        .await
+        .ok()
+        .and_then(|out| {
+            out.lines()
+                .find_map(sanitize_node_binary_path)
+        })
+}
+
+pub(crate) async fn resolve_node_shell_version() -> Option<String> {
+    use crate::host_exec::{cmd_timeout_short, exec_user_login_shell_output, user_shell_is_fish};
+    use crate::runtime_versioning::lumina_probe_meaningful_line;
+    let script = if user_shell_is_fish() {
+        node_shell_version_script_fish()
+    } else {
+        node_shell_version_script_bash()
+    };
+    exec_user_login_shell_output(&script, cmd_timeout_short())
+        .await
+        .ok()
+        .map(|out| lumina_probe_meaningful_line(&out, ""))
+        .filter(|v| !v.is_empty())
+}
+
 pub(crate) async fn resolve_java_shell_binary_path() -> Option<String> {
     use crate::host_exec::{cmd_timeout_short, exec_output_limit};
     let script = java_shell_binary_script();
@@ -101,6 +287,13 @@ pub(crate) fn list_installed_versions_script(runtime_id: &str) -> Option<String>
     Some(match runtime_id {
         "node" => with_discover(&format!(
             "{MISE_LS}{ASDF_ROWS}
+if [ -d \"$HOME/.config/nvm/versions/node\" ]; then
+  for d in \"$HOME/.config/nvm/versions/node\"/*; do
+    [ -d \"$d\" ] || continue
+    [ -x \"$d/bin/node\" ] || continue
+    _emit_unique \"$(basename \"$d\")\" \"$d/bin/node\"
+  done
+fi
 if [ -d \"$HOME/.nvm/versions/node\" ]; then
   for d in \"$HOME/.nvm/versions/node\"/*; do
     [ -d \"$d\" ] || continue
@@ -130,6 +323,13 @@ if [ -d \"$HOME/.local/share/lumina/node\" ]; then
     _emit_unique \"$b\" \"$d/bin/node\"
   done
 fi
+for sys_node in /usr/bin/node /usr/local/bin/node; do
+  if [ -x \"$sys_node\" ]; then
+    v=$($sys_node --version 2>/dev/null | sed 's/^v//')
+    rp=$(readlink -f \"$sys_node\" 2>/dev/null || echo \"$sys_node\")
+    _emit_unique \"$v\" \"$rp\"
+  fi
+done
 "
         )),
         "python" => with_discover(&format!(
@@ -263,9 +463,7 @@ fi
 
 pub(crate) fn active_binary_script(runtime_id: &str) -> Option<String> {
     Some(match runtime_id {
-        "node" => with_preamble(
-            r#"command -v node 2>/dev/null | head -1 | xargs -r readlink -f 2>/dev/null || command -v node 2>/dev/null"#,
-        ),
+        "node" => node_shell_binary_script(),
         "python" => with_preamble(
             r#"pyenv which python 2>/dev/null || pyenv which python3 2>/dev/null || readlink -f "$(command -v python3 2>/dev/null || command -v python 2>/dev/null)" 2>/dev/null"#,
         ),

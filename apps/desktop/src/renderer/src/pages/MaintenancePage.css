@@ -513,6 +513,13 @@
 
 .maint-layer-tile {
   position: relative;
+  display: block;
+  width: 100%;
+  text-align: left;
+  font-family: var(--font-ui);
+  font-size: inherit;
+  color: inherit;
+  cursor: pointer;
   border-radius: 14px;
   padding: 16px 16px 14px;
   background: color-mix(in srgb, var(--bg-widget) 96%, var(--bg-panel));
@@ -572,6 +579,29 @@
   box-shadow:
     0 10px 28px rgba(0, 0, 0, 0.16),
     inset 0 1px 0 color-mix(in srgb, var(--text) 6%, transparent);
+}
+
+.maint-layer-tile:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.maint-layer-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.maint-layer-action .codicon {
+  font-size: 14px;
+  flex-shrink: 0;
 }
 
 .maint-layer-title-row {
@@ -1229,6 +1259,10 @@
 }
 
 .maint-diag-row--fail {
+  border-left: 3px solid var(--orange);
+}
+
+.maint-diag-row--warn {
   border-left: 3px solid var(--orange);
 }
 

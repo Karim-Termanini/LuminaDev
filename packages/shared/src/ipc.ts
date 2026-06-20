@@ -159,6 +159,8 @@ export type HostSecuritySnapshot = {
   selinux: string
   sshPermitRootLogin: string
   sshPasswordAuth: string
+  /** Host has a default SSH public key (~/.ssh/id_ed25519.pub or id_rsa.pub). */
+  sshHostKeyPresent: boolean
   failedAuth24h: number
   riskyOpenPorts: number[]
 }

@@ -174,12 +174,14 @@
   "diag.docker.action": "فتح صفحة Docker",
   "diag.security.pass.summary": "خط الأساس الأمني جيد.",
   "diag.security.pass.hint": "جدار الحماية نشط وتسجيل SSH بكلمة المرور معطّل.",
+  "diag.security.warn.summary": "جدار الحماية نشط — يتبقى تعزيز SSH اختياري.",
   "diag.security.fail.summary": "إعدادات الأمان تحتاج انتباهاً.",
   "diag.security.fail.hintFirewall": "جدار الحماية غير نشط.",
   "diag.security.fail.hintSshPassword": "SSH يسمح بكلمة المرور — يُفضّل المفاتيح.",
   "diag.security.fail.hintBoth": "جدار الحماية متوقف وSSH بكلمة مرور مفعّل.",
   "diag.security.fail.hintGeneric": "راجع جدار الحماية وSSH.",
-  "diag.security.action": "فتح إعدادات النظام",
+  "diag.security.action": "مراجعة الإصلاحات في المراقبة",
+  "diag.security.actionSsh": "تعزيز إعدادات SSH",
   "diag.git.pass.summary": "هوية Git مضبوطة.",
   "diag.git.pass.hint": "الاسم والبريد للcommits مضبوطان.",
   "diag.git.fail.summary": "user.name أو user.email مفقود.",
@@ -202,7 +204,7 @@
   "diag.a11y.pass.summary": "فحص إمكانية الوصول ناجح.",
   "diag.a11y.pass.hint": "التسميات والمعالم منطقية.",
   "diag.a11y.fail.summary": "مشكلات إمكانية وصول في الواجهة.",
-  "diag.a11y.fail.hint": "{{unlabeledInputs}} مدخل، {{unlabeledButtons}} زر بدون تسمية، {{imagesMissingAlt}} صورة بدون alt.",
+  "diag.a11y.fail.hint": "{{unlabeledInputs}} مدخل، {{unlabeledButtons}} زر بدون تسمية، {{imagesMissingAlt}} صورة بدون alt. هذه تسميات واجهة التطبيق — لا يوجد إصلاح تلقائي هنا.",
   "diag.a11y.action": "الإبلاغ عن مشكلة",
 
   "guardian.description": "كل طبقة تقرأ إشارة IPC محددة. النتيجة الرئيسية هي <0>100</0> مطروحاً منها الخصومات المعروضة على الطبقات الفاشلة (مقيدة عند 0). هذا هو التعريف المبرمج لـ\"الحارس\" في هذا التطبيق — وليست درجة تسويقية منفصلة.",
@@ -229,6 +231,19 @@
   "layerTooltip.container_fleet": "نسبة حاويات Docker المتوقفة أو المعطلة",
   "layerTooltip.process_health": "أعلى استخدام للمعالج أو الذاكرة بين أهم العمليات",
   "layerTooltip.host_security": "حالة جدار الحماية ومصادقة SSH بكلمة المرور",
+
+  "layerAction.host_compute": "عرض المعالج في المراقبة",
+  "layerAction.host_compute_stressed": "حمولة معالج عالية — افتح المراقبة",
+  "layerAction.memory_pressure": "عرض الذاكرة في المراقبة",
+  "layerAction.memory_pressure_stressed": "ضغط ذاكرة مرتفع — افتح المراقبة",
+  "layerAction.storage_pressure": "عرض القرص في المراقبة",
+  "layerAction.storage_pressure_stressed": "مساحة قرص منخفضة — شغّل التنظيف",
+  "layerAction.container_fleet": "افتح Docker",
+  "layerAction.container_fleet_stressed": "أصلح الحاويات المتوقفة — افتح Docker",
+  "layerAction.process_health": "راجع أهم العمليات",
+  "layerAction.process_health_stressed": "حمولة عمليات ثقيلة — راجع",
+  "layerAction.host_security": "راجع الأمان في المراقبة",
+  "layerAction.host_security_stressed": "مخاطر أمنية — راجع الوضع",
 
   "guardian.overallExcellent": "كل شيء بخير",
   "guardian.overallHealthy": "سليم",
@@ -292,5 +307,6 @@
   "statusPill.active": "نشط",
   "statusPill.inactive": "غير نشط",
   "statusPill.unknown": "غير معروف",
-  "statusPill.notInstalled": "غير مثبت"
+  "statusPill.notInstalled": "غير مثبت",
+  "statusPill.warning": "تحذير"
 }

@@ -1,6 +1,11 @@
 use super::*;
 use crate::host_exec::exec_result_limit;
-use crate::runtime_discover::resolve_java_shell_binary_path;
+use crate::runtime_discover::{
+    resolve_java_shell_binary_path, resolve_node_shell_binary_path, resolve_node_shell_version,
+};
+use crate::runtime_paths::{
+    mise_install_version_from_path, nvm_node_tag_from_path,
+};
 use crate::runtime_packages::{
     runtime_archlinux_java_active_binary_path, runtime_java_system_packages_for_version,
     runtime_read_host_distro, runtime_system_package_available,
@@ -54,6 +59,21 @@ pub(crate) async fn handle_runtime_status() -> Value {
 
     let mut tasks: Vec<(String, String, _)> = Vec::new();
     for &(id, name) in checks {
+        if id == "node" {
+            let id = id.to_string();
+            let name = name.to_string();
+            tasks.push((
+                id.clone(),
+                name.clone(),
+                tokio::spawn(async move {
+                    match resolve_node_shell_version().await {
+                        Some(version) => json!({ "id": id, "name": name, "installed": true, "version": version }),
+                        None => json!({ "id": id, "name": name, "installed": false }),
+                    }
+                }),
+            ));
+            continue;
+        }
         let shell_cmd = status_probe_script(id).unwrap_or_default();
         if shell_cmd.is_empty() {
             continue;
@@ -457,6 +477,11 @@ async fn runtime_active_binary_path(runtime_id: &str) -> Option<String> {
             return Some(path);
         }
     }
+    if runtime_id == "node" {
+        if let Some(path) = resolve_node_shell_binary_path().await {
+            return Some(path);
+        }
+    }
     let script = active_binary_script(runtime_id)?;
     let out = exec_output_limit("bash", &["-lc", &script], cmd_timeout_short())
         .await
@@ -502,6 +527,22 @@ fn java_row_matches_active(row_path: &str, row_java_home: Option<&str>, active_p
     false
 }
 
+fn node_row_matches_active(row_path: &str, active_path: &str) -> bool {
+    if row_path == active_path || paths_refer_to_same_binary(row_path, active_path) {
+        return true;
+    }
+    if crate::runtime_paths::is_system_node_binary_path(row_path)
+        && crate::runtime_paths::is_system_node_binary_path(active_path)
+    {
+        return true;
+    }
+    let row_tag = nvm_node_tag_from_path(row_path)
+        .or_else(|| mise_install_version_from_path(row_path, "node"));
+    let active_tag = nvm_node_tag_from_path(active_path)
+        .or_else(|| mise_install_version_from_path(active_path, "node"));
+    matches!((row_tag, active_tag), (Some(a), Some(b)) if a == b)
+}
+
 fn active_match_score(
     path: &str,
     active_path: &str,
@@ -510,7 +551,8 @@ fn active_match_score(
 ) -> Option<u8> {
     let matches = path == active_path
         || paths_refer_to_same_binary(path, active_path)
-        || java_row_matches_active(path, java_home, active_path);
+        || java_row_matches_active(path, java_home, active_path)
+        || node_row_matches_active(path, active_path);
     if !matches {
         return None;
     }

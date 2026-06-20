@@ -22,7 +22,7 @@ pub(crate) use host_exec::{
 
 mod runtime_packages;
 pub(crate) use runtime_packages::{
-    pkg_remove_cmd, pkg_upgrade_cmd, runtime_dnf_package_available, runtime_java_major,
+    pkg_upgrade_cmd, runtime_dnf_package_available, runtime_java_major,
     runtime_system_package_installed,
 };
 mod runtime_versioning;

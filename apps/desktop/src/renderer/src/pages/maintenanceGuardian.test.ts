@@ -38,7 +38,7 @@ describe('evaluateGuardian', () => {
   it('returns 100 when all layers healthy', () => {
     const g = evaluateGuardian(
       baseMetrics(),
-      { firewall: 'active', selinux: '', sshPermitRootLogin: 'no', sshPasswordAuth: 'no', failedAuth24h: 0, riskyOpenPorts: [] },
+      { firewall: 'active', selinux: '', sshPermitRootLogin: 'no', sshPasswordAuth: 'no', sshHostKeyPresent: true, failedAuth24h: 0, riskyOpenPorts: [] },
       [row('running'), row('running')]
     )
     expect(g.score).toBe(100)
@@ -57,7 +57,7 @@ describe('evaluateGuardian', () => {
   it('deducts for low running ratio when fleet exists', () => {
     const g = evaluateGuardian(
       baseMetrics(),
-      { firewall: 'active', selinux: '', sshPermitRootLogin: 'no', sshPasswordAuth: 'no', failedAuth24h: 0, riskyOpenPorts: [] },
+      { firewall: 'active', selinux: '', sshPermitRootLogin: 'no', sshPasswordAuth: 'no', sshHostKeyPresent: true, failedAuth24h: 0, riskyOpenPorts: [] },
       [row('running'), row('exited'), row('exited'), row('exited'), row('exited')]
     )
     expect(g.layers.find((l) => l.id === 'container_fleet')?.deduction).toBe(8)
@@ -70,6 +70,7 @@ describe('evaluateGuardian', () => {
       selinux: '',
       sshPermitRootLogin: 'no',
       sshPasswordAuth: 'yes',
+      sshHostKeyPresent: false,
       failedAuth24h: 0,
       riskyOpenPorts: [],
     }
@@ -81,7 +82,7 @@ describe('evaluateGuardian', () => {
   it('deducts for high memory and disk pressure', () => {
     const g = evaluateGuardian(
       baseMetrics({ totalMemMb: 1000, freeMemMb: 20, diskTotalGb: 100, diskFreeGb: 2 }),
-      { firewall: 'active', selinux: '', sshPermitRootLogin: 'no', sshPasswordAuth: 'no', failedAuth24h: 0, riskyOpenPorts: [] },
+      { firewall: 'active', selinux: '', sshPermitRootLogin: 'no', sshPasswordAuth: 'no', sshHostKeyPresent: true, failedAuth24h: 0, riskyOpenPorts: [] },
       []
     )
     expect(g.layers.find((l) => l.id === 'memory_pressure')?.deduction).toBe(22)

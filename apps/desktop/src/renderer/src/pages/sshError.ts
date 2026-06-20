@@ -11,6 +11,9 @@ function translateError(code: string, detail: string, t?: (key: string) => strin
     SSH_NO_KEY: 'error.noKey',
     SSH_ENABLE_LOCAL_FAILED: 'error.enableLocalFailed',
     HOST_COMMAND_TIMEOUT: 'error.hostCommandTimeout',
+    PKEXEC_NO_AGENT: 'error.noPolkitAgent',
+    PKEXEC_CANCELLED: 'error.authCancelled',
+    SSH_TEST_GITHUB_FAILED: 'error.githubTestFailed',
   }
 
   const key = keyMap[code]
@@ -39,6 +42,26 @@ export function humanizeSshError(err: unknown, t?: (key: string) => string): str
   if (code === 'SSH_ENABLE_LOCAL_FAILED') return `Could not enable SSH daemon. ${detail}`
   if (code === 'HOST_COMMAND_TIMEOUT') {
     return `A host command took too long and was stopped. ${detail}`.trim()
+  }
+  if (code === 'PKEXEC_NO_AGENT') {
+    return t
+      ? t('error.noPolkitAgent')
+      : 'No polkit password dialog is available. Start your desktop polkit agent or run the command in a terminal.'
+  }
+  if (code === 'PKEXEC_CANCELLED') {
+    return t ? t('error.authCancelled') : 'Authentication cancelled.'
+  }
+  if (code === 'SSH_TEST_GITHUB_FAILED') {
+    const lower = detail.toLowerCase()
+    if (lower.includes('permission denied (publickey)')) {
+      return t ? t('error.githubPublickeyDenied') : 'GitHub does not have your public key yet. Copy Public Key, add it on GitHub, then test again.'
+    }
+    return t ? t('error.githubTestFailed') : `GitHub connection test failed. ${detail}`
+  }
+
+  const lowerRaw = raw.toLowerCase()
+  if (lowerRaw.includes('permission denied (publickey)')) {
+    return t ? t('error.githubPublickeyDenied') : 'GitHub does not have your public key yet. Copy Public Key, add it on GitHub, then test again.'
   }
 
   return detail || 'SSH operation failed.'

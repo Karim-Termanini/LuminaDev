@@ -36,6 +36,11 @@ export function RuntimeDetailPanel({
     removeVersion,
   } = vm
 
+  const activeDetected = detectedVersions.find((v) => v.isDefault === true)
+  const headerVersionText = activeDetected
+    ? formatRuntimeVersionDisplay(selectedId, activeDetected.version)
+    : formatRuntimeVersionDisplay(selectedId, selectedRuntime.version)
+
   return (
     <div style={{ padding: 40, maxWidth: 800 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -77,7 +82,7 @@ export function RuntimeDetailPanel({
               {selectedRuntime.installed && (
                 <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
                   {t('page.version', {
-                    v: formatRuntimeVersionDisplay(selectedId, selectedRuntime.version),
+                    v: headerVersionText,
                   })}
                 </span>
               )}

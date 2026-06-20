@@ -36,6 +36,7 @@
   "topbar.inboxPrActivity": "PR activity",
   "topbar.inboxLoading": "Loading cloud notifications…",
   "topbar.inboxEmpty": "No mentions, review requests, or PR updates. Connect accounts in Settings.",
+  "topbar.inboxConnectAccounts": "Open Connected accounts",
   "topbar.system": "System",
   "topbar.workstation": "Workstation",
   "topbar.docker": "Docker",

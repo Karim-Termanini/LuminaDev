@@ -1,4 +1,5 @@
 use crate::host_exec::{cmd_timeout_short, exec_result_limit};
+use crate::runtime_packages::NVM_BASH_RESOLVE;
 use crate::runtime_versioning::{
     lumina_first_version_token, lumina_probe_meaningful_line, lumina_rust_channel_token,
     lumina_version_token_matches_probe_line,
@@ -17,8 +18,17 @@ pub(crate) async fn runtime_append_verify(
         requested_version.trim(),
         method
     ));
+    let node_probe = if runtime_id == "node" {
+        Some(format!(
+            r#"{NVM_BASH_RESOLVE}
+([ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh" && node --version 2>&1) || (command -v node >/dev/null 2>&1 && node --version 2>&1) || echo MISSING"#,
+            NVM_BASH_RESOLVE = NVM_BASH_RESOLVE
+        ))
+    } else {
+        None
+    };
     let probe = match runtime_id {
-        "node" => "([ -s \"$NVM_DIR/nvm.sh\" ] && . \"$NVM_DIR/nvm.sh\" && node --version 2>&1) || (command -v node >/dev/null 2>&1 && node --version 2>&1) || echo MISSING",
+        "node" => node_probe.as_deref().unwrap(),
         "python" => "([ -d \"$HOME/.pyenv\" ] && export PYENV_ROOT=\"$HOME/.pyenv\" && export PATH=\"$PYENV_ROOT/bin:$PATH\" && eval \"$(pyenv init -)\" && python3 --version 2>&1) || (command -v python3 >/dev/null 2>&1 && python3 --version 2>&1) || echo MISSING",
         "go" => "([ -x \"$HOME/.local/share/lumina/go/current/bin/go\" ] && \"$HOME/.local/share/lumina/go/current/bin/go\" version 2>&1) || ([ -x \"$HOME/.local/share/lumina/go/bin/go\" ] && \"$HOME/.local/share/lumina/go/bin/go\" version 2>&1) || (command -v go >/dev/null 2>&1 && go version 2>&1) || echo MISSING",
         "rust" => "unset RUSTUP_TOOLCHAIN; ([ -x \"$HOME/.cargo/bin/rustup\" ] && \"$HOME/.cargo/bin/rustup\" show active-toolchain 2>&1 | head -1) || ([ -x \"$HOME/.cargo/bin/rustc\" ] && \"$HOME/.cargo/bin/rustc\" --version 2>&1) || (command -v rustc >/dev/null 2>&1 && rustc --version 2>&1) || echo MISSING",

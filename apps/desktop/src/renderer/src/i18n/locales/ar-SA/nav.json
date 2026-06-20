@@ -36,6 +36,7 @@
   "topbar.inboxPrActivity": "نشاط PR",
   "topbar.inboxLoading": "جارٍ تحميل إشعارات السحابة…",
   "topbar.inboxEmpty": "لا إشارات ولا طلبات مراجعة ولا تحديثات PR. اربط الحسابات من الإعدادات.",
+  "topbar.inboxConnectAccounts": "فتح الحسابات المتصلة",
   "topbar.system": "النظام",
   "topbar.workstation": "محطة العمل",
   "topbar.docker": "دوكر",

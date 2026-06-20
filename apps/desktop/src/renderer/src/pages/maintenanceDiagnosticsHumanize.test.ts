@@ -17,7 +17,23 @@ describe('humanizeMaintenanceDiagnostic', () => {
     )
     expect(h.summary).toBe('diag.security.fail.summary')
     expect(h.hint).toBe('diag.security.fail.hintSshPassword')
-    expect(h.action?.href).toBe('/settings?tab=system')
+    expect(h.action?.href).toBe('/dashboard/monitor?tab=overview&focus=security')
+  })
+
+  it('humanizes security warn when firewall ok but password ssh enabled', () => {
+    const h = humanizeMaintenanceDiagnostic(
+      {
+        id: 'security',
+        label: 'Security baseline',
+        ok: false,
+        severity: 'warn',
+        details: 'firewall=active, sshPasswordAuth=yes',
+      },
+      t,
+    )
+    expect(h.summary).toBe('diag.security.warn.summary')
+    expect(h.hint).toBe('diag.security.fail.hintSshPassword')
+    expect(h.action?.href).toBe('/ssh?wizard=1')
   })
 
   it('humanizes docker success', () => {
@@ -44,5 +60,6 @@ describe('humanizeMaintenanceDiagnostic', () => {
       t,
     )
     expect(h.hint).toBe('diag.a11y.fail.hint')
+    expect(h.action).toBeUndefined()
   })
 })

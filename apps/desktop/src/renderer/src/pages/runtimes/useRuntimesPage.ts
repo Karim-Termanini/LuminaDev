@@ -18,6 +18,7 @@ import {
   filterSupportedRuntimes,
   formatRuntimeVersionDisplay,
   installedVersionKey,
+  installedVersionMatchesActive,
   pickDefaultRuntimeVersion,
   type InstalledVersionRow,
   type RemoveMode,
@@ -197,14 +198,26 @@ export function useRuntimesPage() {
           error?: string
           shellMismatch?: boolean
           shellJavaPath?: string
+          shellNodePath?: string
+          activePath?: string
         }
         assertRuntimeOk(res, t('page.errorActive'))
+        const resolvedActive = res.activePath ?? res.shellNodePath ?? path
+        if (resolvedActive) {
+          setInstalledVersionsCache((prev) => ({
+            ...prev,
+            [selectedId]: (prev[selectedId] ?? []).map((v) => ({
+              ...v,
+              isDefault: installedVersionMatchesActive(v.path, resolvedActive),
+            })),
+          }))
+        }
         if (res.shellMismatch) {
-          setErrorMessage(
-            t('page.javaShellMismatch', {
-              path: res.shellJavaPath ?? t('page.javaShellMismatchUnknown'),
-            })
-          )
+          const shellPath =
+            res.shellJavaPath ?? res.shellNodePath ?? t('page.javaShellMismatchUnknown')
+          const mismatchKey =
+            selectedId === 'node' ? 'page.nodeShellMismatch' : 'page.javaShellMismatch'
+          setErrorMessage(t(mismatchKey, { path: shellPath }))
         } else {
           setErrorMessage(null)
         }

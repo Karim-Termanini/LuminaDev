@@ -12,13 +12,16 @@ import {
 } from '@linux-dev-home/shared'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router-dom'
 import { humanizeDashboardError } from '../dashboardError'
 import { humanizeDockerError } from '../dockerError'
 import { humanizeRuntimeError } from '../runtimeError'
 import { collectAccessibilitySnapshot, evaluateAccessibilitySnapshot } from '../accessibilityAudit'
-import { evaluateGuardian } from '../maintenanceGuardian'
+import { evaluateGuardian, type GuardianLayerId } from '../maintenanceGuardian'
 import {
+  getGuardianLayerPressureScore,
   getMaintenanceOverallLevel,
+  getMaintenancePressureLevel,
 } from '../maintenanceHealth'
 import { type RunbookOp } from '../maintenancePageHelpers'
 import {
@@ -28,10 +31,12 @@ import {
   type SystemdServiceId,
 } from '../maintenanceSystemdServices'
 import { DEFAULT_DOCKER_CLEANUP_SELECTION, profileIds, STATUS_AUTO_DISMISS_MS } from './constants'
+import { buildMonitorLayerPath, resolveGuardianLayerTarget } from './maintenanceGuardianActions'
 import type { DiagnosticCheck, ServiceState, TabId } from './types'
 
 export function useMaintenancePage() {
   const { t } = useTranslation('maintenance')
+  const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState<TabId>('Overview / Health Dashboard')
   const [metrics, setMetrics] = useState<HostMetricsResponse | null>(null)
   const [containers, setContainers] = useState<ContainerRow[]>([])
@@ -204,6 +209,25 @@ export function useMaintenancePage() {
   const runningContainers = containers.filter((c) => c.state === 'running').length
   const guardian = useMemo(() => evaluateGuardian(m, security, containers, topProcesses), [m, security, containers, topProcesses])
   const guardianOverallLevel = useMemo(() => getMaintenanceOverallLevel(guardian.score), [guardian.score])
+
+  const onGuardianLayerAction = useCallback(
+    (layerId: GuardianLayerId) => {
+      const pressureLevel = getMaintenancePressureLevel(
+        getGuardianLayerPressureScore(layerId, m, containers, topProcesses, security)
+      )
+      const target = resolveGuardianLayerTarget(layerId, pressureLevel)
+      if (target.kind === 'maintenanceTab') {
+        setActiveTab(target.tab)
+        return
+      }
+      if (target.kind === 'route') {
+        navigate(target.path)
+        return
+      }
+      navigate(buildMonitorLayerPath(target))
+    },
+    [m, containers, topProcesses, security, navigate]
+  )
   const memPct = m && m.totalMemMb > 0 ? Math.round(((m.totalMemMb - m.freeMemMb) / m.totalMemMb) * 100) : null
   const diskPct = m && m.diskTotalGb > 0 ? Math.round(((m.diskTotalGb - m.diskFreeGb) / m.diskTotalGb) * 100) : null
   const activeJobCount = useMemo(() => jobs.filter((j) => j.state === 'running').length, [jobs])
@@ -399,10 +423,19 @@ export function useMaintenancePage() {
 
       const hostSecRes = await window.dh.monitorSecurity()
       const hostSec = hostSecRes.ok ? hostSecRes.snapshot : null
+      const firewallOk = hostSec?.firewall === 'active'
+      const sshPasswordOk = hostSec?.sshPasswordAuth !== 'yes'
       checks.push({
         id: 'security',
         label: t('check.security'),
-        ok: Boolean(hostSec && hostSec.firewall === 'active' && hostSec.sshPasswordAuth !== 'yes'),
+        ok: Boolean(hostSec && firewallOk && sshPasswordOk),
+        severity: !hostSec
+          ? 'fail'
+          : firewallOk && !sshPasswordOk
+            ? 'warn'
+            : firewallOk && sshPasswordOk
+              ? 'pass'
+              : 'fail',
         details: hostSec
           ? `firewall=${hostSec.firewall}, sshPasswordAuth=${hostSec.sshPasswordAuth}`
           : hostSecRes.error || t('check.securityUnavailable'),
@@ -543,6 +576,7 @@ export function useMaintenancePage() {
     runningContainers,
     guardian,
     guardianOverallLevel,
+    onGuardianLayerAction,
     memPct,
     diskPct,
     activeJobCount,

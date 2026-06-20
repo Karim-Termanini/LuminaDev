@@ -16,7 +16,9 @@ import {
   type SystemdServiceState,
 } from '../maintenanceSystemdServices'
 import { GUARDIAN_LAYER_META, OVERVIEW_NAV } from './constants'
+import { getGuardianLayerActionLabelKey } from './maintenanceGuardianActions'
 import type { DiagnosticCheck, TabId } from './types'
+import type { GuardianLayerId } from '../maintenanceGuardian'
 
 export function GuardianLayerTile({
   layerId,
@@ -26,6 +28,7 @@ export function GuardianLayerTile({
   deduction,
   ok,
   pressureScore,
+  onAction,
 }: {
   layerId: string
   title: string
@@ -34,16 +37,21 @@ export function GuardianLayerTile({
   deduction: number
   ok: boolean
   pressureScore: number | null
+  onAction: (layerId: GuardianLayerId) => void
 }): ReactElement {
   const { t } = useTranslation('maintenance')
   const level = getMaintenancePressureLevel(pressureScore)
   const tooltip = getGuardianLayerTooltip(layerId as Parameters<typeof getGuardianLayerTooltip>[0], t)
   const meta = GUARDIAN_LAYER_META[layerId] ?? { icon: 'info', tone: 'default' }
+  const actionLabelKey = getGuardianLayerActionLabelKey(layerId as GuardianLayerId, level)
 
   return (
-    <div
+    <button
+      type="button"
       className={`maint-layer-tile maint-tone-${meta.tone} ${ok ? 'maint-layer-tile--ok' : 'maint-layer-tile--warn'}`}
       title={tooltip}
+      aria-label={`${title}. ${t(actionLabelKey)}`}
+      onClick={() => onAction(layerId as GuardianLayerId)}
     >
       <div className="maint-layer-tile-bar" aria-hidden />
       <div className="maint-layer-head">
@@ -89,7 +97,11 @@ export function GuardianLayerTile({
       <div className={`maint-layer-deduction ${deduction > 0 ? 'is-warn' : 'is-ok'}`}>
         {deduction > 0 ? `−${deduction} pts` : '−0 pts'}
       </div>
-    </div>
+      <div className="maint-layer-action">
+        <span>{t(actionLabelKey)}</span>
+        <span className="codicon codicon-chevron-right" aria-hidden />
+      </div>
+    </button>
   )
 }
 
@@ -212,9 +224,17 @@ export function DiagnosticResultRow({
 }): ReactElement {
   const { t } = useTranslation('maintenance')
   const human = humanizeMaintenanceDiagnostic(check, t)
+  const severity = check.severity ?? (check.ok ? 'pass' : 'fail')
+  const rowClass =
+    severity === 'pass'
+      ? 'maint-diag-row--pass'
+      : severity === 'warn'
+        ? 'maint-diag-row--warn'
+        : 'maint-diag-row--fail'
+  const pillState = severity === 'pass' ? 'success' : severity === 'warn' ? 'warning' : 'failed'
 
   return (
-    <div className={`maint-diag-row ${check.ok ? 'maint-diag-row--pass' : 'maint-diag-row--fail'}`}>
+    <div className={`maint-diag-row ${rowClass}`}>
       <div className="maint-diag-main">
         <strong className="maint-diag-title">{check.label}</strong>
         <p className="maint-diag-summary">{human.summary}</p>
@@ -225,7 +245,7 @@ export function DiagnosticResultRow({
         </details>
       </div>
       <div className="maint-diag-actions">
-        <StatusPill state={check.ok ? 'success' : 'failed'} />
+        <StatusPill state={pillState} />
         {!check.ok && human.action ? (
           <Link to={human.action.href} className="hp-btn maint-diag-action-btn">
             {t(human.action.labelKey)}
@@ -246,6 +266,8 @@ export function StatusPill({ state }: { state: string }): ReactElement {
   const color =
     state === 'running' || state === 'healthy' || state === 'active' || state === 'success'
       ? 'var(--green)'
+      : state === 'warning'
+        ? 'var(--orange)'
       : state === 'completed'
         ? 'var(--accent)'
         : state === 'degraded' || state === 'failed' || state === 'inactive'
@@ -268,6 +290,7 @@ export function StatusPill({ state }: { state: string }): ReactElement {
         inactive: t('statusPill.inactive'),
         unknown: t('statusPill.unknown'),
         not_installed: t('statusPill.notInstalled'),
+        warning: t('statusPill.warning'),
       }[state] ?? state).toUpperCase()}
     </span>
   )

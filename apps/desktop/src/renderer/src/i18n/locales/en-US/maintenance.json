@@ -182,12 +182,14 @@
   "diag.docker.action": "Open Docker page",
   "diag.security.pass.summary": "Security baseline looks good.",
   "diag.security.pass.hint": "Firewall is active and SSH password login is disabled.",
+  "diag.security.warn.summary": "Firewall is active — optional SSH hardening remains.",
   "diag.security.fail.summary": "Security settings need attention.",
   "diag.security.fail.hintFirewall": "Firewall is not active — your machine accepts more inbound traffic than necessary.",
   "diag.security.fail.hintSshPassword": "SSH allows password login — prefer key-based auth for safer remote access.",
   "diag.security.fail.hintBoth": "Firewall is off and SSH password login is enabled.",
   "diag.security.fail.hintGeneric": "Review firewall and SSH settings on this machine.",
-  "diag.security.action": "Open System settings",
+  "diag.security.action": "Review fixes in Monitor",
+  "diag.security.actionSsh": "Harden SSH settings",
   "diag.git.pass.summary": "Git identity is configured.",
   "diag.git.pass.hint": "Commit author name and email are set for this machine.",
   "diag.git.fail.summary": "Git user.name or user.email is missing.",
@@ -210,7 +212,7 @@
   "diag.a11y.pass.summary": "Accessibility baseline passed.",
   "diag.a11y.pass.hint": "Labels, landmarks, and focusable elements look reasonable.",
   "diag.a11y.fail.summary": "Accessibility issues found in the UI.",
-  "diag.a11y.fail.hint": "{{unlabeledInputs}} unlabeled input(s), {{unlabeledButtons}} unlabeled button(s), {{imagesMissingAlt}} image(s) missing alt text.",
+  "diag.a11y.fail.hint": "{{unlabeledInputs}} unlabeled input(s), {{unlabeledButtons}} unlabeled button(s), {{imagesMissingAlt}} image(s) missing alt text. These are app UI labels — no automatic fix is available here.",
   "diag.a11y.action": "Report issue",
 
   "guardian.description": "Each layer reads a specific IPC signal. The headline score is <0>100</0> minus the deductions shown on failing layers (floored at 0). This is the coded definition of \"Guardian\" in this app — not a separate marketing score.",
@@ -237,6 +239,19 @@
   "layerTooltip.container_fleet": "Share of Docker containers that are stopped or crashed",
   "layerTooltip.process_health": "Highest CPU or memory use among top processes",
   "layerTooltip.host_security": "Firewall status and SSH password authentication",
+
+  "layerAction.host_compute": "View CPU in Monitor",
+  "layerAction.host_compute_stressed": "High CPU — open Monitor",
+  "layerAction.memory_pressure": "View memory in Monitor",
+  "layerAction.memory_pressure_stressed": "High memory — open Monitor",
+  "layerAction.storage_pressure": "View disk in Monitor",
+  "layerAction.storage_pressure_stressed": "Low disk space — run cleanup",
+  "layerAction.container_fleet": "Open Docker",
+  "layerAction.container_fleet_stressed": "Fix stopped containers — open Docker",
+  "layerAction.process_health": "Review top processes",
+  "layerAction.process_health_stressed": "Heavy process load — review",
+  "layerAction.host_security": "Review security in Monitor",
+  "layerAction.host_security_stressed": "Security risks — review posture",
 
   "guardian.overallExcellent": "All good",
   "guardian.overallHealthy": "Healthy",
@@ -300,5 +315,6 @@
   "statusPill.active": "active",
   "statusPill.inactive": "inactive",
   "statusPill.unknown": "unknown",
-  "statusPill.notInstalled": "not installed"
+  "statusPill.notInstalled": "not installed",
+  "statusPill.warning": "warning"
 }

@@ -1,21 +1,26 @@
 use super::*;
-use crate::runtime_packages::pkg_remove_with_deps_cmd;
 
 // Explicit imports for extracted handler functions (also available via use super::*)
 use crate::host_exec::{
-    cmd_timeout_short, exec_output_limit,
-    get_global_daemon_auto_restart, get_global_thread_pool_size,
+    cmd_timeout_short, exec_output_limit, get_global_daemon_auto_restart,
+    get_global_thread_pool_size,
 };
-use crate::runtime_discover::resolve_java_shell_binary_path;
+use crate::runtime_discover::{resolve_java_shell_binary_path, resolve_node_shell_binary_path};
 use crate::runtime_packages::{
     java_major_from_archlinux_profile, runtime_archlinux_java_profile_from_jvm_path,
     runtime_archlinux_java_set_cmd, runtime_dnf_java_alternatives_cmd,
     runtime_java_system_packages_for_version, runtime_mise_java_set_cmd,
-    runtime_mise_java_set_for_major_cmd, runtime_pacman_java_profile_for_pkg,
-    runtime_pacman_java_profile_for_version, runtime_read_host_distro, runtime_system_packages,
+    runtime_mise_java_set_for_major_cmd, runtime_mise_node_link_and_use_cmd,
+    runtime_mise_runtime_set_cmd, runtime_mise_runtime_unuse_cmd, runtime_nvm_install_cmd,
+    runtime_nvm_set_default_cmd,
+    runtime_pacman_java_profile_for_pkg, runtime_pacman_java_profile_for_version,
+    runtime_read_host_distro, runtime_system_packages, pkg_install_one_cmd,
+    pkg_remove_cmd, pkg_remove_with_deps_cmd,
 };
 use crate::runtime_paths::{
-    java_home_from_binary, validate_java_binary_path,
+    is_system_node_binary_path, java_home_from_binary, mise_install_version_from_path,
+    nvm_node_tag_from_path, nvm_version_dir_from_path, path_segment_after_marker,
+    resolve_node_set_active_path, validate_java_binary_path,
 };
 use std::path::Path;
 
@@ -84,25 +89,7 @@ pub(crate) async fn runtime_job_execute(
                 .map_err(|e| e.to_string())
             } else if runtime_id == "node" && method == "local" {
                 let v = lumina_first_version_token(&version).unwrap_or_else(|| "lts/*".into());
-                // nvm refuses to operate when ~/.npmrc pins npm prefix/globalconfig; strip those keys (with backup).
-                let cmd = format!(
-                    r#"set -e
-               NPMRC="$HOME/.npmrc"
-               if [ -f "$NPMRC" ] && grep -qE '^[[:space:]]*(prefix|globalconfig)[[:space:]]*=' "$NPMRC" 2>/dev/null; then
-                 TS="$(date +%s)"
-                 cp -p "$NPMRC" "$NPMRC.lumina-nvm-backup-$TS"
-                 sed -i '/^[[:space:]]*prefix[[:space:]]*=/d;/^[[:space:]]*globalconfig[[:space:]]*=/d' "$NPMRC"
-                 echo "NOTE: Removed incompatible prefix/globalconfig entries from ~/.npmrc (backup: $NPMRC.lumina-nvm-backup-$TS)." >&2
-               fi
-               curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.0/install.sh | bash
-               export NVM_DIR="$HOME/.nvm"
-               [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-               unset npm_config_prefix NPM_CONFIG_PREFIX npm_CONFIG_PREFIX
-               export NPM_CONFIG_USERCONFIG=/dev/null
-               nvm install {v}
-               nvm use --delete-prefix {v}"#,
-                    v = v
-                );
+                let cmd = runtime_nvm_install_cmd(&v);
                 runtime_bash_user_step(
                     &cmd,
                     &mut logs,
@@ -442,16 +429,7 @@ fi"#;
                                 logs.push(format!("NOTE: {} already installed; skipping.", pkg));
                                 continue;
                             }
-                            let cmd = match pkg_mgr {
-                                "apt" => format!(
-                                    "DEBIAN_FRONTEND=noninteractive apt-get install -y {}",
-                                    pkg
-                                ),
-                                "dnf" => format!("dnf install -y {}", pkg),
-                                "pacman" => format!("pacman -S --needed --noconfirm {}", pkg),
-                                "zypper" => format!("zypper install -y {}", pkg),
-                                _ => format!("apt-get install -y {}", pkg),
-                            };
+                            let cmd = pkg_install_one_cmd(pkg_mgr, pkg);
                             logs.push(format!(
                                 "Installing dependency {} of {}: {}…",
                                 idx + 1,
@@ -553,6 +531,26 @@ fi"#;
                     Some(job_id.clone()),
                     10,
                     90,
+                )
+                .await
+                {
+                    Ok(()) => {
+                        logs.push("update finished successfully".to_string());
+                        Ok(())
+                    }
+                    Err(e) => Err(format!("[RUNTIME_UPDATE_FAILED] {}", e)),
+                }
+            } else if runtime_id == "node" && method.trim() == "local" {
+                let v = lumina_first_version_token(&version).unwrap_or_else(|| "lts/*".into());
+                logs.push(format!("Updating Node.js via nvm ({})…", v));
+                let cmd = runtime_nvm_install_cmd(&v);
+                match runtime_bash_user_step(
+                    &cmd,
+                    &mut logs,
+                    Some(app.clone()),
+                    Some(job_id.clone()),
+                    10,
+                    85,
                 )
                 .await
                 {
@@ -880,6 +878,161 @@ async fn java_shell_matches_requested(shell: &str, requested: &str) -> bool {
     }
 }
 
+async fn node_shell_matches_requested(shell: &str, requested: &str) -> bool {
+    if shell == requested {
+        return true;
+    }
+    if std::fs::canonicalize(shell)
+        .ok()
+        .zip(std::fs::canonicalize(requested).ok())
+        .map(|(a, b)| a == b)
+        .unwrap_or(false)
+    {
+        return true;
+    }
+    let version_probe = |path: &str| {
+        let safe = path.replace('\'', "'\\''");
+        format!("\"{safe}\" --version 2>&1 | head -1")
+    };
+    let shell_ver = exec_output_limit(
+        "bash",
+        &["-lc", &version_probe(shell)],
+        cmd_timeout_short(),
+    )
+    .await
+    .ok();
+    let req_ver = exec_output_limit(
+        "bash",
+        &["-lc", &version_probe(requested)],
+        cmd_timeout_short(),
+    )
+    .await
+    .ok();
+    match (shell_ver, req_ver) {
+        (Some(a), Some(b)) => a.trim() == b.trim(),
+        _ => false,
+    }
+}
+
+fn runtime_clear_fish_node_conf(home: &Path) {
+    let _ = std::fs::remove_file(home.join(".config/fish/conf.d/lumina-node.fish"));
+}
+
+fn runtime_write_fish_mise_hook_conf(home: &Path) -> Result<(), String> {
+    let conf_dir = home.join(".config/fish/conf.d");
+    std::fs::create_dir_all(&conf_dir).map_err(|e| {
+        format!(
+            "[RUNTIME_SET_ACTIVE_FAILED] Could not create fish conf.d: {}",
+            e
+        )
+    })?;
+    let content = r#"# lumina-mise — apply mise global tool PATH on fish login (managed by Lumina Runtimes).
+if command -q mise
+  mise hook-env -s fish | source
+end
+"#;
+    std::fs::write(conf_dir.join("99-lumina-mise.fish"), content).map_err(|e| {
+        format!(
+            "[RUNTIME_SET_ACTIVE_FAILED] Could not write fish mise hook config: {}",
+            e
+        )
+    })
+}
+
+async fn host_has_mise() -> bool {
+    exec_output_limit(
+        "bash",
+        &["-lc", "command -v mise >/dev/null 2>&1"],
+        cmd_timeout_short(),
+    )
+    .await
+    .is_ok()
+}
+
+async fn runtime_set_node_active(path: &Path) -> Value {
+    let home = match lumina_home_dir() {
+        Ok(h) => h,
+        Err(e) => return json!({ "ok": false, "error": e }),
+    };
+    runtime_clear_fish_node_conf(&home);
+
+    let p = path.to_string_lossy();
+    let path_str = p.to_string();
+
+    if !path.ends_with(std::path::Path::new("bin/node")) {
+        return json!({ "ok": false, "error": "[RUNTIME_SET_ACTIVE_FAILED] Unsupported Node path (expected …/bin/node)." });
+    }
+
+    let has_mise = host_has_mise().await;
+
+    let res: Result<(), String> = if is_system_node_binary_path(&p) {
+        if !has_mise {
+            return json!({ "ok": false, "error": "[RUNTIME_SET_ACTIVE_FAILED] System Node requires mise to manage the active version on this workstation." });
+        }
+        let cmd = runtime_mise_runtime_unuse_cmd("node");
+        exec_output_limit("bash", &["-lc", &cmd], cmd_timeout_short())
+            .await
+            .map(|_| ())
+            .map_err(|e| format!("[RUNTIME_SET_ACTIVE_FAILED] {}", e.trim()))
+    } else if p.contains("/.nvm/versions/node/") || p.contains("/.config/nvm/versions/node/") {
+        let Some(nvm_tag) = nvm_node_tag_from_path(&p) else {
+            return json!({ "ok": false, "error": "[RUNTIME_SET_ACTIVE_FAILED] Could not resolve nvm version from path." });
+        };
+        let Some(version_dir) = nvm_version_dir_from_path(&p) else {
+            return json!({ "ok": false, "error": "[RUNTIME_SET_ACTIVE_FAILED] Could not resolve nvm install directory." });
+        };
+        let dir = version_dir.to_string_lossy().to_string();
+        let cmd = if has_mise {
+            format!(
+                "{}\n{}",
+                runtime_mise_node_link_and_use_cmd(&nvm_tag, &dir),
+                runtime_nvm_set_default_cmd(&nvm_tag)
+            )
+        } else {
+            runtime_nvm_set_default_cmd(&nvm_tag)
+        };
+        exec_output_limit("bash", &["-lc", &cmd], cmd_timeout_short())
+            .await
+            .map(|_| ())
+            .map_err(|e| format!("[RUNTIME_SET_ACTIVE_FAILED] {}", e.trim()))
+    } else if let Some(version_id) = mise_install_version_from_path(&p, "node") {
+        let cmd = if has_mise {
+            runtime_mise_runtime_set_cmd("node", &version_id)
+        } else {
+            return json!({ "ok": false, "error": "[RUNTIME_SET_ACTIVE_FAILED] mise is required to activate this Node install." });
+        };
+        exec_output_limit("bash", &["-lc", &cmd], cmd_timeout_short())
+            .await
+            .map(|_| ())
+            .map_err(|e| format!("[RUNTIME_SET_ACTIVE_FAILED] {}", e.trim()))
+    } else {
+        return json!({ "ok": false, "error": "[RUNTIME_SET_ACTIVE_FAILED] Unsupported Node path (expected nvm, mise, or system /usr/bin/node)." });
+    };
+
+    match res {
+        Ok(()) => {
+            if has_mise {
+                if let Err(e) = runtime_write_fish_mise_hook_conf(&home) {
+                    return json!({ "ok": false, "error": e });
+                }
+            }
+            let shell_node = resolve_node_shell_binary_path().await;
+            let resolved_active = shell_node.clone().unwrap_or_else(|| path_str.clone());
+            let mut payload = json!({ "ok": true, "activePath": resolved_active });
+            if let Some(shell) = shell_node {
+                payload["shellNodePath"] = json!(shell);
+                if !node_shell_matches_requested(&shell, &path_str).await {
+                    payload["shellMismatch"] = json!(true);
+                }
+            } else if !node_shell_matches_requested(&resolved_active, &path_str).await {
+                payload["shellMismatch"] = json!(true);
+            }
+            payload
+        }
+        Err(e) => json!({ "ok": false, "error": e }),
+    }
+}
+
 async fn runtime_archlinux_java_set_default(
     profile: &str,
     password_opt: Option<&str>,
@@ -1049,34 +1202,20 @@ pub(crate) async fn runtime_set_active_invoke(body: &Value) -> Value {
         return runtime_set_java_active(&home, path_raw).await;
     }
 
+    if runtime_id == "node" {
+        let path = match resolve_node_set_active_path(&home, path_raw) {
+            Ok(p) => p,
+            Err(e) => return json!({ "ok": false, "error": e }),
+        };
+        return runtime_set_node_active(&path).await;
+    }
+
     let path = match lumina_path_must_be_under_home(&home, Path::new(path_raw)) {
         Ok(p) => p,
         Err(e) => return json!({ "ok": false, "error": e }),
     };
 
-    let safe_path = path.to_string_lossy().replace('\'', "'\\''");
-
     let res: Result<(), String> = match runtime_id {
-        "node" => {
-            if !path.ends_with(Path::new("bin/node"))
-                || !path.to_string_lossy().contains("/.nvm/versions/node/")
-            {
-                return json!({ "ok": false, "error": "[RUNTIME_SET_ACTIVE_FAILED] Unsupported Node path (expected an nvm-managed ~/.nvm/versions/node/*/bin/node)." });
-            }
-            let cmd = format!(
-                "export NVM_DIR=\"$HOME/.nvm\" \
-         && [ -s \"$NVM_DIR/nvm.sh\" ] && . \"$NVM_DIR/nvm.sh\" \
-         && unset npm_config_prefix NPM_CONFIG_PREFIX npm_CONFIG_PREFIX \
-         && export NPM_CONFIG_USERCONFIG=/dev/null \
-         && nvm alias default \"$(basename \"$(dirname '{}')\")\" \
-         && nvm use default",
-                safe_path
-            );
-            exec_output_limit("bash", &["-lc", &cmd], cmd_timeout_short())
-                .await
-                .map(|_| ())
-                .map_err(|e| format!("[RUNTIME_SET_ACTIVE_FAILED] {}", e.trim()))
-        }
         "python" => {
             let p = path.to_string_lossy();
             let ok_bin = path.file_name() == Some(OsStr::new("python"))
@@ -1084,12 +1223,16 @@ pub(crate) async fn runtime_set_active_invoke(body: &Value) -> Value {
             if !p.contains("/.pyenv/versions/") || !ok_bin {
                 return json!({ "ok": false, "error": "[RUNTIME_SET_ACTIVE_FAILED] Unsupported Python path (expected a pyenv-managed ~/.pyenv/versions/*/bin/python or python3)." });
             }
+            let Some(pyenv_version) = path_segment_after_marker(&p, "/.pyenv/versions/") else {
+                return json!({ "ok": false, "error": "[RUNTIME_SET_ACTIVE_FAILED] Could not resolve pyenv version from path." });
+            };
+            let safe_pyenv = pyenv_version.replace('\'', "'\\''");
             let cmd = format!(
                 "export PYENV_ROOT=\"$HOME/.pyenv\" \
          && export PATH=\"$PYENV_ROOT/bin:$PATH\" \
          && eval \"$(pyenv init -)\" \
-         && pyenv global \"$(basename \"$(dirname '{}')\")\"",
-                safe_path
+         && pyenv global '{safe_pyenv}'",
+                safe_pyenv = safe_pyenv
             );
             exec_output_limit("bash", &["-lc", &cmd], cmd_timeout_short())
                 .await
