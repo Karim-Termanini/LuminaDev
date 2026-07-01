@@ -39,8 +39,8 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "2.11.2",
-    "@types/node": "^25.9.1",
+    "@tauri-apps/cli": "2.11.4",
+    "@types/node": "^26.0.1",
     "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^4.3.3",
